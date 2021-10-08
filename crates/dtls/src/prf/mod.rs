@@ -77,7 +77,7 @@ pub(crate) fn prf_pre_master_secret(
     match curve {
         NamedCurve::P256 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         NamedCurve::X25519 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
-        _ => Err(Error::ErrInvalidNamedCurve.into()),
+        _ => Err(Error::ErrInvalidNamedCurve),
     }
 }
 
@@ -104,9 +104,9 @@ fn elliptic_curve_pre_master_secret(
                 return Ok(secret.diffie_hellman(&public).as_bytes().to_vec());
             }
         }
-        _ => return Err(Error::ErrInvalidNamedCurve.into()),
+        _ => return Err(Error::ErrInvalidNamedCurve),
     }
-    Err(Error::ErrNamedCurveAndPrivateKeyMismatch.into())
+    Err(Error::ErrNamedCurveAndPrivateKeyMismatch)
 }
 
 //  This PRF with the SHA-256 hash function is used for all cipher suites

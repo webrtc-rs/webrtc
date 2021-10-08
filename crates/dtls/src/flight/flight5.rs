@@ -163,7 +163,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::HandshakeFailure,
                         }),
-                        Some(Error::ErrVerifyDataMismatch.into()),
+                        Some(Error::ErrVerifyDataMismatch),
                     ));
                 }
             }
@@ -290,7 +290,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::UnexpectedMessage,
                         }),
-                        Some(Error::ErrInvalidContentType.into()),
+                        Some(Error::ErrInvalidContentType),
                     ))
                 }
             };
@@ -308,7 +308,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::InternalError,
                         }),
-                        Some(Error::ErrInvalidContentType.into()),
+                        Some(Error::ErrInvalidContentType),
                     ))
                 }
             };
@@ -455,7 +455,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::InternalError,
                         }),
-                        Some(Error::ErrInvalidContentType.into()),
+                        Some(Error::ErrInvalidContentType),
                     ))
                 }
             };
@@ -697,7 +697,7 @@ async fn initalize_cipher_suite(
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InsufficientSecurity,
                 }),
-                Some(Error::ErrNoAvailableSignatureSchemes.into()),
+                Some(Error::ErrNoAvailableSignatureSchemes),
             ));
         }
 

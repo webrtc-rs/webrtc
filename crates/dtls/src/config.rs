@@ -162,26 +162,26 @@ impl Default for ExtendedMasterSecretType {
 
 pub(crate) fn validate_config(is_client: bool, config: &Config) -> Result<()> {
     if is_client && config.psk.is_some() && config.psk_identity_hint.is_none() {
-        return Err(Error::ErrPskAndIdentityMustBeSetForClient.into());
+        return Err(Error::ErrPskAndIdentityMustBeSetForClient);
     }
 
     if !is_client && config.psk.is_none() && config.certificates.is_empty() {
-        return Err(Error::ErrServerMustHaveCertificate.into());
+        return Err(Error::ErrServerMustHaveCertificate);
     }
 
     if !config.certificates.is_empty() && config.psk.is_some() {
-        return Err(Error::ErrPskAndCertificate.into());
+        return Err(Error::ErrPskAndCertificate);
     }
 
     if config.psk_identity_hint.is_some() && config.psk.is_none() {
-        return Err(Error::ErrIdentityNoPsk.into());
+        return Err(Error::ErrIdentityNoPsk);
     }
 
     for cert in &config.certificates {
         match cert.private_key.kind {
             CryptoPrivateKeyKind::Ed25519(_) => {}
             CryptoPrivateKeyKind::Ecdsa256(_) => {}
-            _ => return Err(Error::ErrInvalidPrivateKey.into()),
+            _ => return Err(Error::ErrInvalidPrivateKey),
         }
     }
 

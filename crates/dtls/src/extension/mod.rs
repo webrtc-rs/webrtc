@@ -124,7 +124,7 @@ impl Extension {
             ExtensionValue::RenegotiationInfo => Ok(Extension::RenegotiationInfo(
                 ExtensionRenegotiationInfo::unmarshal(reader)?,
             )),
-            _ => Err(Error::ErrInvalidExtensionType.into()),
+            _ => Err(Error::ErrInvalidExtensionType),
         }
     }
 }

@@ -138,7 +138,7 @@ impl State {
             let cipher_suite = self.cipher_suite.lock().await;
             match &*cipher_suite {
                 Some(cipher_suite) => cipher_suite.id() as u16,
-                None => return Err(Error::ErrCipherSuiteUnset.into()),
+                None => return Err(Error::ErrCipherSuiteUnset),
             }
         };
 
@@ -221,7 +221,7 @@ impl State {
                 cipher_suite.init(&self.master_secret, &remote_random, &local_random, false)
             }
         } else {
-            Err(Error::ErrCipherSuiteUnset.into())
+            Err(Error::ErrCipherSuiteUnset)
         }
     }
 
@@ -231,7 +231,7 @@ impl State {
 
         match bincode::serialize(&serialized) {
             Ok(enc) => Ok(enc),
-            Err(err) => Err(Error::Other(err.to_string()).into()),
+            Err(err) => Err(Error::Other(err.to_string())),
         }
     }
 
@@ -239,7 +239,7 @@ impl State {
     pub async fn unmarshal_binary(&mut self, data: &[u8]) -> Result<()> {
         let serialized: SerializedState = match bincode::deserialize(data) {
             Ok(dec) => dec,
-            Err(err) => return Err(Error::Other(err.to_string()).into()),
+            Err(err) => return Err(Error::Other(err.to_string())),
         };
         self.deserialize(&serialized).await?;
         self.init_cipher_suite().await?;

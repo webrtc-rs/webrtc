@@ -46,7 +46,7 @@ pub struct RecordLayerHeader {
 impl RecordLayerHeader {
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         if self.sequence_number > MAX_SEQUENCE_NUMBER {
-            return Err(Error::ErrSequenceNumberOverflow.into());
+            return Err(Error::ErrSequenceNumberOverflow);
         }
 
         writer.write_u8(self.content_type as u8)?;
@@ -75,7 +75,7 @@ impl RecordLayerHeader {
 
         let protocol_version = ProtocolVersion { major, minor };
         if protocol_version != PROTOCOL_VERSION1_0 && protocol_version != PROTOCOL_VERSION1_2 {
-            return Err(Error::ErrUnsupportedProtocolVersion.into());
+            return Err(Error::ErrUnsupportedProtocolVersion);
         }
         let content_len = reader.read_u16::<BigEndian>()?;
 

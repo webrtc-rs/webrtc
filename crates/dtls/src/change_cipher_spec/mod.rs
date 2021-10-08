@@ -33,7 +33,7 @@ impl ChangeCipherSpec {
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let data = reader.read_u8()?;
         if data != 0x01 {
-            return Err(Error::ErrInvalidCipherSpec.into());
+            return Err(Error::ErrInvalidCipherSpec);
         }
 
         Ok(ChangeCipherSpec {})

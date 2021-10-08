@@ -152,7 +152,7 @@ impl CryptoCcm {
         }
 
         if r.len() <= (RECORD_LAYER_HEADER_SIZE + 8) {
-            return Err(Error::ErrNotEnoughRoomForNonce.into());
+            return Err(Error::ErrNotEnoughRoomForNonce);
         }
 
         let mut nonce = vec![];

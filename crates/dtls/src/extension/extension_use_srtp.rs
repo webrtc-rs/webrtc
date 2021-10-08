@@ -3,7 +3,6 @@ mod extension_use_srtp_test;
 
 use super::*;
 
-
 // SRTPProtectionProfile defines the parameters and options that are in effect for the SRTP processing
 // https://tools.ietf.org/html/rfc5764#section-4.1.2
 #[allow(non_camel_case_types)]

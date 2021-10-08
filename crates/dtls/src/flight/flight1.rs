@@ -97,7 +97,7 @@ impl Flight for Flight1 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion.into()),
+                    Some(Error::ErrUnsupportedProtocolVersion),
                 ));
             }
 

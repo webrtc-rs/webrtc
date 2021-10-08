@@ -232,7 +232,7 @@ impl Handshake {
             HandshakeType::Finished => {
                 HandshakeMessage::Finished(HandshakeMessageFinished::unmarshal(reader)?)
             }
-            _ => return Err(Error::ErrNotImplemented.into()),
+            _ => return Err(Error::ErrNotImplemented),
         };
 
         Ok(Handshake {

@@ -4,7 +4,6 @@ mod extension_supported_elliptic_curves_test;
 use super::*;
 use crate::curve::named_curve::*;
 
-
 const EXTENSION_SUPPORTED_GROUPS_HEADER_SIZE: usize = 6;
 
 // https://tools.ietf.org/html/rfc8422#section-5.1.1

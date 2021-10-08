@@ -36,7 +36,7 @@ impl ExtensionRenegotiationInfo {
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let l = reader.read_u16::<BigEndian>()?; //length
         if l != 1 {
-            return Err(ErrInvalidPacketLength.into());
+            return Err(ErrInvalidPacketLength);
         }
 
         let renegotiated_connection = reader.read_u8()?;

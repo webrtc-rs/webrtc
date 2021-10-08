@@ -70,7 +70,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion.into()),
+                    Some(Error::ErrUnsupportedProtocolVersion),
                 ));
             }
 
@@ -94,7 +94,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrCipherSuiteNoIntersection.into()),
+                    Some(Error::ErrCipherSuiteNoIntersection),
                 ));
             }
 
@@ -107,7 +107,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(Error::ErrNoSupportedEllipticCurves.into()),
+                                Some(Error::ErrNoSupportedEllipticCurves),
                             ));
                         }
                         state.named_curve = e.elliptic_curves[0];
@@ -124,7 +124,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(Error::ErrServerNoMatchingSrtpProfile.into()),
+                                Some(Error::ErrServerNoMatchingSrtpProfile),
                             ));
                         }
                     }
@@ -148,7 +148,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrServerRequiredButNoClientEms.into()),
+                    Some(Error::ErrServerRequiredButNoClientEms),
                 ));
             }
 

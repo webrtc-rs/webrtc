@@ -3,7 +3,6 @@ mod extension_supported_point_formats_test;
 
 use super::*;
 
-
 const EXTENSION_SUPPORTED_POINT_FORMATS_SIZE: usize = 5;
 
 pub type EllipticCurvePointFormat = u8;

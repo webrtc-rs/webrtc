@@ -78,10 +78,9 @@ impl CipherSuite for CipherSuiteTlsPskWithAes128GcmSha256 {
         if let Some(cg) = &self.gcm {
             cg.encrypt(pkt_rlh, raw)
         } else {
-            Err(
-                Error::Other("CipherSuite has not been initialized, unable to encrypt".to_owned())
-                    .into(),
-            )
+            Err(Error::Other(
+                "CipherSuite has not been initialized, unable to encrypt".to_owned(),
+            ))
         }
     }
 
@@ -89,10 +88,9 @@ impl CipherSuite for CipherSuiteTlsPskWithAes128GcmSha256 {
         if let Some(cg) = &self.gcm {
             cg.decrypt(input)
         } else {
-            Err(
-                Error::Other("CipherSuite has not been initialized, unable to decrypt".to_owned())
-                    .into(),
-            )
+            Err(Error::Other(
+                "CipherSuite has not been initialized, unable to decrypt".to_owned(),
+            ))
         }
     }
 }

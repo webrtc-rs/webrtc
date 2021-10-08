@@ -67,8 +67,8 @@ async fn main() -> Result<(), Error> {
     let mut cert_pool = rustls::RootCertStore::empty();
     let f = File::open("examples/certificates/server.pub.pem")?;
     let mut reader = BufReader::new(f);
-    if let Err(_) = cert_pool.add_pem_file(&mut reader) {
-        return Err(Error::Other("cert_pool add_pem_file failed".to_owned()).into());
+    if cert_pool.add_pem_file(&mut reader).is_err() {
+        return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
     }
 
     let config = Config {

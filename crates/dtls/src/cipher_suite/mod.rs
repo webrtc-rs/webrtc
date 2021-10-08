@@ -167,7 +167,7 @@ pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Se
         CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
             Ok(Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()))
         }
-        _ => Err(Error::ErrInvalidCipherSuite.into()),
+        _ => Err(Error::ErrInvalidCipherSuite),
     }
 }
 
@@ -220,7 +220,7 @@ pub(crate) fn parse_cipher_suites(
         .collect();
 
     if filtered_cipher_suites.is_empty() {
-        Err(Error::ErrNoAvailableCipherSuites.into())
+        Err(Error::ErrNoAvailableCipherSuites)
     } else {
         Ok(filtered_cipher_suites)
     }

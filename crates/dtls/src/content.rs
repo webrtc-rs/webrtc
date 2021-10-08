@@ -80,7 +80,7 @@ impl Content {
             ContentType::ApplicationData => Ok(Content::ApplicationData(
                 ApplicationData::unmarshal(reader)?,
             )),
-            _ => Err(Error::ErrInvalidContentType.into()),
+            _ => Err(Error::ErrInvalidContentType),
         }
     }
 }

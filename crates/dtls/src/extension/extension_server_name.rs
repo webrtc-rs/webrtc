@@ -41,7 +41,7 @@ impl ExtensionServerName {
 
         let name_type = reader.read_u8()?;
         if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
-            return Err(Error::ErrInvalidSniFormat.into());
+            return Err(Error::ErrInvalidSniFormat);
         }
 
         let buf_len = reader.read_u16::<BigEndian>()? as usize;
