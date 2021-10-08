@@ -56,7 +56,7 @@ impl Setter for TextAttribute {
             ATTR_REALM => MAX_REALM_B,
             ATTR_SOFTWARE => MAX_SOFTWARE_B,
             ATTR_NONCE => MAX_NONCE_B,
-            _ => return Err(Error::Other(format!("Unsupported AttrType {}", self.attr)).into()),
+            _ => return Err(Error::Other(format!("Unsupported AttrType {}", self.attr))),
         };
 
         check_overflow(self.attr, text.len(), max_len)?;
@@ -85,7 +85,7 @@ impl TextAttribute {
             ATTR_REALM => {}
             ATTR_SOFTWARE => {}
             ATTR_NONCE => {}
-            _ => return Err(Error::Other(format!("Unsupported AttrType {}", attr)).into()),
+            _ => return Err(Error::Other(format!("Unsupported AttrType {}", attr))),
         };
 
         let a = m.get(attr)?;

@@ -66,7 +66,7 @@ impl Collector for TickerCollector {
 
     fn close(&mut self) -> Result<()> {
         if self.close_tx.is_none() {
-            return Err(Error::ErrCollectorClosed.into());
+            return Err(Error::ErrCollectorClosed);
         }
         self.close_tx.take();
         Ok(())
@@ -197,7 +197,7 @@ impl ClientBuilder {
 
     pub fn build(self) -> Result<Client> {
         if self.settings.c.is_none() {
-            return Err(Error::ErrNoConnection.into());
+            return Err(Error::ErrNoConnection);
         }
 
         let client = Client {
@@ -252,7 +252,7 @@ impl Client {
     // Could return ErrClientClosed, ErrTransactionExists.
     fn insert(&mut self, ct: ClientTransaction) -> Result<()> {
         if self.settings.closed {
-            return Err(Error::ErrClientClosed.into());
+            return Err(Error::ErrClientClosed);
         }
 
         if let Some(handler_tx) = &mut self.handler_tx {
@@ -267,7 +267,7 @@ impl Client {
 
     fn remove(&mut self, id: TransactionId) -> Result<()> {
         if self.settings.closed {
-            return Err(Error::ErrClientClosed.into());
+            return Err(Error::ErrClientClosed);
         }
 
         if let Some(handler_tx) = &mut self.handler_tx {
@@ -364,7 +364,7 @@ impl Client {
     // Close stops internal connection and agent, returning CloseErr on error.
     pub async fn close(&mut self) -> Result<()> {
         if self.settings.closed {
-            return Err(Error::ErrClientClosed.into());
+            return Err(Error::ErrClientClosed);
         }
 
         self.settings.closed = true;
@@ -402,7 +402,7 @@ impl Client {
         let conn = if let Some(conn) = &self.settings.c {
             Arc::clone(conn)
         } else {
-            return Err(Error::ErrNoConnection.into());
+            return Err(Error::ErrNoConnection);
         };
 
         Client::start(
@@ -433,7 +433,7 @@ impl Client {
 
     pub async fn send(&mut self, m: &Message, handler: Handler) -> Result<()> {
         if self.settings.closed {
-            return Err(Error::ErrClientClosed.into());
+            return Err(Error::ErrClientClosed);
         }
 
         let has_handler = handler.is_some();
@@ -469,7 +469,7 @@ impl Client {
                         .await?;
                 }
             } else if let Err(err) = result {
-                return Err(Error::Other(err.to_string()).into());
+                return Err(Error::Other(err.to_string()));
             }
         }
 

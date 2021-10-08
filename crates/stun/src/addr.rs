@@ -66,12 +66,12 @@ impl MappedAddress {
     pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<()> {
         let v = m.get(t)?;
         if v.len() <= 4 {
-            return Err(Error::ErrUnexpectedEof.into());
+            return Err(Error::ErrUnexpectedEof);
         }
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::Other(format!("bad value {}", family)).into());
+            return Err(Error::Other(format!("bad value {}", family)));
         }
         self.port = u16::from_be_bytes([v[2], v[3]]);
 

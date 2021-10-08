@@ -42,7 +42,7 @@ impl Setter for MessageIntegrity {
             // Message should not contain FINGERPRINT attribute
             // before MESSAGE-INTEGRITY.
             if a.typ == ATTR_FINGERPRINT {
-                return Err(Error::ErrFingerprintBeforeIntegrity.into());
+                return Err(Error::ErrFingerprintBeforeIntegrity);
             }
         }
         // The text used as input to HMAC is the STUN message,

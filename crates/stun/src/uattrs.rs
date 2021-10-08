@@ -47,7 +47,7 @@ impl Getter for UnknownAttributes {
     fn get_from(&mut self, m: &Message) -> Result<()> {
         let v = m.get(ATTR_UNKNOWN_ATTRIBUTES)?;
         if v.len() % ATTR_TYPE_SIZE != 0 {
-            return Err(Error::ErrBadUnknownAttrsSize.into());
+            return Err(Error::ErrBadUnknownAttrsSize);
         }
         self.0.clear();
         let mut first = 0usize;

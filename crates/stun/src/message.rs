@@ -273,7 +273,7 @@ impl Message {
         // decoding message header
         let buf = &self.raw;
         if buf.len() < MESSAGE_HEADER_SIZE {
-            return Err(Error::ErrUnexpectedHeaderEof.into());
+            return Err(Error::ErrUnexpectedHeaderEof);
         }
 
         let t = u16::from_be_bytes([buf[0], buf[1]]); // first 2 bytes
@@ -285,16 +285,14 @@ impl Message {
             return Err(Error::Other(format!(
                 "{:x} is invalid magic cookie (should be {:x})",
                 cookie, MAGIC_COOKIE
-            ))
-            .into());
+            )));
         }
         if buf.len() < full_size {
             return Err(Error::Other(format!(
                 "buffer length {} is less than {} (expected message size)",
                 buf.len(),
                 full_size
-            ))
-            .into());
+            )));
         }
 
         // saving header data
@@ -315,8 +313,7 @@ impl Message {
                     "buffer length {} is less than {} (expected header size)",
                     b.len(),
                     ATTRIBUTE_HEADER_SIZE
-                ))
-                .into());
+                )));
             }
 
             let mut a = RawAttribute {
@@ -336,8 +333,7 @@ impl Message {
                     b.len(),
                     a_buff_l,
                     a.typ
-                ))
-                .into());
+                )));
             }
             a.value = b[..a_l].to_vec();
             offset += a_buff_l;
@@ -404,7 +400,7 @@ impl Message {
         if ok {
             Ok(v.value)
         } else {
-            Err(Error::ErrAttributeNotFound.into())
+            Err(Error::ErrAttributeNotFound)
         }
     }
 

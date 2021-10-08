@@ -287,7 +287,7 @@ fn test_message_class_string() -> Result<()> {
     ];
 
     for k in v {
-        if k.to_string() == "unknown message class".to_owned() {
+        if k.to_string() == *"unknown message class" {
             assert!(false, "bad stringer {}", k);
         }
     }
@@ -511,7 +511,7 @@ fn test_message_equal() -> Result<()> {
             ..Default::default()
         };
         let b = Message {
-            attributes: Attributes(vec![attr.clone(), attr1]),
+            attributes: Attributes(vec![attr, attr1]),
             length: 4 + 2,
             ..Default::default()
         };
@@ -536,7 +536,7 @@ fn test_message_equal() -> Result<()> {
             ..Default::default()
         };
         let b = Message {
-            attributes: Attributes(vec![attr.clone(), attr1]),
+            attributes: Attributes(vec![attr, attr1]),
             length: 4 + 2,
             ..Default::default()
         };
