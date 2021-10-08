@@ -151,7 +151,7 @@ fn test_valid_packet() {
             "goodbye",
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
-                Box::new(cname.clone()),
+                Box::new(cname),
                 Box::new(Goodbye::default()),
             ]),
             None,
@@ -237,7 +237,7 @@ fn test_cname() {
             "goodbye",
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
-                Box::new(cname.clone()),
+                Box::new(cname),
                 Box::new(Goodbye::default()),
             ]),
             None,
@@ -286,7 +286,7 @@ fn test_compound_packet_roundtrip() {
             "goodbye",
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
-                Box::new(cname.clone()),
+                Box::new(cname),
                 Box::new(Goodbye {
                     sources: vec![1234],
                     ..Default::default()
@@ -320,11 +320,11 @@ fn test_compound_packet_roundtrip() {
 
         let data1 = result.unwrap();
         let c = CompoundPacket::unmarshal(&mut data1.clone())
-            .expect(format!("unmarshal {} error", name).as_str());
+            .unwrap_or_else(|_| panic!("unmarshal {} error", name));
 
         let data2 = c
             .marshal()
-            .expect(format!("marshal {} error", name).as_str());
+            .unwrap_or_else(|_| panic!("marshal {} error", name));
 
         assert_eq!(
             data1, data2,

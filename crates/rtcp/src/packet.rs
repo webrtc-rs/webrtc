@@ -56,10 +56,10 @@ where
 
     match packets.len() {
         // Empty Packet
-        0 => Err(Error::InvalidHeader.into()),
+        0 => Err(Error::InvalidHeader),
 
         // Single Packet
-        1 => packets.pop().ok_or_else(|| Error::BadFirstPacket.into()),
+        1 => packets.pop().ok_or(Error::BadFirstPacket),
 
         // Compound Packet
         _ => Ok(Box::new(CompoundPacket(packets))),
@@ -76,7 +76,7 @@ where
 
     let length = (h.length as usize) * 4;
     if length > raw_data.remaining() {
-        return Err(Error::PacketTooShort.into());
+        return Err(Error::PacketTooShort);
     }
 
     let mut in_packet = h.marshal()?.chain(raw_data.take(length));

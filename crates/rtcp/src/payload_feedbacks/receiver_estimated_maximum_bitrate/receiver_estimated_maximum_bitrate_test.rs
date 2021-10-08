@@ -158,7 +158,7 @@ fn test_receiver_estimated_maximum_bitrate_roundtrip() {
 
         let mut data = got.ok().unwrap();
         let actual = ReceiverEstimatedMaximumBitrate::unmarshal(&mut data)
-            .expect(format!("Unmarshal {}", name).as_str());
+            .unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
         if let Some(expected_bitrate) = unmarshal_expected {
             assert_eq!(

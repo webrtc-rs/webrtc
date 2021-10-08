@@ -186,7 +186,7 @@ fn test_goodbye_round_trip() {
         (
             "count overflow",
             Goodbye {
-                sources: too_many_sources.clone(),
+                sources: too_many_sources,
                 reason: Bytes::from_static(b""),
             },
             Some(Error::TooManySources),
@@ -223,7 +223,7 @@ fn test_goodbye_round_trip() {
         } else {
             let mut data = got.ok().unwrap();
             let actual =
-                Goodbye::unmarshal(&mut data).expect(format!("Unmarshal {}", name).as_str());
+                Goodbye::unmarshal(&mut data).unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
             assert_eq!(
                 actual, want,

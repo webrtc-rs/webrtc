@@ -132,7 +132,7 @@ fn test_slice_loss_indication_roundtrip() {
         } else {
             let mut data = got.ok().unwrap();
             let actual = SliceLossIndication::unmarshal(&mut data)
-                .expect(format!("Unmarshal {}", name).as_str());
+                .unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
             assert_eq!(
                 actual, want,

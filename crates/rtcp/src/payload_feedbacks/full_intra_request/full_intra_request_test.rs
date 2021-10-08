@@ -172,7 +172,7 @@ fn test_full_intra_request_round_trip() {
         } else {
             let mut data = got.ok().unwrap();
             let actual = FullIntraRequest::unmarshal(&mut data)
-                .expect(format!("Unmarshal {}", name).as_str());
+                .unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
             assert_eq!(
                 actual, want,

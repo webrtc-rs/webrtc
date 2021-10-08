@@ -130,7 +130,7 @@ fn test_transport_layer_nack_roundtrip() {
         } else {
             let mut data = got.ok().unwrap();
             let actual = TransportLayerNack::unmarshal(&mut data)
-                .expect(format!("Unmarshal {}", name).as_str());
+                .unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
             assert_eq!(
                 actual, want,
