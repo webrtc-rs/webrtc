@@ -44,7 +44,7 @@ fn small_test_msg() -> Result<Message> {
         }],
         additionals: vec![Resource {
             header: ResourceHeader {
-                name: name.clone(),
+                name: name,
                 typ: DnsType::A,
                 class: DNSCLASS_INET,
                 ..Default::default()
@@ -201,7 +201,7 @@ fn large_test_msg() -> Result<Message> {
             },
             Resource {
                 header: ResourceHeader {
-                    name: name.clone(),
+                    name: name,
                     typ: DnsType::Txt,
                     class: DNSCLASS_INET,
                     ..Default::default()
@@ -403,7 +403,7 @@ fn test_header_unpack_error() -> Result<()> {
 #[test]
 fn test_parser_start() -> Result<()> {
     let mut p = Parser::default();
-    let result = p.start(&vec![]);
+    let result = p.start(&[]);
     assert!(result.is_err());
 
     Ok(())
@@ -916,7 +916,7 @@ fn test_start_error() -> Result<()> {
                     ..Default::default()
                 }
             }),
-            Error::ErrNotStarted.into(),
+            Error::ErrNotStarted,
         ),
         (
             "sectionDone",
@@ -926,7 +926,7 @@ fn test_start_error() -> Result<()> {
                     ..Default::default()
                 }
             }),
-            Error::ErrSectionDone.into(),
+            Error::ErrSectionDone,
         ),
     ];
 
@@ -1056,7 +1056,7 @@ fn test_builder_resource_error() -> Result<()> {
                     ..Default::default()
                 }
             }),
-            Error::ErrNotStarted.into(),
+            Error::ErrNotStarted,
         ),
         (
             "sectionHeader",
@@ -1066,7 +1066,7 @@ fn test_builder_resource_error() -> Result<()> {
                     ..Default::default()
                 }
             }),
-            Error::ErrNotStarted.into(),
+            Error::ErrNotStarted,
         ),
         (
             "sectionQuestions",
@@ -1076,7 +1076,7 @@ fn test_builder_resource_error() -> Result<()> {
                     ..Default::default()
                 }
             }),
-            Error::ErrNotStarted.into(),
+            Error::ErrNotStarted,
         ),
         (
             "sectionDone",
@@ -1086,7 +1086,7 @@ fn test_builder_resource_error() -> Result<()> {
                     ..Default::default()
                 }
             }),
-            Error::ErrSectionDone.into(),
+            Error::ErrSectionDone,
         ),
     ];
 

@@ -83,10 +83,10 @@ impl Builder {
 
     fn start_check(&self, section: Section) -> Result<()> {
         if self.section <= Section::NotStarted {
-            return Err(Error::ErrNotStarted.into());
+            return Err(Error::ErrNotStarted);
         }
         if self.section > section {
-            return Err(Error::ErrSectionDone.into());
+            return Err(Error::ErrSectionDone);
         }
 
         Ok(())
@@ -127,13 +127,13 @@ impl Builder {
             Section::Answers => (&mut self.header.answers, Error::ErrTooManyAnswers),
             Section::Authorities => (&mut self.header.authorities, Error::ErrTooManyAuthorities),
             Section::Additionals => (&mut self.header.additionals, Error::ErrTooManyAdditionals),
-            Section::NotStarted => return Err(Error::ErrNotStarted.into()),
-            Section::Done => return Err(Error::ErrSectionDone.into()),
-            Section::Header => return Err(Error::ErrSectionHeader.into()),
+            Section::NotStarted => return Err(Error::ErrNotStarted),
+            Section::Done => return Err(Error::ErrSectionDone),
+            Section::Header => return Err(Error::ErrSectionHeader),
         };
 
         if *count == u16::MAX {
-            Err(err.into())
+            Err(err)
         } else {
             *count += 1;
             Ok(())
@@ -143,10 +143,10 @@ impl Builder {
     // question adds a single question.
     pub fn add_question(&mut self, q: &Question) -> Result<()> {
         if self.section < Section::Questions {
-            return Err(Error::ErrNotStarted.into());
+            return Err(Error::ErrNotStarted);
         }
         if self.section > Section::Questions {
-            return Err(Error::ErrSectionDone.into());
+            return Err(Error::ErrSectionDone);
         }
         let msg = self.msg.take();
         if let Some(mut msg) = msg {
@@ -160,10 +160,10 @@ impl Builder {
 
     fn check_resource_section(&self) -> Result<()> {
         if self.section < Section::Answers {
-            return Err(Error::ErrNotStarted.into());
+            return Err(Error::ErrNotStarted);
         }
         if self.section > Section::Additionals {
-            return Err(Error::ErrSectionDone.into());
+            return Err(Error::ErrSectionDone);
         }
         Ok(())
     }
@@ -175,7 +175,7 @@ impl Builder {
         if let Some(body) = &r.body {
             r.header.typ = body.real_type();
         } else {
-            return Err(Error::ErrNilResourceBody.into());
+            return Err(Error::ErrNilResourceBody);
         }
 
         if let Some(msg) = self.msg.take() {
@@ -195,7 +195,7 @@ impl Builder {
     // Finish ends message building and generates a binary message.
     pub fn finish(&mut self) -> Result<Vec<u8>> {
         if self.section < Section::Header {
-            return Err(Error::ErrNotStarted.into());
+            return Err(Error::ErrNotStarted);
         }
         self.section = Section::Done;
 
@@ -206,7 +206,7 @@ impl Builder {
             msg[..HEADER_LEN].copy_from_slice(&buf[..HEADER_LEN]);
             Ok(msg)
         } else {
-            Err(Error::ErrEmptyBuilderMsg.into())
+            Err(Error::ErrEmptyBuilderMsg)
         }
     }
 }

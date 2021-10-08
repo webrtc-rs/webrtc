@@ -305,16 +305,16 @@ impl Message {
         // pack more than 65535 of any particular type, but it is possible and
         // we should fail gracefully.
         if self.questions.len() > u16::MAX as usize {
-            return Err(Error::ErrTooManyQuestions.into());
+            return Err(Error::ErrTooManyQuestions);
         }
         if self.answers.len() > u16::MAX as usize {
-            return Err(Error::ErrTooManyAnswers.into());
+            return Err(Error::ErrTooManyAnswers);
         }
         if self.authorities.len() > u16::MAX as usize {
-            return Err(Error::ErrTooManyAuthorities.into());
+            return Err(Error::ErrTooManyAuthorities);
         }
         if self.additionals.len() > u16::MAX as usize {
-            return Err(Error::ErrTooManyAdditionals.into());
+            return Err(Error::ErrTooManyAdditionals);
         }
 
         let (id, bits) = self.header.pack();

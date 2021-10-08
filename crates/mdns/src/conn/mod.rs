@@ -142,7 +142,7 @@ impl DnsConn {
     pub async fn close(&self) -> Result<()> {
         log::info!("Closing connection");
         if self.is_server_closed.load(atomic::Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         log::trace!("Sending close command to server");
@@ -153,7 +153,7 @@ impl DnsConn {
             }
             Err(e) => {
                 log::warn!("Error sending close command to server: {:?}", e);
-                Err(Error::ErrConnectionClosed.into())
+                Err(Error::ErrConnectionClosed)
             }
         }
     }
@@ -166,7 +166,7 @@ impl DnsConn {
         mut close_query_signal: mpsc::Receiver<()>,
     ) -> Result<(ResourceHeader, SocketAddr)> {
         if self.is_server_closed.load(atomic::Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         let name_with_suffix = name.to_owned() + ".";
@@ -192,7 +192,7 @@ impl DnsConn {
 
                 _ = close_query_signal.recv() => {
                     log::info!("Query close signal received.");
-                    return Err(Error::ErrConnectionClosed.into())
+                    return Err(Error::ErrConnectionClosed)
                 },
 
                 res_opt = query_rx.recv() =>{

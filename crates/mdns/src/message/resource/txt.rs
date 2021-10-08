@@ -44,7 +44,7 @@ impl ResourceBody for TxtResource {
             off = new_off;
             // Check if we got too many bytes.
             if length < n + t.as_bytes().len() + 1 {
-                return Err(Error::ErrCalcLen.into());
+                return Err(Error::ErrCalcLen);
             }
             n += t.len() + 1;
             txts.push(t);
