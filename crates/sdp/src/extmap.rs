@@ -66,12 +66,12 @@ impl ExtMap {
         reader.read_line(&mut line)?;
         let parts: Vec<&str> = line.trim().splitn(2, ':').collect();
         if parts.len() != 2 {
-            return Err(Error::ExtMapParse(line).into());
+            return Err(Error::ExtMapParse(line));
         }
 
         let fields: Vec<&str> = parts[1].split_whitespace().collect();
         if fields.len() < 2 {
-            return Err(Error::ExtMapParse(line).into());
+            return Err(Error::ExtMapParse(line));
         }
 
         let valdir: Vec<&str> = fields[0].split('/').collect();
@@ -80,17 +80,17 @@ impl ExtMap {
             return Err(Error::ExtMapParse(format!(
                 "{} -- extmap key must be in the range 1-256",
                 valdir[0]
-            ))
-            .into());
+            )));
         }
 
         let mut direction = Direction::DirectionUnknown;
         if valdir.len() == 2 {
             direction = Direction::new(valdir[1]);
             if direction == Direction::DirectionUnknown {
-                return Err(
-                    Error::ExtMapParse(format!("unknown direction from {}", valdir[1])).into(),
-                );
+                return Err(Error::ExtMapParse(format!(
+                    "unknown direction from {}",
+                    valdir[1]
+                )));
             }
         }
 

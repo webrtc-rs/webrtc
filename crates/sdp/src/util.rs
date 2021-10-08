@@ -285,7 +285,7 @@ pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, u
         let key = String::from_utf8(buf)?;
         match key.len() {
             2 => return Ok((key, num_bytes)),
-            _ => return Err(Error::SdpInvalidSyntax(format!("{:?}", key)).into()),
+            _ => return Err(Error::SdpInvalidSyntax(format!("{:?}", key))),
         }
     }
 }
