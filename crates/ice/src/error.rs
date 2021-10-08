@@ -202,7 +202,7 @@ pub enum Error {
     Util(#[from] util::Error),
     #[error("{0}")]
     Stun(#[from] stun::Error),
-    #[error("parse url: {0}")]
+    #[error("{0}")]
     ParseUrl(#[from] url::ParseError),
     #[error("{0}")]
     Mdns(#[from] mdns::Error),
