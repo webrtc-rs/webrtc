@@ -1,7 +1,6 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use util::{marshal::*, Buffer};
 
-use anyhow::Result;
 use tokio::sync::mpsc;
 
 /// Limit the buffer size to 1MB
@@ -56,7 +55,7 @@ impl Stream {
     /// ReadRTP reads and decrypts full RTP packet and its header from the nextConn
     pub async fn read_rtp(&self, buf: &mut [u8]) -> Result<(usize, rtp::header::Header)> {
         if !self.is_rtp {
-            return Err(Error::InvalidRtpStream.into());
+            return Err(Error::InvalidRtpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;
@@ -69,7 +68,7 @@ impl Stream {
     /// read_rtcp reads and decrypts full RTP packet and its header from the nextConn
     pub async fn read_rtcp(&self, buf: &mut [u8]) -> Result<(usize, rtcp::header::Header)> {
         if self.is_rtp {
-            return Err(Error::InvalidRtcpStream.into());
+            return Err(Error::InvalidRtcpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;

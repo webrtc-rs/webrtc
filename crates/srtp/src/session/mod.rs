@@ -3,10 +3,15 @@ mod session_rtcp_test;
 #[cfg(test)]
 mod session_rtp_test;
 
-use crate::{config::*, context::*, error::Error, option::*, stream::*};
+use crate::{
+    config::*,
+    context::*,
+    error::{Error, Result},
+    option::*,
+    stream::*,
+};
 use util::{conn::Conn, marshal::*};
 
-use anyhow::Result;
 use bytes::Bytes;
 use std::{
     collections::HashMap,
@@ -131,7 +136,7 @@ impl Session {
     ) -> Result<()> {
         let n = udp_rx.recv(buf).await?;
         if n == 0 {
-            return Err(Error::SessionEof.into());
+            return Err(Error::SessionEof);
         }
 
         let decrypted = if is_rtp {
@@ -159,8 +164,8 @@ impl Session {
                 Ok(_) => {}
                 Err(err) => {
                     // Silently drop data when the buffer is full.
-                    if !util::buffer::error::Error::ErrBufferFull.equal(&err) {
-                        return Err(err);
+                    if util::Error::ErrBufferFull != err {
+                        return Err(err.into());
                     }
                 }
             }
@@ -207,7 +212,7 @@ impl Session {
         if let Some(stream) = result {
             Ok(stream)
         } else {
-            Err(Error::SessionSrtpAlreadyClosed.into())
+            Err(Error::SessionSrtpAlreadyClosed)
         }
     }
 
@@ -219,7 +224,7 @@ impl Session {
 
     pub async fn write(&self, buf: &Bytes, is_rtp: bool) -> Result<usize> {
         if self.is_rtp != is_rtp {
-            return Err(Error::SessionRtpRtcpTypeMismatch.into());
+            return Err(Error::SessionRtpRtcpTypeMismatch);
         }
 
         let encrypted = {
@@ -232,10 +237,7 @@ impl Session {
             }
         };
 
-        match self.udp_tx.send(&encrypted).await {
-            Ok(n) => Ok(n),
-            Err(err) => Err(err),
-        }
+        Ok(self.udp_tx.send(&encrypted).await?)
     }
 
     pub async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {

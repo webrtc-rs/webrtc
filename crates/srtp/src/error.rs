@@ -1,6 +1,11 @@
+use std::io;
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError as MpscSendError;
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     #[error("duplicated packet")]
     ErrDuplicated,
@@ -72,13 +77,43 @@ pub enum Error {
     #[error("this stream is not a RTCPStream")]
     InvalidRtcpStream,
 
-    #[allow(non_camel_case_types)]
     #[error("{0}")]
-    new(String),
+    Io(#[source] IoError),
+    #[error("{0}")]
+    KeyingMaterial(#[from] util::KeyingMaterialExporterError),
+    #[error("mpsc send: {0}")]
+    MpscSend(String),
+    #[error("{0}")]
+    Util(#[from] util::Error),
+    #[error("{0}")]
+    Rtcp(#[from] rtcp::Error),
+    #[error("aes gcm: {0}")]
+    AesGcm(#[from] aes_gcm::Error),
+
+    #[error("{0}")]
+    Other(String),
 }
 
-impl Error {
-    pub fn equal(&self, err: &anyhow::Error) -> bool {
-        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+#[derive(Debug, Error)]
+#[error("io error: {0}")]
+pub struct IoError(#[from] pub io::Error);
+
+// Workaround for wanting PartialEq for io::Error.
+impl PartialEq for IoError {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.kind() == other.0.kind()
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::Io(IoError(e))
+    }
+}
+
+// Because Tokio SendError is parameterized, we sadly lose the backtrace.
+impl<T> From<MpscSendError<T>> for Error {
+    fn from(e: MpscSendError<T>) -> Self {
+        Error::MpscSend(e.to_string())
     }
 }

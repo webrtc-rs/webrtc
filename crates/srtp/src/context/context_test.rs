@@ -66,10 +66,10 @@ fn test_key_len() -> Result<()> {
     let key_len = CIPHER_CONTEXT_ALGO.key_len();
     let salt_len = CIPHER_CONTEXT_ALGO.salt_len();
 
-    let result = Context::new(&vec![], &vec![0; salt_len], CIPHER_CONTEXT_ALGO, None, None);
+    let result = Context::new(&[], &vec![0; salt_len], CIPHER_CONTEXT_ALGO, None, None);
     assert!(result.is_err(), "CreateContext accepted a 0 length key");
 
-    let result = Context::new(&vec![0; key_len], &vec![], CIPHER_CONTEXT_ALGO, None, None);
+    let result = Context::new(&vec![0; key_len], &[], CIPHER_CONTEXT_ALGO, None, None);
     assert!(result.is_err(), "CreateContext accepted a 0 length salt");
 
     let result = Context::new(

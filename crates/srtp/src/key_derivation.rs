@@ -2,11 +2,10 @@ use aes::cipher::generic_array::GenericArray;
 use aes::cipher::NewBlockCipher;
 use aes::{Aes128, BlockEncrypt};
 
-use anyhow::Result;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::BufWriter;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 
 pub const LABEL_SRTP_ENCRYPTION: u8 = 0x00;
 pub const LABEL_SRTP_AUTHENTICATION_TAG: u8 = 0x01;
@@ -26,7 +25,7 @@ pub(crate) fn aes_cm_key_derivation(
 ) -> Result<Vec<u8>> {
     if index_over_kdr != 0 {
         // 24-bit "index DIV kdr" must be xored to prf input.
-        return Err(Error::UnsupportedIndexOverKdr.into());
+        return Err(Error::UnsupportedIndexOverKdr);
     }
 
     // https://tools.ietf.org/html/rfc3711#appendix-B.3

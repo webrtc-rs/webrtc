@@ -203,8 +203,8 @@ fn test_rtcp_replay_detector_separation() -> Result<()> {
 fn get_rtcp_index(encrypted: &Bytes, auth_tag_len: usize) -> u32 {
     let tail_offset = encrypted.len() - (auth_tag_len + SRTCP_INDEX_SIZE);
     let reader = &mut encrypted.slice(tail_offset..tail_offset + SRTCP_INDEX_SIZE);
-    let rtcp_index = reader.get_u32() & 0x7FFFFFFF; //^(1 << 31)
-    rtcp_index
+    //^(1 << 31)
+    reader.get_u32() & 0x7FFFFFFF
 }
 
 #[test]
