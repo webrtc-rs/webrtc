@@ -1,6 +1,5 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
-
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -34,7 +33,7 @@ impl Chunk for ChunkShutdownComplete {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_SHUTDOWN_COMPLETE {
-            return Err(Error::ErrChunkTypeNotShutdownComplete.into());
+            return Err(Error::ErrChunkTypeNotShutdownComplete);
         }
 
         Ok(ChunkShutdownComplete {})

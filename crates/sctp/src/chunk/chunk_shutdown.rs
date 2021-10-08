@@ -1,6 +1,5 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -40,11 +39,11 @@ impl Chunk for ChunkShutdown {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_SHUTDOWN {
-            return Err(Error::ErrChunkTypeNotShutdown.into());
+            return Err(Error::ErrChunkTypeNotShutdown);
         }
 
         if raw.len() != CHUNK_HEADER_SIZE + CUMULATIVE_TSN_ACK_LENGTH {
-            return Err(Error::ErrInvalidChunkSize.into());
+            return Err(Error::ErrInvalidChunkSize);
         }
 
         let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());

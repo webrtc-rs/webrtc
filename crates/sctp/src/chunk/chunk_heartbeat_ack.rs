@@ -3,7 +3,6 @@ use crate::param::param_type::ParamType;
 use crate::param::{param_header::*, *};
 use crate::util::get_padding_size;
 
-
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -58,17 +57,17 @@ impl Chunk for ChunkHeartbeatAck {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_HEARTBEAT_ACK {
-            return Err(Error::ErrChunkTypeNotHeartbeatAck.into());
+            return Err(Error::ErrChunkTypeNotHeartbeatAck);
         }
 
         if raw.len() <= CHUNK_HEADER_SIZE {
-            return Err(Error::ErrHeartbeatNotLongEnoughInfo.into());
+            return Err(Error::ErrHeartbeatNotLongEnoughInfo);
         }
 
         let p =
             build_param(&raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length()))?;
         if p.header().typ != ParamType::HeartbeatInfo {
-            return Err(Error::ErrHeartbeatParam.into());
+            return Err(Error::ErrHeartbeatParam);
         }
         let params = vec![p];
 
@@ -77,10 +76,10 @@ impl Chunk for ChunkHeartbeatAck {
 
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         if self.params.len() != 1 {
-            return Err(Error::ErrHeartbeatAckParams.into());
+            return Err(Error::ErrHeartbeatAckParams);
         }
         if self.params[0].header().typ != ParamType::HeartbeatInfo {
-            return Err(Error::ErrHeartbeatAckNotHeartbeatInfo.into());
+            return Err(Error::ErrHeartbeatAckNotHeartbeatInfo);
         }
 
         self.header().marshal_to(buf)?;

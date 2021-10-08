@@ -185,7 +185,7 @@ impl AssociationInternal {
 
             Ok(())
         } else {
-            Err(Error::ErrInitNotStoredToSend.into())
+            Err(Error::ErrInitNotStoredToSend)
         }
     }
 
@@ -205,7 +205,7 @@ impl AssociationInternal {
             self.awake_write_loop();
             Ok(())
         } else {
-            Err(Error::ErrCookieEchoNotStoredToSend.into())
+            Err(Error::ErrCookieEchoNotStoredToSend)
         }
     }
 
@@ -659,7 +659,7 @@ impl AssociationInternal {
         {
             // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
             //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
-            return Err(Error::ErrHandleInitState.into());
+            return Err(Error::ErrHandleInitState);
         }
 
         // Should we be setting any of these permanently until we've ACKed further?
@@ -808,7 +808,7 @@ impl AssociationInternal {
 
             Ok(vec![])
         } else {
-            Err(Error::ErrInitAckNoCookie.into())
+            Err(Error::ErrInitAckNoCookie)
         }
     }
 
@@ -1038,14 +1038,14 @@ impl AssociationInternal {
         default_payload_type: PayloadProtocolIdentifier,
     ) -> Result<Arc<Stream>> {
         if self.streams.contains_key(&stream_identifier) {
-            return Err(Error::ErrStreamAlreadyExist.into());
+            return Err(Error::ErrStreamAlreadyExist);
         }
 
         if let Some(s) = self.create_stream(stream_identifier, false) {
             s.set_default_payload_type(default_payload_type);
             Ok(Arc::clone(&s))
         } else {
-            Err(Error::ErrStreamCreateFailed.into())
+            Err(Error::ErrStreamCreateFailed)
         }
     }
 
@@ -1142,7 +1142,7 @@ impl AssociationInternal {
                         self.min_tsn2measure_rtt = self.my_next_tsn;
                         let rtt = match SystemTime::now().duration_since(c.since) {
                             Ok(rtt) => rtt,
-                            Err(_) => return Err(Error::ErrInvalidSystemTime.into()),
+                            Err(_) => return Err(Error::ErrInvalidSystemTime),
                         };
                         let srtt = self.rto_mgr.set_new_rtt(rtt.as_millis() as u64);
                         log::trace!(
@@ -1160,7 +1160,7 @@ impl AssociationInternal {
                     self.in_fast_recovery = false;
                 }
             } else {
-                return Err(Error::ErrInflightQueueTsnPop.into());
+                return Err(Error::ErrInflightQueueTsnPop);
             }
 
             i += 1;
@@ -1199,7 +1199,7 @@ impl AssociationInternal {
                             self.min_tsn2measure_rtt = self.my_next_tsn;
                             let rtt = match SystemTime::now().duration_since(c.since) {
                                 Ok(rtt) => rtt,
-                                Err(_) => return Err(Error::ErrInvalidSystemTime.into()),
+                                Err(_) => return Err(Error::ErrInvalidSystemTime),
                             };
                             let srtt = self.rto_mgr.set_new_rtt(rtt.as_millis() as u64);
                             log::trace!(
@@ -1216,7 +1216,7 @@ impl AssociationInternal {
                         }
                     }
                 } else {
-                    return Err(Error::ErrTsnRequestNotExist.into());
+                    return Err(Error::ErrTsnRequestNotExist);
                 }
             }
         }
@@ -1356,7 +1356,7 @@ impl AssociationInternal {
                         }
                     }
                 } else {
-                    return Err(Error::ErrTsnRequestNotExist.into());
+                    return Err(Error::ErrTsnRequestNotExist);
                 }
 
                 tsn += 1;
@@ -1738,7 +1738,7 @@ impl AssociationInternal {
     async fn send_reset_request(&mut self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrResetPacketInStateNotExist.into());
+            return Err(Error::ErrResetPacketInStateNotExist);
         }
 
         // Create DATA chunk which only contains valid stream identifier with
@@ -1775,7 +1775,7 @@ impl AssociationInternal {
             }
             Ok(None)
         } else {
-            Err(Error::ErrParamterType.into())
+            Err(Error::ErrParamterType)
         }
     }
 
@@ -1964,7 +1964,7 @@ impl AssociationInternal {
     async fn send_payload_data(&mut self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrPayloadDataStateNotExist.into());
+            return Err(Error::ErrPayloadDataStateNotExist);
         }
 
         // Push the chunks into the pending queue first.
@@ -2143,7 +2143,7 @@ impl AssociationInternal {
         } else if chunk_any.downcast_ref::<ChunkAbort>().is_some()
             || chunk_any.downcast_ref::<ChunkError>().is_some()
         {
-            return Err(Error::ErrChunk.into());
+            return Err(Error::ErrChunk);
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkHeartbeat>() {
             self.handle_heartbeat(c).await?
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkCookieEcho>() {
@@ -2165,7 +2165,7 @@ impl AssociationInternal {
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkShutdownComplete>() {
             self.handle_shutdown_complete(c).await?
         } else {
-            return Err(Error::ErrChunkTypeUnhandled.into());
+            return Err(Error::ErrChunkTypeUnhandled);
         };
 
         if !packets.is_empty() {

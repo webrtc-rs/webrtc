@@ -1,6 +1,5 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -61,12 +60,12 @@ impl Chunk for ChunkForwardTsn {
         let header = ChunkHeader::unmarshal(buf)?;
 
         if header.typ != CT_FORWARD_TSN {
-            return Err(Error::ErrChunkTypeNotForwardTsn.into());
+            return Err(Error::ErrChunkTypeNotForwardTsn);
         }
 
         let mut offset = CHUNK_HEADER_SIZE + NEW_CUMULATIVE_TSN_LENGTH;
         if buf.len() < offset {
-            return Err(Error::ErrChunkTooShort.into());
+            return Err(Error::ErrChunkTooShort);
         }
 
         let reader = &mut buf.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
@@ -149,7 +148,7 @@ impl Chunk for ChunkForwardTsnStream {
 
     fn unmarshal(buf: &Bytes) -> Result<Self> {
         if buf.len() < FORWARD_TSN_STREAM_LENGTH {
-            return Err(Error::ErrChunkTooShort.into());
+            return Err(Error::ErrChunkTooShort);
         }
 
         let reader = &mut buf.clone();

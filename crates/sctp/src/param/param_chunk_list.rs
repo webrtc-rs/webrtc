@@ -1,7 +1,6 @@
 use super::{param_header::*, param_type::*, *};
 use crate::chunk::chunk_type::*;
 
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -36,7 +35,7 @@ impl Param for ParamChunkList {
         let header = ParamHeader::unmarshal(raw)?;
 
         if header.typ != ParamType::ChunkList {
-            return Err(Error::ErrParamTypeUnexpected.into());
+            return Err(Error::ErrParamTypeUnexpected);
         }
 
         let reader =

@@ -1,6 +1,5 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -183,7 +182,7 @@ impl Chunk for ChunkPayloadData {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_PAYLOAD_DATA {
-            return Err(Error::ErrChunkTypeNotPayloadData.into());
+            return Err(Error::ErrChunkTypeNotPayloadData);
         }
 
         let immediate_sack = (header.flags & PAYLOAD_DATA_IMMEDIATE_SACK) != 0;
@@ -192,7 +191,7 @@ impl Chunk for ChunkPayloadData {
         let ending_fragment = (header.flags & PAYLOAD_DATA_ENDING_FRAGMENT_BITMASK) != 0;
 
         if raw.len() < PAYLOAD_DATA_HEADER_SIZE {
-            return Err(Error::ErrChunkPayloadSmall.into());
+            return Err(Error::ErrChunkPayloadSmall);
         }
 
         let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());

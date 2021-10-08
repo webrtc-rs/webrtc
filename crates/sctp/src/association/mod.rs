@@ -235,12 +235,12 @@ impl Association {
 
         if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
-                Err(err.into())
+                Err(err)
             } else {
                 Ok(a)
             }
         } else {
-            Err(Error::ErrAssociationHandshakeClosed.into())
+            Err(Error::ErrAssociationHandshakeClosed)
         }
     }
 
@@ -250,12 +250,12 @@ impl Association {
 
         if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
-                Err(err.into())
+                Err(err)
             } else {
                 Ok(a)
             }
         } else {
-            Err(Error::ErrAssociationHandshakeClosed.into())
+            Err(Error::ErrAssociationHandshakeClosed)
         }
     }
 
@@ -267,7 +267,7 @@ impl Association {
 
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrShutdownNonEstablished.into());
+            return Err(Error::ErrShutdownNonEstablished);
         }
 
         // Attempt a graceful shutdown.

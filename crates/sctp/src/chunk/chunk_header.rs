@@ -1,6 +1,5 @@
 use super::{chunk_type::*, *};
 
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -42,7 +41,7 @@ impl Chunk for ChunkHeader {
 
     fn unmarshal(raw: &Bytes) -> Result<Self> {
         if raw.len() < CHUNK_HEADER_SIZE {
-            return Err(Error::ErrChunkHeaderTooSmall.into());
+            return Err(Error::ErrChunkHeaderTooSmall);
         }
 
         let reader = &mut raw.clone();
@@ -52,14 +51,14 @@ impl Chunk for ChunkHeader {
         let length = reader.get_u16();
 
         if length < CHUNK_HEADER_SIZE as u16 {
-            return Err(Error::ErrChunkHeaderInvalidLength.into());
+            return Err(Error::ErrChunkHeaderInvalidLength);
         }
 
         // Length includes Chunk header
         let value_length = length as isize - CHUNK_HEADER_SIZE as isize;
         let length_after_value = raw.len() as isize - length as isize;
         if length_after_value < 0 {
-            return Err(Error::ErrChunkHeaderNotEnoughSpace.into());
+            return Err(Error::ErrChunkHeaderNotEnoughSpace);
         } else if length_after_value < 4 {
             // https://tools.ietf.org/html/rfc4960#section-3.2
             // The Chunk Length field does not count any chunk PADDING.
@@ -73,7 +72,7 @@ impl Chunk for ChunkHeader {
             for i in (1..=length_after_value).rev() {
                 let padding_offset = CHUNK_HEADER_SIZE + (value_length + i - 1) as usize;
                 if raw[padding_offset] != 0 {
-                    return Err(Error::ErrChunkHeaderPaddingNonZero.into());
+                    return Err(Error::ErrChunkHeaderPaddingNonZero);
                 }
             }
         }
