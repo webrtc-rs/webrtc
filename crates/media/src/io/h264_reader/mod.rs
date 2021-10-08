@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod h264_reader_test;
+
 use crate::error::Error;
 
 use anyhow::Result;

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod h264_writer_test;
+
 use crate::io::Writer;
 
 use anyhow::Result;
