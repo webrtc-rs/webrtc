@@ -40,12 +40,12 @@ impl Payloader for Vp9Payloader {
     /// Payload fragments an Vp9Payloader packet across one or more byte arrays
     fn payload(&mut self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         /*
-         * https://www.ietf.org/id/draft-ietf-payload-vp9-10.txt
+         * https://www.ietf.org/id/draft-ietf-payload-vp9-13.txt
          *
          * Flexible mode (F=1)
          *        0 1 2 3 4 5 6 7
          *       +-+-+-+-+-+-+-+-+
-         *       |I|P|L|F|B|E|V|-| (REQUIRED)
+         *       |I|P|L|F|B|E|V|Z| (REQUIRED)
          *       +-+-+-+-+-+-+-+-+
          *  I:   |M| PICTURE ID  | (REQUIRED)
          *       +-+-+-+-+-+-+-+-+
@@ -62,7 +62,7 @@ impl Payloader for Vp9Payloader {
          * Non-flexible mode (F=0)
          *        0 1 2 3 4 5 6 7
          *       +-+-+-+-+-+-+-+-+
-         *       |I|P|L|F|B|E|V|-| (REQUIRED)
+         *       |I|P|L|F|B|E|V|Z| (REQUIRED)
          *       +-+-+-+-+-+-+-+-+
          *  I:   |M| PICTURE ID  | (RECOMMENDED)
          *       +-+-+-+-+-+-+-+-+
@@ -158,6 +158,8 @@ pub struct Vp9Packet {
     pub e: bool,
     /// scalability structure (SS) present
     pub v: bool,
+    /// Not a reference frame for upper spatial layers
+    pub z: bool,
 
     /// Recommended headers
     /// 7 or 16 bits, picture ID.
@@ -217,6 +219,7 @@ impl Depacketizer for Vp9Packet {
         self.b = (b & 0x08) != 0;
         self.e = (b & 0x04) != 0;
         self.v = (b & 0x02) != 0;
+        self.z = (b & 0x01) != 0;
 
         let mut payload_index = 1;
 

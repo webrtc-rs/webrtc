@@ -13,6 +13,7 @@ pub const VP8_HEADER_SIZE: usize = 1;
 /// Vp8Payloader payloads VP8 packets
 #[derive(Default, Debug, Copy, Clone)]
 pub struct Vp8Payloader {
+    pub enable_picture_id: bool,
     picture_id: u16,
 }
 
@@ -43,10 +44,14 @@ impl Payloader for Vp8Payloader {
          *     and MUST NOT be 1 otherwise.  The S bit MUST be set to 1 for the
          *     first packet of each encoded frame.
          */
-        let using_header_size = if self.picture_id == 0 || self.picture_id < 128 {
-            VP8_HEADER_SIZE + 2
+        let using_header_size = if self.enable_picture_id {
+            if self.picture_id == 0 || self.picture_id < 128 {
+                VP8_HEADER_SIZE + 2
+            } else {
+                VP8_HEADER_SIZE + 3
+            }
         } else {
-            VP8_HEADER_SIZE + 3
+            VP8_HEADER_SIZE
         };
 
         let max_fragment_size = mtu as isize - VP8_HEADER_SIZE as isize;
@@ -70,15 +75,17 @@ impl Payloader for Vp8Payloader {
                 first = false;
             }
 
-            if using_header_size == VP8_HEADER_SIZE + 2 {
-                buf[0] |= 0x80;
-                buf[1] |= 0x80;
-                buf[2] |= (self.picture_id & 0x7F) as u8;
-            } else if using_header_size == VP8_HEADER_SIZE + 3 {
-                buf[0] |= 0x80;
-                buf[1] |= 0x80;
-                buf[2] |= 0x80 | ((self.picture_id >> 8) & 0x7F) as u8;
-                buf[3] |= (self.picture_id & 0xFF) as u8;
+            if self.enable_picture_id {
+                if using_header_size == VP8_HEADER_SIZE + 2 {
+                    buf[0] |= 0x80;
+                    buf[1] |= 0x80;
+                    buf[2] |= (self.picture_id & 0x7F) as u8;
+                } else if using_header_size == VP8_HEADER_SIZE + 3 {
+                    buf[0] |= 0x80;
+                    buf[1] |= 0x80;
+                    buf[2] |= 0x80 | ((self.picture_id >> 8) & 0x7F) as u8;
+                    buf[3] |= (self.picture_id & 0xFF) as u8;
+                }
             }
 
             out.put(&buf[..using_header_size]);
@@ -109,14 +116,14 @@ pub struct Vp8Packet {
     /// Required Header
     /// extended controlbits present
     pub x: u8,
-    /// (non-reference frame)  when set to 1 this frame can be discarded
+    /// when set to 1 this frame can be discarded
     pub n: u8,
     /// start of VP8 partition
     pub s: u8,
     /// partition index
     pub pid: u8,
 
-    /// Optional Header
+    /// Extended control bits
     /// 1 if PictureID is present
     pub i: u8,
     /// 1 if TL0PICIDX is present
@@ -126,10 +133,17 @@ pub struct Vp8Packet {
     /// 1 if KEYIDX is present
     pub k: u8,
 
+    /// Optional extension
     /// 8 or 16 bits, picture ID
     pub picture_id: u16,
     /// 8 bits temporal level zero index
     pub tl0_pic_idx: u8,
+    /// 2 bits temporal layer index
+    pub tid: u8,
+    /// 1 bit layer sync bit
+    pub y: u8,
+    /// 5 bits temporal key frame index
+    pub key_idx: u8,
 
     pub payload: Bytes,
 }
@@ -137,7 +151,8 @@ pub struct Vp8Packet {
 impl Depacketizer for Vp8Packet {
     /// depacketize parses the passed byte slice and stores the result in the VP8Packet this method is called upon
     fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
-        if packet.len() < 4 {
+        let payload_len = packet.len();
+        if payload_len < 4 {
             return Err(Error::ErrShortPacket);
         }
         //    0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
@@ -188,12 +203,28 @@ impl Depacketizer for Vp8Packet {
             }
         }
 
+        if payload_index >= payload_len {
+            return Err(Error::ErrShortPacket);
+        }
+
         if self.l == 1 {
-            reader.get_u8();
+            self.tl0_pic_idx = reader.get_u8();
             payload_index += 1;
         }
 
+        if payload_index >= payload_len {
+            return Err(Error::ErrShortPacket);
+        }
+
         if self.t == 1 || self.k == 1 {
+            let b = reader.get_u8();
+            if self.t == 1 {
+                self.tid = b >> 6;
+                self.y = (b >> 5) & 0x1;
+            }
+            if self.k == 1 {
+                self.key_idx = b & 0x1F;
+            }
             payload_index += 1;
         }
 
