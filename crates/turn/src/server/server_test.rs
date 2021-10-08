@@ -33,7 +33,7 @@ impl AuthHandler for TestAuthHandler {
         if let Some(pw) = self.cred_map.get(username) {
             Ok(pw.to_vec())
         } else {
-            Err(Error::ErrFakeErr.into())
+            Err(Error::ErrFakeErr)
         }
     }
 }

@@ -33,7 +33,7 @@ impl RelayConnObserver for DummyRelayConnObserver {
         _to: &str,
         _dont_wait: bool,
     ) -> Result<TransactionResult> {
-        Err(Error::ErrFakeErr.into())
+        Err(Error::ErrFakeErr)
     }
 }
 

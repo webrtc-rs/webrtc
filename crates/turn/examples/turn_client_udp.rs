@@ -69,7 +69,7 @@ async fn main() -> Result<(), Error> {
     let host = matches.value_of("host").unwrap();
     let port = matches.value_of("port").unwrap();
     let user = matches.value_of("user").unwrap();
-    let cred: Vec<&str> = user.splitn(2, "=").collect();
+    let cred: Vec<&str> = user.splitn(2, '=').collect();
     let ping = matches.is_present("ping");
     let realm = matches.value_of("realm").unwrap();
 

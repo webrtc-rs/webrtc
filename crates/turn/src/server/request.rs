@@ -120,7 +120,7 @@ impl Request {
         if m.typ.class == CLASS_INDICATION {
             match m.typ.method {
                 METHOD_SEND => self.handle_send_indication(m).await,
-                _ => Err(Error::ErrUnexpectedClass.into()),
+                _ => Err(Error::ErrUnexpectedClass),
             }
         } else if m.typ.class == CLASS_REQUEST {
             match m.typ.method {
@@ -129,10 +129,10 @@ impl Request {
                 METHOD_CREATE_PERMISSION => self.handle_create_permission_request(m).await,
                 METHOD_CHANNEL_BIND => self.handle_channel_bind_request(m).await,
                 METHOD_BINDING => self.handle_binding_request(m).await,
-                _ => Err(Error::ErrUnexpectedClass.into()),
+                _ => Err(Error::ErrUnexpectedClass),
             }
         } else {
-            Err(Error::ErrUnexpectedClass.into())
+            Err(Error::ErrUnexpectedClass)
         }
     }
 
@@ -206,7 +206,7 @@ impl Request {
                     &self.conn,
                     self.src_addr,
                     bad_request_msg,
-                    Error::ErrNoSuchUser.into(),
+                    Error::ErrNoSuchUser,
                 )
                 .await?;
                 return Ok(None);
@@ -234,7 +234,7 @@ impl Request {
             // Nonce has already been taken
             let mut nonces = self.nonces.lock().await;
             if nonces.contains_key(&nonce) {
-                return Err(Error::ErrDuplicatedNonce.into());
+                return Err(Error::ErrDuplicatedNonce);
             }
             nonces.insert(nonce.clone(), Instant::now());
         }
@@ -318,7 +318,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                Error::ErrRelayAlreadyAllocatedForFiveTuple.into(),
+                Error::ErrRelayAlreadyAllocatedForFiveTuple,
             )
             .await;
         }
@@ -354,7 +354,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                Error::ErrRequestedTransportMustBeUdp.into(),
+                Error::ErrRequestedTransportMustBeUdp,
             )
             .await;
         }
@@ -380,7 +380,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                Error::ErrNoDontFragmentSupport.into(),
+                Error::ErrNoDontFragmentSupport,
             )
             .await;
         }
@@ -409,7 +409,7 @@ impl Request {
                     &self.conn,
                     self.src_addr,
                     bad_request_msg,
-                    Error::ErrRequestWithReservationTokenAndEvenPort.into(),
+                    Error::ErrRequestWithReservationTokenAndEvenPort,
                 )
                 .await;
             }
@@ -571,7 +571,7 @@ impl Request {
                 let a = a.lock().await;
                 a.refresh(lifetime_duration).await;
             } else {
-                return Err(Error::ErrNoAllocationFound.into());
+                return Err(Error::ErrNoAllocationFound);
             }
         } else {
             self.allocation_manager.delete_allocation(&five_tuple).await;
@@ -653,7 +653,7 @@ impl Request {
 
             build_and_send(&self.conn, self.src_addr, msg).await
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 
@@ -683,18 +683,18 @@ impl Request {
                 a.has_permission(&msg_dst).await
             };
             if !has_perm {
-                return Err(Error::ErrNoPermission.into());
+                return Err(Error::ErrNoPermission);
             }
 
             let a = a.lock().await;
             let l = a.relay_socket.send_to(&data_attr.0, msg_dst).await?;
             if l != data_attr.0.len() {
-                Err(Error::ErrShortWrite.into())
+                Err(Error::ErrShortWrite)
             } else {
                 Ok(())
             }
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 
@@ -764,7 +764,7 @@ impl Request {
             )?;
             return build_and_send(&self.conn, self.src_addr, msg).await;
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 
@@ -786,15 +786,15 @@ impl Request {
             if let Some(peer) = channel {
                 let l = a.relay_socket.send_to(&c.data, peer).await?;
                 if l != c.data.len() {
-                    Err(Error::ErrShortWrite.into())
+                    Err(Error::ErrShortWrite)
                 } else {
                     Ok(())
                 }
             } else {
-                Err(Error::ErrNoSuchChannelBind.into())
+                Err(Error::ErrNoSuchChannelBind)
             }
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 }

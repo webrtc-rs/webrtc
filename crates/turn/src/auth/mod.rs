@@ -57,9 +57,10 @@ impl AuthHandler for LongTermAuthHandler {
 
         let t = Duration::from_secs(username.parse::<u64>()?);
         if t < SystemTime::now().duration_since(UNIX_EPOCH)? {
-            return Err(
-                Error::Other(format!("Expired time-windowed username {}", username)).into(),
-            );
+            return Err(Error::Other(format!(
+                "Expired time-windowed username {}",
+                username
+            )));
         }
 
         let password = long_term_credentials(username, &self.shared_secret);

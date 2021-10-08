@@ -252,7 +252,7 @@ async fn test_allocation_timeout() -> Result<()> {
 
         for allocation in &allocations {
             let mut a = allocation.lock().await;
-            if !a.close().await.is_err() {
+            if a.close().await.is_ok() {
                 continue 'outer;
             }
         }

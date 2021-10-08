@@ -66,19 +66,19 @@ impl ChannelData {
     pub fn decode(&mut self) -> Result<()> {
         let buf = &self.raw;
         if buf.len() < CHANNEL_DATA_HEADER_SIZE {
-            return Err(Error::ErrUnexpectedEof.into());
+            return Err(Error::ErrUnexpectedEof);
         }
         let num = u16::from_be_bytes([buf[0], buf[1]]);
         self.number = ChannelNumber(num);
         if !self.number.valid() {
-            return Err(Error::ErrInvalidChannelNumber.into());
+            return Err(Error::ErrInvalidChannelNumber);
         }
         let l = u16::from_be_bytes([
             buf[CHANNEL_DATA_NUMBER_SIZE],
             buf[CHANNEL_DATA_NUMBER_SIZE + 1],
         ]) as usize;
         if l > buf[CHANNEL_DATA_HEADER_SIZE..].len() {
-            return Err(Error::ErrBadChannelDataLength.into());
+            return Err(Error::ErrBadChannelDataLength);
         }
         self.data = buf[CHANNEL_DATA_HEADER_SIZE..CHANNEL_DATA_HEADER_SIZE + l].to_vec();
 

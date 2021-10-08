@@ -33,7 +33,7 @@ fn test_binding_manager_method() -> Result<()> {
         let addr = SocketAddr::V4(SocketAddrV4::new(lo, 10000 + i));
         let b0 = {
             let b = m.create(addr);
-            b.unwrap().clone()
+            *b.unwrap()
         };
         let b1 = m.find_by_addr(&addr);
         assert!(b1.is_some(), "should succeed");

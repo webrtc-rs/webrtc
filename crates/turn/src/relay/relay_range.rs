@@ -30,13 +30,13 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
     // validate confirms that the RelayAddressGenerator is properly initialized
     fn validate(&self) -> Result<()> {
         if self.min_port == 0 {
-            Err(Error::ErrMinPortNotZero.into())
+            Err(Error::ErrMinPortNotZero)
         } else if self.max_port == 0 {
-            Err(Error::ErrMaxPortNotZero.into())
+            Err(Error::ErrMaxPortNotZero)
         } else if self.max_port < self.min_port {
-            Err(Error::ErrMaxPortLessThanMinPort.into())
+            Err(Error::ErrMaxPortLessThanMinPort)
         } else if self.address.is_empty() {
-            Err(Error::ErrListeningAddressInvalid.into())
+            Err(Error::ErrListeningAddressInvalid)
         } else {
             Ok(())
         }
@@ -81,6 +81,6 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
             return Ok((conn, relay_addr));
         }
 
-        Err(Error::ErrMaxRetriesExceeded.into())
+        Err(Error::ErrMaxRetriesExceeded)
     }
 }

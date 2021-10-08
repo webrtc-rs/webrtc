@@ -34,7 +34,7 @@ impl AuthHandler for MyAuthHandler {
             //log::debug!("username={}, password={:?}", username, pw);
             Ok(pw.to_vec())
         } else {
-            Err(Error::ErrFakeErr.into())
+            Err(Error::ErrFakeErr)
         }
     }
 }
@@ -99,10 +99,10 @@ async fn main() -> Result<(), Error> {
 
     // Cache -users flag for easy lookup later
     // If passwords are stored they should be saved to your DB hashed using turn.GenerateAuthKey
-    let creds: Vec<&str> = users.split(",").collect();
+    let creds: Vec<&str> = users.split(',').collect();
     let mut cred_map = HashMap::new();
     for user in creds {
-        let cred: Vec<&str> = user.splitn(2, "=").collect();
+        let cred: Vec<&str> = user.splitn(2, '=').collect();
         let key = generate_auth_key(cred[0], realm, cred[1]);
         cred_map.insert(cred[0].to_owned(), key);
     }

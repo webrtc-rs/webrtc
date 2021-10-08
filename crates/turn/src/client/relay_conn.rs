@@ -425,12 +425,12 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
             if result.is_err() {
-                return Err(Error::Other(format!("{}", res.typ)).into());
+                return Err(Error::Other(format!("{}", res.typ)));
             } else if code.code == CODE_STALE_NONCE {
                 self.set_nonce_from_msg(&res);
-                return Err(Error::ErrTryAgain.into());
+                return Err(Error::ErrTryAgain);
             } else {
-                return Err(Error::Other(format!("{} (error {})", res.typ, code)).into());
+                return Err(Error::Other(format!("{} (error {})", res.typ, code)));
             }
         }
 
@@ -495,10 +495,10 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
             if result.is_err() {
-                return Err(Error::Other(format!("{}", res.typ)).into());
+                return Err(Error::Other(format!("{}", res.typ)));
             } else if code.code == CODE_STALE_NONCE {
                 self.set_nonce_from_msg(&res);
-                return Err(Error::ErrTryAgain.into());
+                return Err(Error::ErrTryAgain);
             } else {
                 return Ok(());
             }
@@ -569,7 +569,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
         let res = tr_res.msg;
 
         if res.typ != MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE) {
-            return Err(Error::ErrUnexpectedResponse.into());
+            return Err(Error::ErrUnexpectedResponse);
         }
 
         log::debug!("channel binding successful: {} {}", bind_addr, bind_number);
