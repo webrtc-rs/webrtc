@@ -164,20 +164,24 @@ async fn main() -> Result<()> {
         let video_file_name = video_file.to_owned();
         tokio::spawn(async move {
             // Open a IVF file and start reading using our IVFReader
-            let file = File::open(video_file_name)?;
+            let file = File::open(&video_file_name)?;
             let reader = BufReader::new(file);
             let (mut ivf, header) = IVFReader::new(reader)?;
 
             // Wait for connection established
             let _ = notify_video.notified().await;
 
-            println!("play video from disk file output.ivf");
+            println!("play video from disk file {}", video_file_name);
 
+            // It is important to use a time.Ticker instead of time.Sleep because
+            // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
+            // * works around latency issues with Sleep
             // Send our video file frame at a time. Pace our sending so we send it at the same speed it should be played back as.
             // This isn't required since the video is timestamped, but we will such much higher loss if we send all at once.
             let sleep_time = Duration::from_millis(
                 ((1000 * header.timebase_numerator) / header.timebase_denominator) as u64,
             );
+            let mut ticker = tokio::time::interval(sleep_time);
             loop {
                 let frame = match ivf.parse_next_frame() {
                     Ok((frame, _)) => frame,
@@ -187,8 +191,6 @@ async fn main() -> Result<()> {
                     }
                 };
 
-                tokio::time::sleep(sleep_time).await;
-
                 video_track
                     .write_sample(&Sample {
                         data: frame.freeze(),
@@ -196,6 +198,8 @@ async fn main() -> Result<()> {
                         ..Default::default()
                     })
                     .await?;
+
+                let _ = ticker.tick().await;
             }
 
             Result::<()>::Ok(())
@@ -240,6 +244,11 @@ async fn main() -> Result<()> {
 
             println!("play audio from disk file output.ogg");
 
+            // It is important to use a time.Ticker instead of time.Sleep because
+            // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
+            // * works around latency issues with Sleep
+            let mut ticker = tokio::time::interval(Duration::from_millis(20));
+
             // Keep track of last granule, the difference is the amount of samples in the buffer
             let mut last_granule: u64 = 0;
             while let Ok((page_data, page_header)) = ogg.parse_next_page() {
@@ -256,7 +265,7 @@ async fn main() -> Result<()> {
                     })
                     .await?;
 
-                tokio::time::sleep(sample_duration).await;
+                let _ = ticker.tick().await;
             }
 
             Result::<()>::Ok(())

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use interceptor::registry::Registry;
-use media::io::ivf_reader::IVFReader;
+use media::io::h264_reader::H264Reader;
 use media::io::ogg_reader::OggReader;
 use media::Sample;
 use std::fs::File;
@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP9};
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
 use webrtc::error::Error;
 use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
@@ -26,10 +26,10 @@ use webrtc::peer::sdp::session_description::RTCSessionDescription;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("play-from-disk-vp9")
+    let mut app = App::new("play-from-disk-h264")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of play-from-disk-vp9.")
+        .about("An example of play-from-disk-h264.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
@@ -140,7 +140,7 @@ async fn main() -> Result<()> {
         // Create a video track
         let video_track = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_VP9.to_owned(),
+                mime_type: MIME_TYPE_H264.to_owned(),
                 ..Default::default()
             },
             "video".to_owned(),
@@ -163,10 +163,10 @@ async fn main() -> Result<()> {
 
         let video_file_name = video_file.to_owned();
         tokio::spawn(async move {
-            // Open a IVF file and start reading using our IVFReader
+            // Open a H264 file and start reading using our H264Reader
             let file = File::open(&video_file_name)?;
             let reader = BufReader::new(file);
-            let (mut ivf, header) = IVFReader::new(reader)?;
+            let mut h264 = H264Reader::new(reader);
 
             // Wait for connection established
             let _ = notify_video.notified().await;
@@ -176,24 +176,27 @@ async fn main() -> Result<()> {
             // It is important to use a time.Ticker instead of time.Sleep because
             // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
             // * works around latency issues with Sleep
-            // Send our video file frame at a time. Pace our sending so we send it at the same speed it should be played back as.
-            // This isn't required since the video is timestamped, but we will such much higher loss if we send all at once.
-            let sleep_time = Duration::from_millis(
-                ((1000 * header.timebase_numerator) / header.timebase_denominator) as u64,
-            );
-            let mut ticker = tokio::time::interval(sleep_time);
+            let mut ticker = tokio::time::interval(Duration::from_millis(33));
             loop {
-                let frame = match ivf.parse_next_frame() {
-                    Ok((frame, _)) => frame,
+                let nal = match h264.next_nal() {
+                    Ok(nal) => nal,
                     Err(err) => {
                         println!("All video frames parsed and sent: {}", err);
                         break;
                     }
                 };
+                println!(
+                    "PictureOrderCount={}, ForbiddenZeroBit={}, RefIdc={}, UnitType={}, data={}",
+                    nal.picture_order_count,
+                    nal.forbidden_zero_bit,
+                    nal.ref_idc,
+                    nal.unit_type,
+                    nal.data.len()
+                );
 
                 video_track
                     .write_sample(&Sample {
-                        data: frame.freeze(),
+                        data: nal.data.freeze(),
                         duration: Duration::from_secs(1),
                         ..Default::default()
                     })
