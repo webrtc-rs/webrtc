@@ -93,9 +93,10 @@ impl DTLSRole {
 
 #[cfg(test)]
 mod test {
+    use crate::error::Result;
+
     use super::*;
 
-    use anyhow::Result;
     use std::io::Cursor;
 
     #[test]

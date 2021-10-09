@@ -2,7 +2,7 @@
 mod rtp_sender_test;
 
 use crate::api::media_engine::MediaEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::interceptor::{create_stream_info, InterceptorToTrackLocalWriter};
 use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
@@ -13,7 +13,6 @@ use crate::media::rtp::{PayloadType, RTCRtpEncodingParameters, RTCRtpSendParamet
 use crate::media::track::track_local::{TrackLocal, TrackLocalContext, TrackLocalWriter};
 use crate::RECEIVE_MTU;
 
-use anyhow::Result;
 use ice::rand::generate_crypto_random_string;
 use interceptor::stream_info::StreamInfo;
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
@@ -40,13 +39,13 @@ impl RTPSenderInternal {
                 let rtcp_interceptor = self.rtcp_interceptor.lock().await;
                 if let Some(rtcp_interceptor) = &*rtcp_interceptor{
                     let a = Attributes::new();
-                    rtcp_interceptor.read(b, &a).await
+                    Ok(rtcp_interceptor.read(b, &a).await?)
                 }else{
-                    Err(Error::ErrInterceptorNotBind.into())
+                    Err(Error::ErrInterceptorNotBind)
                 }
             }
             _ = stop_called_rx.recv() =>{
-                Err(Error::ErrClosedPipe.into())
+                Err(Error::ErrClosedPipe)
             }
         }
     }
@@ -236,7 +235,7 @@ impl RTCRtpSender {
             let tr = self.tr.lock().await;
             if let Some(r) = &*tr {
                 if r.kind != t.kind() {
-                    return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind.into());
+                    return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind);
                 }
             } else {
                 //TODO: what about None tr?
@@ -275,7 +274,7 @@ impl RTCRtpSender {
 
             t.bind(&new_context).await
         } else {
-            Err(Error::ErrRTPSenderTrackNil.into())
+            Err(Error::ErrRTPSenderTrackNil)
         };
 
         match result {
@@ -306,7 +305,7 @@ impl RTCRtpSender {
     /// send Attempts to set the parameters controlling the sending of media.
     pub async fn send(&self, parameters: &RTCRtpSendParameters) -> Result<()> {
         if self.has_sent().await {
-            return Err(Error::ErrRTPSenderSendAlreadyCalled.into());
+            return Err(Error::ErrRTPSenderSendAlreadyCalled);
         }
 
         let write_stream = Arc::new(InterceptorToTrackLocalWriter::new());

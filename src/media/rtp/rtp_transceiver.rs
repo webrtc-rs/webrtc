@@ -2,7 +2,7 @@
 mod rtp_transceiver_test;
 
 use crate::api::media_engine::MediaEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::rtp_codec::*;
 use crate::media::rtp::rtp_receiver::{RTCRtpReceiver, RTPReceiverInternal};
 use crate::media::rtp::rtp_sender::RTCRtpSender;
@@ -10,7 +10,6 @@ use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::PayloadType;
 use crate::media::track::track_local::TrackLocal;
 
-use anyhow::Result;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -64,7 +63,7 @@ impl RTCRtpTransceiver {
             let media_engine_codecs = self.media_engine.get_codecs_by_kind(self.kind).await;
             let (_, match_type) = codec_parameters_fuzzy_search(codec, &media_engine_codecs);
             if match_type == CodecMatch::None {
-                return Err(Error::ErrRTPTransceiverCodecUnsupported.into());
+                return Err(Error::ErrRTPTransceiverCodecUnsupported);
             }
         }
 
@@ -139,7 +138,7 @@ impl RTCRtpTransceiver {
     pub(crate) async fn set_mid(&self, mid: String) -> Result<()> {
         let mut m = self.mid.lock().await;
         if !m.is_empty() {
-            return Err(Error::ErrRTPTransceiverCannotChangeMid.into());
+            return Err(Error::ErrRTPTransceiverCannotChangeMid);
         }
         *m = mid;
 
@@ -220,7 +219,7 @@ impl RTCRtpTransceiver {
         } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendonly {
             self.set_direction(RTCRtpTransceiverDirection::Inactive);
         } else {
-            return Err(Error::ErrRTPTransceiverSetSendingInvalidState.into());
+            return Err(Error::ErrRTPTransceiverSetSendingInvalidState);
         }
         Ok(())
     }

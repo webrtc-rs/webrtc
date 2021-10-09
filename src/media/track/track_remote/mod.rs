@@ -1,11 +1,11 @@
 use crate::api::media_engine::MediaEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTCRtpParameters, RTPCodecType};
 use crate::media::rtp::{PayloadType, SSRC};
 use crate::{RECEIVE_MTU, RTP_PAYLOAD_TYPE_BITMASK};
 
 use crate::media::rtp::rtp_receiver::RTPReceiverInternal;
-use anyhow::Result;
+
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
 use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
@@ -193,7 +193,7 @@ impl TrackRemote {
                 if let Some(receiver) = &self.receiver {
                     receiver.read_rtp(b, self.tid).await?
                 } else {
-                    return Err(Error::ErrRTPReceiverNil.into());
+                    return Err(Error::ErrRTPReceiverNil);
                 }
             };
             self.check_and_update_track(&b[..n]).await?;
@@ -205,7 +205,7 @@ impl TrackRemote {
     /// once a different payloadType is detected the track will be updated
     async fn check_and_update_track(&self, b: &[u8]) -> Result<()> {
         if b.len() < 2 {
-            return Err(Error::ErrRTPTooShort.into());
+            return Err(Error::ErrRTPTooShort);
         }
 
         let payload_type = b[1] & RTP_PAYLOAD_TYPE_BITMASK;
@@ -224,7 +224,7 @@ impl TrackRemote {
                 *codec = if let Some(codec) = p.codecs.first() {
                     codec.clone()
                 } else {
-                    return Err(Error::ErrCodecNotFound.into());
+                    return Err(Error::ErrCodecNotFound);
                 };
             }
             {

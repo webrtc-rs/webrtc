@@ -188,7 +188,7 @@ async fn main() -> Result<()> {
                                         result = pc2.write_rtcp(&PictureLossIndication{
                                                 sender_ssrc: 0,
                                                 media_ssrc,
-                                        }).await;
+                                        }).await.map_err(Into::into);
                                     }
                                 };
                             }

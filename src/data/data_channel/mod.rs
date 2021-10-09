@@ -16,7 +16,6 @@ use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::Result;
 use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::Mutex;
@@ -25,7 +24,7 @@ use data_channel_state::RTCDataChannelState;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data::sctp_transport::RTCSctpTransport;
-use crate::error::{Error, OnErrorHdlrFn};
+use crate::error::{Error, OnErrorHdlrFn, Result};
 
 /// message size limit for Chromium
 const DATA_CHANNEL_BUFFER_SIZE: u16 = u16::MAX;
@@ -179,7 +178,7 @@ impl RTCDataChannel {
 
             Ok(())
         } else {
-            Err(Error::ErrSCTPNotEstablished.into())
+            Err(Error::ErrSCTPNotEstablished)
         }
     }
 
@@ -296,12 +295,12 @@ impl RTCDataChannel {
                 Ok((n, is_string)) => (n, is_string),
                 Err(err) => {
                     ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
-                    if !sctp::error::Error::ErrStreamClosed.equal(&err) {
+                    if err != sctp::Error::ErrStreamClosed {
                         let on_error_handler2 = Arc::clone(&on_error_handler);
                         tokio::spawn(async move {
                             let mut handler = on_error_handler2.lock().await;
                             if let Some(f) = &mut *handler {
-                                f(err).await;
+                                f(err.into()).await;
                             }
                         });
                     }
@@ -337,9 +336,9 @@ impl RTCDataChannel {
 
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
-            dc.write_data_channel(data, false).await
+            Ok(dc.write_data_channel(data, false).await?)
         } else {
-            Err(Error::ErrClosedPipe.into())
+            Err(Error::ErrClosedPipe)
         }
     }
 
@@ -349,15 +348,15 @@ impl RTCDataChannel {
 
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
-            dc.write_data_channel(&Bytes::from(s), true).await
+            Ok(dc.write_data_channel(&Bytes::from(s), true).await?)
         } else {
-            Err(Error::ErrClosedPipe.into())
+            Err(Error::ErrClosedPipe)
         }
     }
 
     fn ensure_open(&self) -> Result<()> {
         if self.ready_state() != RTCDataChannelState::Open {
-            Err(Error::ErrClosedPipe.into())
+            Err(Error::ErrClosedPipe)
         } else {
             Ok(())
         }
@@ -373,7 +372,7 @@ impl RTCDataChannel {
     /// resulting DataChannel object.
     pub async fn detach(&self) -> Result<Arc<data::data_channel::DataChannel>> {
         if !self.setting_engine.detach.data_channels {
-            return Err(Error::ErrDetachNotEnabled.into());
+            return Err(Error::ErrDetachNotEnabled);
         }
 
         let data_channel = self.data_channel.lock().await;
@@ -382,7 +381,7 @@ impl RTCDataChannel {
 
             Ok(Arc::clone(dc))
         } else {
-            Err(Error::ErrDetachBeforeOpened.into())
+            Err(Error::ErrDetachBeforeOpened)
         }
     }
 
@@ -397,7 +396,7 @@ impl RTCDataChannel {
 
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
-            dc.close().await
+            Ok(dc.close().await?)
         } else {
             Ok(())
         }

@@ -17,7 +17,7 @@ use setting_engine::*;
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::RTCSctpTransport;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::rtp::rtp_sender::RTCRtpSender;
@@ -26,7 +26,6 @@ use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::RTCPeerConnection;
 use interceptor::{noop::NoOp, registry::Registry, Interceptor};
 
-use anyhow::Result;
 use rcgen::KeyPair;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -88,7 +87,7 @@ impl API {
             let now = SystemTime::now();
             for cert in &certificates {
                 if cert.expires().duration_since(now).is_err() {
-                    return Err(Error::ErrCertificateExpired.into());
+                    return Err(Error::ErrCertificateExpired);
                 }
             }
         } else {
@@ -127,7 +126,7 @@ impl API {
     ) -> Result<RTCDataChannel> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
         if params.label.len() > 65535 {
-            return Err(Error::ErrStringSizeLimit.into());
+            return Err(Error::ErrStringSizeLimit);
         }
 
         let d = RTCDataChannel::new(params, Arc::clone(&self.setting_engine));

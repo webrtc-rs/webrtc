@@ -2,6 +2,7 @@ use super::*;
 use crate::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
+use crate::error::Result;
 use crate::media::rtp::rtp_codec::RTCRtpCodecCapability;
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
@@ -238,7 +239,7 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
-        assert!(Error::ErrRTPSenderNewTrackHasIncorrectKind.equal(&err));
+        assert_eq!(Error::ErrRTPSenderNewTrackHasIncorrectKind, err);
     } else {
         assert!(false);
     }
@@ -314,7 +315,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
-        assert!(Error::ErrUnsupportedCodec.equal(&err));
+        assert_eq!(Error::ErrUnsupportedCodec, err);
     } else {
         assert!(false);
     }

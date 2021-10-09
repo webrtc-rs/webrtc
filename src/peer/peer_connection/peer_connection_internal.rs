@@ -427,20 +427,20 @@ impl PeerConnectionInternal {
         init: &[RTCRtpTransceiverInit],
     ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         let direction = match init.len() {
             0 => RTCRtpTransceiverDirection::Sendrecv,
             1 => init[0].direction,
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne.into()),
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne),
         };
 
         let t = match direction {
             RTCRtpTransceiverDirection::Sendonly | RTCRtpTransceiverDirection::Sendrecv => {
                 let codecs = self.media_engine.get_codecs_by_kind(kind).await;
                 if codecs.is_empty() {
-                    return Err(Error::ErrNoCodecsAvailable.into());
+                    return Err(Error::ErrNoCodecsAvailable);
                 }
                 let track = Arc::new(TrackLocalStaticSample::new(
                     codecs[0].capability.clone(),
@@ -468,7 +468,7 @@ impl PeerConnectionInternal {
                 )
                 .await
             }
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport.into()),
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport),
         };
 
         self.add_rtp_transceiver(Arc::clone(&t)).await;
@@ -512,7 +512,7 @@ impl PeerConnectionInternal {
                 ));
                 (None, s)
             }
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport.into()),
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport),
         };
 
         Ok(RTCRtpTransceiver::new(
@@ -707,7 +707,7 @@ impl PeerConnectionInternal {
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
             cert.get_fingerprints()?
         } else {
-            return Err(Error::ErrNonCertificate.into());
+            return Err(Error::ErrNonCertificate);
         };
 
         let params = PopulateSdpParams {
@@ -762,7 +762,7 @@ impl PeerConnectionInternal {
                 for media in &parsed.media_descriptions {
                     if let Some(mid_value) = get_mid_value(media) {
                         if mid_value.is_empty() {
-                            return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue.into());
+                            return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue);
                         }
 
                         if media.media_name.media == MEDIA_SECTION_APPLICATION {
@@ -788,7 +788,7 @@ impl PeerConnectionInternal {
                                 && detected_plan_b)
                         {
                             if !detected_plan_b {
-                                return Err(Error::ErrIncorrectSDPSemantics.into());
+                                return Err(Error::ErrIncorrectSDPSemantics);
                             }
                             // If we're responding to a plan-b offer, then we should try to fill up this
                             // media entry with all matching local transceivers
@@ -831,7 +831,7 @@ impl PeerConnectionInternal {
                             || sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback
                         {
                             if detected_plan_b {
-                                return Err(Error::ErrIncorrectSDPSemantics.into());
+                                return Err(Error::ErrIncorrectSDPSemantics);
                             }
                             if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
                                 if let Some(sender) = t.sender().await {
@@ -845,11 +845,11 @@ impl PeerConnectionInternal {
                                     ..Default::default()
                                 });
                             } else {
-                                return Err(Error::ErrPeerConnTranscieverMidNil.into());
+                                return Err(Error::ErrPeerConnTranscieverMidNil);
                             }
                         }
                     } else {
-                        return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue.into());
+                        return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue);
                     }
                 }
             }
@@ -900,7 +900,7 @@ impl PeerConnectionInternal {
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
             cert.get_fingerprints()?
         } else {
-            return Err(Error::ErrNonCertificate.into());
+            return Err(Error::ErrNonCertificate);
         };
 
         let params = PopulateSdpParams {
@@ -942,9 +942,7 @@ impl PeerConnectionInternal {
                     if let Some(only_media_section) = parsed.media_descriptions.first() {
                         for a in &only_media_section.attributes {
                             if a.key == SSRC_STR {
-                                return Err(
-                                    Error::ErrPeerConnSingleMediaSectionHasExplicitSSRC.into()
-                                );
+                                return Err(Error::ErrPeerConnSingleMediaSectionHasExplicitSSRC);
                             }
                         }
 
@@ -987,7 +985,7 @@ impl PeerConnectionInternal {
                     })
                     .await;
                 if !audio_supported && !video_supported {
-                    return Err(Error::ErrPeerConnSimulcastMidRTPExtensionRequired.into());
+                    return Err(Error::ErrPeerConnSimulcastMidRTPExtensionRequired);
                 }
 
                 let (sid_extension_id, audio_supported, video_supported) = self
@@ -997,7 +995,7 @@ impl PeerConnectionInternal {
                     })
                     .await;
                 if !audio_supported && !video_supported {
-                    return Err(Error::ErrPeerConnSimulcastStreamIDRTPExtensionRequired.into());
+                    return Err(Error::ErrPeerConnSimulcastStreamIDRTPExtensionRequired);
                 }
 
                 let mut b = vec![0u8; RECEIVE_MTU];
@@ -1050,11 +1048,11 @@ impl PeerConnectionInternal {
                         }
                     }
                 }
-                return Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed.into());
+                return Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed);
             }
         }
 
-        Err(Error::ErrPeerConnRemoteDescriptionNil.into())
+        Err(Error::ErrPeerConnRemoteDescriptionNil)
     }
 
     async fn start_receiver(
@@ -1182,13 +1180,15 @@ impl PeerConnectionInternal {
     }
 }
 
+type IResult<T> = std::result::Result<T, interceptor::Error>;
+
 #[async_trait]
 impl RTCPWriter for PeerConnectionInternal {
     async fn write(
         &self,
         pkt: &(dyn rtcp::packet::Packet + Send + Sync),
         _a: &Attributes,
-    ) -> Result<usize> {
-        self.dtls_transport.write_rtcp(pkt).await
+    ) -> IResult<usize> {
+        Ok(self.dtls_transport.write_rtcp(pkt).await?)
     }
 }

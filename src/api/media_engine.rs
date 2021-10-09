@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod media_engine_test;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::fmtp::parse_fmtp;
 use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
@@ -14,7 +14,6 @@ use crate::media::rtp::rtp_transceiver_direction::{
 use crate::media::rtp::{PayloadType, RTCPFeedback};
 use crate::peer::sdp::{codecs_from_media_description, rtp_extensions_from_media_description};
 
-use anyhow::Result;
 use sdp::session_description::SessionDescription;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -393,7 +392,10 @@ impl MediaEngine {
     ) -> Result<()> {
         codec.stats_id = format!(
             "RTPCodec-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         );
         match typ {
             RTPCodecType::Audio => {
@@ -404,7 +406,7 @@ impl MediaEngine {
                 MediaEngine::add_codec(&mut self.video_codecs, codec);
                 Ok(())
             }
-            _ => Err(Error::ErrUnknownType.into()),
+            _ => Err(Error::ErrUnknownType),
         }
     }
 
@@ -427,7 +429,7 @@ impl MediaEngine {
             if *direction != RTCRtpTransceiverDirection::Recvonly
                 && *direction != RTCRtpTransceiverDirection::Sendonly
             {
-                return Err(Error::ErrRegisterHeaderExtensionInvalidDirection.into());
+                return Err(Error::ErrRegisterHeaderExtensionInvalidDirection);
             }
         }
 
@@ -527,7 +529,7 @@ impl MediaEngine {
             }
         }
 
-        Err(Error::ErrCodecNotFound.into())
+        Err(Error::ErrCodecNotFound)
     }
 
     /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {

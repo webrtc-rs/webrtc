@@ -1,7 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-use anyhow::Result;
 use ice::candidate::candidate_base::CandidateBaseConfig;
 use ice::candidate::candidate_host::CandidateHostConfig;
 use ice::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
@@ -10,7 +9,7 @@ use ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use ice::candidate::Candidate;
 use serde::{Deserialize, Serialize};
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::peer::ice::ice_protocol::RTCIceProtocol;
 
@@ -138,7 +137,7 @@ impl RTCIceCandidate {
                 };
                 config.new_candidate_relay().await?
             }
-            _ => return Err(Error::ErrICECandidateTypeUnknown.into()),
+            _ => return Err(Error::ErrICECandidateTypeUnknown),
         };
 
         Ok(c)

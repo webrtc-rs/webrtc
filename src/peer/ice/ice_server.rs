@@ -1,7 +1,5 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::peer::ice::ice_credential_type::RTCIceCredentialType;
-
-use anyhow::Result;
 
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
@@ -15,7 +13,7 @@ pub struct RTCIceServer {
 
 impl RTCIceServer {
     pub(crate) fn parse_url(&self, url_str: &str) -> Result<ice::url::Url> {
-        ice::url::Url::parse_url(url_str)
+        Ok(ice::url::Url::parse_url(url_str)?)
     }
 
     pub(crate) fn validate(&self) -> Result<()> {
@@ -32,7 +30,7 @@ impl RTCIceServer {
             {
                 // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.2)
                 if self.username.is_empty() || self.credential.is_empty() {
-                    return Err(Error::ErrNoTurnCredentials.into());
+                    return Err(Error::ErrNoTurnCredentials);
                 }
                 url.username = self.username.clone();
 
@@ -49,7 +47,7 @@ impl RTCIceServer {
                             }
                         }*/
                     }
-                    _ => return Err(Error::ErrTurnCredentials.into()),
+                    _ => return Err(Error::ErrTurnCredentials),
                 };
             }
 
@@ -143,12 +141,7 @@ mod test {
 
         for (ice_server, expected_err) in tests {
             if let Err(err) = ice_server.urls() {
-                assert!(
-                    expected_err.equal(&err),
-                    "{:?} with err {:?}",
-                    ice_server,
-                    err
-                );
+                assert_eq!(expected_err, err, "{:?} with err {:?}", ice_server, err);
             } else {
                 assert!(false, "expected error, but got ok");
             }
@@ -164,17 +157,12 @@ mod test {
                 credential: String::new(),
                 credential_type: RTCIceCredentialType::Oauth,
             },
-            ice::error::Error::ErrStunQuery,
+            ice::Error::ErrStunQuery,
         )];
 
         for (ice_server, expected_err) in tests {
             if let Err(err) = ice_server.urls() {
-                assert!(
-                    expected_err.equal(&err),
-                    "{:?} with err {:?}",
-                    ice_server,
-                    err
-                );
+                assert_eq!(err, expected_err, "{:?} with err {:?}", ice_server, err);
             } else {
                 assert!(false, "expected error, but got ok");
             }

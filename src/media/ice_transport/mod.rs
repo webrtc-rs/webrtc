@@ -3,7 +3,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
-use anyhow::Result;
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
@@ -12,7 +11,7 @@ use util::Conn;
 use ice_candidate_pair::RTCIceCandidatePair;
 use ice_role::RTCIceRole;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
@@ -88,7 +87,7 @@ impl RTCIceTransport {
     /// Start incoming connectivity checks based on its configured role.
     pub async fn start(&self, params: &RTCIceParameters, role: Option<RTCIceRole>) -> Result<()> {
         if self.state() != RTCIceTransportState::New {
-            return Err(Error::ErrICETransportNotInNew.into());
+            return Err(Error::ErrICETransportNotInNew);
         }
 
         self.ensure_gatherer().await?;
@@ -163,7 +162,7 @@ impl RTCIceTransport {
                         .await?
                 }
 
-                _ => return Err(Error::ErrICERoleUnknown.into()),
+                _ => return Err(Error::ErrICERoleUnknown),
             };
 
             let config = Config {
@@ -181,7 +180,7 @@ impl RTCIceTransport {
 
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 
@@ -200,7 +199,7 @@ impl RTCIceTransport {
                 )
                 .await?;
         } else {
-            return Err(Error::ErrICEAgentNotExist.into());
+            return Err(Error::ErrICEAgentNotExist);
         }
         self.gatherer.gather().await
     }
@@ -255,7 +254,7 @@ impl RTCIceTransport {
             }
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 
@@ -274,7 +273,7 @@ impl RTCIceTransport {
 
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 
@@ -347,7 +346,7 @@ impl RTCIceTransport {
         if let Some(agent) = self.gatherer.get_agent().await {
             Ok(agent.set_remote_credentials(new_ufrag, new_pwd).await?)
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 }

@@ -1,7 +1,6 @@
 use crate::util::mux::mux_func::MatchFunc;
 use util::{Buffer, Conn};
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::io;
@@ -29,6 +28,8 @@ impl Endpoint {
         Ok(())
     }
 }
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 #[async_trait]
 impl Conn for Endpoint {

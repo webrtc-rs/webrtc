@@ -4,11 +4,10 @@ mod track_local_static_test;
 pub mod track_local_static_rtp;
 pub mod track_local_static_sample;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::rtp_codec::*;
 use crate::media::rtp::*;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::any::Any;
 use std::fmt;

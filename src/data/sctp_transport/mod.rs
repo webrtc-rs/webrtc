@@ -18,7 +18,6 @@ use sctp::association::Association;
 
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 
-use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
@@ -167,7 +166,7 @@ impl RTCSctpTransport {
 
             Ok(())
         } else {
-            Err(Error::ErrSCTPTransportDTLS.into())
+            Err(Error::ErrSCTPTransportDTLS)
         }
     }
 
@@ -196,11 +195,11 @@ impl RTCSctpTransport {
             {
                 Ok(dc) => dc,
                 Err(err) => {
-                    if data::error::Error::ErrStreamClosed.equal(&err) {
+                    if data::Error::ErrStreamClosed == err {
                         log::error!("Failed to accept data channel: {}", err);
                         let mut handler = param.on_error_handler.lock().await;
                         if let Some(f) = &mut *handler {
-                            f(err).await;
+                            f(err.into()).await;
                         }
                     }
                     break;
@@ -367,7 +366,7 @@ impl RTCSctpTransport {
             }
         }
 
-        Err(Error::ErrMaxDataChannelID.into())
+        Err(Error::ErrMaxDataChannelID)
     }
 
     pub(crate) async fn association(&self) -> Option<Arc<Association>> {

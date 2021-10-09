@@ -1,6 +1,7 @@
+use crate::error::Result;
+
 use super::sdp_type::RTCSdpType;
 
-use anyhow::Result;
 use sdp::session_description::SessionDescription;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;

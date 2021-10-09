@@ -2,7 +2,7 @@
 mod sdp_test;
 
 use crate::api::media_engine::MediaEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
@@ -17,7 +17,6 @@ use crate::MEDIA_SECTION_APPLICATION;
 pub mod sdp_type;
 pub mod session_description;
 
-use anyhow::Result;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::common_description::{Address, ConnectionInformation};
@@ -374,7 +373,7 @@ pub(crate) async fn add_transceiver_sdp(
     params: AddTransceiverSdpParams,
 ) -> Result<(SessionDescription, bool)> {
     if media_section.transceivers.is_empty() {
-        return Err(Error::ErrSDPZeroTransceivers.into());
+        return Err(Error::ErrSDPZeroTransceivers);
     }
     let (is_plan_b, should_add_candidates, mid_value, dtls_role, ice_gathering_state) = (
         params.is_plan_b,
@@ -560,9 +559,9 @@ pub(crate) async fn populate_sdp(
 
     for (i, m) in media_sections.iter().enumerate() {
         if m.data && !m.transceivers.is_empty() {
-            return Err(Error::ErrSDPMediaSectionMediaDataChanInvalid.into());
+            return Err(Error::ErrSDPMediaSectionMediaDataChanInvalid);
         } else if !params.is_plan_b && m.transceivers.len() > 1 {
-            return Err(Error::ErrSDPMediaSectionMultipleTrackInvalid.into());
+            return Err(Error::ErrSDPMediaSectionMultipleTrackInvalid);
         }
 
         let should_add_candidates = i == 0;
@@ -635,7 +634,7 @@ pub(crate) fn description_is_plan_b(
 ) -> Result<bool> {
     if let Some(desc) = desc {
         if let Some(parsed) = &desc.parsed {
-            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?;
+            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$").unwrap();
             for media in &parsed.media_descriptions {
                 if let Some(s) = get_mid_value(media) {
                     if let Some(caps) = detection_regex.captures(s) {
@@ -674,18 +673,18 @@ pub(crate) fn extract_fingerprint(desc: &SessionDescription) -> Result<(String, 
     }
 
     if fingerprints.is_empty() {
-        return Err(Error::ErrSessionDescriptionNoFingerprint.into());
+        return Err(Error::ErrSessionDescriptionNoFingerprint);
     }
 
     for m in 1..fingerprints.len() {
         if fingerprints[m] != fingerprints[0] {
-            return Err(Error::ErrSessionDescriptionConflictingFingerprints.into());
+            return Err(Error::ErrSessionDescriptionConflictingFingerprints);
         }
     }
 
     let parts: Vec<&str> = fingerprints[0].split(' ').collect();
     if parts.len() != 2 {
-        return Err(Error::ErrSessionDescriptionInvalidFingerprint.into());
+        return Err(Error::ErrSessionDescriptionInvalidFingerprint);
     }
 
     Ok((parts[1].to_owned(), parts[0].to_owned()))
@@ -726,20 +725,20 @@ pub(crate) async fn extract_ice_details(
     }
 
     if remote_ufrags.is_empty() {
-        return Err(Error::ErrSessionDescriptionMissingIceUfrag.into());
+        return Err(Error::ErrSessionDescriptionMissingIceUfrag);
     } else if remote_pwds.is_empty() {
-        return Err(Error::ErrSessionDescriptionMissingIcePwd.into());
+        return Err(Error::ErrSessionDescriptionMissingIcePwd);
     }
 
     for m in 1..remote_ufrags.len() {
         if remote_ufrags[m] != remote_ufrags[0] {
-            return Err(Error::ErrSessionDescriptionConflictingIceUfrag.into());
+            return Err(Error::ErrSessionDescriptionConflictingIceUfrag);
         }
     }
 
     for m in 1..remote_pwds.len() {
         if remote_pwds[m] != remote_pwds[0] {
-            return Err(Error::ErrSessionDescriptionConflictingIcePwd.into());
+            return Err(Error::ErrSessionDescriptionConflictingIcePwd);
         }
     }
 
@@ -803,7 +802,7 @@ pub(crate) fn codecs_from_media_description(
                 if payload_type == 0 {
                     continue;
                 }
-                return Err(err);
+                return Err(err.into());
             }
         };
 

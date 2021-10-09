@@ -17,7 +17,7 @@ async fn test_opus_case() -> Result<()> {
 
     let offer = pc.create_offer(None).await?;
 
-    let re = Regex::new(r"(?m)^a=rtpmap:\d+ opus/48000/2")?;
+    let re = Regex::new(r"(?m)^a=rtpmap:\d+ opus/48000/2").unwrap();
     assert!(re.is_match(offer.sdp.as_str()));
 
     pc.close().await?;
@@ -37,11 +37,11 @@ async fn test_video_case() -> Result<()> {
 
     let offer = pc.create_offer(None).await?;
 
-    let re = Regex::new(r"(?m)^a=rtpmap:\d+ H264/90000")?;
+    let re = Regex::new(r"(?m)^a=rtpmap:\d+ H264/90000").unwrap();
     assert!(re.is_match(offer.sdp.as_str()));
-    let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP8/90000")?;
+    let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP8/90000").unwrap();
     assert!(re.is_match(offer.sdp.as_str()));
-    let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP9/90000")?;
+    let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP9/90000").unwrap();
     assert!(re.is_match(offer.sdp.as_str()));
 
     pc.close().await?;
@@ -53,7 +53,7 @@ async fn test_video_case() -> Result<()> {
 async fn test_media_engine_remote_description() -> Result<()> {
     let must_parse = |raw: &str| -> Result<SessionDescription> {
         let mut reader = Cursor::new(raw.as_bytes());
-        SessionDescription::unmarshal(&mut reader)
+        Ok(SessionDescription::unmarshal(&mut reader)?)
     };
 
     //"No Media"
@@ -493,7 +493,7 @@ a=fmtp:97 apt=96
         assert!(m.negotiated_video.load(Ordering::SeqCst));
 
         if let Err(err) = m.get_codec_by_payload(97).await {
-            assert!(Error::ErrCodecNotFound.equal(&err));
+            assert_eq!(Error::ErrCodecNotFound, err);
         } else {
             assert!(false);
         }
@@ -605,7 +605,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             )
             .await;
         if let Err(err) = result {
-            assert!(Error::ErrRegisterHeaderExtensionInvalidDirection.equal(&err));
+            assert_eq!(Error::ErrRegisterHeaderExtensionInvalidDirection, err);
         } else {
             assert!(false);
         }
@@ -620,7 +620,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             )
             .await;
         if let Err(err) = result {
-            assert!(Error::ErrRegisterHeaderExtensionInvalidDirection.equal(&err));
+            assert_eq!(Error::ErrRegisterHeaderExtensionInvalidDirection, err);
         } else {
             assert!(false);
         }
@@ -634,7 +634,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             )
             .await;
         if let Err(err) = result {
-            assert!(Error::ErrRegisterHeaderExtensionInvalidDirection.equal(&err));
+            assert_eq!(Error::ErrRegisterHeaderExtensionInvalidDirection, err);
         } else {
             assert!(false);
         }

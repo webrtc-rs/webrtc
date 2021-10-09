@@ -1,9 +1,8 @@
 use super::*;
 use crate::api::media_engine::*;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::fmtp::*;
 
-use anyhow::Result;
 use std::fmt;
 
 /// RTPCodecType determines the type of a codec
@@ -85,7 +84,7 @@ impl RTCRtpCodecCapability {
         {
             Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader::default()))
         } else {
-            Err(Error::ErrNoPayloaderForCodec.into())
+            Err(Error::ErrNoPayloaderForCodec)
         }
     }
 }

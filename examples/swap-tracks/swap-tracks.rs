@@ -9,7 +9,6 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
-use webrtc::error::Error;
 use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
 use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -19,6 +18,7 @@ use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -213,7 +213,7 @@ async fn main() -> Result<()> {
     let done1 = Arc::clone(&done);
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             let done2 = Arc::clone(&done1);
             Box::pin(async move {
@@ -263,7 +263,7 @@ async fn main() -> Result<()> {
             packet.header.sequence_number = i;
             // Write out the packet, ignoring closed pipe if nobody is listening
             if let Err(err) = output_track.write_rtp(&packet).await {
-                if Error::ErrClosedPipe.equal(&err) {
+                if Error::ErrClosedPipe == err {
                     // The peerConnection has been closed.
                     return;
                 } else {

@@ -1,5 +1,5 @@
 use crate::api::setting_engine::SettingEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::peer::ice::ice_candidate::*;
@@ -10,7 +10,6 @@ use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
 use ice::url::Url;
 
-use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -235,7 +234,7 @@ impl RTCIceGatherer {
         let (frag, pwd) = if let Some(agent) = self.get_agent().await {
             agent.get_local_user_credentials().await
         } else {
-            return Err(Error::ErrICEAgentNotExist.into());
+            return Err(Error::ErrICEAgentNotExist);
         };
 
         Ok(RTCIceParameters {
@@ -252,7 +251,7 @@ impl RTCIceGatherer {
         let ice_candidates = if let Some(agent) = self.get_agent().await {
             agent.get_local_candidates().await?
         } else {
-            return Err(Error::ErrICEAgentNotExist.into());
+            return Err(Error::ErrICEAgentNotExist);
         };
 
         Ok(rtc_ice_candidates_from_ice_candidates(&ice_candidates))

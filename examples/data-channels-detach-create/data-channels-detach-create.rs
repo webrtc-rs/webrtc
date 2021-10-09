@@ -226,7 +226,7 @@ async fn write_loop(d: Arc<data::data_channel::DataChannel>) -> Result<()> {
             _ = timeout.as_mut() =>{
                 let message = math_rand_alpha(15);
                 println!("Sending '{}'", message);
-                result = d.write(&Bytes::from(message)).await;
+                result = d.write(&Bytes::from(message)).await.map_err(Into::into);
             }
         };
     }

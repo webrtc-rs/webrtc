@@ -13,7 +13,7 @@ use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::data::sctp_transport::RTCSctpTransport;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
@@ -61,7 +61,6 @@ use crate::{
     SSRC_STR,
 };
 
-use anyhow::Result;
 use async_trait::async_trait;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
@@ -177,7 +176,10 @@ impl RTCPeerConnection {
         Ok(RTCPeerConnection {
             stats_id: format!(
                 "PeerConnection-{}",
-                SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
             ),
             interceptor_rtcp_writer,
             internal,
@@ -204,7 +206,7 @@ impl RTCPeerConnection {
             let now = SystemTime::now();
             for cert in &configuration.certificates {
                 if cert.expires().duration_since(now).is_err() {
-                    return Err(Error::ErrCertificateExpired.into());
+                    return Err(Error::ErrCertificateExpired);
                 }
             }
         } else {
@@ -630,9 +632,9 @@ impl RTCPeerConnection {
     ) -> Result<RTCSessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if use_identity {
-            return Err(Error::ErrIdentityProviderNotImplemented.into());
+            return Err(Error::ErrIdentityProviderNotImplemented);
         } else if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         if let Some(options) = options {
@@ -752,7 +754,7 @@ impl RTCPeerConnection {
             }
             count += 1;
             if count >= 128 {
-                return Err(Error::ErrExcessiveRetries.into());
+                return Err(Error::ErrExcessiveRetries);
             }
         }
 
@@ -818,15 +820,15 @@ impl RTCPeerConnection {
     ) -> Result<RTCSessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if self.remote_description().await.is_none() {
-            return Err(Error::ErrNoRemoteDescription.into());
+            return Err(Error::ErrNoRemoteDescription);
         } else if use_identity {
-            return Err(Error::ErrIdentityProviderNotImplemented.into());
+            return Err(Error::ErrIdentityProviderNotImplemented);
         } else if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         } else if self.signaling_state() != RTCSignalingState::HaveRemoteOffer
             && self.signaling_state() != RTCSignalingState::HaveLocalPranswer
         {
-            return Err(Error::ErrIncorrectSignalingState.into());
+            return Err(Error::ErrIncorrectSignalingState);
         }
 
         let mut connection_role = self
@@ -876,9 +878,9 @@ impl RTCPeerConnection {
         op: StateChangeOp,
     ) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         } else if sd.sdp_type == RTCSdpType::Unspecified {
-            return Err(Error::ErrPeerConnSDPTypeInvalidValue.into());
+            return Err(Error::ErrPeerConnSDPTypeInvalidValue);
         }
 
         let next_state = {
@@ -896,7 +898,7 @@ impl RTCPeerConnection {
                                 sd.sdp != *last_offer
                             };
                             if check {
-                                Err(new_sdpdoes_not_match_offer.into())
+                                Err(new_sdpdoes_not_match_offer)
                             } else {
                                 let next_state = check_next_signaling_state(
                                     cur,
@@ -920,7 +922,7 @@ impl RTCPeerConnection {
                                 sd.sdp != *last_answer
                             };
                             if check {
-                                Err(new_sdpdoes_not_match_answer.into())
+                                Err(new_sdpdoes_not_match_answer)
                             } else {
                                 let next_state = check_next_signaling_state(
                                     cur,
@@ -975,7 +977,7 @@ impl RTCPeerConnection {
                                 sd.sdp != *last_answer
                             };
                             if check {
-                                Err(new_sdpdoes_not_match_answer.into())
+                                Err(new_sdpdoes_not_match_answer)
                             } else {
                                 let next_state = check_next_signaling_state(
                                     cur,
@@ -991,7 +993,7 @@ impl RTCPeerConnection {
                                 next_state
                             }
                         }
-                        _ => Err(Error::ErrPeerConnStateChangeInvalid.into()),
+                        _ => Err(Error::ErrPeerConnStateChangeInvalid),
                     }
                 }
                 StateChangeOp::SetRemote => {
@@ -1075,7 +1077,7 @@ impl RTCPeerConnection {
                             }
                             next_state
                         }
-                        _ => Err(Error::ErrPeerConnStateChangeInvalid.into()),
+                        _ => Err(Error::ErrPeerConnStateChangeInvalid),
                     }
                 } //_ => Err(Error::ErrPeerConnStateChangeUnhandled.into()),
             }
@@ -1126,7 +1128,7 @@ impl RTCPeerConnection {
     /// set_local_description sets the SessionDescription of the local peer
     pub async fn set_local_description(&self, mut desc: RTCSessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         let have_local_description = {
@@ -1145,7 +1147,7 @@ impl RTCPeerConnection {
                     let last_offer = self.internal.last_offer.lock().await;
                     desc.sdp = last_offer.clone();
                 }
-                _ => return Err(Error::ErrPeerConnSDPTypeInvalidValueSetLocalDescription.into()),
+                _ => return Err(Error::ErrPeerConnSDPTypeInvalidValueSetLocalDescription),
             }
         }
 
@@ -1198,7 +1200,7 @@ impl RTCPeerConnection {
     /// set_remote_description sets the SessionDescription of the remote peer
     pub async fn set_remote_description(&self, mut desc: RTCSessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         let is_renegotation = {
@@ -1227,9 +1229,7 @@ impl RTCPeerConnection {
                         for media in &parsed.media_descriptions {
                             if let Some(mid_value) = get_mid_value(media) {
                                 if mid_value.is_empty() {
-                                    return Err(
-                                        Error::ErrPeerConnRemoteDescriptionWithoutMidValue.into()
-                                    );
+                                    return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue);
                                 }
 
                                 if media.media_name.media == MEDIA_SECTION_APPLICATION {
@@ -1450,7 +1450,7 @@ impl RTCPeerConnection {
     /// to the existing set of candidates.
     pub async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()> {
         if self.remote_description().await.is_none() {
-            return Err(Error::ErrNoRemoteDescription.into());
+            return Err(Error::ErrNoRemoteDescription);
         }
 
         let candidate_value = match candidate.candidate.strip_prefix("candidate:") {
@@ -1518,7 +1518,7 @@ impl RTCPeerConnection {
         track: Arc<dyn TrackLocal + Send + Sync>,
     ) -> Result<Arc<RTCRtpSender>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         {
@@ -1585,14 +1585,14 @@ impl RTCPeerConnection {
 
         match transceiver.sender().await {
             Some(sender) => Ok(sender),
-            None => Err(Error::ErrRTPSenderNil.into()),
+            None => Err(Error::ErrRTPSenderNil),
         }
     }
 
     /// remove_track removes a Track from the PeerConnection
     pub async fn remove_track(&self, sender: &Arc<RTCRtpSender>) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         let mut transceiver = None;
@@ -1633,7 +1633,7 @@ impl RTCPeerConnection {
             }
             Ok(())
         } else {
-            Err(Error::ErrSenderNotCreatedByConnection.into())
+            Err(Error::ErrSenderNotCreatedByConnection)
         }
     }
 
@@ -1653,13 +1653,13 @@ impl RTCPeerConnection {
         init: &[RTCRtpTransceiverInit],
     ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         let direction = match init.len() {
             0 => RTCRtpTransceiverDirection::Sendrecv,
             1 => init[0].direction,
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackOnlyAcceptsOne.into()),
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackOnlyAcceptsOne),
         };
 
         let t = self
@@ -1682,7 +1682,7 @@ impl RTCPeerConnection {
     ) -> Result<Arc<RTCDataChannel>> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #2)
         if self.internal.is_closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrConnectionClosed.into());
+            return Err(Error::ErrConnectionClosed);
         }
 
         let mut params = DataChannelParameters {
@@ -1721,7 +1721,7 @@ impl RTCPeerConnection {
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #11)
             if params.protocol.len() > 65535 {
-                return Err(Error::ErrProtocolTooLarge.into());
+                return Err(Error::ErrProtocolTooLarge);
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #12)
@@ -1737,7 +1737,7 @@ impl RTCPeerConnection {
 
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #16)
         if d.max_packet_lifetime != 0 && d.max_retransmits != 0 {
-            return Err(Error::ErrRetransmitsOrPacketLifeTime.into());
+            return Err(Error::ErrRetransmitsOrPacketLifeTime);
         }
 
         {
@@ -1775,7 +1775,7 @@ impl RTCPeerConnection {
 
     /// set_identity_provider is used to configure an identity provider to generate identity assertions
     pub fn set_identity_provider(&self, _provider: &str) -> Result<()> {
-        Err(Error::ErrPeerConnSetIdentityProviderNotImplemented.into())
+        Err(Error::ErrPeerConnSetIdentityProviderNotImplemented)
     }
 
     /// write_rtcp sends a user provided RTCP packet to the connected peer. If no peer is connected the
@@ -1785,7 +1785,7 @@ impl RTCPeerConnection {
         pkt: &(dyn rtcp::packet::Packet + Send + Sync),
     ) -> Result<usize> {
         let a = Attributes::new();
-        self.interceptor_rtcp_writer.write(pkt, &a).await
+        Ok(self.interceptor_rtcp_writer.write(pkt, &a).await?)
     }
 
     /// close ends the PeerConnection
@@ -1821,7 +1821,7 @@ impl RTCPeerConnection {
             for t in &*rtp_transceivers {
                 if !t.stopped {
                     if let Err(err) = t.stop().await {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 }
             }
@@ -1837,17 +1837,17 @@ impl RTCPeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)
         if let Err(err) = self.internal.sctp_transport.stop().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #7)
         if let Err(err) = self.internal.dtls_transport.stop().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #8, #9, #10)
         if let Err(err) = self.internal.ice_transport.stop().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
@@ -1861,7 +1861,7 @@ impl RTCPeerConnection {
         .await;
 
         if let Err(err) = self.internal.ops.close().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         flatten_errs(close_errs)

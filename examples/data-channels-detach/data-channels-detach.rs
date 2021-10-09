@@ -136,7 +136,7 @@ async fn main() -> Result<()> {
             Box::pin(async move {
                 let d2 = Arc::clone(&d);
                 let d_label2 = d_label.clone();
-                let d_id2 = d_id.clone();
+                let d_id2 = d_id;
                 d.on_open(Box::new(move || {
                     println!("Data channel '{}'-'{}' open.", d_label2, d_id2);
 
@@ -235,7 +235,7 @@ async fn write_loop(d: Arc<data::data_channel::DataChannel>) -> Result<()> {
             _ = timeout.as_mut() =>{
                 let message = math_rand_alpha(15);
                 println!("Sending '{}'", message);
-                result = d.write(&Bytes::from(message)).await;
+                result = d.write(&Bytes::from(message)).await.map_err(Into::into);
             }
         };
     }

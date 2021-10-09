@@ -5,11 +5,13 @@ use ::dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 
 pub mod api;
 pub mod data;
-pub mod error;
+mod error;
 pub mod media;
 pub mod peer;
 pub mod stats;
 pub mod util;
+
+pub use error::Error;
 
 #[macro_use]
 extern crate lazy_static;

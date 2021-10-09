@@ -4,10 +4,10 @@ mod mux_test;
 pub mod endpoint;
 pub mod mux_func;
 
+use crate::error::Result;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::MatchFunc;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

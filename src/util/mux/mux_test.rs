@@ -25,7 +25,7 @@ async fn pipe_memory() -> (Arc<Endpoint>, impl Conn) {
 }
 
 #[tokio::test]
-async fn test_no_endpoints() -> Result<()> {
+async fn test_no_endpoints() -> crate::error::Result<()> {
     // In memory pipe
     let (ca, _) = pipe();
 
@@ -44,6 +44,8 @@ struct MuxErrorConn {
     idx: AtomicUsize,
     data: Vec<Vec<u8>>,
 }
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 #[async_trait]
 impl Conn for MuxErrorConn {

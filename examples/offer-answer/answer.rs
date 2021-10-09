@@ -149,7 +149,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 Ok(resp) => resp,
                 Err(err) => {
                     println!("{}", err);
-                    return Err(err.into());
+                    return Err(err);
                 }
             };
             //println!("remote_handler Response: {}", resp.status());
@@ -348,7 +348,7 @@ async fn main() -> Result<()> {
             // Register channel opening handling
             let d2 =  Arc::clone(&d);
             let d_label2 = d_label.clone();
-            let d_id2 = d_id.clone();
+            let d_id2 = d_id;
             d.on_open(Box::new(move || {
                 println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
                 Box::pin(async move {
@@ -361,7 +361,7 @@ async fn main() -> Result<()> {
                             _ = timeout.as_mut() =>{
                                 let message = math_rand_alpha(15);
                                 println!("Sending '{}'", message);
-                                result = d2.send_text(message).await;
+                                result = d2.send_text(message).await.map_err(Into::into);
                             }
                         };
                     }
@@ -371,7 +371,7 @@ async fn main() -> Result<()> {
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-               print!("Message from DataChannel '{}': '{}'\n", d_label, msg_str);
+               println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
                Box::pin(async{})
            })).await;
         })

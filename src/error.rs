@@ -1,8 +1,15 @@
+use rcgen::RcgenError;
 use std::future::Future;
+use std::num::ParseIntError;
 use std::pin::Pin;
+use std::string::FromUtf8Error;
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError as MpscSendError;
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     /// ErrUnknownType indicates an error with Unknown info.
     #[error("unknown")]
@@ -333,17 +340,65 @@ pub enum Error {
     #[error("not long enough to be a RTP Packet")]
     ErrRTPTooShort,
 
+    #[error("{0}")]
+    Util(#[from] util::Error),
+    #[error("{0}")]
+    Ice(#[from] ice::Error),
+    #[error("{0}")]
+    Srtp(#[from] srtp::Error),
+    #[error("{0}")]
+    Dtls(#[from] dtls::Error),
+    #[error("{0}")]
+    Data(#[from] data::Error),
+    #[error("{0}")]
+    Sctp(#[from] sctp::Error),
+    #[error("{0}")]
+    Sdp(#[from] sdp::Error),
+    #[error("{0}")]
+    Interceptor(#[from] interceptor::Error),
+    #[error("{0}")]
+    Rtcp(#[from] rtcp::Error),
+    #[error("{0}")]
+    Rtp(#[from] rtp::Error),
+
+    #[error("utf-8 error: {0}")]
+    Utf8(#[from] FromUtf8Error),
+    #[error("{0}")]
+    RcGen(#[from] RcgenError),
+    #[error("mpsc send: {0}")]
+    MpscSend(String),
+    #[error("parse int: {0}")]
+    ParseInt(#[from] ParseIntError),
+    #[error("parse url: {0}")]
+    ParseUrl(#[from] url::ParseError),
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     new(String),
 }
 
-impl Error {
-    pub fn equal(&self, err: &anyhow::Error) -> bool {
-        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+pub type OnErrorHdlrFn =
+    Box<dyn (FnMut(Error) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+
+// Because Tokio SendError is parameterized, we sadly lose the backtrace.
+impl<T> From<MpscSendError<T>> for Error {
+    fn from(e: MpscSendError<T>) -> Self {
+        Error::MpscSend(e.to_string())
     }
 }
 
-pub type OnErrorHdlrFn = Box<
-    dyn (FnMut(anyhow::Error) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
->;
+impl From<Error> for interceptor::Error {
+    fn from(e: Error) -> Self {
+        // this is a bit lol, but we do preserve the stack trace
+        interceptor::Error::Util(util::Error::from_std(e))
+    }
+}
+
+impl PartialEq<ice::Error> for Error {
+    fn eq(&self, other: &ice::Error) -> bool {
+        if let Error::Ice(e) = self {
+            return e == other;
+        }
+        false
+    }
+}

@@ -64,6 +64,7 @@ mod test {
     use super::*;
     use crate::api::media_engine::MediaEngine;
     use crate::api::APIBuilder;
+    use crate::error::Result;
     use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
     use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
     use crate::media::rtp::RTCRtpTransceiverInit;
@@ -72,7 +73,7 @@ mod test {
     use crate::peer::configuration::RTCConfiguration;
     use crate::peer::peer_connection::peer_connection_test::close_pair_now;
     use crate::SSRC_STR;
-    use anyhow::Result;
+
     use sdp::media_description::MediaDescription;
     use sdp::session_description::SessionDescription;
     use std::collections::HashSet;

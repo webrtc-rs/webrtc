@@ -2,7 +2,7 @@
 mod rtp_receiver_test;
 
 use crate::api::media_engine::MediaEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::interceptor::*;
 use crate::media::rtp::rtp_codec::{
@@ -17,7 +17,7 @@ use crate::util::flatten_errs;
 use crate::RECEIVE_MTU;
 
 use crate::peer::sdp::TrackDetails;
-use anyhow::Result;
+
 use interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPReader};
 use std::sync::Arc;
@@ -48,16 +48,16 @@ impl RTPReceiverInternal {
                 if let Some(t) = tracks.first(){
                     if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                         let a = Attributes::new();
-                        rtcp_interceptor.read(b, &a).await
+                        Ok(rtcp_interceptor.read(b, &a).await?)
                     }else{
-                        Err(Error::ErrInterceptorNotBind.into())
+                        Err(Error::ErrInterceptorNotBind)
                     }
                 }else{
-                    Err(Error::ErrExistingTrack.into())
+                    Err(Error::ErrExistingTrack)
                 }
             }
             _ = closed_rx.recv() => {
-                Err(Error::ErrClosedPipe.into())
+                Err(Error::ErrClosedPipe)
             }
         }
     }
@@ -74,16 +74,16 @@ impl RTPReceiverInternal {
                     if t.track.rid() == rid {
                        if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                             let a = Attributes::new();
-                            return rtcp_interceptor.read(b, &a).await;
+                            return Ok(rtcp_interceptor.read(b, &a).await?);
                         }else{
-                            return Err(Error::ErrInterceptorNotBind.into());
+                            return Err(Error::ErrInterceptorNotBind);
                         }
                     }
                 }
-                Err(Error::ErrRTPReceiverForRIDTrackStreamNotFound.into())
+                Err(Error::ErrRTPReceiverForRIDTrackStreamNotFound)
             }
             _ = closed_rx.recv() => {
-                Err(Error::ErrClosedPipe.into())
+                Err(Error::ErrClosedPipe)
             }
         }
     }
@@ -139,10 +139,10 @@ impl RTPReceiverInternal {
 
         if let Some(ri) = rtp_interceptor {
             let a = Attributes::new();
-            ri.read(b, &a).await
+            Ok(ri.read(b, &a).await?)
         } else {
             //log::debug!("read_rtp exit tracks with ErrRTPReceiverWithSSRCTrackStreamNotFound");
-            Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound.into())
+            Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound)
         }
     }
 
@@ -297,7 +297,7 @@ impl RTCRtpReceiver {
         let _d = {
             let mut received_tx = self.received_tx.lock().await;
             if received_tx.is_none() {
-                return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
+                return Err(Error::ErrRTPReceiverReceiveAlreadyCalled);
             }
             received_tx.take()
         };
@@ -536,7 +536,7 @@ impl RTCRtpReceiver {
         }
 
         //log::debug!("receive_for_rid exit tracks 2");
-        Err(Error::ErrRTPReceiverForSSRCTrackStreamNotFound.into())
+        Err(Error::ErrRTPReceiverForSSRCTrackStreamNotFound)
     }
 
     async fn streams_for_ssrc(

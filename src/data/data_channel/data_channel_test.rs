@@ -1310,11 +1310,11 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
     const OLD_APPLICATION: &str = "m=application 63743 DTLS/SCTP 5000\r";
     const OLD_ATTRIBUTE: &str = "a=sctpmap:5000 webrtc-datachannel 256\r";
 
-    let re = Regex::new(r"m=application (.*?)\r")?;
+    let re = Regex::new(r"m=application (.*?)\r").unwrap();
     offer.sdp = re
         .replace_all(offer.sdp.as_str(), OLD_APPLICATION)
         .to_string();
-    let re = Regex::new(r"a=sctp-port(.*?)\r")?;
+    let re = Regex::new(r"a=sctp-port(.*?)\r").unwrap();
     offer.sdp = re
         .replace_all(offer.sdp.as_str(), OLD_ATTRIBUTE)
         .to_string();
@@ -1548,8 +1548,9 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
     // attempt to send when channel is closed
     let result = channel_a.send(&Bytes::from_static(b"ABC")).await;
     if let Err(err) = result {
-        assert!(
-            Error::ErrClosedPipe.equal(&err),
+        assert_eq!(
+            Error::ErrClosedPipe,
+            err,
             "expected ErrClosedPipe, but got {}",
             err
         );
@@ -1559,8 +1560,9 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
 
     let result = channel_a.send_text("test".to_owned()).await;
     if let Err(err) = result {
-        assert!(
-            Error::ErrClosedPipe.equal(&err),
+        assert_eq!(
+            Error::ErrClosedPipe,
+            err,
             "expected ErrClosedPipe, but got {}",
             err
         );
@@ -1570,8 +1572,9 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
 
     let result = channel_a.ensure_open();
     if let Err(err) = result {
-        assert!(
-            Error::ErrClosedPipe.equal(&err),
+        assert_eq!(
+            Error::ErrClosedPipe,
+            err,
             "expected ErrClosedPipe, but got {}",
             err
         );

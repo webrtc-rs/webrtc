@@ -3,7 +3,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 
-use anyhow::Result;
 use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
@@ -18,7 +17,7 @@ use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::default_srtp_protection_profiles;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::media::ice_transport::ice_role::RTCIceRole;
@@ -186,7 +185,7 @@ impl RTCDtlsTransport {
                 .extract_session_keys_from_dtls(conn_state, self.role().await == DTLSRole::Client)
                 .await?;
         } else {
-            return Err(Error::ErrDtlsTransportNotStarted.into());
+            return Err(Error::ErrDtlsTransportNotStarted);
         }
 
         {
@@ -226,7 +225,7 @@ impl RTCDtlsTransport {
                 .extract_session_keys_from_dtls(conn_state, self.role().await == DTLSRole::Client)
                 .await?;
         } else {
-            return Err(Error::ErrDtlsTransportNotStarted.into());
+            return Err(Error::ErrDtlsTransportNotStarted);
         }
 
         {
@@ -302,7 +301,7 @@ impl RTCDtlsTransport {
         self.ensure_ice_conn()?;
 
         if self.state() != RTCDtlsTransportState::New {
-            return Err(Error::ErrInvalidDTLSStart.into());
+            return Err(Error::ErrInvalidDTLSStart);
         }
 
         {
@@ -321,7 +320,7 @@ impl RTCDtlsTransport {
         let certificate = if let Some(cert) = self.certificates.first() {
             cert.certificate.clone()
         } else {
-            return Err(Error::ErrNonCertificate.into());
+            return Err(Error::ErrNonCertificate);
         };
         self.state_change(RTCDtlsTransportState::Connecting).await;
 
@@ -375,14 +374,16 @@ impl RTCDtlsTransport {
                 .await
             }
         } else {
-            Err(Error::new("ice_transport.new_endpoint failed".to_owned()).into())
+            Err(dtls::Error::Other(
+                "ice_transport.new_endpoint failed".to_owned(),
+            ))
         };
 
         let dtls_conn = match dtls_conn_result {
             Ok(dtls_conn) => dtls_conn,
             Err(err) => {
                 self.state_change(RTCDtlsTransportState::Failed).await;
-                return Err(err);
+                return Err(err.into());
             }
         };
 
@@ -398,7 +399,7 @@ impl RTCDtlsTransport {
                 }
                 _ => {
                     self.state_change(RTCDtlsTransportState::Failed).await;
-                    return Err(Error::ErrNoSRTPProtectionProfile.into());
+                    return Err(Error::ErrNoSRTPProtectionProfile);
                 }
             };
         }
@@ -414,7 +415,7 @@ impl RTCDtlsTransport {
         let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
         if remote_certs.is_empty() {
             self.state_change(RTCDtlsTransportState::Failed).await;
-            return Err(Error::ErrNoRemoteCertificate.into());
+            return Err(Error::ErrNoRemoteCertificate);
         }
 
         {
@@ -443,14 +444,14 @@ impl RTCDtlsTransport {
     /// stops and closes the DTLSTransport object.
     pub async fn stop(&self) -> Result<()> {
         // Try closing everything and collect the errors
-        let mut close_errs: Vec<anyhow::Error> = vec![];
+        let mut close_errs: Vec<Error> = vec![];
         {
             let mut srtp_session = self.srtp_session.lock().await;
             if let Some(srtp_session) = srtp_session.take() {
                 match srtp_session.close().await {
                     Ok(_) => {}
                     Err(err) => {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 };
             }
@@ -462,7 +463,7 @@ impl RTCDtlsTransport {
                 match srtcp_session.close().await {
                     Ok(_) => {}
                     Err(err) => {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 };
             }
@@ -474,7 +475,7 @@ impl RTCDtlsTransport {
                 match ss.close().await {
                     Ok(_) => {}
                     Err(err) => {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 };
             }
@@ -485,8 +486,8 @@ impl RTCDtlsTransport {
             match conn.close().await {
                 Ok(_) => {}
                 Err(err) => {
-                    if err.to_string() != dtls::error::Error::ErrConnClosed.to_string() {
-                        close_errs.push(err);
+                    if err.to_string() != dtls::Error::ErrConnClosed.to_string() {
+                        close_errs.push(err.into());
                     }
                 }
             }
@@ -501,7 +502,7 @@ impl RTCDtlsTransport {
         let remote_parameters = self.remote_parameters.lock().await;
         for fp in &remote_parameters.fingerprints {
             if fp.algorithm != "sha-256" {
-                return Err(Error::ErrUnsupportedFingerprintAlgorithm.into());
+                return Err(Error::ErrUnsupportedFingerprintAlgorithm);
             }
 
             let mut h = Sha256::new();
@@ -515,12 +516,12 @@ impl RTCDtlsTransport {
             }
         }
 
-        Err(Error::ErrNoMatchingCertificateFingerprint.into())
+        Err(Error::ErrNoMatchingCertificateFingerprint)
     }
 
     pub(crate) fn ensure_ice_conn(&self) -> Result<()> {
         if self.ice_transport.state() == RTCIceTransportState::New {
-            Err(Error::ErrICEConnectionNotStarted.into())
+            Err(Error::ErrICEConnectionNotStarted)
         } else {
             Ok(())
         }

@@ -1,7 +1,6 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::peer::sdp::sdp_type::RTCSdpType;
 
-use anyhow::Result;
 use std::fmt;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -129,7 +128,7 @@ pub(crate) fn check_next_signaling_state(
 ) -> Result<RTCSignalingState> {
     // Special case for rollbacks
     if sdp_type == RTCSdpType::Rollback && cur == RTCSignalingState::Stable {
-        return Err(Error::ErrSignalingStateCannotRollback.into());
+        return Err(Error::ErrSignalingStateCannotRollback);
     }
 
     // 4.3.1 valid state transitions
@@ -205,11 +204,11 @@ pub(crate) fn check_next_signaling_state(
             }
         }
         _ => {
-            return Err(Error::ErrSignalingStateProposedTransitionInvalid.into());
+            return Err(Error::ErrSignalingStateProposedTransitionInvalid);
         }
     };
 
-    Err(Error::ErrSignalingStateProposedTransitionInvalid.into())
+    Err(Error::ErrSignalingStateProposedTransitionInvalid)
 }
 
 #[cfg(test)]
