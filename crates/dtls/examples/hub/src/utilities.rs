@@ -107,6 +107,6 @@ pub fn load_certificate(path: PathBuf) -> Result<Vec<rustls::Certificate>, Error
     let mut reader = BufReader::new(f);
     match certs(&mut reader) {
         Ok(ders) => Ok(ders),
-        Err(_) => Err(Error::ErrNoCertificateFound.into()),
+        Err(_) => Err(Error::ErrNoCertificateFound),
     }
 }
