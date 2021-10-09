@@ -37,3 +37,15 @@ fn test_opus_payload() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_opus_is_partition_head() -> Result<()> {
+    let opus = OpusPacket::default();
+    //"NormalPacket"
+    assert!(
+        opus.is_partition_head(&Bytes::from_static(&[0x00, 0x00])),
+        "All OPUS RTP packet should be the head of a new partition"
+    );
+
+    Ok(())
+}

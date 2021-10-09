@@ -293,24 +293,23 @@ impl Depacketizer for H264Packet {
 
         Ok(())
     }
-}
 
-/// H264PartitionHeadChecker checks H264 partition head
-pub struct H264PartitionHeadChecker;
-
-impl H264PartitionHeadChecker {
     /// is_partition_head checks if this is the head of a packetized nalu stream.
-    pub fn is_partition_head(packet: &Bytes) -> bool {
-        if packet.len() < 2 {
+    fn is_partition_head(&self, payload: &Bytes) -> bool {
+        if payload.len() < 2 {
             return false;
         }
 
-        if packet[0] & NALU_TYPE_BITMASK == FUA_NALU_TYPE
-            || packet[0] & NALU_TYPE_BITMASK == FUB_NALU_TYPE
+        if payload[0] & NALU_TYPE_BITMASK == FUA_NALU_TYPE
+            || payload[0] & NALU_TYPE_BITMASK == FUB_NALU_TYPE
         {
-            (packet[1] & FU_START_BITMASK) != 0
+            (payload[1] & FU_START_BITMASK) != 0
         } else {
             true
         }
+    }
+
+    fn is_partition_tail(&self, marker: bool, _payload: &Bytes) -> bool {
+        marker
     }
 }

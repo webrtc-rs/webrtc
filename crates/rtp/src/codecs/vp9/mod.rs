@@ -243,6 +243,19 @@ impl Depacketizer for Vp9Packet {
 
         Ok(())
     }
+
+    /// is_partition_head checks whether if this is a head of the VP9 partition
+    fn is_partition_head(&self, payload: &Bytes) -> bool {
+        if payload.is_empty() {
+            false
+        } else {
+            (payload[0] & 0x08) != 0
+        }
+    }
+
+    fn is_partition_tail(&self, marker: bool, _payload: &Bytes) -> bool {
+        marker
+    }
 }
 
 impl Vp9Packet {
@@ -455,20 +468,5 @@ impl Vp9Packet {
         }
 
         Ok(payload_index)
-    }
-}
-
-/// Vp9PartitionHeadChecker checks VP9 partition head
-pub struct Vp9PartitionHeadChecker;
-
-impl Vp9PartitionHeadChecker {
-    /// is_partition_head checks whether if this is a head of the VP9 partition
-    pub fn is_partition_head(packet: &Bytes) -> bool {
-        let mut p = Vp9Packet::default();
-        if p.depacketize(packet).is_err() {
-            false
-        } else {
-            p.b
-        }
     }
 }

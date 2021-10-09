@@ -40,4 +40,12 @@ impl Depacketizer for OpusPacket {
             Ok(())
         }
     }
+
+    fn is_partition_head(&self, _payload: &Bytes) -> bool {
+        true
+    }
+
+    fn is_partition_tail(&self, _marker: bool, _payload: &Bytes) -> bool {
+        true
+    }
 }

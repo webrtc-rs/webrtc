@@ -336,19 +336,21 @@ fn test_vp9_payloader_payload() -> Result<()> {
 
 #[test]
 fn test_vp9_partition_head_checker_is_partition_head() -> Result<()> {
+    let vp9 = Vp9Packet::default();
+
     //"SmallPacket"
     assert!(
-        !Vp9PartitionHeadChecker::is_partition_head(&Bytes::new()),
+        !vp9.is_partition_head(&Bytes::new()),
         "Small packet should not be the head of a new partition"
     );
 
     //"NormalPacket"
     assert!(
-        Vp9PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x18, 0x00, 0x00])),
+        vp9.is_partition_head(&Bytes::from_static(&[0x18, 0x00, 0x00])),
         "VP9 RTP packet with B flag should be head of a new partition"
     );
     assert!(
-        !Vp9PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x10, 0x00, 0x00])),
+        !vp9.is_partition_head(&Bytes::from_static(&[0x10, 0x00, 0x00])),
         "VP9 RTP packet without B flag should not be head of a new partition"
     );
 

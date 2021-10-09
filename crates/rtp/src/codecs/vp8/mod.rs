@@ -236,19 +236,17 @@ impl Depacketizer for Vp8Packet {
 
         Ok(())
     }
-}
 
-/// Vp8PartitionHeadChecker checks VP8 partition head
-pub struct Vp8PartitionHeadChecker;
-
-impl Vp8PartitionHeadChecker {
     /// is_partition_head checks whether if this is a head of the VP8 partition
-    pub fn is_partition_head(packet: &Bytes) -> bool {
-        let mut p = Vp8Packet::default();
-        if p.depacketize(packet).is_err() {
+    fn is_partition_head(&self, payload: &Bytes) -> bool {
+        if payload.is_empty() {
             false
         } else {
-            p.s == 1
+            (payload[0] & 0x10) != 0
         }
+    }
+
+    fn is_partition_tail(&self, marker: bool, _payload: &Bytes) -> bool {
+        marker
     }
 }

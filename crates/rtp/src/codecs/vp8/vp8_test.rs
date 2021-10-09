@@ -203,21 +203,23 @@ fn test_vp8_payload_eror() -> Result<()> {
 
 #[test]
 fn test_vp8_partition_head_checker_is_partition_head() -> Result<()> {
+    let vp8 = Vp8Packet::default();
+
     //"SmallPacket"
     assert!(
-        !Vp8PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x00])),
+        !vp8.is_partition_head(&Bytes::from_static(&[0x00])),
         "Small packet should not be the head of a new partition"
     );
 
     //"SFlagON",
     assert!(
-        Vp8PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x10, 0x00, 0x00, 0x00])),
+        vp8.is_partition_head(&Bytes::from_static(&[0x10, 0x00, 0x00, 0x00])),
         "Packet with S flag should be the head of a new partition"
     );
 
     //"SFlagOFF"
     assert!(
-        !Vp8PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x00, 0x00, 0x00, 0x00])),
+        !vp8.is_partition_head(&Bytes::from_static(&[0x00, 0x00, 0x00, 0x00])),
         "Packet without S flag should not be the head of a new partition"
     );
 

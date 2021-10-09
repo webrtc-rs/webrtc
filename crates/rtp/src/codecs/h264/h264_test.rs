@@ -190,45 +190,46 @@ fn test_h264_packet_unmarshal() -> Result<()> {
 
 #[test]
 fn test_h264_partition_head_checker_is_partition_head() -> Result<()> {
+    let h264 = H264Packet::default();
     let empty_nalu = Bytes::from_static(&[]);
     assert!(
-        !H264PartitionHeadChecker::is_partition_head(&empty_nalu),
+        !h264.is_partition_head(&empty_nalu),
         "empty nalu must not be a partition head"
     );
 
     let single_nalu = Bytes::from_static(&[1, 0]);
     assert!(
-        H264PartitionHeadChecker::is_partition_head(&single_nalu),
+        h264.is_partition_head(&single_nalu),
         "single nalu must be a partition head"
     );
 
     let stapa_nalu = Bytes::from_static(&[STAPA_NALU_TYPE, 0]);
     assert!(
-        H264PartitionHeadChecker::is_partition_head(&stapa_nalu),
+        h264.is_partition_head(&stapa_nalu),
         "stapa nalu must be a partition head"
     );
 
     let fua_start_nalu = Bytes::from_static(&[FUA_NALU_TYPE, FU_START_BITMASK]);
     assert!(
-        H264PartitionHeadChecker::is_partition_head(&fua_start_nalu),
+        h264.is_partition_head(&fua_start_nalu),
         "fua start nalu must be a partition head"
     );
 
     let fua_end_nalu = Bytes::from_static(&[FUA_NALU_TYPE, FU_END_BITMASK]);
     assert!(
-        !H264PartitionHeadChecker::is_partition_head(&fua_end_nalu),
+        !h264.is_partition_head(&fua_end_nalu),
         "fua end nalu must not be a partition head"
     );
 
     let fub_start_nalu = Bytes::from_static(&[FUB_NALU_TYPE, FU_START_BITMASK]);
     assert!(
-        H264PartitionHeadChecker::is_partition_head(&fub_start_nalu),
+        h264.is_partition_head(&fub_start_nalu),
         "fub start nalu must be a partition head"
     );
 
     let fub_end_nalu = Bytes::from_static(&[FUB_NALU_TYPE, FU_END_BITMASK]);
     assert!(
-        !H264PartitionHeadChecker::is_partition_head(&fub_end_nalu),
+        !h264.is_partition_head(&fub_end_nalu),
         "fub end nalu must not be a partition head"
     );
 
