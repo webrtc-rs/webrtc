@@ -57,10 +57,10 @@ async fn save_to_disk(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("save-to-disk")
+    let mut app = App::new("save-to-disk-vpx")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of save-to-disk.")
+        .about("An example of save-to-disk-vpx.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
@@ -165,7 +165,7 @@ async fn main() -> Result<()> {
                 sdp_fmtp_line: "".to_owned(),
                 rtcp_feedback: vec![],
             },
-            payload_type: 96,
+            payload_type: if is_vp9 { 98 } else { 96 },
             ..Default::default()
         },
         RTPCodecType::Video,
