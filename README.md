@@ -103,7 +103,7 @@ This project is still in active and early development stage, please refer to the
 
 ### Toolchain
 
-webrtc-rs currently requires Rust 1.52.1+ to build.
+webrtc-rs currently requires Rust 1.55.0+ to build.
 
 ### Monorepo Setup
 
