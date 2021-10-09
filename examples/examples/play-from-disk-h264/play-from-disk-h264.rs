@@ -185,14 +185,15 @@ async fn main() -> Result<()> {
                         break;
                     }
                 };
-                println!(
+
+                /*println!(
                     "PictureOrderCount={}, ForbiddenZeroBit={}, RefIdc={}, UnitType={}, data={}",
                     nal.picture_order_count,
                     nal.forbidden_zero_bit,
                     nal.ref_idc,
                     nal.unit_type,
                     nal.data.len()
-                );
+                );*/
 
                 video_track
                     .write_sample(&Sample {
