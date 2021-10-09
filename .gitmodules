@@ -40,3 +40,6 @@
 [submodule "crates/interceptor"]
 	path = crates/interceptor
 	url = https://github.com/webrtc-rs/interceptor
+[submodule "examples"]
+	path = examples
+	url = https://github.com/webrtc-rs/examples

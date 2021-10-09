@@ -66,7 +66,7 @@
 
 WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href="https://github.com/pion/webrtc/releases/tag/v3.0.32">Pion</a> stack in Rust.
 This project is still in active and early development stage, please refer to the [Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) to track the major milestones and releases.
-[Examples](https://github.com/webrtc-rs/webrtc/tree/master/examples#readme) provide code samples to show how to use webrtc-rs to build media and data channel applications.
+[Examples](https://github.com/webrtc-rs/examples/blob/main/examples/README.md) provide code samples to show how to use webrtc-rs to build media and data channel applications.
 
 ## Features
 
@@ -120,6 +120,18 @@ To build all webrtc dependent crates:
 ```
 cd webrtc/crates
 cargo build [or clippy or test or fmt]
+```
+
+To build all webrtc examples:
+
+```
+cd webrtc/examples
+cargo test # build all examples
+#[ or
+cargo build --example play-from-disk-vp8 # build play-from-disk-vp8 example only
+cargo build --example play-from-disk-vp9 # build play-from-disk-vp9 example only
+#...
+#]   
 ```
 
 To build webrtc crate:
