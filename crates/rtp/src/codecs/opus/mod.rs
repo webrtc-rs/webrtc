@@ -27,17 +27,14 @@ impl Payloader for OpusPayloader {
 
 /// OpusPacket represents the Opus header that is stored in the payload of an RTP Packet
 #[derive(PartialEq, Debug, Default, Clone)]
-pub struct OpusPacket {
-    pub payload: Bytes,
-}
+pub struct OpusPacket;
 
 impl Depacketizer for OpusPacket {
-    fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<Bytes> {
         if packet.is_empty() {
             Err(Error::ErrShortPacket)
         } else {
-            self.payload = packet.clone();
-            Ok(())
+            Ok(packet.clone())
         }
     }
 

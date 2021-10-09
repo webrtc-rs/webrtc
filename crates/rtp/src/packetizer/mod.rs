@@ -42,7 +42,7 @@ impl Clone for Box<dyn Packetizer + Send + Sync> {
 
 /// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
 pub trait Depacketizer {
-    fn depacketize(&mut self, b: &Bytes) -> Result<()>;
+    fn depacketize(&mut self, b: &Bytes) -> Result<Bytes>;
 
     /// Checks if the packet is at the beginning of a partition.  This
     /// should return false if the result could not be determined, in

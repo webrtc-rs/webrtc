@@ -7,15 +7,14 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
             "Empty",
             Bytes::from_static(&[]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
             "NonFlexible",
             Bytes::from_static(&[0x00, 0xAA]),
-            Vp9Packet {
-                payload: Bytes::from_static(&[0xAA]),
-                ..Default::default()
-            },
+            Vp9Packet::default(),
+            Bytes::from_static(&[0xAA]),
             None,
         ),
         (
@@ -24,9 +23,9 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
             Vp9Packet {
                 i: true,
                 picture_id: 0x02,
-                payload: Bytes::from_static(&[0xAA]),
                 ..Default::default()
             },
+            Bytes::from_static(&[0xAA]),
             None,
         ),
         (
@@ -35,21 +34,23 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
             Vp9Packet {
                 i: true,
                 picture_id: 0x01FF,
-                payload: Bytes::from_static(&[0xAA]),
                 ..Default::default()
             },
+            Bytes::from_static(&[0xAA]),
             None,
         ),
         (
             "NonFlexiblePictureIDExt_ShortPacket0",
             Bytes::from_static(&[0x80, 0x81]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
             "NonFlexiblePictureIDExt_ShortPacket1",
             Bytes::from_static(&[0x80]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
@@ -63,9 +64,9 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                 sid: 0x01,
                 d: true,
                 tl0picidx: 0x01,
-                payload: Bytes::from_static(&[0xAA]),
                 ..Default::default()
             },
+            Bytes::from_static(&[0xAA]),
             None,
         ),
         (
@@ -79,21 +80,23 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                 tid: 0x01,
                 sid: 0x01,
                 d: true,
-                payload: Bytes::from_static(&[0x01, 0xAA]),
                 ..Default::default()
             },
+            Bytes::from_static(&[0x01, 0xAA]),
             None,
         ),
         (
             "NonFlexibleLayerIndicePictureID_ShortPacket0",
             Bytes::from_static(&[0xA0, 0x02, 0x23]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
             "NonFlexibleLayerIndicePictureID_ShortPacket1",
             Bytes::from_static(&[0xA0, 0x02]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
@@ -105,15 +108,16 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                 f: true,
                 picture_id: 0x02,
                 pdiff: vec![0x01, 0x02],
-                payload: Bytes::from_static(&[0xAA]),
                 ..Default::default()
             },
+            Bytes::from_static(&[0xAA]),
             None,
         ),
         (
             "FlexiblePictureIDRefIndex_TooManyPDiff",
             Bytes::from_static(&[0xD0, 0x02, 0x03, 0x05, 0x07, 0x09, 0x10, 0xAA]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrTooManyPDiff),
         ),
         (
@@ -125,27 +129,30 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                 f: true,
                 picture_id: 0x02,
                 pdiff: vec![0x01, 0x02],
-                payload: Bytes::from_static(&[]),
                 ..Default::default()
             },
+            Bytes::from_static(&[]),
             None,
         ),
         (
             "FlexiblePictureIDRefIndex_ShortPacket0",
             Bytes::from_static(&[0xD0, 0x02, 0x03]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
             "FlexiblePictureIDRefIndex_ShortPacket1",
             Bytes::from_static(&[0xD0, 0x02]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
             "FlexiblePictureIDRefIndex_ShortPacket2",
             Bytes::from_static(&[0xD0]),
             Vp9Packet::default(),
+            Bytes::new(),
             Some(Error::ErrShortPacket),
         ),
         (
@@ -171,9 +178,9 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                 ng: 0,
                 width: vec![640, 1280],
                 height: vec![360, 720],
-                payload: Bytes::from_static(&[]),
                 ..Default::default()
             },
+            Bytes::new(),
             None,
         ),
         (
@@ -196,14 +203,14 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                 pgtid: vec![0, 2],
                 pgu: vec![true, false],
                 pgpdiff: vec![vec![], vec![33]],
-                payload: Bytes::from_static(&[]),
                 ..Default::default()
             },
+            Bytes::new(),
             None,
         ),
     ];
 
-    for (name, b, pkt, err) in tests {
+    for (name, b, pkt, expected, err) in tests {
         let mut p = Vp9Packet::default();
 
         if let Some(expected) = err {
@@ -217,8 +224,9 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                 assert!(false, "{}: expected error, but got passed", name);
             }
         } else {
-            p.depacketize(&b)?;
+            let payload = p.depacketize(&b)?;
             assert_eq!(pkt, p, "{}: expected {:?}, but got {:?}", name, pkt, p);
+            assert_eq!(payload, expected);
         }
     }
 

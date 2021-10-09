@@ -139,22 +139,22 @@ fn test_h264_packet_unmarshal() -> Result<()> {
         "Unmarshal accepted a STAP-A packet with insufficient data"
     );
 
-    pkt.depacketize(&single_payload)?;
+    let payload = pkt.depacketize(&single_payload)?;
     assert_eq!(
-        pkt.payload, single_payload_unmarshaled,
+        payload, single_payload_unmarshaled,
         "Unmarshaling a single payload shouldn't modify the payload"
     );
 
-    avc_pkt.depacketize(&single_payload)?;
+    let payload = avc_pkt.depacketize(&single_payload)?;
     assert_eq!(
-        avc_pkt.payload, single_payload_unmarshaled_avc,
+        payload, single_payload_unmarshaled_avc,
         "Unmarshaling a single payload into avc stream shouldn't modify the payload"
     );
 
     let mut large_payload_result = BytesMut::new();
     for p in &large_payload_packetized {
-        pkt.depacketize(p)?;
-        large_payload_result.put(&*pkt.payload.clone());
+        let payload = pkt.depacketize(p)?;
+        large_payload_result.put(&*payload.clone());
     }
     assert_eq!(
         large_payload_result.freeze(),
@@ -164,8 +164,8 @@ fn test_h264_packet_unmarshal() -> Result<()> {
 
     let mut large_payload_result_avc = BytesMut::new();
     for p in &large_payload_packetized {
-        avc_pkt.depacketize(p)?;
-        large_payload_result_avc.put(&*avc_pkt.payload.clone());
+        let payload = avc_pkt.depacketize(p)?;
+        large_payload_result_avc.put(&*payload.clone());
     }
     assert_eq!(
         large_payload_result_avc.freeze(),
@@ -173,15 +173,15 @@ fn test_h264_packet_unmarshal() -> Result<()> {
         "Failed to unmarshal a large payload into avc stream"
     );
 
-    pkt.depacketize(&single_payload_multi_nalu)?;
+    let payload = pkt.depacketize(&single_payload_multi_nalu)?;
     assert_eq!(
-        pkt.payload, single_payload_multi_nalu_unmarshaled,
+        payload, single_payload_multi_nalu_unmarshaled,
         "Failed to unmarshal a single packet with multiple NALUs"
     );
 
-    avc_pkt.depacketize(&single_payload_multi_nalu)?;
+    let payload = avc_pkt.depacketize(&single_payload_multi_nalu)?;
     assert_eq!(
-        avc_pkt.payload, single_payload_multi_nalu_unmarshaled_avc,
+        payload, single_payload_multi_nalu_unmarshaled_avc,
         "Failed to unmarshal a single packet with multiple NALUs into avc stream"
     );
 

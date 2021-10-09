@@ -11,8 +11,8 @@ fn test_opus_unmarshal() -> Result<()> {
 
     // Normal packet
     let raw_bytes = Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x90]);
-    pck.depacketize(&raw_bytes)?;
-    assert_eq!(&raw_bytes, &pck.payload, "Payload must be same");
+    let payload = pck.depacketize(&raw_bytes)?;
+    assert_eq!(&raw_bytes, &payload, "Payload must be same");
 
     Ok(())
 }

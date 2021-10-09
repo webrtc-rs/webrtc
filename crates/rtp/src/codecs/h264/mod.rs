@@ -201,14 +201,12 @@ impl Payloader for H264Payloader {
 #[derive(PartialEq, Debug, Default, Clone)]
 pub struct H264Packet {
     pub is_avc: bool,
-    pub payload: Bytes,
-
     fua_buffer: Option<BytesMut>,
 }
 
 impl Depacketizer for H264Packet {
     /// depacketize parses the passed byte slice and stores the result in the H264Packet this method is called upon
-    fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<Bytes> {
         if packet.len() <= 2 {
             return Err(Error::ErrShortPacket);
         }
@@ -228,7 +226,7 @@ impl Depacketizer for H264Packet {
                     payload.put(&*ANNEXB_NALUSTART_CODE);
                 }
                 payload.put(&*packet.clone());
-                self.payload = payload.freeze();
+                Ok(payload.freeze())
             }
             STAPA_NALU_TYPE => {
                 let mut curr_offset = STAPA_HEADER_SIZE;
@@ -253,7 +251,7 @@ impl Depacketizer for H264Packet {
                     curr_offset += nalu_size;
                 }
 
-                self.payload = payload.freeze();
+                Ok(payload.freeze())
             }
             FUA_NALU_TYPE => {
                 if packet.len() < FUA_HEADER_SIZE as usize {
@@ -283,15 +281,13 @@ impl Depacketizer for H264Packet {
                         payload.put(fua_buffer);
                     }
 
-                    self.payload = payload.freeze();
+                    Ok(payload.freeze())
                 } else {
-                    self.payload = Bytes::new();
+                    Ok(Bytes::new())
                 }
             }
-            _ => return Err(Error::NaluTypeIsNotHandled(nalu_type)),
+            _ => Err(Error::NaluTypeIsNotHandled(nalu_type)),
         }
-
-        Ok(())
     }
 
     /// is_partition_head checks if this is the head of a packetized nalu stream.

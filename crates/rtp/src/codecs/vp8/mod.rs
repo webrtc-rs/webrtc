@@ -144,13 +144,11 @@ pub struct Vp8Packet {
     pub y: u8,
     /// 5 bits temporal key frame index
     pub key_idx: u8,
-
-    pub payload: Bytes,
 }
 
 impl Depacketizer for Vp8Packet {
     /// depacketize parses the passed byte slice and stores the result in the VP8Packet this method is called upon
-    fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<Bytes> {
         let payload_len = packet.len();
         if payload_len < 4 {
             return Err(Error::ErrShortPacket);
@@ -232,9 +230,7 @@ impl Depacketizer for Vp8Packet {
             return Err(Error::ErrShortPacket);
         }
 
-        self.payload = packet.slice(payload_index..);
-
-        Ok(())
+        Ok(packet.slice(payload_index..))
     }
 
     /// is_partition_head checks whether if this is a head of the VP8 partition

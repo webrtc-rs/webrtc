@@ -198,13 +198,11 @@ pub struct Vp9Packet {
     pub pgu: Vec<bool>,
     /// Reference indecies of pictures in a Picture Group
     pub pgpdiff: Vec<Vec<u8>>,
-
-    pub payload: Bytes,
 }
 
 impl Depacketizer for Vp9Packet {
     /// depacketize parses the passed byte slice and stores the result in the Vp9Packet this method is called upon
-    fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<Bytes> {
         if packet.is_empty() {
             return Err(Error::ErrShortPacket);
         }
@@ -239,9 +237,7 @@ impl Depacketizer for Vp9Packet {
             payload_index = self.parse_ssdata(reader, payload_index)?;
         }
 
-        self.payload = packet.slice(payload_index..);
-
-        Ok(())
+        Ok(packet.slice(payload_index..))
     }
 
     /// is_partition_head checks whether if this is a head of the VP9 partition
