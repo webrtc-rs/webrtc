@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use webrtc::api::APIBuilder;
 use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
@@ -75,6 +75,11 @@ async fn main() -> Result<()> {
                 .help("Prints debug log information"),
         )
         .arg(
+            Arg::with_name("vp9")
+                .long("vp9")
+                .help("Save VP9 to disk. Default: VP8"),
+        )
+        .arg(
             Arg::with_name("video")
                 .required_unless("FULLHELP")
                 .takes_value(true)
@@ -116,6 +121,7 @@ async fn main() -> Result<()> {
             .init();
     }
 
+    let is_vp9 = matches.is_present("vp9");
     let video_file = matches.value_of("video").unwrap();
     let audio_file = matches.value_of("audio").unwrap();
 
@@ -123,16 +129,16 @@ async fn main() -> Result<()> {
         Arc::new(Mutex::new(IVFWriter::new(
             File::create(video_file)?,
             &IVFFileHeader {
-                signature: *b"DKIF",      // 0-3
-                version: 0,               // 4-5
-                header_size: 32,          // 6-7
-                four_cc: *b"VP80",        // 8-11
-                width: 640,               // 12-13
-                height: 480,              // 14-15
-                timebase_denominator: 30, // 16-19
-                timebase_numerator: 1,    // 20-23
-                num_frames: 900,          // 24-27
-                unused: 0,                // 28-31
+                signature: *b"DKIF",                               // 0-3
+                version: 0,                                        // 4-5
+                header_size: 32,                                   // 6-7
+                four_cc: if is_vp9 { *b"VP90" } else { *b"VP80" }, // 8-11
+                width: 640,                                        // 12-13
+                height: 480,                                       // 14-15
+                timebase_denominator: 30,                          // 16-19
+                timebase_numerator: 1,                             // 20-23
+                num_frames: 900,                                   // 24-27
+                unused: 0,                                         // 28-31
             },
         )?));
     let ogg_writer: Arc<Mutex<dyn media::io::Writer + Send + Sync>> = Arc::new(Mutex::new(
@@ -145,11 +151,15 @@ async fn main() -> Result<()> {
     let mut m = MediaEngine::default();
 
     // Setup the codecs you want to use.
-    // We'll use a VP8 and Opus but you can also define your own
+    // We'll use a VP8/VP9 and Opus but you can also define your own
     m.register_codec(
         RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_VP8.to_owned(),
+                mime_type: if is_vp9 {
+                    MIME_TYPE_VP9.to_owned()
+                } else {
+                    MIME_TYPE_VP8.to_owned()
+                },
                 clock_rate: 90000,
                 channels: 0,
                 sdp_fmtp_line: "".to_owned(),
@@ -245,13 +255,14 @@ async fn main() -> Result<()> {
             let ogg_writer2 = Arc::clone(&ogg_writer);
             Box::pin(async move {
                 let codec = track.codec().await;
-                if codec.capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase() {
+                let mime_type = codec.capability.mime_type.to_lowercase();
+                if mime_type == MIME_TYPE_OPUS.to_lowercase() {
                     println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");     
                     tokio::spawn(async move {
                         let _ = save_to_disk(ogg_writer2, track, notify_rx2).await;
                     });
-                } else if codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase() {
-                    println!("Got VP8 track, saving to disk as output.ivf");
+                } else if mime_type == MIME_TYPE_VP8.to_lowercase() || mime_type == MIME_TYPE_VP9.to_lowercase(){
+                    println!("Got {} track, saving to disk as output.ivf", if is_vp9 {"VP9"} else { "VP8"});
                      tokio::spawn(async move {
                          let _ = save_to_disk(ivf_writer2, track, notify_rx2).await;
                      });

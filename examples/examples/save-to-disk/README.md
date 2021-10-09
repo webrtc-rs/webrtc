@@ -1,5 +1,5 @@
 # save-to-disk
-save-to-disk is a simple application that shows how to record your webcam/microphone using WebRTC.rs and save VP8/Opus to disk.
+save-to-disk is a simple application that shows how to record your webcam/microphone using WebRTC.rs and save VP8/VP9 and Opus to disk.
 
 TODO: If you wish to save H264 to disk checkout out [save-to-webm]
 
@@ -24,6 +24,6 @@ Run `echo $BROWSER_SDP | ./target/debug/examples/save-to-disk`
 Copy the text that `save-to-disk` just emitted and copy into second text area
 
 ### Hit 'Start Session' in jsfiddle, wait, close jsfiddle, enjoy your video!
-In the folder you ran `save-to-disk` you should now have a file `output-1.ivf` play with your video player of choice!
+In the folder you ran `save-to-disk` you should now have a file `output.ivf` play with your video player of choice!
 
 Congrats, you have used WebRTC.rs!
