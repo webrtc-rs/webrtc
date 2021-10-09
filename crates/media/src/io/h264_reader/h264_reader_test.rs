@@ -6,7 +6,7 @@ fn test_data_does_not_start_with_h264header() -> Result<()> {
     let test_function = |input: &[u8]| {
         let mut reader = H264Reader::new(Cursor::new(input));
         if let Err(err) = reader.next_nal() {
-            assert!(Error::ErrDataIsNotH264Stream.equal(&err));
+            assert_eq!(Error::ErrDataIsNotH264Stream, err);
         } else {
             assert!(false);
         }
@@ -42,7 +42,7 @@ fn test_eof() -> Result<()> {
     let test_function = |input: &[u8]| {
         let mut reader = H264Reader::new(Cursor::new(input));
         if let Err(err) = reader.next_nal() {
-            assert!(Error::ErrIoEOF.equal(&err));
+            assert_eq!(Error::ErrIoEOF, err);
         } else {
             assert!(false);
         }

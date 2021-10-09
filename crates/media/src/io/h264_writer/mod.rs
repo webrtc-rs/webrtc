@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod h264_writer_test;
 
+use crate::error::Result;
 use crate::io::Writer;
 
-use anyhow::Result;
 use rtp::codecs::h264::H264Packet;
 use rtp::packetizer::Depacketizer;
 use std::io::{Seek, Write};

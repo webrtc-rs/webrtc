@@ -1,9 +1,8 @@
 #[cfg(test)]
 mod h264_reader_test;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 
-use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::io::Read;
@@ -192,19 +191,19 @@ impl<R: Read> H264Reader<R> {
 
         let n = prefix_buffer.len();
         if n == 0 {
-            return Err(Error::ErrIoEOF.into());
+            return Err(Error::ErrIoEOF);
         }
 
         if n < 3 {
-            return Err(Error::ErrDataIsNotH264Stream.into());
+            return Err(Error::ErrDataIsNotH264Stream);
         }
 
         let nal_prefix3bytes_found = NAL_PREFIX_3BYTES[..] == prefix_buffer[..3];
         if n == 3 {
             if nal_prefix3bytes_found {
-                return Err(Error::ErrIoEOF.into());
+                return Err(Error::ErrIoEOF);
             }
-            return Err(Error::ErrDataIsNotH264Stream.into());
+            return Err(Error::ErrDataIsNotH264Stream);
         }
 
         // n == 4
@@ -217,7 +216,7 @@ impl<R: Read> H264Reader<R> {
         if nal_prefix4bytes_found {
             Ok(4)
         } else {
-            Err(Error::ErrDataIsNotH264Stream.into())
+            Err(Error::ErrDataIsNotH264Stream)
         }
     }
 
@@ -254,7 +253,7 @@ impl<R: Read> H264Reader<R> {
         }
 
         if self.nal_buffer.is_empty() {
-            return Err(Error::ErrIoEOF.into());
+            return Err(Error::ErrIoEOF);
         }
 
         let mut nal = NAL::new(self.nal_buffer.split());
