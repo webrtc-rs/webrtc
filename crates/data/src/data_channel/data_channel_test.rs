@@ -1,3 +1,5 @@
+use crate::error::Result;
+
 use super::*;
 
 use util::conn::conn_bridge::*;
@@ -89,7 +91,7 @@ async fn create_new_association_pair(
     }
 
     if !a0handshake_done || !a1handshake_done {
-        return Err(Error::new("handshake failed".to_owned()).into());
+        return Err(Error::new("handshake failed".to_owned()));
     }
 
     drop(closed_tx);

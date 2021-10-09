@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod data_channel_test;
 
+use crate::error::Result;
 use crate::{
     error::Error, message::message_channel_ack::*, message::message_channel_open::*, message::*,
 };
@@ -10,7 +11,6 @@ use sctp::{
 };
 use util::marshal::*;
 
-use anyhow::Result;
 use bytes::{Buf, Bytes};
 use derive_builder::Builder;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -108,7 +108,7 @@ impl DataChannel {
         let (n, ppi) = stream.read_sctp(&mut buf).await?;
 
         if ppi != PayloadProtocolIdentifier::Dcep {
-            return Err(Error::InvalidPayloadProtocolIdentifier(ppi as u8).into());
+            return Err(Error::InvalidPayloadProtocolIdentifier(ppi as u8));
         }
 
         let mut read_buf = &buf[..n];
@@ -121,7 +121,7 @@ impl DataChannel {
             config.label = String::from_utf8(dco.label)?;
             config.protocol = String::from_utf8(dco.protocol)?;
         } else {
-            return Err(Error::InvalidMessageType(msg.message_type() as u8).into());
+            return Err(Error::InvalidMessageType(msg.message_type() as u8));
         };
 
         let data_channel = DataChannel::new(stream, config);
@@ -148,7 +148,7 @@ impl DataChannel {
                     // reset, it also resets its corresponding outgoing stream.
                     self.stream.close().await?;
 
-                    return Err(err);
+                    return Err(err.into());
                 }
             };
 
@@ -264,15 +264,16 @@ impl DataChannel {
                 .await?;
             Ok(0)
         } else {
-            self.stream.write_sctp(data, ppi).await
+            Ok(self.stream.write_sctp(data, ppi).await?)
         }
     }
 
     async fn write_data_channel_ack(&self) -> Result<usize> {
         let ack = Message::DataChannelAck(DataChannelAck {}).marshal()?;
-        self.stream
+        Ok(self
+            .stream
             .write_sctp(&ack, PayloadProtocolIdentifier::Dcep)
-            .await
+            .await?)
     }
 
     /// Close closes the DataChannel and the underlying SCTP stream.
@@ -288,7 +289,7 @@ impl DataChannel {
         // a corresponding notification to the application layer that the reset
         // has been performed.  Streams are available for reuse after a reset
         // has been performed.
-        self.stream.close().await
+        Ok(self.stream.close().await?)
     }
 
     /// BufferedAmount returns the number of bytes of data currently queued to be

@@ -13,7 +13,6 @@ use crate::error::Error;
 
 use util::marshal::*;
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 
 /// A parsed DataChannel message
@@ -33,7 +32,7 @@ impl MarshalSize for Message {
 }
 
 impl Marshal for Message {
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         let mut bytes_written = 0;
         let n = self.message_type().marshal_to(buf)?;
         buf = &mut buf[n..];
@@ -47,7 +46,7 @@ impl Marshal for Message {
 }
 
 impl Unmarshal for Message {
-    fn unmarshal<B>(buf: &mut B) -> Result<Self>
+    fn unmarshal<B>(buf: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,
