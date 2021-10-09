@@ -107,7 +107,7 @@ webrtc-rs currently requires Rust 1.55.0+ to build.
 
 ### Monorepo Setup
 
-All webrtc dependent crates are added as [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) of this repository under /crates/.
+All webrtc dependent crates and examples are added as [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) of this repository under /crates/ or /examples/.
 
 ```
 git clone https://github.com/webrtc-rs/webrtc
@@ -126,8 +126,8 @@ To build all webrtc examples:
 
 ```
 cd webrtc/examples
-cargo test # build all examples
-#[ or
+cargo test # build all examples (maybe very slow)
+#[ or just build single example (much faster)
 cargo build --example play-from-disk-vp8 # build play-from-disk-vp8 example only
 cargo build --example play-from-disk-vp9 # build play-from-disk-vp9 example only
 #...
