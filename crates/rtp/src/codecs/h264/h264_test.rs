@@ -234,3 +234,26 @@ fn test_h264_partition_head_checker_is_partition_head() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_h264_payloader_payload_sps_and_pps_handling() -> Result<()> {
+    let mut pck = H264Payloader::default();
+    let expected = vec![
+        Bytes::from_static(&[
+            0x78, 0x00, 0x03, 0x07, 0x00, 0x01, 0x00, 0x03, 0x08, 0x02, 0x03,
+        ]),
+        Bytes::from_static(&[0x05, 0x04, 0x05]),
+    ];
+
+    // When packetizing SPS and PPS are emitted with following NALU
+    let res = pck.payload(1500, &Bytes::from_static(&[0x07, 0x00, 0x01]))?;
+    assert!(res.is_empty(), "Generated payload should be empty");
+
+    let res = pck.payload(1500, &Bytes::from_static(&[0x08, 0x02, 0x03]))?;
+    assert!(res.is_empty(), "Generated payload should be empty");
+
+    let actual = pck.payload(1500, &Bytes::from_static(&[0x05, 0x04, 0x05]))?;
+    assert_eq!(actual, expected, "SPS and PPS aren't packed together");
+
+    Ok(())
+}
