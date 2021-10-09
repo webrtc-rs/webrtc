@@ -52,7 +52,7 @@ impl FromStr for ResizeMode {
 mod tests {
     use super::*;
 
-    const FACING_MODE: &'static str = "environment";
+    const FACING_MODE: &str = "environment";
 
     #[test]
     fn from_str_success() {

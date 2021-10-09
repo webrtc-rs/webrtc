@@ -2,10 +2,12 @@
 #![allow(dead_code)]
 
 pub mod audio;
-pub mod error;
+mod error;
 pub mod io;
 pub mod track;
 pub mod video;
+
+pub use error::Error;
 
 use bytes::Bytes;
 use std::time::{Duration, SystemTime};

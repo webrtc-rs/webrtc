@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod ivf_reader_test;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::io::ResetFn;
-use anyhow::Result;
+
 use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::BytesMut;
 use std::io::Read;
@@ -114,9 +114,9 @@ impl<R: Read> IVFReader<R> {
         };
 
         if header.signature != IVF_FILE_HEADER_SIGNATURE {
-            return Err(Error::ErrSignatureMismatch.into());
+            return Err(Error::ErrSignatureMismatch);
         } else if header.version != 0 {
-            return Err(Error::ErrUnknownIVFVersion.into());
+            return Err(Error::ErrUnknownIVFVersion);
         }
 
         self.bytes_read += IVF_FILE_HEADER_SIZE;

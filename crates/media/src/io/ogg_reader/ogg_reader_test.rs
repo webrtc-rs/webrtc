@@ -54,7 +54,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert!(Error::ErrBadIDPageSignature.equal(&err));
+            assert_eq!(Error::ErrBadIDPageSignature, err);
         }
     }
 
@@ -66,7 +66,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert!(Error::ErrBadIDPageType.equal(&err));
+            assert_eq!(Error::ErrBadIDPageType, err);
         }
     }
 
@@ -78,7 +78,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert!(Error::ErrBadIDPageLength.equal(&err));
+            assert_eq!(Error::ErrBadIDPageLength, err);
         }
     }
 
@@ -90,7 +90,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert!(Error::ErrBadIDPagePayloadSignature.equal(&err));
+            assert_eq!(Error::ErrBadIDPagePayloadSignature, err);
         }
     }
 
@@ -102,7 +102,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), true);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert!(Error::ErrChecksumMismatch.equal(&err));
+            assert_eq!(Error::ErrChecksumMismatch, err);
         }
     }
 
