@@ -54,7 +54,7 @@ impl Payloader for Vp8Payloader {
             VP8_HEADER_SIZE
         };
 
-        let max_fragment_size = mtu as isize - VP8_HEADER_SIZE as isize;
+        let max_fragment_size = mtu as isize - using_header_size as isize;
         let mut payload_data_remaining = payload.len() as isize;
         let mut payload_data_index: usize = 0;
         let mut payloads = vec![];
@@ -235,5 +235,20 @@ impl Depacketizer for Vp8Packet {
         self.payload = packet.slice(payload_index..);
 
         Ok(())
+    }
+}
+
+/// Vp8PartitionHeadChecker checks VP8 partition head
+pub struct Vp8PartitionHeadChecker;
+
+impl Vp8PartitionHeadChecker {
+    /// is_partition_head checks whether if this is a head of the VP8 partition
+    pub fn is_partition_head(packet: &Bytes) -> bool {
+        let mut p = Vp8Packet::default();
+        if p.depacketize(packet).is_err() {
+            false
+        } else {
+            p.s == 1
+        }
     }
 }

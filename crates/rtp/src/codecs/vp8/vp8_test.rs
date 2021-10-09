@@ -101,6 +101,83 @@ fn test_vp8_unmarshal() -> Result<()> {
 
 #[test]
 fn test_vp8_payload() -> Result<()> {
+    let tests = vec![
+        (
+            "WithoutPictureID",
+            Vp8Payloader::default(),
+            2,
+            vec![
+                Bytes::from_static(&[0x90, 0x90, 0x90]),
+                Bytes::from_static(&[0x91, 0x91]),
+            ],
+            vec![
+                vec![
+                    Bytes::from_static(&[0x10, 0x90]),
+                    Bytes::from_static(&[0x00, 0x90]),
+                    Bytes::from_static(&[0x00, 0x90]),
+                ],
+                vec![
+                    Bytes::from_static(&[0x10, 0x91]),
+                    Bytes::from_static(&[0x00, 0x91]),
+                ],
+            ],
+        ),
+        (
+            "WithPictureID_1byte",
+            Vp8Payloader {
+                enable_picture_id: true,
+                picture_id: 0x20,
+            },
+            5,
+            vec![
+                Bytes::from_static(&[0x90, 0x90, 0x90]),
+                Bytes::from_static(&[0x91, 0x91]),
+            ],
+            vec![
+                vec![
+                    Bytes::from_static(&[0x90, 0x80, 0x20, 0x90, 0x90]),
+                    Bytes::from_static(&[0x80, 0x80, 0x20, 0x90]),
+                ],
+                vec![Bytes::from_static(&[0x90, 0x80, 0x21, 0x91, 0x91])],
+            ],
+        ),
+        (
+            "WithPictureID_2bytes",
+            Vp8Payloader {
+                enable_picture_id: true,
+                picture_id: 0x120,
+            },
+            6,
+            vec![
+                Bytes::from_static(&[0x90, 0x90, 0x90]),
+                Bytes::from_static(&[0x91, 0x91]),
+            ],
+            vec![
+                vec![
+                    Bytes::from_static(&[0x90, 0x80, 0x81, 0x20, 0x90, 0x90]),
+                    Bytes::from_static(&[0x80, 0x80, 0x81, 0x20, 0x90]),
+                ],
+                vec![Bytes::from_static(&[0x90, 0x80, 0x81, 0x21, 0x91, 0x91])],
+            ],
+        ),
+    ];
+
+    for (name, mut pck, mtu, payloads, expected) in tests {
+        for (i, payload) in payloads.iter().enumerate() {
+            let actual = pck.payload(mtu, payload)?;
+            assert_eq!(
+                expected[i], actual,
+                "{}: Generated packet[{}] differs",
+                name, i
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_vp8_payload_eror() -> Result<()> {
     let mut pck = Vp8Payloader::default();
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
@@ -119,6 +196,29 @@ fn test_vp8_payload() -> Result<()> {
         result.len(),
         payload.len(),
         "Generated payload should be the same size as original payload size"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_vp8_partition_head_checker_is_partition_head() -> Result<()> {
+    //"SmallPacket"
+    assert!(
+        !Vp8PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x00])),
+        "Small packet should not be the head of a new partition"
+    );
+
+    //"SFlagON",
+    assert!(
+        Vp8PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x10, 0x00, 0x00, 0x00])),
+        "Packet with S flag should be the head of a new partition"
+    );
+
+    //"SFlagOFF"
+    assert!(
+        !Vp8PartitionHeadChecker::is_partition_head(&Bytes::from_static(&[0x00, 0x00, 0x00, 0x00])),
+        "Packet without S flag should not be the head of a new partition"
     );
 
     Ok(())
