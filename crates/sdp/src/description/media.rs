@@ -1,13 +1,23 @@
+use std::collections::HashMap;
 use std::fmt;
 use url::Url;
 
-use super::common_description::*;
-use super::extmap::*;
+use crate::description::common::*;
+use crate::extmap::*;
 
 /// Constants for extmap key
 pub const EXT_MAP_VALUE_TRANSPORT_CC_KEY: isize = 3;
 pub const EXT_MAP_VALUE_TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
+
+fn ext_map_uri() -> HashMap<isize, &'static str> {
+    let mut m = HashMap::new();
+    m.insert(
+        EXT_MAP_VALUE_TRANSPORT_CC_KEY,
+        EXT_MAP_VALUE_TRANSPORT_CC_URI,
+    );
+    m
+}
 
 /// MediaDescription represents a media type.
 /// <https://tools.ietf.org/html/rfc4566#section-5.14>
@@ -49,7 +59,7 @@ pub struct MediaDescription {
 }
 
 impl MediaDescription {
-    /// Attribute returns the value of an attribute and if it exists
+    /// attribute returns the value of an attribute and if it exists
     pub fn attribute(&self, key: &str) -> Option<&String> {
         for a in &self.attributes {
             if a.key == key {
@@ -59,7 +69,7 @@ impl MediaDescription {
         None
     }
 
-    /// New JSEPMediaDescription creates a new MediaName with
+    /// new_jsep_media_description creates a new MediaName with
     /// some settings that are required by the JSEP spec.
     pub fn new_jsep_media_description(codec_type: String, _codec_prefs: Vec<&str>) -> Self {
         MediaDescription {
@@ -93,13 +103,13 @@ impl MediaDescription {
         }
     }
 
-    /// WithPropertyAttribute adds a property attribute 'a=key' to the media description
+    /// with_property_attribute adds a property attribute 'a=key' to the media description
     pub fn with_property_attribute(mut self, key: String) -> Self {
         self.attributes.push(Attribute::new(key, None));
         self
     }
 
-    /// WithValueAttribute adds a value attribute 'a=key:value' to the media description
+    /// with_value_attribute adds a value attribute 'a=key:value' to the media description
     pub fn with_value_attribute(mut self, key: String, value: String) -> Self {
         self.attributes.push(Attribute::new(key, Some(value)));
         self
@@ -110,13 +120,13 @@ impl MediaDescription {
         self.with_value_attribute("fingerprint".to_owned(), algorithm + " " + &value)
     }
 
-    /// WithICECredentials adds ICE credentials to the media description
+    /// with_ice_credentials adds ICE credentials to the media description
     pub fn with_ice_credentials(self, username: String, password: String) -> Self {
         self.with_value_attribute("ice-ufrag".to_string(), username)
             .with_value_attribute("ice-pwd".to_string(), password)
     }
 
-    /// WithCodec adds codec information to the media description
+    /// with_codec adds codec information to the media description
     pub fn with_codec(
         mut self,
         payload_type: u8,
@@ -139,7 +149,7 @@ impl MediaDescription {
         }
     }
 
-    /// WithMediaSource adds media source information to the media description
+    /// with_media_source adds media source information to the media description
     pub fn with_media_source(
         self,
         ssrc: u32,
@@ -155,7 +165,7 @@ impl MediaDescription {
         // Deprecated but not phased out?
     }
 
-    /// WithCandidate adds an ICE candidate to the media description
+    /// with_candidate adds an ICE candidate to the media description
     /// Deprecated: use WithICECandidate instead
     pub fn with_candidate(self, value: String) -> Self {
         self.with_value_attribute("candidate".to_string(), value)
@@ -165,11 +175,18 @@ impl MediaDescription {
         self.with_property_attribute(e.marshal())
     }
 
-    /// WithTransportCCExtMap adds an extmap to the media description
+    /// with_transport_cc_extmap adds an extmap to the media description
     pub fn with_transport_cc_extmap(self) -> Self {
-        let uri = match Url::parse(EXT_MAP_VALUE_TRANSPORT_CC_URI) {
-            Ok(uri) => Some(uri),
-            Err(_) => None,
+        let uri = {
+            let m = ext_map_uri();
+            if let Some(uri_str) = m.get(&EXT_MAP_VALUE_TRANSPORT_CC_KEY) {
+                match Url::parse(uri_str) {
+                    Ok(uri) => Some(uri),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            }
         };
 
         let e = ExtMap {

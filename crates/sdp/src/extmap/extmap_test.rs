@@ -1,5 +1,6 @@
 use super::*;
-use crate::util::{ATTRIBUTE_KEY, END_LINE};
+use crate::lexer::END_LINE;
+use crate::util::ATTRIBUTE_KEY;
 
 use std::io::BufReader;
 use std::iter::Iterator;
@@ -52,15 +53,15 @@ fn test_extmap() -> Result<()> {
 
 #[test]
 fn test_transport_cc_extmap() -> Result<()> {
-    //a=extmap:<value>["/"<direction>] <URI> <extensionattributes>
-    //a=extmap:3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01
+    // a=extmap:<value>["/"<direction>] <URI> <extensionattributes>
+    // a=extmap:3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01
     let uri = Some(Url::parse(
         "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
     )?);
     let e = ExtMap {
         value: 3,
         uri,
-        direction: Direction::DirectionUnknown,
+        direction: Direction::Unspecified,
         ext_attr: None,
     };
 

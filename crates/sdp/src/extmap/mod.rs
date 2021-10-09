@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod extmap_test;
 
-use super::common_description::*;
 use super::direction::*;
 use super::error::{Error, Result};
+use crate::description::common::*;
 
 use std::fmt;
 use std::io;
@@ -34,9 +34,8 @@ pub struct ExtMap {
 impl fmt::Display for ExtMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = format!("{}", self.value);
-        let dirstring = self.direction.to_string();
-        if dirstring != DIRECTION_UNKNOWN_STR {
-            output += format!("/{}", dirstring).as_str();
+        if self.direction != Direction::Unspecified {
+            output += format!("/{}", self.direction.to_string()).as_str();
         }
 
         if let Some(uri) = &self.uri {
@@ -83,10 +82,10 @@ impl ExtMap {
             )));
         }
 
-        let mut direction = Direction::DirectionUnknown;
+        let mut direction = Direction::Unspecified;
         if valdir.len() == 2 {
             direction = Direction::new(valdir[1]);
-            if direction == Direction::DirectionUnknown {
+            if direction == Direction::Unspecified {
                 return Err(Error::ExtMapParse(format!(
                     "unknown direction from {}",
                     valdir[1]

@@ -1,7 +1,7 @@
 use std::fmt;
 
-// Information describes the "i=" field which provides textual information
-// about the session.
+/// Information describes the "i=" field which provides textual information
+/// about the session.
 pub type Information = String;
 
 /// ConnectionInformation defines the representation for the "c=" field
@@ -23,7 +23,7 @@ impl fmt::Display for ConnectionInformation {
     }
 }
 
-/// Address desribes a structured address token from within the "c=" field.
+/// Address describes a structured address token from within the "c=" field.
 #[derive(Debug, Default, Clone)]
 pub struct Address {
     pub address: String,
@@ -82,12 +82,12 @@ impl fmt::Display for Attribute {
 }
 
 impl Attribute {
-    /// constructs a new attribute
+    /// new constructs a new attribute
     pub fn new(key: String, value: Option<String>) -> Self {
         Attribute { key, value }
     }
 
-    /// IsICECandidate returns true if the attribute key equals "candidate".
+    /// is_ice_candidate returns true if the attribute key equals "candidate".
     pub fn is_ice_candidate(&self) -> bool {
         self.key.as_str() == "candidate"
     }

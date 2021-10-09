@@ -9,7 +9,6 @@ documentation = "https://docs.rs/sdp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/sdp"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 url = "2.2.2"
 rand = "0.8.4"

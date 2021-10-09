@@ -4,10 +4,10 @@ use std::iter::Iterator;
 #[test]
 fn test_new_direction() {
     let passingtests = vec![
-        ("sendrecv", Direction::DirectionSendRecv),
-        ("sendonly", Direction::DirectionSendOnly),
-        ("recvonly", Direction::DirectionRecvOnly),
-        ("inactive", Direction::DirectionInactive),
+        ("sendrecv", Direction::SendRecv),
+        ("sendonly", Direction::SendOnly),
+        ("recvonly", Direction::RecvOnly),
+        ("inactive", Direction::Inactive),
     ];
 
     let failingtests = vec!["", "notadirection"];
@@ -18,18 +18,18 @@ fn test_new_direction() {
     }
     for (_, &u) in failingtests.iter().enumerate() {
         let dir = Direction::new(u);
-        assert!(dir == Direction::DirectionUnknown);
+        assert!(dir == Direction::Unspecified);
     }
 }
 
 #[test]
 fn test_direction_string() {
     let tests = vec![
-        (Direction::DirectionUnknown, DIRECTION_UNKNOWN_STR),
-        (Direction::DirectionSendRecv, "sendrecv"),
-        (Direction::DirectionSendOnly, "sendonly"),
-        (Direction::DirectionRecvOnly, "recvonly"),
-        (Direction::DirectionInactive, "inactive"),
+        (Direction::Unspecified, DIRECTION_UNSPECIFIED_STR),
+        (Direction::SendRecv, "sendrecv"),
+        (Direction::SendOnly, "sendonly"),
+        (Direction::RecvOnly, "recvonly"),
+        (Direction::Inactive, "inactive"),
     ];
 
     for (i, u) in tests.iter().enumerate() {

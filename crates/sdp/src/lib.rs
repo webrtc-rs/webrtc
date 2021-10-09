@@ -1,12 +1,13 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
-pub mod common_description;
+pub mod description;
 pub mod direction;
-mod error;
 pub mod extmap;
-pub mod media_description;
-pub mod session_description;
 pub mod util;
 
+mod error;
+pub(crate) mod lexer;
+
+pub use description::{media::MediaDescription, session::SessionDescription};
 pub use error::Error;

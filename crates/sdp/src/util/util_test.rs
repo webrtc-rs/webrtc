@@ -1,7 +1,7 @@
 use super::*;
-use crate::common_description::*;
-use crate::media_description::*;
-use crate::session_description::*;
+use crate::description::common::*;
+use crate::description::media::*;
+use crate::description::session::*;
 
 fn get_test_session_description() -> SessionDescription {
     SessionDescription{
