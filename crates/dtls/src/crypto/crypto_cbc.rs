@@ -12,11 +12,11 @@ use std::io::Cursor;
 use std::ops::Not;
 
 use crate::content::*;
+use crate::error::*;
 use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 
 use aes::Aes256;
-use anyhow::Result;
 use block_modes::BlockModeError;
 use block_modes::{BlockMode, Cbc};
 use rand::Rng;

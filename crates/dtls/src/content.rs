@@ -4,7 +4,6 @@ use super::change_cipher_spec::*;
 use super::handshake::*;
 use crate::error::*;
 
-use anyhow::Result;
 use std::io::{Read, Write};
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
@@ -81,7 +80,7 @@ impl Content {
             ContentType::ApplicationData => Ok(Content::ApplicationData(
                 ApplicationData::unmarshal(reader)?,
             )),
-            _ => Err(Error::ErrInvalidContentType.into()),
+            _ => Err(Error::ErrInvalidContentType),
         }
     }
 }

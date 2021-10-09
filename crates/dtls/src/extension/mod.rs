@@ -16,7 +16,6 @@ use extension_use_srtp::*;
 use crate::error::*;
 
 use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 
@@ -125,7 +124,7 @@ impl Extension {
             ExtensionValue::RenegotiationInfo => Ok(Extension::RenegotiationInfo(
                 ExtensionRenegotiationInfo::unmarshal(reader)?,
             )),
-            _ => Err(Error::ErrInvalidExtensionType.into()),
+            _ => Err(Error::ErrInvalidExtensionType),
         }
     }
 }

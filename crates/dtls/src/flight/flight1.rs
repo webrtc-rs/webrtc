@@ -5,7 +5,7 @@ use crate::config::*;
 use crate::conn::*;
 use crate::content::*;
 use crate::curve::named_curve::*;
-use crate::error::*;
+use crate::error::Error;
 use crate::extension::extension_server_name::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
@@ -40,7 +40,7 @@ impl Flight for Flight1 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         // HelloVerifyRequest can be skipped by the server,
         // so allow ServerHello during flight1 also
         let (seq, msgs) = match cache
@@ -97,7 +97,7 @@ impl Flight for Flight1 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion.into()),
+                    Some(Error::ErrUnsupportedProtocolVersion),
                 ));
             }
 
@@ -120,7 +120,7 @@ impl Flight for Flight1 {
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         let zero_epoch = 0;
         state.local_epoch.store(zero_epoch, Ordering::SeqCst);
         state.remote_epoch.store(zero_epoch, Ordering::SeqCst);

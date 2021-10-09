@@ -1,4 +1,3 @@
-use anyhow::Result;
 use rand_core::OsRng; // requires 'getrandom' feature
 
 use crate::error::*;
@@ -53,7 +52,7 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair> {
             )
         }
         //TODO: add NamedCurve::p384
-        _ => return Err(Error::ErrInvalidNamedCurve.into()),
+        _ => return Err(Error::ErrInvalidNamedCurve),
     };
 
     Ok(NamedCurveKeypair {
@@ -70,7 +69,7 @@ impl NamedCurve {
             NamedCurve::X25519 => elliptic_curve_keypair(NamedCurve::X25519),
             NamedCurve::P256 => elliptic_curve_keypair(NamedCurve::P256),
             //NamedCurve::P384 => elliptic_curve_keypair(NamedCurve::P384),
-            _ => Err(Error::ErrInvalidNamedCurve.into()),
+            _ => Err(Error::ErrInvalidNamedCurve),
         }
     }
 }

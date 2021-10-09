@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod prf_test;
 
-use anyhow::Result;
 use std::convert::TryInto;
 use std::fmt;
 
@@ -78,7 +77,7 @@ pub(crate) fn prf_pre_master_secret(
     match curve {
         NamedCurve::P256 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         NamedCurve::X25519 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
-        _ => Err(Error::ErrInvalidNamedCurve.into()),
+        _ => Err(Error::ErrInvalidNamedCurve),
     }
 }
 
@@ -96,15 +95,18 @@ fn elliptic_curve_pre_master_secret(
             }
         }
         NamedCurve::X25519 => {
-            let pub_key: [u8; 32] = public_key.try_into()?;
+            if public_key.len() != 32 {
+                return Err(Error::Other("Public key is not 32 len".into()));
+            }
+            let pub_key: [u8; 32] = public_key.try_into().unwrap();
             let public = x25519_dalek::PublicKey::from(pub_key);
             if let NamedCurvePrivateKey::StaticSecretX25519(secret) = private_key {
                 return Ok(secret.diffie_hellman(&public).as_bytes().to_vec());
             }
         }
-        _ => return Err(Error::ErrInvalidNamedCurve.into()),
+        _ => return Err(Error::ErrInvalidNamedCurve),
     }
-    Err(Error::ErrNamedCurveAndPrivateKeyMismatch.into())
+    Err(Error::ErrNamedCurveAndPrivateKeyMismatch)
 }
 
 //  This PRF with the SHA-256 hash function is used for all cipher suites
@@ -133,7 +135,7 @@ fn elliptic_curve_pre_master_secret(
 fn hmac_sha(h: CipherSuiteHash, key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     let mut mac = match h {
         CipherSuiteHash::Sha256 => {
-            HmacSha256::new_varkey(key).map_err(|e| Error::new(e.to_string()))?
+            HmacSha256::new_varkey(key).map_err(|e| Error::Other(e.to_string()))?
         }
     };
     mac.update(data);
@@ -288,7 +290,7 @@ pub(crate) fn prf_mac(
     payload: &[u8],
     key: &[u8],
 ) -> Result<Vec<u8>> {
-    let mut hmac = HmacSha1::new_varkey(key).map_err(|e| Error::new(e.to_string()))?;
+    let mut hmac = HmacSha1::new_varkey(key).map_err(|e| Error::Other(e.to_string()))?;
 
     let mut msg = vec![0u8; 13];
     msg[..2].copy_from_slice(&epoch.to_be_bytes());

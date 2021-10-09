@@ -3,8 +3,6 @@ mod extension_use_extended_master_secret_test;
 
 use super::*;
 
-use anyhow::Result;
-
 const EXTENSION_USE_EXTENDED_MASTER_SECRET_HEADER_SIZE: usize = 4;
 
 // https://tools.ietf.org/html/rfc8422

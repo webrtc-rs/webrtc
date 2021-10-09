@@ -8,7 +8,7 @@ use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
 use crate::curve::*;
-use crate::error::*;
+use crate::error::Error;
 use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_use_extended_master_secret::*;
@@ -48,7 +48,7 @@ impl Flight for Flight4 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         let (seq, msgs) = match cache
             .full_pull_map(
                 state.handshake_recv_sequence,
@@ -134,7 +134,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::NoCertificate,
                     }),
-                    Some(Error::ErrCertificateVerifyNoCertificate.into()),
+                    Some(Error::ErrCertificateVerifyNoCertificate),
                 ));
             }
 
@@ -205,7 +205,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrNoAvailableSignatureSchemes.into()),
+                    Some(Error::ErrNoAvailableSignatureSchemes),
                 ));
             }
 
@@ -246,7 +246,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ErrInvalidCertificate.into()),
+                        Some(Error::ErrInvalidCertificate),
                     ));
                 }
 
@@ -395,7 +395,7 @@ impl Flight for Flight4 {
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InternalError,
                 }),
-                Some(Error::new(err.to_string()).into()),
+                Some(Error::Other(err.to_string())),
             ));
         }
 
@@ -445,7 +445,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(Error::ErrClientCertificateRequired.into()),
+                        Some(Error::ErrClientCertificateRequired),
                     ));
                 }
             }
@@ -456,7 +456,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ErrClientCertificateNotVerified.into()),
+                        Some(Error::ErrClientCertificateNotVerified),
                     ));
                 }
             }
@@ -467,7 +467,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(Error::ErrClientCertificateRequired.into()),
+                        Some(Error::ErrClientCertificateRequired),
                     ));
                 }
                 if !state.peer_certificates_verified {
@@ -476,7 +476,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ErrClientCertificateNotVerified.into()),
+                        Some(Error::ErrClientCertificateNotVerified),
                     ));
                 }
             }
@@ -493,7 +493,7 @@ impl Flight for Flight4 {
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         let mut extensions = vec![Extension::RenegotiationInfo(ExtensionRenegotiationInfo {
             renegotiated_connection: 0,
         })];

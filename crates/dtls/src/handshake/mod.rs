@@ -15,7 +15,6 @@ pub mod handshake_random;
 #[cfg(test)]
 mod handshake_test;
 
-use anyhow::Result;
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -233,7 +232,7 @@ impl Handshake {
             HandshakeType::Finished => {
                 HandshakeMessage::Finished(HandshakeMessageFinished::unmarshal(reader)?)
             }
-            _ => return Err(Error::ErrNotImplemented.into()),
+            _ => return Err(Error::ErrNotImplemented),
         };
 
         Ok(Handshake {

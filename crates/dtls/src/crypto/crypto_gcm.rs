@@ -67,7 +67,7 @@ impl CryptoGcm {
 
         self.local_gcm
             .encrypt_in_place(nonce, &additional_data, &mut buffer)
-            .map_err(|e| Error::new(e.to_string()))?;
+            .map_err(|e| Error::Other(e.to_string()))?;
 
         let mut r = Vec::with_capacity(raw.len() + nonce.len() + buffer.len());
         r.extend_from_slice(raw);
@@ -91,7 +91,7 @@ impl CryptoGcm {
         }
 
         if r.len() <= (RECORD_LAYER_HEADER_SIZE + 8) {
-            return Err(Error::ErrNotEnoughRoomForNonce.into());
+            return Err(Error::ErrNotEnoughRoomForNonce);
         }
 
         let mut nonce = vec![];
@@ -108,7 +108,7 @@ impl CryptoGcm {
 
         self.remote_gcm
             .decrypt_in_place(nonce, &additional_data, &mut buffer)
-            .map_err(|e| Error::new(e.to_string()))?;
+            .map_err(|e| Error::Other(e.to_string()))?;
 
         let mut d = Vec::with_capacity(RECORD_LAYER_HEADER_SIZE + buffer.len());
         d.extend_from_slice(&r[..RECORD_LAYER_HEADER_SIZE]);

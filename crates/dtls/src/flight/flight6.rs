@@ -30,7 +30,7 @@ impl Flight for Flight6 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         let (_, msgs) = match cache
             .full_pull_map(
                 state.handshake_recv_sequence - 1,
@@ -72,7 +72,7 @@ impl Flight for Flight6 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         let mut pkts = vec![Packet {
             record: RecordLayer::new(
                 PROTOCOL_VERSION1_2,

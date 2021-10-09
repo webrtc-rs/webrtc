@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod signature_hash_algorithm_test;
 
-use anyhow::Result;
 use std::fmt;
 
 use crate::crypto::*;
@@ -149,7 +148,7 @@ pub(crate) fn select_signature_scheme(
         }
     }
 
-    Err(Error::ErrNoAvailableSignatureSchemes.into())
+    Err(Error::ErrNoAvailableSignatureSchemes)
 }
 
 // SignatureScheme identifies a signature algorithm supported by TLS. See
@@ -193,11 +192,11 @@ pub(crate) fn parse_signature_schemes(
     for ss in sigs {
         let sig: SignatureAlgorithm = ((*ss & 0xFF) as u8).into();
         if sig == SignatureAlgorithm::Unsupported {
-            return Err(Error::ErrInvalidSignatureAlgorithm.into());
+            return Err(Error::ErrInvalidSignatureAlgorithm);
         }
         let h: HashAlgorithm = (((*ss >> 8) & 0xFF) as u8).into();
         if h == HashAlgorithm::Unsupported || h.invalid() {
-            return Err(Error::ErrInvalidHashAlgorithm.into());
+            return Err(Error::ErrInvalidHashAlgorithm);
         }
         if h.insecure() && !insecure_hashes {
             continue;
@@ -209,7 +208,7 @@ pub(crate) fn parse_signature_schemes(
     }
 
     if out.is_empty() {
-        Err(Error::ErrNoAvailableSignatureSchemes.into())
+        Err(Error::ErrNoAvailableSignatureSchemes)
     } else {
         Ok(out)
     }

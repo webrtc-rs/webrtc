@@ -3,7 +3,6 @@ mod extension_server_name_test;
 
 use super::*;
 
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 
@@ -42,7 +41,7 @@ impl ExtensionServerName {
 
         let name_type = reader.read_u8()?;
         if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
-            return Err(Error::ErrInvalidSniFormat.into());
+            return Err(Error::ErrInvalidSniFormat);
         }
 
         let buf_len = reader.read_u16::<BigEndian>()? as usize;

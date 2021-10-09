@@ -11,7 +11,6 @@ use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::handshake::Handshake;
 use record_layer_header::*;
 
-use anyhow::Result;
 use std::io::{Read, Write};
 
 /*
@@ -67,7 +66,7 @@ impl RecordLayer {
                 Content::ChangeCipherSpec(ChangeCipherSpec::unmarshal(reader)?)
             }
             ContentType::Handshake => Content::Handshake(Handshake::unmarshal(reader)?),
-            _ => return Err(Error::new("Invalid Content Type".to_owned()).into()),
+            _ => return Err(Error::Other("Invalid Content Type".to_owned())),
         };
 
         Ok(RecordLayer {
@@ -89,14 +88,14 @@ pub(crate) fn unpack_datagram(buf: &[u8]) -> Result<Vec<Vec<u8>>> {
     let mut offset = 0;
     while buf.len() != offset {
         if buf.len() - offset <= RECORD_LAYER_HEADER_SIZE {
-            return Err(Error::ErrInvalidPacketLength.into());
+            return Err(Error::ErrInvalidPacketLength);
         }
 
         let pkt_len = RECORD_LAYER_HEADER_SIZE
             + (((buf[offset + RECORD_LAYER_HEADER_SIZE - 2] as usize) << 8)
                 | buf[offset + RECORD_LAYER_HEADER_SIZE - 1] as usize);
         if offset + pkt_len > buf.len() {
-            return Err(Error::ErrInvalidPacketLength.into());
+            return Err(Error::ErrInvalidPacketLength);
         }
 
         out.push(buf[offset..offset + pkt_len].to_vec());

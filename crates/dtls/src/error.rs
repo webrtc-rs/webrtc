@@ -1,6 +1,15 @@
 use thiserror::Error;
 
+use rcgen::RcgenError;
+use std::io;
+use std::string::FromUtf8Error;
+use tokio::sync::mpsc::error::SendError as MpscSendError;
+use util::KeyingMaterialExporterError;
+
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, Error, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     #[error("conn is closed")]
     ErrConnClosed,
@@ -135,13 +144,73 @@ pub enum Error {
     #[error("Alert is Fatal or Close Notify")]
     ErrAlertFatalOrClose,
 
+    #[error("{0}")]
+    Io(#[source] IoError),
+    #[error("{0}")]
+    Util(#[from] util::Error),
+    #[error("utf8: {0}")]
+    Utf8(#[from] FromUtf8Error),
+    #[error("{0}")]
+    P256(#[source] P256Error),
+    #[error("{0}")]
+    RcGen(#[from] RcgenError),
+    #[error("mpsc send: {0}")]
+    MpscSend(String),
+    #[error("keying material: {0}")]
+    KeyingMaterial(#[from] KeyingMaterialExporterError),
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
-    new(String),
+    Other(String),
 }
 
-impl Error {
-    pub fn equal(&self, err: &anyhow::Error) -> bool {
-        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+#[derive(Debug, Error)]
+#[error("io error: {0}")]
+pub struct IoError(#[from] pub io::Error);
+
+// Workaround for wanting PartialEq for io::Error.
+impl PartialEq for IoError {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.kind() == other.0.kind()
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::Io(IoError(e))
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("{0}")]
+pub struct P256Error(#[source] p256::elliptic_curve::Error);
+
+impl PartialEq for P256Error {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+impl From<p256::elliptic_curve::Error> for Error {
+    fn from(e: p256::elliptic_curve::Error) -> Self {
+        Error::P256(P256Error(e))
+    }
+}
+
+impl From<block_modes::InvalidKeyIvLength> for Error {
+    fn from(e: block_modes::InvalidKeyIvLength) -> Self {
+        Error::Other(e.to_string())
+    }
+}
+impl From<block_modes::BlockModeError> for Error {
+    fn from(e: block_modes::BlockModeError) -> Self {
+        Error::Other(e.to_string())
+    }
+}
+
+// Because Tokio SendError is parameterized, we sadly lose the backtrace.
+impl<T> From<MpscSendError<T>> for Error {
+    fn from(e: MpscSendError<T>) -> Self {
+        Error::MpscSend(e.to_string())
     }
 }

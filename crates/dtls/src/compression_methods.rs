@@ -1,4 +1,5 @@
-use anyhow::Result;
+use crate::error::Result;
+
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 

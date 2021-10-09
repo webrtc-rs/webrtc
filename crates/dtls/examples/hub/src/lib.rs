@@ -3,12 +3,13 @@
 
 pub mod utilities;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::Conn;
+
+use dtls::Error;
 
 const BUF_SIZE: usize = 8192;
 
@@ -44,7 +45,7 @@ impl Hub {
     async fn read_loop(
         conns: Arc<Mutex<HashMap<String, Arc<dyn Conn + Send + Sync>>>>,
         conn: Arc<dyn Conn + Send + Sync>,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         let mut b = vec![0u8; BUF_SIZE];
 
         while let Ok(n) = conn.recv(&mut b).await {
@@ -58,7 +59,7 @@ impl Hub {
     async fn unregister(
         conns: Arc<Mutex<HashMap<String, Arc<dyn Conn + Send + Sync>>>>,
         conn: Arc<dyn Conn + Send + Sync>,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         if let Some(remote_addr) = conn.remote_addr().await {
             {
                 let mut cs = conns.lock().await;

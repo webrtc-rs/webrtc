@@ -1,16 +1,16 @@
-use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::sync::Arc;
 use util::conn::*;
 use webrtc_dtls::cipher_suite::CipherSuiteId;
 use webrtc_dtls::config::ExtendedMasterSecretType;
+use webrtc_dtls::Error;
 use webrtc_dtls::{config::Config, listener::listen};
 
 // cargo run --example listen_psk -- --host 127.0.0.1:4444
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     env_logger::Builder::new()
         .format(|buf, record| {
             writeln!(
@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
     let host = matches.value_of("host").unwrap().to_owned();
 
     let cfg = Config {
-        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>> {
+        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>, Error> {
             println!("Client's hint: {}", String::from_utf8(hint.to_vec())?);
             Ok(vec![0xAB, 0xC1, 0x23])
         })),
@@ -84,5 +84,5 @@ async fn main() -> Result<()> {
 
     h.chat().await;
 
-    listener.close().await
+    Ok(listener.close().await?)
 }

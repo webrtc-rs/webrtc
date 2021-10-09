@@ -8,7 +8,6 @@ use crate::compression_methods::*;
 use crate::extension::*;
 use crate::record_layer::record_layer_header::*;
 
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt;
 use std::io::{BufReader, BufWriter};
@@ -103,7 +102,7 @@ impl HandshakeMessageClientHello {
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         if self.cookie.len() > 255 {
-            return Err(Error::ErrCookieTooLong.into());
+            return Err(Error::ErrCookieTooLong);
         }
 
         writer.write_u8(self.version.major)?;

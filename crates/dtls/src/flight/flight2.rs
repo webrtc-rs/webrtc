@@ -2,7 +2,7 @@ use super::flight0::*;
 use super::flight4::*;
 use super::*;
 use crate::content::*;
-use crate::error::*;
+use crate::error::Error;
 use crate::handshake::handshake_message_hello_verify_request::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
@@ -31,7 +31,7 @@ impl Flight for Flight2 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         let (seq, msgs) = match cache
             .full_pull_map(
                 state.handshake_recv_sequence,
@@ -75,7 +75,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion.into()),
+                    Some(Error::ErrUnsupportedProtocolVersion),
                 ));
             }
 
@@ -89,7 +89,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::AccessDenied,
                     }),
-                    Some(Error::ErrCookieMismatch.into()),
+                    Some(Error::ErrCookieMismatch),
                 ));
             }
 
@@ -110,7 +110,7 @@ impl Flight for Flight2 {
         state: &mut State,
         _cache: &HandshakeCache,
         _cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         state.handshake_send_sequence = 0;
         Ok(vec![Packet {
             record: RecordLayer::new(

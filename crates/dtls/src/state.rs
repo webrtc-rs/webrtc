@@ -4,9 +4,8 @@ use super::curve::named_curve::*;
 use super::extension::extension_use_srtp::SrtpProtectionProfile;
 use super::handshake::handshake_random::*;
 use super::prf::*;
-use crate::error::Error;
+use crate::error::*;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::io::{BufWriter, Cursor};
 use std::marker::{Send, Sync};
@@ -14,6 +13,7 @@ use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::KeyingMaterialExporter;
+use util::KeyingMaterialExporterError;
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
 pub struct State {
@@ -138,7 +138,7 @@ impl State {
             let cipher_suite = self.cipher_suite.lock().await;
             match &*cipher_suite {
                 Some(cipher_suite) => cipher_suite.id() as u16,
-                None => return Err(Error::ErrCipherSuiteUnset.into()),
+                None => return Err(Error::ErrCipherSuiteUnset),
             }
         };
 
@@ -221,7 +221,7 @@ impl State {
                 cipher_suite.init(&self.master_secret, &remote_random, &local_random, false)
             }
         } else {
-            Err(Error::ErrCipherSuiteUnset.into())
+            Err(Error::ErrCipherSuiteUnset)
         }
     }
 
@@ -231,7 +231,7 @@ impl State {
 
         match bincode::serialize(&serialized) {
             Ok(enc) => Ok(enc),
-            Err(err) => Err(Error::new(err.to_string()).into()),
+            Err(err) => Err(Error::Other(err.to_string())),
         }
     }
 
@@ -239,7 +239,7 @@ impl State {
     pub async fn unmarshal_binary(&mut self, data: &[u8]) -> Result<()> {
         let serialized: SerializedState = match bincode::deserialize(data) {
             Ok(dec) => dec,
-            Err(err) => return Err(Error::new(err.to_string()).into()),
+            Err(err) => return Err(Error::Other(err.to_string())),
         };
         self.deserialize(&serialized).await?;
         self.init_cipher_suite().await?;
@@ -259,28 +259,26 @@ impl KeyingMaterialExporter for State {
         label: &str,
         context: &[u8],
         length: usize,
-    ) -> Result<Vec<u8>> {
+    ) -> std::result::Result<Vec<u8>, KeyingMaterialExporterError> {
+        use KeyingMaterialExporterError::*;
+
         if self.local_epoch.load(Ordering::SeqCst) == 0 {
-            return Err(Error::ErrHandshakeInProgress.into());
+            return Err(HandshakeInProgress);
         } else if !context.is_empty() {
-            return Err(Error::ErrContextUnsupported.into());
+            return Err(ContextUnsupported);
         } else if INVALID_KEYING_LABELS.contains_key(label) {
-            return Err(Error::ErrReservedExportKeyingMaterial.into());
+            return Err(ReservedExportKeyingMaterial);
         }
 
         let mut local_random = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(local_random.as_mut());
-            if let Err(err) = self.local_random.marshal(&mut writer) {
-                return Err(err);
-            }
+            self.local_random.marshal(&mut writer)?;
         }
         let mut remote_random = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(remote_random.as_mut());
-            if let Err(err) = self.remote_random.marshal(&mut writer) {
-                return Err(err);
-            }
+            self.remote_random.marshal(&mut writer)?;
         }
 
         let mut seed = label.as_bytes().to_vec();
@@ -296,10 +294,10 @@ impl KeyingMaterialExporter for State {
         if let Some(cipher_suite) = &*cipher_suite {
             match prf_p_hash(&self.master_secret, &seed, length, cipher_suite.hash_func()) {
                 Ok(v) => Ok(v),
-                Err(err) => Err(err),
+                Err(err) => Err(Hash(err.to_string())),
             }
         } else {
-            Err(Error::ErrCipherSuiteUnset.into())
+            Err(CipherSuiteUnset)
         }
     }
 }

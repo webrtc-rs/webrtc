@@ -1,17 +1,16 @@
-use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use hub::utilities::Error;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::sync::Arc;
 use util::conn::*;
 use webrtc_dtls::config::{ClientAuthType, ExtendedMasterSecretType};
+use webrtc_dtls::Error;
 use webrtc_dtls::{config::Config, listener::listen};
 
 // cargo run --example listen_verify -- --host 127.0.0.1:4444
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     env_logger::Builder::new()
         .format(|buf, record| {
             writeln!(
@@ -64,8 +63,8 @@ async fn main() -> Result<()> {
     let mut cert_pool = rustls::RootCertStore::empty();
     let f = File::open("examples/certificates/server.pub.pem")?;
     let mut reader = BufReader::new(f);
-    if let Err(_) = cert_pool.add_pem_file(&mut reader) {
-        return Err(Error::new("cert_pool add_pem_file failed".to_owned()).into());
+    if cert_pool.add_pem_file(&mut reader).is_err() {
+        return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
     }
 
     let cfg = Config {
@@ -113,5 +112,5 @@ async fn main() -> Result<()> {
 
     done_tx.take();
 
-    listener.close().await
+    Ok(listener.close().await?)
 }

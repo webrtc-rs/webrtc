@@ -120,7 +120,7 @@ impl HandshakeCache {
             }
             if !r.optional && item.is_none() {
                 // Missing mandatory message.
-                return Err(Error::new("Missing mandatory message".to_owned()).into());
+                return Err(Error::Other("Missing mandatory message".to_owned()));
             }
 
             if let Some(c) = item {
@@ -137,10 +137,9 @@ impl HandshakeCache {
                 let raw_handshake = Handshake::unmarshal(&mut reader)?;
                 if seq as u16 != raw_handshake.handshake_header.message_sequence {
                     // There is a gap. Some messages are not arrived.
-                    return Err(Error::new(
+                    return Err(Error::Other(
                         "There is a gap. Some messages are not arrived.".to_owned(),
-                    )
-                    .into());
+                    ));
                 }
                 seq += 1;
                 out.insert(t, raw_handshake.handshake_message);

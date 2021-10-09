@@ -7,6 +7,7 @@ pub(crate) mod flight5;
 pub(crate) mod flight6;
 
 use crate::alert::*;
+use crate::error::Error;
 use crate::handshake::handshake_cache::*;
 use crate::handshaker::*;
 use crate::record_layer::*;
@@ -74,12 +75,12 @@ pub(crate) trait Flight: fmt::Display + fmt::Debug {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)>;
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)>;
 
     async fn generate(
         &self,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)>;
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)>;
 }

@@ -7,7 +7,6 @@ pub mod cipher_suite_tls_psk_with_aes_128_ccm;
 pub mod cipher_suite_tls_psk_with_aes_128_ccm8;
 pub mod cipher_suite_tls_psk_with_aes_128_gcm_sha256;
 
-use anyhow::Result;
 use std::fmt;
 use std::marker::{Send, Sync};
 
@@ -168,7 +167,7 @@ pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Se
         CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
             Ok(Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()))
         }
-        _ => Err(Error::ErrInvalidCipherSuite.into()),
+        _ => Err(Error::ErrInvalidCipherSuite),
     }
 }
 
@@ -221,7 +220,7 @@ pub(crate) fn parse_cipher_suites(
         .collect();
 
     if filtered_cipher_suites.is_empty() {
-        Err(Error::ErrNoAvailableCipherSuites.into())
+        Err(Error::ErrNoAvailableCipherSuites)
     } else {
         Ok(filtered_cipher_suites)
     }
