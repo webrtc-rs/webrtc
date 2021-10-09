@@ -1,6 +1,5 @@
 use super::{param_header::*, param_type::*, *};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -80,7 +79,7 @@ impl Param for ParamRequestedHmacAlgorithm {
             if a == HmacAlgorithm::HmacSha128 || a == HmacAlgorithm::HmacSha256 {
                 available_algorithms.push(a);
             } else {
-                return Err(Error::ErrInvalidAlgorithmType.into());
+                return Err(Error::ErrInvalidAlgorithmType);
             }
 
             offset += 2;

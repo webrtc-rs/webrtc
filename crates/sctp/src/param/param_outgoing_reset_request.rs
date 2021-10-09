@@ -1,6 +1,5 @@
 use super::{param_header::*, param_type::*, *};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 pub(crate) const PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET: usize = 12;
@@ -73,7 +72,7 @@ impl Param for ParamOutgoingResetRequest {
         let header = ParamHeader::unmarshal(raw)?;
         if raw.len() < PARAM_HEADER_LENGTH + PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET
         {
-            return Err(Error::ErrSsnResetRequestParamTooShort.into());
+            return Err(Error::ErrSsnResetRequestParamTooShort);
         }
 
         let reader =

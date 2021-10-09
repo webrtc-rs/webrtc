@@ -1,7 +1,7 @@
 use webrtc_sctp::association::*;
 use webrtc_sctp::stream::*;
+use webrtc_sctp::Error;
 
-use anyhow::Result;
 use bytes::Bytes;
 use clap::{App, AppSettings, Arg};
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use util::{conn::conn_disconnected_packet::DisconnectedPacketConn, Conn};
 // RUST_LOG=trace cargo run --color=always --package webrtc-sctp --example pong -- --host 0.0.0.0:5678
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
         println!("finished ping-pong");
         drop(done_tx);
 
-        Result::<()>::Ok(())
+        Result::<(), Error>::Ok(())
     });
 
     println!("Waiting for Ctrl-C...");

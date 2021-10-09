@@ -1,7 +1,6 @@
 use super::{chunk_header::*, chunk_type::*, *};
 use crate::param::{param_header::*, param_type::*, *};
 
-use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -56,17 +55,17 @@ impl Chunk for ChunkHeartbeat {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_HEARTBEAT {
-            return Err(Error::ErrChunkTypeNotHeartbeat.into());
+            return Err(Error::ErrChunkTypeNotHeartbeat);
         }
 
         if raw.len() <= CHUNK_HEADER_SIZE {
-            return Err(Error::ErrHeartbeatNotLongEnoughInfo.into());
+            return Err(Error::ErrHeartbeatNotLongEnoughInfo);
         }
 
         let p =
             build_param(&raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length()))?;
         if p.header().typ != ParamType::HeartbeatInfo {
-            return Err(Error::ErrHeartbeatParam.into());
+            return Err(Error::ErrHeartbeatParam);
         }
         let params = vec![p];
 

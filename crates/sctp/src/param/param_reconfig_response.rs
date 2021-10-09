@@ -1,6 +1,5 @@
 use super::{param_header::*, param_type::*, *};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -105,7 +104,7 @@ impl Param for ParamReconfigResponse {
     fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ParamHeader::unmarshal(raw)?;
         if raw.len() < 8 + PARAM_HEADER_LENGTH {
-            return Err(Error::ErrReconfigRespParamTooShort.into());
+            return Err(Error::ErrReconfigRespParamTooShort);
         }
 
         let reader =

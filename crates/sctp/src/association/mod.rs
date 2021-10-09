@@ -22,7 +22,7 @@ use crate::chunk::chunk_shutdown_ack::ChunkShutdownAck;
 use crate::chunk::chunk_shutdown_complete::ChunkShutdownComplete;
 use crate::chunk::chunk_type::*;
 use crate::chunk::Chunk;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::error_cause::*;
 use crate::packet::Packet;
 use crate::param::param_heartbeat_info::ParamHeartbeatInfo;
@@ -42,7 +42,6 @@ use crate::util::*;
 use association_internal::*;
 use association_stats::*;
 
-use anyhow::Result;
 use bytes::Bytes;
 use rand::random;
 use std::collections::{HashMap, VecDeque};
@@ -236,12 +235,12 @@ impl Association {
 
         if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
-                Err(err.into())
+                Err(err)
             } else {
                 Ok(a)
             }
         } else {
-            Err(Error::ErrAssociationHandshakeClosed.into())
+            Err(Error::ErrAssociationHandshakeClosed)
         }
     }
 
@@ -251,12 +250,12 @@ impl Association {
 
         if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
-                Err(err.into())
+                Err(err)
             } else {
                 Ok(a)
             }
         } else {
-            Err(Error::ErrAssociationHandshakeClosed.into())
+            Err(Error::ErrAssociationHandshakeClosed)
         }
     }
 
@@ -268,7 +267,7 @@ impl Association {
 
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrShutdownNonEstablished.into());
+            return Err(Error::ErrShutdownNonEstablished);
         }
 
         // Attempt a graceful shutdown.

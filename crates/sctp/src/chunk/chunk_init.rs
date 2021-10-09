@@ -3,7 +3,6 @@ use crate::param::param_supported_extensions::ParamSupportedExtensions;
 use crate::param::{param_header::*, *};
 use crate::util::get_padding_size;
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -132,16 +131,16 @@ impl Chunk for ChunkInit {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if !(header.typ == CT_INIT || header.typ == CT_INIT_ACK) {
-            return Err(Error::ErrChunkTypeNotTypeInit.into());
+            return Err(Error::ErrChunkTypeNotTypeInit);
         } else if raw.len() < CHUNK_HEADER_SIZE + INIT_CHUNK_MIN_LENGTH {
-            return Err(Error::ErrChunkValueNotLongEnough.into());
+            return Err(Error::ErrChunkValueNotLongEnough);
         }
 
         // The Chunk Flags field in INIT is reserved, and all bits in it should
         // be set to 0 by the sender and ignored by the receiver.  The sequence
         // of parameters within an INIT can be processed in any order.
         if header.flags != 0 {
-            return Err(Error::ErrChunkTypeInitFlagZero.into());
+            return Err(Error::ErrChunkTypeInitFlagZero);
         }
 
         let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
@@ -217,7 +216,7 @@ impl Chunk for ChunkInit {
         // to be 0, the receiver MUST treat it as an error and close the
         // association by transmitting an ABORT.
         if self.initiate_tag == 0 {
-            return Err(Error::ErrChunkTypeInitInitateTagZero.into());
+            return Err(Error::ErrChunkTypeInitInitateTagZero);
         }
 
         // Defines the maximum number of streams the sender of this INIT
@@ -231,7 +230,7 @@ impl Chunk for ChunkInit {
         // Note: A receiver of an INIT with the MIS value of 0 SHOULD abort
         // the association.
         if self.num_inbound_streams == 0 {
-            return Err(Error::ErrInitInboundStreamRequestZero.into());
+            return Err(Error::ErrInitInboundStreamRequestZero);
         }
 
         // Defines the number of outbound streams the sender of this INIT
@@ -242,7 +241,7 @@ impl Chunk for ChunkInit {
         // abort the association.
 
         if self.num_outbound_streams == 0 {
-            return Err(Error::ErrInitOutboundStreamRequestZero.into());
+            return Err(Error::ErrInitOutboundStreamRequestZero);
         }
 
         // An SCTP receiver MUST be able to receive a minimum of 1500 bytes in
@@ -250,7 +249,7 @@ impl Chunk for ChunkInit {
         // less than 1500 bytes in its initial a_rwnd sent in the INIT or INIT
         // ACK.
         if self.advertised_receiver_window_credit < 1500 {
-            return Err(Error::ErrInitAdvertisedReceiver1500.into());
+            return Err(Error::ErrInitAdvertisedReceiver1500);
         }
 
         Ok(())

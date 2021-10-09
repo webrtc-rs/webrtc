@@ -13,7 +13,7 @@ pub(crate) mod param_state_cookie;
 pub(crate) mod param_supported_extensions;
 pub(crate) mod param_type;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::param::{
     param_chunk_list::ParamChunkList, param_forward_tsn_supported::ParamForwardTsnSupported,
     param_heartbeat_info::ParamHeartbeatInfo,
@@ -25,7 +25,6 @@ use crate::param::{
 use param_header::*;
 use param_type::*;
 
-use anyhow::Result;
 use bytes::{Buf, Bytes, BytesMut};
 use std::{any::Any, fmt};
 
@@ -55,7 +54,7 @@ impl Clone for Box<dyn Param + Send + Sync> {
 
 pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param + Send + Sync>> {
     if raw_param.len() < PARAM_HEADER_LENGTH {
-        return Err(Error::ErrParamHeaderTooShort.into());
+        return Err(Error::ErrParamHeaderTooShort);
     }
     let reader = &mut raw_param.slice(..2);
     let t: ParamType = reader.get_u16().into();
@@ -69,6 +68,6 @@ pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param + Send + Sy
         ParamType::HeartbeatInfo => Ok(Box::new(ParamHeartbeatInfo::unmarshal(raw_param)?)),
         ParamType::OutSsnResetReq => Ok(Box::new(ParamOutgoingResetRequest::unmarshal(raw_param)?)),
         ParamType::ReconfigResp => Ok(Box::new(ParamReconfigResponse::unmarshal(raw_param)?)),
-        _ => Err(Error::ErrParamTypeUnhandled.into()),
+        _ => Err(Error::ErrParamTypeUnhandled),
     }
 }

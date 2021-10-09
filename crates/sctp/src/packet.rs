@@ -15,10 +15,9 @@ use crate::chunk::chunk_shutdown::ChunkShutdown;
 use crate::chunk::chunk_shutdown_ack::ChunkShutdownAck;
 use crate::chunk::chunk_shutdown_complete::ChunkShutdownComplete;
 use crate::chunk::chunk_type::*;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::util::*;
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
@@ -84,7 +83,7 @@ pub(crate) const PACKET_HEADER_SIZE: usize = 12;
 impl Packet {
     pub(crate) fn unmarshal(raw: &Bytes) -> Result<Self> {
         if raw.len() < PACKET_HEADER_SIZE {
-            return Err(Error::ErrPacketRawTooSmall.into());
+            return Err(Error::ErrPacketRawTooSmall);
         }
 
         let reader = &mut raw.clone();
@@ -96,7 +95,7 @@ impl Packet {
         let our_checksum = generate_packet_checksum(raw);
 
         if their_checksum != our_checksum {
-            return Err(Error::ErrChecksumMismatch.into());
+            return Err(Error::ErrChecksumMismatch);
         }
 
         let mut chunks = vec![];
@@ -106,7 +105,7 @@ impl Packet {
             if offset == raw.len() {
                 break;
             } else if offset + CHUNK_HEADER_SIZE > raw.len() {
-                return Err(Error::ErrParseSctpChunkNotEnoughData.into());
+                return Err(Error::ErrParseSctpChunkNotEnoughData);
             }
 
             let ct = ChunkType(raw[offset]);
@@ -127,7 +126,7 @@ impl Packet {
                 CT_SHUTDOWN_COMPLETE => {
                     Box::new(ChunkShutdownComplete::unmarshal(&raw.slice(offset..))?)
                 }
-                _ => return Err(Error::ErrUnmarshalUnknownChunkType.into()),
+                _ => return Err(Error::ErrUnmarshalUnknownChunkType),
             };
 
             let chunk_value_padding = get_padding_size(c.value_length());
@@ -195,7 +194,7 @@ impl Packet {
         // identify the association to which this packet belongs.  The port
         // number 0 MUST NOT be used.
         if self.source_port == 0 {
-            return Err(Error::ErrSctpPacketSourcePortZero.into());
+            return Err(Error::ErrSctpPacketSourcePortZero);
         }
 
         // This is the SCTP port number to which this packet is destined.
@@ -203,7 +202,7 @@ impl Packet {
         // SCTP packet to the correct receiving endpoint/application.  The
         // port number 0 MUST NOT be used.
         if self.destination_port == 0 {
-            return Err(Error::ErrSctpPacketDestinationPortZero.into());
+            return Err(Error::ErrSctpPacketDestinationPortZero);
         }
 
         // Check values on the packet that are specific to a particular chunk type
@@ -214,13 +213,13 @@ impl Packet {
                     // They MUST be the only chunks present in the SCTP packets that carry
                     // them.
                     if self.chunks.len() != 1 {
-                        return Err(Error::ErrInitChunkBundled.into());
+                        return Err(Error::ErrInitChunkBundled);
                     }
 
                     // A packet containing an INIT chunk MUST have a zero Verification
                     // Tag.
                     if self.verification_tag != 0 {
-                        return Err(Error::ErrInitChunkVerifyTagNotZero.into());
+                        return Err(Error::ErrInitChunkVerifyTagNotZero);
                     }
                 }
             }

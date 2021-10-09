@@ -3,11 +3,11 @@ mod stream_test;
 
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
 use crate::queue::pending_queue::PendingQueue;
-use anyhow::Result;
+
 use bytes::Bytes;
 use std::fmt;
 use std::future::Future;
@@ -186,7 +186,7 @@ impl Stream {
             if result.is_ok() {
                 return result;
             } else if let Err(err) = result {
-                if Error::ErrShortBuffer.equal(&err) {
+                if Error::ErrShortBuffer == err {
                     return Err(err);
                 }
             }
@@ -194,7 +194,7 @@ impl Stream {
             self.read_notifier.notified().await;
         }
 
-        Err(Error::ErrStreamClosed.into())
+        Err(Error::ErrStreamClosed)
     }
 
     pub(crate) async fn handle_data(&self, pd: ChunkPayloadData) {
@@ -263,7 +263,7 @@ impl Stream {
     /// write_sctp writes len(p) bytes from p to the DTLS connection
     pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
         if p.len() > self.max_message_size.load(Ordering::SeqCst) as usize {
-            return Err(Error::ErrOutboundPacketTooLarge.into());
+            return Err(Error::ErrOutboundPacketTooLarge);
         }
 
         let state: AssociationState = self.state.load(Ordering::SeqCst).into();
@@ -271,7 +271,7 @@ impl Stream {
             AssociationState::ShutdownSent
             | AssociationState::ShutdownAckSent
             | AssociationState::ShutdownPending
-            | AssociationState::ShutdownReceived => return Err(Error::ErrStreamClosed.into()),
+            | AssociationState::ShutdownReceived => return Err(Error::ErrStreamClosed),
             _ => {}
         };
 
@@ -437,7 +437,7 @@ impl Stream {
     async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrPayloadDataStateNotExist.into());
+            return Err(Error::ErrPayloadDataStateNotExist);
         }
 
         // Push the chunks into the pending queue first.
@@ -452,7 +452,7 @@ impl Stream {
     async fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrResetPacketInStateNotExist.into());
+            return Err(Error::ErrResetPacketInStateNotExist);
         }
 
         // Create DATA chunk which only contains valid stream identifier with

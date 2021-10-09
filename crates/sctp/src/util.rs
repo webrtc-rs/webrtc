@@ -74,8 +74,9 @@ pub(crate) fn sna16eq(i1: u16, i2: u16) -> bool {
 
 #[cfg(test)]
 mod test {
+    use crate::error::Result;
+
     use super::*;
-    use anyhow::Result;
 
     const DIV: isize = 16;
 
@@ -83,7 +84,7 @@ mod test {
     fn test_serial_number_arithmetic32bit() -> Result<()> {
         const SERIAL_BITS: u32 = 32;
         const INTERVAL: u32 = ((1u64 << (SERIAL_BITS as u64)) / (DIV as u64)) as u32;
-        const MAX_FORWARD_DISTANCE: u32 = 1 << (SERIAL_BITS - 1) - 1;
+        const MAX_FORWARD_DISTANCE: u32 = 1 << ((SERIAL_BITS - 1) - 1);
         const MAX_BACKWARD_DISTANCE: u32 = 1 << (SERIAL_BITS - 1);
 
         for i in 0..DIV as u32 {
@@ -210,7 +211,7 @@ mod test {
     fn test_serial_number_arithmetic16bit() -> Result<()> {
         const SERIAL_BITS: u16 = 16;
         const INTERVAL: u16 = ((1u64 << (SERIAL_BITS as u64)) / (DIV as u64)) as u16;
-        const MAX_FORWARD_DISTANCE: u16 = 1 << (SERIAL_BITS - 1) - 1;
+        const MAX_FORWARD_DISTANCE: u16 = 1 << ((SERIAL_BITS - 1) - 1);
         const MAX_BACKWARD_DISTANCE: u16 = 1 << (SERIAL_BITS - 1);
 
         for i in 0..DIV as u16 {

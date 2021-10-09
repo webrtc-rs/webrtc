@@ -1,6 +1,5 @@
 use super::{param_header::*, param_type::*, *};
 
-use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 
 #[derive(Default, Debug, Clone, PartialEq)]

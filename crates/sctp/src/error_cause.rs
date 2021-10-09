@@ -1,6 +1,5 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -90,7 +89,7 @@ impl fmt::Display for ErrorCause {
 impl ErrorCause {
     pub(crate) fn unmarshal(buf: &Bytes) -> Result<Self> {
         if buf.len() < ERROR_CAUSE_HEADER_LENGTH {
-            return Err(Error::ErrErrorCauseTooSmall.into());
+            return Err(Error::ErrErrorCauseTooSmall);
         }
 
         let reader = &mut buf.clone();
@@ -99,7 +98,7 @@ impl ErrorCause {
         let len = reader.get_u16();
 
         if len < ERROR_CAUSE_HEADER_LENGTH as u16 {
-            return Err(Error::ErrErrorCauseTooSmall.into());
+            return Err(Error::ErrErrorCauseTooSmall);
         }
 
         let value_length = len as usize - ERROR_CAUSE_HEADER_LENGTH;

@@ -1,6 +1,9 @@
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, Error, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     #[error("raw is too small for a SCTP chunk")]
     ErrChunkHeaderTooSmall,
@@ -216,13 +219,6 @@ pub enum Error {
     #[error("Max Data Channel ID")]
     ErrMaxDataChannelID,
 
-    #[allow(non_camel_case_types)]
     #[error("{0}")]
-    new(String),
-}
-
-impl Error {
-    pub fn equal(&self, err: &anyhow::Error) -> bool {
-        err.downcast_ref::<Self>().map_or(false, |e| e == self)
-    }
+    Other(String),
 }

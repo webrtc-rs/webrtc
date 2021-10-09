@@ -1,8 +1,8 @@
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::util::*;
 
-use crate::error::Error;
-use anyhow::Result;
+use crate::error::{Error, Result};
+
 use std::cmp::Ordering;
 
 fn sort_chunks_by_tsn(c: &mut Vec<ChunkPayloadData>) {
@@ -261,17 +261,17 @@ impl ReassemblyQueue {
             // Now, check ordered
             let cset = &self.ordered[0];
             if !cset.is_complete() {
-                return Err(Error::ErrTryAgain.into());
+                return Err(Error::ErrTryAgain);
             }
             if sna16gt(cset.ssn, self.next_ssn) {
-                return Err(Error::ErrTryAgain.into());
+                return Err(Error::ErrTryAgain);
             }
             if cset.ssn == self.next_ssn {
                 self.next_ssn += 1;
             }
             self.ordered.remove(0)
         } else {
-            return Err(Error::ErrTryAgain.into());
+            return Err(Error::ErrTryAgain);
         };
 
         // Concat all fragments into the buffer
@@ -291,7 +291,7 @@ impl ReassemblyQueue {
         }
 
         if let Some(err) = err {
-            Err(err.into())
+            Err(err)
         } else {
             Ok((n_written, cset.ppi))
         }

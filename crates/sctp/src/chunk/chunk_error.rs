@@ -1,7 +1,6 @@
 use super::{chunk_header::*, chunk_type::*, *};
 use crate::error_cause::*;
 
-use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -57,7 +56,7 @@ impl Chunk for ChunkError {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_ERROR {
-            return Err(Error::ErrChunkTypeNotCtError.into());
+            return Err(Error::ErrChunkTypeNotCtError);
         }
 
         let mut error_causes = vec![];

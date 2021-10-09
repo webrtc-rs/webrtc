@@ -1,6 +1,5 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
-use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -39,7 +38,7 @@ impl Chunk for ChunkCookieEcho {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_COOKIE_ECHO {
-            return Err(Error::ErrChunkTypeNotCookieEcho.into());
+            return Err(Error::ErrChunkTypeNotCookieEcho);
         }
 
         let cookie = raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());

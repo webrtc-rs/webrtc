@@ -86,7 +86,7 @@ async fn create_new_association_pair(
     }
 
     if !a0handshake_done || !a1handshake_done {
-        return Err(Error::new("handshake failed".to_owned()).into());
+        return Err(Error::Other("handshake failed".to_owned()).into());
     }
 
     drop(closed_tx);
@@ -192,7 +192,7 @@ async fn establish_session_pair(
 
     let s1 = server.accept_stream().await.unwrap();
     if s0.stream_identifier != s1.stream_identifier {
-        return Err(Error::new("SI should match".to_owned()).into());
+        return Err(Error::Other("SI should match".to_owned()).into());
     }
 
     br.process().await;
@@ -201,15 +201,15 @@ async fn establish_session_pair(
     let (n, ppi) = s1.read_sctp(&mut buf).await?;
 
     if n != hello_msg.len() {
-        return Err(Error::new("received data must by 3 bytes".to_owned()).into());
+        return Err(Error::Other("received data must by 3 bytes".to_owned()).into());
     }
 
     if ppi != PayloadProtocolIdentifier::Dcep {
-        return Err(Error::new("unexpected ppi".to_owned()).into());
+        return Err(Error::Other("unexpected ppi".to_owned()).into());
     }
 
     if &buf[..n] != &hello_msg {
-        return Err(Error::new("received data mismatch".to_owned()).into());
+        return Err(Error::Other("received data mismatch".to_owned()).into());
     }
 
     flush_buffers(br, client, server).await;
@@ -731,8 +731,9 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
     let result = s1.read_sctp(&mut buf).await;
     assert!(result.is_err(), "expected error to be io.ErrShortBuffer");
     if let Err(err) = result {
-        assert!(
-            Error::ErrShortBuffer.equal(&err),
+        assert_eq!(
+            Error::ErrShortBuffer,
+            err,
             "expected error to be io.ErrShortBuffer"
         );
     }
@@ -2102,13 +2103,15 @@ impl AsAny for FakeEchoConn {
     }
 }
 
+type UResult<T> = std::result::Result<T, util::Error>;
+
 #[async_trait]
 impl Conn for FakeEchoConn {
-    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+    async fn connect(&self, _addr: SocketAddr) -> UResult<()> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn recv(&self, b: &mut [u8]) -> Result<usize> {
+    async fn recv(&self, b: &mut [u8]) -> UResult<usize> {
         let mut rd_rx = self.rd_rx.lock().await;
         let v = match rd_rx.recv().await {
             Some(v) => v,
@@ -2122,11 +2125,11 @@ impl Conn for FakeEchoConn {
         Ok(l)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+    async fn recv_from(&self, _buf: &mut [u8]) -> UResult<(usize, SocketAddr)> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn send(&self, b: &[u8]) -> Result<usize> {
+    async fn send(&self, b: &[u8]) -> UResult<usize> {
         let wr_tx = self.wr_tx.lock().await;
         match wr_tx.send(b.to_vec()).await {
             Ok(_) => {}
@@ -2136,11 +2139,11 @@ impl Conn for FakeEchoConn {
         Ok(b.len())
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> UResult<usize> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    async fn local_addr(&self) -> UResult<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
@@ -2148,7 +2151,7 @@ impl Conn for FakeEchoConn {
         None
     }
 
-    async fn close(&self) -> Result<()> {
+    async fn close(&self) -> UResult<()> {
         Ok(())
     }
 }
@@ -2240,7 +2243,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     let a1 = tokio::select! {
         _ = timer1.as_mut() =>{
             assert!(false,"timed out waiting for a1");
-            return Err(Error::new("timed out waiting for a1".to_owned()).into());
+            return Err(Error::Other("timed out waiting for a1".to_owned()).into());
         },
         a1 = a1chan_rx.recv() => {
             a1.unwrap()
@@ -2252,7 +2255,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     let a2 = tokio::select! {
         _ = timer2.as_mut() =>{
             assert!(false,"timed out waiting for a2");
-            return Err(Error::new("timed out waiting for a2".to_owned()).into());
+            return Err(Error::Other("timed out waiting for a2".to_owned()).into());
         },
         a2 = a2chan_rx.recv() => {
             a2.unwrap()
