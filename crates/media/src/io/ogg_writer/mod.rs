@@ -159,7 +159,7 @@ impl<W: Write + Seek> Writer for OggWriter<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
         let mut opus_packet = rtp::codecs::opus::OpusPacket::default();
-        opus_packet.depacketize(&packet.payload)?;
+        let payload = opus_packet.depacketize(&packet.payload)?;
 
         // Should be equivalent to sample_rate * duration
         if self.previous_timestamp != 1 {
@@ -169,7 +169,7 @@ impl<W: Write + Seek> Writer for OggWriter<W> {
         self.previous_timestamp = packet.header.timestamp;
 
         self.write_page(
-            &opus_packet.payload,
+            &payload,
             PAGE_HEADER_TYPE_CONTINUATION_OF_STREAM,
             self.previous_granule_position,
             self.page_index,

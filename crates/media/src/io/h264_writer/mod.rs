@@ -65,9 +65,9 @@ impl<W: Write + Seek> Writer for H264Writer<W> {
         }
 
         if let Some(cached_packet) = &mut self.cached_packet {
-            cached_packet.depacketize(&packet.payload)?;
+            let payload = cached_packet.depacketize(&packet.payload)?;
 
-            self.writer.write_all(&cached_packet.payload)?;
+            self.writer.write_all(&payload)?;
         }
 
         Ok(())

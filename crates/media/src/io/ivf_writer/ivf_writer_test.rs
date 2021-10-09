@@ -87,33 +87,29 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
 
     // Check valid packet parameters
     let mut vp8packet = rtp::codecs::vp8::Vp8Packet::default();
-    vp8packet.depacketize(&valid_packet.payload)?;
+    let payload = vp8packet.depacketize(&valid_packet.payload)?;
     assert_eq!(1, vp8packet.s, "Start packet S value should be 1");
     assert_eq!(
         1,
-        vp8packet.payload[0] & 0x01,
+        payload[0] & 0x01,
         "Non Keyframe packet P value should be 1"
     );
 
     // Check mid partition packet parameters
     let mut vp8packet = rtp::codecs::vp8::Vp8Packet::default();
-    vp8packet.depacketize(&mid_part_packet.payload)?;
+    let payload = vp8packet.depacketize(&mid_part_packet.payload)?;
     assert_eq!(0, vp8packet.s, "Mid Partition packet S value should be 0");
     assert_eq!(
         1,
-        vp8packet.payload[0] & 0x01,
+        payload[0] & 0x01,
         "Non Keyframe packet P value should be 1"
     );
 
     // Check keyframe packet parameters
     let mut vp8packet = rtp::codecs::vp8::Vp8Packet::default();
-    vp8packet.depacketize(&keyframe_packet.payload)?;
+    let payload = vp8packet.depacketize(&keyframe_packet.payload)?;
     assert_eq!(1, vp8packet.s, "Start packet S value should be 1");
-    assert_eq!(
-        0,
-        vp8packet.payload[0] & 0x01,
-        "Keyframe packet P value should be 0"
-    );
+    assert_eq!(0, payload[0] & 0x01, "Keyframe packet P value should be 0");
 
     let add_packet_test_case = vec![
         (
@@ -170,7 +166,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             assert!(result.is_ok(), "{}", msg1);
         }
 
-        assert_eq!(seen_key_frame, writer.seen_key_frame);
+        assert_eq!(seen_key_frame, writer.seen_key_frame, "{} failed", msg1);
         if count == 1 {
             assert_eq!(0, writer.count);
         } else if count == 2 {

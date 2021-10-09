@@ -16,6 +16,7 @@ pub struct IVFWriter<W: Write + Seek> {
     count: u64,
     seen_key_frame: bool,
     current_frame: Option<BytesMut>,
+    is_vp9: bool,
 }
 
 impl<W: Write + Seek> IVFWriter<W> {
@@ -26,6 +27,7 @@ impl<W: Write + Seek> IVFWriter<W> {
             count: 0,
             seen_key_frame: false,
             current_frame: None,
+            is_vp9: &header.four_cc != b"VP80",
         };
 
         w.write_header(header)?;
@@ -54,24 +56,29 @@ impl<W: Write + Seek> IVFWriter<W> {
 impl<W: Write + Seek> Writer for IVFWriter<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
-        let mut vp8packet = rtp::codecs::vp8::Vp8Packet::default();
-        vp8packet.depacketize(&packet.payload)?;
+        let mut depacketizer: Box<dyn Depacketizer> = if self.is_vp9 {
+            Box::new(rtp::codecs::vp9::Vp9Packet::default())
+        } else {
+            Box::new(rtp::codecs::vp8::Vp8Packet::default())
+        };
 
-        let is_key_frame = vp8packet.payload[0] & 0x01;
+        let payload = depacketizer.depacketize(&packet.payload)?;
+
+        let is_key_frame = payload[0] & 0x01;
 
         if (!self.seen_key_frame && is_key_frame == 1)
-            || (self.current_frame.is_none() && vp8packet.s != 1)
+            || (self.current_frame.is_none() && !depacketizer.is_partition_head(&packet.payload))
         {
             return Ok(());
         }
 
         self.seen_key_frame = true;
         let frame_length = if let Some(current_frame) = &mut self.current_frame {
-            current_frame.extend(vp8packet.payload);
+            current_frame.extend(payload);
             current_frame.len()
         } else {
             let mut current_frame = BytesMut::new();
-            current_frame.extend(vp8packet.payload);
+            current_frame.extend(payload);
             let frame_length = current_frame.len();
             self.current_frame = Some(current_frame);
             frame_length
