@@ -93,15 +93,16 @@ async fn create_offerer() -> Result<Arc<RTCPeerConnection>> {
         tokio::spawn(async move {
             let buf = Bytes::from_static(&[0u8; 1024]);
             while dc2.send(&buf).await.is_ok() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
                 let buffered_amount = dc2.buffered_amount().await;
                 if buffered_amount + buf.len() > MAX_BUFFERED_AMOUNT {
                     // Wait until the bufferedAmount becomes lower than the threshold
-                    println!(
-                        "buffered_amount {} + sent {} > MAX_BUFFERED_AMOUNT {}",
-                        buffered_amount,
-                        buf.len(),
-                        MAX_BUFFERED_AMOUNT
-                    );
+                    // println!(
+                    //     "buffered_amount {} + sent {} > MAX_BUFFERED_AMOUNT {}",
+                    //     buffered_amount,
+                    //     buf.len(),
+                    //     MAX_BUFFERED_AMOUNT
+                    // );
                     let _ = send_more_ch_rx.recv().await;
                 }
             }
@@ -206,6 +207,8 @@ async fn create_answerer() -> Result<Arc<RTCPeerConnection>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    console_subscriber::init();
+
     let mut app = App::new("data-channels-flow-control")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")

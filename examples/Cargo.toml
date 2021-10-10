@@ -36,6 +36,7 @@ serde_json = "1.0"
 bytes = "1"
 lazy_static = "1.4"
 rand = "0.8"
+console-subscriber = { git = "https://github.com/tokio-rs/console", branch = "main" }
 
 [profile.dev]
 opt-level = 0
