@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of SDP. Rewrite <a href="https://github.com/pion/sdp/releases/tag/v2.4.0">Pion</a> SDP in Rust
+ A pure Rust implementation of SDP. Rewrite <a href="https://github.com/pion/sdp/releases/tag/v3.0.4">Pion</a> SDP in Rust
 </p>
