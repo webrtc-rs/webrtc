@@ -565,121 +565,121 @@ impl SessionDescription {
 
 fn s1<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    if &key == "v=" {
+    if &key == b"v=" {
         return Ok(Some(StateFn {
             f: unmarshal_protocol_version,
         }));
     }
 
-    Err(Error::SdpInvalidSyntax(key))
+    Err(Error::SdpInvalidSyntax(String::from_utf8(key)?))
 }
 
 fn s2<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    if &key == "o=" {
+    if &key == b"o=" {
         return Ok(Some(StateFn {
             f: unmarshal_origin,
         }));
     }
 
-    Err(Error::SdpInvalidSyntax(key))
+    Err(Error::SdpInvalidSyntax(String::from_utf8(key)?))
 }
 
 fn s3<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    if &key == "s=" {
+    if &key == b"s=" {
         return Ok(Some(StateFn {
             f: unmarshal_session_name,
         }));
     }
 
-    Err(Error::SdpInvalidSyntax(key))
+    Err(Error::SdpInvalidSyntax(String::from_utf8(key)?))
 }
 
 fn s4<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    match key.as_str() {
-        "i=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"i=" => Ok(Some(StateFn {
             f: unmarshal_session_information,
         })),
-        "u=" => Ok(Some(StateFn { f: unmarshal_uri })),
-        "e=" => Ok(Some(StateFn { f: unmarshal_email })),
-        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
-        "c=" => Ok(Some(StateFn {
+        b"u=" => Ok(Some(StateFn { f: unmarshal_uri })),
+        b"e=" => Ok(Some(StateFn { f: unmarshal_email })),
+        b"p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" => Ok(Some(StateFn {
+        b"t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
 fn s5<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    match key.as_str() {
-        "b=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" => Ok(Some(StateFn {
+        b"t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
 fn s6<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    match key.as_str() {
-        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
-        "c=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" => Ok(Some(StateFn {
+        b"t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
 fn s7<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    match key.as_str() {
-        "u=" => Ok(Some(StateFn { f: unmarshal_uri })),
-        "e=" => Ok(Some(StateFn { f: unmarshal_email })),
-        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
-        "c=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"u=" => Ok(Some(StateFn { f: unmarshal_uri })),
+        b"e=" => Ok(Some(StateFn { f: unmarshal_email })),
+        b"p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" => Ok(Some(StateFn {
+        b"t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
 fn s8<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    match key.as_str() {
-        "c=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" => Ok(Some(StateFn {
+        b"t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
@@ -689,44 +689,44 @@ fn s9<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<
         return Ok(None);
     }
 
-    match key.as_str() {
-        "z=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"z=" => Ok(Some(StateFn {
             f: unmarshal_time_zones,
         })),
-        "k=" => Ok(Some(StateFn {
+        b"k=" => Ok(Some(StateFn {
             f: unmarshal_session_encryption_key,
         })),
-        "a=" => Ok(Some(StateFn {
+        b"a=" => Ok(Some(StateFn {
             f: unmarshal_session_attribute,
         })),
-        "r=" => Ok(Some(StateFn {
+        b"r=" => Ok(Some(StateFn {
             f: unmarshal_repeat_times,
         })),
-        "t=" => Ok(Some(StateFn {
+        b"t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        "m=" => Ok(Some(StateFn {
+        b"m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
 fn s10<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
-    match key.as_str() {
-        "e=" => Ok(Some(StateFn { f: unmarshal_email })),
-        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
-        "c=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"e=" => Ok(Some(StateFn { f: unmarshal_email })),
+        b"p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" => Ok(Some(StateFn {
+        b"t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
@@ -736,14 +736,14 @@ fn s11<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option
         return Ok(None);
     }
 
-    match key.as_str() {
-        "a=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"a=" => Ok(Some(StateFn {
             f: unmarshal_session_attribute,
         })),
-        "m=" => Ok(Some(StateFn {
+        b"m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
@@ -753,26 +753,26 @@ fn s12<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option
         return Ok(None);
     }
 
-    match key.as_str() {
-        "a=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"a=" => Ok(Some(StateFn {
             f: unmarshal_media_attribute,
         })),
-        "k=" => Ok(Some(StateFn {
+        b"k=" => Ok(Some(StateFn {
             f: unmarshal_media_encryption_key,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_media_bandwidth,
         })),
-        "c=" => Ok(Some(StateFn {
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_media_connection_information,
         })),
-        "i=" => Ok(Some(StateFn {
+        b"i=" => Ok(Some(StateFn {
             f: unmarshal_media_title,
         })),
-        "m=" => Ok(Some(StateFn {
+        b"m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
@@ -782,17 +782,17 @@ fn s13<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option
         return Ok(None);
     }
 
-    match key.as_str() {
-        "a=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"a=" => Ok(Some(StateFn {
             f: unmarshal_session_attribute,
         })),
-        "k=" => Ok(Some(StateFn {
+        b"k=" => Ok(Some(StateFn {
             f: unmarshal_session_encryption_key,
         })),
-        "m=" => Ok(Some(StateFn {
+        b"m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
@@ -802,30 +802,30 @@ fn s14<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option
         return Ok(None);
     }
 
-    match key.as_str() {
-        "a=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"a=" => Ok(Some(StateFn {
             f: unmarshal_media_attribute,
         })),
         // Non-spec ordering
-        "k=" => Ok(Some(StateFn {
+        b"k=" => Ok(Some(StateFn {
             f: unmarshal_media_encryption_key,
         })),
         // Non-spec ordering
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_media_bandwidth,
         })),
         // Non-spec ordering
-        "c=" => Ok(Some(StateFn {
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_media_connection_information,
         })),
         // Non-spec ordering
-        "i=" => Ok(Some(StateFn {
+        b"i=" => Ok(Some(StateFn {
             f: unmarshal_media_title,
         })),
-        "m=" => Ok(Some(StateFn {
+        b"m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
@@ -835,27 +835,27 @@ fn s15<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option
         return Ok(None);
     }
 
-    match key.as_str() {
-        "a=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"a=" => Ok(Some(StateFn {
             f: unmarshal_media_attribute,
         })),
-        "k=" => Ok(Some(StateFn {
+        b"k=" => Ok(Some(StateFn {
             f: unmarshal_media_encryption_key,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_media_bandwidth,
         })),
-        "c=" => Ok(Some(StateFn {
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_media_connection_information,
         })),
         // Non-spec ordering
-        "i=" => Ok(Some(StateFn {
+        b"i=" => Ok(Some(StateFn {
             f: unmarshal_media_title,
         })),
-        "m=" => Ok(Some(StateFn {
+        b"m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
@@ -865,27 +865,27 @@ fn s16<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option
         return Ok(None);
     }
 
-    match key.as_str() {
-        "a=" => Ok(Some(StateFn {
+    match key.as_slice() {
+        b"a=" => Ok(Some(StateFn {
             f: unmarshal_media_attribute,
         })),
-        "k=" => Ok(Some(StateFn {
+        b"k=" => Ok(Some(StateFn {
             f: unmarshal_media_encryption_key,
         })),
-        "c=" => Ok(Some(StateFn {
+        b"c=" => Ok(Some(StateFn {
             f: unmarshal_media_connection_information,
         })),
-        "b=" => Ok(Some(StateFn {
+        b"b=" => Ok(Some(StateFn {
             f: unmarshal_media_bandwidth,
         })),
         // Non-spec ordering
-        "i=" => Ok(Some(StateFn {
+        b"i=" => Ok(Some(StateFn {
             f: unmarshal_media_title,
         })),
-        "m=" => Ok(Some(StateFn {
+        b"m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(String::from_utf8(key)?)),
     }
 }
 
