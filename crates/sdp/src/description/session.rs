@@ -34,7 +34,7 @@ pub const ATTR_KEY_EXT_MAP: &str = "extmap";
 pub const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &str = "LS";
 pub const SEMANTIC_TOKEN_FLOW_IDENTIFICATION: &str = "FID";
 pub const SEMANTIC_TOKEN_FORWARD_ERROR_CORRECTION: &str = "FEC";
-pub const SEMANTIC_TOKEN_WEB_RTCMEDIA_STREAMS: &str = "WMS";
+pub const SEMANTIC_TOKEN_WEBRTC_MEDIA_STREAMS: &str = "WMS";
 
 /// Version describes the value provided by the "v=" field which gives
 /// the version of the Session Description Protocol.
