@@ -20,9 +20,9 @@ const DEFAULT_RTO: Duration = Duration::from_millis(300);
 const DEFAULT_MAX_ATTEMPTS: u32 = 7;
 const DEFAULT_MAX_BUFFER_SIZE: usize = 8;
 
-// Collector calls function f with constant rate.
-//
-// The simple Collector is ticker which calls function on each tick.
+/// Collector calls function f with constant rate.
+///
+/// The simple Collector is ticker which calls function on each tick.
 pub trait Collector {
     fn start(
         &mut self,
@@ -73,10 +73,10 @@ impl Collector for TickerCollector {
     }
 }
 
-// clientTransaction represents transaction in progress.
-// If transaction is succeed or failed, f will be called
-// provided by event.
-// Concurrent access is invalid.
+/// ClientTransaction represents transaction in progress.
+/// If transaction is succeed or failed, f will be called
+/// provided by event.
+/// Concurrent access is invalid.
 #[derive(Debug, Clone)]
 pub struct ClientTransaction {
     id: TransactionId,
@@ -144,43 +144,41 @@ impl ClientBuilder {
     //    self
     //}
 
-    // WithRTO sets client RTO as defined in STUN RFC.
+    /// with_rto sets client RTO as defined in STUN RFC.
     pub fn with_rto(mut self, rto: Duration) -> Self {
         self.settings.rto = rto;
         self
     }
 
-    // WithTimeoutRate sets RTO timer minimum resolution.
+    /// with_timeout_rate sets RTO timer minimum resolution.
     pub fn with_timeout_rate(mut self, d: Duration) -> Self {
         self.settings.rto_rate = d;
         self
     }
 
-    // WithAgent sets client STUN agent.
-    //
-    // Defaults to agent implementation in current package,
-    // see agent.go.
+    /// with_buffer_size sets buffer size.
     pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
         self.settings.buffer_size = buffer_size;
         self
     }
 
-    // WithCollector rests client timeout collector, the implementation
-    // of ticker which calls function on each tick.
+    /// with_collector rests client timeout collector, the implementation
+    /// of ticker which calls function on each tick.
     pub fn with_collector(mut self, coll: Box<dyn Collector + Send>) -> Self {
         self.settings.collector = Some(coll);
         self
     }
 
+    /// with_conn sets transport connection
     pub fn with_conn(mut self, conn: Arc<dyn Conn + Send + Sync>) -> Self {
         self.settings.c = Some(conn);
         self
     }
 
-    // with_no_retransmit disables retransmissions and sets RTO to
-    // DEFAULT_MAX_ATTEMPTS * DEFAULT_RTO which will be effectively time out
-    // if not set.
-    // Useful for TCP connections where transport handles RTO.
+    /// with_no_retransmit disables retransmissions and sets RTO to
+    /// DEFAULT_MAX_ATTEMPTS * DEFAULT_RTO which will be effectively time out
+    /// if not set.
+    /// Useful for TCP connections where transport handles RTO.
     pub fn with_no_retransmit(mut self) -> Self {
         self.settings.max_attempts = 0;
         if self.settings.rto == Duration::from_secs(0) {
@@ -210,7 +208,7 @@ impl ClientBuilder {
     }
 }
 
-// Client simulates "connection" to STUN server.
+/// Client simulates "connection" to STUN server.
 #[derive(Default)]
 pub struct Client {
     settings: ClientSettings,
@@ -248,8 +246,6 @@ impl Client {
         }
     }
 
-    // start registers transaction.
-    // Could return ErrClientClosed, ErrTransactionExists.
     fn insert(&mut self, ct: ClientTransaction) -> Result<()> {
         if self.settings.closed {
             return Err(Error::ErrClientClosed);
@@ -361,7 +357,7 @@ impl Client {
         });
     }
 
-    // Close stops internal connection and agent, returning CloseErr on error.
+    /// close stops internal connection and agent, returning CloseErr on error.
     pub async fn close(&mut self) -> Result<()> {
         if self.settings.closed {
             return Err(Error::ErrClientClosed);
