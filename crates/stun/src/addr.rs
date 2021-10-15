@@ -13,12 +13,12 @@ pub(crate) const FAMILY_IPV6: u16 = 0x02;
 pub(crate) const IPV4LEN: usize = 4;
 pub(crate) const IPV6LEN: usize = 16;
 
-// MappedAddress represents MAPPED-ADDRESS attribute.
-//
-// This attribute is used only by servers for achieving backwards
-// compatibility with RFC 3489 clients.
-//
-// RFC 5389 Section 15.1
+/// MappedAddress represents MAPPED-ADDRESS attribute.
+///
+/// This attribute is used only by servers for achieving backwards
+/// compatibility with RFC 3489 clients.
+///
+/// RFC 5389 Section 15.1
 pub struct MappedAddress {
     pub ip: IpAddr,
     pub port: u16,
@@ -48,21 +48,21 @@ impl Default for MappedAddress {
 }
 
 impl Setter for MappedAddress {
-    // add_to adds MAPPED-ADDRESS to message.
+    /// add_to adds MAPPED-ADDRESS to message.
     fn add_to(&self, m: &mut Message) -> Result<()> {
         self.add_to_as(m, ATTR_MAPPED_ADDRESS)
     }
 }
 
 impl Getter for MappedAddress {
-    // GetFrom decodes MAPPED-ADDRESS from message.
+    /// get_from decodes MAPPED-ADDRESS from message.
     fn get_from(&mut self, m: &Message) -> Result<()> {
         self.get_from_as(m, ATTR_MAPPED_ADDRESS)
     }
 }
 
 impl MappedAddress {
-    // get_from_as decodes MAPPED-ADDRESS value in message m as an attribute of type t.
+    /// get_from_as decodes MAPPED-ADDRESS value in message m as an attribute of type t.
     pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<()> {
         let v = m.get(t)?;
         if v.len() <= 4 {
@@ -90,7 +90,7 @@ impl MappedAddress {
         Ok(())
     }
 
-    // add_to_as adds MAPPED-ADDRESS value to m as t attribute.
+    /// add_to_as adds MAPPED-ADDRESS value to m as t attribute.
     pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<()> {
         let family = match self.ip {
             IpAddr::V4(_) => FAMILY_IPV4,
@@ -112,17 +112,17 @@ impl MappedAddress {
     }
 }
 
-// AlternateServer represents ALTERNATE-SERVER attribute.
-//
-// RFC 5389 Section 15.11
+/// AlternateServer represents ALTERNATE-SERVER attribute.
+///
+/// RFC 5389 Section 15.11
 pub type AlternateServer = MappedAddress;
 
-// ResponseOrigin represents RESPONSE-ORIGIN attribute.
-//
-// RFC 5780 Section 7.3
+/// ResponseOrigin represents RESPONSE-ORIGIN attribute.
+///
+/// RFC 5780 Section 7.3
 pub type ResponseOrigin = MappedAddress;
 
-// OtherAddress represents OTHER-ADDRESS attribute.
-//
-// RFC 5780 Section 7.4
+/// OtherAddress represents OTHER-ADDRESS attribute.
+///
+/// RFC 5780 Section 7.4
 pub type OtherAddress = MappedAddress;

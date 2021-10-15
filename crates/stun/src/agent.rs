@@ -11,29 +11,31 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
-// Handler handles state changes of transaction.
-// Handler is called on transaction state change.
-// Usage of e is valid only during call, user must
-// copy needed fields explicitly.
+/// Handler handles state changes of transaction.
+/// Handler is called on transaction state change.
+/// Usage of e is valid only during call, user must
+/// copy needed fields explicitly.
 pub type Handler = Option<Arc<mpsc::UnboundedSender<Event>>>;
 
-// noop_handler just discards any event.
+/// noop_handler just discards any event.
 pub fn noop_handler() -> Handler {
     None
 }
 
-// Agent is low-level abstraction over transaction list that
-// handles concurrency (all calls are goroutine-safe) and
-// time outs (via Collect call).
+/// Agent is low-level abstraction over transaction list that
+/// handles concurrency (all calls are goroutine-safe) and
+/// time outs (via Collect call).
 pub struct Agent {
-    // transactions is map of transactions that are currently
-    // in progress. Event handling is done in such way when
-    // transaction is unregistered before AgentTransaction access,
-    // minimizing mux lock and protecting AgentTransaction from
-    // data races via unexpected concurrent access.
+    /// transactions is map of transactions that are currently
+    /// in progress. Event handling is done in such way when
+    /// transaction is unregistered before AgentTransaction access,
+    /// minimizing mux lock and protecting AgentTransaction from
+    /// data races via unexpected concurrent access.
     transactions: HashMap<TransactionId, AgentTransaction>,
-    closed: bool,     // all calls are invalid if true
-    handler: Handler, // handles transactions
+    /// all calls are invalid if true
+    closed: bool,
+    /// handles transactions
+    handler: Handler,
 }
 
 #[derive(Debug, Clone)]
@@ -50,8 +52,8 @@ impl Default for EventType {
     }
 }
 
-// Event is passed to Handler describing the transaction event.
-// Do not reuse outside Handler.
+/// Event is passed to Handler describing the transaction event.
+/// Do not reuse outside Handler.
 #[derive(Debug)] //Clone
 pub struct Event {
     pub event_type: EventType,
@@ -67,23 +69,23 @@ impl Default for Event {
     }
 }
 
-// AgentTransaction represents transaction in progress.
-// Concurrent access is invalid.
+/// AgentTransaction represents transaction in progress.
+/// Concurrent access is invalid.
 pub(crate) struct AgentTransaction {
     id: TransactionId,
     deadline: Instant,
 }
 
-// AGENT_COLLECT_CAP is initial capacity for Agent.Collect slices,
-// sufficient to make function zero-alloc in most cases.
+/// AGENT_COLLECT_CAP is initial capacity for Agent.Collect slices,
+/// sufficient to make function zero-alloc in most cases.
 const AGENT_COLLECT_CAP: usize = 100;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Default, Debug)]
 pub struct TransactionId(pub [u8; TRANSACTION_ID_SIZE]);
 
 impl TransactionId {
-    // NewTransactionID returns new random transaction ID using crypto/rand
-    // as source.
+    /// new returns new random transaction ID using crypto/rand
+    /// as source.
     pub fn new() -> Self {
         let mut b = TransactionId([0u8; TRANSACTION_ID_SIZE]);
         rand::thread_rng().fill(&mut b.0);
@@ -99,8 +101,8 @@ impl Setter for TransactionId {
     }
 }
 
-// ClientAgent is Agent implementation that is used by Client to
-// process transactions.
+/// ClientAgent is Agent implementation that is used by Client to
+/// process transactions.
 #[derive(Debug)]
 pub enum ClientAgent {
     Process(Message),
@@ -110,9 +112,8 @@ pub enum ClientAgent {
     Close,
 }
 
-// NewAgent initializes and returns new Agent with provided handler.
-// If h is nil, the noop_handler will be used.
 impl Agent {
+    /// new initializes and returns new Agent with provided handler.
     pub fn new(handler: Handler) -> Self {
         Agent {
             transactions: HashMap::new(),
@@ -121,9 +122,9 @@ impl Agent {
         }
     }
 
-    // stop_with_error removes transaction from list and calls handler with
-    // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
-    fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<()> {
+    /// stop_with_error removes transaction from list and calls handler with
+    /// provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
+    pub fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<()> {
         if self.closed {
             return Err(Error::ErrAgentClosed);
         }
@@ -142,8 +143,8 @@ impl Agent {
         }
     }
 
-    // process incoming message, synchronously passing it to handler.
-    fn process(&mut self, message: Message) -> Result<()> {
+    /// process incoming message, synchronously passing it to handler.
+    pub fn process(&mut self, message: Message) -> Result<()> {
         if self.closed {
             return Err(Error::ErrAgentClosed);
         }
@@ -162,9 +163,9 @@ impl Agent {
         Ok(())
     }
 
-    // Close terminates all transactions with ErrAgentClosed and renders Agent to
-    // closed state.
-    fn close(&mut self) -> Result<()> {
+    /// close terminates all transactions with ErrAgentClosed and renders Agent to
+    /// closed state.
+    pub fn close(&mut self) -> Result<()> {
         if self.closed {
             return Err(Error::ErrAgentClosed);
         }
@@ -185,11 +186,11 @@ impl Agent {
         Ok(())
     }
 
-    // Start registers transaction with provided id and deadline.
-    // Could return ErrAgentClosed, ErrTransactionExists.
-    //
-    // Agent handler is guaranteed to be eventually called.
-    fn start(&mut self, id: TransactionId, deadline: Instant) -> Result<()> {
+    /// start registers transaction with provided id and deadline.
+    /// Could return ErrAgentClosed, ErrTransactionExists.
+    ///
+    /// Agent handler is guaranteed to be eventually called.
+    pub fn start(&mut self, id: TransactionId, deadline: Instant) -> Result<()> {
         if self.closed {
             return Err(Error::ErrAgentClosed);
         }
@@ -203,18 +204,18 @@ impl Agent {
         Ok(())
     }
 
-    // Stop stops transaction by id with ErrTransactionStopped, blocking
-    // until handler returns.
-    fn stop(&mut self, id: TransactionId) -> Result<()> {
+    /// stop stops transaction by id with ErrTransactionStopped, blocking
+    /// until handler returns.
+    pub fn stop(&mut self, id: TransactionId) -> Result<()> {
         self.stop_with_error(id, Error::ErrTransactionStopped)
     }
 
-    // Collect terminates all transactions that have deadline before provided
-    // time, blocking until all handlers will process ErrTransactionTimeOut.
-    // Will return ErrAgentClosed if agent is already closed.
-    //
-    // It is safe to call Collect concurrently but makes no sense.
-    fn collect(&mut self, deadline: Instant) -> Result<()> {
+    /// collect terminates all transactions that have deadline before provided
+    /// time, blocking until all handlers will process ErrTransactionTimeOut.
+    /// Will return ErrAgentClosed if agent is already closed.
+    ///
+    /// It is safe to call Collect concurrently but makes no sense.
+    pub fn collect(&mut self, deadline: Instant) -> Result<()> {
         if self.closed {
             // Doing nothing if agent is closed.
             // All transactions should be already closed
@@ -251,8 +252,8 @@ impl Agent {
         Ok(())
     }
 
-    // set_handler sets agent handler to h.
-    fn set_handler(&mut self, h: Handler) -> Result<()> {
+    /// set_handler sets agent handler to h.
+    pub fn set_handler(&mut self, h: Handler) -> Result<()> {
         if self.closed {
             return Err(Error::ErrAgentClosed);
         }
@@ -261,7 +262,7 @@ impl Agent {
         Ok(())
     }
 
-    pub async fn run(mut agent: Agent, mut rx: mpsc::Receiver<ClientAgent>) {
+    pub(crate) async fn run(mut agent: Agent, mut rx: mpsc::Receiver<ClientAgent>) {
         while let Some(client_agent) = rx.recv().await {
             let result = match client_agent {
                 ClientAgent::Process(message) => agent.process(message),
