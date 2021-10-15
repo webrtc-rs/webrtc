@@ -284,8 +284,6 @@ impl DnsConn {
                 }
             }
 
-            //log::trace!("Recv bytes {:?} from {}", &b[..n], src);
-
             let mut p = Parser::default();
             if let Err(err) = p.start(&b[..n]) {
                 log::error!("Failed to parse mDNS packet {}", err);

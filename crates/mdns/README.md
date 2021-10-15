@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of mDNS. Rewrite <a href="https://github.com/pion/mdns/releases/tag/v0.0.4">Pion</a> mDNS in Rust
+ A pure Rust implementation of mDNS. Rewrite <a href="https://github.com/pion/mdns/releases/tag/v0.0.5">Pion</a> mDNS in Rust
 </p>
