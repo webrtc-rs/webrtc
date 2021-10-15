@@ -3,6 +3,7 @@ use std::ops::{Add, Sub};
 use std::time::Duration;
 use stun::addr::{AlternateServer, MappedAddress};
 use stun::agent::{noop_handler, Agent, TransactionId};
+use stun::attributes::{ATTR_REALM, ATTR_USERNAME};
 use stun::message::{Message, Setter};
 use tokio::time::Instant;
 
@@ -73,5 +74,31 @@ fn benchmark_agent(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, benchmark_addr, benchmark_agent);
+fn benchmark_attributes(c: &mut Criterion) {
+    {
+        let m = Message::new();
+        c.bench_function("BenchmarkMessage_GetNotFound", |b| {
+            b.iter(|| {
+                let _ = m.get(ATTR_REALM);
+            })
+        });
+    }
+
+    {
+        let mut m = Message::new();
+        m.add(ATTR_USERNAME, &[1, 2, 3, 4, 5, 6, 7]);
+        c.bench_function("BenchmarkMessage_Get", |b| {
+            b.iter(|| {
+                let _ = m.get(ATTR_USERNAME);
+            })
+        });
+    }
+}
+
+criterion_group!(
+    benches,
+    benchmark_addr,
+    benchmark_agent,
+    benchmark_attributes,
+);
 criterion_main!(benches);
