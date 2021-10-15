@@ -95,6 +95,8 @@ fn benchmark_attributes(c: &mut Criterion) {
     }
 }
 
+//TODO: add benchmark_client
+
 criterion_group!(
     benches,
     benchmark_addr,

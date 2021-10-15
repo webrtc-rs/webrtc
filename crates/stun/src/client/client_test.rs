@@ -8,3 +8,5 @@ fn ensure_client_settings_is_send() {
 }
 
 fn ensure_send<T: Send>(_: T) {}
+
+//TODO: add more client tests
