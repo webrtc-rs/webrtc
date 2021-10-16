@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of TURN. Rewrite <a href="https://github.com/pion/turn/releases/tag/v2.0.2">Pion</a> TURN in Rust
+ A pure Rust implementation of TURN. Rewrite <a href="https://github.com/pion/turn/releases/tag/v2.0.5">Pion</a> TURN in Rust
 </p>
