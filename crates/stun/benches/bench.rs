@@ -626,7 +626,7 @@ fn benchmark_xoraddr(c: &mut Criterion) {
         let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
 
         m.transaction_id.0.copy_from_slice(&transaction_id);
-        let addr_value = base64::encode("00019cd5f49f38ae").into_bytes();
+        let addr_value = [0, 1, 156, 213, 244, 159, 56, 174]; //hex.DecodeString("00019cd5f49f38ae")
         m.add(ATTR_XORMAPPED_ADDRESS, &addr_value);
         let mut addr = XorMappedAddress::default();
         c.bench_function("BenchmarkXORMappedAddress_GetFrom", |b| {
