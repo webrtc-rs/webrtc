@@ -1,20 +1,22 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::io::Cursor;
 use std::net::Ipv4Addr;
 use std::ops::{Add, Sub};
 use std::time::Duration;
 use stun::addr::{AlternateServer, MappedAddress};
 use stun::agent::{noop_handler, Agent, TransactionId};
 use stun::attributes::{
-    ATTR_CHANNEL_NUMBER, ATTR_DONT_FRAGMENT, ATTR_MESSAGE_INTEGRITY, ATTR_NONCE, ATTR_REALM,
-    ATTR_SOFTWARE, ATTR_USERNAME, ATTR_XORMAPPED_ADDRESS,
+    ATTR_CHANNEL_NUMBER, ATTR_DONT_FRAGMENT, ATTR_ERROR_CODE, ATTR_MESSAGE_INTEGRITY, ATTR_NONCE,
+    ATTR_REALM, ATTR_SOFTWARE, ATTR_USERNAME, ATTR_XORMAPPED_ADDRESS,
 };
 use stun::error_code::{ErrorCode, ErrorCodeAttribute, CODE_STALE_NONCE};
 use stun::fingerprint::{FINGERPRINT, FINGERPRINT_SIZE};
 use stun::integrity::MessageIntegrity;
 use stun::message::{
-    Getter, Message, Setter, ATTRIBUTE_HEADER_SIZE, BINDING_REQUEST, MESSAGE_HEADER_SIZE,
+    is_message, Getter, Message, MessageType, Setter, ATTRIBUTE_HEADER_SIZE, BINDING_REQUEST,
+    CLASS_REQUEST, MESSAGE_HEADER_SIZE, METHOD_BINDING,
 };
 use stun::textattrs::{Nonce, Realm, Software, Username};
 use stun::uattrs::UnknownAttributes;
@@ -261,55 +263,245 @@ fn benchmark_message_integrity(c: &mut Criterion) {
 
 fn benchmark_message(c: &mut Criterion) {
     {
-        c.bench_function("BenchmarkMessage_Write", |b| b.iter(|| {}));
+        let mut m = Message::new();
+        c.bench_function("BenchmarkMessage_Write", |b| {
+            b.iter(|| {
+                m.add(ATTR_ERROR_CODE, &[0xff, 0x11, 0x12, 0x34]);
+                m.transaction_id = TransactionId::new();
+                m.typ = MessageType {
+                    method: METHOD_BINDING,
+                    class: CLASS_REQUEST,
+                };
+                m.write_header();
+                m.reset();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessageType_Value", |b| b.iter(|| {}));
+        let m = MessageType {
+            method: METHOD_BINDING,
+            class: CLASS_REQUEST,
+        };
+        c.bench_function("BenchmarkMessageType_Value", |b| {
+            b.iter(|| {
+                let _ = m.value();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessage_WriteTo", |b| b.iter(|| {}));
+        let typ = MessageType {
+            method: METHOD_BINDING,
+            class: CLASS_REQUEST,
+        };
+        let mut m = Message {
+            typ,
+            length: 0,
+            transaction_id: TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+            ..Default::default()
+        };
+        m.write_header();
+        let mut buf = vec![];
+        c.bench_function("BenchmarkMessage_WriteTo", |b| {
+            b.iter(|| {
+                {
+                    let mut writer = Cursor::new(&mut buf);
+                    m.write_to(&mut writer).unwrap();
+                }
+                buf.clear();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessage_ReadFrom", |b| b.iter(|| {}));
+        let typ = MessageType {
+            method: METHOD_BINDING,
+            class: CLASS_REQUEST,
+        };
+        let mut m = Message {
+            typ,
+            length: 0,
+            transaction_id: TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+            ..Default::default()
+        };
+        m.write_header();
+        let mut mrec = Message::new();
+        c.bench_function("BenchmarkMessage_ReadFrom", |b| {
+            b.iter(|| {
+                let mut reader = Cursor::new(&m.raw);
+                mrec.read_from(&mut reader).unwrap();
+                mrec.reset();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessage_ReadBytes", |b| b.iter(|| {}));
+        let typ = MessageType {
+            method: METHOD_BINDING,
+            class: CLASS_REQUEST,
+        };
+        let mut m = Message {
+            typ,
+            length: 0,
+            transaction_id: TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+            ..Default::default()
+        };
+        m.write_header();
+        let mut mrec = Message::new();
+        c.bench_function("BenchmarkMessage_ReadBytes", |b| {
+            b.iter(|| {
+                mrec.write(&m.raw).unwrap();
+                mrec.reset();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkIsMessage", |b| b.iter(|| {}));
+        let typ = MessageType {
+            method: METHOD_BINDING,
+            class: CLASS_REQUEST,
+        };
+        let mut m = Message {
+            typ,
+            transaction_id: TransactionId::new(),
+            ..Default::default()
+        };
+        let software = Software::new(ATTR_SOFTWARE, "cydev/stun test".to_owned());
+        software.add_to(&mut m).unwrap();
+        m.write_header();
+        c.bench_function("BenchmarkIsMessage", |b| {
+            b.iter(|| {
+                assert!(is_message(&m.raw), "Should be message");
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessage_NewTransactionID", |b| b.iter(|| {}));
+        let mut m = Message::new();
+        m.write_header();
+        c.bench_function("BenchmarkMessage_NewTransactionID", |b| {
+            b.iter(|| {
+                m.new_transaction_id().unwrap();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessageFull", |b| b.iter(|| {}));
+        let mut m = Message::new();
+        let s = Software::new(ATTR_SOFTWARE, "software".to_owned());
+        let addr = XorMappedAddress {
+            ip: Ipv4Addr::new(213, 1, 223, 5).into(),
+            ..Default::default()
+        };
+        c.bench_function("BenchmarkMessageFull", |b| {
+            b.iter(|| {
+                addr.add_to(&mut m).unwrap();
+                s.add_to(&mut m).unwrap();
+                m.write_attributes();
+                m.write_header();
+                FINGERPRINT.add_to(&mut m).unwrap();
+                m.write_header();
+                m.reset();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessageFullHardcore", |b| b.iter(|| {}));
+        let mut m = Message::new();
+        let s = Software::new(ATTR_SOFTWARE, "software".to_owned());
+        let addr = XorMappedAddress {
+            ip: Ipv4Addr::new(213, 1, 223, 5).into(),
+            ..Default::default()
+        };
+        c.bench_function("BenchmarkMessageFullHardcore", |b| {
+            b.iter(|| {
+                addr.add_to(&mut m).unwrap();
+                s.add_to(&mut m).unwrap();
+                m.write_header();
+                m.reset();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessage_WriteHeader", |b| b.iter(|| {}));
+        let typ = MessageType {
+            method: METHOD_BINDING,
+            class: CLASS_REQUEST,
+        };
+        let mut m = Message {
+            typ,
+            transaction_id: TransactionId::new(),
+            raw: vec![0u8; 128],
+            ..Default::default()
+        };
+        c.bench_function("BenchmarkMessage_WriteHeader", |b| {
+            b.iter(|| {
+                m.write_header();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessage_CloneTo", |b| b.iter(|| {}));
+        let mut m = Message::new();
+        m.build(&[
+            Box::new(BINDING_REQUEST),
+            Box::new(TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2])),
+            Box::new(Software::new(ATTR_SOFTWARE, "webrtc-rs/stun".to_owned())),
+            Box::new(MessageIntegrity::new_long_term_integrity(
+                "username".to_owned(),
+                "realm".to_owned(),
+                "password".to_owned(),
+            )),
+            Box::new(FINGERPRINT),
+        ])
+        .unwrap();
+        let mut a = Message::new();
+        m.clone_to(&mut a).unwrap();
+        c.bench_function("BenchmarkMessage_CloneTo", |b| {
+            b.iter(|| {
+                m.clone_to(&mut a).unwrap();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkMessage_AddTo", |b| b.iter(|| {}));
+        let mut m = Message::new();
+        m.build(&[
+            Box::new(BINDING_REQUEST),
+            Box::new(TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2])),
+            Box::new(FINGERPRINT),
+        ])
+        .unwrap();
+        let mut a = Message::new();
+        m.clone_to(&mut a).unwrap();
+        c.bench_function("BenchmarkMessage_AddTo", |b| {
+            b.iter(|| {
+                m.add_to(&mut a).unwrap();
+            })
+        });
     }
 
     {
-        c.bench_function("BenchmarkDecode", |b| b.iter(|| {}));
+        let typ = MessageType {
+            method: METHOD_BINDING,
+            class: CLASS_REQUEST,
+        };
+        let mut m = Message {
+            typ,
+            transaction_id: TransactionId::new(),
+            ..Default::default()
+        };
+        m.add(ATTR_ERROR_CODE, &[0xff, 0xfe, 0xfa]);
+        m.write_header();
+        let mut mdecoded = Message::new();
+        c.bench_function("BenchmarkDecode", |b| {
+            b.iter(|| {
+                mdecoded.reset();
+                mdecoded.raw = m.raw.clone();
+                mdecoded.decode().unwrap();
+            })
+        });
     }
 }
 
