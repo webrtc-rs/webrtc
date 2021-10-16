@@ -1,5 +1,5 @@
-use std::time::Duration;
 use criterion::{criterion_group, criterion_main, Criterion};
+use std::time::Duration;
 use stun::attributes::ATTR_DATA;
 use stun::message::{Getter, Message, Setter};
 use turn::proto::chandata::ChannelData;
@@ -79,7 +79,7 @@ fn benchmark_chan(c: &mut Criterion) {
 fn benchmark_data(c: &mut Criterion) {
     {
         let mut m = Message::new();
-        let d = Data(vec![0u8;10]);
+        let d = Data(vec![0u8; 10]);
         c.bench_function("BenchmarkData/AddTo", |b| {
             b.iter(|| {
                 d.add_to(&mut m).unwrap();
@@ -90,7 +90,7 @@ fn benchmark_data(c: &mut Criterion) {
 
     {
         let mut m = Message::new();
-        let d = Data(vec![0u8;10]);
+        let d = Data(vec![0u8; 10]);
         c.bench_function("BenchmarkData/AddToRaw", |b| {
             b.iter(|| {
                 m.add(ATTR_DATA, &d.0);
@@ -99,7 +99,6 @@ fn benchmark_data(c: &mut Criterion) {
         });
     }
 }
-
 
 fn benchmark_lifetime(c: &mut Criterion) {
     {
@@ -127,5 +126,11 @@ fn benchmark_lifetime(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, benchmark_chan_data, benchmark_chan, benchmark_data, benchmark_lifetime);
+criterion_group!(
+    benches,
+    benchmark_chan_data,
+    benchmark_chan,
+    benchmark_data,
+    benchmark_lifetime
+);
 criterion_main!(benches);
