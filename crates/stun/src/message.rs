@@ -17,9 +17,9 @@ use std::io::{Read, Write};
 // network byte order.
 //
 // Defined in "STUN Message Structure", section 6.
-pub(crate) const MAGIC_COOKIE: u32 = 0x2112A442;
-pub(crate) const ATTRIBUTE_HEADER_SIZE: usize = 4;
-pub(crate) const MESSAGE_HEADER_SIZE: usize = 20;
+pub const MAGIC_COOKIE: u32 = 0x2112A442;
+pub const ATTRIBUTE_HEADER_SIZE: usize = 4;
+pub const MESSAGE_HEADER_SIZE: usize = 20;
 
 // TRANSACTION_ID_SIZE is length of transaction id array (in bytes).
 pub const TRANSACTION_ID_SIZE: usize = 12; // 96 bit

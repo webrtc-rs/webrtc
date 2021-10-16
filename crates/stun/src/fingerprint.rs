@@ -21,8 +21,8 @@ pub struct FingerprintAttr;
 //  FINGERPRINT.add_to(m)
 pub const FINGERPRINT: FingerprintAttr = FingerprintAttr {};
 
-const FINGERPRINT_XOR_VALUE: u32 = 0x5354554e;
-const FINGERPRINT_SIZE: usize = 4; // 32 bit
+pub const FINGERPRINT_XOR_VALUE: u32 = 0x5354554e;
+pub const FINGERPRINT_SIZE: usize = 4; // 32 bit
 
 // FingerprintValue returns CRC-32 of b XOR-ed by 0x5354554e.
 //

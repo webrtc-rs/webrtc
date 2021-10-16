@@ -78,7 +78,7 @@ impl Getter for ErrorCodeAttribute {
 
 // ErrorCode is code for ERROR-CODE attribute.
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Default)]
-pub struct ErrorCode(u16);
+pub struct ErrorCode(pub u16);
 
 impl Setter for ErrorCode {
     // add_to adds ERROR-CODE with default reason to m. If there
