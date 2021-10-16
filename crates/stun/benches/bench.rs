@@ -1,4 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use std::net::Ipv4Addr;
 use std::ops::{Add, Sub};
 use std::time::Duration;
@@ -16,7 +18,7 @@ use stun::message::{
 };
 use stun::textattrs::{Nonce, Realm, Software, Username};
 use stun::uattrs::UnknownAttributes;
-use stun::xoraddr::XorMappedAddress;
+use stun::xoraddr::{xor_bytes, XorMappedAddress};
 use tokio::time::Instant;
 
 // AGENT_COLLECT_CAP is initial capacity for Agent.Collect slices,
@@ -257,7 +259,59 @@ fn benchmark_message_integrity(c: &mut Criterion) {
     }
 }
 
-//TODO: benchmark_message
+fn benchmark_message(c: &mut Criterion) {
+    {
+        c.bench_function("BenchmarkMessage_Write", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessageType_Value", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessage_WriteTo", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessage_ReadFrom", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessage_ReadBytes", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkIsMessage", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessage_NewTransactionID", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessageFull", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessageFullHardcore", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessage_WriteHeader", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessage_CloneTo", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkMessage_AddTo", |b| b.iter(|| {}));
+    }
+
+    {
+        c.bench_function("BenchmarkDecode", |b| b.iter(|| {}));
+    }
+}
 
 fn benchmark_text_attributes(c: &mut Criterion) {
     {
@@ -348,20 +402,19 @@ fn benchmark_unknown_attributes(c: &mut Criterion) {
     }
 }
 
-//TODO: complete benchmark_xor
-/*fn benchmark_xor(c: &mut Criterion) {
-    {
-        c.bench_function("BenchmarkXOR", |b| b.iter(|| {}));
-    }
-
-    {
-        c.bench_function("BenchmarkXORSafe", |b| b.iter(|| {}));
-    }
-
-    {
-        c.bench_function("BenchmarkXORFast", |b| b.iter(|| {}));
-    }
-}*/
+fn benchmark_xor(c: &mut Criterion) {
+    let mut r = StdRng::seed_from_u64(666);
+    let mut a = [0u8; 1024];
+    let mut d = [0u8; 1024];
+    r.fill(&mut a);
+    r.fill(&mut d);
+    let mut dst = [0u8; 1024];
+    c.bench_function("BenchmarkXOR", |b| {
+        b.iter(|| {
+            let _ = xor_bytes(&mut dst, &a, &d);
+        })
+    });
+}
 
 fn benchmark_xoraddr(c: &mut Criterion) {
     {
@@ -402,10 +455,10 @@ criterion_group!(
     benchmark_fingerprint,
     benchmark_message_build_overhead,
     benchmark_message_integrity,
-    //TODO: benchmark_message
+    benchmark_message,
     benchmark_text_attributes,
     benchmark_unknown_attributes,
-    //TODO: benchmark_xor,
+    benchmark_xor,
     benchmark_xoraddr,
 );
 criterion_main!(benches);

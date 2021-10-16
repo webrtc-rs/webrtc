@@ -4,13 +4,13 @@ use crate::checks::*;
 use std::io::BufReader;
 
 #[test]
-fn test_xorsafe() -> Result<()> {
+fn test_xor_safe() -> Result<()> {
     let mut dst = vec![0; 8];
     let a = vec![1, 2, 3, 4, 5, 6, 7, 8];
     let b = vec![8, 7, 7, 6, 6, 3, 4, 1];
-    safe_xorbytes(&mut dst, &a, &b);
+    safe_xor_bytes(&mut dst, &a, &b);
     let c = dst.clone();
-    safe_xorbytes(&mut dst, &c, &a);
+    safe_xor_bytes(&mut dst, &c, &a);
     for i in 0..dst.len() {
         assert_eq!(b[i], dst[i], "{} != {}", b[i], dst[i]);
     }
@@ -19,13 +19,13 @@ fn test_xorsafe() -> Result<()> {
 }
 
 #[test]
-fn test_xorsafe_bsmaller() -> Result<()> {
+fn test_xor_safe_bsmaller() -> Result<()> {
     let mut dst = vec![0; 5];
     let a = vec![1, 2, 3, 4, 5, 6, 7, 8];
     let b = vec![8, 7, 7, 6, 6];
-    safe_xorbytes(&mut dst, &a, &b);
+    safe_xor_bytes(&mut dst, &a, &b);
     let c = dst.clone();
-    safe_xorbytes(&mut dst, &c, &a);
+    safe_xor_bytes(&mut dst, &c, &a);
     for i in 0..dst.len() {
         assert_eq!(b[i], dst[i], "{} != {}", b[i], dst[i]);
     }

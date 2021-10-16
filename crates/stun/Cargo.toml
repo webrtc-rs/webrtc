@@ -45,6 +45,3 @@ bench = false
 name = "stun_decode"
 path = "examples/stun_decode.rs"
 bench = false
-
-[profile.bench]
-incremental = true

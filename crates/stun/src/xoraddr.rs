@@ -15,9 +15,9 @@ const WORD_SIZE: usize = mem::size_of::<usize>();
 
 //var supportsUnaligned = runtime.GOARCH == "386" || runtime.GOARCH == "amd64" // nolint:gochecknoglobals
 
-// fastXORBytes xors in bulk. It only works on architectures that
+// fast_xor_bytes xors in bulk. It only works on architectures that
 // support unaligned read/writes.
-/*TODO: fn fastXORBytes(dst:&[u8], a:&[u8], b:&[u8]) ->usize {
+/*TODO: fn fast_xor_bytes(dst:&[u8], a:&[u8], b:&[u8]) ->usize {
     let mut n = a.len();
     if b.len() < n {
         n = b.len();
@@ -40,7 +40,7 @@ const WORD_SIZE: usize = mem::size_of::<usize>();
     return n
 }*/
 
-fn safe_xorbytes(dst: &mut [u8], a: &[u8], b: &[u8]) -> usize {
+fn safe_xor_bytes(dst: &mut [u8], a: &[u8], b: &[u8]) -> usize {
     let mut n = a.len();
     if b.len() < n {
         n = b.len();
@@ -54,18 +54,18 @@ fn safe_xorbytes(dst: &mut [u8], a: &[u8], b: &[u8]) -> usize {
     n
 }
 
-// xor_bytes xors the bytes in a and b. The destination is assumed to have enough
-// space. Returns the number of bytes xor'd.
-fn xor_bytes(dst: &mut [u8], a: &[u8], b: &[u8]) -> usize {
-    //if supportsUnaligned {
+/// xor_bytes xors the bytes in a and b. The destination is assumed to have enough
+/// space. Returns the number of bytes xor'd.
+pub fn xor_bytes(dst: &mut [u8], a: &[u8], b: &[u8]) -> usize {
+    //TODO: if supportsUnaligned {
     //	return fastXORBytes(dst, a, b)
     //}
-    safe_xorbytes(dst, a, b)
+    safe_xor_bytes(dst, a, b)
 }
 
-// XORMappedAddress implements XOR-MAPPED-ADDRESS attribute.
-//
-// RFC 5389 Section 15.2
+/// XORMappedAddress implements XOR-MAPPED-ADDRESS attribute.
+///
+/// RFC 5389 Section 15.2
 pub struct XorMappedAddress {
     pub ip: IpAddr,
     pub port: u16,
@@ -95,42 +95,25 @@ impl fmt::Display for XorMappedAddress {
 }
 
 impl Setter for XorMappedAddress {
-    // AddTo adds XOR-MAPPED-ADDRESS to m. Can return ErrBadIPLength
-    // if len(a.IP) is invalid.
+    /// add_to adds XOR-MAPPED-ADDRESS to m. Can return ErrBadIPLength
+    /// if len(a.IP) is invalid.
     fn add_to(&self, m: &mut Message) -> Result<()> {
         self.add_to_as(m, ATTR_XORMAPPED_ADDRESS)
     }
 }
 
 impl Getter for XorMappedAddress {
-    // GetFrom decodes XOR-MAPPED-ADDRESS attribute in message and returns
-    // error if any. While decoding, a.IP is reused if possible and can be
-    // rendered to invalid state (e.g. if a.IP was set to IPv6 and then
-    // IPv4 value were decoded into it), be careful.
-    //
-    // Example:
-    //
-    //  expectedIP := net.ParseIP("213.141.156.236")
-    //  expectedIP.String() // 213.141.156.236, 16 bytes, first 12 of them are zeroes
-    //  expectedPort := 21254
-    //  addr := &XORMappedAddress{
-    //    IP:   expectedIP,
-    //    Port: expectedPort,
-    //  }
-    //  // addr were added to message that is decoded as newMessage
-    //  // ...
-    //
-    //  addr.GetFrom(newMessage)
-    //  addr.IP.String()    // 213.141.156.236, net.IPv4Len
-    //  expectedIP.String() // d58d:9cec::ffff:d58d:9cec, 16 bytes, first 4 are IPv4
-    //  // now we have len(expectedIP) = 16 and len(addr.IP) = 4.
+    /// get_from decodes XOR-MAPPED-ADDRESS attribute in message and returns
+    /// error if any. While decoding, a.IP is reused if possible and can be
+    /// rendered to invalid state (e.g. if a.IP was set to IPv6 and then
+    /// IPv4 value were decoded into it), be careful.
     fn get_from(&mut self, m: &Message) -> Result<()> {
         self.get_from_as(m, ATTR_XORMAPPED_ADDRESS)
     }
 }
 
 impl XorMappedAddress {
-    // AddToAs adds XOR-MAPPED-ADDRESS value to m as t attribute.
+    /// add_to_as adds XOR-MAPPED-ADDRESS value to m as t attribute.
     pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<()> {
         let (family, ip_len, ip) = match self.ip {
             IpAddr::V4(ipv4) => (FAMILY_IPV4, IPV4LEN, ipv4.octets().to_vec()),
@@ -149,8 +132,8 @@ impl XorMappedAddress {
         Ok(())
     }
 
-    // GetFromAs decodes XOR-MAPPED-ADDRESS attribute value in message
-    // getting it as for t type.
+    /// get_from_as decodes XOR-MAPPED-ADDRESS attribute value in message
+    /// getting it as for t type.
     pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<()> {
         let v = m.get(t)?;
         if v.len() <= 4 {
