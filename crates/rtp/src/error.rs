@@ -40,6 +40,11 @@ pub enum Error {
     #[error("NALU Type is unhandled")]
     ErrUnhandledNaluType,
 
+    #[error("corrupted h265 packet")]
+    ErrH265CorruptedPacket,
+    #[error("invalid h265 packet type")]
+    ErrInvalidH265PacketType,
+
     #[error("extension_payload must be in 32-bit words")]
     HeaderExtensionPayloadNot32BitWords,
     #[error("audio level overflow")]
