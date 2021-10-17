@@ -499,20 +499,10 @@ impl Packet for TransportLayerCc {
     fn raw_size(&self) -> usize {
         let mut n = HEADER_LENGTH + PACKET_CHUNK_OFFSET + self.packet_chunks.len() * 2;
         for d in &self.recv_deltas {
-            let delta = d.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
-
             // small delta
-            if d.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta
-                && delta >= 0
-                && delta <= u8::MAX as i64
-            {
+            if d.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta {
                 n += 1;
-            }
-
-            if d.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta
-                && delta >= i16::MIN as i64
-                && delta <= i16::MAX as i64
-            {
+            } else {
                 n += 2
             }
         }
