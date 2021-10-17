@@ -88,6 +88,14 @@ pub enum Error {
     /// Packet status chunk is not 2 bytes.
     #[error("Packet status chunk must be 2 bytes")]
     PacketStatusChunkLength,
+    #[error("Invalid bitrate")]
+    InvalidBitrate,
+    #[error("Wrong chunk type")]
+    WrongChunkType,
+    #[error("Struct contains unexpected member type")]
+    BadStructMemberType,
+    #[error("Cannot read into non-pointer")]
+    BadReadParameter,
 
     #[error("{0}")]
     Util(#[from] util::Error),
