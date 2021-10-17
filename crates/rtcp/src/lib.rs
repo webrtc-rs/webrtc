@@ -42,6 +42,7 @@
 
 pub mod compound_packet;
 mod error;
+pub mod extended_report;
 pub mod goodbye;
 pub mod header;
 pub mod packet;
