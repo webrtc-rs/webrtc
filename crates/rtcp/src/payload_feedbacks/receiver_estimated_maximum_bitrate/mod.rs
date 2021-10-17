@@ -18,7 +18,7 @@ pub struct ReceiverEstimatedMaximumBitrate {
     pub sender_ssrc: u32,
 
     /// Estimated maximum bitrate
-    pub bitrate: u64,
+    pub bitrate: f32,
 
     /// SSRC entries which this packet applies to
     pub ssrcs: Vec<u32>,
@@ -34,7 +34,7 @@ const UNIQUE_IDENTIFIER: [u8; 4] = [b'R', b'E', b'M', b'B'];
 impl fmt::Display for ReceiverEstimatedMaximumBitrate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Do some unit conversions because b/s is far too difficult to read.
-        let mut bitrate = self.bitrate as f64;
+        let mut bitrate = self.bitrate;
         let mut powers = 0;
 
         // Keep dividing the bitrate until it's under 1000
@@ -100,6 +100,8 @@ impl MarshalSize for ReceiverEstimatedMaximumBitrate {
 impl Marshal for ReceiverEstimatedMaximumBitrate {
     /// Marshal serializes the packet and returns a byte slice.
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        const BITRATE_MAX: f32 = 2.417_842_4e24; //0x3FFFFp+63;
+
         /*
             0                   1                   2                   3
             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -135,34 +137,31 @@ impl Marshal for ReceiverEstimatedMaximumBitrate {
         // Write the length of the ssrcs to follow at the end
         buf.put_u8(self.ssrcs.len() as u8);
 
-        // We can only encode 18 bits of information in the mantissa.
-        // The exponent lets us shift to the left up to 64 places (6-bits).
-        // We actually need a uint82 to encode the largest possible number,
-        // but uint64 should be good enough for 2.3 exabytes per second.
-
-        // So we need to truncate the bitrate and use the exponent for the shift.
-        // bitrate = mantissa * (1 << exp)
-
-        // Calculate the total shift based on the leading number of zeroes.
-        // This will be negative if there is no shift required.
-        let shift = 64 - self.bitrate.leading_zeros();
-        let mantissa;
-        let exp;
-
-        if shift <= 18 {
-            // Fit everything in the mantissa because we can.
-            mantissa = self.bitrate;
-            exp = 0;
-        } else {
-            // We can only use 18 bits of precision, so truncate.
-            mantissa = self.bitrate >> (shift - 18);
-            exp = shift - 18;
+        let mut exp = 0;
+        let mut bitrate = self.bitrate;
+        if bitrate >= BITRATE_MAX {
+            bitrate = BITRATE_MAX
         }
+
+        if bitrate < 0.0 {
+            return Err(Error::InvalidBitrate.into());
+        }
+
+        while bitrate >= (1 << 18) as f32 {
+            bitrate /= 2.0;
+            exp += 1;
+        }
+
+        if exp >= (1 << 6) {
+            return Err(Error::InvalidBitrate.into());
+        }
+
+        let mantissa = bitrate.floor() as u32;
 
         // We can't quite use the binary package because
         // a) it's a uint24 and b) the exponent is only 6-bits
         // Just trust me; this is big-endian encoding.
-        buf.put_u8(((exp << 2) | (mantissa >> 16) as u32) as u8);
+        buf.put_u8((exp << 2) as u8 | (mantissa >> 16) as u8);
         buf.put_u8((mantissa >> 8) as u8);
         buf.put_u8(mantissa as u8);
 
@@ -191,6 +190,8 @@ impl Unmarshal for ReceiverEstimatedMaximumBitrate {
         if raw_packet_len < 20 {
             return Err(Error::PacketTooShort.into());
         }
+
+        const MANTISSA_MAX: u32 = 0x7FFFFF;
         /*
             0                   1                   2                   3
             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -241,21 +242,25 @@ impl Unmarshal for ReceiverEstimatedMaximumBitrate {
 
         // Get the 6-bit exponent value.
         let b17 = raw_packet.get_u8();
-        let exp = (b17 as u64) >> 2;
+        let mut exp = (b17 as u64) >> 2;
+        exp += 127; // bias for IEEE754
+        exp += 23; // IEEE754 biases the decimal to the left, abs-send-time biases it to the right
 
         // The remaining 2-bits plus the next 16-bits are the mantissa.
         let b18 = raw_packet.get_u8();
         let b19 = raw_packet.get_u8();
-        let mantissa = ((b17 & 3) as u64) << 16 | (b18 as u64) << 8 | b19 as u64;
+        let mut mantissa = ((b17 & 3) as u32) << 16 | (b18 as u32) << 8 | b19 as u32;
 
-        let bitrate = if exp > 46 {
-            // NOTE: We intentionally truncate values so they fit in a uint64.
-            // Otherwise we would need a uint82.
-            // This is 2.3 exabytes per second, which should be good enough.
-            std::u64::MAX
-        } else {
-            mantissa << exp
-        };
+        if mantissa != 0 {
+            // ieee754 requires an implicit leading bit
+            while (mantissa & (MANTISSA_MAX + 1)) == 0 {
+                exp -= 1;
+                mantissa *= 2;
+            }
+        }
+
+        // bitrate = mantissa * 2^exp
+        let bitrate = f32::from_bits(((exp as u32) << 23) | (mantissa & MANTISSA_MAX));
 
         let mut ssrcs = vec![];
         for _i in 0..ssrcs_len {

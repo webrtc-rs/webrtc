@@ -16,6 +16,7 @@ pub enum PacketType {
     ApplicationDefined = 204,        // RFC 3550, 6.7 (unimplemented)
     TransportSpecificFeedback = 205, // RFC 4585, 6051
     PayloadSpecificFeedback = 206,   // RFC 4585, 6.3
+    ExtendedReport = 207,            // RFC 3611
 }
 
 impl Default for PacketType {
@@ -51,6 +52,7 @@ impl std::fmt::Display for PacketType {
             PacketType::ApplicationDefined => "APP",
             PacketType::TransportSpecificFeedback => "TSFB",
             PacketType::PayloadSpecificFeedback => "PSFB",
+            PacketType::ExtendedReport => "XR",
         };
         write!(f, "{}", s)
     }

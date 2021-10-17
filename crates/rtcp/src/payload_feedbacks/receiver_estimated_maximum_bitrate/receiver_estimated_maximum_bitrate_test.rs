@@ -2,176 +2,119 @@ use super::*;
 use bytes::Bytes;
 
 #[test]
-fn test_receiver_estimated_maximum_bitrate_unmarshal() {
-    let tests: Vec<(&str, Bytes, ReceiverEstimatedMaximumBitrate, Option<Error>)> = vec![
-        (
-            "valid",
-            Bytes::from_static(&[
-                143u8, 206, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 82, 69, 77, 66, 1, 26, 32, 223, 72, 116,
-                237, 22,
-            ]),
-            ReceiverEstimatedMaximumBitrate {
-                sender_ssrc: 1,
-                bitrate: 8927168,
-                ssrcs: vec![1215622422],
-            },
-            None,
-        ),
-        (
-            "Real data sent by Chrome while watching a 6Mb/s stream",
-            // mantissa = []byte{26 & 3, 32, 223} = []byte{2, 32, 223} = 139487
-            // exp = 26 >> 2 = 6
-            // bitrate = 139487 * 2^6 = 139487 * 64 = 8927168 = 8.9 Mb/s
-            Bytes::from_static(&[
-                143, 206, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 82, 69, 77, 66, 1, 26, 32, 223, 72, 116,
-                237, 22,
-            ]),
-            ReceiverEstimatedMaximumBitrate {
-                sender_ssrc: 1,
-                bitrate: 8927168,
-                ssrcs: vec![1215622422],
-            },
-            None,
-        ),
-        (
-            "Marshal a packet with the maximum possible bitrate.",
-            // bitrate = 0xFFFFC00000000000
-            // mantissa = 262143 = 0x3FFFF
-            // exp = 46
-            Bytes::from_static(&[
-                143, 206, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 82, 69, 77, 66, 0, 187, 255, 255,
-            ]),
-            ReceiverEstimatedMaximumBitrate {
-                sender_ssrc: 0,
-                bitrate: 0xFFFFC00000000000,
-                ssrcs: vec![],
-            },
-            None,
-        ),
-        (
-            "Marshal a packet with the overflowed bitrate.",
-            // bitrate = 0xFFFFFFFFFFFFFFFF
-            // mantissa = 0
-            // exp = 47
-            Bytes::from_static(&[
-                143, 206, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 82, 69, 77, 66, 0, 188, 0, 0,
-            ]),
-            ReceiverEstimatedMaximumBitrate {
-                sender_ssrc: 0,
-                bitrate: 0xFFFFFFFFFFFFFFFF,
-                ssrcs: vec![],
-            },
-            None,
-        ),
-    ];
+fn test_receiver_estimated_maximum_bitrate_marshal() {
+    let input = ReceiverEstimatedMaximumBitrate {
+        sender_ssrc: 1,
+        bitrate: 8927168.0,
+        ssrcs: vec![1215622422],
+    };
 
-    for (name, mut data, want, want_error) in tests {
-        let got = ReceiverEstimatedMaximumBitrate::unmarshal(&mut data);
+    let expected = Bytes::from_static(&[
+        143, 206, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 82, 69, 77, 66, 1, 26, 32, 223, 72, 116, 237, 22,
+    ]);
 
-        assert_eq!(
-            got.is_err(),
-            want_error.is_some(),
-            "Unmarshal {} rr: err = {:?}, want {:?}",
-            name,
-            got,
-            want_error
-        );
-
-        if let Some(err) = want_error {
-            let got_err = got.err().unwrap();
-            assert_eq!(
-                err, got_err,
-                "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
-            );
-        } else {
-            let actual = got.unwrap();
-            assert_eq!(
-                actual, want,
-                "Unmarshal {} rr: got {:?}, want {:?}",
-                name, actual, want
-            );
-        }
-    }
+    let output = input.marshal().unwrap();
+    assert_eq!(expected, output);
 }
 
 #[test]
-fn test_receiver_estimated_maximum_bitrate_roundtrip() {
-    let tests: Vec<(
-        &str,
-        ReceiverEstimatedMaximumBitrate,
-        Option<()>,
-        Option<u64>,
-    )> = vec![
-        (
-            "Real data sent by Chrome while watching a 6Mb/s stream",
-            // mantissa = []byte{26 & 3, 32, 223} = []byte{2, 32, 223} = 139487
-            // exp = 26 >> 2 = 6
-            // bitrate = 139487 * 2^6 = 139487 * 64 = 8927168 = 8.9 Mb/s
-            ReceiverEstimatedMaximumBitrate {
-                sender_ssrc: 1,
-                bitrate: 8927168,
-                ssrcs: vec![1215622422],
-            },
-            None,
-            None,
-        ),
-        (
-            "Marshal a packet with the maximum possible bitrate.",
-            // bitrate = 0xFFFFC00000000000
-            // mantissa = 262143 = 0x3FFFF
-            // exp = 46
-            ReceiverEstimatedMaximumBitrate {
-                sender_ssrc: 0,
-                bitrate: 0xFFFFC00000000000,
-                ssrcs: vec![],
-            },
-            None,
-            None,
-        ),
-        (
-            "Marshal a packet with the overflowed bitrate.",
-            // bitrate = 0xFFFFFFFFFFFFFFFF
-            // mantissa = 0
-            // exp = 47
-            ReceiverEstimatedMaximumBitrate {
-                sender_ssrc: 0,
-                bitrate: 0xFFFFFFFFFFFFFFFF,
-                ssrcs: vec![],
-            },
-            None,
-            Some(0xFFFFC00000000000u64),
-        ),
-    ];
+fn test_receiver_estimated_maximum_bitrate_unmarshal() {
+    // Real data sent by Chrome while watching a 6Mb/s stream
+    let mut input = Bytes::from_static(&[
+        143, 206, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 82, 69, 77, 66, 1, 26, 32, 223, 72, 116, 237, 22,
+    ]);
 
-    for (name, report, marshal_error, unmarshal_expected) in tests {
-        let got = report.marshal();
+    // mantissa = []byte{26 & 3, 32, 223} = []byte{2, 32, 223} = 139487
+    // exp = 26 >> 2 = 6
+    // bitrate = 139487 * 2^6 = 139487 * 64 = 8927168 = 8.9 Mb/s
+    let expected = ReceiverEstimatedMaximumBitrate {
+        sender_ssrc: 1,
+        bitrate: 8927168.0,
+        ssrcs: vec![1215622422],
+    };
 
-        assert_eq!(
-            got.is_ok(),
-            marshal_error.is_none(),
-            "Marshal {}: err = {:?}, want {:?}",
-            name,
-            got,
-            marshal_error
-        );
+    let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut input).unwrap();
+    assert_eq!(expected, packet);
+}
 
-        let mut data = got.ok().unwrap();
-        let actual = ReceiverEstimatedMaximumBitrate::unmarshal(&mut data)
-            .unwrap_or_else(|_| panic!("Unmarshal {}", name));
+#[test]
+fn test_receiver_estimated_maximum_bitrate_truncate() {
+    let input = Bytes::from_static(&[
+        143, 206, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 82, 69, 77, 66, 1, 26, 32, 223, 72, 116, 237, 22,
+    ]);
 
-        if let Some(expected_bitrate) = unmarshal_expected {
-            assert_eq!(
-                actual.bitrate, expected_bitrate,
-                "{} round trip: got {:?}, want {:?}",
-                name, actual.bitrate, expected_bitrate
-            )
-        } else {
-            assert_eq!(
-                actual, report,
-                "{} header round trip: got {:?}, want {:?}",
-                name, actual, report
-            );
-        }
-    }
+    // Make sure that we're interpreting the bitrate correctly.
+    // For the above example, we have:
+
+    // mantissa = 139487
+    // exp = 6
+    // bitrate = 8927168
+
+    let mut buf = input.clone();
+    let mut packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut buf).unwrap();
+    assert_eq!(8927168.0, packet.bitrate);
+
+    // Just verify marshal produces the same input.
+    let output = packet.marshal().unwrap();
+    assert_eq!(input, output);
+
+    // If we subtract the bitrate by 1, we'll round down a lower mantissa
+    packet.bitrate -= 1.0;
+
+    // bitrate = 8927167
+    // mantissa = 139486
+    // exp = 6
+
+    let mut output = packet.marshal().unwrap();
+    assert_ne!(input, output);
+    let expected = Bytes::from_static(&[
+        143, 206, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 82, 69, 77, 66, 1, 26, 32, 222, 72, 116, 237, 22,
+    ]);
+    assert_eq!(expected, output);
+
+    // Which if we actually unmarshal again, we'll find that it's actually decreased by 63 (which is exp)
+    // mantissa = 139486
+    // exp = 6
+    // bitrate = 8927104
+
+    let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut output).unwrap();
+    assert_eq!(8927104.0, packet.bitrate);
+}
+
+#[test]
+fn test_receiver_estimated_maximum_bitrate_overflow() {
+    // Marshal a packet with the maximum possible bitrate.
+    let packet = ReceiverEstimatedMaximumBitrate {
+        bitrate: f32::MAX,
+        ..Default::default()
+    };
+
+    // mantissa = 262143 = 0x3FFFF
+    // exp = 63
+
+    let expected = Bytes::from_static(&[
+        143, 206, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 82, 69, 77, 66, 0, 255, 255, 255,
+    ]);
+
+    let output = packet.marshal().unwrap();
+    assert_eq!(expected, output);
+
+    // mantissa = 262143
+    // exp = 63
+    // bitrate = 0xFFFFC00000000000
+
+    let mut buf = output.clone();
+    let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut buf).unwrap();
+    assert_eq!(f32::from_bits(0x67FFFFC0), packet.bitrate);
+
+    // Make sure we marshal to the same result again.
+    let output = packet.marshal().unwrap();
+    assert_eq!(expected, output);
+
+    // Finally, try unmarshalling one number higher than we used to be able to handle.
+    let mut input = Bytes::from_static(&[
+        143, 206, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 82, 69, 77, 66, 0, 188, 0, 0,
+    ]);
+    let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut input).unwrap();
+    assert_eq!(f32::from_bits(0x62800000), packet.bitrate);
 }
