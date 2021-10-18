@@ -16,7 +16,7 @@ impl fmt::Display for UnknownReportBlock {
 impl UnknownReportBlock {
     pub fn xr_header(&self) -> XRHeader {
         XRHeader {
-            block_type: Default::default(),
+            block_type: BlockType::Unknown,
             type_specific: 0,
             block_length: (self.raw_size() / 4 - 1) as u16,
         }

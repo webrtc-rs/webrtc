@@ -9,7 +9,7 @@ pub mod ssr;
 pub mod vm;*/
 pub mod unknown;
 
-use unknown::UnknownReportBlock;
+pub use unknown::UnknownReportBlock;
 
 use crate::error;
 use crate::header::{Header, PacketType, HEADER_LENGTH, SSRC_LENGTH};
