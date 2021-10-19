@@ -63,15 +63,15 @@ impl UDPMuxConnInner {
             return Err(Error::ErrBufferShort);
         }
 
-        let data_len: usize = *(&buffer[..2]
+        let data_len: usize = buffer[..2]
             .try_into()
-            .map(|bytes| u16::from_le_bytes(bytes))
+            .map(u16::from_le_bytes)
             .map(From::from)
-            .unwrap());
+            .unwrap();
         offset += 2;
 
-        let total = usize::from(2 + data_len + 2 + 7);
-        if usize::from(data_len) > buf.len() || total > len {
+        let total = 2 + data_len + 2 + 7;
+        if data_len > buf.len() || total > len {
             return Err(Error::ErrBufferShort);
         }
 
@@ -84,7 +84,7 @@ impl UDPMuxConnInner {
     }
 
     async fn send_to(&self, buf: &[u8], target: &SocketAddr) -> ConnResult<usize> {
-        self.params.udp_mux.send_to(&buf, target).await
+        self.params.udp_mux.send_to(buf, target).await
     }
 
     fn is_closed(&self) -> bool {
@@ -137,7 +137,7 @@ impl UDPMuxConnInner {
     pub(super) fn add_address(self: &Arc<Self>, addr: SocketAddr) {
         {
             let mut addresses = self.addresses.lock().expect("Failed to obtain lock");
-            addresses.insert(addr.clone());
+            addresses.insert(addr);
         }
     }
 
@@ -282,10 +282,10 @@ impl Conn for UDPMuxConn {
         }
 
         if !self.contains_address(&target) {
-            self.add_address(target.clone());
+            self.add_address(target);
         }
 
-        self.inner.send_to(&buf, &target).await
+        self.inner.send_to(buf, &target).await
     }
 
     async fn local_addr(&self) -> ConnResult<SocketAddr> {

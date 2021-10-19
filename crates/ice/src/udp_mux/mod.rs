@@ -82,7 +82,7 @@ impl UDPMuxDefault {
     async fn send_to(&self, buf: &[u8], target: &SocketAddr) -> Result<usize, Error> {
         self.params
             .udp_socket
-            .send_to(&buf, target)
+            .send_to(buf, target)
             .await
             .map_err(Into::into)
     }
@@ -105,7 +105,7 @@ impl UDPMuxDefault {
             return;
         }
 
-        let key = conn.key().clone();
+        let key = conn.key();
         {
             let mut addresses = self
                 .address_map
@@ -113,12 +113,12 @@ impl UDPMuxDefault {
                 .expect("Failed to obtain write lock");
 
             addresses
-                .entry(addr.clone())
+                .entry(addr)
                 .and_modify(|e| {
                     e.remove_address(&addr);
                     *e = conn.clone()
                 })
-                .or_insert(conn.clone());
+                .or_insert_with(|| conn.clone());
         }
 
         log::debug!("Registered {} for {}", addr, key);
@@ -128,13 +128,13 @@ impl UDPMuxDefault {
         let (result, message) = {
             let mut m = STUNMessage::new();
 
-            (m.unmarshal_binary(&buffer), m)
+            (m.unmarshal_binary(buffer), m)
         };
 
         match result {
             Err(err) => {
                 log::warn!("Failed to handle decode ICE from {}: {}", addr, err);
-                return None;
+                None
             }
             Ok(_) => {
                 let (attr, found) = message.attributes.get(ATTR_USERNAME);
@@ -158,7 +158,7 @@ impl UDPMuxDefault {
 
                 let conns = self.conns.lock().await;
                 let conn = s
-                    .split(":")
+                    .split(':')
                     .next()
                     .and_then(|ufrag| conns.get(ufrag))
                     .map(Clone::clone);
@@ -235,7 +235,7 @@ impl UDPMux for UDPMuxDefault {
         let old_conns = {
             let mut conns = self.conns.lock().await;
 
-            std::mem::replace(&mut (*conns), Default::default())
+            std::mem::take(&mut (*conns))
         };
 
         // NOTE: We don't wait for these closure to complete
@@ -251,7 +251,7 @@ impl UDPMux for UDPMuxDefault {
 
             // NOTE: This is important, we need to drop all instances of `UDPMuxConn` to
             // avoid a retain cycle due to the use of [`std::sync::Arc`] on both sides.
-            let _ = std::mem::replace(&mut (*address_map), Default::default());
+            let _ = std::mem::take(&mut (*address_map));
         }
     }
 
@@ -268,7 +268,7 @@ impl UDPMux for UDPMuxDefault {
                 return Ok(Arc::new(conn.clone()) as Arc<dyn Conn + Send + Sync>);
             }
 
-            let muxed_conn = self.create_muxed_conn(ufrag.into()).await;
+            let muxed_conn = self.create_muxed_conn(ufrag).await;
             let mut close_rx = muxed_conn.close_rx();
             let cloned_self = Arc::clone(&self);
             let cloned_ufrag = ufrag.to_string();

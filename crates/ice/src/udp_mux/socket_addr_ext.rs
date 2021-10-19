@@ -106,7 +106,7 @@ impl SocketAddrExt for SocketAddr {
                     ip, port, flowinfo, scope_id,
                 )))
             }
-            _ => return Err(Error::ErrFailedToParseIpaddr),
+            _ => Err(Error::ErrFailedToParseIpaddr),
         }
     }
 }
