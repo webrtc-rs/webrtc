@@ -1,5 +1,7 @@
 use super::*;
 
+const PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH: u16 = 9;
+
 /// PacketReceiptTimesReportBlock represents a Packet Receipt Times
 /// report block, as described in RFC 3611 section 4.3.
 ///
@@ -22,7 +24,6 @@ use super::*;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct PacketReceiptTimesReportBlock {
-    pub xr_header: XRHeader,
     pub t: u8,
     pub ssrc: u32,
     pub begin_seq: u16,
@@ -36,36 +37,112 @@ impl fmt::Display for PacketReceiptTimesReportBlock {
     }
 }
 
-impl ReportBlock for PacketReceiptTimesReportBlock {
+impl PacketReceiptTimesReportBlock {
+    pub fn xr_header(&self) -> XRHeader {
+        XRHeader {
+            block_type: BlockType::PacketReceiptTimes,
+            type_specific: self.t & 0x0F,
+            block_length: (self.raw_size() / 4 - 1) as u16,
+        }
+    }
+}
+
+impl Packet for PacketReceiptTimesReportBlock {
+    fn header(&self) -> Header {
+        Header::default()
+    }
+
     /// destination_ssrc returns an array of ssrc values that this report block refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.ssrc]
     }
 
-    fn setup_block_header(&mut self) {
-        self.xr_header.block_type = ReportBlockType::PacketReceiptTimes;
-        self.xr_header.type_specific = self.t & 0x0F;
-        self.xr_header.block_length = (self.raw_size() / 4 - 1) as u16;
-    }
-
-    fn unpack_block_header(&mut self) {
-        self.t = (self.xr_header.type_specific) & 0x0F;
-    }
-
     fn raw_size(&self) -> usize {
-        4 + 1 + 4 + 2 + 2 + self.receipt_time.len() * 4
+        XR_HEADER_LENGTH
+            + PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH as usize
+            + self.receipt_time.len() * 4
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
-    fn equal(&self, other: &(dyn ReportBlock + Send + Sync)) -> bool {
+    fn equal(&self, other: &(dyn Packet + Send + Sync)) -> bool {
         other
             .as_any()
             .downcast_ref::<PacketReceiptTimesReportBlock>()
             .map_or(false, |a| self == a)
     }
-    fn cloned(&self) -> Box<dyn ReportBlock + Send + Sync> {
+    fn cloned(&self) -> Box<dyn Packet + Send + Sync> {
         Box::new(self.clone())
+    }
+}
+
+impl MarshalSize for PacketReceiptTimesReportBlock {
+    fn marshal_size(&self) -> usize {
+        self.raw_size()
+    }
+}
+
+impl Marshal for PacketReceiptTimesReportBlock {
+    /// marshal_to encodes the PacketReceiptTimesReportBlock in binary
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(error::Error::BufferTooShort.into());
+        }
+
+        let h = self.xr_header();
+        let n = h.marshal_to(buf)?;
+        buf = &mut buf[n..];
+
+        buf.put_u8(self.t);
+        buf.put_u32(self.ssrc);
+        buf.put_u16(self.begin_seq);
+        buf.put_u16(self.end_seq);
+        for rt in &self.receipt_time {
+            buf.put_u32(*rt);
+        }
+
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for PacketReceiptTimesReportBlock {
+    /// Unmarshal decodes the PacketReceiptTimesReportBlock from binary
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        if raw_packet.remaining() < XR_HEADER_LENGTH {
+            return Err(error::Error::PacketTooShort.into());
+        }
+
+        let xr_header = XRHeader::unmarshal(raw_packet)?;
+
+        if xr_header.block_length < PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH
+            || (xr_header.block_length - PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH) % 4 != 0
+            || raw_packet.remaining() < xr_header.block_length as usize
+        {
+            return Err(error::Error::PacketTooShort.into());
+        }
+
+        let t = raw_packet.get_u8();
+        let ssrc = raw_packet.get_u32();
+        let begin_seq = raw_packet.get_u16();
+        let end_seq = raw_packet.get_u16();
+
+        let remaining = xr_header.block_length - PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH;
+        let mut receipt_time = vec![];
+        for _ in 0..remaining / 4 {
+            receipt_time.push(raw_packet.get_u32());
+        }
+
+        Ok(PacketReceiptTimesReportBlock {
+            t,
+            ssrc,
+            begin_seq,
+            end_seq,
+            receipt_time,
+        })
     }
 }

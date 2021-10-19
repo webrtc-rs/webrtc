@@ -96,7 +96,7 @@ impl MarshalSize for DLRRReportBlock {
 impl Marshal for DLRRReportBlock {
     /// marshal_to encodes the DLRRReportBlock in binary
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
-        if buf.remaining_mut() < self.raw_size() {
+        if buf.remaining_mut() < self.marshal_size() {
             return Err(error::Error::BufferTooShort.into());
         }
 

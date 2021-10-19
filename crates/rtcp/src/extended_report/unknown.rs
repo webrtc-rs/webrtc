@@ -60,7 +60,7 @@ impl MarshalSize for UnknownReportBlock {
 impl Marshal for UnknownReportBlock {
     /// marshal_to encodes the UnknownReportBlock in binary
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
-        if buf.remaining_mut() < self.raw_size() {
+        if buf.remaining_mut() < self.marshal_size() {
             return Err(error::Error::BufferTooShort.into());
         }
 
