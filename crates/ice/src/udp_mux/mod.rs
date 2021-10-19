@@ -124,11 +124,7 @@ impl UDPMuxDefault {
         log::debug!("Registered {} for {}", addr, key);
     }
 
-    async fn conn_from_stun_message(
-        self: Arc<Self>,
-        buffer: &[u8],
-        addr: &SocketAddr,
-    ) -> Option<UDPMuxConn> {
+    async fn conn_from_stun_message(&self, buffer: &[u8], addr: &SocketAddr) -> Option<UDPMuxConn> {
         let (result, message) = {
             let mut m = STUNMessage::new();
 
