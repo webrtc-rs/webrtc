@@ -28,24 +28,24 @@ use stun::{
 use crate::candidate::RECEIVE_MTU;
 
 #[async_trait]
-trait UDPMux {
+pub trait UDPMux {
     /// Close the muxing.
     async fn close(&self);
 
     /// Get the underlying connection for a given ufrag.
-    async fn get_conn(self: &Arc<Self>, ufrag: &str) -> Result<Arc<dyn Conn + Send + Sync>, Error>;
+    async fn get_conn(self: Arc<Self>, ufrag: &str) -> Result<Arc<dyn Conn + Send + Sync>, Error>;
 
     /// Remove the underlying connection for a given ufrag.
-    async fn remove_conn_by_frag(self: &Arc<Self>, ufrag: &str);
+    async fn remove_conn_by_frag(&self, ufrag: &str);
 }
 
 #[derive(Debug)]
-struct UDPMuxParams {
+pub struct UDPMuxParams {
     udp_socket: UdpSocket,
 }
 
 #[derive(Debug)]
-struct UDPMuxDefault {
+pub struct UDPMuxDefault {
     /// The params this instance is configured with.
     /// Contains the underlying UDP socket in use
     params: UDPMuxParams,
@@ -259,7 +259,7 @@ impl UDPMux for UDPMuxDefault {
         }
     }
 
-    async fn get_conn(self: &Arc<Self>, ufrag: &str) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+    async fn get_conn(self: Arc<Self>, ufrag: &str) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
         if self.is_closed() {
             return Err(Error::ErrUseClosedNetworkConn);
         }
@@ -289,7 +289,7 @@ impl UDPMux for UDPMuxDefault {
         }
     }
 
-    async fn remove_conn_by_frag(self: &Arc<Self>, ufrag: &str) {
+    async fn remove_conn_by_frag(&self, ufrag: &str) {
         // Pion's ice implementation has both `RemoveConnByFrag` and `RemoveConn`, but since `conns`
         // is keyed on `ufrag` their implementation is equivalent.
 

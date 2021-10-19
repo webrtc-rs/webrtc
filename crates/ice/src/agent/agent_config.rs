@@ -2,6 +2,7 @@ use super::*;
 use crate::error::*;
 use crate::mdns::*;
 use crate::network_type::*;
+use crate::udp_mux::UDPMux;
 use crate::url::*;
 
 use util::vnet::net::*;
@@ -138,6 +139,11 @@ pub struct AgentConfig {
     /// Net is the our abstracted network interface for internal development purpose only
     /// (see (github.com/pion/transport/vnet)[github.com/pion/transport/vnet]).
     pub net: Option<Arc<Net>>,
+
+    /// UDPMux is used for multiplexing multiple incoming UDP connections on a single port
+    /// when this is set, the agent ignores PortMin and PortMax configurations and will
+    /// defer to UDPMux for incoming connections
+    pub udp_mux: Option<Arc<dyn UDPMux>>,
 
     /// A function that you can use in order to whitelist or blacklist the interfaces which are
     /// used to gather ICE candidates.

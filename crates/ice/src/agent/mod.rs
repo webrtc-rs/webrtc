@@ -20,6 +20,7 @@ use crate::external_ip_mapper::*;
 use crate::mdns::*;
 use crate::network_type::*;
 use crate::state::*;
+use crate::udp_mux::UDPMux;
 use crate::url::*;
 use agent_config::*;
 use agent_internal::*;
@@ -107,6 +108,8 @@ pub struct Agent {
     pub(crate) candidate_types: Vec<CandidateType>,
     pub(crate) urls: Vec<Url>,
     pub(crate) network_types: Vec<NetworkType>,
+
+    pub(crate) udp_mux: Option<Arc<dyn UDPMux>>,
 
     pub(crate) gather_candidate_cancel: Option<GatherCandidateCancelFn>,
 }
@@ -210,6 +213,8 @@ impl Agent {
             network_types: config.network_types.clone(),
 
             gather_candidate_cancel: None, //TODO: add cancel
+
+            udp_mux: config.udp_mux,
         };
 
         agent
