@@ -2,8 +2,8 @@
 mod extended_report_test;
 
 pub mod dlrr;
-pub mod prt; /*
-             pub mod rle;
+pub mod prt;
+pub mod rle; /*
              pub mod rrt;
              pub mod ssr;
              pub mod vm;*/

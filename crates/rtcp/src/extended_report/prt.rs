@@ -1,6 +1,6 @@
 use super::*;
 
-const PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH: u16 = 9;
+const PRT_REPORT_BLOCK_MIN_LENGTH: u16 = 9;
 
 /// PacketReceiptTimesReportBlock represents a Packet Receipt Times
 /// report block, as described in RFC 3611 section 4.3.
@@ -58,9 +58,7 @@ impl Packet for PacketReceiptTimesReportBlock {
     }
 
     fn raw_size(&self) -> usize {
-        XR_HEADER_LENGTH
-            + PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH as usize
-            + self.receipt_time.len() * 4
+        XR_HEADER_LENGTH + PRT_REPORT_BLOCK_MIN_LENGTH as usize + self.receipt_time.len() * 4
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
@@ -119,8 +117,8 @@ impl Unmarshal for PacketReceiptTimesReportBlock {
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
 
-        if xr_header.block_length < PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH
-            || (xr_header.block_length - PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH) % 4 != 0
+        if xr_header.block_length < PRT_REPORT_BLOCK_MIN_LENGTH
+            || (xr_header.block_length - PRT_REPORT_BLOCK_MIN_LENGTH) % 4 != 0
             || raw_packet.remaining() < xr_header.block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());
@@ -131,7 +129,7 @@ impl Unmarshal for PacketReceiptTimesReportBlock {
         let begin_seq = raw_packet.get_u16();
         let end_seq = raw_packet.get_u16();
 
-        let remaining = xr_header.block_length - PACKET_RECEIPT_TIMES_REPORT_BLOCK_MIN_LENGTH;
+        let remaining = xr_header.block_length - PRT_REPORT_BLOCK_MIN_LENGTH;
         let mut receipt_time = vec![];
         for _ in 0..remaining / 4 {
             receipt_time.push(raw_packet.get_u32());
