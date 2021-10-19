@@ -68,6 +68,7 @@ impl From<u8> for PacketType {
             204 => PacketType::ApplicationDefined,        // RFC 3550, 6.7 (unimplemented)
             205 => PacketType::TransportSpecificFeedback, // RFC 4585, 6051
             206 => PacketType::PayloadSpecificFeedback,   // RFC 4585, 6.3
+            207 => PacketType::ExtendedReport,            // RFC 3611
             _ => PacketType::Unsupported,
         }
     }

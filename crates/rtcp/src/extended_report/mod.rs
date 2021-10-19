@@ -9,7 +9,13 @@ pub mod ssr;
 pub mod unknown;
 pub mod vm;
 
+pub use dlrr::{DLRRReport, DLRRReportBlock};
+pub use prt::PacketReceiptTimesReportBlock;
+pub use rle::{Chunk, ChunkType, DuplicateRLEReportBlock, LossRLEReportBlock, RLEReportBlock};
+pub use rrt::ReceiverReferenceTimeReportBlock;
+pub use ssr::{StatisticsSummaryReportBlock, TTLorHopLimitType};
 pub use unknown::UnknownReportBlock;
+pub use vm::VoIPMetricsReportBlock;
 
 use crate::error;
 use crate::header::{Header, PacketType, HEADER_LENGTH, SSRC_LENGTH};
@@ -270,19 +276,21 @@ impl Unmarshal for ExtendedReport {
 
             let block_type: BlockType = raw_packet.chunk()[0].into();
             let report: Box<dyn Packet + Send + Sync> = match block_type {
-                /*ReportBlockType::LossRLE=>LossRLEReportBlock::
-                case DuplicateRLEReportBlockType:
-                    block = new(DuplicateRLEReportBlock)
-                case PacketReceiptTimesReportBlockType:
-                    block = new(PacketReceiptTimesReportBlock)
-                case ReceiverReferenceTimeReportBlockType:
-                    block = new(ReceiverReferenceTimeReportBlock)
-                case DLRRReportBlockType:
-                    block = new(DLRRReportBlock)
-                case StatisticsSummaryReportBlockType:
-                    block = new(StatisticsSummaryReportBlock)
-                case VoIPMetricsReportBlockType:
-                    block = new(VoIPMetricsReportBlock)*/
+                BlockType::LossRLE => Box::new(LossRLEReportBlock::unmarshal(raw_packet)?),
+                BlockType::DuplicateRLE => {
+                    Box::new(DuplicateRLEReportBlock::unmarshal(raw_packet)?)
+                }
+                BlockType::PacketReceiptTimes => {
+                    Box::new(PacketReceiptTimesReportBlock::unmarshal(raw_packet)?)
+                }
+                BlockType::ReceiverReferenceTime => {
+                    Box::new(ReceiverReferenceTimeReportBlock::unmarshal(raw_packet)?)
+                }
+                BlockType::DLRR => Box::new(DLRRReportBlock::unmarshal(raw_packet)?),
+                BlockType::StatisticsSummary => {
+                    Box::new(StatisticsSummaryReportBlock::unmarshal(raw_packet)?)
+                }
+                BlockType::VoIPMetrics => Box::new(VoIPMetricsReportBlock::unmarshal(raw_packet)?),
                 _ => Box::new(UnknownReportBlock::unmarshal(raw_packet)?),
             };
 

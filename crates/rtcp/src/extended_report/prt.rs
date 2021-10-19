@@ -118,10 +118,10 @@ impl Unmarshal for PacketReceiptTimesReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-
-        if xr_header.block_length < PRT_REPORT_BLOCK_MIN_LENGTH
-            || (xr_header.block_length - PRT_REPORT_BLOCK_MIN_LENGTH) % 4 != 0
-            || raw_packet.remaining() < xr_header.block_length as usize
+        let block_length = xr_header.block_length * 4;
+        if block_length < PRT_REPORT_BLOCK_MIN_LENGTH
+            || (block_length - PRT_REPORT_BLOCK_MIN_LENGTH) % 4 != 0
+            || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());
         }
@@ -132,7 +132,7 @@ impl Unmarshal for PacketReceiptTimesReportBlock {
         let begin_seq = raw_packet.get_u16();
         let end_seq = raw_packet.get_u16();
 
-        let remaining = xr_header.block_length - PRT_REPORT_BLOCK_MIN_LENGTH;
+        let remaining = block_length - PRT_REPORT_BLOCK_MIN_LENGTH;
         let mut receipt_time = vec![];
         for _ in 0..remaining / 4 {
             receipt_time.push(raw_packet.get_u32());

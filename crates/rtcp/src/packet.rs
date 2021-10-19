@@ -10,6 +10,7 @@ use crate::{
 };
 use util::marshal::{Marshal, Unmarshal};
 
+use crate::extended_report::ExtendedReport;
 use bytes::Buf;
 use std::any::Any;
 use std::fmt;
@@ -100,6 +101,7 @@ where
             FORMAT_FIR => Box::new(FullIntraRequest::unmarshal(&mut in_packet)?),
             _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
         },
+        PacketType::ExtendedReport => Box::new(ExtendedReport::unmarshal(&mut in_packet)?),
         _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
     };
 

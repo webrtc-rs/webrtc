@@ -191,9 +191,8 @@ impl Unmarshal for StatisticsSummaryReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-
-        if xr_header.block_length != SSR_REPORT_BLOCK_LENGTH
-            || raw_packet.remaining() < xr_header.block_length as usize
+        let block_length = xr_header.block_length * 4;
+        if block_length != SSR_REPORT_BLOCK_LENGTH || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());
         }

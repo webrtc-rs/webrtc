@@ -180,7 +180,7 @@ impl MarshalSize for RLEReportBlock {
 }
 
 impl Marshal for RLEReportBlock {
-    /// marshal_to encodes the RleReportBlock in binary
+    /// marshal_to encodes the RLEReportBlock in binary
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if buf.remaining_mut() < self.marshal_size() {
             return Err(error::Error::BufferTooShort.into());
@@ -202,7 +202,7 @@ impl Marshal for RLEReportBlock {
 }
 
 impl Unmarshal for RLEReportBlock {
-    /// Unmarshal decodes the RleReportBlock from binary
+    /// Unmarshal decodes the RLEReportBlock from binary
     fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
     where
         Self: Sized,
@@ -213,10 +213,10 @@ impl Unmarshal for RLEReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-
-        if xr_header.block_length < RLE_REPORT_BLOCK_MIN_LENGTH
-            || (xr_header.block_length - RLE_REPORT_BLOCK_MIN_LENGTH) % 2 != 0
-            || raw_packet.remaining() < xr_header.block_length as usize
+        let block_length = xr_header.block_length * 4;
+        if block_length < RLE_REPORT_BLOCK_MIN_LENGTH
+            || (block_length - RLE_REPORT_BLOCK_MIN_LENGTH) % 2 != 0
+            || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());
         }
@@ -228,7 +228,7 @@ impl Unmarshal for RLEReportBlock {
         let begin_seq = raw_packet.get_u16();
         let end_seq = raw_packet.get_u16();
 
-        let remaining = xr_header.block_length - RLE_REPORT_BLOCK_MIN_LENGTH;
+        let remaining = block_length - RLE_REPORT_BLOCK_MIN_LENGTH;
         let mut chunks = vec![];
         for _ in 0..remaining / 2 {
             chunks.push(Chunk(raw_packet.get_u16()));

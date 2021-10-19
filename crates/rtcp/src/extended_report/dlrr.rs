@@ -126,16 +126,15 @@ impl Unmarshal for DLRRReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-
-        if xr_header.block_length % DLRR_REPORT_LENGTH != 0
-            || raw_packet.remaining() < xr_header.block_length as usize
+        let block_length = xr_header.block_length * 4;
+        if block_length % DLRR_REPORT_LENGTH != 0 || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());
         }
 
         let mut offset = 0;
         let mut reports = vec![];
-        while offset < xr_header.block_length {
+        while offset < block_length {
             let ssrc = raw_packet.get_u32();
             let last_rr = raw_packet.get_u32();
             let dlrr = raw_packet.get_u32();

@@ -86,12 +86,12 @@ impl Unmarshal for UnknownReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-
-        if raw_packet.remaining() < xr_header.block_length as usize {
+        let block_length = xr_header.block_length * 4;
+        if raw_packet.remaining() < block_length as usize {
             return Err(error::Error::PacketTooShort.into());
         }
 
-        let bytes = raw_packet.copy_to_bytes(xr_header.block_length as usize);
+        let bytes = raw_packet.copy_to_bytes(block_length as usize);
 
         Ok(UnknownReportBlock { bytes })
     }

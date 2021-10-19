@@ -70,7 +70,7 @@ impl MarshalSize for ReceiverReferenceTimeReportBlock {
 }
 
 impl Marshal for ReceiverReferenceTimeReportBlock {
-    /// marshal_to encodes the PacketReceiptTimesReportBlock in binary
+    /// marshal_to encodes the ReceiverReferenceTimeReportBlock in binary
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if buf.remaining_mut() < self.marshal_size() {
             return Err(error::Error::BufferTooShort.into());
@@ -87,7 +87,7 @@ impl Marshal for ReceiverReferenceTimeReportBlock {
 }
 
 impl Unmarshal for ReceiverReferenceTimeReportBlock {
-    /// Unmarshal decodes the PacketReceiptTimesReportBlock from binary
+    /// Unmarshal decodes the ReceiverReferenceTimeReportBlock from binary
     fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
     where
         Self: Sized,
@@ -98,9 +98,8 @@ impl Unmarshal for ReceiverReferenceTimeReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-
-        if xr_header.block_length != RRT_REPORT_BLOCK_LENGTH
-            || raw_packet.remaining() < xr_header.block_length as usize
+        let block_length = xr_header.block_length * 4;
+        if block_length != RRT_REPORT_BLOCK_LENGTH || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());
         }
