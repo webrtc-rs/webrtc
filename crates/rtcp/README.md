@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of RTCP. Rewrite <a href="https://github.com/pion/rtcp/releases/tag/v1.2.4">Pion</a> RTCP in Rust
+ A pure Rust implementation of RTCP. Rewrite <a href="https://github.com/pion/rtcp/releases/tag/v1.2.8">Pion</a> RTCP in Rust
 </p>
