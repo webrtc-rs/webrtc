@@ -1,6 +1,6 @@
 [package]
 name = "rtcp"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2018"
 description = "A pure Rust implementation of RTCP"
