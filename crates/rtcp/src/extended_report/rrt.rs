@@ -1,6 +1,6 @@
 use super::*;
 
-const RRT_REPORT_BLOCK_MIN_LENGTH: u16 = 8;
+const RRT_REPORT_BLOCK_LENGTH: u16 = 8;
 
 /// ReceiverReferenceTimeReportBlock encodes a Receiver Reference Time
 /// report block as described in RFC 3611 section 4.4.
@@ -46,7 +46,7 @@ impl Packet for ReceiverReferenceTimeReportBlock {
     }
 
     fn raw_size(&self) -> usize {
-        XR_HEADER_LENGTH + RRT_REPORT_BLOCK_MIN_LENGTH as usize
+        XR_HEADER_LENGTH + RRT_REPORT_BLOCK_LENGTH as usize
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
@@ -99,7 +99,7 @@ impl Unmarshal for ReceiverReferenceTimeReportBlock {
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
 
-        if xr_header.block_length != RRT_REPORT_BLOCK_MIN_LENGTH
+        if xr_header.block_length != RRT_REPORT_BLOCK_LENGTH
             || raw_packet.remaining() < xr_header.block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());

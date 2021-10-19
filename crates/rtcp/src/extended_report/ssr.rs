@@ -1,5 +1,7 @@
 use super::*;
 
+const SSR_REPORT_BLOCK_LENGTH: u16 = 4 + 2 * 2 + 4 * 6 + 4;
+
 /// StatisticsSummaryReportBlock encodes a Statistics Summary Report
 /// Block as described in RFC 3611, section 4.6.
 ///
@@ -28,11 +30,13 @@ use super::*;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct StatisticsSummaryReportBlock {
-    pub xr_header: XRHeader,
+    //not included in marshal/unmarshal
     pub loss_reports: bool,
     pub duplicate_reports: bool,
     pub jitter_reports: bool,
     pub ttl_or_hop_limit: TTLorHopLimitType,
+
+    //marshal/unmarshal
     pub ssrc: u32,
     pub begin_seq: u16,
     pub end_seq: u16,
@@ -90,49 +94,148 @@ impl fmt::Display for TTLorHopLimitType {
     }
 }
 
-impl ReportBlock for StatisticsSummaryReportBlock {
+impl StatisticsSummaryReportBlock {
+    pub fn xr_header(&self) -> XRHeader {
+        let mut type_specific = 0x00;
+        if self.loss_reports {
+            type_specific |= 0x80;
+        }
+        if self.duplicate_reports {
+            type_specific |= 0x40;
+        }
+        if self.jitter_reports {
+            type_specific |= 0x20;
+        }
+        type_specific |= (self.ttl_or_hop_limit as u8 & 0x03) << 3;
+
+        XRHeader {
+            block_type: BlockType::StatisticsSummary,
+            type_specific,
+            block_length: (self.raw_size() / 4 - 1) as u16,
+        }
+    }
+}
+
+impl Packet for StatisticsSummaryReportBlock {
+    fn header(&self) -> Header {
+        Header::default()
+    }
+
     /// destination_ssrc returns an array of ssrc values that this report block refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.ssrc]
     }
 
-    fn setup_block_header(&mut self) {
-        self.xr_header.block_type = ReportBlockType::StatisticsSummary;
-        self.xr_header.type_specific = 0x00;
-        if self.loss_reports {
-            self.xr_header.type_specific |= 0x80;
-        }
-        if self.duplicate_reports {
-            self.xr_header.type_specific |= 0x40;
-        }
-        if self.jitter_reports {
-            self.xr_header.type_specific |= 0x20;
-        }
-        self.xr_header.type_specific |= (self.ttl_or_hop_limit as u8 & 0x03) << 3;
-        self.xr_header.block_length = (self.raw_size() / 4 - 1) as u16;
-    }
-
-    fn unpack_block_header(&mut self) {
-        self.loss_reports = self.xr_header.type_specific & 0x80 != 0;
-        self.duplicate_reports = self.xr_header.type_specific & 0x40 != 0;
-        self.jitter_reports = self.xr_header.type_specific & 0x20 != 0;
-        self.ttl_or_hop_limit = ((self.xr_header.type_specific & 0x18) >> 3).into();
-    }
-
     fn raw_size(&self) -> usize {
-        4 + 3 + 1 + 4 + 2 * 2 + 4 * 6 + 4
+        XR_HEADER_LENGTH + SSR_REPORT_BLOCK_LENGTH as usize
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
-    fn equal(&self, other: &(dyn ReportBlock + Send + Sync)) -> bool {
+    fn equal(&self, other: &(dyn Packet + Send + Sync)) -> bool {
         other
             .as_any()
             .downcast_ref::<StatisticsSummaryReportBlock>()
             .map_or(false, |a| self == a)
     }
-    fn cloned(&self) -> Box<dyn ReportBlock + Send + Sync> {
+    fn cloned(&self) -> Box<dyn Packet + Send + Sync> {
         Box::new(self.clone())
+    }
+}
+
+impl MarshalSize for StatisticsSummaryReportBlock {
+    fn marshal_size(&self) -> usize {
+        self.raw_size()
+    }
+}
+
+impl Marshal for StatisticsSummaryReportBlock {
+    /// marshal_to encodes the StatisticsSummaryReportBlock in binary
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(error::Error::BufferTooShort.into());
+        }
+
+        let h = self.xr_header();
+        let n = h.marshal_to(buf)?;
+        buf = &mut buf[n..];
+
+        buf.put_u32(self.ssrc);
+        buf.put_u16(self.begin_seq);
+        buf.put_u16(self.end_seq);
+        buf.put_u32(self.lost_packets);
+        buf.put_u32(self.dup_packets);
+        buf.put_u32(self.min_jitter);
+        buf.put_u32(self.max_jitter);
+        buf.put_u32(self.mean_jitter);
+        buf.put_u32(self.dev_jitter);
+        buf.put_u8(self.min_ttl_or_hl);
+        buf.put_u8(self.max_ttl_or_hl);
+        buf.put_u8(self.mean_ttl_or_hl);
+        buf.put_u8(self.dev_ttl_or_hl);
+
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for StatisticsSummaryReportBlock {
+    /// Unmarshal decodes the StatisticsSummaryReportBlock from binary
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        if raw_packet.remaining() < XR_HEADER_LENGTH {
+            return Err(error::Error::PacketTooShort.into());
+        }
+
+        let xr_header = XRHeader::unmarshal(raw_packet)?;
+
+        if xr_header.block_length != SSR_REPORT_BLOCK_LENGTH
+            || raw_packet.remaining() < xr_header.block_length as usize
+        {
+            return Err(error::Error::PacketTooShort.into());
+        }
+
+        let loss_reports = xr_header.type_specific & 0x80 != 0;
+        let duplicate_reports = xr_header.type_specific & 0x40 != 0;
+        let jitter_reports = xr_header.type_specific & 0x20 != 0;
+        let ttl_or_hop_limit: TTLorHopLimitType = ((xr_header.type_specific & 0x18) >> 3).into();
+
+        let ssrc = raw_packet.get_u32();
+        let begin_seq = raw_packet.get_u16();
+        let end_seq = raw_packet.get_u16();
+        let lost_packets = raw_packet.get_u32();
+        let dup_packets = raw_packet.get_u32();
+        let min_jitter = raw_packet.get_u32();
+        let max_jitter = raw_packet.get_u32();
+        let mean_jitter = raw_packet.get_u32();
+        let dev_jitter = raw_packet.get_u32();
+        let min_ttl_or_hl = raw_packet.get_u8();
+        let max_ttl_or_hl = raw_packet.get_u8();
+        let mean_ttl_or_hl = raw_packet.get_u8();
+        let dev_ttl_or_hl = raw_packet.get_u8();
+
+        Ok(StatisticsSummaryReportBlock {
+            loss_reports,
+            duplicate_reports,
+            jitter_reports,
+            ttl_or_hop_limit,
+
+            ssrc,
+            begin_seq,
+            end_seq,
+            lost_packets,
+            dup_packets,
+            min_jitter,
+            max_jitter,
+            mean_jitter,
+            dev_jitter,
+            min_ttl_or_hl,
+            max_ttl_or_hl,
+            mean_ttl_or_hl,
+            dev_ttl_or_hl,
+        })
     }
 }

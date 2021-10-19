@@ -1,6 +1,6 @@
 use super::*;
 
-const PRT_REPORT_BLOCK_MIN_LENGTH: u16 = 9;
+const PRT_REPORT_BLOCK_MIN_LENGTH: u16 = 8;
 
 /// PacketReceiptTimesReportBlock represents a Packet Receipt Times
 /// report block, as described in RFC 3611 section 4.3.
@@ -24,7 +24,10 @@ const PRT_REPORT_BLOCK_MIN_LENGTH: u16 = 9;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct PacketReceiptTimesReportBlock {
+    //not included in marshal/unmarshal
     pub t: u8,
+
+    //marshal/unmarshal
     pub ssrc: u32,
     pub begin_seq: u16,
     pub end_seq: u16,
@@ -92,7 +95,6 @@ impl Marshal for PacketReceiptTimesReportBlock {
         let n = h.marshal_to(buf)?;
         buf = &mut buf[n..];
 
-        buf.put_u8(self.t);
         buf.put_u32(self.ssrc);
         buf.put_u16(self.begin_seq);
         buf.put_u16(self.end_seq);
@@ -124,7 +126,8 @@ impl Unmarshal for PacketReceiptTimesReportBlock {
             return Err(error::Error::PacketTooShort.into());
         }
 
-        let t = raw_packet.get_u8();
+        let t = xr_header.type_specific & 0x0F;
+
         let ssrc = raw_packet.get_u32();
         let begin_seq = raw_packet.get_u16();
         let end_seq = raw_packet.get_u16();
@@ -137,6 +140,7 @@ impl Unmarshal for PacketReceiptTimesReportBlock {
 
         Ok(PacketReceiptTimesReportBlock {
             t,
+
             ssrc,
             begin_seq,
             end_seq,

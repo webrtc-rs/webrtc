@@ -1,6 +1,6 @@
 use super::*;
 
-const RLE_REPORT_BLOCK_MIN_LENGTH: u16 = 9;
+const RLE_REPORT_BLOCK_MIN_LENGTH: u16 = 8;
 
 /// ChunkType enumerates the three kinds of chunks described in RFC 3611 section 4.1.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -104,8 +104,11 @@ impl Chunk {
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct RLEReportBlock {
+    //not included in marshal/unmarshal
     pub is_loss_rle: bool,
     pub t: u8,
+
+    //marshal/unmarshal
     pub ssrc: u32,
     pub begin_seq: u16,
     pub end_seq: u16,
@@ -187,7 +190,6 @@ impl Marshal for RLEReportBlock {
         let n = h.marshal_to(buf)?;
         buf = &mut buf[n..];
 
-        buf.put_u8(self.t);
         buf.put_u32(self.ssrc);
         buf.put_u16(self.begin_seq);
         buf.put_u16(self.end_seq);
@@ -220,7 +222,8 @@ impl Unmarshal for RLEReportBlock {
         }
 
         let is_loss_rle = xr_header.block_type == BlockType::LossRLE;
-        let t = raw_packet.get_u8();
+        let t = xr_header.type_specific & 0x0F;
+
         let ssrc = raw_packet.get_u32();
         let begin_seq = raw_packet.get_u16();
         let end_seq = raw_packet.get_u16();
