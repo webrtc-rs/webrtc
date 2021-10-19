@@ -58,9 +58,9 @@ impl MarshalSize for UnknownReportBlock {
 }
 
 impl Marshal for UnknownReportBlock {
-    /// marshal_to encodes the ExtendedReport in binary
+    /// marshal_to encodes the UnknownReportBlock in binary
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
-        if buf.remaining_mut() < XR_HEADER_LENGTH {
+        if buf.remaining_mut() < self.raw_size() {
             return Err(error::Error::BufferTooShort.into());
         }
 
@@ -75,7 +75,7 @@ impl Marshal for UnknownReportBlock {
 }
 
 impl Unmarshal for UnknownReportBlock {
-    /// Unmarshal decodes the ExtendedReport from binary
+    /// Unmarshal decodes the UnknownReportBlock from binary
     fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
     where
         Self: Sized,
