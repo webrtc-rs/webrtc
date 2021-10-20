@@ -18,11 +18,12 @@ use sctp::association::Association;
 
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 
+use data::data_channel::DataChannel;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use util::Conn;
 
 const SCTP_MAX_CHANNELS: u16 = u16::MAX;
@@ -40,6 +41,7 @@ pub type OnDataChannelOpenedHdlrFn = Box<
 >;
 
 struct AcceptDataChannelParams {
+    notify_rx: Arc<Notify>,
     sctp_association: Arc<Association>,
     data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
     on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
@@ -82,6 +84,8 @@ pub struct RTCSctpTransport {
     pub(crate) data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
 
+    notify_tx: Arc<Notify>,
+
     setting_engine: Arc<SettingEngine>,
 }
 
@@ -105,6 +109,8 @@ impl RTCSctpTransport {
             data_channels_opened: Arc::new(AtomicU32::new(0)),
             data_channels_requested: Arc::new(AtomicU32::new(0)),
             data_channels_accepted: Arc::new(AtomicU32::new(0)),
+
+            notify_tx: Arc::new(Notify::new()),
 
             setting_engine,
         }
@@ -151,6 +157,7 @@ impl RTCSctpTransport {
                 .store(RTCSctpTransportState::Connected as u8, Ordering::SeqCst);
 
             let param = AcceptDataChannelParams {
+                notify_rx: self.notify_tx.clone(),
                 sctp_association,
                 data_channels: Arc::clone(&self.data_channels),
                 on_error_handler: Arc::clone(&self.on_error_handler),
@@ -181,28 +188,33 @@ impl RTCSctpTransport {
 
         self.state
             .store(RTCSctpTransportState::Closed as u8, Ordering::SeqCst);
+
+        self.notify_tx.notify_waiters();
+
         Ok(())
     }
 
     async fn accept_data_channels(param: AcceptDataChannelParams) {
         loop {
-            //TODO: add cancellation handling
-            let dc = match data::data_channel::DataChannel::accept(
-                &param.sctp_association,
-                data::data_channel::Config::default(),
-            )
-            .await
-            {
-                Ok(dc) => dc,
-                Err(err) => {
-                    if data::Error::ErrStreamClosed == err {
-                        log::error!("Failed to accept data channel: {}", err);
-                        let mut handler = param.on_error_handler.lock().await;
-                        if let Some(f) = &mut *handler {
-                            f(err.into()).await;
+            let dc = tokio::select! {
+                _ = param.notify_rx.notified() => break,
+                result = DataChannel::accept(
+                    &param.sctp_association,
+                    data::data_channel::Config::default(),
+                ) => {
+                    match result {
+                        Ok(dc) => dc,
+                        Err(err) => {
+                            if data::Error::ErrStreamClosed == err {
+                                log::error!("Failed to accept data channel: {}", err);
+                                let mut handler = param.on_error_handler.lock().await;
+                                if let Some(f) = &mut *handler {
+                                    f(err.into()).await;
+                                }
+                            }
+                            break;
                         }
                     }
-                    break;
                 }
             };
 
