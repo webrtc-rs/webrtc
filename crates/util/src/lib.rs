@@ -28,7 +28,7 @@ pub trait KeyingMaterialExporter {
         label: &str,
         context: &[u8],
         length: usize,
-    ) -> Result<Vec<u8>, KeyingMaterialExporterError>;
+    ) -> std::result::Result<Vec<u8>, KeyingMaterialExporterError>;
 }
 
 /// Possible errors while exporting keying material.
@@ -84,5 +84,7 @@ pub use crate::conn::Conn;
 pub use crate::marshal::{exact_size_buf::ExactSizeBuf, Marshal, MarshalSize, Unmarshal};
 
 mod error;
+pub use error::{Error, Result};
 
-pub use error::Error;
+#[cfg(feature = "sync")]
+pub mod sync;
