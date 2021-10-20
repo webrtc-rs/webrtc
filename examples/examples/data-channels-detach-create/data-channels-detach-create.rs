@@ -188,7 +188,7 @@ async fn main() -> Result<()> {
     // Apply the answer as the remote description
     peer_connection.set_remote_description(answer).await?;
 
-    println!("Press ctlr-c to stop");
+    println!("Press ctrl-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
 
     peer_connection.close().await?;

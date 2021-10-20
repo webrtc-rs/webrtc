@@ -332,7 +332,7 @@ async fn main() -> Result<()> {
     answer_pc.set_local_description(answer).await?;
     set_remote_description(&offer_pc, &desc2).await?;
 
-    println!("Press ctlr-c to stop");
+    println!("Press ctrl-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
 
     if let Err(err) = offer_pc.close().await {

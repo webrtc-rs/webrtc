@@ -365,7 +365,7 @@ async fn main() -> Result<()> {
     };
     //println!("Response: {}", resp.status());
 
-    println!("Press ctlr-c to stop");
+    println!("Press ctrl-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
 
     peer_connection.close().await?;
