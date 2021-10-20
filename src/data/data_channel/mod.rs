@@ -18,7 +18,7 @@ use std::time::SystemTime;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 
 use data_channel_state::RTCDataChannelState;
 
@@ -75,6 +75,8 @@ pub struct RTCDataChannel {
     pub(crate) sctp_transport: Mutex<Option<Arc<RTCSctpTransport>>>,
     pub(crate) data_channel: Mutex<Option<Arc<data::data_channel::DataChannel>>>,
 
+    pub(crate) notify_tx: Arc<Notify>,
+
     // A reference to the associated api object used by this datachannel
     pub(crate) setting_engine: Arc<SettingEngine>,
 }
@@ -98,6 +100,9 @@ impl RTCDataChannel {
             max_retransmits: params.max_retransmits,
             ready_state: Arc::new(AtomicU8::new(RTCDataChannelState::Connecting as u8)),
             detach_called: Arc::new(AtomicBool::new(false)),
+
+            notify_tx: Arc::new(Notify::new()),
+
             setting_engine,
             ..Default::default()
         }
@@ -261,8 +266,10 @@ impl RTCDataChannel {
             let on_message_handler = Arc::clone(&self.on_message_handler);
             let on_close_handler = Arc::clone(&self.on_close_handler);
             let on_error_handler = Arc::clone(&self.on_error_handler);
+            let notify_rx = self.notify_tx.clone();
             tokio::spawn(async move {
                 RTCDataChannel::read_loop(
+                    notify_rx,
                     dc,
                     ready_state,
                     on_message_handler,
@@ -282,6 +289,7 @@ impl RTCDataChannel {
     }
 
     async fn read_loop(
+        notify_rx: Arc<Notify>,
         data_channel: Arc<data::data_channel::DataChannel>,
         ready_state: Arc<AtomicU8>,
         on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
@@ -290,30 +298,34 @@ impl RTCDataChannel {
     ) {
         let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
         loop {
-            //TODO: add cancellation handling
-            let (n, is_string) = match data_channel.read_data_channel(&mut buffer).await {
-                Ok((n, is_string)) => (n, is_string),
-                Err(err) => {
-                    ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
-                    if err != sctp::Error::ErrStreamClosed {
-                        let on_error_handler2 = Arc::clone(&on_error_handler);
-                        tokio::spawn(async move {
-                            let mut handler = on_error_handler2.lock().await;
-                            if let Some(f) = &mut *handler {
-                                f(err.into()).await;
+            let (n, is_string) = tokio::select! {
+                _ = notify_rx.notified() => break,
+                result = data_channel.read_data_channel(&mut buffer) => {
+                    match result{
+                        Ok((n, is_string)) => (n, is_string),
+                        Err(err) => {
+                            ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
+                            if err != sctp::Error::ErrStreamClosed {
+                                let on_error_handler2 = Arc::clone(&on_error_handler);
+                                tokio::spawn(async move {
+                                    let mut handler = on_error_handler2.lock().await;
+                                    if let Some(f) = &mut *handler {
+                                        f(err.into()).await;
+                                    }
+                                });
                             }
-                        });
-                    }
 
-                    let on_close_handler2 = Arc::clone(&on_close_handler);
-                    tokio::spawn(async move {
-                        let mut handler = on_close_handler2.lock().await;
-                        if let Some(f) = &mut *handler {
-                            f().await;
+                            let on_close_handler2 = Arc::clone(&on_close_handler);
+                            tokio::spawn(async move {
+                                let mut handler = on_close_handler2.lock().await;
+                                if let Some(f) = &mut *handler {
+                                    f().await;
+                                }
+                            });
+
+                            break;
                         }
-                    });
-
-                    break;
+                    }
                 }
             };
 
@@ -393,6 +405,7 @@ impl RTCDataChannel {
         }
 
         self.set_ready_state(RTCDataChannelState::Closing);
+        self.notify_tx.notify_waiters();
 
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
