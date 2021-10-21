@@ -77,7 +77,7 @@ impl UDPMuxConnInner {
             return Err(Error::ErrBufferShort);
         }
 
-        buf.copy_from_slice(&buffer[offset..offset + data_len]);
+        buf[..data_len].copy_from_slice(&buffer[offset..offset + data_len]);
         offset += data_len;
 
         let address_len: usize = buffer[offset..offset + 2]
@@ -132,7 +132,7 @@ impl UDPMuxConnInner {
         }
     }
 
-    fn remote_addr(&self) -> Option<SocketAddr> {
+    fn local_addr(&self) -> Option<SocketAddr> {
         self.params.local_addr
     }
 
@@ -298,11 +298,13 @@ impl Conn for UDPMuxConn {
     }
 
     async fn local_addr(&self) -> ConnResult<SocketAddr> {
-        Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
+        self.inner.local_addr().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into()
+        })
     }
 
     async fn remote_addr(&self) -> Option<SocketAddr> {
-        self.inner.remote_addr()
+        None
     }
     async fn close(&self) -> ConnResult<()> {
         self.inner.close();

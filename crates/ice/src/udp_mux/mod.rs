@@ -47,6 +47,12 @@ pub struct UDPMuxParams {
     udp_socket: UdpSocket,
 }
 
+impl UDPMuxParams {
+    pub fn new(udp_socket: UdpSocket) -> Self {
+        Self { udp_socket }
+    }
+}
+
 #[derive(Debug)]
 pub struct UDPMuxDefault {
     /// The params this instance is configured with.
@@ -64,7 +70,7 @@ pub struct UDPMuxDefault {
 }
 
 impl UDPMuxDefault {
-    fn new(params: UDPMuxParams) -> Arc<Self> {
+    pub fn new(params: UDPMuxParams) -> Arc<Self> {
         let mux = Arc::new(Self {
             params,
             conns: Mutex::default(),
@@ -78,7 +84,7 @@ impl UDPMuxDefault {
         mux
     }
 
-    fn is_closed(&self) -> bool {
+    pub fn is_closed(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
     }
 

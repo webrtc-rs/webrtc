@@ -2,8 +2,8 @@ use super::*;
 use crate::error::*;
 use crate::mdns::*;
 use crate::network_type::*;
-use crate::udp_mux::UDPMux;
 use crate::url::*;
+use crate::UDPNetwork;
 
 use util::vnet::net::*;
 
@@ -58,10 +58,9 @@ pub type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
 pub struct AgentConfig {
     pub urls: Vec<Url>,
 
-    /// This is optional. Leave it as 0 for the default UDP port allocation strategy.
-    pub port_min: u16,
-    /// This is optional. Leave it as 0 for the default UDP port allocation strategy.
-    pub port_max: u16,
+    /// Controls how the UDP network stack works.
+    /// See [`UDPNetwork`]
+    pub udp_network: UDPNetwork,
 
     /// It is used to perform connectivity checks. The values MUST be unguessable, with at least
     /// 128 bits of random number generator output used to generate the password, and at least 24
@@ -139,11 +138,6 @@ pub struct AgentConfig {
     /// Net is the our abstracted network interface for internal development purpose only
     /// (see (github.com/pion/transport/vnet)[github.com/pion/transport/vnet]).
     pub net: Option<Arc<Net>>,
-
-    /// UDPMux is used for multiplexing multiple incoming UDP connections on a single port
-    /// when this is set, the agent ignores PortMin and PortMax configurations and will
-    /// defer to UDPMux for incoming connections
-    pub udp_mux: Option<Arc<dyn UDPMux>>,
 
     /// A function that you can use in order to whitelist or blacklist the interfaces which are
     /// used to gather ICE candidates.
