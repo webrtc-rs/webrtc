@@ -7,6 +7,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("Invalid Parent RTCP Reader")]
     ErrInvalidParentRtcpReader,
+    #[error("Invalid Next RTP Writer")]
+    ErrInvalidNextRtpWriter,
     #[error("Incorrect ReceiverReport CloseRx")]
     ErrIncorrectReceiverReportCloseRx,
     #[error("IO EOF")]
@@ -21,6 +23,8 @@ pub enum Error {
     Srtp(#[from] srtp::Error),
     #[error("{0}")]
     Rtcp(#[from] rtcp::Error),
+    #[error("{0}")]
+    Rtp(#[from] rtp::Error),
     #[error("{0}")]
     Util(#[from] util::Error),
 

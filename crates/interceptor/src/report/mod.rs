@@ -16,7 +16,7 @@ use sender::{SenderReport, SenderReportInternal};
 /// ReceiverBuilder can be used to configure ReceiverReport Interceptor.
 #[derive(Default)]
 pub struct ReportBuilder {
-    pub(crate) is_rr: bool,
+    is_rr: bool,
     interval: Option<Duration>,
     now: Option<FnTimeGen>,
 }
