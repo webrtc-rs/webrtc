@@ -1,35 +1,35 @@
 use crate::chain::Chain;
 use crate::error::Result;
 use crate::noop::NoOp;
-use crate::{Factory, Interceptor};
+use crate::{Interceptor, InterceptorBuilder};
 
 use std::sync::Arc;
 
 /// Registry is a collector for interceptors.
 #[derive(Default)]
 pub struct Registry {
-    factories: Vec<Box<dyn Factory + Send + Sync>>,
+    builders: Vec<Box<dyn InterceptorBuilder + Send + Sync>>,
 }
 
 impl Registry {
     pub fn new() -> Self {
-        Registry { factories: vec![] }
+        Registry { builders: vec![] }
     }
 
-    /// add adds a new Factory to the registry.
-    pub fn add(&mut self, factory: Box<dyn Factory + Send + Sync>) {
-        self.factories.push(factory);
+    /// add adds a new InterceptorBuilder to the registry.
+    pub fn add(&mut self, builder: Box<dyn InterceptorBuilder + Send + Sync>) {
+        self.builders.push(builder);
     }
 
     /// build constructs a single Interceptor from a InterceptorRegistry
     pub fn build(&self, id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>> {
-        if self.factories.is_empty() {
+        if self.builders.is_empty() {
             return Ok(Arc::new(NoOp {}));
         }
 
         let mut interceptors = vec![];
-        for f in &self.factories {
-            let icpr = f.new_interceptor(id)?;
+        for f in &self.builders {
+            let icpr = f.build(id)?;
             interceptors.push(icpr);
         }
 

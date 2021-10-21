@@ -22,9 +22,9 @@ pub mod stream_reader;
 
 pub use error::Error;
 
-/// Factory provides an interface for constructing interceptors
-pub trait Factory {
-    fn new_interceptor(&self, id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>>;
+/// InterceptorBuilder provides an interface for constructing interceptors
+pub trait InterceptorBuilder {
+    fn build(&self, id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>>;
 }
 
 /// Interceptor can be used to add functionality to you PeerConnections by modifying any incoming/outgoing rtp/rtcp

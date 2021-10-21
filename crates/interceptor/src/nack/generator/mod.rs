@@ -6,8 +6,8 @@ use generator_stream::GeneratorStream;
 
 use crate::error::{Error, Result};
 use crate::stream_info::StreamInfo;
-use crate::RTCPWriter;
 use crate::{Attributes, Interceptor, RTCPReader, RTPReader, RTPWriter};
+use crate::{InterceptorBuilder, RTCPWriter};
 
 use crate::nack::stream_support_nack;
 
@@ -49,10 +49,12 @@ impl GeneratorBuilder {
         self.interval = Some(interval);
         self
     }
+}
 
-    pub fn build(self) -> Generator {
+impl InterceptorBuilder for GeneratorBuilder {
+    fn build(&self, _id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>> {
         let (close_tx, close_rx) = mpsc::channel(1);
-        Generator {
+        Ok(Arc::new(Generator {
             internal: Arc::new(GeneratorInternal {
                 log2_size_minus_6: if let Some(log2_size_minus_6) = self.log2_size_minus_6 {
                     log2_size_minus_6
@@ -76,7 +78,7 @@ impl GeneratorBuilder {
 
             wg: Mutex::new(Some(WaitGroup::new())),
             close_tx: Mutex::new(Some(close_tx)),
-        }
+        }))
     }
 }
 

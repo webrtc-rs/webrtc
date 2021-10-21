@@ -18,12 +18,10 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -74,12 +72,10 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -144,12 +140,10 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -230,12 +224,10 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -305,12 +297,10 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -412,12 +402,10 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -528,12 +516,10 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -603,12 +589,10 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -670,12 +654,10 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {
@@ -752,12 +734,10 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
         },
     );
 
-    let icpr: Arc<dyn Interceptor + Send + Sync> = Arc::new(
-        ReceiverReport::builder()
-            .with_interval(Duration::from_millis(50))
-            .with_now_fn(time_gen)
-            .build_rr(),
-    );
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {

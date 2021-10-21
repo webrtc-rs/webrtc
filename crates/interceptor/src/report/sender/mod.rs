@@ -30,7 +30,10 @@ pub struct SenderReport {
 impl SenderReport {
     /// builder returns a new ReportBuilder.
     pub fn builder() -> ReportBuilder {
-        ReportBuilder::default()
+        ReportBuilder {
+            is_rr: false,
+            ..Default::default()
+        }
     }
 
     async fn is_closed(&self) -> bool {

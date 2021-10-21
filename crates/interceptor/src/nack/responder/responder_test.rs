@@ -9,7 +9,7 @@ use rtcp::transport_feedbacks::transport_layer_nack::{NackPair, TransportLayerNa
 #[tokio::test]
 async fn test_responder_interceptor() -> Result<()> {
     let icpr: Arc<dyn Interceptor + Send + Sync> =
-        Arc::new(Responder::builder().with_log2_size(3).build());
+        Responder::builder().with_log2_size(3).build("")?;
 
     let stream = MockStream::new(
         &StreamInfo {

@@ -3,7 +3,9 @@ mod responder_stream;
 mod responder_test;
 
 use crate::stream_info::StreamInfo;
-use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
+use crate::{
+    Attributes, Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader, RTPWriter,
+};
 use responder_stream::ResponderStream;
 
 use crate::error::{Error, Result};
@@ -31,9 +33,11 @@ impl ResponderBuilder {
         self.log2_size = Some(log2_size);
         self
     }
+}
 
-    pub fn build(self) -> Responder {
-        Responder {
+impl InterceptorBuilder for ResponderBuilder {
+    fn build(&self, _id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>> {
+        Ok(Arc::new(Responder {
             internal: Arc::new(ResponderInternal {
                 log2_size: if let Some(log2_size) = self.log2_size {
                     log2_size
@@ -43,7 +47,7 @@ impl ResponderBuilder {
                 streams: Arc::new(Mutex::new(HashMap::new())),
                 parent_rtcp_reader: Mutex::new(None),
             }),
-        }
+        }))
     }
 }
 
