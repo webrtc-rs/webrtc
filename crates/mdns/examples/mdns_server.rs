@@ -4,6 +4,7 @@ use mdns::Error;
 use mdns::{config::*, conn::*};
 
 use clap::{App, AppSettings, Arg};
+use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -15,7 +16,20 @@ use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init();
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, log::LevelFilter::Trace)
+        .init();
 
     let mut app = App::new("mDNS Sever")
         .version("0.1.0")
