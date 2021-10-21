@@ -18,7 +18,9 @@ use super::{UDPMuxDefault, RECEIVE_MTU};
 /// Create a buffer of appropriate size to fit both a packet with max RECEIVE_MTU and the
 /// additional metadata used for muxing.
 fn make_buffer() -> Vec<u8> {
-    vec![0u8; RECEIVE_MTU + MAX_ADDR_SIZE]
+    // The 4 extra bytes are used to encode the length of the data and address respectively.
+    // See [`write_packet`] for details.
+    vec![0u8; RECEIVE_MTU + MAX_ADDR_SIZE + 2 + 2]
 }
 
 #[derive(Debug)]
@@ -78,7 +80,14 @@ impl UDPMuxConnInner {
         buf.copy_from_slice(&buffer[offset..offset + data_len]);
         offset += data_len;
 
-        let addr = SocketAddr::decode(&buffer[offset..])?;
+        let address_len: usize = buffer[offset..offset + 2]
+            .try_into()
+            .map(u16::from_le_bytes)
+            .map(From::from)
+            .unwrap();
+        offset += 2;
+
+        let addr = SocketAddr::decode(&buffer[offset..offset + address_len])?;
 
         Ok((data_len, addr))
     }
@@ -196,7 +205,7 @@ impl UDPMuxConn {
         let mut buffer = make_buffer();
         let mut offset = 0;
 
-        if data.len() + MAX_ADDR_SIZE >= RECEIVE_MTU + MAX_ADDR_SIZE {
+        if (data.len() + MAX_ADDR_SIZE) > (RECEIVE_MTU + MAX_ADDR_SIZE) {
             return Err(Error::ErrBufferShort);
         }
 
@@ -204,11 +213,11 @@ impl UDPMuxConn {
         // Where the number in parenthesis indicate the number of bytes used
         // `dn` and `an` are the length in bytes of data and addr respectively.
 
-        // SAFETY: `data.len()` is at most RECEIVE_MTU(8192) - MAX_ADDR_SIZE(512)
+        // SAFETY: `data.len()` is at most RECEIVE_MTU(8192) - MAX_ADDR_SIZE(27)
         buffer[0..2].copy_from_slice(&(data.len() as u16).to_le_bytes()[..]);
         offset += 2;
 
-        buffer[offset..].copy_from_slice(data);
+        buffer[offset..offset + data.len()].copy_from_slice(data);
         offset += data.len();
 
         let len = addr.encode(&mut buffer[offset + 2..])?;

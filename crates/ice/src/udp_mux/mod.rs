@@ -18,6 +18,9 @@ use tokio::sync::Mutex;
 mod udp_mux_conn;
 use udp_mux_conn::{UDPMuxConn, UDPMuxConnParams};
 
+#[cfg(test)]
+mod udp_mux_test;
+
 mod socket_addr_ext;
 
 use stun::{

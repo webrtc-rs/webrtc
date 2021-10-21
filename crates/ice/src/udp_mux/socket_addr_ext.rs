@@ -17,8 +17,11 @@ pub(super) trait SocketAddrExt {
 }
 
 const IPV4_MARKER: u8 = 4;
+const IPV4_ADDRESS_SIZE: usize = 7;
 const IPV6_MARKER: u8 = 6;
-pub(super) const MAX_ADDR_SIZE: usize = 27;
+const IPV6_ADDRESS_SIZE: usize = 27;
+
+pub(super) const MAX_ADDR_SIZE: usize = IPV6_ADDRESS_SIZE;
 
 impl SocketAddrExt for SocketAddr {
     fn encode(&self, buffer: &mut [u8]) -> Result<usize, Error> {
@@ -61,12 +64,12 @@ impl SocketAddrExt for SocketAddr {
     fn decode(buffer: &[u8]) -> Result<SocketAddr, Error> {
         use std::net::*;
 
-        if buffer.len() < MAX_ADDR_SIZE {
-            return Err(Error::ErrBufferShort);
-        }
-
         match buffer[0] {
             IPV4_MARKER => {
+                if buffer.len() < IPV4_ADDRESS_SIZE {
+                    return Err(Error::ErrBufferShort);
+                }
+
                 let ip_parts = &buffer[1..5];
                 let port = match &buffer[5..7].try_into() {
                     Err(_) => return Err(Error::ErrFailedToParseIpaddr),
@@ -78,6 +81,10 @@ impl SocketAddrExt for SocketAddr {
                 Ok(SocketAddr::V4(SocketAddrV4::new(ip, port)))
             }
             IPV6_MARKER => {
+                if buffer.len() < IPV6_ADDRESS_SIZE {
+                    return Err(Error::ErrBufferShort);
+                }
+
                 // Just to help the type system infer correctly
                 fn helper(b: &[u8]) -> Result<&[u8; 16], TryFromSliceError> {
                     b.try_into()
