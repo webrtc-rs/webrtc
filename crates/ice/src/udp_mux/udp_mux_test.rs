@@ -98,7 +98,7 @@ async fn test_udp_mux() -> Result<()> {
     });
 
     let (r1, r2, r3) = tokio::join!(h1, h2, h3);
-    let all_results = vec![r1, r2, r3];
+    let all_results = [r1, r2, r3];
 
     for timeout_result in &all_results {
         // Timeout error
