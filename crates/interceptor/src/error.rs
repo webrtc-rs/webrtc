@@ -7,16 +7,19 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("Invalid Parent RTCP Reader")]
     ErrInvalidParentRtcpReader,
+    #[error("Invalid Parent RTP Reader")]
+    ErrInvalidParentRtpReader,
     #[error("Invalid Next RTP Writer")]
     ErrInvalidNextRtpWriter,
-    #[error("Incorrect ReceiverReport CloseRx")]
-    ErrIncorrectReceiverReportCloseRx,
+    #[error("Invalid CloseRx Channel")]
+    ErrInvalidCloseRx,
+    #[error("Invalid PacketRx Channel")]
+    ErrInvalidPacketRx,
     #[error("IO EOF")]
     ErrIoEOF,
     #[error("Buffer is too short")]
     ErrShortBuffer,
-    /// ErrInvalidSize is returned by newReceiveLog/newSendBuffer, when an incorrect buffer size is supplied.
-    #[error("invalid buffer size")]
+    #[error("Invalid buffer size")]
     ErrInvalidSize,
 
     #[error("{0}")]
