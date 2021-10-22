@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod twcc_test;
+
 pub mod header_extension;
 pub mod sender;
 
@@ -219,16 +222,16 @@ impl Chunk {
 
     fn encode(&mut self) -> PacketStatusChunk {
         if !self.has_different_types {
-            self.reset();
-            return PacketStatusChunk::RunLengthChunk(RunLengthChunk {
+            let p = PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                 type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                 packet_status_symbol: self.deltas[0].into(),
                 run_length: self.deltas.len() as u16,
             });
+            self.reset();
+            return p;
         }
         if self.deltas.len() == MAX_ONE_BIT_CAP {
-            self.reset();
-            return PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+            let p = PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                 type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                 symbol_size: SymbolSizeTypeTcc::OneBit,
                 symbol_list: self
@@ -237,6 +240,8 @@ impl Chunk {
                     .map(|x| SymbolTypeTcc::from(*x))
                     .collect::<Vec<SymbolTypeTcc>>(),
             });
+            self.reset();
+            return p;
         }
 
         let min_cap = std::cmp::min(MAX_TWO_BIT_CAP, self.deltas.len());

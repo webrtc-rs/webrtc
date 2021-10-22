@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod sender_test;
+
 use crate::twcc::header_extension::TRANSPORT_CC_URI;
 use crate::twcc::Recorder;
 use crate::*;
@@ -9,6 +12,7 @@ use util::Unmarshal;
 use waitgroup::WaitGroup;
 
 /// SenderBuilder is a InterceptorBuilder for a SenderInterceptor
+#[derive(Default)]
 pub struct SenderBuilder {
     interval: Option<Duration>,
 }
@@ -123,6 +127,11 @@ struct Sender {
 }
 
 impl Sender {
+    /// builder returns a new SenderBuilder.
+    pub fn builder() -> SenderBuilder {
+        SenderBuilder::default()
+    }
+
     async fn is_closed(&self) -> bool {
         let close_tx = self.close_tx.lock().await;
         close_tx.is_none()
