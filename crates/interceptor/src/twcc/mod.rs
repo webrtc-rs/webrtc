@@ -133,19 +133,6 @@ impl Feedback {
         }
         self.rtcp.recv_deltas = self.deltas.clone();
 
-        /*TODO:
-        let mut padLen = 20 + self.rtcp.packet_chunks.len() * 2 + self.len; // 4 bytes header + 16 bytes twcc header + 2 bytes for each chunk + length of deltas
-        let padding = padLen % 4 != 0;
-        while padLen % 4 != 0 {
-            padLen += 1;
-        }
-        self.rtcp.header = rtcp::header::Header {
-            count: FORMAT_TCC,
-            packet_type: PacketType::TransportSpecificFeedback,
-            padding,
-            length: (padLen / 4) as u16 - 1,
-        };*/
-
         self.rtcp.clone()
     }
 

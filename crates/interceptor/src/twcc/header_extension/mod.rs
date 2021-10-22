@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod header_extension_test;
+
 use crate::*;
 use crate::{Attributes, RTPWriter};
 
