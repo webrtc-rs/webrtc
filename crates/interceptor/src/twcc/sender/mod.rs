@@ -141,7 +141,6 @@ impl Sender {
         rtcp_writer: Arc<dyn RTCPWriter + Send + Sync>,
         internal: Arc<SenderInternal>,
     ) -> Result<()> {
-        let mut ticker = tokio::time::interval(internal.interval);
         let mut close_rx = {
             let mut close_rx = internal.close_rx.lock().await;
             if let Some(close_rx) = close_rx.take() {
@@ -160,6 +159,7 @@ impl Sender {
         };
 
         let a = Attributes::new();
+        let mut ticker = tokio::time::interval(internal.interval);
         loop {
             tokio::select! {
                 _ = close_rx.recv() =>{

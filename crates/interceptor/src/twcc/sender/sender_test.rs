@@ -2,7 +2,8 @@ use super::*;
 use crate::mock::mock_stream::MockStream;
 use crate::stream_info::RTPHeaderExtension;
 use rtcp::transport_feedbacks::transport_layer_cc::{
-    PacketStatusChunk, RunLengthChunk, StatusChunkTypeTcc, SymbolTypeTcc, TransportLayerCc,
+    PacketStatusChunk, RunLengthChunk, StatusChunkTypeTcc, StatusVectorChunk, SymbolSizeTypeTcc,
+    SymbolTypeTcc, TransportLayerCc,
 };
 use util::Marshal;
 
@@ -98,58 +99,74 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
     Ok(())
 }
 
-/*
 #[tokio::test]
-async fn test_sender_interceptor_different_delays_between_rtp_packets() ->Result<()> {
-    f, err := NewSenderInterceptor(SendInterval(500 * time.Millisecond))
-    assert.NoError(t, err)
+async fn test_sender_interceptor_different_delays_between_rtp_packets() -> Result<()> {
+    let builder = Sender::builder().with_interval(Duration::from_millis(500));
+    let icpr = builder.build("")?;
 
-    i, err := f.NewInterceptor("")
-    assert.NoError(t, err)
-
-    stream := test.NewMockStream(&interceptor.StreamInfo{RTPHeaderExtensions: []interceptor.RTPHeaderExtension{
-        {
-            URI: transportCCURI,
-            ID:  1,
+    let stream = MockStream::new(
+        &StreamInfo {
+            ssrc: 1,
+            rtp_header_extensions: vec![RTPHeaderExtension {
+                uri: TRANSPORT_CC_URI.to_owned(),
+                id: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
         },
-    }}, i)
-    defer func() {
-        assert.NoError(t, stream.Close())
-    }()
+        icpr,
+    )
+    .await;
 
-    delays := []int{0, 10, 100, 200}
-    for i, d := range delays {
-        time.Sleep(time.Duration(d) * time.Millisecond)
+    let delays = vec![0, 10, 100, 200];
+    for (i, d) in delays.iter().enumerate() {
+        tokio::time::sleep(Duration::from_millis(*d)).await;
 
-        hdr := rtp.Header{}
-        tcc, err := (&rtp.TransportCCExtension{TransportSequence: uint16(i)}).Marshal()
-        assert.NoError(t, err)
-        err = hdr.SetExtension(1, tcc)
-        assert.NoError(t, err)
-        stream.ReceiveRTP(&rtp.Packet{Header: hdr})
+        let mut hdr = rtp::header::Header::default();
+        let tcc = TransportCcExtension {
+            transport_sequence: i as u16,
+        }
+        .marshal()?;
+
+        hdr.set_extension(1, tcc)?;
+        stream
+            .receive_rtp(rtp::packet::Packet {
+                header: hdr,
+                ..Default::default()
+            })
+            .await;
     }
 
-    pkts := <-stream.WrittenRTCP()
-    assert.Equal(t, 1, len(pkts))
-    cc, ok := pkts[0].(*rtcp.TransportLayerCC)
-    assert.True(t, ok)
-    assert.Equal(t, uint16(0), cc.BaseSequenceNumber)
-    assert.Equal(t, []rtcp.PacketStatusChunk{
-        &rtcp.StatusVectorChunk{
-            SymbolSize: rtcp.TypeTCCSymbolSizeTwoBit,
-            SymbolList: []uint16{
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-                rtcp.TypeTCCPacketReceivedLargeDelta,
-                rtcp.TypeTCCPacketReceivedLargeDelta,
-            },
-        },
-    }, cc.PacketChunks)
+    // since tick immediately, let's ignore the first rtcp pkt
+    let _ = stream.written_rtcp().await.unwrap();
+
+    // the second 500ms tick will works
+    let pkt = stream.written_rtcp().await.unwrap();
+    if let Some(cc) = pkt.as_any().downcast_ref::<TransportLayerCc>() {
+        assert_eq!(0, cc.base_sequence_number);
+        assert_eq!(
+            vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                symbol_size: SymbolSizeTypeTcc::TwoBit,
+                symbol_list: vec![
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedLargeDelta,
+                    SymbolTypeTcc::PacketReceivedLargeDelta,
+                ],
+            })],
+            cc.packet_chunks
+        );
+    } else {
+        assert!(false);
+    }
+
+    stream.close().await?;
 
     Ok(())
 }
 
-
+/*
 #[tokio::test]
 async fn test_sender_interceptor_packet_loss() ->Result<()> {
     f, err := NewSenderInterceptor(SendInterval(2 * time.Second))
