@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of Pluggable RTP/RTCP processors. Rewrite <a href="https://github.com/pion/interceptor/releases/tag/v0.0.13">Pion</a> Interceptor in Rust
+ A pure Rust implementation of Pluggable RTP/RTCP processors. Rewrite <a href="https://github.com/pion/interceptor/releases/tag/v0.1.0">Pion</a> Interceptor in Rust
 </p>

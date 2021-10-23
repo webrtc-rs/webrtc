@@ -99,6 +99,8 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
     Ok(())
 }
 
+//TODO: remove this conditional test
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_sender_interceptor_different_delays_between_rtp_packets() -> Result<()> {
     let builder = Sender::builder().with_interval(Duration::from_millis(500));
@@ -166,6 +168,8 @@ async fn test_sender_interceptor_different_delays_between_rtp_packets() -> Resul
     Ok(())
 }
 
+//TODO: remove this conditional test
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_sender_interceptor_packet_loss() -> Result<()> {
     let builder = Sender::builder().with_interval(Duration::from_secs(2));
