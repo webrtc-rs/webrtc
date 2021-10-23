@@ -1,5 +1,6 @@
 use super::*;
 use crate::error::Result;
+use rtcp::packet::Packet;
 use util::Marshal;
 
 #[test]
@@ -175,202 +176,211 @@ fn test_chunk_add() -> Result<()> {
 
     Ok(())
 }
-/*
-func Test_feedback(t *testing.T) {
-    t.Run("add simple", func(t *testing.T) {
-        f := feedback{}
 
-        got := f.addReceived(0, 10)
+#[test]
+fn test_feedback() -> Result<()> {
+    //"add simple"
+    {
+        let mut f = Feedback::default();
+        let got = f.add_received(0, 10);
+        assert!(got);
+    }
 
-        assert!( got)
-    })
+    //"add too large"
+    {
+        let mut f = Feedback::default();
 
-    t.Run("add too large", func(t *testing.T) {
-        f := feedback{}
+        assert!(!f.add_received(12, 8200 * 1000 * 250));
+    }
 
-        assert.False(t, f.addReceived(12, 8200*1000*250))
-    })
+    // "add received 1"
+    {
+        let mut f = Feedback::default();
+        f.set_base(1, 1000 * 1000);
 
-    t.Run("add received 1", func(t *testing.T) {
-        f := &feedback{}
-        f.setBase(1, 1000*1000)
+        let got = f.add_received(1, 1023 * 1000);
 
-        got := f.addReceived(1, 1023*1000)
+        assert!(got);
+        assert_eq!(2, f.next_sequence_number);
+        assert_eq!(15, f.ref_timestamp64ms);
 
-        assert!( got)
-        assert.Equal(t, uint16(2), f.nextSequenceNumber)
-        assert.Equal(t, int64(15), f.refTimestamp64MS)
+        let got = f.add_received(4, 1086 * 1000);
+        assert!(got);
+        assert_eq!(5, f.next_sequence_number);
+        assert_eq!(15, f.ref_timestamp64ms);
 
-        got = f.addReceived(4, 1086*1000)
-        assert!( got)
-        assert.Equal(t, uint16(5), f.nextSequenceNumber)
-        assert.Equal(t, int64(15), f.refTimestamp64MS)
+        assert!(f.last_chunk.has_different_types);
+        assert_eq!(4, f.last_chunk.deltas.len());
+        assert!(!f
+            .last_chunk
+            .deltas
+            .contains(&(SymbolTypeTcc::PacketReceivedLargeDelta as u16)));
+    }
 
-        assert!( f.lastChunk.hasDifferentTypes)
-        assert.Equal(t, 4, len(f.lastChunk.deltas))
-        assert.NotContains(t, f.lastChunk.deltas, SymbolTypeTcc::PacketReceivedLargeDelta)
-    })
+    const TYPE_TCC_DELTA_SCALE_FACTOR: i64 = 250;
 
-    t.Run("add received 2", func(t *testing.T) {
-        f := newFeedback(0, 0, 0)
-        f.setBase(5, 320*1000)
+    //"add received 2"
+    {
+        let mut f = Feedback::new(0, 0, 0);
+        f.set_base(5, 320 * 1000);
 
-        got := f.addReceived(5, 320*1000)
-        assert!( got)
-        got = f.addReceived(7, 448*1000)
-        assert!( got)
-        got = f.addReceived(8, 512*1000)
-        assert!( got)
-        got = f.addReceived(11, 768*1000)
-        assert!( got)
+        let mut got = f.add_received(5, 320 * 1000);
+        assert!(got);
+        got = f.add_received(7, 448 * 1000);
+        assert!(got);
+        got = f.add_received(8, 512 * 1000);
+        assert!(got);
+        got = f.add_received(11, 768 * 1000);
+        assert!(got);
 
-        pkt := f.getRTCP()
+        let pkt = f.get_rtcp();
 
-        assert!( pkt.Header.Padding)
-        assert.Equal(t, uint16(7), pkt.Header.Length)
-        assert.Equal(t, uint16(5), pkt.BaseSequenceNumber)
-        assert.Equal(t, uint16(7), pkt.PacketStatusCount)
-        assert.Equal(t, uint32(5), pkt.ReferenceTime)
-        assert.Equal(t, uint8(0), pkt.FbPktCount)
-        assert.Equal(t, 1, len(pkt.PacketChunks))
+        assert!(pkt.header().padding);
+        assert_eq!(7, pkt.header().length);
+        assert_eq!(5, pkt.base_sequence_number);
+        assert_eq!(7, pkt.packet_status_count);
+        assert_eq!(5, pkt.reference_time);
+        assert_eq!(0, pkt.fb_pkt_count);
+        assert_eq!(1, pkt.packet_chunks.len());
 
-        assert.Equal(t, []rtcp.PacketStatusChunk{&rtcp.StatusVectorChunk{
-            SymbolSize: SymbolTypeTcc::SymbolSizeTwoBit,
-            SymbolList: []uint16{
-                SymbolTypeTcc::PacketReceivedSmallDelta,
-                SymbolTypeTcc::PacketNotReceived,
-                SymbolTypeTcc::PacketReceivedLargeDelta,
-                SymbolTypeTcc::PacketReceivedLargeDelta,
-                SymbolTypeTcc::PacketNotReceived,
-                SymbolTypeTcc::PacketNotReceived,
-                SymbolTypeTcc::PacketReceivedLargeDelta,
-            },
-        }}, pkt.PacketChunks)
-
-        expectedDeltas := []*rtcp.RecvDelta{
-            {
-                Type:  SymbolTypeTcc::PacketReceivedSmallDelta,
-                Delta: 0,
-            },
-            {
-                Type:  SymbolTypeTcc::PacketReceivedLargeDelta,
-                Delta: 0x0200 * SymbolTypeTcc::DeltaScaleFactor,
-            },
-            {
-                Type:  SymbolTypeTcc::PacketReceivedLargeDelta,
-                Delta: 0x0100 * SymbolTypeTcc::DeltaScaleFactor,
-            },
-            {
-                Type:  SymbolTypeTcc::PacketReceivedLargeDelta,
-                Delta: 0x0400 * SymbolTypeTcc::DeltaScaleFactor,
-            },
-        }
-        assert.Equal(t, len(expectedDeltas), len(pkt.RecvDeltas))
-        for i, d := range expectedDeltas {
-            assert.Equal(t, d, pkt.RecvDeltas[i])
-        }
-    })
-
-    t.Run("add received wrapped sequence number", func(t *testing.T) {
-        f := newFeedback(0, 0, 0)
-        f.setBase(65535, 320*1000)
-
-        got := f.addReceived(65535, 320*1000)
-        assert!( got)
-        got = f.addReceived(7, 448*1000)
-        assert!( got)
-        got = f.addReceived(8, 512*1000)
-        assert!( got)
-        got = f.addReceived(11, 768*1000)
-        assert!( got)
-
-        pkt := f.getRTCP()
-
-        assert!( pkt.Header.Padding)
-        assert.Equal(t, uint16(7), pkt.Header.Length)
-        assert.Equal(t, uint16(65535), pkt.BaseSequenceNumber)
-        assert.Equal(t, uint16(13), pkt.PacketStatusCount)
-        assert.Equal(t, uint32(5), pkt.ReferenceTime)
-        assert.Equal(t, uint8(0), pkt.FbPktCount)
-        assert.Equal(t, 2, len(pkt.PacketChunks))
-
-        assert.Equal(t, []rtcp.PacketStatusChunk{
-            &rtcp.StatusVectorChunk{
-                SymbolSize: SymbolTypeTcc::SymbolSizeTwoBit,
-                SymbolList: []uint16{
+        assert_eq!(
+            vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                symbol_size: SymbolSizeTypeTcc::TwoBit,
+                symbol_list: vec![
                     SymbolTypeTcc::PacketReceivedSmallDelta,
                     SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketNotReceived,
-                },
-            },
-            &rtcp.StatusVectorChunk{
-                SymbolSize: SymbolTypeTcc::SymbolSizeTwoBit,
-                SymbolList: []uint16{
-                    SymbolTypeTcc::PacketNotReceived,
                     SymbolTypeTcc::PacketReceivedLargeDelta,
                     SymbolTypeTcc::PacketReceivedLargeDelta,
                     SymbolTypeTcc::PacketNotReceived,
                     SymbolTypeTcc::PacketNotReceived,
                     SymbolTypeTcc::PacketReceivedLargeDelta,
-                },
-            },
-        }, pkt.PacketChunks)
+                ],
+            })],
+            pkt.packet_chunks
+        );
 
-        expectedDeltas := []*rtcp.RecvDelta{
-            {
-                Type:  SymbolTypeTcc::PacketReceivedSmallDelta,
-                Delta: 0,
+        let expected_deltas = vec![
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: 0,
             },
-            {
-                Type:  SymbolTypeTcc::PacketReceivedLargeDelta,
-                Delta: 0x0200 * SymbolTypeTcc::DeltaScaleFactor,
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
+                delta: 0x0200 * TYPE_TCC_DELTA_SCALE_FACTOR,
             },
-            {
-                Type:  SymbolTypeTcc::PacketReceivedLargeDelta,
-                Delta: 0x0100 * SymbolTypeTcc::DeltaScaleFactor,
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
+                delta: 0x0100 * TYPE_TCC_DELTA_SCALE_FACTOR,
             },
-            {
-                Type:  SymbolTypeTcc::PacketReceivedLargeDelta,
-                Delta: 0x0400 * SymbolTypeTcc::DeltaScaleFactor,
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
+                delta: 0x0400 * TYPE_TCC_DELTA_SCALE_FACTOR,
             },
+        ];
+        assert_eq!(expected_deltas.len(), pkt.recv_deltas.len());
+        for (i, d) in expected_deltas.iter().enumerate() {
+            assert_eq!(d, &pkt.recv_deltas[i]);
         }
-        assert.Equal(t, len(expectedDeltas), len(pkt.RecvDeltas))
-        for i, d := range expectedDeltas {
-            assert.Equal(t, d, pkt.RecvDeltas[i])
-        }
-    })
+    }
 
-    t.Run("get RTCP", func(t *testing.T) {
-        testcases := []struct {
-            arrivalTS              int64
-            sequenceNumber         uint16
-            wantRefTime            uint32
-            wantBaseSequenceNumber uint16
-        }{
-            {320, 1, 5, 1},
-            {1000, 2, 15, 2},
-        }
-        for _, tt := range testcases {
-            tt := tt
+    //"add received wrapped sequence number"
+    {
+        let mut f = Feedback::new(0, 0, 0);
+        f.set_base(65535, 320 * 1000);
 
-            t.Run("set correct base seq and time", func(t *testing.T) {
-                f := newFeedback(0, 0, 0)
-                f.setBase(tt.sequenceNumber, tt.arrivalTS*1000)
+        let mut got = f.add_received(65535, 320 * 1000);
+        assert!(got);
+        got = f.add_received(7, 448 * 1000);
+        assert!(got);
+        got = f.add_received(8, 512 * 1000);
+        assert!(got);
+        got = f.add_received(11, 768 * 1000);
+        assert!(got);
 
-                got := f.getRTCP()
-                assert.Equal(t, tt.wantRefTime, got.ReferenceTime)
-                assert.Equal(t, tt.wantBaseSequenceNumber, got.BaseSequenceNumber)
-            })
+        let pkt = f.get_rtcp();
+
+        assert!(pkt.header().padding);
+        assert_eq!(7, pkt.header().length);
+        assert_eq!(65535, pkt.base_sequence_number);
+        assert_eq!(13, pkt.packet_status_count);
+        assert_eq!(5, pkt.reference_time);
+        assert_eq!(0, pkt.fb_pkt_count);
+        assert_eq!(2, pkt.packet_chunks.len());
+
+        assert_eq!(
+            vec![
+                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::TwoBit,
+                    symbol_list: vec![
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                    ],
+                }),
+                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::TwoBit,
+                    symbol_list: vec![
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedLargeDelta,
+                        SymbolTypeTcc::PacketReceivedLargeDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedLargeDelta,
+                    ],
+                }),
+            ],
+            pkt.packet_chunks
+        );
+
+        let expected_deltas = vec![
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: 0,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
+                delta: 0x0200 * TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
+                delta: 0x0100 * TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
+                delta: 0x0400 * TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+        ];
+        assert_eq!(expected_deltas.len(), pkt.recv_deltas.len());
+        for (i, d) in expected_deltas.iter().enumerate() {
+            assert_eq!(d, &pkt.recv_deltas[i]);
         }
-    })
+    }
+
+    //"get RTCP"
+    {
+        let tests = vec![(320, 1, 5, 1), (1000, 2, 15, 2)];
+        for (arrival_ts, sequence_number, want_ref_time, want_base_sequence_number) in tests {
+            let mut f = Feedback::new(0, 0, 0);
+            f.set_base(sequence_number, arrival_ts * 1000);
+
+            let got = f.get_rtcp();
+            assert_eq!(want_ref_time, got.reference_time);
+            assert_eq!(want_base_sequence_number, got.base_sequence_number);
+        }
+    }
+
+    Ok(())
 }
-
+/*
 func addRun(t *testing.T, r *Recorder, sequenceNumbers []uint16, arrivalTimes []int64) {
-    assert.Equal(t, len(sequenceNumbers), len(arrivalTimes))
+    assert!( len(sequenceNumbers), len(arrivalTimes))
 
     for i := range sequenceNumbers {
         r.Record(5000, sequenceNumbers[i], arrivalTimes[i])
@@ -409,9 +419,9 @@ func TestBuildFeedbackPacket(t *testing.T) {
     })
 
     rtcpPackets := r.BuildFeedbackPacket()
-    assert.Equal(t, 1, len(rtcpPackets))
+    assert!( 1, len(rtcpPackets))
 
-    assert.Equal(t, &rtcp.TransportLayerCC{
+    assert!( &rtcp.TransportLayerCC{
         Header: rtcp.Header{
             Count:   rtcp.FormatTCC,
             Type:    rtcp.TypeTransportSpecificFeedback,
@@ -459,7 +469,7 @@ func TestBuildFeedbackPacket_Rolling(t *testing.T) {
     })
 
     rtcpPackets := r.BuildFeedbackPacket()
-    assert.Equal(t, 1, len(rtcpPackets)) // Empty TWCC
+    assert!( 1, len(rtcpPackets)) // Empty TWCC
 
     addRun(t, r, []uint16{4, 5, 6, 7}, []int64{
         increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
@@ -469,9 +479,9 @@ func TestBuildFeedbackPacket_Rolling(t *testing.T) {
     })
 
     rtcpPackets = r.BuildFeedbackPacket()
-    assert.Equal(t, 1, len(rtcpPackets))
+    assert!( 1, len(rtcpPackets))
 
-    assert.Equal(t, &rtcp.TransportLayerCC{
+    assert!( &rtcp.TransportLayerCC{
         Header: rtcp.Header{
             Count:   rtcp.FormatTCC,
             Type:    rtcp.TypeTransportSpecificFeedback,
