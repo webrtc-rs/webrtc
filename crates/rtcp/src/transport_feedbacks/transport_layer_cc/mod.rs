@@ -428,7 +428,7 @@ const PACKET_CHUNK_OFFSET: usize = 16;
 const TYPE_TCC_STATUS_VECTOR_CHUNK: usize = 1;
 
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-const TYPE_TCC_DELTA_SCALE_FACTOR: i64 = 250;
+pub const TYPE_TCC_DELTA_SCALE_FACTOR: i64 = 250;
 
 // Notice: RFC is wrong: "packet received" (0) and "packet not received" (1)
 // if S == TYPE_TCCSYMBOL_SIZE_ONE_BIT, symbol list will be: TypeTCCPacketNotReceived TypeTCCPacketReceivedSmallDelta
