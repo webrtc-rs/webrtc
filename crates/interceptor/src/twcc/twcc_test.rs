@@ -217,8 +217,6 @@ fn test_feedback() -> Result<()> {
             .contains(&(SymbolTypeTcc::PacketReceivedLargeDelta as u16)));
     }
 
-    const TYPE_TCC_DELTA_SCALE_FACTOR: i64 = 250;
-
     //"add received 2"
     {
         let mut f = Feedback::new(0, 0, 0);
@@ -378,145 +376,194 @@ fn test_feedback() -> Result<()> {
 
     Ok(())
 }
-/*
-func addRun(t *testing.T, r *Recorder, sequenceNumbers []uint16, arrivalTimes []int64) {
-    assert!( len(sequenceNumbers), len(arrivalTimes))
 
-    for i := range sequenceNumbers {
-        r.Record(5000, sequenceNumbers[i], arrivalTimes[i])
+fn add_run(r: &mut Recorder, sequence_numbers: &[u16], arrival_times: &[i64]) {
+    assert_eq!(sequence_numbers.len(), arrival_times.len());
+
+    for i in 0..sequence_numbers.len() {
+        r.record(5000, sequence_numbers[i], arrival_times[i]);
     }
 }
 
-const (
-    scaleFactorReferenceTime = 64000
-)
+const TYPE_TCC_DELTA_SCALE_FACTOR: i64 = 250;
+const SCALE_FACTOR_REFERENCE_TIME: i64 = 64000;
 
-func increaseTime(arrivalTime *int64, increaseAmount int64) int64 {
-    *arrivalTime += increaseAmount
-    return *arrivalTime
+fn increase_time(arrival_time: &mut i64, increase_amount: i64) -> i64 {
+    *arrival_time += increase_amount;
+    *arrival_time
 }
 
-func marshalAll(t *testing.T, pkts []rtcp.Packet) {
-    for _, pkt := range pkts {
-        _, err := pkt.Marshal()
-        assert.NoError(t, err)
+fn marshal_all(pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>]) -> Result<()> {
+    for pkt in pkts {
+        let _ = pkt.marshal()?;
     }
+    Ok(())
 }
 
-func TestBuildFeedbackPacket(t *testing.T) {
-    r := NewRecorder(5000)
+#[test]
+fn test_build_feedback_packet() -> Result<()> {
+    let mut r = Recorder::new(5000);
 
-    arrivalTime := int64(scaleFactorReferenceTime)
-    addRun(t, r, []uint16{0, 1, 2, 3, 4, 5, 6, 7}, []int64{
-        scaleFactorReferenceTime,
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor*256),
-    })
+    let mut arrival_time = SCALE_FACTOR_REFERENCE_TIME as i64;
+    add_run(
+        &mut r,
+        &[0, 1, 2, 3, 4, 5, 6, 7],
+        &[
+            SCALE_FACTOR_REFERENCE_TIME,
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR * 256),
+        ],
+    );
 
-    rtcpPackets := r.BuildFeedbackPacket()
-    assert!( 1, len(rtcpPackets))
+    let rtcp_packets = r.build_feedback_packet();
+    assert_eq!(1, rtcp_packets.len());
 
-    assert!( &rtcp.TransportLayerCC{
-        Header: rtcp.Header{
-            Count:   rtcp.FormatTCC,
-            Type:    rtcp.TypeTransportSpecificFeedback,
-            Padding: true,
-            Length:  8,
-        },
-        SenderSSRC:         5000,
-        MediaSSRC:          5000,
-        BaseSequenceNumber: 0,
-        ReferenceTime:      1,
-        FbPktCount:         0,
-        PacketStatusCount:  8,
-        PacketChunks: []rtcp.PacketStatusChunk{
-            &rtcp.RunLengthChunk{
-                Type:               SymbolTypeTcc::RunLengthChunk,
-                PacketStatusSymbol: SymbolTypeTcc::PacketReceivedSmallDelta,
-                RunLength:          7,
+    let expected = TransportLayerCc {
+        sender_ssrc: 5000,
+        media_ssrc: 5000,
+        base_sequence_number: 0,
+        reference_time: 1,
+        fb_pkt_count: 0,
+        packet_status_count: 8,
+        packet_chunks: vec![
+            PacketStatusChunk::RunLengthChunk(RunLengthChunk {
+                type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
+                run_length: 7,
+            }),
+            PacketStatusChunk::RunLengthChunk(RunLengthChunk {
+                type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                packet_status_symbol: SymbolTypeTcc::PacketReceivedLargeDelta,
+                run_length: 1,
+            }),
+        ],
+        recv_deltas: vec![
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: 0,
             },
-            &rtcp.RunLengthChunk{
-                Type:               SymbolTypeTcc::RunLengthChunk,
-                PacketStatusSymbol: SymbolTypeTcc::PacketReceivedLargeDelta,
-                RunLength:          1,
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
             },
-        },
-        RecvDeltas: []*rtcp.RecvDelta{
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: 0},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedLargeDelta, Delta: SymbolTypeTcc::DeltaScaleFactor * 256},
-        },
-    }, rtcpPackets[0].(*rtcp.TransportLayerCC))
-    marshalAll(t, rtcpPackets)
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR * 256,
+            },
+        ],
+    };
+
+    if let Some(tcc) = rtcp_packets[0].as_any().downcast_ref::<TransportLayerCc>() {
+        assert_eq!(tcc, &expected);
+    } else {
+        assert!(false);
+    }
+
+    marshal_all(&rtcp_packets[..])?;
+
+    Ok(())
 }
 
-func TestBuildFeedbackPacket_Rolling(t *testing.T) {
-    r := NewRecorder(5000)
+#[test]
+fn test_build_feedback_packet_rolling() -> Result<()> {
+    let mut r = Recorder::new(5000);
 
-    arrivalTime := int64(scaleFactorReferenceTime)
-    addRun(t, r, []uint16{0}, []int64{
-        arrivalTime,
-    })
+    let mut arrival_time = SCALE_FACTOR_REFERENCE_TIME as i64;
+    add_run(&mut r, &[0], &[arrival_time]);
 
-    rtcpPackets := r.BuildFeedbackPacket()
-    assert!( 1, len(rtcpPackets)) // Empty TWCC
+    let rtcp_packets = r.build_feedback_packet();
+    assert_eq!(1, rtcp_packets.len()); // Empty TWCC
 
-    addRun(t, r, []uint16{4, 5, 6, 7}, []int64{
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-        increaseTime(&arrivalTime, SymbolTypeTcc::DeltaScaleFactor),
-    })
+    add_run(
+        &mut r,
+        &[4, 5, 6, 7],
+        &[
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
+        ],
+    );
 
-    rtcpPackets = r.BuildFeedbackPacket()
-    assert!( 1, len(rtcpPackets))
+    let rtcp_packets = r.build_feedback_packet();
+    assert_eq!(1, rtcp_packets.len());
 
-    assert!( &rtcp.TransportLayerCC{
-        Header: rtcp.Header{
-            Count:   rtcp.FormatTCC,
-            Type:    rtcp.TypeTransportSpecificFeedback,
-            Padding: true,
-            Length:  6,
-        },
-        SenderSSRC:         5000,
-        MediaSSRC:          5000,
-        BaseSequenceNumber: 0,
-        ReferenceTime:      1,
-        FbPktCount:         0,
-        PacketStatusCount:  8,
-        PacketChunks: []rtcp.PacketStatusChunk{
-            &rtcp.StatusVectorChunk{
-                Type:       SymbolTypeTcc::RunLengthChunk,
-                SymbolSize: SymbolTypeTcc::SymbolSizeTwoBit,
-                SymbolList: []uint16{
-                    SymbolTypeTcc::PacketReceivedSmallDelta,
-                    SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketNotReceived,
-                    SymbolTypeTcc::PacketReceivedSmallDelta,
-                    SymbolTypeTcc::PacketReceivedSmallDelta,
-                    SymbolTypeTcc::PacketReceivedSmallDelta,
-                },
+    let expected = TransportLayerCc {
+        sender_ssrc: 5000,
+        media_ssrc: 5000,
+        base_sequence_number: 0,
+        reference_time: 1,
+        fb_pkt_count: 0,
+        packet_status_count: 8,
+        packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+            type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+            symbol_size: SymbolSizeTypeTcc::TwoBit,
+            symbol_list: vec![
+                SymbolTypeTcc::PacketReceivedSmallDelta,
+                SymbolTypeTcc::PacketNotReceived,
+                SymbolTypeTcc::PacketNotReceived,
+                SymbolTypeTcc::PacketNotReceived,
+                SymbolTypeTcc::PacketReceivedSmallDelta,
+                SymbolTypeTcc::PacketReceivedSmallDelta,
+                SymbolTypeTcc::PacketReceivedSmallDelta,
+            ],
+        })],
+        recv_deltas: vec![
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: 0,
             },
-        },
-        RecvDeltas: []*rtcp.RecvDelta{
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: 0},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-            {Type: SymbolTypeTcc::PacketReceivedSmallDelta, Delta: SymbolTypeTcc::DeltaScaleFactor},
-        },
-    }, rtcpPackets[0].(*rtcp.TransportLayerCC))
-    marshalAll(t, rtcpPackets)
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+            RecvDelta {
+                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+            },
+        ],
+    };
+
+    if let Some(tcc) = rtcp_packets[0].as_any().downcast_ref::<TransportLayerCc>() {
+        assert_eq!(tcc, &expected);
+    } else {
+        assert!(false);
+    }
+
+    marshal_all(&rtcp_packets[..])?;
+
+    Ok(())
 }
-*/
