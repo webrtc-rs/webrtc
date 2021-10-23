@@ -54,6 +54,8 @@ pub trait Depacketizer {
     fn is_partition_tail(&self, marker: bool, payload: &Bytes) -> bool;
 }
 
+//TODO: SystemTime vs Instant?
+// non-monotonic clock vs monotonically non-decreasing clock
 /// FnTimeGen provides current SystemTime
 pub type FnTimeGen =
     Arc<dyn (Fn() -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>>) + Send + Sync>;

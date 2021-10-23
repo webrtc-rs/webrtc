@@ -1,3 +1,5 @@
+use crate::error::{Error, Result};
+use crate::packetizer::Depacketizer;
 use bytes::Bytes;
 
 #[cfg(test)]
@@ -8,11 +10,11 @@ mod h265_test;
 ///
 
 const H265NALU_HEADER_SIZE: usize = 2;
-// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
 const H265NALU_AGGREGATION_PACKET_TYPE: u8 = 48;
-// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
 const H265NALU_FRAGMENTATION_UNIT_TYPE: u8 = 49;
-// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
+/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
 const H265NALU_PACI_PACKET_TYPE: u8 = 50;
 
 /// H265NALUHeader is a H265 NAL Unit Header
@@ -95,6 +97,7 @@ impl H265NALUHeader {
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
+#[derive(Default, Debug, Clone)]
 pub struct H265SingleNALUnitPacket {
     /// payload_header is the header of the H265 packet.
     payload_header: H265NALUHeader,
@@ -187,6 +190,7 @@ impl H265SingleNALUnitPacket {
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+#[derive(Default, Debug, Clone)]
 pub struct H265AggregationUnitFirst {
     donl: Option<u16>,
     nal_unit_size: u16,
@@ -211,586 +215,607 @@ impl H265AggregationUnitFirst {
         self.nal_unit.clone()
     }
 }
-/*
-// H265AggregationUnit represent the an Aggregation Unit in an AP, which is not the first one.
-//
-//    0                   1                   2                   3
-//    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//                   : DOND (cond)   |          NALU size            |
-//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |                                                               |
-//   |                       NAL unit                                |
-//   |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |                               :
-//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//
-// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-type H265AggregationUnit struct {
-    dond        *uint8
-    nal_unit_size uint16
-    nal_unit     []byte
+
+/// H265AggregationUnit represent the an Aggregation Unit in an AP, which is not the first one.
+///
+///    0                   1                   2                   3
+///    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///                   : DOND (cond)   |          NALU size            |
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///   |                                                               |
+///   |                       NAL unit                                |
+///   |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///   |                               :
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///
+/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+#[derive(Default, Debug, Clone)]
+pub struct H265AggregationUnit {
+    dond: Option<u8>,
+    nal_unit_size: u16,
+    nal_unit: Bytes,
 }
 
-// DOND field plus 1 specifies the difference between
-// the decoding order number values of the current aggregated NAL unit
-// and the preceding aggregated NAL unit in the same AP.
-func (u H265AggregationUnit) DOND() *uint8 {
-    return u.dond
-}
-
-// nalusize represents the size, in bytes, of the nal_unit.
-func (u H265AggregationUnit) nalusize() uint16 {
-    return u.nal_unit_size
-}
-
-// nal_unit payload.
-func (u H265AggregationUnit) nal_unit() []byte {
-    return u.nal_unit
-}
-
-// H265AggregationPacket represents an Aggregation packet.
-//   0                   1                   2                   3
-//    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |    PayloadHdr (Type=48)       |                               |
-//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
-//   |                                                               |
-//   |             two or more aggregation units                     |
-//   |                                                               |
-//   |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |                               :...OPTIONAL RTP padding        |
-//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//
-// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-type H265AggregationPacket struct {
-    firstUnit  *H265AggregationUnitFirst
-    otherUnits []H265AggregationUnit
-
-    might_need_donl bool
-}
-
-// with_donl can be called to specify whether or not DONL might be parsed.
-// DONL may need to be parsed if `sprop-max-don-diff` is greater than 0 on the RTP stream.
-func (p *H265AggregationPacket) with_donl(value bool) {
-    p.might_need_donl = value
-}
-
-// Unmarshal parses the passed byte slice and stores the result in the H265AggregationPacket this method is called upon.
-func (p *H265AggregationPacket) Unmarshal(payload []byte) ([]byte, error) {
-    // sizeof(headers)
-    const totalHeaderSize = H265NALU_HEADER_SIZE
-    if payload == nil {
-        return nil, errNilPacket
-    } else if len(payload) <= totalHeaderSize {
-        return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+impl H265AggregationUnit {
+    /// dond field plus 1 specifies the difference between
+    /// the decoding order number values of the current aggregated NAL unit
+    /// and the preceding aggregated NAL unit in the same AP.
+    pub fn dond(&self) -> Option<u8> {
+        self.dond
     }
 
-    payload_header := newH265NALUHeader(payload[0], payload[1])
-    if payload_header.F() {
-        return nil, errH265CorruptedPacket
-    }
-    if !payload_header.is_aggregation_packet() {
-        return nil, errInvalidH265PacketType
+    /// nalu_size represents the size, in bytes, of the nal_unit.
+    pub fn nalu_size(&self) -> u16 {
+        self.nal_unit_size
     }
 
-    // First parse the first aggregation unit
-    payload = payload[2:]
-    firstUnit := &H265AggregationUnitFirst{}
+    /// nal_unit payload.
+    pub fn nal_unit(&self) -> Bytes {
+        self.nal_unit.clone()
+    }
+}
 
-    if p.might_need_donl {
+/// H265AggregationPacket represents an Aggregation packet.
+///   0                   1                   2                   3
+///    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///   |    PayloadHdr (Type=48)       |                               |
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
+///   |                                                               |
+///   |             two or more aggregation units                     |
+///   |                                                               |
+///   |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///   |                               :...OPTIONAL RTP padding        |
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///
+/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+pub struct H265AggregationPacket {
+    first_unit: Option<H265AggregationUnitFirst>,
+    other_units: Vec<H265AggregationUnit>,
+
+    might_need_donl: bool,
+}
+
+impl H265AggregationPacket {
+    /// with_donl can be called to specify whether or not DONL might be parsed.
+    /// DONL may need to be parsed if `sprop-max-don-diff` is greater than 0 on the RTP stream.
+    pub fn with_donl(&mut self, value: bool) {
+        self.might_need_donl = value;
+    }
+
+    /*TODO:
+    // Unmarshal parses the passed byte slice and stores the result in the H265AggregationPacket this method is called upon.
+    func (p *H265AggregationPacket) Unmarshal(payload []byte) ([]byte, error) {
+        // sizeof(headers)
+        const totalHeaderSize = H265NALU_HEADER_SIZE
+        if payload == nil {
+            return nil, errNilPacket
+        } else if len(payload) <= totalHeaderSize {
+            return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+        }
+
+        payload_header := newH265NALUHeader(payload[0], payload[1])
+        if payload_header.F() {
+            return nil, errH265CorruptedPacket
+        }
+        if !payload_header.is_aggregation_packet() {
+            return nil, errInvalidH265PacketType
+        }
+
+        // First parse the first aggregation unit
+        payload = payload[2:]
+        first_unit := &H265AggregationUnitFirst{}
+
+        if p.might_need_donl {
+            if len(payload) < 2 {
+                return nil, errShortPacket
+            }
+
+            donl := (uint16(payload[0]) << 8) | uint16(payload[1])
+            first_unit.donl = &donl
+
+            payload = payload[2:]
+        }
         if len(payload) < 2 {
             return nil, errShortPacket
         }
-
-        donl := (uint16(payload[0]) << 8) | uint16(payload[1])
-        firstUnit.donl = &donl
-
+        first_unit.nal_unit_size = (uint16(payload[0]) << 8) | uint16(payload[1])
         payload = payload[2:]
-    }
-    if len(payload) < 2 {
-        return nil, errShortPacket
-    }
-    firstUnit.nal_unit_size = (uint16(payload[0]) << 8) | uint16(payload[1])
-    payload = payload[2:]
 
-    if len(payload) < int(firstUnit.nal_unit_size) {
-        return nil, errShortPacket
-    }
+        if len(payload) < int(first_unit.nal_unit_size) {
+            return nil, errShortPacket
+        }
 
-    firstUnit.nal_unit = payload[:firstUnit.nal_unit_size]
-    payload = payload[firstUnit.nal_unit_size:]
+        first_unit.nal_unit = payload[:first_unit.nal_unit_size]
+        payload = payload[first_unit.nal_unit_size:]
 
-    // Parse remaining Aggregation Units
-    var units []H265AggregationUnit
-    for {
-        unit := H265AggregationUnit{}
+        // Parse remaining Aggregation Units
+        var units []H265AggregationUnit
+        for {
+            unit := H265AggregationUnit{}
 
-        if p.might_need_donl {
-            if len(payload) < 1 {
+            if p.might_need_donl {
+                if len(payload) < 1 {
+                    break
+                }
+
+                dond := payload[0]
+                unit.dond = &dond
+
+                payload = payload[1:]
+            }
+
+            if len(payload) < 2 {
+                break
+            }
+            unit.nal_unit_size = (uint16(payload[0]) << 8) | uint16(payload[1])
+            payload = payload[2:]
+
+            if len(payload) < int(unit.nal_unit_size) {
                 break
             }
 
-            dond := payload[0]
-            unit.dond = &dond
+            unit.nal_unit = payload[:unit.nal_unit_size]
+            payload = payload[unit.nal_unit_size:]
 
-            payload = payload[1:]
+            units = append(units, unit)
         }
 
-        if len(payload) < 2 {
-            break
-        }
-        unit.nal_unit_size = (uint16(payload[0]) << 8) | uint16(payload[1])
-        payload = payload[2:]
-
-        if len(payload) < int(unit.nal_unit_size) {
-            break
-        }
-
-        unit.nal_unit = payload[:unit.nal_unit_size]
-        payload = payload[unit.nal_unit_size:]
-
-        units = append(units, unit)
-    }
-
-    // There need to be **at least** two Aggregation Units (first + another one)
-    if len(units) == 0 {
-        return nil, errShortPacket
-    }
-
-    p.firstUnit = firstUnit
-    p.otherUnits = units
-
-    return nil, nil
-}
-
-// FirstUnit returns the first Aggregated Unit of the packet.
-func (p *H265AggregationPacket) FirstUnit() *H265AggregationUnitFirst {
-    return p.firstUnit
-}
-
-// OtherUnits returns the all the other Aggregated Unit of the packet (excluding the first one).
-func (p *H265AggregationPacket) OtherUnits() []H265AggregationUnit {
-    return p.otherUnits
-}
-
-func (p *H265AggregationPacket) is_h265packet() {}
-
-//
-// Fragmentation Unit implementation
-//
-
-const (
-    // sizeof(uint8)
-    h265FragmentationUnitHeaderSize = 1
-)
-
-// H265FragmentationUnitHeader is a H265 FU Header
-// +---------------+
-// |0|1|2|3|4|5|6|7|
-// +-+-+-+-+-+-+-+-+
-// |S|E|  FuType   |
-// +---------------+
-type H265FragmentationUnitHeader uint8
-
-// S represents the start of a fragmented NAL unit.
-func (h H265FragmentationUnitHeader) S() bool {
-    const mask = 0b10000000
-    return ((h & mask) >> 7) != 0
-}
-
-// E represents the end of a fragmented NAL unit.
-func (h H265FragmentationUnitHeader) E() bool {
-    const mask = 0b01000000
-    return ((h & mask) >> 6) != 0
-}
-
-// FuType MUST be equal to the field Type of the fragmented NAL unit.
-func (h H265FragmentationUnitHeader) FuType() uint8 {
-    const mask = 0b00111111
-    return uint8(h) & mask
-}
-
-// H265FragmentationUnitPacket represents a single Fragmentation Unit packet.
-//
-//  0                   1                   2                   3
-// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |    PayloadHdr (Type=49)       |   FU header   | DONL (cond)   |
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-|
-// | DONL (cond)   |                                               |
-// |-+-+-+-+-+-+-+-+                                               |
-// |                         FU payload                            |
-// |                                                               |
-// |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |                               :...OPTIONAL RTP padding        |
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//
-// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
-type H265FragmentationUnitPacket struct {
-    // payload_header is the header of the H265 packet.
-    payload_header H265NALUHeader
-    // fuHeader is the header of the fragmentation unit
-    fuHeader H265FragmentationUnitHeader
-    // donl is a 16-bit field, that may or may not be present.
-    donl *uint16
-    // payload of the fragmentation unit.
-    payload []byte
-
-    might_need_donl bool
-}
-
-// with_donl can be called to specify whether or not DONL might be parsed.
-// DONL may need to be parsed if `sprop-max-don-diff` is greater than 0 on the RTP stream.
-func (p *H265FragmentationUnitPacket) with_donl(value bool) {
-    p.might_need_donl = value
-}
-
-// Unmarshal parses the passed byte slice and stores the result in the H265FragmentationUnitPacket this method is called upon.
-func (p *H265FragmentationUnitPacket) Unmarshal(payload []byte) ([]byte, error) {
-    // sizeof(headers)
-    const totalHeaderSize = H265NALU_HEADER_SIZE + h265FragmentationUnitHeaderSize
-    if payload == nil {
-        return nil, errNilPacket
-    } else if len(payload) <= totalHeaderSize {
-        return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
-    }
-
-    payload_header := newH265NALUHeader(payload[0], payload[1])
-    if payload_header.F() {
-        return nil, errH265CorruptedPacket
-    }
-    if !payload_header.is_fragmentation_unit() {
-        return nil, errInvalidH265PacketType
-    }
-
-    fuHeader := H265FragmentationUnitHeader(payload[2])
-    payload = payload[3:]
-
-    if fuHeader.S() && p.might_need_donl {
-        // sizeof(uint16)
-        if len(payload) <= 2 {
+        // There need to be **at least** two Aggregation Units (first + another one)
+        if len(units) == 0 {
             return nil, errShortPacket
         }
 
-        donl := (uint16(payload[0]) << 8) | uint16(payload[1])
-        p.donl = &donl
-        payload = payload[2:]
+        p.first_unit = first_unit
+        p.other_units = units
+
+        return nil, nil
+    }*/
+
+    /// first_unit returns the first Aggregated Unit of the packet.
+    pub fn first_unit(&self) -> Option<&H265AggregationUnitFirst> {
+        self.first_unit.as_ref()
     }
 
-    p.payload_header = payload_header
-    p.fuHeader = fuHeader
-    p.payload = payload
-
-    return nil, nil
-}
-
-// payload_header returns the NALU header of the packet.
-func (p *H265FragmentationUnitPacket) payload_header() H265NALUHeader {
-    return p.payload_header
-}
-
-// FuHeader returns the Fragmentation Unit Header of the packet.
-func (p *H265FragmentationUnitPacket) FuHeader() H265FragmentationUnitHeader {
-    return p.fuHeader
-}
-
-// DONL returns the DONL of the packet.
-func (p *H265FragmentationUnitPacket) DONL() *uint16 {
-    return p.donl
-}
-
-// payload returns the Fragmentation Unit packet payload.
-func (p *H265FragmentationUnitPacket) payload() []byte {
-    return p.payload
-}
-
-func (p *H265FragmentationUnitPacket) is_h265packet() {}
-
-//
-// PACI implementation
-//
-
-// H265PACIPacket represents a single H265 PACI packet.
-//
-//  0                   1                   2                   3
-// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |    PayloadHdr (Type=50)       |A|   cType   | PHSsize |F0..2|Y|
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |        payload Header Extension Structure (PHES)              |
-// |=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=|
-// |                                                               |
-// |                  PACI payload: NAL unit                       |
-// |                   . . .                                       |
-// |                                                               |
-// |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-// |                               :...OPTIONAL RTP padding        |
-// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//
-// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
-type H265PACIPacket struct {
-    // payload_header is the header of the H265 packet.
-    payload_header H265NALUHeader
-
-    // Field which holds value for `A`, `cType`, `PHSsize`, `F0`, `F1`, `F2` and `Y` fields.
-    paciHeaderFields uint16
-
-    // phes is a header extension, of byte length `PHSsize`
-    phes []byte
-
-    // payload contains NAL units & optional padding
-    payload []byte
-}
-
-// payload_header returns the NAL Unit Header.
-func (p *H265PACIPacket) payload_header() H265NALUHeader {
-    return p.payload_header
-}
-
-// A copies the F bit of the PACI payload NALU.
-func (p *H265PACIPacket) A() bool {
-    const mask = 0b10000000 << 8
-    return (p.paciHeaderFields & mask) != 0
-}
-
-// CType copies the Type field of the PACI payload NALU.
-func (p *H265PACIPacket) CType() uint8 {
-    const mask = 0b01111110 << 8
-    return uint8((p.paciHeaderFields & mask) >> (8 + 1))
-}
-
-// PHSsize indicates the size of the PHES field.
-func (p *H265PACIPacket) PHSsize() uint8 {
-    const mask = (0b00000001 << 8) | 0b11110000
-    return uint8((p.paciHeaderFields & mask) >> 4)
-}
-
-// F0 indicates the presence of a Temporal Scalability support extension in the PHES.
-func (p *H265PACIPacket) F0() bool {
-    const mask = 0b00001000
-    return (p.paciHeaderFields & mask) != 0
-}
-
-// F1 must be zero, reserved for future extensions.
-func (p *H265PACIPacket) F1() bool {
-    const mask = 0b00000100
-    return (p.paciHeaderFields & mask) != 0
-}
-
-// F2 must be zero, reserved for future extensions.
-func (p *H265PACIPacket) F2() bool {
-    const mask = 0b00000010
-    return (p.paciHeaderFields & mask) != 0
-}
-
-// Y must be zero, reserved for future extensions.
-func (p *H265PACIPacket) Y() bool {
-    const mask = 0b00000001
-    return (p.paciHeaderFields & mask) != 0
-}
-
-// PHES contains header extensions. Its size is indicated by PHSsize.
-func (p *H265PACIPacket) PHES() []byte {
-    return p.phes
-}
-
-// payload is a single NALU or NALU-like struct, not including the first two octets (header).
-func (p *H265PACIPacket) payload() []byte {
-    return p.payload
-}
-
-// TSCI returns the Temporal Scalability Control Information extension, if present.
-func (p *H265PACIPacket) TSCI() *H265TSCI {
-    if !p.F0() || p.PHSsize() < 3 {
-        return nil
+    /// other_units returns the all the other Aggregated Unit of the packet (excluding the first one).
+    pub fn other_units(&self) -> &[H265AggregationUnit] {
+        self.other_units.as_slice()
     }
 
-    tsci := H265TSCI((uint32(p.phes[0]) << 16) | (uint32(p.phes[1]) << 8) | uint32(p.phes[0]))
-    return &tsci
+    fn is_h265packet(&self) {}
 }
 
-// Unmarshal parses the passed byte slice and stores the result in the H265PACIPacket this method is called upon.
-func (p *H265PACIPacket) Unmarshal(payload []byte) ([]byte, error) {
-    // sizeof(headers)
-    const totalHeaderSize = H265NALU_HEADER_SIZE + 2
-    if payload == nil {
-        return nil, errNilPacket
-    } else if len(payload) <= totalHeaderSize {
-        return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+///
+/// Fragmentation Unit implementation
+///
+
+const H265FRAGMENTATION_UNIT_HEADER_SIZE: usize = 1;
+
+/// H265FragmentationUnitHeader is a H265 FU Header
+/// +---------------+
+/// |0|1|2|3|4|5|6|7|
+/// +-+-+-+-+-+-+-+-+
+/// |S|E|  fu_type   |
+/// +---------------+
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
+pub struct H265FragmentationUnitHeader(pub u8);
+
+impl H265FragmentationUnitHeader {
+    /// s represents the start of a fragmented NAL unit.
+    pub fn s(&self) -> bool {
+        const MASK: u8 = 0b10000000;
+        ((self.0 & MASK) >> 7) != 0
     }
 
-    payload_header := newH265NALUHeader(payload[0], payload[1])
-    if payload_header.F() {
-        return nil, errH265CorruptedPacket
-    }
-    if !payload_header.is_pacipacket() {
-        return nil, errInvalidH265PacketType
+    /// e represents the end of a fragmented NAL unit.
+    pub fn e(&self) -> bool {
+        const MASK: u8 = 0b01000000;
+        ((self.0 & MASK) >> 6) != 0
     }
 
-    paciHeaderFields := (uint16(payload[2]) << 8) | uint16(payload[3])
-    payload = payload[4:]
+    /// fu_type MUST be equal to the field Type of the fragmented NAL unit.
+    pub fn fu_type(&self) -> u8 {
+        const MASK: u8 = 0b00111111;
+        self.0 & MASK
+    }
+}
 
-    p.paciHeaderFields = paciHeaderFields
-    headerExtensionSize := p.PHSsize()
+/// H265FragmentationUnitPacket represents a single Fragmentation Unit packet.
+///
+///  0                   1                   2                   3
+/// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |    PayloadHdr (Type=49)       |   FU header   | DONL (cond)   |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-|
+/// | DONL (cond)   |                                               |
+/// |-+-+-+-+-+-+-+-+                                               |
+/// |                         FU payload                            |
+/// |                                                               |
+/// |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                               :...OPTIONAL RTP padding        |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///
+/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+#[derive(Default, Debug, Clone)]
+pub struct H265FragmentationUnitPacket {
+    /// payload_header is the header of the H265 packet.
+    payload_header: H265NALUHeader,
+    /// fu_header is the header of the fragmentation unit
+    fu_header: H265FragmentationUnitHeader,
+    /// donl is a 16-bit field, that may or may not be present.
+    donl: Option<u16>,
+    /// payload of the fragmentation unit.
+    payload: Bytes,
 
-    if len(payload) < int(headerExtensionSize)+1 {
-        p.paciHeaderFields = 0
-        return nil, errShortPacket
+    might_need_donl: bool,
+}
+
+impl H265FragmentationUnitPacket {
+    /// with_donl can be called to specify whether or not DONL might be parsed.
+    /// DONL may need to be parsed if `sprop-max-don-diff` is greater than 0 on the RTP stream.
+    pub fn with_donl(&mut self, value: bool) {
+        self.might_need_donl = value;
     }
 
-    p.payload_header = payload_header
-
-    if headerExtensionSize > 0 {
-        p.phes = payload[:headerExtensionSize]
-    }
-
-    payload = payload[headerExtensionSize:]
-    p.payload = payload
-
-    return nil, nil
-}
-
-func (p *H265PACIPacket) is_h265packet() {}
-
-//
-// Temporal Scalability Control Information
-//
-
-// H265TSCI is a Temporal Scalability Control Information header extension.
-// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.5
-type H265TSCI uint32
-
-// TL0PICIDX see RFC7798 for more details.
-func (h H265TSCI) TL0PICIDX() uint8 {
-    const m1 = 0xFFFF0000
-    const m2 = 0xFF00
-    return uint8((((h & m1) >> 16) & m2) >> 8)
-}
-
-// IrapPicID see RFC7798 for more details.
-func (h H265TSCI) IrapPicID() uint8 {
-    const m1 = 0xFFFF0000
-    const m2 = 0x00FF
-    return uint8(((h & m1) >> 16) & m2)
-}
-
-// S see RFC7798 for more details.
-func (h H265TSCI) S() bool {
-    const m1 = 0xFF00
-    const m2 = 0b10000000
-    return (uint8((h&m1)>>8) & m2) != 0
-}
-
-// E see RFC7798 for more details.
-func (h H265TSCI) E() bool {
-    const m1 = 0xFF00
-    const m2 = 0b01000000
-    return (uint8((h&m1)>>8) & m2) != 0
-}
-
-// RES see RFC7798 for more details.
-func (h H265TSCI) RES() uint8 {
-    const m1 = 0xFF00
-    const m2 = 0b00111111
-    return uint8((h&m1)>>8) & m2
-}
-
-//
-// H265 Packet interface
-//
-
-type is_h265packet interface {
-    is_h265packet()
-}
-
-var (
-    _ is_h265packet = (*H265FragmentationUnitPacket)(nil)
-    _ is_h265packet = (*H265PACIPacket)(nil)
-    _ is_h265packet = (*H265SingleNALUnitPacket)(nil)
-    _ is_h265packet = (*H265AggregationPacket)(nil)
-)
-
-//
-// Packet implementation
-//
-
-// H265Packet represents a H265 packet, stored in the payload of an RTP packet.
-type H265Packet struct {
-    packet        is_h265packet
-    might_need_donl bool
-}
-
-// with_donl can be called to specify whether or not DONL might be parsed.
-// DONL may need to be parsed if `sprop-max-don-diff` is greater than 0 on the RTP stream.
-func (p *H265Packet) with_donl(value bool) {
-    p.might_need_donl = value
-}
-
-// Unmarshal parses the passed byte slice and stores the result in the H265Packet this method is called upon
-func (p *H265Packet) Unmarshal(payload []byte) ([]byte, error) {
-    if payload == nil {
-        return nil, errNilPacket
-    } else if len(payload) <= H265NALU_HEADER_SIZE {
-        return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), H265NALU_HEADER_SIZE)
-    }
-
-    payload_header := newH265NALUHeader(payload[0], payload[1])
-    if payload_header.F() {
-        return nil, errH265CorruptedPacket
-    }
-
-    switch {
-    case payload_header.is_pacipacket():
-        decoded := &H265PACIPacket{}
-        if _, err := decoded.Unmarshal(payload); err != nil {
-            return nil, err
+    /*TODO:
+    // Unmarshal parses the passed byte slice and stores the result in the H265FragmentationUnitPacket this method is called upon.
+    func (p *H265FragmentationUnitPacket) Unmarshal(payload []byte) ([]byte, error) {
+        // sizeof(headers)
+        const totalHeaderSize = H265NALU_HEADER_SIZE + H265FRAGMENTATION_UNIT_HEADER_SIZE
+        if payload == nil {
+            return nil, errNilPacket
+        } else if len(payload) <= totalHeaderSize {
+            return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
         }
 
-        p.packet = decoded
-
-    case payload_header.is_fragmentation_unit():
-        decoded := &H265FragmentationUnitPacket{}
-        decoded.with_donl(p.might_need_donl)
-
-        if _, err := decoded.Unmarshal(payload); err != nil {
-            return nil, err
+        payload_header := newH265NALUHeader(payload[0], payload[1])
+        if payload_header.F() {
+            return nil, errH265CorruptedPacket
+        }
+        if !payload_header.is_fragmentation_unit() {
+            return nil, errInvalidH265PacketType
         }
 
-        p.packet = decoded
+        fu_header := H265FragmentationUnitHeader(payload[2])
+        payload = payload[3:]
 
-    case payload_header.is_aggregation_packet():
-        decoded := &H265AggregationPacket{}
-        decoded.with_donl(p.might_need_donl)
+        if fu_header.S() && p.might_need_donl {
+            // sizeof(uint16)
+            if len(payload) <= 2 {
+                return nil, errShortPacket
+            }
 
-        if _, err := decoded.Unmarshal(payload); err != nil {
-            return nil, err
+            donl := (uint16(payload[0]) << 8) | uint16(payload[1])
+            p.donl = &donl
+            payload = payload[2:]
         }
 
-        p.packet = decoded
+        p.payload_header = payload_header
+        p.fu_header = fu_header
+        p.payload = payload
 
-    default:
-        decoded := &H265SingleNALUnitPacket{}
-        decoded.with_donl(p.might_need_donl)
+        return nil, nil
+    }*/
 
-        if _, err := decoded.Unmarshal(payload); err != nil {
-            return nil, err
-        }
-
-        p.packet = decoded
+    /// payload_header returns the NALU header of the packet.
+    pub fn payload_header(&self) -> H265NALUHeader {
+        self.payload_header
     }
 
-    return nil, nil
+    /// fu_header returns the Fragmentation Unit Header of the packet.
+    pub fn fu_header(&self) -> H265FragmentationUnitHeader {
+        self.fu_header
+    }
+
+    /// donl returns the DONL of the packet.
+    pub fn donl(&self) -> Option<u16> {
+        self.donl
+    }
+
+    /// payload returns the Fragmentation Unit packet payload.
+    pub fn payload(&self) -> Bytes {
+        self.payload.clone()
+    }
+
+    fn is_h265packet(&self) {}
 }
 
-// Packet returns the populated packet.
-// Must be casted to one of:
-// - *H265SingleNALUnitPacket
-// - *H265FragmentationUnitPacket
-// - *H265AggregationPacket
-// - *H265PACIPacket
-// nolint:golint
-func (p *H265Packet) Packet() is_h265packet {
-    return p.packet
+///
+/// PACI implementation
+///
+
+/// H265PACIPacket represents a single H265 PACI packet.
+///
+///  0                   1                   2                   3
+/// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |    PayloadHdr (Type=50)       |A|   cType   | phssize |F0..2|Y|
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |        payload Header Extension Structure (phes)              |
+/// |=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=|
+/// |                                                               |
+/// |                  PACI payload: NAL unit                       |
+/// |                   . . .                                       |
+/// |                                                               |
+/// |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                               :...OPTIONAL RTP padding        |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///
+/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
+#[derive(Default, Debug, Clone)]
+pub struct H265PACIPacket {
+    /// payload_header is the header of the H265 packet.
+    payload_header: H265NALUHeader,
+
+    /// Field which holds value for `A`, `cType`, `phssize`, `F0`, `F1`, `F2` and `Y` fields.
+    paci_header_fields: u16,
+
+    /// phes is a header extension, of byte length `phssize`
+    phes: Bytes,
+
+    /// payload contains NAL units & optional padding
+    payload: Bytes,
 }
-*/
+
+impl H265PACIPacket {
+    /// payload_header returns the NAL Unit Header.
+    pub fn payload_header(&self) -> H265NALUHeader {
+        self.payload_header
+    }
+
+    /// a copies the F bit of the PACI payload NALU.
+    pub fn a(&self) -> bool {
+        const MASK: u16 = 0b10000000 << 8;
+        (self.paci_header_fields & MASK) != 0
+    }
+
+    /// ctype copies the Type field of the PACI payload NALU.
+    pub fn ctype(&self) -> u8 {
+        const MASK: u16 = 0b01111110 << 8;
+        ((self.paci_header_fields & MASK) >> (8 + 1)) as u8
+    }
+
+    /// phssize indicates the size of the phes field.
+    pub fn phssize(&self) -> u8 {
+        const MASK: u16 = (0b00000001 << 8) | 0b11110000;
+        ((self.paci_header_fields & MASK) >> 4) as u8
+    }
+
+    /// f0 indicates the presence of a Temporal Scalability support extension in the phes.
+    pub fn f0(&self) -> bool {
+        const MASK: u16 = 0b00001000;
+        (self.paci_header_fields & MASK) != 0
+    }
+
+    /// f1 must be zero, reserved for future extensions.
+    pub fn f1(&self) -> bool {
+        const MASK: u16 = 0b00000100;
+        (self.paci_header_fields & MASK) != 0
+    }
+
+    /// f2 must be zero, reserved for future extensions.
+    pub fn f2(&self) -> bool {
+        const MASK: u16 = 0b00000010;
+        (self.paci_header_fields & MASK) != 0
+    }
+
+    /// y must be zero, reserved for future extensions.
+    pub fn y(&self) -> bool {
+        const MASK: u16 = 0b00000001;
+        (self.paci_header_fields & MASK) != 0
+    }
+
+    /// phes contains header extensions. Its size is indicated by phssize.
+    pub fn phes(&self) -> Bytes {
+        self.phes.clone()
+    }
+
+    /// payload is a single NALU or NALU-like struct, not including the first two octets (header).
+    pub fn payload(&self) -> Bytes {
+        self.payload.clone()
+    }
+
+    /// tsci returns the Temporal Scalability Control Information extension, if present.
+    pub fn tsci(&self) -> Option<H265TSCI> {
+        if !self.f0() || self.phssize() < 3 {
+            return None;
+        }
+
+        Some(H265TSCI(
+            ((self.phes[0] as u32) << 16) | ((self.phes[1] as u32) << 8) | self.phes[0] as u32,
+        ))
+    }
+
+    /*TODO:
+    // Unmarshal parses the passed byte slice and stores the result in the H265PACIPacket this method is called upon.
+    func (p *H265PACIPacket) Unmarshal(payload []byte) ([]byte, error) {
+        // sizeof(headers)
+        const totalHeaderSize = H265NALU_HEADER_SIZE + 2
+        if payload == nil {
+            return nil, errNilPacket
+        } else if len(payload) <= totalHeaderSize {
+            return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+        }
+
+        payload_header := newH265NALUHeader(payload[0], payload[1])
+        if payload_header.F() {
+            return nil, errH265CorruptedPacket
+        }
+        if !payload_header.is_pacipacket() {
+            return nil, errInvalidH265PacketType
+        }
+
+        paci_header_fields := (uint16(payload[2]) << 8) | uint16(payload[3])
+        payload = payload[4:]
+
+        p.paci_header_fields = paci_header_fields
+        headerExtensionSize := p.phssize()
+
+        if len(payload) < int(headerExtensionSize)+1 {
+            p.paci_header_fields = 0
+            return nil, errShortPacket
+        }
+
+        p.payload_header = payload_header
+
+        if headerExtensionSize > 0 {
+            p.phes = payload[:headerExtensionSize]
+        }
+
+        payload = payload[headerExtensionSize:]
+        p.payload = payload
+
+        return nil, nil
+    }*/
+
+    fn is_h265packet(&self) {}
+}
+
+///
+/// Temporal Scalability Control Information
+///
+
+/// H265TSCI is a Temporal Scalability Control Information header extension.
+/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.5
+pub struct H265TSCI(pub u32);
+
+impl H265TSCI {
+    /// tl0picidx see RFC7798 for more details.
+    pub fn tl0picidx(&self) -> u8 {
+        const M1: u32 = 0xFFFF0000;
+        const M2: u32 = 0xFF00;
+        ((((self.0 & M1) >> 16) & M2) >> 8) as u8
+    }
+
+    /// irap_pic_id see RFC7798 for more details.
+    pub fn irap_pic_id(&self) -> u8 {
+        const M1: u32 = 0xFFFF0000;
+        const M2: u32 = 0x00FF;
+        (((self.0 & M1) >> 16) & M2) as u8
+    }
+
+    /// s see RFC7798 for more details.
+    pub fn s(&self) -> bool {
+        const M1: u32 = 0xFF00;
+        const M2: u32 = 0b10000000;
+        (((self.0 & M1) >> 8) & M2) != 0
+    }
+
+    /// e see RFC7798 for more details.
+    pub fn e(&self) -> bool {
+        const M1: u32 = 0xFF00;
+        const M2: u32 = 0b01000000;
+        (((self.0 & M1) >> 8) & M2) != 0
+    }
+
+    /// res see RFC7798 for more details.
+    pub fn res(&self) -> u8 {
+        const M1: u32 = 0xFF00;
+        const M2: u32 = 0b00111111;
+        (((self.0 & M1) >> 8) & M2) as u8
+    }
+}
+
+///
+/// H265 Packet interface
+///
+pub trait IsH265packet {
+    fn is_h265packet(&self);
+}
+
+///
+/// Packet implementation
+///
+
+/// H265Packet represents a H265 packet, stored in the payload of an RTP packet.
+pub struct H265Packet {
+    packet: Box<dyn IsH265packet>,
+    might_need_donl: bool,
+}
+
+impl H265Packet {
+    /// with_donl can be called to specify whether or not DONL might be parsed.
+    /// DONL may need to be parsed if `sprop-max-don-diff` is greater than 0 on the RTP stream.
+    pub fn with_donl(&mut self, value: bool) {
+        self.might_need_donl = value;
+    }
+
+    /// Packet returns the populated packet.
+    /// Must be casted to one of:
+    /// - *H265SingleNALUnitPacket
+    /// - *H265FragmentationUnitPacket
+    /// - *H265AggregationPacket
+    /// - *H265PACIPacket
+    pub fn packet(&self) -> &dyn IsH265packet {
+        self.packet.as_ref()
+    }
+}
+
+impl Depacketizer for H265Packet {
+    /// depacketize parses the passed byte slice and stores the result in the H265Packet this method is called upon
+    fn depacketize(&mut self, payload: &Bytes) -> Result<Bytes> {
+        if payload.len() <= H265NALU_HEADER_SIZE {
+            return Err(Error::ErrShortPacket);
+        }
+
+        let payload_header = H265NALUHeader::new(payload[0], payload[1]);
+        if payload_header.f() {
+            return Err(Error::ErrH265CorruptedPacket);
+        }
+
+        /*
+        if payload_header.is_paci_packet() {
+            decoded: = &H265PACIPacket {}
+            if _, err: = decoded.Unmarshal(payload);
+            err != nil {
+                return nil,
+                err
+            }
+
+            p.packet = decoded
+        }else if payload_header.is_fragmentation_unit() {
+            decoded: = &H265FragmentationUnitPacket {}
+            decoded.with_donl(p.might_need_donl)
+
+            if _, err: = decoded.Unmarshal(payload);
+            err != nil {
+                return nil,
+                err
+            }
+
+            p.packet = decoded
+        }else if payload_header.is_aggregation_packet() {
+            decoded: = &H265AggregationPacket {}
+            decoded.with_donl(p.might_need_donl)
+
+            if _, err: = decoded.Unmarshal(payload);
+            err != nil {
+                return nil,
+                err
+            }
+
+            p.packet = decoded
+        }else{
+            decoded := &H265SingleNALUnitPacket{}
+            decoded.with_donl(p.might_need_donl)
+
+            if _, err := decoded.Unmarshal(payload); err != nil {
+                return nil, err
+            }
+
+            p.packet = decoded
+        }*/
+        Ok(Bytes::new())
+    }
+
+    /// is_partition_head checks if this is the head of a packetized nalu stream.
+    fn is_partition_head(&self, _payload: &Bytes) -> bool {
+        //TODO:
+        true
+    }
+
+    fn is_partition_tail(&self, marker: bool, _payload: &Bytes) -> bool {
+        marker
+    }
+}

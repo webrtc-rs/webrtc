@@ -35,7 +35,7 @@ impl Payloader for Vp8Payloader {
          *      +-+-+-+-+-+-+-+-+
          * I:   |M| PictureID   | (OPTIONAL)
          *      +-+-+-+-+-+-+-+-+
-         * L:   |   TL0PICIDX   | (OPTIONAL)
+         * L:   |   tl0picidx   | (OPTIONAL)
          *      +-+-+-+-+-+-+-+-+
          * T/K: |tid|Y| KEYIDX  | (OPTIONAL)
          *      +-+-+-+-+-+-+-+-+
@@ -126,7 +126,7 @@ pub struct Vp8Packet {
     /// Extended control bits
     /// 1 if PictureID is present
     pub i: u8,
-    /// 1 if TL0PICIDX is present
+    /// 1 if tl0picidx is present
     pub l: u8,
     /// 1 if tid is present
     pub t: u8,
@@ -161,9 +161,9 @@ impl Depacketizer for Vp8Packet {
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
         // I: |M| PictureID   | (OPTIONAL)   I:   |M| PictureID   | (OPTIONAL)
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
-        // L: |   TL0PICIDX   | (OPTIONAL)        |   PictureID   |
+        // L: |   tl0picidx   | (OPTIONAL)        |   PictureID   |
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
-        //T/K:|tid|Y| KEYIDX  | (OPTIONAL)   L:   |   TL0PICIDX   | (OPTIONAL)
+        //T/K:|tid|Y| KEYIDX  | (OPTIONAL)   L:   |   tl0picidx   | (OPTIONAL)
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
         //T/K:|tid|Y| KEYIDX  | (OPTIONAL)
         //    +-+-+-+-+-+-+-+-+

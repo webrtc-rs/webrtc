@@ -70,7 +70,7 @@ impl Payloader for Vp9Payloader {
          *       +-+-+-+-+-+-+-+-+
          *  L:   | tid |U| SID |D| (CONDITIONALLY RECOMMENDED)
          *       +-+-+-+-+-+-+-+-+
-         *       |   TL0PICIDX   | (CONDITIONALLY REQUIRED)
+         *       |   tl0picidx   | (CONDITIONALLY REQUIRED)
          *       +-+-+-+-+-+-+-+-+
          *  V:   | SS            |
          *       | ..            |
