@@ -273,67 +273,82 @@ async fn test_sender_interceptor_packet_loss() -> Result<()> {
     Ok(())
 }
 
-/*
 #[tokio::test]
-async fn test_sender_interceptor_overflow() ->Result<()> {
-    f, err := NewSenderInterceptor(SendInterval(2 * time.Second))
-    assert.NoError(t, err)
+async fn test_sender_interceptor_overflow() -> Result<()> {
+    let builder = Sender::builder();
+    let icpr = builder.build("")?;
 
-    i, err := f.NewInterceptor("")
-    assert.NoError(t, err)
-
-    stream := test.NewMockStream(&interceptor.StreamInfo{RTPHeaderExtensions: []interceptor.RTPHeaderExtension{
-        {
-            URI: transportCCURI,
-            ID:  1,
+    let stream = MockStream::new(
+        &StreamInfo {
+            ssrc: 1,
+            rtp_header_extensions: vec![RTPHeaderExtension {
+                uri: TRANSPORT_CC_URI.to_owned(),
+                id: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
         },
-    }}, i)
-    defer func() {
-        assert.NoError(t, stream.Close())
-    }()
+        icpr,
+    )
+    .await;
 
-    for _, i := range []int{65530, 65534, 65535, 1, 2, 10} {
-        hdr := rtp.Header{}
-        tcc, err := (&rtp.TransportCCExtension{TransportSequence: uint16(i)}).Marshal()
-        assert.NoError(t, err)
-        err = hdr.SetExtension(1, tcc)
-        assert.NoError(t, err)
-        stream.ReceiveRTP(&rtp.Packet{Header: hdr})
+    for i in [65530, 65534, 65535, 1, 2, 10] {
+        let mut hdr = rtp::header::Header::default();
+        let tcc = TransportCcExtension {
+            transport_sequence: i,
+        }
+        .marshal()?;
+        hdr.set_extension(1, tcc)?;
+        stream
+            .receive_rtp(rtp::packet::Packet {
+                header: hdr,
+                ..Default::default()
+            })
+            .await;
     }
 
-    pkts := <-stream.WrittenRTCP()
-    assert.Equal(t, 1, len(pkts))
-    cc, ok := pkts[0].(*rtcp.TransportLayerCC)
-    assert.True(t, ok)
-    assert.Equal(t, uint16(65530), cc.BaseSequenceNumber)
-    assert.Equal(t, []rtcp.PacketStatusChunk{
-        &rtcp.StatusVectorChunk{
-            SymbolSize: rtcp.TypeTCCSymbolSizeOneBit,
-            SymbolList: []uint16{
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketNotReceived,
-            },
-        },
-        &rtcp.StatusVectorChunk{
-            SymbolSize: rtcp.TypeTCCSymbolSizeTwoBit,
-            SymbolList: []uint16{
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketNotReceived,
-                rtcp.TypeTCCPacketReceivedSmallDelta,
-            },
-        },
-    }, cc.PacketChunks)
+    let pkt = stream.written_rtcp().await.unwrap();
+    if let Some(cc) = pkt.as_any().downcast_ref::<TransportLayerCc>() {
+        assert_eq!(65530, cc.base_sequence_number);
+        assert_eq!(
+            vec![
+                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::OneBit,
+                    symbol_list: vec![
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                    ],
+                }),
+                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::TwoBit,
+                    symbol_list: vec![
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                    ],
+                }),
+            ],
+            cc.packet_chunks
+        );
+    } else {
+        assert!(false);
+    }
+
+    stream.close().await?;
+
+    Ok(())
 }
-*/
