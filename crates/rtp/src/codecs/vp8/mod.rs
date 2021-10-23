@@ -37,7 +37,7 @@ impl Payloader for Vp8Payloader {
          *      +-+-+-+-+-+-+-+-+
          * L:   |   TL0PICIDX   | (OPTIONAL)
          *      +-+-+-+-+-+-+-+-+
-         * T/K: |TID|Y| KEYIDX  | (OPTIONAL)
+         * T/K: |tid|Y| KEYIDX  | (OPTIONAL)
          *      +-+-+-+-+-+-+-+-+
          *  S: Start of VP8 partition.  SHOULD be set to 1 when the first payload
          *     octet of the RTP packet is the beginning of a new VP8 partition,
@@ -163,9 +163,9 @@ impl Depacketizer for Vp8Packet {
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
         // L: |   TL0PICIDX   | (OPTIONAL)        |   PictureID   |
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
-        //T/K:|TID|Y| KEYIDX  | (OPTIONAL)   L:   |   TL0PICIDX   | (OPTIONAL)
+        //T/K:|tid|Y| KEYIDX  | (OPTIONAL)   L:   |   TL0PICIDX   | (OPTIONAL)
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
-        //T/K:|TID|Y| KEYIDX  | (OPTIONAL)
+        //T/K:|tid|Y| KEYIDX  | (OPTIONAL)
         //    +-+-+-+-+-+-+-+-+
 
         let reader = &mut packet.clone();
