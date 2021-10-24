@@ -49,7 +49,7 @@ fn test_bad_compound() {
 
     let mut bad_compound = Bytes::copy_from_slice(&REAL_PACKET[84..104]);
     let p = unmarshal(&mut bad_compound).expect("Error unmarshalling packet");
-    let compound = p.as_any().downcast_ref::<CompoundPacket>().unwrap();
+    let compound = CompoundPacket(p);
 
     // this should return an error,
     // it violates the "must start with RR or SR" rule

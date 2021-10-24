@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::{
-    compound_packet::*, error::Error, goodbye::*, header::*,
-    payload_feedbacks::full_intra_request::*, payload_feedbacks::picture_loss_indication::*,
+    error::Error, goodbye::*, header::*, payload_feedbacks::full_intra_request::*,
+    payload_feedbacks::picture_loss_indication::*,
     payload_feedbacks::receiver_estimated_maximum_bitrate::*,
     payload_feedbacks::slice_loss_indication::*, raw_packet::*, receiver_report::*,
     sender_report::*, source_description::*,
@@ -44,7 +44,7 @@ impl Clone for Box<dyn Packet + Send + Sync> {
 /// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
 /// will be returned. Otherwise, the underlying type of the returned packet will be
 /// CompoundPacket.
-pub fn unmarshal<B>(raw_data: &mut B) -> Result<Box<dyn Packet + Send + Sync>>
+pub fn unmarshal<B>(raw_data: &mut B) -> Result<Vec<Box<dyn Packet + Send + Sync>>>
 where
     B: Buf,
 {
@@ -59,11 +59,8 @@ where
         // Empty Packet
         0 => Err(Error::InvalidHeader),
 
-        // Single Packet
-        1 => packets.pop().ok_or(Error::BadFirstPacket),
-
-        // Compound Packet
-        _ => Ok(Box::new(CompoundPacket(packets))),
+        // Multiple Packet
+        _ => Ok(packets),
     }
 }
 
@@ -187,13 +184,13 @@ mod test {
             media_ssrc: 0x902f9e2e,
         };
 
-        let expected: Box<dyn Packet + Send + Sync> = Box::new(CompoundPacket(vec![
+        let expected: Vec<Box<dyn Packet + Send + Sync>> = vec![
             Box::new(a),
             Box::new(b),
             Box::new(c),
             Box::new(d),
             Box::new(e),
-        ]));
+        ];
 
         assert!(packet == expected, "Invalid packets");
     }
