@@ -24,7 +24,8 @@ pub struct MockStream {
     rtcp_in_tx: Mutex<Option<mpsc::Sender<Box<dyn rtcp::packet::Packet + Send + Sync>>>>,
     rtp_in_tx: Mutex<Option<mpsc::Sender<rtp::packet::Packet>>>,
 
-    rtcp_in_modified_rx: Mutex<mpsc::Receiver<Result<Box<dyn rtcp::packet::Packet + Send + Sync>>>>,
+    rtcp_in_modified_rx:
+        Mutex<mpsc::Receiver<Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>>>>,
     rtp_in_modified_rx: Mutex<mpsc::Receiver<Result<rtp::packet::Packet>>>,
 }
 
@@ -199,7 +200,9 @@ impl MockStream {
     }
 
     /// read_rtcp returns a channel containing the rtcp batched read, modified by the interceptor
-    pub async fn read_rtcp(&self) -> Option<Result<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
+    pub async fn read_rtcp(
+        &self,
+    ) -> Option<Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>>> {
         let mut rtcp_in_modified_rx = self.rtcp_in_modified_rx.lock().await;
         rtcp_in_modified_rx.recv().await
     }

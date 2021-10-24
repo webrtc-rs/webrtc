@@ -12,7 +12,6 @@ use crate::error::{Error, Result};
 use crate::nack::stream_support_nack;
 
 use async_trait::async_trait;
-use rtcp::compound_packet::CompoundPacket;
 use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
 use std::collections::HashMap;
 use std::future::Future;
@@ -109,23 +108,14 @@ impl RTCPReader for ResponderInternal {
         };
 
         let mut b = &buf[..n];
-        let pkt = rtcp::packet::unmarshal(&mut b)?;
-
-        if let Some(nack) = pkt.as_any().downcast_ref::<TransportLayerNack>() {
-            let nack = nack.clone();
-            let streams = Arc::clone(&self.streams);
-            tokio::spawn(async move {
-                ResponderInternal::resend_packets(streams, nack).await;
-            });
-        } else if let Some(cp) = pkt.as_any().downcast_ref::<CompoundPacket>() {
-            for p in &cp.0 {
-                if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
-                    let nack = nack.clone();
-                    let streams = Arc::clone(&self.streams);
-                    tokio::spawn(async move {
-                        ResponderInternal::resend_packets(streams, nack).await;
-                    });
-                }
+        let pkts = rtcp::packet::unmarshal(&mut b)?;
+        for p in &pkts {
+            if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
+                let nack = nack.clone();
+                let streams = Arc::clone(&self.streams);
+                tokio::spawn(async move {
+                    ResponderInternal::resend_packets(streams, nack).await;
+                });
             }
         }
 

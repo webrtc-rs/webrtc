@@ -36,7 +36,7 @@ impl RTCPReader for ReceiverReportInternal {
         };
 
         let mut b = &buf[..n];
-        let pkt = rtcp::packet::unmarshal(&mut b)?;
+        let pkts = rtcp::packet::unmarshal(&mut b)?;
 
         let now = if let Some(f) = &self.now {
             f().await
@@ -44,33 +44,17 @@ impl RTCPReader for ReceiverReportInternal {
             SystemTime::now()
         };
 
-        if let Some(sr) = pkt
-            .as_any()
-            .downcast_ref::<rtcp::sender_report::SenderReport>()
-        {
-            let stream = {
-                let m = self.streams.lock().await;
-                m.get(&sr.ssrc).cloned()
-            };
-            if let Some(stream) = stream {
-                stream.process_sender_report(now, sr).await;
-            }
-        } else if let Some(cp) = pkt
-            .as_any()
-            .downcast_ref::<rtcp::compound_packet::CompoundPacket>()
-        {
-            for p in &cp.0 {
-                if let Some(sr) = p
-                    .as_any()
-                    .downcast_ref::<rtcp::sender_report::SenderReport>()
-                {
-                    let stream = {
-                        let m = self.streams.lock().await;
-                        m.get(&sr.ssrc).cloned()
-                    };
-                    if let Some(stream) = stream {
-                        stream.process_sender_report(now, sr).await;
-                    }
+        for p in &pkts {
+            if let Some(sr) = p
+                .as_any()
+                .downcast_ref::<rtcp::sender_report::SenderReport>()
+            {
+                let stream = {
+                    let m = self.streams.lock().await;
+                    m.get(&sr.ssrc).cloned()
+                };
+                if let Some(stream) = stream {
+                    stream.process_sender_report(now, sr).await;
                 }
             }
         }
