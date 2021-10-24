@@ -13,6 +13,7 @@ use crate::{
 use util::{conn::Conn, marshal::*};
 
 use bytes::Bytes;
+use std::collections::HashSet;
 use std::{
     collections::HashMap,
     marker::{Send, Sync},
@@ -149,7 +150,8 @@ impl Session {
         let ssrcs = if is_rtp {
             vec![rtp::header::Header::unmarshal(&mut buf)?.ssrc]
         } else {
-            rtcp::packet::unmarshal(&mut buf)?.destination_ssrc()
+            let pkts = rtcp::packet::unmarshal(&mut buf)?;
+            destination_ssrc(&pkts)
         };
 
         for ssrc in ssrcs {
@@ -252,4 +254,16 @@ impl Session {
         let raw = pkt.marshal()?;
         self.write(&raw, false).await
     }
+}
+
+/// create a list of Destination SSRCs
+/// that's a superset of all Destinations in the slice.
+fn destination_ssrc(pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>]) -> Vec<u32> {
+    let mut ssrc_set = HashSet::new();
+    for p in pkts {
+        for ssrc in p.destination_ssrc() {
+            ssrc_set.insert(ssrc);
+        }
+    }
+    ssrc_set.into_iter().collect()
 }
