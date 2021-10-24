@@ -116,43 +116,41 @@ impl H265SingleNALUnitPacket {
         self.might_need_donl = value;
     }
 
-    /*TODO:
-    /// Unmarshal parses the passed byte slice and stores the result in the H265SingleNALUnitPacket this method is called upon.
-    pub fn Unmarshal(payload []byte) ([]byte, error) {
-        // sizeof(headers)
-        const totalHeaderSize = H265NALU_HEADER_SIZE
-        if payload == nil {
-            return nil, errNilPacket
-        } else if len(payload) <= totalHeaderSize {
-            return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+    /// depacketize parses the passed byte slice and stores the result in the H265SingleNALUnitPacket this method is called upon.
+    fn depacketize(&mut self, payload: &Bytes) -> Result<()> {
+        if payload.len() <= H265NALU_HEADER_SIZE {
+            return Err(Error::ErrShortPacket);
         }
 
-        payload_header := newH265NALUHeader(payload[0], payload[1])
-        if payload_header.F() {
-            return nil, errH265CorruptedPacket
+        let payload_header = H265NALUHeader::new(payload[0], payload[1]);
+        if payload_header.f() {
+            return Err(Error::ErrH265CorruptedPacket);
         }
-        if payload_header.is_fragmentation_unit() || payload_header.is_pacipacket() || payload_header.is_aggregation_packet() {
-            return nil, errInvalidH265PacketType
+        if payload_header.is_fragmentation_unit()
+            || payload_header.is_paci_packet()
+            || payload_header.is_aggregation_packet()
+        {
+            return Err(Error::ErrInvalidH265PacketType);
         }
 
-        payload = payload[2:]
+        let mut payload = payload.slice(2..);
 
-        if p.might_need_donl {
+        if self.might_need_donl {
             // sizeof(uint16)
-            if len(payload) <= 2 {
-                return nil, errShortPacket
+            if payload.len() <= 2 {
+                return Err(Error::ErrShortPacket);
             }
 
-            donl := (uint16(payload[0]) << 8) | uint16(payload[1])
-            p.donl = &donl
-            payload = payload[2:]
+            let donl = ((payload[0] as u16) << 8) | (payload[1] as u16);
+            self.donl = Some(donl);
+            payload = payload.slice(2..);
         }
 
-        p.payload_header = payload_header
-        p.payload = payload
+        self.payload_header = payload_header;
+        self.payload = payload;
 
-        return nil, nil
-    }*/
+        Ok(())
+    }
 
     /// payload_header returns the NALU header of the packet.
     pub fn payload_header(&self) -> H265NALUHeader {
@@ -168,8 +166,6 @@ impl H265SingleNALUnitPacket {
     pub fn payload(&self) -> Bytes {
         self.payload.clone()
     }
-
-    fn is_h265packet(&self) {}
 }
 
 ///
@@ -270,6 +266,7 @@ impl H265AggregationUnit {
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+#[derive(Default, Debug, Clone)]
 pub struct H265AggregationPacket {
     first_unit: Option<H265AggregationUnitFirst>,
     other_units: Vec<H265AggregationUnit>,
@@ -284,94 +281,89 @@ impl H265AggregationPacket {
         self.might_need_donl = value;
     }
 
-    /*TODO:
-    // Unmarshal parses the passed byte slice and stores the result in the H265AggregationPacket this method is called upon.
-    func (p *H265AggregationPacket) Unmarshal(payload []byte) ([]byte, error) {
-        // sizeof(headers)
-        const totalHeaderSize = H265NALU_HEADER_SIZE
-        if payload == nil {
-            return nil, errNilPacket
-        } else if len(payload) <= totalHeaderSize {
-            return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+    /// depacketize parses the passed byte slice and stores the result in the H265AggregationPacket this method is called upon.
+    fn depacketize(&mut self, payload: &Bytes) -> Result<()> {
+        if payload.len() <= H265NALU_HEADER_SIZE {
+            return Err(Error::ErrShortPacket);
         }
 
-        payload_header := newH265NALUHeader(payload[0], payload[1])
-        if payload_header.F() {
-            return nil, errH265CorruptedPacket
+        let payload_header = H265NALUHeader::new(payload[0], payload[1]);
+        if payload_header.f() {
+            return Err(Error::ErrH265CorruptedPacket);
         }
         if !payload_header.is_aggregation_packet() {
-            return nil, errInvalidH265PacketType
+            return Err(Error::ErrInvalidH265PacketType);
         }
 
         // First parse the first aggregation unit
-        payload = payload[2:]
-        first_unit := &H265AggregationUnitFirst{}
+        let mut payload = payload.slice(2..);
+        let mut first_unit = H265AggregationUnitFirst::default();
 
-        if p.might_need_donl {
-            if len(payload) < 2 {
-                return nil, errShortPacket
+        if self.might_need_donl {
+            if payload.len() < 2 {
+                return Err(Error::ErrShortPacket);
             }
 
-            donl := (uint16(payload[0]) << 8) | uint16(payload[1])
-            first_unit.donl = &donl
+            let donl = ((payload[0] as u16) << 8) | (payload[1] as u16);
+            first_unit.donl = Some(donl);
 
-            payload = payload[2:]
+            payload = payload.slice(2..);
         }
-        if len(payload) < 2 {
-            return nil, errShortPacket
+        if payload.len() < 2 {
+            return Err(Error::ErrShortPacket);
         }
-        first_unit.nal_unit_size = (uint16(payload[0]) << 8) | uint16(payload[1])
-        payload = payload[2:]
+        first_unit.nal_unit_size = ((payload[0] as u16) << 8) | (payload[1] as u16);
+        payload = payload.slice(2..);
 
-        if len(payload) < int(first_unit.nal_unit_size) {
-            return nil, errShortPacket
+        if payload.len() < first_unit.nal_unit_size as usize {
+            return Err(Error::ErrShortPacket);
         }
 
-        first_unit.nal_unit = payload[:first_unit.nal_unit_size]
-        payload = payload[first_unit.nal_unit_size:]
+        first_unit.nal_unit = payload.slice(..first_unit.nal_unit_size as usize);
+        payload = payload.slice(first_unit.nal_unit_size as usize..);
 
         // Parse remaining Aggregation Units
-        var units []H265AggregationUnit
-        for {
-            unit := H265AggregationUnit{}
+        let mut units = vec![]; //H265AggregationUnit
+        loop {
+            let mut unit = H265AggregationUnit::default();
 
-            if p.might_need_donl {
-                if len(payload) < 1 {
-                    break
+            if self.might_need_donl {
+                if payload.is_empty() {
+                    break;
                 }
 
-                dond := payload[0]
-                unit.dond = &dond
+                let dond = payload[0];
+                unit.dond = Some(dond);
 
-                payload = payload[1:]
+                payload = payload.slice(1..);
             }
 
-            if len(payload) < 2 {
-                break
+            if payload.len() < 2 {
+                break;
             }
-            unit.nal_unit_size = (uint16(payload[0]) << 8) | uint16(payload[1])
-            payload = payload[2:]
+            unit.nal_unit_size = ((payload[0] as u16) << 8) | (payload[1] as u16);
+            payload = payload.slice(2..);
 
-            if len(payload) < int(unit.nal_unit_size) {
-                break
+            if payload.len() < unit.nal_unit_size as usize {
+                break;
             }
 
-            unit.nal_unit = payload[:unit.nal_unit_size]
-            payload = payload[unit.nal_unit_size:]
+            unit.nal_unit = payload.slice(..unit.nal_unit_size as usize);
+            payload = payload.slice(unit.nal_unit_size as usize..);
 
-            units = append(units, unit)
+            units.push(unit);
         }
 
         // There need to be **at least** two Aggregation Units (first + another one)
-        if len(units) == 0 {
-            return nil, errShortPacket
+        if units.is_empty() {
+            return Err(Error::ErrShortPacket);
         }
 
-        p.first_unit = first_unit
-        p.other_units = units
+        self.first_unit = Some(first_unit);
+        self.other_units = units;
 
-        return nil, nil
-    }*/
+        Ok(())
+    }
 
     /// first_unit returns the first Aggregated Unit of the packet.
     pub fn first_unit(&self) -> Option<&H265AggregationUnitFirst> {
@@ -382,8 +374,6 @@ impl H265AggregationPacket {
     pub fn other_units(&self) -> &[H265AggregationUnit] {
         self.other_units.as_slice()
     }
-
-    fn is_h265packet(&self) {}
 }
 
 ///
@@ -458,45 +448,40 @@ impl H265FragmentationUnitPacket {
         self.might_need_donl = value;
     }
 
-    /*TODO:
-    // Unmarshal parses the passed byte slice and stores the result in the H265FragmentationUnitPacket this method is called upon.
-    func (p *H265FragmentationUnitPacket) Unmarshal(payload []byte) ([]byte, error) {
-        // sizeof(headers)
-        const totalHeaderSize = H265NALU_HEADER_SIZE + H265FRAGMENTATION_UNIT_HEADER_SIZE
-        if payload == nil {
-            return nil, errNilPacket
-        } else if len(payload) <= totalHeaderSize {
-            return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+    /// depacketize parses the passed byte slice and stores the result in the H265FragmentationUnitPacket this method is called upon.
+    fn depacketize(&mut self, payload: &Bytes) -> Result<()> {
+        const TOTAL_HEADER_SIZE: usize = H265NALU_HEADER_SIZE + H265FRAGMENTATION_UNIT_HEADER_SIZE;
+        if payload.len() <= TOTAL_HEADER_SIZE {
+            return Err(Error::ErrShortPacket);
         }
 
-        payload_header := newH265NALUHeader(payload[0], payload[1])
-        if payload_header.F() {
-            return nil, errH265CorruptedPacket
+        let payload_header = H265NALUHeader::new(payload[0], payload[1]);
+        if payload_header.f() {
+            return Err(Error::ErrH265CorruptedPacket);
         }
         if !payload_header.is_fragmentation_unit() {
-            return nil, errInvalidH265PacketType
+            return Err(Error::ErrInvalidH265PacketType);
         }
 
-        fu_header := H265FragmentationUnitHeader(payload[2])
-        payload = payload[3:]
+        let fu_header = H265FragmentationUnitHeader(payload[2]);
+        let mut payload = payload.slice(3..);
 
-        if fu_header.S() && p.might_need_donl {
-            // sizeof(uint16)
-            if len(payload) <= 2 {
-                return nil, errShortPacket
+        if fu_header.s() && self.might_need_donl {
+            if payload.len() <= 2 {
+                return Err(Error::ErrShortPacket);
             }
 
-            donl := (uint16(payload[0]) << 8) | uint16(payload[1])
-            p.donl = &donl
-            payload = payload[2:]
+            let donl = ((payload[0] as u16) << 8) | (payload[1] as u16);
+            self.donl = Some(donl);
+            payload = payload.slice(2..);
         }
 
-        p.payload_header = payload_header
-        p.fu_header = fu_header
-        p.payload = payload
+        self.payload_header = payload_header;
+        self.fu_header = fu_header;
+        self.payload = payload;
 
-        return nil, nil
-    }*/
+        Ok(())
+    }
 
     /// payload_header returns the NALU header of the packet.
     pub fn payload_header(&self) -> H265NALUHeader {
@@ -517,8 +502,6 @@ impl H265FragmentationUnitPacket {
     pub fn payload(&self) -> Bytes {
         self.payload.clone()
     }
-
-    fn is_h265packet(&self) {}
 }
 
 ///
@@ -576,8 +559,8 @@ impl H265PACIPacket {
         ((self.paci_header_fields & MASK) >> (8 + 1)) as u8
     }
 
-    /// phssize indicates the size of the phes field.
-    pub fn phssize(&self) -> u8 {
+    /// phs_size indicates the size of the phes field.
+    pub fn phs_size(&self) -> u8 {
         const MASK: u16 = (0b00000001 << 8) | 0b11110000;
         ((self.paci_header_fields & MASK) >> 4) as u8
     }
@@ -618,7 +601,7 @@ impl H265PACIPacket {
 
     /// tsci returns the Temporal Scalability Control Information extension, if present.
     pub fn tsci(&self) -> Option<H265TSCI> {
-        if !self.f0() || self.phssize() < 3 {
+        if !self.f0() || self.phs_size() < 3 {
             return None;
         }
 
@@ -627,47 +610,43 @@ impl H265PACIPacket {
         ))
     }
 
-    /*TODO:
-    // Unmarshal parses the passed byte slice and stores the result in the H265PACIPacket this method is called upon.
-    func (p *H265PACIPacket) Unmarshal(payload []byte) ([]byte, error) {
-        // sizeof(headers)
-        const totalHeaderSize = H265NALU_HEADER_SIZE + 2
-        if payload == nil {
-            return nil, errNilPacket
-        } else if len(payload) <= totalHeaderSize {
-            return nil, fmt.Errorf("%w: %d <= %v", errShortPacket, len(payload), totalHeaderSize)
+    /// depacketize parses the passed byte slice and stores the result in the H265PACIPacket this method is called upon.
+    fn depacketize(&mut self, payload: &Bytes) -> Result<()> {
+        const TOTAL_HEADER_SIZE: usize = H265NALU_HEADER_SIZE + 2;
+        if payload.len() <= TOTAL_HEADER_SIZE {
+            return Err(Error::ErrShortPacket);
         }
 
-        payload_header := newH265NALUHeader(payload[0], payload[1])
-        if payload_header.F() {
-            return nil, errH265CorruptedPacket
+        let payload_header = H265NALUHeader::new(payload[0], payload[1]);
+        if payload_header.f() {
+            return Err(Error::ErrH265CorruptedPacket);
         }
-        if !payload_header.is_pacipacket() {
-            return nil, errInvalidH265PacketType
-        }
-
-        paci_header_fields := (uint16(payload[2]) << 8) | uint16(payload[3])
-        payload = payload[4:]
-
-        p.paci_header_fields = paci_header_fields
-        headerExtensionSize := p.phssize()
-
-        if len(payload) < int(headerExtensionSize)+1 {
-            p.paci_header_fields = 0
-            return nil, errShortPacket
+        if !payload_header.is_paci_packet() {
+            return Err(Error::ErrInvalidH265PacketType);
         }
 
-        p.payload_header = payload_header
+        let paci_header_fields = ((payload[2] as u16) << 8) | (payload[3] as u16);
+        let mut payload = payload.slice(4..);
 
-        if headerExtensionSize > 0 {
-            p.phes = payload[:headerExtensionSize]
+        self.paci_header_fields = paci_header_fields;
+        let header_extension_size = self.phs_size();
+
+        if payload.len() < header_extension_size as usize + 1 {
+            self.paci_header_fields = 0;
+            return Err(Error::ErrShortPacket);
         }
 
-        payload = payload[headerExtensionSize:]
-        p.payload = payload
+        self.payload_header = payload_header;
 
-        return nil, nil
-    }*/
+        if header_extension_size > 0 {
+            self.phes = payload.slice(..header_extension_size as usize);
+        }
+
+        payload = payload.slice(header_extension_size as usize..);
+        self.payload = payload;
+
+        Ok(())
+    }
 
     fn is_h265packet(&self) {}
 }
@@ -718,10 +697,13 @@ impl H265TSCI {
 }
 
 ///
-/// H265 Packet interface
+/// H265 Payload Enum
 ///
-pub trait IsH265packet {
-    fn is_h265packet(&self);
+pub enum H265Payload {
+    H265SingleNALUnitPacket(H265SingleNALUnitPacket),
+    H265FragmentationUnitPacket(H265FragmentationUnitPacket),
+    H265AggregationPacket(H265AggregationPacket),
+    H265PACIPacket(H265PACIPacket),
 }
 
 ///
@@ -730,7 +712,7 @@ pub trait IsH265packet {
 
 /// H265Packet represents a H265 packet, stored in the payload of an RTP packet.
 pub struct H265Packet {
-    packet: Box<dyn IsH265packet>,
+    payload: H265Payload,
     might_need_donl: bool,
 }
 
@@ -741,14 +723,14 @@ impl H265Packet {
         self.might_need_donl = value;
     }
 
-    /// Packet returns the populated packet.
+    /// payload returns the populated payload.
     /// Must be casted to one of:
-    /// - *H265SingleNALUnitPacket
-    /// - *H265FragmentationUnitPacket
-    /// - *H265AggregationPacket
-    /// - *H265PACIPacket
-    pub fn packet(&self) -> &dyn IsH265packet {
-        self.packet.as_ref()
+    /// - H265SingleNALUnitPacket
+    /// - H265FragmentationUnitPacket
+    /// - H265AggregationPacket
+    /// - H265PACIPacket
+    pub fn payload(&self) -> &H265Payload {
+        &self.payload
     }
 }
 
@@ -764,49 +746,35 @@ impl Depacketizer for H265Packet {
             return Err(Error::ErrH265CorruptedPacket);
         }
 
-        /*
         if payload_header.is_paci_packet() {
-            decoded: = &H265PACIPacket {}
-            if _, err: = decoded.Unmarshal(payload);
-            err != nil {
-                return nil,
-                err
-            }
+            let mut decoded = H265PACIPacket::default();
+            decoded.depacketize(payload)?;
 
-            p.packet = decoded
-        }else if payload_header.is_fragmentation_unit() {
-            decoded: = &H265FragmentationUnitPacket {}
-            decoded.with_donl(p.might_need_donl)
+            self.payload = H265Payload::H265PACIPacket(decoded);
+        } else if payload_header.is_fragmentation_unit() {
+            let mut decoded = H265FragmentationUnitPacket::default();
+            decoded.with_donl(self.might_need_donl);
 
-            if _, err: = decoded.Unmarshal(payload);
-            err != nil {
-                return nil,
-                err
-            }
+            decoded.depacketize(payload)?;
 
-            p.packet = decoded
-        }else if payload_header.is_aggregation_packet() {
-            decoded: = &H265AggregationPacket {}
-            decoded.with_donl(p.might_need_donl)
+            self.payload = H265Payload::H265FragmentationUnitPacket(decoded);
+        } else if payload_header.is_aggregation_packet() {
+            let mut decoded = H265AggregationPacket::default();
+            decoded.with_donl(self.might_need_donl);
 
-            if _, err: = decoded.Unmarshal(payload);
-            err != nil {
-                return nil,
-                err
-            }
+            decoded.depacketize(payload)?;
 
-            p.packet = decoded
-        }else{
-            decoded := &H265SingleNALUnitPacket{}
-            decoded.with_donl(p.might_need_donl)
+            self.payload = H265Payload::H265AggregationPacket(decoded);
+        } else {
+            let mut decoded = H265SingleNALUnitPacket::default();
+            decoded.with_donl(self.might_need_donl);
 
-            if _, err := decoded.Unmarshal(payload); err != nil {
-                return nil, err
-            }
+            decoded.depacketize(payload)?;
 
-            p.packet = decoded
-        }*/
-        Ok(Bytes::new())
+            self.payload = H265Payload::H265SingleNALUnitPacket(decoded);
+        }
+
+        Ok(payload.clone())
     }
 
     /// is_partition_head checks if this is the head of a packetized nalu stream.
