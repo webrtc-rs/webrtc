@@ -2,7 +2,9 @@
 mod media_engine_test;
 
 use crate::error::{Error, Result};
-use crate::peer::sdp::{codecs_from_media_description, rtp_extensions_from_media_description};
+use crate::peer_connection::sdp::{
+    codecs_from_media_description, rtp_extensions_from_media_description,
+};
 use crate::rtp_transceiver::fmtp::parse_fmtp;
 use crate::rtp_transceiver::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,

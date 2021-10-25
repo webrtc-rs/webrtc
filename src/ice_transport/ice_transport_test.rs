@@ -2,11 +2,11 @@ use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
 use crate::error::Result;
-use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
-use crate::peer::peer_connection::peer_connection_test::{
+use crate::peer_connection::ice::ice_connection_state::RTCIceConnectionState;
+use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use crate::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
-use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use std::sync::atomic::AtomicU32;
 use tokio::time::Duration;
 use waitgroup::WaitGroup;

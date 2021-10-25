@@ -1,10 +1,10 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::{Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
-use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
-use crate::peer::ice::ice_candidate::*;
-use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
-use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
+use crate::peer_connection::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
+use crate::peer_connection::ice::ice_candidate::*;
+use crate::peer_connection::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
+use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
@@ -417,8 +417,8 @@ impl RTCIceGatherer {
 mod test {
     use super::*;
     use crate::api::APIBuilder;
-    use crate::peer::ice::ice_gather::RTCIceGatherOptions;
-    use crate::peer::ice::ice_server::RTCIceServer;
+    use crate::peer_connection::ice::ice_gather::RTCIceGatherOptions;
+    use crate::peer_connection::ice::ice_server::RTCIceServer;
     use tokio::sync::mpsc;
 
     #[tokio::test]

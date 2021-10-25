@@ -7,9 +7,9 @@ pub mod setting_engine;
 
 use crate::dtls_transport::RTCDtlsTransport;
 use crate::ice_transport::RTCIceTransport;
-use crate::peer::certificate::RTCCertificate;
-use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
-use crate::peer::ice::ice_gather::RTCIceGatherOptions;
+use crate::peer_connection::certificate::RTCCertificate;
+use crate::peer_connection::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::peer_connection::ice::ice_gather::RTCIceGatherOptions;
 
 use media_engine::*;
 use setting_engine::*;
@@ -17,8 +17,8 @@ use setting_engine::*;
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data_channel::RTCDataChannel;
 use crate::error::{Error, Result};
-use crate::peer::configuration::RTCConfiguration;
-use crate::peer::peer_connection::RTCPeerConnection;
+use crate::peer_connection::configuration::RTCConfiguration;
+use crate::peer_connection::RTCPeerConnection;
 use crate::rtp_transceiver::rtp_codec::RTPCodecType;
 use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use crate::rtp_transceiver::rtp_sender::RTCRtpSender;

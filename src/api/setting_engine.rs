@@ -2,7 +2,7 @@
 mod setting_engine_test;
 
 use crate::dtls_transport::dtls_role::DTLSRole;
-use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
+use crate::peer_connection::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::InterfaceFilterFn;
 use ice::mdns::MulticastDnsMode;

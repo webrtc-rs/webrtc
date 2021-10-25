@@ -7,7 +7,7 @@ pub(crate) struct PeerConnectionInternal {
     /// requires that when reusing a media section a new unique mid
     /// should be defined (see JSEP 3.4.1).
     pub(super) greater_mid: AtomicIsize,
-    pub(super) sdp_origin: Mutex<sdp::session_description::Origin>,
+    pub(super) sdp_origin: Mutex<::sdp::session_description::Origin>,
     pub(super) last_offer: Mutex<String>,
     pub(super) last_answer: Mutex<String>,
 
@@ -981,7 +981,7 @@ impl PeerConnectionInternal {
                 let (mid_extension_id, audio_supported, video_supported) = self
                     .media_engine
                     .get_header_extension_id(RTCRtpHeaderExtensionCapability {
-                        uri: sdp::extmap::SDES_MID_URI.to_owned(),
+                        uri: ::sdp::extmap::SDES_MID_URI.to_owned(),
                     })
                     .await;
                 if !audio_supported && !video_supported {
@@ -991,7 +991,7 @@ impl PeerConnectionInternal {
                 let (sid_extension_id, audio_supported, video_supported) = self
                     .media_engine
                     .get_header_extension_id(RTCRtpHeaderExtensionCapability {
-                        uri: sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
+                        uri: ::sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
                     })
                     .await;
                 if !audio_supported && !video_supported {

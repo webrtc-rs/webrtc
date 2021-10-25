@@ -1,8 +1,8 @@
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::APIBuilder;
-use crate::peer::configuration::RTCConfiguration;
-use crate::peer::peer_connection::peer_connection_test::close_pair_now;
+use crate::peer_connection::configuration::RTCConfiguration;
+use crate::peer_connection::peer_connection_test::close_pair_now;
 
 #[tokio::test]
 async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {

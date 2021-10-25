@@ -1,4 +1,4 @@
-use crate::peer::ice::ice_candidate::*;
+use crate::peer_connection::ice::ice_candidate::*;
 
 use std::fmt;
 

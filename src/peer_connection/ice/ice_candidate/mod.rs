@@ -10,8 +10,8 @@ use ice::candidate::Candidate;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
-use crate::peer::ice::ice_protocol::RTCIceProtocol;
+use crate::peer_connection::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
+use crate::peer_connection::ice::ice_protocol::RTCIceProtocol;
 
 pub mod ice_candidate_type;
 

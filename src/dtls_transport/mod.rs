@@ -23,7 +23,7 @@ use crate::error::{Error, Result};
 use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::ice_transport::RTCIceTransport;
-use crate::peer::certificate::RTCCertificate;
+use crate::peer_connection::certificate::RTCCertificate;
 use crate::util::flatten_errs;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};

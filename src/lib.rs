@@ -16,7 +16,7 @@ pub mod data_channel;
 pub mod dtls_transport;
 pub mod error;
 pub mod ice_transport;
-pub mod peer;
+pub mod peer_connection;
 pub mod rtp_transceiver;
 pub mod sctp_transport;
 pub mod stats;

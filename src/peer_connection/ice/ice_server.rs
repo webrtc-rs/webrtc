@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::peer::ice::ice_credential_type::RTCIceCredentialType;
+use crate::peer_connection::ice::ice_credential_type::RTCIceCredentialType;
 
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.

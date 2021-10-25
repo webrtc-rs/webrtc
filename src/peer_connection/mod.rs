@@ -1,7 +1,16 @@
 #[cfg(test)]
 pub(crate) mod peer_connection_test;
 
+pub mod certificate;
+pub mod configuration;
+pub mod ice;
+pub mod offer_answer_options;
+pub(crate) mod operation;
 mod peer_connection_internal;
+pub mod peer_connection_state;
+pub mod policy;
+pub mod sdp;
+pub mod signaling_state;
 
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
@@ -22,25 +31,29 @@ use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::ice_transport::RTCIceTransport;
-use crate::peer::certificate::RTCCertificate;
-use crate::peer::configuration::RTCConfiguration;
-use crate::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
-use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
-use crate::peer::ice::ice_gather::ice_gatherer::{
+use crate::peer_connection::certificate::RTCCertificate;
+use crate::peer_connection::configuration::RTCConfiguration;
+use crate::peer_connection::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use crate::peer_connection::ice::ice_connection_state::RTCIceConnectionState;
+use crate::peer_connection::ice::ice_gather::ice_gatherer::{
     OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
     RTCIceGatherer,
 };
-use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
-use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
-use crate::peer::ice::ice_gather::RTCIceGatherOptions;
-use crate::peer::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
-use crate::peer::operation::{Operation, Operations};
-use crate::peer::peer_connection_state::{NegotiationNeededState, RTCPeerConnectionState};
-use crate::peer::policy::sdp_semantics::RTCSdpSemantics;
-use crate::peer::sdp::sdp_type::RTCSdpType;
-use crate::peer::sdp::session_description::RTCSessionDescription;
-use crate::peer::sdp::*;
-use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
+use crate::peer_connection::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
+use crate::peer_connection::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
+use crate::peer_connection::ice::ice_gather::RTCIceGatherOptions;
+use crate::peer_connection::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
+use crate::peer_connection::operation::{Operation, Operations};
+use crate::peer_connection::peer_connection_state::{
+    NegotiationNeededState, RTCPeerConnectionState,
+};
+use crate::peer_connection::policy::sdp_semantics::RTCSdpSemantics;
+use crate::peer_connection::sdp::sdp_type::RTCSdpType;
+use crate::peer_connection::sdp::session_description::RTCSessionDescription;
+use crate::peer_connection::sdp::*;
+use crate::peer_connection::signaling_state::{
+    check_next_signaling_state, RTCSignalingState, StateChangeOp,
+};
 use crate::rtp_transceiver::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
 use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
@@ -61,14 +74,14 @@ use crate::{
     SSRC_STR,
 };
 
+use ::ice::candidate::candidate_base::unmarshal_candidate;
+use ::ice::candidate::Candidate;
+use ::sdp::session_description::*;
+use ::sdp::util::ConnectionRole;
 use async_trait::async_trait;
-use ice::candidate::candidate_base::unmarshal_candidate;
-use ice::candidate::Candidate;
 use interceptor::{Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use rcgen::KeyPair;
-use sdp::session_description::*;
-use sdp::util::ConnectionRole;
 use srtp::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;

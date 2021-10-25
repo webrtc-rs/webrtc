@@ -2,12 +2,12 @@ use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
 use crate::data_channel::RTCDataChannel;
-use crate::peer::configuration::RTCConfiguration;
-use crate::peer::ice::ice_candidate::RTCIceCandidate;
-use crate::peer::peer_connection::peer_connection_test::{
+use crate::peer_connection::configuration::RTCConfiguration;
+use crate::peer_connection::ice::ice_candidate::RTCIceCandidate;
+use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use crate::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
-use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 use regex::Regex;

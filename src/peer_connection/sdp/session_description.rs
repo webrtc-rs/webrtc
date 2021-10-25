@@ -33,7 +33,7 @@ mod test {
     use super::*;
     use crate::api::media_engine::MediaEngine;
     use crate::api::APIBuilder;
-    use crate::peer::configuration::RTCConfiguration;
+    use crate::peer_connection::configuration::RTCConfiguration;
 
     #[test]
     fn test_session_description_json() {

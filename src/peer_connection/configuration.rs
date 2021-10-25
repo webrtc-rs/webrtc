@@ -1,9 +1,9 @@
-use crate::peer::certificate::RTCCertificate;
-use crate::peer::ice::ice_server::RTCIceServer;
-use crate::peer::policy::bundle_policy::RTCBundlePolicy;
-use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
-use crate::peer::policy::rtcp_mux_policy::RTCRtcpMuxPolicy;
-use crate::peer::policy::sdp_semantics::RTCSdpSemantics;
+use crate::peer_connection::certificate::RTCCertificate;
+use crate::peer_connection::ice::ice_server::RTCIceServer;
+use crate::peer_connection::policy::bundle_policy::RTCBundlePolicy;
+use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
+use crate::peer_connection::policy::rtcp_mux_policy::RTCRtcpMuxPolicy;
+use crate::peer_connection::policy::sdp_semantics::RTCSdpSemantics;
 
 /// A Configuration defines how peer-to-peer communication via PeerConnection
 /// is established or re-established.
