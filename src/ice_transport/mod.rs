@@ -10,7 +10,7 @@ use util::Conn;
 
 use ice_candidate::RTCIceCandidate;
 use ice_candidate_pair::RTCIceCandidatePair;
-use ice_gather::ice_gatherer::RTCIceGatherer;
+use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
 
 use crate::error::{Error, Result};
@@ -26,9 +26,12 @@ mod ice_transport_test;
 
 pub mod ice_candidate;
 pub mod ice_candidate_pair;
+pub mod ice_candidate_type;
 pub mod ice_connection_state;
 pub mod ice_credential_type;
-pub mod ice_gather;
+pub mod ice_gatherer;
+pub mod ice_gatherer_state;
+pub mod ice_gathering_state;
 pub mod ice_parameters;
 pub mod ice_protocol;
 pub mod ice_role;

@@ -10,10 +10,8 @@ use ice::candidate::Candidate;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::ice_transport::ice_candidate::ice_candidate_type::RTCIceCandidateType;
+use crate::ice_transport::ice_candidate_type::RTCIceCandidateType;
 use crate::ice_transport::ice_protocol::RTCIceProtocol;
-
-pub mod ice_candidate_type;
 
 /// ICECandidate represents a ice candidate
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

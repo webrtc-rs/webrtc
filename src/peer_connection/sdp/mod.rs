@@ -5,8 +5,8 @@ use crate::api::media_engine::MediaEngine;
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::error::{Error, Result};
 use crate::ice_transport::ice_candidate::RTCIceCandidate;
-use crate::ice_transport::ice_gather::ice_gatherer::RTCIceGatherer;
-use crate::ice_transport::ice_gather::ice_gathering_state::RTCIceGatheringState;
+use crate::ice_transport::ice_gatherer::RTCIceGatherer;
+use crate::ice_transport::ice_gathering_state::RTCIceGatheringState;
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,

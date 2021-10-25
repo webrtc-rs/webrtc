@@ -6,8 +6,8 @@ pub mod media_engine;
 pub mod setting_engine;
 
 use crate::dtls_transport::RTCDtlsTransport;
-use crate::ice_transport::ice_gather::ice_gatherer::RTCIceGatherer;
-use crate::ice_transport::ice_gather::RTCIceGatherOptions;
+use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
+use crate::ice_transport::ice_gatherer::RTCIceGatherer;
 use crate::ice_transport::RTCIceTransport;
 use crate::peer_connection::certificate::RTCCertificate;
 

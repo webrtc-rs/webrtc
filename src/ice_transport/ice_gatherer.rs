@@ -1,9 +1,10 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::{Error, Result};
-use crate::ice_transport::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::ice_transport::ice_candidate::*;
-use crate::ice_transport::ice_gather::ice_gatherer_state::RTCIceGathererState;
+use crate::ice_transport::ice_candidate_type::RTCIceCandidateType;
+use crate::ice_transport::ice_gatherer_state::RTCIceGathererState;
 use crate::ice_transport::ice_parameters::RTCIceParameters;
+use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 use ice::agent::Agent;
@@ -15,6 +16,13 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+/// ICEGatherOptions provides options relating to the gathering of ICE candidates.
+#[derive(Default, Debug, Clone)]
+pub struct RTCIceGatherOptions {
+    pub ice_servers: Vec<RTCIceServer>,
+    pub ice_gather_policy: RTCIceTransportPolicy,
+}
 
 pub type OnLocalCandidateHdlrFn = Box<
     dyn (FnMut(Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
@@ -417,7 +425,7 @@ impl RTCIceGatherer {
 mod test {
     use super::*;
     use crate::api::APIBuilder;
-    use crate::ice_transport::ice_gather::RTCIceGatherOptions;
+    use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
     use crate::ice_transport::ice_server::RTCIceServer;
     use tokio::sync::mpsc;
 

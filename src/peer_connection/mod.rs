@@ -28,13 +28,13 @@ use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
 use crate::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
-use crate::ice_transport::ice_gather::ice_gatherer::{
+use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
+use crate::ice_transport::ice_gatherer::{
     OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
     RTCIceGatherer,
 };
-use crate::ice_transport::ice_gather::ice_gatherer_state::RTCIceGathererState;
-use crate::ice_transport::ice_gather::ice_gathering_state::RTCIceGatheringState;
-use crate::ice_transport::ice_gather::RTCIceGatherOptions;
+use crate::ice_transport::ice_gatherer_state::RTCIceGathererState;
+use crate::ice_transport::ice_gathering_state::RTCIceGatheringState;
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
