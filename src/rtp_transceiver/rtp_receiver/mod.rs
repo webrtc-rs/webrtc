@@ -90,7 +90,9 @@ impl RTPReceiverInternal {
 
     /// read_rtcp is a convenience method that wraps Read and unmarshal for you.
     /// It also runs any configured interceptors.
-    async fn read_rtcp(&self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    async fn read_rtcp(
+        &self,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; RECEIVE_MTU];
         let (n, attributes) = self.read(&mut b).await?;
 
@@ -104,7 +106,7 @@ impl RTPReceiverInternal {
     async fn read_simulcast_rtcp(
         &self,
         rid: &str,
-    ) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; RECEIVE_MTU];
         let (n, attributes) = self.read_simulcast(&mut b, rid).await?;
 
@@ -395,7 +397,9 @@ impl RTCRtpReceiver {
 
     /// read_rtcp is a convenience method that wraps Read and unmarshal for you.
     /// It also runs any configured interceptors.
-    pub async fn read_rtcp(&self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    pub async fn read_rtcp(
+        &self,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read_rtcp().await
     }
 
@@ -403,7 +407,7 @@ impl RTCRtpReceiver {
     pub async fn read_simulcast_rtcp(
         &self,
         rid: &str,
-    ) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read_simulcast_rtcp(rid).await
     }
 

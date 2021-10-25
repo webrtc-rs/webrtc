@@ -5,8 +5,6 @@ use interceptor::nack::{generator::Generator, responder::Responder};
 use interceptor::registry::Registry;
 use interceptor::report::{receiver::ReceiverReport, sender::SenderReport};
 
-use std::sync::Arc;
-
 /// register_default_interceptors will register some useful interceptors.
 /// If you want to customize which interceptors are loaded, you should copy the
 /// code from this method and remove unwanted interceptors.
@@ -22,16 +20,18 @@ pub fn register_default_interceptors(
 }
 
 /// configure_rtcp_reports will setup everything necessary for generating Sender and Receiver Reports
-pub fn configure_rtcp_reports(registry: Registry) -> Registry {
-    let receiver = Arc::new(ReceiverReport::builder().build_rr());
-    let sender = Arc::new(SenderReport::builder().build_sr());
-    registry.with_interceptor(receiver).with_interceptor(sender)
+pub fn configure_rtcp_reports(mut registry: Registry) -> Registry {
+    let receiver = Box::new(ReceiverReport::builder());
+    let sender = Box::new(SenderReport::builder());
+    registry.add(receiver);
+    registry.add(sender);
+    registry
 }
 
 /// configure_nack will setup everything necessary for handling generating/responding to nack messages.
-pub fn configure_nack(registry: Registry, media_engine: &mut MediaEngine) -> Registry {
-    let generator = Arc::new(Generator::builder().build());
-    let responder = Arc::new(Responder::builder().build());
+pub fn configure_nack(mut registry: Registry, media_engine: &mut MediaEngine) -> Registry {
+    let generator = Box::new(Generator::builder());
+    let responder = Box::new(Responder::builder());
 
     media_engine.register_feedback(
         RTCPFeedback {
@@ -48,7 +48,7 @@ pub fn configure_nack(registry: Registry, media_engine: &mut MediaEngine) -> Reg
         RTPCodecType::Video,
     );
 
+    registry.add(responder);
+    registry.add(generator);
     registry
-        .with_interceptor(responder)
-        .with_interceptor(generator)
 }

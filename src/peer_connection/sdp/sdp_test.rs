@@ -555,6 +555,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
+    let interceptor = api.interceptor_registry.build("")?;
 
     let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
     let certificate = RTCCertificate::from_key_pair(kp)?;
@@ -616,7 +617,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                     track,
                     Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),
-                    Arc::clone(&api.interceptor),
+                    Arc::clone(&interceptor),
                 )
                 .await,
             )))

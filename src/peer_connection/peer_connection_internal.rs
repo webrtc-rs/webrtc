@@ -53,6 +53,7 @@ pub(crate) struct PeerConnectionInternal {
 
 impl PeerConnectionInternal {
     pub(super) async fn new(api: &API, configuration: &mut RTCConfiguration) -> Result<Self> {
+        let interceptor = api.interceptor_registry.build("")?;
         let mut pc = PeerConnectionInternal {
             greater_mid: AtomicIsize::new(-1),
             sdp_origin: Mutex::new(Default::default()),
@@ -86,7 +87,7 @@ impl PeerConnectionInternal {
             } else {
                 Arc::clone(&api.media_engine)
             },
-            interceptor: Arc::clone(&api.interceptor),
+            interceptor,
             on_peer_connection_state_change_handler: Arc::new(Default::default()),
             pending_remote_description: Arc::new(Default::default()),
         };

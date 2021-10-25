@@ -12,20 +12,20 @@ repository = "https://github.com/webrtc-rs/webrtc"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.0" }
+util = { package = "webrtc-util", version = "0.5.1" }
 sdp = "0.4.0"
 mdns = { package = "webrtc-mdns", version = "0.4.0" }
 stun = "0.4.0"
 turn = "0.5.0"
 ice = { package = "webrtc-ice", version = "0.5.0" }
 dtls = { package = "webrtc-dtls", version = "0.5.0" }
-rtp = "0.6.0"
-rtcp = "0.5.0"
-srtp = { package = "webrtc-srtp", version = "0.7.0" }
+rtp = "0.6.1"
+rtcp = "0.6.0"
+srtp = { package = "webrtc-srtp", version = "0.8.0" }
 sctp = { package = "webrtc-sctp", version = "0.4.0" }
 data = { package = "webrtc-data", version = "0.3.0" }
 media = { package = "webrtc-media", version = "0.4.0" }
-interceptor = "0.4.0"
+interceptor = "0.6.0"
 tokio = { version = "1.12.0", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.42"

@@ -54,7 +54,9 @@ impl RTPSenderInternal {
     }
 
     /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
-    async fn read_rtcp(&self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    async fn read_rtcp(
+        &self,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; RECEIVE_MTU];
         let (n, attributes) = self.read(&mut b).await?;
 
@@ -410,7 +412,9 @@ impl RTCRtpSender {
     }
 
     /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
-    pub async fn read_rtcp(&self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    pub async fn read_rtcp(
+        &self,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read_rtcp().await
     }
 

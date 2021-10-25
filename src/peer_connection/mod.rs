@@ -180,7 +180,10 @@ impl RTCPeerConnection {
 
         let internal = Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?);
         let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
-        let interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(internal_rtcp_writer).await;
+        let interceptor_rtcp_writer = internal
+            .interceptor
+            .bind_rtcp_writer(internal_rtcp_writer)
+            .await;
 
         // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
