@@ -11,8 +11,10 @@ pub mod peer;
 pub mod stats;
 pub mod util;
 
+pub use data;
 pub use error::Error;
 pub use interceptor;
+pub use media;
 pub use rtcp;
 pub use rtp;
 
