@@ -11,8 +11,8 @@ pub mod peer;
 pub mod stats;
 pub mod util;
 
-pub use ::data as _data;
-pub use ::media as _media;
+pub use ::data as webrtc_data;
+pub use ::media as webrtc_media;
 pub use error::Error;
 pub use interceptor;
 pub use rtcp;
