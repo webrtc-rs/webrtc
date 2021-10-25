@@ -16,9 +16,9 @@ use ice_role::RTCIceRole;
 use crate::error::{Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
-use crate::util::mux::endpoint::Endpoint;
-use crate::util::mux::mux_func::MatchFunc;
-use crate::util::mux::{Config, Mux};
+use crate::utilities::mux::endpoint::Endpoint;
+use crate::utilities::mux::mux_func::MatchFunc;
+use crate::utilities::mux::{Config, Mux};
 use crate::RECEIVE_MTU;
 
 #[cfg(test)]

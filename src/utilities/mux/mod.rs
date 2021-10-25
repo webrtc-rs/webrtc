@@ -5,8 +5,8 @@ pub mod endpoint;
 pub mod mux_func;
 
 use crate::error::Result;
-use crate::util::mux::endpoint::Endpoint;
-use crate::util::mux::mux_func::MatchFunc;
+use crate::utilities::mux::endpoint::Endpoint;
+use crate::utilities::mux::mux_func::MatchFunc;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};

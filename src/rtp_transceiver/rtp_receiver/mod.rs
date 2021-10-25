@@ -15,7 +15,7 @@ use crate::rtp_transceiver::{
 };
 use crate::track::track_remote::TrackRemote;
 use crate::track::TrackStreams;
-use crate::util::flatten_errs;
+use crate::utilities::flatten_errs;
 use crate::RECEIVE_MTU;
 
 use interceptor::stream_info::{RTPHeaderExtension, StreamInfo};

@@ -18,7 +18,7 @@ use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::RTCIceTransport;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
-use crate::util::flatten_errs;
+use crate::utilities::flatten_errs;
 use regex::Regex;
 use tokio::sync::mpsc;
 use tokio::time::Duration;

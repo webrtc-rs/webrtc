@@ -1,6 +1,6 @@
 use super::track_local_static_rtp::TrackLocalStaticRTP;
 use super::*;
-use crate::util::flatten_errs;
+use crate::utilities::flatten_errs;
 use crate::RTP_OUTBOUND_MTU;
 
 use media::Sample;

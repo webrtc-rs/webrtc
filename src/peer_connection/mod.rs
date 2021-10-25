@@ -67,7 +67,7 @@ use crate::sctp_transport::RTCSctpTransport;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
-use crate::util::{flatten_errs, math_rand_alpha};
+use crate::utilities::{flatten_errs, math_rand_alpha};
 use crate::{
     MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,
     SSRC_STR,

@@ -1,6 +1,6 @@
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::error::{Error, Result};
-use crate::util::math_rand_alpha;
+use crate::utilities::math_rand_alpha;
 
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
 use rcgen::{CertificateParams, KeyPair, RcgenError};

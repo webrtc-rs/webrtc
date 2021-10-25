@@ -1,4 +1,4 @@
-use crate::util::mux::mux_func::MatchFunc;
+use crate::utilities::mux::mux_func::MatchFunc;
 use util::{Buffer, Conn};
 
 use async_trait::async_trait;

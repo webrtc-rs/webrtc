@@ -21,7 +21,7 @@ pub mod rtp_transceiver;
 pub mod sctp_transport;
 pub mod stats;
 pub mod track;
-pub mod util;
+pub mod utilities;
 
 #[macro_use]
 extern crate lazy_static;

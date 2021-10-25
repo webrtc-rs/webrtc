@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::util::flatten_errs;
+use crate::utilities::flatten_errs;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
