@@ -1,7 +1,5 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use interceptor::registry::Registry;
-use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -9,6 +7,7 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
+use webrtc::interceptor::registry::Registry;
 use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
 use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -18,6 +17,7 @@ use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::Error;
 
 #[tokio::main]
@@ -136,7 +136,8 @@ async fn main() -> Result<()> {
     // The total number of tracks
     let track_count = Arc::new(AtomicUsize::new(0));
     // The channel of packets with a bit of buffer
-    let (packets_tx, mut packets_rx) = tokio::sync::mpsc::channel::<rtp::packet::Packet>(60);
+    let (packets_tx, mut packets_rx) =
+        tokio::sync::mpsc::channel::<webrtc::rtp::packet::Packet>(60);
     let packets_tx = Arc::new(packets_tx);
 
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,

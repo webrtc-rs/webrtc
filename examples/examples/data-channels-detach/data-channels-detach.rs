@@ -1,7 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
 use clap::{App, AppSettings, Arg};
-use interceptor::registry::Registry;
 use std::io::Write;
 use std::sync::Arc;
 use tokio::time::Duration;
@@ -10,6 +9,7 @@ use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::interceptor::registry::Registry;
 use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
@@ -206,7 +206,7 @@ async fn main() -> Result<()> {
 }
 
 // read_loop shows how to read from the datachannel directly
-async fn read_loop(d: Arc<data::data_channel::DataChannel>) -> Result<()> {
+async fn read_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Result<()> {
     let mut buffer = vec![0u8; MESSAGE_SIZE];
     loop {
         let n = match d.read(&mut buffer).await {
@@ -225,7 +225,7 @@ async fn read_loop(d: Arc<data::data_channel::DataChannel>) -> Result<()> {
 }
 
 // write_loop shows how to write to the datachannel directly
-async fn write_loop(d: Arc<data::data_channel::DataChannel>) -> Result<()> {
+async fn write_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Result<()> {
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
         let timeout = tokio::time::sleep(Duration::from_secs(5));
