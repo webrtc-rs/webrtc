@@ -1,12 +1,12 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use interceptor::registry::Registry;
 use std::io::Write;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
+use webrtc::interceptor::registry::Registry;
 use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};

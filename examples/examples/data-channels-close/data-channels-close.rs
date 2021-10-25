@@ -1,6 +1,5 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use interceptor::registry::Registry;
 use std::io::Write;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
@@ -11,6 +10,7 @@ use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::interceptor::registry::Registry;
 use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;

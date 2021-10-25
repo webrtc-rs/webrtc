@@ -1,10 +1,5 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use interceptor::registry::Registry;
-use media::io::ivf_reader::IVFFileHeader;
-use media::io::ivf_writer::IVFWriter;
-use media::io::ogg_writer::OggWriter;
-use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
@@ -13,6 +8,7 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use webrtc::api::APIBuilder;
+use webrtc::interceptor::registry::Registry;
 use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
 use webrtc::media::track::track_remote::TrackRemote;
@@ -20,9 +16,13 @@ use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_connection_state::RTCIceConnectionState;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use webrtc::webrtc_media::io::ivf_reader::IVFFileHeader;
+use webrtc::webrtc_media::io::ivf_writer::IVFWriter;
+use webrtc::webrtc_media::io::ogg_writer::OggWriter;
 
 async fn save_to_disk(
-    writer: Arc<Mutex<dyn media::io::Writer + Send + Sync>>,
+    writer: Arc<Mutex<dyn webrtc::webrtc_media::io::Writer + Send + Sync>>,
     track: Arc<TrackRemote>,
     notify: Arc<Notify>,
 ) -> Result<()> {
@@ -125,7 +125,7 @@ async fn main() -> Result<()> {
     let video_file = matches.value_of("video").unwrap();
     let audio_file = matches.value_of("audio").unwrap();
 
-    let ivf_writer: Arc<Mutex<dyn media::io::Writer + Send + Sync>> =
+    let ivf_writer: Arc<Mutex<dyn webrtc::webrtc_media::io::Writer + Send + Sync>> =
         Arc::new(Mutex::new(IVFWriter::new(
             File::create(video_file)?,
             &IVFFileHeader {
@@ -141,9 +141,9 @@ async fn main() -> Result<()> {
                 unused: 0,                                         // 28-31
             },
         )?));
-    let ogg_writer: Arc<Mutex<dyn media::io::Writer + Send + Sync>> = Arc::new(Mutex::new(
-        OggWriter::new(File::create(audio_file)?, 48000, 2)?,
-    ));
+    let ogg_writer: Arc<Mutex<dyn webrtc::webrtc_media::io::Writer + Send + Sync>> = Arc::new(
+        Mutex::new(OggWriter::new(File::create(audio_file)?, 48000, 2)?),
+    );
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
