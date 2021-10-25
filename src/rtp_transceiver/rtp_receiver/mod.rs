@@ -4,16 +4,16 @@ mod rtp_receiver_test;
 use crate::api::media_engine::MediaEngine;
 use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
-use crate::media::rtp::rtp_codec::{
+use crate::rtp_transceiver::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
     RTCRtpParameters, RTPCodecType,
 };
-use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
-use crate::media::rtp::{
+use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
+use crate::rtp_transceiver::{
     create_stream_info, RTCRtpCodingParameters, RTCRtpReceiveParameters, SSRC,
 };
-use crate::media::track::track_remote::TrackRemote;
-use crate::media::track::TrackStreams;
+use crate::track::track_remote::TrackRemote;
+use crate::track::TrackStreams;
 use crate::util::flatten_errs;
 use crate::RECEIVE_MTU;
 

@@ -3,15 +3,15 @@ use crate::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MI
 use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
 use crate::error::Result;
-use crate::media::rtp::rtp_codec::RTCRtpCodecCapability;
-use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
-use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
-use crate::media::track::track_remote::TrackRemote;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, create_vnet_pair, new_pair, send_video_until_done, signal_pair,
     until_connection_state,
 };
 use crate::peer::peer_connection_state::RTCPeerConnectionState;
+use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use crate::track::track_remote::TrackRemote;
 use bytes::Bytes;
 use std::sync::atomic::AtomicU64;
 use tokio::time::Duration;

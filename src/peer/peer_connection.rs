@@ -22,17 +22,6 @@ use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::ice_transport::RTCIceTransport;
-use crate::media::rtp::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
-use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
-use crate::media::rtp::rtp_sender::RTCRtpSender;
-use crate::media::rtp::rtp_transceiver::{
-    find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
-};
-use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
-use crate::media::rtp::{RTCRtpTransceiverInit, SSRC};
-use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
-use crate::media::track::track_local::TrackLocal;
-use crate::media::track::track_remote::TrackRemote;
 use crate::peer::certificate::RTCCertificate;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
@@ -52,9 +41,20 @@ use crate::peer::sdp::sdp_type::RTCSdpType;
 use crate::peer::sdp::session_description::RTCSessionDescription;
 use crate::peer::sdp::*;
 use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
+use crate::rtp_transceiver::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
+use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
+use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
+use crate::rtp_transceiver::{
+    find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
+};
+use crate::rtp_transceiver::{RTCRtpTransceiverInit, SSRC};
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::sctp_transport::RTCSctpTransport;
+use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use crate::track::track_local::TrackLocal;
+use crate::track::track_remote::TrackRemote;
 use crate::util::{flatten_errs, math_rand_alpha};
 use crate::{
     MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,

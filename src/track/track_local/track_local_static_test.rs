@@ -1,10 +1,10 @@
 use super::{track_local_static_rtp::*, track_local_static_sample::*, *};
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
-use crate::media::track::track_remote::TrackRemote;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::peer_connection_test::*;
+use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use crate::track::track_remote::TrackRemote;
 
 use bytes::Bytes;
 use std::sync::Arc;

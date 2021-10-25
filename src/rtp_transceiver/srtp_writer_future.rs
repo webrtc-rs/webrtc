@@ -1,7 +1,7 @@
 use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
-use crate::media::rtp::rtp_sender::RTPSenderInternal;
-use crate::media::rtp::SSRC;
+use crate::rtp_transceiver::rtp_sender::RTPSenderInternal;
+use crate::rtp_transceiver::SSRC;
 
 use srtp::session::Session;
 use srtp::stream::Stream;

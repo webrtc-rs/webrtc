@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::*;
 use crate::error::{Error, Result};
-use crate::media::rtp::fmtp::*;
+use crate::rtp_transceiver::fmtp::*;
 
 use std::fmt;
 

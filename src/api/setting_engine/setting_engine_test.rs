@@ -1,8 +1,8 @@
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::peer::peer_connection::peer_connection_test::*;
+use crate::rtp_transceiver::rtp_codec::RTPCodecType;
 use std::sync::atomic::Ordering;
 
 #[test]

@@ -1,6 +1,6 @@
 use crate::api::media_engine::MediaEngine;
 use crate::error::Result;
-use crate::media::rtp::{rtp_codec::RTPCodecType, RTCPFeedback};
+use crate::rtp_transceiver::{rtp_codec::RTPCodecType, RTCPFeedback};
 use interceptor::nack::{generator::Generator, responder::Responder};
 use interceptor::registry::Registry;
 use interceptor::report::{receiver::ReceiverReport, sender::SenderReport};

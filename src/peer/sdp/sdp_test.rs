@@ -4,10 +4,10 @@ use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
 use crate::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
 use crate::dtls_transport::RTCDtlsTransport;
-use crate::media::rtp::rtp_sender::RTCRtpSender;
-use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
-use crate::media::track::track_local::TrackLocal;
 use crate::peer::certificate::RTCCertificate;
+use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
+use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use crate::track::track_local::TrackLocal;
 use rcgen::KeyPair;
 use sdp::common_description::Attribute;
 

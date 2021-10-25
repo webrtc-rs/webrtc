@@ -65,13 +65,13 @@ mod test {
     use crate::api::media_engine::MediaEngine;
     use crate::api::APIBuilder;
     use crate::error::Result;
-    use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
-    use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
-    use crate::media::rtp::RTCRtpTransceiverInit;
-    use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
-    use crate::media::track::track_local::TrackLocal;
     use crate::peer::configuration::RTCConfiguration;
     use crate::peer::peer_connection::peer_connection_test::close_pair_now;
+    use crate::rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
+    use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
+    use crate::rtp_transceiver::RTCRtpTransceiverInit;
+    use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+    use crate::track::track_local::TrackLocal;
     use crate::SSRC_STR;
 
     use sdp::media_description::MediaDescription;
