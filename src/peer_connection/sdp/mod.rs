@@ -21,10 +21,10 @@ pub mod session_description;
 
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
-use sdp::common_description::{Address, ConnectionInformation};
+use sdp::description::common::{Address, ConnectionInformation};
+use sdp::description::media::{MediaDescription, MediaName, RangedPort};
+use sdp::description::session::*;
 use sdp::extmap::ExtMap;
-use sdp::media_description::{MediaDescription, MediaName, RangedPort};
-use sdp::session_description::*;
 use sdp::util::ConnectionRole;
 use std::collections::HashMap;
 use std::convert::From;
@@ -427,7 +427,7 @@ pub(crate) async fn add_transceiver_sdp(
     if codecs.is_empty() {
         // Explicitly reject track if we don't have the codec
         d = d.with_media(MediaDescription {
-            media_name: sdp::media_description::MediaName {
+            media_name: sdp::description::media::MediaName {
                 media: t.kind.to_string(),
                 port: RangedPort {
                     value: 0,

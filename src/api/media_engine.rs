@@ -16,7 +16,7 @@ use crate::rtp_transceiver::rtp_transceiver_direction::{
 };
 use crate::rtp_transceiver::{PayloadType, RTCPFeedback};
 
-use sdp::session_description::SessionDescription;
+use sdp::description::session::SessionDescription;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};

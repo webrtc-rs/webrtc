@@ -7,7 +7,7 @@ pub(crate) struct PeerConnectionInternal {
     /// requires that when reusing a media section a new unique mid
     /// should be defined (see JSEP 3.4.1).
     pub(super) greater_mid: AtomicIsize,
-    pub(super) sdp_origin: Mutex<::sdp::session_description::Origin>,
+    pub(super) sdp_origin: Mutex<::sdp::description::session::Origin>,
     pub(super) last_offer: Mutex<String>,
     pub(super) last_answer: Mutex<String>,
 

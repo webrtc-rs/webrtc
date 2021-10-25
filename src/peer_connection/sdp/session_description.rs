@@ -2,7 +2,7 @@ use crate::error::Result;
 
 use super::sdp_type::RTCSdpType;
 
-use sdp::session_description::SessionDescription;
+use sdp::description::session::SessionDescription;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 

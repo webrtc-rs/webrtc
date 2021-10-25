@@ -1,4 +1,4 @@
-use sdp::session_description::SessionDescription;
+use sdp::description::session::SessionDescription;
 use sdp::util::ConnectionRole;
 
 use serde::{Deserialize, Serialize};

@@ -75,7 +75,7 @@ use crate::{
 
 use ::ice::candidate::candidate_base::unmarshal_candidate;
 use ::ice::candidate::Candidate;
-use ::sdp::session_description::*;
+use ::sdp::description::session::*;
 use ::sdp::util::ConnectionRole;
 use async_trait::async_trait;
 use interceptor::{Attributes, Interceptor, RTCPWriter};

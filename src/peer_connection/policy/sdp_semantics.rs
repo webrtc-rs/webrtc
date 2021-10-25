@@ -74,8 +74,8 @@ mod test {
     use crate::track::track_local::TrackLocal;
     use crate::SSRC_STR;
 
-    use sdp::media_description::MediaDescription;
-    use sdp::session_description::SessionDescription;
+    use sdp::description::media::MediaDescription;
+    use sdp::description::session::SessionDescription;
     use std::collections::HashSet;
     use std::sync::Arc;
 
