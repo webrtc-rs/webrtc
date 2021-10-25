@@ -1,4 +1,4 @@
-use crate::peer_connection::ice::ice_server::RTCIceServer;
+use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 pub mod ice_gatherer;

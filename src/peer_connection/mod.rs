@@ -3,7 +3,6 @@ pub(crate) mod peer_connection_test;
 
 pub mod certificate;
 pub mod configuration;
-pub mod ice;
 pub mod offer_answer_options;
 pub(crate) mod operation;
 mod peer_connection_internal;
@@ -27,21 +26,21 @@ use crate::dtls_transport::dtls_role::{
 use crate::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
+use crate::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
+use crate::ice_transport::ice_gather::ice_gatherer::{
+    OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
+    RTCIceGatherer,
+};
+use crate::ice_transport::ice_gather::ice_gatherer_state::RTCIceGathererState;
+use crate::ice_transport::ice_gather::ice_gathering_state::RTCIceGatheringState;
+use crate::ice_transport::ice_gather::RTCIceGatherOptions;
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::ice_transport::RTCIceTransport;
 use crate::peer_connection::certificate::RTCCertificate;
 use crate::peer_connection::configuration::RTCConfiguration;
-use crate::peer_connection::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
-use crate::peer_connection::ice::ice_connection_state::RTCIceConnectionState;
-use crate::peer_connection::ice::ice_gather::ice_gatherer::{
-    OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
-    RTCIceGatherer,
-};
-use crate::peer_connection::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
-use crate::peer_connection::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
-use crate::peer_connection::ice::ice_gather::RTCIceGatherOptions;
 use crate::peer_connection::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
 use crate::peer_connection::operation::{Operation, Operations};
 use crate::peer_connection::peer_connection_state::{

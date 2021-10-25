@@ -8,14 +8,14 @@ use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
 use util::Conn;
 
+use ice_candidate::RTCIceCandidate;
 use ice_candidate_pair::RTCIceCandidatePair;
+use ice_gather::ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
 
 use crate::error::{Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
-use crate::peer_connection::ice::ice_candidate::RTCIceCandidate;
-use crate::peer_connection::ice::ice_gather::ice_gatherer::RTCIceGatherer;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::MatchFunc;
 use crate::util::mux::{Config, Mux};
@@ -24,9 +24,15 @@ use crate::RECEIVE_MTU;
 #[cfg(test)]
 mod ice_transport_test;
 
+pub mod ice_candidate;
 pub mod ice_candidate_pair;
+pub mod ice_connection_state;
+pub mod ice_credential_type;
+pub mod ice_gather;
 pub mod ice_parameters;
+pub mod ice_protocol;
 pub mod ice_role;
+pub mod ice_server;
 pub mod ice_transport_state;
 
 pub type OnConnectionStateChangeHdlrFn = Box<
