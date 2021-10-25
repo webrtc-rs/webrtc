@@ -3,20 +3,22 @@
 
 use ::dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 
-pub mod api;
-pub mod data;
-mod error;
-pub mod media;
-pub mod peer;
-pub mod stats;
-pub mod util;
-
-pub use ::data as webrtc_data;
 pub use ::media as webrtc_media;
-pub use error::Error;
+pub use data;
 pub use interceptor;
 pub use rtcp;
 pub use rtp;
+
+pub use error::Error;
+
+pub mod api;
+pub mod data_channel;
+mod error;
+pub mod media;
+pub mod peer;
+pub mod sctp_transport;
+pub mod stats;
+pub mod util;
 
 #[macro_use]
 extern crate lazy_static;

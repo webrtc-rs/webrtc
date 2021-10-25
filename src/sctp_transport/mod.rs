@@ -7,16 +7,16 @@ pub mod sctp_transport_state;
 use sctp_transport_state::RTCSctpTransportState;
 
 use crate::api::setting_engine::SettingEngine;
-use crate::data::data_channel::RTCDataChannel;
-use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use crate::data_channel::RTCDataChannel;
 use crate::error::*;
 use crate::media::dtls_transport::dtls_role::DTLSRole;
 use crate::media::dtls_transport::*;
+use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;
 
-use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
+use crate::data_channel::data_channel_parameters::DataChannelParameters;
 
 use data::data_channel::DataChannel;
 use std::future::Future;

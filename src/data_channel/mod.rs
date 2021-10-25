@@ -23,8 +23,8 @@ use tokio::sync::{Mutex, Notify};
 use data_channel_state::RTCDataChannelState;
 
 use crate::api::setting_engine::SettingEngine;
-use crate::data::sctp_transport::RTCSctpTransport;
 use crate::error::{Error, OnErrorHdlrFn, Result};
+use crate::sctp_transport::RTCSctpTransport;
 
 /// message size limit for Chromium
 const DATA_CHANNEL_BUFFER_SIZE: u16 = u16::MAX;

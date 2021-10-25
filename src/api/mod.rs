@@ -14,9 +14,8 @@ use crate::peer::ice::ice_gather::RTCIceGatherOptions;
 use media_engine::*;
 use setting_engine::*;
 
-use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
-use crate::data::data_channel::RTCDataChannel;
-use crate::data::sctp_transport::RTCSctpTransport;
+use crate::data_channel::data_channel_parameters::DataChannelParameters;
+use crate::data_channel::RTCDataChannel;
 use crate::error::{Error, Result};
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
@@ -24,6 +23,7 @@ use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::RTCPeerConnection;
+use crate::sctp_transport::RTCSctpTransport;
 use interceptor::{noop::NoOp, registry::Registry, Interceptor};
 
 use rcgen::KeyPair;

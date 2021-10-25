@@ -6,13 +6,10 @@ mod peer_connection_internal;
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
-use crate::data::data_channel::data_channel_init::RTCDataChannelInit;
-use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
-use crate::data::data_channel::data_channel_state::RTCDataChannelState;
-use crate::data::data_channel::RTCDataChannel;
-use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
-use crate::data::sctp_transport::sctp_transport_state::RTCSctpTransportState;
-use crate::data::sctp_transport::RTCSctpTransport;
+use crate::data_channel::data_channel_init::RTCDataChannelInit;
+use crate::data_channel::data_channel_parameters::DataChannelParameters;
+use crate::data_channel::data_channel_state::RTCDataChannelState;
+use crate::data_channel::RTCDataChannel;
 use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
@@ -55,6 +52,9 @@ use crate::peer::sdp::sdp_type::RTCSdpType;
 use crate::peer::sdp::session_description::RTCSessionDescription;
 use crate::peer::sdp::*;
 use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
+use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;
+use crate::sctp_transport::RTCSctpTransport;
 use crate::util::{flatten_errs, math_rand_alpha};
 use crate::{
     MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,

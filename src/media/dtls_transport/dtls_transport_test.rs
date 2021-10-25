@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::data::data_channel::RTCDataChannel;
+use crate::data_channel::RTCDataChannel;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::peer_connection::peer_connection_test::{
