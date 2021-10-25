@@ -2,9 +2,9 @@
 mod sdp_test;
 
 use crate::api::media_engine::MediaEngine;
+use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::error::{Error, Result};
-use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
-use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
 use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;

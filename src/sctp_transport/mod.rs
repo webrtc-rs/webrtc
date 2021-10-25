@@ -8,9 +8,9 @@ use sctp_transport_state::RTCSctpTransportState;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data_channel::RTCDataChannel;
+use crate::dtls_transport::dtls_role::DTLSRole;
+use crate::dtls_transport::*;
 use crate::error::*;
-use crate::media::dtls_transport::dtls_role::DTLSRole;
-use crate::media::dtls_transport::*;
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 
 use data::message::message_channel_open::ChannelType;

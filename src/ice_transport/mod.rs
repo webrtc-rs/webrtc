@@ -12,8 +12,8 @@ use ice_candidate_pair::RTCIceCandidatePair;
 use ice_role::RTCIceRole;
 
 use crate::error::{Error, Result};
-use crate::media::ice_transport::ice_parameters::RTCIceParameters;
-use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::ice_transport::ice_parameters::RTCIceParameters;
+use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
 use crate::util::mux::endpoint::Endpoint;

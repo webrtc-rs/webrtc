@@ -2,7 +2,6 @@
 #![allow(dead_code)]
 
 use ::dtls::extension::extension_use_srtp::SrtpProtectionProfile;
-
 pub use ::media as webrtc_media;
 pub use data;
 pub use interceptor;
@@ -13,7 +12,9 @@ pub use error::Error;
 
 pub mod api;
 pub mod data_channel;
+pub mod dtls_transport;
 mod error;
+pub mod ice_transport;
 pub mod media;
 pub mod peer;
 pub mod sctp_transport;

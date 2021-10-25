@@ -2,15 +2,18 @@
 mod rtp_sender_test;
 
 use crate::api::media_engine::MediaEngine;
+use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
-use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::interceptor::{create_stream_info, InterceptorToTrackLocalWriter};
 use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
 use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
-use crate::media::rtp::{PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters, SSRC};
-use crate::media::track::track_local::{TrackLocal, TrackLocalContext, TrackLocalWriter};
+use crate::media::rtp::{
+    create_stream_info, PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters, SSRC,
+};
+use crate::media::track::track_local::{
+    InterceptorToTrackLocalWriter, TrackLocal, TrackLocalContext, TrackLocalWriter,
+};
 use crate::RECEIVE_MTU;
 
 use ice::rand::generate_crypto_random_string;

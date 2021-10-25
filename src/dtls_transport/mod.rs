@@ -17,12 +17,12 @@ use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::default_srtp_protection_profiles;
+use crate::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::error::{Error, Result};
-use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
-use crate::media::ice_transport::ice_role::RTCIceRole;
-use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
-use crate::media::ice_transport::RTCIceTransport;
+use crate::ice_transport::ice_role::RTCIceRole;
+use crate::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::ice_transport::RTCIceTransport;
 use crate::peer::certificate::RTCCertificate;
 use crate::util::flatten_errs;
 use crate::util::mux::endpoint::Endpoint;

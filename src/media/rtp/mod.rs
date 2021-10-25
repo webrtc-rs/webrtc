@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
+
+use interceptor::{
+    stream_info::{RTPHeaderExtension, StreamInfo},
+    Attributes,
+};
 use rtp_codec::*;
 
 pub(crate) mod fmtp;
@@ -98,4 +103,41 @@ pub struct RTCRtpTransceiverInit {
     pub direction: RTCRtpTransceiverDirection,
     pub send_encodings: Vec<RTCRtpEncodingParameters>,
     // Streams       []*Track
+}
+
+pub(crate) fn create_stream_info(
+    id: String,
+    ssrc: SSRC,
+    payload_type: PayloadType,
+    codec: RTCRtpCodecCapability,
+    webrtc_header_extensions: &[RTCRtpHeaderExtensionParameters],
+) -> StreamInfo {
+    let mut header_extensions = vec![];
+    for h in webrtc_header_extensions {
+        header_extensions.push(RTPHeaderExtension {
+            id: h.id,
+            uri: h.uri.clone(),
+        });
+    }
+
+    let mut feedbacks = vec![];
+    for f in &codec.rtcp_feedback {
+        feedbacks.push(interceptor::stream_info::RTCPFeedback {
+            typ: f.typ.clone(),
+            parameter: f.parameter.clone(),
+        });
+    }
+
+    StreamInfo {
+        id,
+        attributes: Attributes::new(),
+        ssrc,
+        payload_type,
+        rtp_header_extensions: header_extensions,
+        mime_type: codec.mime_type,
+        clock_rate: codec.clock_rate,
+        channels: codec.channels,
+        sdp_fmtp_line: codec.sdp_fmtp_line,
+        rtcp_feedback: feedbacks,
+    }
 }

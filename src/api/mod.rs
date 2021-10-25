@@ -5,8 +5,8 @@ pub mod interceptor_registry;
 pub mod media_engine;
 pub mod setting_engine;
 
-use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::ice_transport::RTCIceTransport;
+use crate::dtls_transport::RTCDtlsTransport;
+use crate::ice_transport::RTCIceTransport;
 use crate::peer::certificate::RTCCertificate;
 use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
 use crate::peer::ice::ice_gather::RTCIceGatherOptions;

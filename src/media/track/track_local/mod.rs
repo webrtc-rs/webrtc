@@ -9,9 +9,11 @@ use crate::media::rtp::rtp_codec::*;
 use crate::media::rtp::*;
 
 use async_trait::async_trait;
+use interceptor::{Attributes, RTPWriter};
 use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use util::Unmarshal;
 
 /// TrackLocalWriter is the Writer for outbound RTP Packets
@@ -101,4 +103,48 @@ pub(crate) struct TrackBinding {
     ssrc: SSRC,
     payload_type: PayloadType,
     write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
+}
+
+pub(crate) struct InterceptorToTrackLocalWriter {
+    pub(crate) interceptor_rtp_writer: Mutex<Option<Arc<dyn RTPWriter + Send + Sync>>>,
+}
+
+impl InterceptorToTrackLocalWriter {
+    pub(crate) fn new() -> Self {
+        InterceptorToTrackLocalWriter {
+            interceptor_rtp_writer: Mutex::new(None),
+        }
+    }
+}
+
+impl std::fmt::Debug for InterceptorToTrackLocalWriter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InterceptorToTrackLocalWriter").finish()
+    }
+}
+
+impl Default for InterceptorToTrackLocalWriter {
+    fn default() -> Self {
+        InterceptorToTrackLocalWriter {
+            interceptor_rtp_writer: Mutex::new(None),
+        }
+    }
+}
+
+#[async_trait]
+impl TrackLocalWriter for InterceptorToTrackLocalWriter {
+    async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+        let interceptor_rtp_writer = self.interceptor_rtp_writer.lock().await;
+        if let Some(writer) = &*interceptor_rtp_writer {
+            let a = Attributes::new();
+            Ok(writer.write(pkt, &a).await?)
+        } else {
+            Ok(0)
+        }
+    }
+
+    async fn write(&self, mut b: &[u8]) -> Result<usize> {
+        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
+        self.write_rtp(&pkt).await
+    }
 }

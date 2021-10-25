@@ -7,11 +7,11 @@ use crate::peer::peer_connection::RTCPeerConnection;
 
 //use log::LevelFilter;
 //use std::io::Write;
-use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::ice_transport::ice_parameters::RTCIceParameters;
-use crate::media::ice_transport::ice_role::RTCIceRole;
-use crate::media::ice_transport::RTCIceTransport;
+use crate::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::dtls_transport::RTCDtlsTransport;
+use crate::ice_transport::ice_parameters::RTCIceParameters;
+use crate::ice_transport::ice_role::RTCIceRole;
+use crate::ice_transport::RTCIceTransport;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ice_connection_state::RTCIceConnectionState;

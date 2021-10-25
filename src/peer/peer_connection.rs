@@ -10,18 +10,18 @@ use crate::data_channel::data_channel_init::RTCDataChannelInit;
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data_channel::data_channel_state::RTCDataChannelState;
 use crate::data_channel::RTCDataChannel;
-use crate::error::{Error, Result};
-use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
-use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::media::dtls_transport::dtls_role::{
+use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
+use crate::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
 };
-use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
-use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::ice_transport::ice_parameters::RTCIceParameters;
-use crate::media::ice_transport::ice_role::RTCIceRole;
-use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
-use crate::media::ice_transport::RTCIceTransport;
+use crate::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
+use crate::dtls_transport::RTCDtlsTransport;
+use crate::error::{Error, Result};
+use crate::ice_transport::ice_parameters::RTCIceParameters;
+use crate::ice_transport::ice_role::RTCIceRole;
+use crate::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::ice_transport::RTCIceTransport;
 use crate::media::rtp::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::rtp::rtp_sender::RTCRtpSender;

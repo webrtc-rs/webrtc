@@ -1,5 +1,5 @@
+use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::error::{Error, Result};
-use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::util::math_rand_alpha;
 
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};

@@ -1,6 +1,6 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::{Error, Result};
-use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::peer::ice::ice_candidate::*;
 use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
