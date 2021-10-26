@@ -224,7 +224,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()

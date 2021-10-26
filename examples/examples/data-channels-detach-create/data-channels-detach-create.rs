@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Since this behavior diverges from the WebRTC API it has to be
     // enabled using a settings engine. Mixing both detached and the

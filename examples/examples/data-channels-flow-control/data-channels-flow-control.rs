@@ -46,7 +46,7 @@ async fn create_offerer() -> Result<Arc<RTCPeerConnection>> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -142,7 +142,7 @@ async fn create_answerer() -> Result<Arc<RTCPeerConnection>> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()

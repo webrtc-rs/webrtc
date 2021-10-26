@@ -89,7 +89,7 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
             let mut registry = Registry::new();
 
             // Use the default set of Interceptors
-            registry = match register_default_interceptors(registry, &mut m) {
+            registry = match register_default_interceptors(registry, &mut m).await {
                 Ok(r) => r,
                 Err(err) => panic!("{}", err),
             };
