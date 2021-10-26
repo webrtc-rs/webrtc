@@ -335,8 +335,14 @@ async fn main() -> Result<()> {
     answer_pc.set_local_description(answer).await?;
     set_remote_description(&offer_pc, &desc2).await?;
 
-    println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    println!("Press ctrl-c to stop or wait for 5s");
+    let timeout = tokio::time::sleep(Duration::from_secs(5));
+    tokio::pin!(timeout);
+
+    tokio::select! {
+        _ = timeout.as_mut() => {}
+        _ = tokio::signal::ctrl_c() => {}
+    }
 
     if let Err(err) = offer_pc.close().await {
         println!("cannot close offer_pc: {}", err);
