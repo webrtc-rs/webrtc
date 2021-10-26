@@ -93,16 +93,10 @@ async fn create_offerer() -> Result<Arc<RTCPeerConnection>> {
         tokio::spawn(async move {
             let buf = Bytes::from_static(&[0u8; 1024]);
             while dc2.send(&buf).await.is_ok() {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                //TODO: why add this?
+                tokio::time::sleep(Duration::from_micros(1)).await;
                 let buffered_amount = dc2.buffered_amount().await;
                 if buffered_amount + buf.len() > MAX_BUFFERED_AMOUNT {
-                    // Wait until the bufferedAmount becomes lower than the threshold
-                    // println!(
-                    //     "buffered_amount {} + sent {} > MAX_BUFFERED_AMOUNT {}",
-                    //     buffered_amount,
-                    //     buf.len(),
-                    //     MAX_BUFFERED_AMOUNT
-                    // );
                     let _ = send_more_ch_rx.recv().await;
                 }
             }
@@ -207,8 +201,6 @@ async fn create_answerer() -> Result<Arc<RTCPeerConnection>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    console_subscriber::init();
-
     let mut app = App::new("data-channels-flow-control")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
@@ -225,6 +217,12 @@ async fn main() -> Result<()> {
                 .long("debug")
                 .short("d")
                 .help("Prints debug log information"),
+        )
+        .arg(
+            Arg::with_name("console_subscriber")
+                .long("console_subscriber")
+                .short("c")
+                .help("Enable console subscriber"),
         );
 
     let matches = app.clone().get_matches();
@@ -232,6 +230,11 @@ async fn main() -> Result<()> {
     if matches.is_present("FULLHELP") {
         app.print_long_help().unwrap();
         std::process::exit(0);
+    }
+
+    let enable_console_subscriber = matches.is_present("console_subscriber");
+    if enable_console_subscriber {
+        console_subscriber::init();
     }
 
     let debug = matches.is_present("debug");
