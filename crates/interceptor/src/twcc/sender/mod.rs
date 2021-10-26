@@ -119,7 +119,7 @@ impl RTPReader for SenderInternal {
 
 /// Sender sends transport wide congestion control reports as specified in:
 /// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
-struct Sender {
+pub struct Sender {
     internal: Arc<SenderInternal>,
 
     wg: Mutex<Option<WaitGroup>>,
