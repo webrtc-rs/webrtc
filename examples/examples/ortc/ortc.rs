@@ -5,17 +5,17 @@ use std::io::Write;
 use std::sync::Arc;
 use tokio::time::Duration;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data::data_channel::data_channel_parameters::DataChannelParameters;
-use webrtc::data::data_channel::RTCDataChannel;
-use webrtc::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
-use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
-use webrtc::media::ice_transport::ice_parameters::RTCIceParameters;
-use webrtc::media::ice_transport::ice_role::RTCIceRole;
-use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
-use webrtc::peer::ice::ice_gather::RTCIceGatherOptions;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::util::math_rand_alpha;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::data_channel_parameters::DataChannelParameters;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::dtls_transport::dtls_parameters::DTLSParameters;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_gatherer::RTCIceGatherOptions;
+use webrtc::ice_transport::ice_parameters::RTCIceParameters;
+use webrtc::ice_transport::ice_role::RTCIceRole;
+use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use webrtc::utilities::math_rand_alpha;
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -8,13 +8,13 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
-use webrtc::util::math_rand_alpha;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::utilities::math_rand_alpha;
 
 const MESSAGE_SIZE: usize = 1500;
 
@@ -206,7 +206,7 @@ async fn main() -> Result<()> {
 }
 
 // read_loop shows how to read from the datachannel directly
-async fn read_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Result<()> {
+async fn read_loop(d: Arc<webrtc::data::data_channel::DataChannel>) -> Result<()> {
     let mut buffer = vec![0u8; MESSAGE_SIZE];
     loop {
         let n = match d.read(&mut buffer).await {
@@ -225,7 +225,7 @@ async fn read_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Re
 }
 
 // write_loop shows how to write to the datachannel directly
-async fn write_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Result<()> {
+async fn write_loop(d: Arc<webrtc::data::data_channel::DataChannel>) -> Result<()> {
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
         let timeout = tokio::time::sleep(Duration::from_secs(5));

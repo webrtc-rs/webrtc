@@ -9,16 +9,16 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::data_channel_init::RTCDataChannelInit;
-use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection::RTCPeerConnection;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
 
 const BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 512 * 1024; // 512 KB
 const MAX_BUFFERED_AMOUNT: usize = 1024 * 1024; // 1 MB
