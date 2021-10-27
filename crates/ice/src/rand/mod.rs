@@ -5,7 +5,7 @@ use rand::{thread_rng, Rng};
 
 const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const RUNES_CANDIDATE_ID_FOUNDATION: &[u8] =
-    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/";
+    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/+";
 
 const LEN_UFRAG: usize = 16;
 const LEN_PWD: usize = 32;
