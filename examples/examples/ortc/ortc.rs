@@ -14,8 +14,8 @@ use webrtc::ice_transport::ice_gatherer::RTCIceGatherOptions;
 use webrtc::ice_transport::ice_parameters::RTCIceParameters;
 use webrtc::ice_transport::ice_role::RTCIceRole;
 use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::peer_connection::math_rand_alpha;
 use webrtc::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
-use webrtc::utilities::math_rand_alpha;
 
 #[tokio::main]
 async fn main() -> Result<()> {

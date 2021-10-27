@@ -15,7 +15,6 @@ repository = "https://github.com/webrtc-rs/examples"
 
 
 [dev-dependencies]
-util = { package = "webrtc-util", version = "0.5.0" }
 webrtc = { git = "https://github.com/webrtc-rs/webrtc/", branch = "v0.3.0" }
 tokio = { version = "1.12.0", features = ["full"] }
 env_logger = "0.9.0"
