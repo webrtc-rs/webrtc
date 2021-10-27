@@ -7,6 +7,9 @@ use interceptor::stream_info::StreamInfo;
 use interceptor::{RTCPReader, RTPReader};
 use std::sync::Arc;
 
+pub(crate) const RTP_OUTBOUND_MTU: usize = 1200;
+pub(crate) const RTP_PAYLOAD_TYPE_BITMASK: u8 = 0x7F;
+
 /// TrackStreams maintains a mapping of RTP/RTCP streams to a specific track
 /// a RTPReceiver may contain multiple streams if we are dealing with Multicast
 pub(crate) struct TrackStreams {

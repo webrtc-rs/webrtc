@@ -6,6 +6,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
+use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use sha2::{Digest, Sha256};
 use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
@@ -16,17 +17,15 @@ use util::Conn;
 use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
-use crate::default_srtp_protection_profiles;
 use crate::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
-use crate::error::{Error, Result};
+use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::ice_transport::RTCIceTransport;
+use crate::mux::endpoint::Endpoint;
+use crate::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
 use crate::peer_connection::certificate::RTCCertificate;
-use crate::utilities::flatten_errs;
-use crate::utilities::mux::endpoint::Endpoint;
-use crate::utilities::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
 
 #[cfg(test)]
 mod dtls_transport_test;
@@ -35,6 +34,13 @@ pub mod dtls_fingerprint;
 pub mod dtls_parameters;
 pub mod dtls_role;
 pub mod dtls_transport_state;
+
+pub(crate) fn default_srtp_protection_profiles() -> Vec<SrtpProtectionProfile> {
+    vec![
+        SrtpProtectionProfile::Srtp_Aead_Aes_128_Gcm,
+        SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
+    ]
+}
 
 pub type OnDTLSTransportStateChangeHdlrFn = Box<
     dyn (FnMut(RTCDtlsTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)

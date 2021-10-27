@@ -14,11 +14,11 @@ use crate::rtp_transceiver::rtp_codec::{
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::rtp_transceiver::RTCRtpTransceiver;
 use crate::rtp_transceiver::{PayloadType, RTCPFeedback, SSRC};
-use crate::MEDIA_SECTION_APPLICATION;
 
 pub mod sdp_type;
 pub mod session_description;
 
+use crate::peer_connection::MEDIA_SECTION_APPLICATION;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::description::common::{Address, ConnectionInformation};

@@ -25,7 +25,7 @@ use crate::dtls_transport::dtls_role::{
 };
 use crate::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::dtls_transport::RTCDtlsTransport;
-use crate::error::{Error, Result};
+use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
 use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
@@ -67,11 +67,7 @@ use crate::sctp_transport::RTCSctpTransport;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
-use crate::utilities::{flatten_errs, math_rand_alpha};
-use crate::{
-    MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,
-    SSRC_STR,
-};
+use crate::RECEIVE_MTU;
 
 use ::ice::candidate::candidate_base::unmarshal_candidate;
 use ::ice::candidate::Candidate;
@@ -80,6 +76,7 @@ use ::sdp::util::ConnectionRole;
 use async_trait::async_trait;
 use interceptor::{Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
+use rand::{thread_rng, Rng};
 use rcgen::KeyPair;
 use srtp::stream::Stream;
 use std::future::Future;
@@ -88,6 +85,35 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
+
+pub(crate) const SSRC_STR: &str = "ssrc";
+
+/// SIMULCAST_PROBE_COUNT is the amount of RTP Packets
+/// that handleUndeclaredSSRC will read and try to dispatch from
+/// mid and rid values
+pub(crate) const SIMULCAST_PROBE_COUNT: usize = 10;
+
+/// SIMULCAST_MAX_PROBE_ROUTINES is how many active routines can be used to probe
+/// If the total amount of incoming SSRCes exceeds this new requests will be ignored
+pub(crate) const SIMULCAST_MAX_PROBE_ROUTINES: u64 = 25;
+
+pub(crate) const MEDIA_SECTION_APPLICATION: &str = "application";
+
+const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/// math_rand_alpha generates a mathmatical random alphabet sequence of the requested length.
+pub fn math_rand_alpha(n: usize) -> String {
+    let mut rng = thread_rng();
+
+    let rand_string: String = (0..n)
+        .map(|_| {
+            let idx = rng.gen_range(0..RUNES_ALPHA.len());
+            RUNES_ALPHA[idx] as char
+        })
+        .collect();
+
+    rand_string
+}
 
 pub type OnSignalingStateChangeHdlrFn = Box<
     dyn (FnMut(RTCSignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)

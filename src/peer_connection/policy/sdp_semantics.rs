@@ -72,8 +72,8 @@ mod test {
     use crate::rtp_transceiver::RTCRtpTransceiverInit;
     use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
     use crate::track::track_local::TrackLocal;
-    use crate::SSRC_STR;
 
+    use crate::peer_connection::SSRC_STR;
     use sdp::description::media::MediaDescription;
     use sdp::description::session::SessionDescription;
     use std::collections::HashSet;
