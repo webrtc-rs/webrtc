@@ -13,7 +13,7 @@ use bytes::Bytes;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::SystemTime;
 
 use data::message::message_channel_open::ChannelType;
@@ -72,7 +72,7 @@ pub struct RTCDataChannel {
 
     pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
 
-    pub(crate) sctp_transport: Mutex<Option<Arc<RTCSctpTransport>>>,
+    pub(crate) sctp_transport: Mutex<Option<Weak<RTCSctpTransport>>>,
     pub(crate) data_channel: Mutex<Option<Arc<data::data_channel::DataChannel>>>,
 
     pub(crate) notify_tx: Arc<Notify>,
@@ -114,7 +114,7 @@ impl RTCDataChannel {
             {
                 let mut st = self.sctp_transport.lock().await;
                 if st.is_none() {
-                    *st = Some(Arc::clone(&sctp_transport));
+                    *st = Some(Arc::downgrade(&sctp_transport));
                 } else {
                     return Ok(());
                 }
@@ -188,7 +188,7 @@ impl RTCDataChannel {
     }
 
     /// transport returns the SCTPTransport instance the DataChannel is sending over.
-    pub async fn transport(&self) -> Option<Arc<RTCSctpTransport>> {
+    pub async fn transport(&self) -> Option<Weak<RTCSctpTransport>> {
         let sctp_transport = self.sctp_transport.lock().await;
         sctp_transport.clone()
     }
