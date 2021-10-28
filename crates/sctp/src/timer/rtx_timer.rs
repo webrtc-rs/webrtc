@@ -1,6 +1,6 @@
 use crate::association::RtxTimerId;
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
@@ -107,7 +107,7 @@ pub(crate) trait RtxTimerObserver {
 /// rtxTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
 #[derive(Default, Debug)]
 pub(crate) struct RtxTimer<T: 'static + RtxTimerObserver + Send> {
-    pub(crate) timeout_observer: Arc<Mutex<T>>,
+    pub(crate) timeout_observer: Weak<Mutex<T>>,
     pub(crate) id: RtxTimerId,
     pub(crate) max_retrans: usize,
     pub(crate) close_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -117,7 +117,11 @@ impl<T: 'static + RtxTimerObserver + Send> RtxTimer<T> {
     /// newRTXTimer creates a new retransmission timer.
     /// if max_retrans is set to 0, it will keep retransmitting until stop() is called.
     /// (it will never make on_retransmission_failure() callback.
-    pub(crate) fn new(timeout_observer: Arc<Mutex<T>>, id: RtxTimerId, max_retrans: usize) -> Self {
+    pub(crate) fn new(
+        timeout_observer: Weak<Mutex<T>>,
+        id: RtxTimerId,
+        max_retrans: usize,
+    ) -> Self {
         RtxTimer {
             timeout_observer,
             id,
@@ -148,7 +152,7 @@ impl<T: 'static + RtxTimerObserver + Send> RtxTimer<T> {
         let id = self.id;
         let max_retrans = self.max_retrans;
         let close_tx = Arc::clone(&self.close_tx);
-        let timeout_observer = Arc::clone(&self.timeout_observer);
+        let timeout_observer = self.timeout_observer.clone();
 
         tokio::spawn(async move {
             let mut n_rtos = 0;
@@ -163,12 +167,16 @@ impl<T: 'static + RtxTimerObserver + Send> RtxTimer<T> {
                         n_rtos+=1;
 
                         let failure = {
-                            let mut observer = timeout_observer.lock().await;
-                            if max_retrans == 0 || n_rtos <= max_retrans {
-                                observer.on_retransmission_timeout(id, n_rtos).await;
-                                false
-                            } else {
-                                observer.on_retransmission_failure(id).await;
+                            if let Some(observer) = timeout_observer.upgrade(){
+                                let mut observer = observer.lock().await;
+                                if max_retrans == 0 || n_rtos <= max_retrans {
+                                    observer.on_retransmission_timeout(id, n_rtos).await;
+                                    false
+                                } else {
+                                    observer.on_retransmission_failure(id).await;
+                                    true
+                                }
+                            }else{
                                 true
                             }
                         };

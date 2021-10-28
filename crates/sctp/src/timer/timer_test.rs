@@ -36,7 +36,7 @@ mod test_ack_timer {
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestAckTimerObserver { ncbs: ncbs.clone() }));
 
-        let mut rt = AckTimer::new(obs, ACK_INTERVAL);
+        let mut rt = AckTimer::new(Arc::downgrade(&obs), ACK_INTERVAL);
 
         // should start ok
         let ok = rt.start();
@@ -224,7 +224,7 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         assert!(!rt.is_running().await, "should not be running");
 
@@ -251,7 +251,7 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         let interval = 30;
         let ok = rt.start(interval).await;
@@ -279,7 +279,7 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         let interval = 30;
         let ok = rt.start(interval).await;
@@ -304,7 +304,7 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         let interval = 30;
         let ok = rt.start(interval).await;
@@ -333,7 +333,7 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         for _ in 0..1000 {
             let ok = rt.start(30).await;
@@ -362,7 +362,7 @@ mod test_rtx_timer {
         }));
 
         let since = SystemTime::now();
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         // RTO(msec) Total(msec)
         //  10          10    1st RTO
@@ -413,7 +413,7 @@ mod test_rtx_timer {
         }));
 
         let since = SystemTime::now();
-        let rt = RtxTimer::new(obs, timer_id, 0);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, 0);
 
         // RTO(msec) Total(msec)
         //  10          10    1st RTO
@@ -461,7 +461,7 @@ mod test_rtx_timer {
             max_rtos: usize::MAX,
             ..Default::default()
         }));
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         for _ in 0..10 {
             rt.stop().await;
@@ -487,7 +487,7 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
+        let rt = RtxTimer::new(Arc::downgrade(&obs), timer_id, PATH_MAX_RETRANS);
 
         let ok = rt.start(20).await;
         assert!(ok, "should be accepted");

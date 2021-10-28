@@ -353,31 +353,34 @@ impl Association {
 
             let mut ai = association_internal.lock().await;
             ai.t1init = Some(RtxTimer::new(
-                Arc::clone(&association_internal3),
+                Arc::downgrade(&association_internal3),
                 RtxTimerId::T1Init,
                 MAX_INIT_RETRANS,
             ));
             ai.t1cookie = Some(RtxTimer::new(
-                Arc::clone(&association_internal3),
+                Arc::downgrade(&association_internal3),
                 RtxTimerId::T1Cookie,
                 MAX_INIT_RETRANS,
             ));
             ai.t2shutdown = Some(RtxTimer::new(
-                Arc::clone(&association_internal3),
+                Arc::downgrade(&association_internal3),
                 RtxTimerId::T2Shutdown,
                 NO_MAX_RETRANS,
             )); // retransmit forever
             ai.t3rtx = Some(RtxTimer::new(
-                Arc::clone(&association_internal3),
+                Arc::downgrade(&association_internal3),
                 RtxTimerId::T3RTX,
                 NO_MAX_RETRANS,
             )); // retransmit forever
             ai.treconfig = Some(RtxTimer::new(
-                Arc::clone(&association_internal3),
+                Arc::downgrade(&association_internal3),
                 RtxTimerId::Reconfig,
                 NO_MAX_RETRANS,
             )); // retransmit forever
-            ai.ack_timer = Some(AckTimer::new(association_internal3, ACK_INTERVAL));
+            ai.ack_timer = Some(AckTimer::new(
+                Arc::downgrade(&association_internal3),
+                ACK_INTERVAL,
+            ));
         }
 
         tokio::spawn(async move {

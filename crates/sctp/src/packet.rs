@@ -72,7 +72,7 @@ impl fmt::Display for Packet {
             self.source_port, self.destination_port, self.verification_tag,
         );
         for chunk in &self.chunks {
-            res += format!("Chunk: {}", chunk.to_string()).as_str();
+            res += format!("Chunk: {}", chunk).as_str();
         }
         write!(f, "{}", res)
     }

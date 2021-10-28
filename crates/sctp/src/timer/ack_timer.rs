@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::sync::Weak;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
@@ -14,14 +14,14 @@ pub(crate) trait AckTimerObserver {
 /// ackTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
 #[derive(Default, Debug)]
 pub(crate) struct AckTimer<T: 'static + AckTimerObserver + Send> {
-    pub(crate) timeout_observer: Arc<Mutex<T>>,
+    pub(crate) timeout_observer: Weak<Mutex<T>>,
     pub(crate) interval: Duration,
     pub(crate) close_tx: Option<mpsc::Sender<()>>,
 }
 
 impl<T: 'static + AckTimerObserver + Send> AckTimer<T> {
     /// newAckTimer creates a new acknowledgement timer used to enable delayed ack.
-    pub(crate) fn new(timeout_observer: Arc<Mutex<T>>, interval: Duration) -> Self {
+    pub(crate) fn new(timeout_observer: Weak<Mutex<T>>, interval: Duration) -> Self {
         AckTimer {
             timeout_observer,
             interval,
@@ -38,7 +38,7 @@ impl<T: 'static + AckTimerObserver + Send> AckTimer<T> {
 
         let (close_tx, mut close_rx) = mpsc::channel(1);
         let interval = self.interval;
-        let timeout_observer = Arc::clone(&self.timeout_observer);
+        let timeout_observer = self.timeout_observer.clone();
 
         tokio::spawn(async move {
             let timer = tokio::time::sleep(interval);
@@ -46,8 +46,10 @@ impl<T: 'static + AckTimerObserver + Send> AckTimer<T> {
 
             tokio::select! {
                 _ = timer.as_mut() => {
-                    let mut observer = timeout_observer.lock().await;
-                    observer.on_ack_timeout().await;
+                    if let Some(observer) = timeout_observer.upgrade(){
+                        let mut observer = observer.lock().await;
+                        observer.on_ack_timeout().await;
+                    }
                  }
                 _ = close_rx.recv() => {},
             }
