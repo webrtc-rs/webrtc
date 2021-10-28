@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-sctp"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SCTP"
