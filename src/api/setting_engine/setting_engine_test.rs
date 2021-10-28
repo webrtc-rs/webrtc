@@ -6,34 +6,6 @@ use crate::rtp_transceiver::rtp_codec::RTPCodecType;
 use std::sync::atomic::Ordering;
 
 #[test]
-fn test_set_ephemeral_udpport_range() -> Result<()> {
-    let mut s = SettingEngine::default();
-
-    assert!(
-        !(s.ephemeral_udp.port_min != 0 || s.ephemeral_udp.port_max != 0),
-        "SettingEngine defaults aren't as expected."
-    );
-
-    // set bad ephemeral ports
-    assert!(
-        s.set_ephemeral_udp_port_range(3000, 2999).is_err(),
-        "Setting engine should fail bad ephemeral ports."
-    );
-
-    assert!(
-        s.set_ephemeral_udp_port_range(3000, 4000).is_ok(),
-        "Setting engine failed valid port range"
-    );
-
-    assert!(
-        !(s.ephemeral_udp.port_min != 3000 || s.ephemeral_udp.port_max != 4000),
-        "Setting engine ports do not reflect expected range"
-    );
-
-    Ok(())
-}
-
-#[test]
 fn test_set_connection_timeout() -> Result<()> {
     let mut s = SettingEngine::default();
 

@@ -104,10 +104,9 @@ impl RTCIceGatherer {
         }
 
         let mut config = ice::agent::agent_config::AgentConfig {
+            udp_network: self.setting_engine.udp_network.clone(),
             lite: self.setting_engine.candidates.ice_lite,
             urls: self.validated_servers.clone(),
-            port_min: self.setting_engine.ephemeral_udp.port_min,
-            port_max: self.setting_engine.ephemeral_udp.port_max,
             disconnected_timeout: self.setting_engine.timeout.ice_disconnected_timeout,
             failed_timeout: self.setting_engine.timeout.ice_failed_timeout,
             keepalive_interval: self.setting_engine.timeout.ice_keepalive_interval,
@@ -129,7 +128,6 @@ impl RTCIceGatherer {
             local_ufrag: self.setting_engine.candidates.username_fragment.clone(),
             local_pwd: self.setting_engine.candidates.password.clone(),
             //TODO: TCPMux:                 self.setting_engine.iceTCPMux,
-            //TODO: UDPMux:                 self.setting_engine.iceUDPMux,
             //TODO: ProxyDialer:            self.setting_engine.iceProxyDialer,
             ..Default::default()
         };
