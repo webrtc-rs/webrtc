@@ -38,10 +38,26 @@ impl Network {
     /// The "remote" ip.  
     fn remote_ip(&self, port: u16) -> String {
         match self {
+            // Use Ipv4 mapped IP address for dual stack
+            #[cfg(all(unix, target_pointer_width = "64"))]
             Network::Ipv4 => format!("[::ffff:127.0.0.1]:{}", port),
+
+            #[cfg(any(not(unix), not(target_pointer_width = "64")))]
+            Network::Ipv4 => format!("127.0.0.1:{}", port),
+
             Network::Ipv6 => format!("[::1]:{}", port),
         }
     }
+}
+
+async fn bind_socket() -> Result<UdpSocket> {
+    #[cfg(all(unix, target_pointer_width = "64"))]
+    let udp_socket = UdpSocket::bind("[::]:0").await?;
+
+    #[cfg(any(not(unix), not(target_pointer_width = "64")))]
+    let udp_socket = UdpSocket::bind("0.0.0.0:0").await?;
+
+    Ok(udp_socket)
 }
 
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -88,17 +104,28 @@ async fn test_udp_mux() -> Result<()> {
         .await
     });
 
-    let udp_mux_dyn_3 = Arc::clone(&udp_mux_dyn);
-    let h3 = tokio::spawn(async move {
-        timeout(
-            TIMEOUT,
-            test_mux_connection(Arc::clone(&udp_mux_dyn_3), "ufrag3", addr, Network::Ipv6),
-        )
-        .await
-    });
+    let all_results;
 
-    let (r1, r2, r3) = tokio::join!(h1, h2, h3);
-    let all_results = [r1, r2, r3];
+    #[cfg(all(unix, target_pointer_width = "64"))]
+    {
+        let udp_mux_dyn_3 = Arc::clone(&udp_mux_dyn);
+        let h3 = tokio::spawn(async move {
+            timeout(
+                TIMEOUT,
+                test_mux_connection(Arc::clone(&udp_mux_dyn_3), "ufrag3", addr, Network::Ipv6),
+            )
+            .await
+        });
+
+        let (r1, r2, r3) = tokio::join!(h1, h2, h3);
+        all_results = [r1, r2, r3];
+    }
+
+    #[cfg(any(not(unix), not(target_pointer_width = "64")))]
+    {
+        let (r1, r2) = tokio::join!(h1, h2);
+        all_results = [r1, r2];
+    }
 
     for timeout_result in &all_results {
         // Timeout error
