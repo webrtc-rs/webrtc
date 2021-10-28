@@ -1,11 +1,12 @@
+use tokio::net::UdpSocket;
 use webrtc_ice as ice;
 
 use ice::agent::agent_config::AgentConfig;
 use ice::agent::Agent;
 use ice::candidate::{candidate_base::*, *};
-use ice::network_type::*;
 use ice::state::*;
 use ice::Error;
+use ice::{network_type::*, UDPNetwork};
 
 use clap::{App, AppSettings, Arg};
 use hyper::service::{make_service_fn, service_fn};
@@ -86,20 +87,20 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    /*env_logger::Builder::new()
-    .format(|buf, record| {
-        writeln!(
-            buf,
-            "{}:{} [{}] {} - {}",
-            record.file().unwrap_or("unknown"),
-            record.line().unwrap_or(0),
-            record.level(),
-            chrono::Local::now().format("%H:%M:%S.%6f"),
-            record.args()
-        )
-    })
-    .filter(None, log::LevelFilter::Trace)
-    .init();*/
+    env_logger::init();
+    // .format(|buf, record| {
+    //     writeln!(
+    //         buf,
+    //         "{}:{} [{}] {} - {}",
+    //         record.file().unwrap_or("unknown"),
+    //         record.line().unwrap_or(0),
+    //         record.level(),
+    //         chrono::Local::now().format("%H:%M:%S.%6f"),
+    //         record.args()
+    //     )
+    // })
+    // .filter(None, log::LevelFilter::Trace)
+    // .init();
 
     let mut app = App::new("ICE Demo")
         .version("0.1.0")
@@ -107,6 +108,13 @@ async fn main() -> Result<(), Error> {
         .about("An example of ICE")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
+        .arg(
+            Arg::with_name("use mux")
+                .takes_value(false)
+                .long("use-mux")
+                .short("m")
+                .help("Use a muxed UDP connection over a single listening port"),
+        )
         .arg(
             Arg::with_name("FULLHELP")
                 .help("Prints more detailed help information")
@@ -127,6 +135,7 @@ async fn main() -> Result<(), Error> {
     }
 
     let is_controlling = matches.is_present("controlling");
+    let use_mux = matches.is_present("use mux");
 
     let (local_http_port, remote_http_port) = if is_controlling {
         (9000, 9001)
@@ -155,13 +164,37 @@ async fn main() -> Result<(), Error> {
     let mut input = String::new();
     let _ = io::stdin().read_line(&mut input)?;
 
-    let ice_agent = Arc::new(
-        Agent::new(AgentConfig {
-            network_types: vec![NetworkType::Udp4],
-            ..Default::default()
-        })
-        .await?,
-    );
+    let udp_network = if use_mux {
+        use ice::udp_mux::*;
+        let port = if is_controlling { 4000 } else { 4001 };
+
+        let udp_socket = UdpSocket::bind(("0.0.0.0", port)).await?;
+        let udp_mux = UDPMuxDefault::new(UDPMuxParams::new(udp_socket));
+
+        UDPNetwork::Muxed(udp_mux)
+    } else {
+        UDPNetwork::Ephemeral(Default::default())
+    };
+
+    let ice_agent = if is_controlling {
+        Arc::new(
+            Agent::new(AgentConfig {
+                network_types: vec![NetworkType::Udp4],
+                udp_network,
+                ..Default::default()
+            })
+            .await?,
+        )
+    } else {
+        Arc::new(
+            Agent::new(AgentConfig {
+                network_types: vec![NetworkType::Udp4],
+                udp_network,
+                ..Default::default()
+            })
+            .await?,
+        )
+    };
 
     let client = Arc::new(Client::new());
 
