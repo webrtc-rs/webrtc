@@ -197,4 +197,49 @@ mod test {
 
         assert_eq!(decoded, Ok(ip));
     }
+
+    #[test]
+    fn test_encode_ipv4_with_short_buffer() {
+        let mut buffer = vec![0u8; IPV4_ADDRESS_SIZE - 1];
+        let ip = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from([56, 128, 35, 5]), 0x1234));
+
+        let result = ip.encode(&mut buffer);
+
+        assert_eq!(result, Err(Error::ErrBufferShort));
+    }
+
+    #[test]
+    fn test_encode_ipv6_with_short_buffer() {
+        let mut buffer = vec![0u8; MAX_ADDR_SIZE - 1];
+        let ip = SocketAddr::V6(SocketAddrV6::new(
+            Ipv6Addr::from([
+                92, 114, 235, 3, 244, 64, 38, 111, 20, 100, 199, 241, 19, 174, 220, 123,
+            ]),
+            0x1234,
+            0x12345678,
+            0x87654321,
+        ));
+
+        let result = ip.encode(&mut buffer);
+
+        assert_eq!(result, Err(Error::ErrBufferShort));
+    }
+
+    #[test]
+    fn test_decode_ipv4_with_short_buffer() {
+        let buffer = vec![IPV4_MARKER, 0];
+
+        let result = SocketAddr::decode(&buffer);
+
+        assert_eq!(result, Err(Error::ErrBufferShort));
+    }
+
+    #[test]
+    fn test_decode_ipv6_with_short_buffer() {
+        let buffer = vec![IPV6_MARKER, 0];
+
+        let result = SocketAddr::decode(&buffer);
+
+        assert_eq!(result, Err(Error::ErrBufferShort));
+    }
 }
