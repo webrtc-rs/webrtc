@@ -7,6 +7,7 @@ use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::InterfaceFilterFn;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
+use ice::udp_network::UDPNetwork;
 
 use crate::error::{Error, Result};
 
@@ -14,12 +15,6 @@ use crate::RECEIVE_MTU;
 use std::sync::Arc;
 use tokio::time::Duration;
 use util::vnet::net::*;
-
-#[derive(Default, Clone)]
-pub struct EphemeralUDP {
-    pub port_min: u16,
-    pub port_max: u16,
-}
 
 #[derive(Default, Clone)]
 pub struct Detach {
@@ -62,7 +57,6 @@ pub struct ReplayProtection {
 /// use-cases without deviating from the WebRTC API elsewhere.
 #[derive(Default, Clone)]
 pub struct SettingEngine {
-    pub(crate) ephemeral_udp: EphemeralUDP,
     pub(crate) detach: Detach,
     pub(crate) timeout: Timeout,
     pub(crate) candidates: Candidates,
@@ -77,6 +71,7 @@ pub struct SettingEngine {
     //iceTCPMux                                 :ice.TCPMux,?
     //iceUDPMux                                 :ice.UDPMux,?
     //iceProxyDialer                            :proxy.Dialer,?
+    pub(crate) udp_network: UDPNetwork,
     pub(crate) disable_media_engine_copy: bool,
     pub(crate) srtp_protection_profiles: Vec<SrtpProtectionProfile>,
     pub(crate) receive_mtu: usize,
@@ -139,17 +134,8 @@ impl SettingEngine {
         self.timeout.ice_relay_acceptance_min_wait = t;
     }
 
-    /// set_ephemeral_udp_port_range limits the pool of ephemeral ports that
-    /// ICE UDP connections can allocate from. This affects both host candidates,
-    /// and the local address of server reflexive candidates.
-    pub fn set_ephemeral_udp_port_range(&mut self, port_min: u16, port_max: u16) -> Result<()> {
-        if port_max < port_min {
-            return Err(ice::Error::ErrPort.into());
-        }
-
-        self.ephemeral_udp.port_min = port_min;
-        self.ephemeral_udp.port_max = port_max;
-        Ok(())
+    pub fn set_udp_network(&mut self, udp_network: UDPNetwork) {
+        self.udp_network = udp_network;
     }
 
     /// set_lite configures whether or not the ice agent should be a lite agent
