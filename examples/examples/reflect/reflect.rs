@@ -168,7 +168,7 @@ async fn main() -> Result<()> {
 
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
-    let pc = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     peer_connection
         .on_track(Box::new(
             move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
@@ -178,7 +178,7 @@ async fn main() -> Result<()> {
                     let media_ssrc = track.ssrc();
 
                     if track.kind() == RTPCodecType::Video {
-                        let pc2 = Arc::clone(&pc);
+                        let pc2 = pc.clone();
                         tokio::spawn(async move {
                             let mut result = Result::<usize>::Ok(0);
                             while result.is_ok() {
@@ -187,10 +187,14 @@ async fn main() -> Result<()> {
 
                                 tokio::select! {
                                     _ = timeout.as_mut() =>{
-                                        result = pc2.write_rtcp(&PictureLossIndication{
-                                                sender_ssrc: 0,
-                                                media_ssrc,
-                                        }).await.map_err(Into::into);
+                                        if let Some(pc) = pc2.upgrade(){
+                                            result = pc.write_rtcp(&PictureLossIndication{
+                                                    sender_ssrc: 0,
+                                                    media_ssrc,
+                                            }).await.map_err(Into::into);
+                                        }else{
+                                            break;
+                                        }
                                     }
                                 };
                             }
@@ -211,20 +215,20 @@ async fn main() -> Result<()> {
 
                     let output_track2 = Arc::clone(&output_track);
                     tokio::spawn(async move {
-                        print!(
-                            "Track has started, of type {}: {} \n",
+                        println!(
+                            "Track has started, of type {}: {}",
                             track.payload_type(),
                             track.codec().await.capability.mime_type
                         );
                         // Read RTP packets being sent to webrtc-rs
                         while let Ok((rtp, _)) = track.read_rtp().await {
                             if let Err(err) = output_track2.write_rtp(&rtp).await {
-                                print!("output track write_rtp got error: {}", err);
+                                println!("output track write_rtp got error: {}", err);
                                 break;
                             }
                         }
 
-                        print!("on_track finished!");
+                        println!("on_track finished!");
                     });
                 }
                 Box::pin(async {})
@@ -238,7 +242,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
