@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod setting_engine_test;
 
-use crate::media::dtls_transport::dtls_role::DTLSRole;
-use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
+use crate::dtls_transport::dtls_role::DTLSRole;
+use crate::ice_transport::ice_candidate_type::RTCIceCandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::InterfaceFilterFn;
 use ice::mdns::MulticastDnsMode;

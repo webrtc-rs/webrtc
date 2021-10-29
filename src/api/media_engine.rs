@@ -2,19 +2,21 @@
 mod media_engine_test;
 
 use crate::error::{Error, Result};
-use crate::media::rtp::fmtp::parse_fmtp;
-use crate::media::rtp::rtp_codec::{
+use crate::peer_connection::sdp::{
+    codecs_from_media_description, rtp_extensions_from_media_description,
+};
+use crate::rtp_transceiver::fmtp::parse_fmtp;
+use crate::rtp_transceiver::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
     RTCRtpHeaderExtensionCapability, RTCRtpHeaderExtensionParameters, RTCRtpParameters,
     RTPCodecType,
 };
-use crate::media::rtp::rtp_transceiver_direction::{
+use crate::rtp_transceiver::rtp_transceiver_direction::{
     have_rtp_transceiver_direction_intersection, RTCRtpTransceiverDirection,
 };
-use crate::media::rtp::{PayloadType, RTCPFeedback};
-use crate::peer::sdp::{codecs_from_media_description, rtp_extensions_from_media_description};
+use crate::rtp_transceiver::{PayloadType, RTCPFeedback};
 
-use sdp::session_description::SessionDescription;
+use sdp::description::session::SessionDescription;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};

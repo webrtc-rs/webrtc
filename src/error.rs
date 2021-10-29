@@ -402,3 +402,13 @@ impl PartialEq<ice::Error> for Error {
         false
     }
 }
+
+/// flatten_errs flattens multiple errors into one
+pub fn flatten_errs(errs: Vec<impl Into<Error>>) -> Result<()> {
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        let errs_strs: Vec<String> = errs.into_iter().map(|e| e.into().to_string()).collect();
+        Err(Error::new(errs_strs.join("\n")))
+    }
+}

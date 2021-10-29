@@ -5,26 +5,26 @@ pub mod interceptor_registry;
 pub mod media_engine;
 pub mod setting_engine;
 
-use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::ice_transport::RTCIceTransport;
-use crate::peer::certificate::RTCCertificate;
-use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
-use crate::peer::ice::ice_gather::RTCIceGatherOptions;
+use crate::dtls_transport::RTCDtlsTransport;
+use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
+use crate::ice_transport::ice_gatherer::RTCIceGatherer;
+use crate::ice_transport::RTCIceTransport;
+use crate::peer_connection::certificate::RTCCertificate;
 
 use media_engine::*;
 use setting_engine::*;
 
-use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
-use crate::data::data_channel::RTCDataChannel;
-use crate::data::sctp_transport::RTCSctpTransport;
+use crate::data_channel::data_channel_parameters::DataChannelParameters;
+use crate::data_channel::RTCDataChannel;
 use crate::error::{Error, Result};
-use crate::media::rtp::rtp_codec::RTPCodecType;
-use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
-use crate::media::rtp::rtp_sender::RTCRtpSender;
-use crate::media::track::track_local::TrackLocal;
-use crate::peer::configuration::RTCConfiguration;
-use crate::peer::peer_connection::RTCPeerConnection;
-use interceptor::{noop::NoOp, registry::Registry, Interceptor};
+use crate::peer_connection::configuration::RTCConfiguration;
+use crate::peer_connection::RTCPeerConnection;
+use crate::rtp_transceiver::rtp_codec::RTPCodecType;
+use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
+use crate::sctp_transport::RTCSctpTransport;
+use crate::track::track_local::TrackLocal;
+use interceptor::{registry::Registry, Interceptor};
 
 use rcgen::KeyPair;
 use std::sync::Arc;
@@ -37,7 +37,7 @@ use std::time::SystemTime;
 pub struct API {
     pub(crate) setting_engine: Arc<SettingEngine>,
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(crate) interceptor: Arc<dyn Interceptor + Send + Sync>,
+    pub(crate) interceptor_registry: Registry,
 }
 
 impl API {
@@ -140,13 +140,9 @@ impl API {
         &self,
         kind: RTPCodecType,
         transport: Arc<RTCDtlsTransport>,
+        interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTCRtpReceiver {
-        RTCRtpReceiver::new(
-            kind,
-            transport,
-            Arc::clone(&self.media_engine),
-            Arc::clone(&self.interceptor),
-        )
+        RTCRtpReceiver::new(kind, transport, Arc::clone(&self.media_engine), interceptor)
     }
 
     /// new_rtp_sender constructs a new RTPSender
@@ -154,12 +150,13 @@ impl API {
         &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<RTCDtlsTransport>,
+        interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTCRtpSender {
         RTCRtpSender::new(
             track,
             transport,
             Arc::clone(&self.media_engine),
-            Arc::clone(&self.interceptor),
+            interceptor,
         )
         .await
     }
@@ -169,7 +166,7 @@ impl API {
 pub struct APIBuilder {
     setting_engine: Option<Arc<SettingEngine>>,
     media_engine: Option<Arc<MediaEngine>>,
-    interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    interceptor_registry: Option<Registry>,
 }
 
 impl APIBuilder {
@@ -189,10 +186,12 @@ impl APIBuilder {
             } else {
                 Arc::new(MediaEngine::default())
             },
-            interceptor: if let Some(interceptor) = self.interceptor.take() {
-                interceptor
+            interceptor_registry: if let Some(interceptor_registry) =
+                self.interceptor_registry.take()
+            {
+                interceptor_registry
             } else {
-                Arc::new(NoOp {})
+                Registry::new()
             },
         }
     }
@@ -214,7 +213,7 @@ impl APIBuilder {
     /// with_interceptor_registry allows providing Interceptors to the API.
     /// Settings should not be changed after passing the registry to an API.
     pub fn with_interceptor_registry(mut self, interceptor_registry: Registry) -> Self {
-        self.interceptor = Some(interceptor_registry.build());
+        self.interceptor_registry = Some(interceptor_registry);
         self
     }
 }
