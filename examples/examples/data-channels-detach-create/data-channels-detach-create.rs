@@ -109,6 +109,8 @@ async fn main() -> Result<()> {
     // Create a datachannel with label 'data'
     let data_channel = peer_connection.create_data_channel("data", None).await?;
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -120,7 +122,7 @@ async fn main() -> Result<()> {
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -189,7 +191,12 @@ async fn main() -> Result<()> {
     peer_connection.set_remote_description(answer).await?;
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {}
+    };
 
     peer_connection.close().await?;
 

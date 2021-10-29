@@ -107,6 +107,8 @@ async fn main() -> Result<()> {
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -118,7 +120,7 @@ async fn main() -> Result<()> {
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -198,7 +200,12 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {}
+    };
 
     peer_connection.close().await?;
 

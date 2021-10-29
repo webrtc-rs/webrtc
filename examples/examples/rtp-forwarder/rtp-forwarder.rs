@@ -25,7 +25,6 @@ use webrtc::util::{Conn, Marshal, Unmarshal};
 #[derive(Clone)]
 struct UdpConn {
     conn: Arc<dyn Conn + Send + Sync>,
-    port: u16,
     payload_type: u8,
 }
 
@@ -158,7 +157,6 @@ async fn main() -> Result<()> {
                 sock.connect(format!("127.0.0.1:{}", 4000)).await?;
                 Arc::new(sock)
             },
-            port: 4000,
             payload_type: 111,
         },
     );
@@ -170,7 +168,6 @@ async fn main() -> Result<()> {
                 sock.connect(format!("127.0.0.1:{}", 4002)).await?;
                 Arc::new(sock)
             },
-            port: 4002,
             payload_type: 96,
         },
     );
@@ -264,6 +261,8 @@ async fn main() -> Result<()> {
         }))
         .await;
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -275,7 +274,7 @@ async fn main() -> Result<()> {
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting: Done forwarding");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -314,7 +313,12 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {}
+    };
 
     peer_connection.close().await?;
 

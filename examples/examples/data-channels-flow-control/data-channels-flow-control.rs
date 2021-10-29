@@ -307,10 +307,12 @@ async fn main() -> Result<()> {
             }))
             .await;
 
+        let (offer_done_tx, mut offer_done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
         // Set the handler for Peer connection state
         // This will notify you when the peer has connected/disconnected
         offer_pc
-            .on_peer_connection_state_change(Box::new(|s: RTCPeerConnectionState| {
+            .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
                 println!("Peer Connection State has changed: {} (offerer)", s);
 
                 if s == RTCPeerConnectionState::Failed {
@@ -318,16 +320,18 @@ async fn main() -> Result<()> {
                     // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                     // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                     println!("Peer Connection (offerer) has gone to failed exiting");
-                    std::process::exit(0);
+                    let _ = offer_done_tx.try_send(());
                 }
                 Box::pin(async {})
             }))
             .await;
 
+        let (answer_done_tx, mut answer_done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
         // Set the handler for Peer connection state
         // This will notify you when the peer has connected/disconnected
         answer_pc
-            .on_peer_connection_state_change(Box::new(|s: RTCPeerConnectionState| {
+            .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
                 println!("Peer Connection State has changed: {} (answerer)", s);
 
                 if s == RTCPeerConnectionState::Failed {
@@ -335,7 +339,7 @@ async fn main() -> Result<()> {
                     // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                     // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                     println!("Peer Connection (answerer) has gone to failed exiting");
-                    std::process::exit(0);
+                    let _ = answer_done_tx.try_send(());
                 }
                 Box::pin(async {})
             }))
@@ -359,6 +363,12 @@ async fn main() -> Result<()> {
         tokio::select! {
             _ = timeout.as_mut() => {}
             _ = tokio::signal::ctrl_c() => {}
+            _ = offer_done_rx.recv() => {
+                println!("received offer done signal!");
+            }
+            _ = answer_done_rx.recv() => {
+                println!("received answer done signal!");
+            }
         }
 
         if let Err(err) = offer_pc.close().await {

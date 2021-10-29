@@ -250,31 +250,24 @@ async fn main() -> Result<()> {
         }
 	})).await;
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    let pc = Arc::clone(&peer_connection);
     peer_connection
         .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
             println!("Connection State has changed {}", connection_state);
 
-            let pc2 = Arc::clone(&pc);
-            let notify_tx2 = Arc::clone(&notify_tx);
-            Box::pin(async move {
-                if connection_state == RTCIceConnectionState::Connected {
-                    println!("Ctrl+C the remote client to stop the demo");
-                } else if connection_state == RTCIceConnectionState::Failed {
-                    notify_tx2.notify_waiters();
+            if connection_state == RTCIceConnectionState::Connected {
+                println!("Ctrl+C the remote client to stop the demo");
+            } else if connection_state == RTCIceConnectionState::Failed {
+                notify_tx.notify_waiters();
 
-                    println!("Done writing media files");
+                println!("Done writing media files");
 
-                    // Gracefully shutdown the peer connection
-                    if let Err(err) = pc2.close().await {
-                        println!("peer_connection close err: {}", err);
-                    }
-
-                    std::process::exit(0);
-                }
-            })
+                let _ = done_tx.try_send(());
+            }
+            Box::pin(async {})
         }))
         .await;
 
@@ -310,7 +303,14 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {}
+    };
+
+    peer_connection.close().await?;
 
     Ok(())
 }
