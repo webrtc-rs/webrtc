@@ -41,13 +41,12 @@ rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
 rcgen = { version = "0.8.13", features = ["pem", "x509-parser"]}
 ring = "0.16.19"
 sha2 = "0.9.1"
-chrono = "0.4.19"
-base64 = "0.13.0"
 lazy_static = "1.4"
 
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.9.0"
+# chrono = "0.4.19"
 
 [profile.dev]
 opt-level = 0
