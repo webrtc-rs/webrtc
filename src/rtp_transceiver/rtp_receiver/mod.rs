@@ -47,7 +47,14 @@ impl RTPReceiverInternal {
                 if let Some(t) = tracks.first(){
                     if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                         let a = Attributes::new();
-                        Ok(rtcp_interceptor.read(b, &a).await?)
+                        tokio::select! {
+                            _ = closed_rx.recv() => {
+                                Err(Error::ErrClosedPipe)
+                            }
+                            result = rtcp_interceptor.read(b, &a) => {
+                                Ok(result?)
+                            }
+                        }
                     }else{
                         Err(Error::ErrInterceptorNotBind)
                     }
@@ -73,7 +80,14 @@ impl RTPReceiverInternal {
                     if t.track.rid() == rid {
                        if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                             let a = Attributes::new();
-                            return Ok(rtcp_interceptor.read(b, &a).await?);
+                            tokio::select! {
+                                _ = closed_rx.recv() => {
+                                    return Err(Error::ErrClosedPipe);
+                                }
+                                result = rtcp_interceptor.read(b, &a) => {
+                                    return Ok(result?);
+                                }
+                            }
                         }else{
                             return Err(Error::ErrInterceptorNotBind);
                         }

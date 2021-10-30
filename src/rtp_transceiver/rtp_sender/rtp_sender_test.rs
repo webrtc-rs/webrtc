@@ -281,15 +281,19 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     {
         let tr = rtp_sender.tr.lock().await;
         if let Some(t) = &*tr {
-            t.set_codec_preferences(vec![RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
-                    mime_type: MIME_TYPE_VP8.to_owned(),
+            if let Some(t) = t.upgrade() {
+                t.set_codec_preferences(vec![RTCRtpCodecParameters {
+                    capability: RTCRtpCodecCapability {
+                        mime_type: MIME_TYPE_VP8.to_owned(),
+                        ..Default::default()
+                    },
+                    payload_type: 96,
                     ..Default::default()
-                },
-                payload_type: 96,
-                ..Default::default()
-            }])
-            .await?;
+                }])
+                .await?;
+            } else {
+                assert!(false);
+            }
         } else {
             assert!(false);
         }

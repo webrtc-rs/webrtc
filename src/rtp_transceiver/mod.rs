@@ -236,7 +236,7 @@ impl RTCRtpTransceiver {
 
     pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTCRtpSender>>) {
         if let Some(sender) = &s {
-            sender.set_rtp_transceiver(Some(Arc::clone(self))).await;
+            sender.set_rtp_transceiver(Some(Arc::downgrade(self))).await;
         }
 
         if let Some(prev_sender) = self.sender().await {

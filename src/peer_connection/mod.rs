@@ -191,6 +191,8 @@ pub struct RTCPeerConnection {
 
     interceptor_rtcp_writer: Arc<dyn RTCPWriter + Send + Sync>,
 
+    interceptor: Arc<dyn Interceptor + Send + Sync>,
+
     pub(crate) internal: Arc<PeerConnectionInternal>,
 }
 
@@ -204,12 +206,13 @@ impl RTCPeerConnection {
     pub(crate) async fn new(api: &API, mut configuration: RTCConfiguration) -> Result<Self> {
         RTCPeerConnection::init_configuration(&mut configuration)?;
 
-        let internal = Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?);
+        let interceptor = api.interceptor_registry.build("")?;
+        let internal = Arc::new(
+            PeerConnectionInternal::new(api, Arc::downgrade(&interceptor), &mut configuration)
+                .await?,
+        );
         let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
-        let interceptor_rtcp_writer = internal
-            .interceptor
-            .bind_rtcp_writer(internal_rtcp_writer)
-            .await;
+        let interceptor_rtcp_writer = interceptor.bind_rtcp_writer(internal_rtcp_writer).await;
 
         // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
@@ -222,6 +225,7 @@ impl RTCPeerConnection {
                     .unwrap()
                     .as_nanos()
             ),
+            interceptor,
             interceptor_rtcp_writer,
             internal,
             configuration,
@@ -1320,7 +1324,7 @@ impl RTCPeerConnection {
                                         kind,
                                         Arc::clone(&self.internal.dtls_transport),
                                         Arc::clone(&self.internal.media_engine),
-                                        Arc::clone(&self.internal.interceptor),
+                                        Arc::clone(&self.interceptor),
                                     ));
 
                                     let local_direction =
@@ -1571,7 +1575,7 @@ impl RTCPeerConnection {
                             Arc::clone(&track),
                             Arc::clone(&self.internal.dtls_transport),
                             Arc::clone(&self.internal.media_engine),
-                            Arc::clone(&self.internal.interceptor),
+                            Arc::clone(&self.interceptor),
                         )
                         .await,
                     );
@@ -1852,13 +1856,13 @@ impl RTCPeerConnection {
         //    continue the chain the Mux has to be closed.
         let mut close_errs = vec![];
 
-        if let Err(err) = self.internal.interceptor.close().await {
+        if let Err(err) = self.interceptor.close().await {
             close_errs.push(err);
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)
         {
-            let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
+            let mut rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if !t.stopped {
                     if let Err(err) = t.stop().await {
@@ -1866,14 +1870,16 @@ impl RTCPeerConnection {
                     }
                 }
             }
+            rtp_transceivers.clear();
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #5)
         {
-            let data_channels = self.internal.sctp_transport.data_channels.lock().await;
+            let mut data_channels = self.internal.sctp_transport.data_channels.lock().await;
             for d in &*data_channels {
                 d.set_ready_state(RTCDataChannelState::Closed);
             }
+            data_channels.clear();
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)

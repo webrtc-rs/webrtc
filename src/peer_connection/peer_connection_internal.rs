@@ -1,5 +1,6 @@
 use super::*;
 use std::sync::atomic::AtomicIsize;
+use std::sync::Weak;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -48,12 +49,15 @@ pub(crate) struct PeerConnectionInternal {
     // A reference to the associated API state used by this connection
     pub(super) setting_engine: Arc<SettingEngine>,
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(super) interceptor: Arc<dyn Interceptor + Send + Sync>,
+    pub(super) interceptor: Weak<dyn Interceptor + Send + Sync>,
 }
 
 impl PeerConnectionInternal {
-    pub(super) async fn new(api: &API, configuration: &mut RTCConfiguration) -> Result<Self> {
-        let interceptor = api.interceptor_registry.build("")?;
+    pub(super) async fn new(
+        api: &API,
+        interceptor: Weak<dyn Interceptor + Send + Sync>,
+        configuration: &mut RTCConfiguration,
+    ) -> Result<Self> {
         let mut pc = PeerConnectionInternal {
             greater_mid: AtomicIsize::new(-1),
             sdp_origin: Mutex::new(Default::default()),
@@ -160,11 +164,16 @@ impl PeerConnectionInternal {
                         continue;
                     }
 
+                    let interceptor = self
+                        .interceptor
+                        .upgrade()
+                        .ok_or(Error::ErrInterceptorNotBind)?;
+
                     let receiver = Arc::new(RTCRtpReceiver::new(
                         receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
-                        Arc::clone(&self.interceptor),
+                        interceptor,
                     ));
                     t.set_receiver(Some(receiver)).await;
                 }
@@ -452,11 +461,15 @@ impl PeerConnectionInternal {
                 self.new_transceiver_from_track(direction, track).await?
             }
             RTCRtpTransceiverDirection::Recvonly => {
+                let interceptor = self
+                    .interceptor
+                    .upgrade()
+                    .ok_or(Error::ErrInterceptorNotBind)?;
                 let receiver = Arc::new(RTCRtpReceiver::new(
                     kind,
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
-                    Arc::clone(&self.interceptor),
+                    interceptor,
                 ));
 
                 RTCRtpTransceiver::new(
@@ -482,20 +495,25 @@ impl PeerConnectionInternal {
         direction: RTCRtpTransceiverDirection,
         track: Arc<dyn TrackLocal + Send + Sync>,
     ) -> Result<Arc<RTCRtpTransceiver>> {
+        let interceptor = self
+            .interceptor
+            .upgrade()
+            .ok_or(Error::ErrInterceptorNotBind)?;
+
         let (r, s) = match direction {
             RTCRtpTransceiverDirection::Sendrecv => {
                 let r = Some(Arc::new(RTCRtpReceiver::new(
                     track.kind(),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
-                    Arc::clone(&self.interceptor),
+                    Arc::clone(&interceptor),
                 )));
                 let s = Some(Arc::new(
                     RTCRtpSender::new(
                         Arc::clone(&track),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
-                        Arc::clone(&self.interceptor),
+                        Arc::clone(&interceptor),
                     )
                     .await,
                 ));
@@ -507,7 +525,7 @@ impl PeerConnectionInternal {
                         Arc::clone(&track),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
-                        Arc::clone(&self.interceptor),
+                        Arc::clone(&interceptor),
                     )
                     .await,
                 ));

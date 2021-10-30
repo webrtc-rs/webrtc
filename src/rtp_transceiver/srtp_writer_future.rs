@@ -10,14 +10,14 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::{Attributes, RTCPReader, RTPWriter};
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
 /// SrtpWriterFuture blocks Read/Write calls until
 /// the SRTP Session is available
 pub(crate) struct SrtpWriterFuture {
     pub(crate) ssrc: SSRC,
-    pub(crate) rtp_sender: Arc<RTPSenderInternal>,
+    pub(crate) rtp_sender: Weak<RTPSenderInternal>,
     pub(crate) rtp_transport: Arc<RTCDtlsTransport>,
     pub(crate) rtcp_read_stream: Mutex<Option<Arc<Stream>>>, // atomic.Value // *
     pub(crate) rtp_write_session: Mutex<Option<Arc<Session>>>, // atomic.Value // *
@@ -27,7 +27,11 @@ impl SrtpWriterFuture {
     async fn init(&self, return_when_no_srtp: bool) -> Result<()> {
         if return_when_no_srtp {
             {
-                if self.rtp_sender.stop_called_signal.load(Ordering::SeqCst) {
+                if let Some(rtp_sender) = self.rtp_sender.upgrade() {
+                    if rtp_sender.stop_called_signal.load(Ordering::SeqCst) {
+                        return Err(Error::ErrClosedPipe);
+                    }
+                } else {
                     return Err(Error::ErrClosedPipe);
                 }
             }
@@ -38,11 +42,15 @@ impl SrtpWriterFuture {
         } else {
             let mut rx = self.rtp_transport.srtp_ready_rx.lock().await;
             if let Some(srtp_ready_rx) = &mut *rx {
-                let mut stop_called_rx = self.rtp_sender.stop_called_rx.lock().await;
+                if let Some(rtp_sender) = self.rtp_sender.upgrade() {
+                    let mut stop_called_rx = rtp_sender.stop_called_rx.lock().await;
 
-                tokio::select! {
-                    _ = stop_called_rx.recv()=> return Err(Error::ErrClosedPipe),
-                    _ = srtp_ready_rx.recv() =>{}
+                    tokio::select! {
+                        _ = stop_called_rx.recv()=> return Err(Error::ErrClosedPipe),
+                        _ = srtp_ready_rx.recv() =>{}
+                    }
+                } else {
+                    return Err(Error::ErrClosedPipe);
                 }
             }
         }

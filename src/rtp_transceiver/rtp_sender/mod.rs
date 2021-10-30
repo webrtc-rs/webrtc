@@ -20,7 +20,7 @@ use ice::rand::generate_crypto_random_string;
 use interceptor::stream_info::StreamInfo;
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use tokio::sync::{mpsc, Mutex};
 
 pub(crate) struct RTPSenderInternal {
@@ -39,10 +39,20 @@ impl RTPSenderInternal {
         );
         tokio::select! {
             _ = send_called_rx.recv() =>{
-                let rtcp_interceptor = self.rtcp_interceptor.lock().await;
-                if let Some(rtcp_interceptor) = &*rtcp_interceptor{
+                let rtcp_interceptor = {
+                    let rtcp_interceptor = self.rtcp_interceptor.lock().await;
+                    rtcp_interceptor.clone()
+                };
+                if let Some(rtcp_interceptor) = rtcp_interceptor{
                     let a = Attributes::new();
-                    Ok(rtcp_interceptor.read(b, &a).await?)
+                    tokio::select! {
+                        _ = stop_called_rx.recv() => {
+                            Err(Error::ErrClosedPipe)
+                        }
+                        result = rtcp_interceptor.read(b, &a) => {
+                            Ok(result?)
+                        }
+                    }
                 }else{
                     Err(Error::ErrInterceptorNotBind)
                 }
@@ -90,7 +100,7 @@ pub struct RTCRtpSender {
 
     pub(crate) id: String,
 
-    tr: Mutex<Option<Arc<RTCRtpTransceiver>>>,
+    tr: Mutex<Option<Weak<RTCRtpTransceiver>>>,
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
     stop_called_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -124,7 +134,7 @@ impl RTCRtpSender {
 
         let srtp_stream = Arc::new(SrtpWriterFuture {
             ssrc,
-            rtp_sender: Arc::clone(&internal),
+            rtp_sender: Arc::downgrade(&internal),
             rtp_transport: Arc::clone(&transport),
             rtcp_read_stream: Mutex::new(None),
             rtp_write_session: Mutex::new(None),
@@ -174,7 +184,7 @@ impl RTCRtpSender {
         self.negotiated.store(true, Ordering::SeqCst);
     }
 
-    pub(crate) async fn set_rtp_transceiver(&self, t: Option<Arc<RTCRtpTransceiver>>) {
+    pub(crate) async fn set_rtp_transceiver(&self, t: Option<Weak<RTCRtpTransceiver>>) {
         let mut tr = self.tr.lock().await;
         *tr = t;
     }
@@ -213,7 +223,11 @@ impl RTCRtpSender {
         let codecs = {
             let tr = self.tr.lock().await;
             if let Some(t) = &*tr {
-                t.get_codecs().await
+                if let Some(t) = t.upgrade() {
+                    t.get_codecs().await
+                } else {
+                    vec![]
+                }
             } else {
                 vec![]
             }
@@ -239,8 +253,12 @@ impl RTCRtpSender {
         if let Some(t) = &track {
             let tr = self.tr.lock().await;
             if let Some(r) = &*tr {
-                if r.kind != t.kind() {
-                    return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind);
+                if let Some(r) = r.upgrade() {
+                    if r.kind != t.kind() {
+                        return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind);
+                    }
+                } else {
+                    //TODO: what about None arc?
                 }
             } else {
                 //TODO: what about None tr?
