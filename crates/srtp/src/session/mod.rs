@@ -73,9 +73,9 @@ impl Session {
         )?;
 
         let streams_map = Arc::new(Mutex::new(HashMap::new()));
-        let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
-        let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
-        let (close_session_tx, mut close_session_rx) = mpsc::channel(1);
+        let (mut new_stream_tx, new_stream_rx) = mpsc::channel(8);
+        let (close_stream_tx, mut close_stream_rx) = mpsc::channel(8);
+        let (close_session_tx, mut close_session_rx) = mpsc::channel(8);
         let udp_tx = Arc::clone(&conn);
         let udp_rx = Arc::clone(&conn);
         let cloned_streams_map = Arc::clone(&streams_map);
