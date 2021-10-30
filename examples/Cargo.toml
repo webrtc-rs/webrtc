@@ -15,7 +15,7 @@ repository = "https://github.com/webrtc-rs/examples"
 
 
 [dev-dependencies]
-webrtc = {path = "../"} #{ git = "https://github.com/webrtc-rs/webrtc/", branch = "master" }
+webrtc = { git = "https://github.com/webrtc-rs/webrtc/", branch = "master" }
 tokio = { version = "1.12.0", features = ["full"] }
 env_logger = "0.9.0"
 clap = "2"
