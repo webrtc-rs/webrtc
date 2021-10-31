@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::APIBuilder;
@@ -108,8 +108,8 @@ async fn main() -> Result<()> {
         let done_answer1 = done_answer.clone();
         // Register the handlers
         Box::pin(async move {
-            let d2 = Arc::downgrade(&d);
-            let d_label2 = d_label.clone();
+            // no need to downgrade this to Weak, since on_open is FnOnce callback
+            let d2 = Arc::clone(&d);
             let done_answer2 = done_answer1.clone();
             d.on_open(Box::new(move || {
                 Box::pin(async move {
@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
                         _ = done_answer2.notified() => {
                             println!("received done_answer signal!");
                         }
-                        _ = handle_on_open(d2, &d_label2, d_id) => {}
+                        _ = handle_on_open(d2) => {}
                     };
 
                     println!("exit data answer");
@@ -210,16 +210,15 @@ async fn main() -> Result<()> {
         // Register the handlers
         // channel.OnOpen(handleOnOpen(channel)) // TODO: OnOpen on handle ChannelAck
         // Temporary alternative
+
+        // no need to downgrade this to Weak
         let d2 = Arc::clone(&d);
-        let d_label = d.label().to_owned();
-        let d_id = d.id();
         tokio::spawn(async move {
-            let d3 = Arc::downgrade(&d2);
             tokio::select! {
                 _ = done_offer.notified() => {
                     println!("received done_offer signal!");
                 }
-                _ = handle_on_open(d3, &d_label, d_id) => {}
+                _ = handle_on_open(d2) => {}
             };
 
             println!("exit data offer");
@@ -263,8 +262,8 @@ struct Signal {
     sctp_capabilities: SCTPTransportCapabilities, // `json:"sctpCapabilities"`
 }
 
-async fn handle_on_open(d: Weak<RTCDataChannel>, label: &str, id: u16) -> Result<()> {
-    println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", label, id);
+async fn handle_on_open(d: Arc<RTCDataChannel>) -> Result<()> {
+    println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d.label(), d.id());
 
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
@@ -275,11 +274,7 @@ async fn handle_on_open(d: Weak<RTCDataChannel>, label: &str, id: u16) -> Result
             _ = timeout.as_mut() =>{
                 let message = math_rand_alpha(15);
                 println!("Sending '{}'", message);
-                if let Some(d2) = d.upgrade() {
-                    result = d2.send_text(message).await.map_err(Into::into);
-                }else{
-                    break;
-                }
+                result = d.send_text(message).await.map_err(Into::into);
             }
         };
     }

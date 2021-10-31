@@ -82,33 +82,27 @@ async fn create_offerer() -> Result<Arc<RTCPeerConnection>> {
     let dc = pc.create_data_channel("data", options).await?;
 
     // Register channel opening handling
-    let dc2 = Arc::downgrade(&dc);
+
+    // no need to downgrade this to Weak, since on_open is FnOnce callback
+    let dc2 = Arc::clone(&dc);
     dc.on_open(Box::new(|| {
         println!(
-            "OnOpen: Start sending a series of 1024-byte packets as fast as it can",
-            //dc2.label(),
-            //dc2.id()
+            "OnOpen-{}-{} : Start sending a series of 1024-byte packets as fast as it can",
+            dc2.label(),
+            dc2.id()
         );
 
         tokio::spawn(async move {
             let buf = Bytes::from_static(&[0u8; 1024]);
             loop {
-                if let Some(dc3) = dc2.upgrade() {
-                    if dc3.send(&buf).await.is_err() {
-                        break;
-                    }
-                } else {
+                if dc2.send(&buf).await.is_err() {
                     break;
                 }
 
                 tokio::time::sleep(Duration::from_micros(1)).await;
-                if let Some(dc3) = dc2.upgrade() {
-                    let buffered_amount = dc3.buffered_amount().await;
-                    if buffered_amount + buf.len() > MAX_BUFFERED_AMOUNT {
-                        let _ = send_more_ch_rx.recv().await;
-                    }
-                } else {
-                    break;
+                let buffered_amount = dc2.buffered_amount().await;
+                if buffered_amount + buf.len() > MAX_BUFFERED_AMOUNT {
+                    let _ = send_more_ch_rx.recv().await;
                 }
             }
             println!("exit on_open");
@@ -173,7 +167,6 @@ async fn create_answerer() -> Result<Arc<RTCPeerConnection>> {
 
         Box::pin(async move {
             // Register channel opening handling
-            //let dc2 = Arc::downgrade(&dc);
             let total_bytes_received2 = Arc::clone(&total_bytes_received);
             dc.on_open(Box::new(move || {
                 println!("OnOpen: Start receiving data"); //, dc2.label(), dc2.id());
