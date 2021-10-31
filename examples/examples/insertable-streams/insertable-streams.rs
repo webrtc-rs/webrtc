@@ -117,6 +117,9 @@ async fn main() -> Result<()> {
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let video_done_tx = done_tx.clone();
+
     // Create a video track
     let video_track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
@@ -186,6 +189,8 @@ async fn main() -> Result<()> {
                 .await?;
         }
 
+        let _ = video_done_tx.try_send(());
+
         Result::<()>::Ok(())
     });
 
@@ -200,8 +205,6 @@ async fn main() -> Result<()> {
             Box::pin(async {})
         }))
         .await;
-
-    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
