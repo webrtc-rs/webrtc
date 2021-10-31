@@ -8,6 +8,11 @@ ice-restart demonstrates WebRTC.rs ICE Restart abilities.
 cargo build --example ice-restart
 ```
 
+### Run ice-restart
+```
+cargo run --example ice-restart
+```
+
 ### Open the Web UI
 Open [http://localhost:8080](http://localhost:8080). This will automatically start a PeerConnection. This page will now prints stats about the PeerConnection
 and allow you to do an ICE Restart at anytime.

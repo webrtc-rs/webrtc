@@ -204,7 +204,9 @@ async fn main() -> Result<()> {
         _ = done_rx.recv() => {
             println!("received done signal!");
         }
-        _ = tokio::signal::ctrl_c() => {}
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
     };
 
     peer_connection.close().await?;

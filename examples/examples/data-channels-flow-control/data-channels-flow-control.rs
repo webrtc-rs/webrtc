@@ -362,7 +362,9 @@ async fn main() -> Result<()> {
 
         tokio::select! {
             _ = timeout.as_mut() => {}
-            _ = tokio::signal::ctrl_c() => {}
+            _ = tokio::signal::ctrl_c() => {
+                println!("");
+            }
             _ = offer_done_rx.recv() => {
                 println!("received offer done signal!");
             }
