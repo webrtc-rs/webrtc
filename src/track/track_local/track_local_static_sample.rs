@@ -4,7 +4,6 @@ use crate::error::flatten_errs;
 
 use crate::track::RTP_OUTBOUND_MTU;
 use media::Sample;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
@@ -16,10 +15,10 @@ struct TrackLocalStaticSampleInternal {
 
 /// TrackLocalStaticSample is a TrackLocal that has a pre-set codec and accepts Samples.
 /// If you wish to send a RTP Packet use TrackLocalStaticRTP
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TrackLocalStaticSample {
     rtp_track: TrackLocalStaticRTP,
-    internal: Arc<Mutex<TrackLocalStaticSampleInternal>>,
+    internal: Mutex<TrackLocalStaticSampleInternal>,
 }
 
 impl TrackLocalStaticSample {
@@ -29,11 +28,11 @@ impl TrackLocalStaticSample {
 
         TrackLocalStaticSample {
             rtp_track,
-            internal: Arc::new(Mutex::new(TrackLocalStaticSampleInternal {
+            internal: Mutex::new(TrackLocalStaticSampleInternal {
                 packetizer: None,
                 sequencer: None,
                 clock_rate: 0.0f64,
-            })),
+            }),
         }
     }
 

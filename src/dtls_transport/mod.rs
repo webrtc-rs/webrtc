@@ -452,8 +452,11 @@ impl RTCDtlsTransport {
         // Try closing everything and collect the errors
         let mut close_errs: Vec<Error> = vec![];
         {
-            let mut srtp_session = self.srtp_session.lock().await;
-            if let Some(srtp_session) = srtp_session.take() {
+            let srtp_session = {
+                let mut srtp_session = self.srtp_session.lock().await;
+                srtp_session.take()
+            };
+            if let Some(srtp_session) = srtp_session {
                 match srtp_session.close().await {
                     Ok(_) => {}
                     Err(err) => {
@@ -464,8 +467,11 @@ impl RTCDtlsTransport {
         }
 
         {
-            let mut srtcp_session = self.srtcp_session.lock().await;
-            if let Some(srtcp_session) = srtcp_session.take() {
+            let srtcp_session = {
+                let mut srtcp_session = self.srtcp_session.lock().await;
+                srtcp_session.take()
+            };
+            if let Some(srtcp_session) = srtcp_session {
                 match srtcp_session.close().await {
                     Ok(_) => {}
                     Err(err) => {
@@ -476,8 +482,11 @@ impl RTCDtlsTransport {
         }
 
         {
-            let simulcast_streams = self.simulcast_streams.lock().await;
-            for ss in &*simulcast_streams {
+            let simulcast_streams: Vec<Arc<Stream>> = {
+                let mut simulcast_streams = self.simulcast_streams.lock().await;
+                simulcast_streams.drain(..).collect()
+            };
+            for ss in simulcast_streams {
                 match ss.close().await {
                     Ok(_) => {}
                     Err(err) => {

@@ -21,11 +21,11 @@ use interceptor::stream_info::StreamInfo;
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, Notify};
 
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: Mutex<mpsc::Receiver<()>>,
-    pub(crate) stop_called_rx: Mutex<mpsc::Receiver<()>>,
+    pub(crate) stop_called_rx: Arc<Notify>,
     pub(crate) stop_called_signal: Arc<AtomicBool>,
     pub(crate) rtcp_interceptor: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
 }
@@ -33,10 +33,8 @@ pub(crate) struct RTPSenderInternal {
 impl RTPSenderInternal {
     /// read reads incoming RTCP for this RTPReceiver
     async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
-        let (mut send_called_rx, mut stop_called_rx) = (
-            self.send_called_rx.lock().await,
-            self.stop_called_rx.lock().await,
-        );
+        let mut send_called_rx = self.send_called_rx.lock().await;
+
         tokio::select! {
             _ = send_called_rx.recv() =>{
                 let rtcp_interceptor = {
@@ -46,7 +44,7 @@ impl RTPSenderInternal {
                 if let Some(rtcp_interceptor) = rtcp_interceptor{
                     let a = Attributes::new();
                     tokio::select! {
-                        _ = stop_called_rx.recv() => {
+                        _ = self.stop_called_rx.notified() => {
                             Err(Error::ErrClosedPipe)
                         }
                         result = rtcp_interceptor.read(b, &a) => {
@@ -57,7 +55,7 @@ impl RTPSenderInternal {
                     Err(Error::ErrInterceptorNotBind)
                 }
             }
-            _ = stop_called_rx.recv() =>{
+            _ = self.stop_called_rx.notified() =>{
                 Err(Error::ErrClosedPipe)
             }
         }
@@ -103,7 +101,7 @@ pub struct RTCRtpSender {
     tr: Mutex<Option<Weak<RTCRtpTransceiver>>>,
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
-    stop_called_tx: Mutex<Option<mpsc::Sender<()>>>,
+    stop_called_tx: Arc<Notify>,
     stop_called_signal: Arc<AtomicBool>,
 
     internal: Arc<RTPSenderInternal>,
@@ -121,13 +119,14 @@ impl RTCRtpSender {
             b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
         );
         let (send_called_tx, send_called_rx) = mpsc::channel(1);
-        let (stop_called_tx, stop_called_rx) = mpsc::channel(1);
+        let stop_called_tx = Arc::new(Notify::new());
+        let stop_called_rx = stop_called_tx.clone();
         let ssrc = rand::random::<u32>();
         let stop_called_signal = Arc::new(AtomicBool::new(false));
 
         let internal = Arc::new(RTPSenderInternal {
             send_called_rx: Mutex::new(send_called_rx),
-            stop_called_rx: Mutex::new(stop_called_rx),
+            stop_called_rx,
             stop_called_signal: Arc::clone(&stop_called_signal),
             rtcp_interceptor: Mutex::new(None),
         });
@@ -169,7 +168,7 @@ impl RTCRtpSender {
             tr: Mutex::new(None),
 
             send_called_tx: Mutex::new(Some(send_called_tx)),
-            stop_called_tx: Mutex::new(Some(stop_called_tx)),
+            stop_called_tx,
             stop_called_signal,
 
             internal,
@@ -266,10 +265,13 @@ impl RTCRtpSender {
         }
 
         if self.has_sent().await {
-            let t = self.track.lock().await;
-            if let Some(track) = &*t {
+            let t = {
+                let t = self.track.lock().await;
+                t.clone()
+            };
+            if let Some(t) = t {
                 let context = self.context.lock().await;
-                track.unbind(&*context).await?;
+                t.unbind(&*context).await?;
             }
         }
 
@@ -317,8 +319,10 @@ impl RTCRtpSender {
                     context.params.codecs = vec![codec];
                 }
 
-                let mut t = self.track.lock().await;
-                *t = track;
+                {
+                    let mut t = self.track.lock().await;
+                    *t = track;
+                }
 
                 Ok(())
             }
@@ -401,14 +405,11 @@ impl RTCRtpSender {
 
     /// stop irreversibly stops the RTPSender
     pub async fn stop(&self) -> Result<()> {
-        {
-            let mut stop_called_tx = self.stop_called_tx.lock().await;
-            if stop_called_tx.is_none() {
-                return Ok(());
-            }
-            stop_called_tx.take();
-            self.stop_called_signal.store(true, Ordering::SeqCst);
+        if self.stop_called_signal.load(Ordering::SeqCst) {
+            return Ok(());
         }
+        self.stop_called_signal.store(true, Ordering::SeqCst);
+        self.stop_called_tx.notify_waiters();
 
         if !self.has_sent().await {
             return Ok(());
@@ -444,7 +445,6 @@ impl RTCRtpSender {
 
     /// has_stopped tells if stop has been called
     pub(crate) async fn has_stopped(&self) -> bool {
-        let stop_call_tx = self.stop_called_tx.lock().await;
-        stop_call_tx.is_none()
+        self.stop_called_signal.load(Ordering::SeqCst)
     }
 }

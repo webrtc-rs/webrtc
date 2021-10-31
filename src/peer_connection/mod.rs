@@ -250,9 +250,9 @@ impl RTCPeerConnection {
         if !configuration.certificates.is_empty() {
             let now = SystemTime::now();
             for cert in &configuration.certificates {
-                if cert.expires().duration_since(now).is_err() {
-                    return Err(Error::ErrCertificateExpired);
-                }
+                cert.expires()
+                    .duration_since(now)
+                    .map_err(|_| Error::ErrCertificateExpired)?;
             }
         } else {
             let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
@@ -428,10 +428,10 @@ impl RTCPeerConnection {
                 // }
                 let m = get_by_mid(t.mid().await.as_str(), local_desc);
                 // Step 5.2
-                if !t.stopped && m.is_none() {
+                if !t.stopped.load(Ordering::SeqCst) && m.is_none() {
                     return true;
                 }
-                if !t.stopped {
+                if !t.stopped.load(Ordering::SeqCst) {
                     if let Some(m) = m {
                         // Step 5.3.1
                         if t.direction() == RTCRtpTransceiverDirection::Sendrecv
@@ -481,7 +481,7 @@ impl RTCPeerConnection {
                     }
                 }
                 // Step 5.4
-                if t.stopped && !t.mid().await.is_empty() {
+                if t.stopped.load(Ordering::SeqCst) && !t.mid().await.is_empty() {
                     let current_remote_description = params.current_remote_description.lock().await;
                     if let Some(remote_desc) = &*current_remote_description {
                         if get_by_mid(t.mid().await.as_str(), local_desc).is_some()
@@ -1569,7 +1569,10 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if !t.stopped && t.kind == track.kind() && t.sender().await.is_none() {
+                if !t.stopped.load(Ordering::SeqCst)
+                    && t.kind == track.kind()
+                    && t.sender().await.is_none()
+                {
                     let sender = Arc::new(
                         RTCRtpSender::new(
                             Arc::clone(&track),
@@ -1864,10 +1867,8 @@ impl RTCPeerConnection {
         {
             let mut rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if !t.stopped {
-                    if let Err(err) = t.stop().await {
-                        close_errs.push(err.into());
-                    }
+                if let Err(err) = t.stop().await {
+                    close_errs.push(err.into());
                 }
             }
             rtp_transceivers.clear();
@@ -1877,7 +1878,9 @@ impl RTCPeerConnection {
         {
             let mut data_channels = self.internal.sctp_transport.data_channels.lock().await;
             for d in &*data_channels {
-                d.set_ready_state(RTCDataChannelState::Closed);
+                if let Err(err) = d.close().await {
+                    close_errs.push(err.into());
+                }
             }
             data_channels.clear();
         }

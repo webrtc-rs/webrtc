@@ -1,14 +1,13 @@
 use super::*;
 
 use crate::error::flatten_errs;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// TrackLocalStaticRTP  is a TrackLocal that has a pre-set codec and accepts RTP Packets.
 /// If you wish to send a media.Sample use TrackLocalStaticSample
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TrackLocalStaticRTP {
-    pub(crate) bindings: Arc<Mutex<Vec<TrackBinding>>>,
+    pub(crate) bindings: Mutex<Vec<Arc<TrackBinding>>>,
     codec: RTCRtpCodecCapability,
     id: String,
     stream_id: String,
@@ -19,7 +18,7 @@ impl TrackLocalStaticRTP {
     pub fn new(codec: RTCRtpCodecCapability, id: String, stream_id: String) -> Self {
         TrackLocalStaticRTP {
             codec,
-            bindings: Arc::new(Mutex::new(vec![])),
+            bindings: Mutex::new(vec![]),
             id,
             stream_id,
         }
@@ -46,12 +45,12 @@ impl TrackLocal for TrackLocalStaticRTP {
         if match_type != CodecMatch::None {
             {
                 let mut bindings = self.bindings.lock().await;
-                bindings.push(TrackBinding {
+                bindings.push(Arc::new(TrackBinding {
                     ssrc: t.ssrc(),
                     payload_type: codec.payload_type,
                     write_stream: t.write_stream(),
                     id: t.id(),
-                });
+                }));
             }
 
             Ok(codec)
@@ -118,8 +117,11 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
         let mut write_errs = vec![];
         let mut pkt = p.clone();
 
-        let bindings = self.bindings.lock().await;
-        for b in &*bindings {
+        let bindings = {
+            let bindings = self.bindings.lock().await;
+            bindings.clone()
+        };
+        for b in bindings {
             pkt.header.ssrc = b.ssrc;
             pkt.header.payload_type = b.payload_type;
             if let Some(write_stream) = &b.write_stream {

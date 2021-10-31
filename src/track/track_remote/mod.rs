@@ -10,7 +10,7 @@ use crate::track::RTP_PAYLOAD_TYPE_BITMASK;
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
 use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 use util::Unmarshal;
 
@@ -41,7 +41,7 @@ pub struct TrackRemote {
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
 
-    receiver: Option<Arc<RTPReceiverInternal>>,
+    receiver: Option<Weak<RTPReceiverInternal>>,
     internal: Mutex<TrackRemoteInternal>,
 }
 
@@ -65,7 +65,7 @@ impl TrackRemote {
         kind: RTPCodecType,
         ssrc: SSRC,
         rid: String,
-        receiver: Arc<RTPReceiverInternal>,
+        receiver: Weak<RTPReceiverInternal>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
@@ -192,7 +192,11 @@ impl TrackRemote {
         } else {
             let (n, attributes) = {
                 if let Some(receiver) = &self.receiver {
-                    receiver.read_rtp(b, self.tid).await?
+                    if let Some(receiver) = receiver.upgrade() {
+                        receiver.read_rtp(b, self.tid).await?
+                    } else {
+                        return Err(Error::ErrRTPReceiverNil);
+                    }
                 } else {
                     return Err(Error::ErrRTPReceiverNil);
                 }
@@ -217,7 +221,9 @@ impl TrackRemote {
                 .await?;
 
             if let Some(receiver) = &self.receiver {
-                self.kind.store(receiver.kind as u8, Ordering::SeqCst);
+                if let Some(receiver) = receiver.upgrade() {
+                    self.kind.store(receiver.kind as u8, Ordering::SeqCst);
+                }
             }
             self.payload_type.store(payload_type, Ordering::SeqCst);
             {

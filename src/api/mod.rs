@@ -86,9 +86,9 @@ impl API {
         if !certificates.is_empty() {
             let now = SystemTime::now();
             for cert in &certificates {
-                if cert.expires().duration_since(now).is_err() {
-                    return Err(Error::ErrCertificateExpired);
-                }
+                cert.expires()
+                    .duration_since(now)
+                    .map_err(|_| Error::ErrCertificateExpired)?;
             }
         } else {
             let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;

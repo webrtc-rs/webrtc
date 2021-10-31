@@ -43,10 +43,8 @@ impl SrtpWriterFuture {
             let mut rx = self.rtp_transport.srtp_ready_rx.lock().await;
             if let Some(srtp_ready_rx) = &mut *rx {
                 if let Some(rtp_sender) = self.rtp_sender.upgrade() {
-                    let mut stop_called_rx = rtp_sender.stop_called_rx.lock().await;
-
                     tokio::select! {
-                        _ = stop_called_rx.recv()=> return Err(Error::ErrClosedPipe),
+                        _ = rtp_sender.stop_called_rx.notified()=> return Err(Error::ErrClosedPipe),
                         _ = srtp_ready_rx.recv() =>{}
                     }
                 } else {
@@ -71,8 +69,11 @@ impl SrtpWriterFuture {
     }
 
     pub async fn close(&self) -> Result<()> {
-        let stream = self.rtcp_read_stream.lock().await;
-        if let Some(rtcp_read_stream) = &*stream {
+        let stream = {
+            let mut stream = self.rtcp_read_stream.lock().await;
+            stream.take()
+        };
+        if let Some(rtcp_read_stream) = stream {
             Ok(rtcp_read_stream.close().await?)
         } else {
             Ok(())
@@ -81,8 +82,11 @@ impl SrtpWriterFuture {
 
     pub async fn read(&self, b: &mut [u8]) -> Result<usize> {
         {
-            let stream = self.rtcp_read_stream.lock().await;
-            if let Some(rtcp_read_stream) = &*stream {
+            let stream = {
+                let stream = self.rtcp_read_stream.lock().await;
+                stream.clone()
+            };
+            if let Some(rtcp_read_stream) = stream {
                 return Ok(rtcp_read_stream.read(b).await?);
             }
         }
@@ -90,8 +94,11 @@ impl SrtpWriterFuture {
         self.init(false).await?;
 
         {
-            let stream = self.rtcp_read_stream.lock().await;
-            if let Some(rtcp_read_stream) = &*stream {
+            let stream = {
+                let stream = self.rtcp_read_stream.lock().await;
+                stream.clone()
+            };
+            if let Some(rtcp_read_stream) = stream {
                 return Ok(rtcp_read_stream.read(b).await?);
             }
         }
@@ -101,8 +108,11 @@ impl SrtpWriterFuture {
 
     pub async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
         {
-            let session = self.rtp_write_session.lock().await;
-            if let Some(rtp_write_session) = &*session {
+            let session = {
+                let session = self.rtp_write_session.lock().await;
+                session.clone()
+            };
+            if let Some(rtp_write_session) = session {
                 return Ok(rtp_write_session.write_rtp(pkt).await?);
             }
         }
@@ -110,8 +120,11 @@ impl SrtpWriterFuture {
         self.init(true).await?;
 
         {
-            let session = self.rtp_write_session.lock().await;
-            if let Some(rtp_write_session) = &*session {
+            let session = {
+                let session = self.rtp_write_session.lock().await;
+                session.clone()
+            };
+            if let Some(rtp_write_session) = session {
                 return Ok(rtp_write_session.write_rtp(pkt).await?);
             }
         }
@@ -121,8 +134,11 @@ impl SrtpWriterFuture {
 
     pub async fn write(&self, b: &Bytes) -> Result<usize> {
         {
-            let session = self.rtp_write_session.lock().await;
-            if let Some(rtp_write_session) = &*session {
+            let session = {
+                let session = self.rtp_write_session.lock().await;
+                session.clone()
+            };
+            if let Some(rtp_write_session) = session {
                 return Ok(rtp_write_session.write(b, true).await?);
             }
         }
@@ -130,8 +146,11 @@ impl SrtpWriterFuture {
         self.init(true).await?;
 
         {
-            let session = self.rtp_write_session.lock().await;
-            if let Some(rtp_write_session) = &*session {
+            let session = {
+                let session = self.rtp_write_session.lock().await;
+                session.clone()
+            };
+            if let Some(rtp_write_session) = session {
                 return Ok(rtp_write_session.write(b, true).await?);
             }
         }

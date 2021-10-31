@@ -20,12 +20,12 @@ use crate::RECEIVE_MTU;
 use interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPReader};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, Notify};
 
-pub(crate) struct RTPReceiverInternal {
+pub struct RTPReceiverInternal {
     pub(crate) kind: RTPCodecType,
     tracks: Mutex<Vec<TrackStreams>>,
-    closed_rx: Mutex<mpsc::Receiver<()>>,
+    closed_rx: Arc<Notify>,
     received_rx: Mutex<mpsc::Receiver<()>>,
 
     transceiver_codecs: Mutex<Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>>,
@@ -38,8 +38,7 @@ pub(crate) struct RTPReceiverInternal {
 impl RTPReceiverInternal {
     /// read reads incoming RTCP for this RTPReceiver
     async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
-        let (mut received_rx, mut closed_rx) =
-            (self.received_rx.lock().await, self.closed_rx.lock().await);
+        let mut received_rx = self.received_rx.lock().await;
 
         tokio::select! {
             _ = received_rx.recv() =>{
@@ -48,7 +47,7 @@ impl RTPReceiverInternal {
                     if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                         let a = Attributes::new();
                         tokio::select! {
-                            _ = closed_rx.recv() => {
+                            _ = self.closed_rx.notified() => {
                                 Err(Error::ErrClosedPipe)
                             }
                             result = rtcp_interceptor.read(b, &a) => {
@@ -62,7 +61,7 @@ impl RTPReceiverInternal {
                     Err(Error::ErrExistingTrack)
                 }
             }
-            _ = closed_rx.recv() => {
+            _ = self.closed_rx.notified() => {
                 Err(Error::ErrClosedPipe)
             }
         }
@@ -70,8 +69,7 @@ impl RTPReceiverInternal {
 
     /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
     async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
-        let (mut received_rx, mut closed_rx) =
-            (self.received_rx.lock().await, self.closed_rx.lock().await);
+        let mut received_rx = self.received_rx.lock().await;
 
         tokio::select! {
             _ = received_rx.recv() =>{
@@ -81,7 +79,7 @@ impl RTPReceiverInternal {
                        if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                             let a = Attributes::new();
                             tokio::select! {
-                                _ = closed_rx.recv() => {
+                                _ = self.closed_rx.notified() => {
                                     return Err(Error::ErrClosedPipe);
                                 }
                                 result = rtcp_interceptor.read(b, &a) => {
@@ -95,7 +93,7 @@ impl RTPReceiverInternal {
                 }
                 Err(Error::ErrRTPReceiverForRIDTrackStreamNotFound)
             }
-            _ = closed_rx.recv() => {
+            _ = self.closed_rx.notified() => {
                 Err(Error::ErrClosedPipe)
             }
         }
@@ -152,9 +150,16 @@ impl RTPReceiverInternal {
             tid,
         );*/
 
-        if let Some(ri) = rtp_interceptor {
+        if let Some(rtp_interceptor) = rtp_interceptor {
             let a = Attributes::new();
-            Ok(ri.read(b, &a).await?)
+            tokio::select! {
+                _ = self.closed_rx.notified() => {
+                    Err(Error::ErrClosedPipe)
+                }
+                result = rtp_interceptor.read(b, &a) => {
+                    Ok(result?)
+                }
+            }
         } else {
             //log::debug!("read_rtp exit tracks with ErrRTPReceiverWithSSRCTrackStreamNotFound");
             Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound)
@@ -202,10 +207,10 @@ impl RTPReceiverInternal {
 pub struct RTCRtpReceiver {
     kind: RTPCodecType,
     transport: Arc<RTCDtlsTransport>,
-    closed_tx: Mutex<Option<mpsc::Sender<()>>>,
+    closed_tx: Arc<Notify>,
     received_tx: Mutex<Option<mpsc::Sender<()>>>,
 
-    pub(crate) internal: Arc<RTPReceiverInternal>,
+    pub internal: Arc<RTPReceiverInternal>,
 }
 
 impl RTCRtpReceiver {
@@ -215,13 +220,14 @@ impl RTCRtpReceiver {
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
-        let (closed_tx, closed_rx) = mpsc::channel(1);
+        let closed_tx = Arc::new(Notify::new());
+        let closed_rx = closed_tx.clone();
         let (received_tx, received_rx) = mpsc::channel(1);
 
         RTCRtpReceiver {
             kind,
             transport: Arc::clone(&transport),
-            closed_tx: Mutex::new(Some(closed_tx)),
+            closed_tx,
             received_tx: Mutex::new(Some(received_tx)),
 
             internal: Arc::new(RTPReceiverInternal {
@@ -232,7 +238,7 @@ impl RTCRtpReceiver {
                 media_engine,
                 interceptor,
 
-                closed_rx: Mutex::new(closed_rx),
+                closed_rx,
                 received_rx: Mutex::new(received_rx),
 
                 transceiver_codecs: Mutex::new(None),
@@ -307,7 +313,7 @@ impl RTCRtpReceiver {
 
     /// receive initialize the track and starts all the transports
     pub async fn receive(&self, parameters: &RTCRtpReceiveParameters) -> Result<()> {
-        let receiver = Arc::clone(&self.internal);
+        let receiver = Arc::downgrade(&self.internal);
 
         let _d = {
             let mut received_tx = self.received_tx.lock().await;
@@ -375,7 +381,7 @@ impl RTCRtpReceiver {
                         self.kind,
                         0,
                         encoding.rid.clone(),
-                        Arc::clone(&receiver),
+                        receiver.clone(),
                         Arc::clone(&media_engine),
                         Arc::clone(&interceptor),
                     )),
@@ -462,13 +468,7 @@ impl RTCRtpReceiver {
 
     /// Stop irreversibly stops the RTPReceiver
     pub async fn stop(&self) -> Result<()> {
-        let _d = {
-            let mut closed_tx = self.closed_tx.lock().await;
-            if closed_tx.is_none() {
-                return Ok(());
-            }
-            closed_tx.take()
-        };
+        self.closed_tx.notify_waiters();
 
         let received_tx_is_none = {
             let received_tx = self.received_tx.lock().await;

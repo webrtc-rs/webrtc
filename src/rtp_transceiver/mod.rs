@@ -15,7 +15,7 @@ use interceptor::{
 };
 
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::Unmarshal;
@@ -162,7 +162,7 @@ pub struct RTCRtpTransceiver {
 
     codecs: Arc<Mutex<Vec<RTCRtpCodecParameters>>>, // User provided codecs via set_codec_preferences
 
-    pub(crate) stopped: bool,
+    pub(crate) stopped: AtomicBool,
     pub(crate) kind: RTPCodecType,
 
     media_engine: Arc<MediaEngine>,
@@ -183,7 +183,7 @@ impl RTCRtpTransceiver {
             receiver: Mutex::new(None),
             direction: AtomicU8::new(direction as u8),
             codecs: Arc::new(Mutex::new(codecs)),
-            stopped: false,
+            stopped: AtomicBool::new(false),
             kind,
             media_engine,
         });
@@ -305,6 +305,12 @@ impl RTCRtpTransceiver {
 
     /// stop irreversibly stops the RTPTransceiver
     pub async fn stop(&self) -> Result<()> {
+        if self.stopped.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        self.stopped.store(true, Ordering::SeqCst);
+
         {
             let s = self.sender.lock().await;
             if let Some(sender) = &*s {

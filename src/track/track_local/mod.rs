@@ -97,7 +97,7 @@ pub trait TrackLocal {
 /// TrackBinding is a single bind for a Track
 /// Bind can be called multiple times, this stores the
 /// result for a single bind call so that it can be used when writing
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub(crate) struct TrackBinding {
     id: String,
     ssrc: SSRC,
