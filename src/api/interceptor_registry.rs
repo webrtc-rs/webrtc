@@ -19,7 +19,10 @@ pub async fn register_default_interceptors(
 
     registry = configure_rtcp_reports(registry);
 
-    registry = configure_twcc_sender(registry, media_engine).await?;
+    //TODO: temporarily disable twcc until all reference cycle memory leak fixed
+    // current when configure_twcc_sender, audio + video cause corrupted audio
+    // https://github.com/webrtc-rs/webrtc/issues/129
+    // registry = configure_twcc_sender(registry, media_engine).await?;
 
     Ok(registry)
 }
