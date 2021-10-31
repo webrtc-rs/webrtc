@@ -15,7 +15,7 @@ repository = "https://github.com/webrtc-rs/examples"
 
 
 [dev-dependencies]
-webrtc = {path = "../"} #{ git = "https://github.com/webrtc-rs/webrtc/", branch = "master" }
+webrtc = { git = "https://github.com/webrtc-rs/webrtc/", branch = "master" } #{path = "../"} #
 tokio = { version = "1.12.0", features = ["full"] }
 env_logger = "0.9.0"
 clap = "2"
@@ -81,13 +81,8 @@ path = "examples/insertable-streams/insertable-streams.rs"
 bench = false
 
 [[example]]
-name = "play-from-disk-vp8"
-path = "examples/play-from-disk-vp8/play-from-disk-vp8.rs"
-bench = false
-
-[[example]]
-name = "play-from-disk-vp9"
-path = "examples/play-from-disk-vp9/play-from-disk-vp9.rs"
+name = "play-from-disk-vpx"
+path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
 bench = false
 
 [[example]]

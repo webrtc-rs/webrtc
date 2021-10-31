@@ -136,6 +136,10 @@ async fn main() -> Result<()> {
     let notify_video = notify_tx.clone();
     let notify_audio = notify_tx.clone();
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let video_done_tx = done_tx.clone();
+    let audio_done_tx = done_tx.clone();
+
     if let Some(video_file) = video_file {
         // Create a video track
         let video_track = Arc::new(TrackLocalStaticSample::new(
@@ -206,6 +210,8 @@ async fn main() -> Result<()> {
                 let _ = ticker.tick().await;
             }
 
+            let _ = video_done_tx.try_send(());
+
             Result::<()>::Ok(())
         });
     }
@@ -272,6 +278,8 @@ async fn main() -> Result<()> {
                 let _ = ticker.tick().await;
             }
 
+            let _ = audio_done_tx.try_send(());
+
             Result::<()>::Ok(())
         });
     }
@@ -288,13 +296,11 @@ async fn main() -> Result<()> {
         }))
         .await;
 
-    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
-
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
