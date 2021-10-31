@@ -207,10 +207,8 @@ impl RTCPeerConnection {
         RTCPeerConnection::init_configuration(&mut configuration)?;
 
         let interceptor = api.interceptor_registry.build("")?;
-        let internal = Arc::new(
-            PeerConnectionInternal::new(api, Arc::downgrade(&interceptor), &mut configuration)
-                .await?,
-        );
+        let (internal, configuration) =
+            PeerConnectionInternal::new(api, Arc::downgrade(&interceptor), configuration).await?;
         let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
         let interceptor_rtcp_writer = interceptor.bind_rtcp_writer(internal_rtcp_writer).await;
 

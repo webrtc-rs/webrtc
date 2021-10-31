@@ -56,8 +56,8 @@ impl PeerConnectionInternal {
     pub(super) async fn new(
         api: &API,
         interceptor: Weak<dyn Interceptor + Send + Sync>,
-        configuration: &mut RTCConfiguration,
-    ) -> Result<Self> {
+        mut configuration: RTCConfiguration,
+    ) -> Result<(Arc<Self>, RTCConfiguration)> {
         let mut pc = PeerConnectionInternal {
             greater_mid: AtomicIsize::new(-1),
             sdp_origin: Mutex::new(Default::default()),
@@ -127,7 +127,7 @@ impl PeerConnectionInternal {
             }))
             .await;
 
-        Ok(pc)
+        Ok((Arc::new(pc), configuration))
     }
 
     pub(super) async fn start_rtp(
