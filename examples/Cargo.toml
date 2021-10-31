@@ -36,6 +36,11 @@ console-subscriber = { git = "https://github.com/tokio-rs/console", branch = "ma
 opt-level = 0
 
 [[example]]
+name = "rc-cycle"
+path = "examples/rc-cycle/rc-cycle.rs"
+bench = false
+
+[[example]]
 name = "broadcast"
 path = "examples/broadcast/broadcast.rs"
 bench = false

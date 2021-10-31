@@ -6,9 +6,9 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 
 #### Media API
 - [x] [x] [Reflect](reflect): The reflect example demonstrates how to have webrtc-rs send back to the user exactly what it receives using the same PeerConnection.
-- [x] [] [Play from Disk VP8](play-from-disk-vp8): The play-from-disk-vp8 example demonstrates how to send VP8 video to your browser from a file saved to disk.
-- [x] [] [Play from Disk VP9](play-from-disk-vp9): The play-from-disk-vp9 example demonstrates how to send VP9 video to your browser from a file saved to disk.
-- [x] [] [Play from Disk H264](play-from-disk-h264): The play-from-disk-h264 example demonstrates how to send H264 video to your browser from a file saved to disk.
+- [x] [x] [Play from Disk VP8](play-from-disk-vp8): The play-from-disk-vp8 example demonstrates how to send VP8 video to your browser from a file saved to disk.
+- [x] [x] [Play from Disk VP9](play-from-disk-vp9): The play-from-disk-vp9 example demonstrates how to send VP9 video to your browser from a file saved to disk.
+- [x] [x] [Play from Disk H264](play-from-disk-h264): The play-from-disk-h264 example demonstrates how to send H264 video to your browser from a file saved to disk.
 - [x] [] [Play from Disk Renegotiation](play-from-disk-renegotiation): The play-from-disk-renegotiation example is an extension of the play-from-disk example, but demonstrates how you can add/remove video tracks from an already negotiated PeerConnection.
 - [x] [] [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to send E2E encrypted video and decrypt via insertable streams in the browser.
 - [x] [] [Save to Disk VPx](save-to-disk-vpx): The save-to-disk example shows how to record your webcam and save the footage (VP8/VP9 for video, Opus for audio) to disk on the server side.

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use webrtc::api::APIBuilder;
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
@@ -26,10 +26,10 @@ use webrtc::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("play-from-disk-vp8")
+    let mut app = App::new("play-from-disk-vpx")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of play-from-disk-vp8.")
+        .about("An example of play-from-disk-vpx.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
@@ -57,6 +57,11 @@ async fn main() -> Result<()> {
                 .short("a")
                 .long("audio")
                 .help("Audio file to be streaming."),
+        )
+        .arg(
+            Arg::with_name("vp9")
+                .long("vp9")
+                .help("Save VP9 to disk. Default: VP8"),
         );
 
     let matches = app.clone().get_matches();
@@ -84,6 +89,7 @@ async fn main() -> Result<()> {
             .init();
     }
 
+    let is_vp9 = matches.is_present("vp9");
     let video_file = matches.value_of("video");
     let audio_file = matches.value_of("audio");
 
@@ -136,11 +142,19 @@ async fn main() -> Result<()> {
     let notify_video = notify_tx.clone();
     let notify_audio = notify_tx.clone();
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let video_done_tx = done_tx.clone();
+    let audio_done_tx = done_tx.clone();
+
     if let Some(video_file) = video_file {
         // Create a video track
         let video_track = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_VP8.to_owned(),
+                mime_type: if is_vp9 {
+                    MIME_TYPE_VP9.to_owned()
+                } else {
+                    MIME_TYPE_VP8.to_owned()
+                },
                 ..Default::default()
             },
             "video".to_owned(),
@@ -201,6 +215,8 @@ async fn main() -> Result<()> {
 
                 let _ = ticker.tick().await;
             }
+
+            let _ = video_done_tx.try_send(());
 
             Result::<()>::Ok(())
         });
@@ -268,6 +284,8 @@ async fn main() -> Result<()> {
                 let _ = ticker.tick().await;
             }
 
+            let _ = audio_done_tx.try_send(());
+
             Result::<()>::Ok(())
         });
     }
@@ -283,8 +301,6 @@ async fn main() -> Result<()> {
             Box::pin(async {})
         }))
         .await;
-
-    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
