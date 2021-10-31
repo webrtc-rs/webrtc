@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, io};
 use url::Url;
 
@@ -248,7 +248,7 @@ impl SessionDescription {
                 session_id: new_session_id(),
                 session_version: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
+                    .unwrap_or_else(|_| Duration::from_secs(0))
                     .subsec_nanos() as u64,
                 network_type: "IN".to_string(),
                 address_type: "IP4".to_string(),
