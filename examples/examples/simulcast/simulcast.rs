@@ -154,7 +154,7 @@ async fn main() -> Result<()> {
     peer_connection.set_remote_description(offer).await?;
 
     // Set a handler for when a new remote track starts
-    let pc = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     peer_connection
         .on_track(Box::new(
             move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
@@ -171,7 +171,7 @@ async fn main() -> Result<()> {
 
                     // Start reading from all the streams and sending them to the related output track
                     let media_ssrc = track.ssrc();
-                    let pc2 = Arc::clone(&pc);
+                    let pc2 = pc.clone();
                     tokio::spawn(async move {
                         let mut result = Result::<usize>::Ok(0);
                         while result.is_ok() {
@@ -185,10 +185,14 @@ async fn main() -> Result<()> {
 
                             tokio::select! {
                                 _ = timeout.as_mut() =>{
-                                    result = pc2.write_rtcp(&PictureLossIndication{
+                                    if let Some(pc) = pc2.upgrade(){
+                                        result = pc.write_rtcp(&PictureLossIndication{
                                             sender_ssrc: 0,
                                             media_ssrc,
-                                    }).await.map_err(Into::into);
+                                        }).await.map_err(Into::into);
+                                    }else{
+                                        break;
+                                    }
                                 }
                             };
                         }

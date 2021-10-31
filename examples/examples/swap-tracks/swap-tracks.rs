@@ -142,7 +142,7 @@ async fn main() -> Result<()> {
 
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
-    let pc1 = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     let curr_track1 = Arc::clone(&curr_track);
     let track_count1 = Arc::clone(&track_count);
     peer_connection
@@ -152,7 +152,7 @@ async fn main() -> Result<()> {
                     let track_num = track_count1.fetch_add(1, Ordering::SeqCst);
 
                     let curr_track2 = Arc::clone(&curr_track1);
-                    let pc2 = Arc::clone(&pc1);
+                    let pc2 = pc.clone();
                     let packets_tx2 = Arc::clone(&packets_tx);
                     tokio::spawn(async move {
                         println!(
@@ -178,14 +178,18 @@ async fn main() -> Result<()> {
                                 // If just switched to this track, send PLI to get picture refresh
                                 if !is_curr_track {
                                     is_curr_track = true;
-                                    if let Err(err) = pc2
-                                        .write_rtcp(&PictureLossIndication {
-                                            sender_ssrc: 0,
-                                            media_ssrc: track.ssrc(),
-                                        })
-                                        .await
-                                    {
-                                        println!("write_rtcp err: {}", err);
+                                    if let Some(pc) = pc2.upgrade() {
+                                        if let Err(err) = pc
+                                            .write_rtcp(&PictureLossIndication {
+                                                sender_ssrc: 0,
+                                                media_ssrc: track.ssrc(),
+                                            })
+                                            .await
+                                        {
+                                            println!("write_rtcp err: {}", err);
+                                        }
+                                    } else {
+                                        break;
                                     }
                                 }
                                 let _ = packets_tx2.send(rtp).await;

@@ -237,24 +237,26 @@ async fn main() -> Result<()> {
 
     // When an ICE candidate is available send to the other Pion instance
     // the other Pion instance will add this candidate by calling AddICECandidate
-    let peer_connection2 = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = answer_addr.clone();
     peer_connection
         .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
             //println!("on_ice_candidate {:?}", c);
 
-            let peer_connection3 = Arc::clone(&peer_connection2);
+            let pc2 = pc.clone();
             let pending_candidates3 = Arc::clone(&pending_candidates2);
             let addr3 = addr2.clone();
             Box::pin(async move {
                 if let Some(c) = c {
-                    let desc = peer_connection3.remote_description().await;
-                    if desc.is_none() {
-                        let mut cs = pending_candidates3.lock().await;
-                        cs.push(c);
-                    } else if let Err(err) = signal_candidate(&addr3, &c).await {
-                        assert!(false, "{}", err);
+                    if let Some(pc) = pc2.upgrade() {
+                        let desc = pc.remote_description().await;
+                        if desc.is_none() {
+                            let mut cs = pending_candidates3.lock().await;
+                            cs.push(c);
+                        } else if let Err(err) = signal_candidate(&addr3, &c).await {
+                            assert!(false, "{}", err);
+                        }
                     }
                 }
             })

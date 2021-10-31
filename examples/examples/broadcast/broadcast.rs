@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
     let local_track_chan_tx = Arc::new(local_track_chan_tx);
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
-    let pc = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     peer_connection
         .on_track(Box::new(
             move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
@@ -135,7 +135,7 @@ async fn main() -> Result<()> {
                     // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
                     // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
                     let media_ssrc = track.ssrc();
-                    let pc2 = Arc::clone(&pc);
+                    let pc2 = pc.clone();
                     tokio::spawn(async move {
                         let mut result = Result::<usize>::Ok(0);
                         while result.is_ok() {
@@ -144,10 +144,14 @@ async fn main() -> Result<()> {
 
                             tokio::select! {
                                 _ = timeout.as_mut() =>{
-                                    result = pc2.write_rtcp(&PictureLossIndication{
+                                    if let Some(pc) = pc2.upgrade(){
+                                        result = pc.write_rtcp(&PictureLossIndication{
                                             sender_ssrc: 0,
                                             media_ssrc,
-                                    }).await.map_err(Into::into);
+                                        }).await.map_err(Into::into);
+                                    }else{
+                                        break;
+                                    }
                                 }
                             };
                         }

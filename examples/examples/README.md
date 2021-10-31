@@ -10,8 +10,8 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 - [x] [x] [Play from Disk H264](play-from-disk-h264): The play-from-disk-h264 example demonstrates how to send H264 video to your browser from a file saved to disk.
 - [x] [x] [Play from Disk Renegotiation](play-from-disk-renegotiation): The play-from-disk-renegotiation example is an extension of the play-from-disk example, but demonstrates how you can add/remove video tracks from an already negotiated PeerConnection.
 - [x] [x] [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to send E2E encrypted video and decrypt via insertable streams in the browser.
-- [x] [] [Save to Disk VPx](save-to-disk-vpx): The save-to-disk example shows how to record your webcam and save the footage (VP8/VP9 for video, Opus for audio) to disk on the server side.
-- [x] [] [Save to Disk H264](save-to-disk-h264): The save-to-disk example shows how to record your webcam and save the footage (H264 for video, Opus for audio) to disk on the server side.
+- [x] [x] [Save to Disk VPx](save-to-disk-vpx): The save-to-disk example shows how to record your webcam and save the footage (VP8/VP9 for video, Opus for audio) to disk on the server side.
+- [x] [x] [Save to Disk H264](save-to-disk-h264): The save-to-disk example shows how to record your webcam and save the footage (H264 for video, Opus for audio) to disk on the server side.
 - [x] [] [Broadcast](broadcast): The broadcast example demonstrates how to broadcast a video to multiple peers. A broadcaster uploads the video once and the server forwards it to all other peers.
 - [x] [] [RTP Forwarder](rtp-forwarder): The rtp-forwarder example demonstrates how to forward your audio/video streams using RTP.
 - [x] [] [RTP to WebRTC](rtp-to-webrtc): The rtp-to-webrtc example demonstrates how to take RTP packets sent to a webrtc-rs process into your browser.
