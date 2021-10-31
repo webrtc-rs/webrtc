@@ -785,7 +785,11 @@ impl AgentInternal {
 
         let mut temp = vec![];
         for binding_request in pending_binding_requests.drain(..) {
-            if filter_time.duration_since(binding_request.timestamp) < MAX_BINDING_REQUEST_TIMEOUT {
+            if filter_time
+                .checked_duration_since(binding_request.timestamp)
+                .map(|duration| duration < MAX_BINDING_REQUEST_TIMEOUT)
+                .unwrap_or(true)
+            {
                 temp.push(binding_request);
             }
         }
