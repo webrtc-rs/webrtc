@@ -55,10 +55,9 @@ impl Nic for DummyNic {
                 done_ch_tx.take();
             }
             2 => {
-                let delay = match SystemTime::now().duration_since(c.get_timestamp()) {
-                    Ok(delay) => delay,
-                    Err(_) => Duration::from_secs(0),
-                };
+                let delay = SystemTime::now()
+                    .duration_since(c.get_timestamp())
+                    .unwrap_or(Duration::from_secs(0));
                 {
                     let mut delay_res = self.delay_res.lock().await;
                     delay_res.push(delay);
