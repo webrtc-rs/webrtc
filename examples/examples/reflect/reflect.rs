@@ -39,6 +39,16 @@ async fn main() -> Result<()> {
                 .long("debug")
                 .short("d")
                 .help("Prints debug log information"),
+        ).arg(
+            Arg::with_name("audio")
+                .long("audio")
+                .short("a")
+                .help("Enable audio reflect"),
+        ).arg(
+            Arg::with_name("video")
+                .long("video")
+                .short("v")
+                .help("Enable video reflect"),
         );
 
     let matches = app.clone().get_matches();
@@ -48,6 +58,12 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 
+    let audio = matches.is_present("audio");
+    let video = matches.is_present("video");
+    if !audio && !video {
+        println!("one of audio or video must be enabled");
+        std::process::exit(0);
+    }
     let debug = matches.is_present("debug");
     if debug {
         env_logger::Builder::new()
@@ -72,33 +88,37 @@ async fn main() -> Result<()> {
     let mut m = MediaEngine::default();
 
     // Setup the codecs you want to use.
-    /*m.register_codec(
-        RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_OPUS.to_owned(),
+    if audio {
+        m.register_codec(
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_OPUS.to_owned(),
+                    ..Default::default()
+                },
+                payload_type: 120,
                 ..Default::default()
             },
-            payload_type: 120,
-            ..Default::default()
-        },
-        RTPCodecType::Audio,
-    )?;*/
+            RTPCodecType::Audio,
+        )?;
+    }
 
     // We'll use a VP8 and Opus but you can also define your own
-    m.register_codec(
-        RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_VP8.to_owned(),
-                clock_rate: 90000,
-                channels: 0,
-                sdp_fmtp_line: "".to_owned(),
-                rtcp_feedback: vec![],
+    if video {
+        m.register_codec(
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_VP8.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 96,
+                ..Default::default()
             },
-            payload_type: 96,
-            ..Default::default()
-        },
-        RTPCodecType::Video,
-    )?;
+            RTPCodecType::Video,
+        )?;
+    }
 
     // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
     // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
@@ -127,8 +147,14 @@ async fn main() -> Result<()> {
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
     let mut output_tracks = HashMap::new();
-    for s in vec!["video"] {
-        //"audio",
+    let mut media = vec![];
+    if audio {
+        media.push("audio");
+    }
+    if video {
+        media.push("video");
+    };
+    for s in media {
         let output_track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
                 mime_type: if s == "video" {
@@ -150,10 +176,11 @@ async fn main() -> Result<()> {
         // Read incoming RTCP packets
         // Before these packets are returned they are processed by interceptors. For things
         // like NACK this needs to be called.
+        let m = s.to_owned();
         tokio::spawn(async move {
             let mut rtcp_buf = vec![0u8; 1500];
             while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-            println!("rtp_sender.read loop exit");
+            println!("{} rtp_sender.read loop exit", m);
             Result::<()>::Ok(())
         });
 
@@ -230,7 +257,11 @@ async fn main() -> Result<()> {
                             }
                         }
 
-                        println!("on_track finished!");
+                        println!(
+                            "on_track finished, of type {}: {}",
+                            track.payload_type(),
+                            track.codec().await.capability.mime_type
+                        );
                     });
                 }
                 Box::pin(async {})
@@ -282,7 +313,6 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    //println!("Press ctrl-c to stop or wait for 20s");
     //let timeout = tokio::time::sleep(Duration::from_secs(20));
     //tokio::pin!(timeout);
 
@@ -293,7 +323,9 @@ async fn main() -> Result<()> {
         _ = done_rx.recv() => {
             println!("received done signal!");
         }
-        _ = tokio::signal::ctrl_c() => {}
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
     };
 
     peer_connection.close().await?;
