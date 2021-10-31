@@ -312,7 +312,10 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 
             // check if the binding needs a refresh
             if bind_st == BindingState::Ready
-                && Instant::now().duration_since(bind_at) > Duration::from_secs(5 * 60)
+                && Instant::now()
+                    .checked_duration_since(bind_at)
+                    .unwrap_or_else(|| Duration::from_secs(0))
+                    > Duration::from_secs(5 * 60)
             {
                 let binding_mgr = Arc::clone(&self.binding_mgr);
                 let rc_obs = Arc::clone(&self.obs);

@@ -169,7 +169,10 @@ impl Request {
             let mut nonces = self.nonces.lock().await;
 
             let to_be_deleted = if let Some(nonce_creation_time) = nonces.get(&nonce_attr.text) {
-                Instant::now().duration_since(*nonce_creation_time) >= NONCE_LIFETIME
+                Instant::now()
+                    .checked_duration_since(*nonce_creation_time)
+                    .unwrap_or_else(|| Duration::from_secs(0))
+                    >= NONCE_LIFETIME
             } else {
                 true
             };
