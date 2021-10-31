@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::time::Instant;
+use tokio::time::{Duration, Instant};
 
 #[async_trait]
 trait ControllingSelector {
@@ -65,19 +65,31 @@ impl AgentInternal {
         let start_time = self.start_time.lock().await;
         match c.candidate_type() {
             CandidateType::Host => {
-                Instant::now().duration_since(*start_time).as_nanos()
+                Instant::now()
+                    .checked_duration_since(*start_time)
+                    .unwrap_or_else(|| Duration::from_secs(0))
+                    .as_nanos()
                     > self.host_acceptance_min_wait.as_nanos()
             }
             CandidateType::ServerReflexive => {
-                Instant::now().duration_since(*start_time).as_nanos()
+                Instant::now()
+                    .checked_duration_since(*start_time)
+                    .unwrap_or_else(|| Duration::from_secs(0))
+                    .as_nanos()
                     > self.srflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::PeerReflexive => {
-                Instant::now().duration_since(*start_time).as_nanos()
+                Instant::now()
+                    .checked_duration_since(*start_time)
+                    .unwrap_or_else(|| Duration::from_secs(0))
+                    .as_nanos()
                     > self.prflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::Relay => {
-                Instant::now().duration_since(*start_time).as_nanos()
+                Instant::now()
+                    .checked_duration_since(*start_time)
+                    .unwrap_or_else(|| Duration::from_secs(0))
+                    .as_nanos()
                     > self.relay_acceptance_min_wait.as_nanos()
             }
             CandidateType::Unspecified => {

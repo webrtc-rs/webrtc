@@ -218,7 +218,9 @@ impl AgentInternal {
             }
 
             // We have been in checking longer then Disconnect+Failed timeout, set the connection to Failed
-            if Instant::now().duration_since(*checking_duration)
+            if Instant::now()
+                .checked_duration_since(*checking_duration)
+                .unwrap_or_else(|| Duration::from_secs(0))
                 > self.disconnected_timeout + self.failed_timeout
             {
                 self.update_connection_state(ConnectionState::Failed).await;
@@ -441,12 +443,9 @@ impl AgentInternal {
             (*selected_pair).as_ref().map_or_else(
                 || (false, Duration::from_secs(0)),
                 |selected_pair| {
-                    let disconnected_time = match SystemTime::now()
+                    let disconnected_time = SystemTime::now()
                         .duration_since(selected_pair.remote.last_received())
-                    {
-                        Ok(d) => d,
-                        Err(_) => Duration::from_secs(0),
-                    };
+                        .unwrap_or_else(|_| Duration::from_secs(0));
                     (true, disconnected_time)
                 },
             )
@@ -494,15 +493,13 @@ impl AgentInternal {
         };
 
         if let (Some(local), Some(remote)) = (local, remote) {
-            let last_sent = match SystemTime::now().duration_since(local.last_sent()) {
-                Ok(d) => d,
-                Err(_) => Duration::from_secs(0),
-            };
+            let last_sent = SystemTime::now()
+                .duration_since(local.last_sent())
+                .unwrap_or_else(|_| Duration::from_secs(0));
 
-            let last_received = match SystemTime::now().duration_since(remote.last_received()) {
-                Ok(d) => d,
-                Err(_) => Duration::from_secs(0),
-            };
+            let last_received = SystemTime::now()
+                .duration_since(remote.last_received())
+                .unwrap_or_else(|_| Duration::from_secs(0));
 
             if (self.keepalive_interval != Duration::from_secs(0))
                 && ((last_sent > self.keepalive_interval)

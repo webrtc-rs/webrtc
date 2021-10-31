@@ -257,10 +257,9 @@ impl Candidate for CandidateBase {
     }
 
     fn seen(&self, outbound: bool) {
-        let d = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(d) => d,
-            Err(_) => Duration::from_secs(0),
-        };
+        let d = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0));
 
         if outbound {
             self.set_last_sent(d);
