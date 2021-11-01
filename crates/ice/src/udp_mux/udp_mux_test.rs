@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::io;
+use std::net::Ipv6Addr;
 use std::time::Duration;
 
 use super::*;
@@ -55,7 +56,7 @@ async fn test_udp_mux() -> Result<()> {
     //     })
     //     .init();
 
-    let udp_socket = UdpSocket::bind("[::]:0").await?;
+    let udp_socket = UdpSocket::bind((Ipv6Addr::UNSPECIFIED, 0)).await?;
     let addr = udp_socket.local_addr()?;
     log::info!("Listening on {}", addr);
 
