@@ -53,9 +53,20 @@ impl Operations {
     /// the execution will start immediately in a new goroutine.
     pub(crate) async fn enqueue(&self, op: Operation) -> Result<()> {
         if let Some(ops_tx) = &self.ops_tx {
-            let _ = ops_tx.send(op)?;
-            self.length.fetch_add(1, Ordering::SeqCst);
+            return Operations::enqueue_inner(op, &ops_tx, &self.length);
         }
+
+        Ok(())
+    }
+
+    fn enqueue_inner(
+        op: Operation,
+        ops_tx: &Arc<mpsc::UnboundedSender<Operation>>,
+        length: &Arc<AtomicUsize>,
+    ) -> Result<()> {
+        length.fetch_add(1, Ordering::SeqCst);
+        let _ = ops_tx.send(op)?;
+
         Ok(())
     }
 
@@ -93,7 +104,8 @@ impl Operations {
                     if let Some(mut f) = result {
                         length.fetch_sub(1, Ordering::SeqCst);
                         if f.0().await {
-                            let _ = ops_tx.send(f);
+                            // Requeue this operation
+                            let _ = Operations::enqueue_inner(f, &ops_tx, &length);
                         }
                     }
                 }
