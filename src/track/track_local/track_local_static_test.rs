@@ -413,7 +413,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
         b.Fatalf("Failed to create a PC pair for testing")
     }
 
-    track, err := NewTrackLocalStaticRTP(RTPCodecCapability{MimeType: "video/vp8"}, "video", "pion")
+    track, err := NewTrackLocalStaticRTP(RTPCodecCapability{mime_type: "video/vp8"}, "video", "pion")
     assert.NoError(b, err)
 
     _, err = offerPC.AddTrack(track)

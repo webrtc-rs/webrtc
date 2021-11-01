@@ -42,6 +42,7 @@ rcgen = { version = "0.8.13", features = ["pem", "x509-parser"]}
 ring = "0.16.19"
 sha2 = "0.9.1"
 lazy_static = "1.4"
+hex = "0.4.3"
 
 [dev-dependencies]
 tokio-test = "0.4"

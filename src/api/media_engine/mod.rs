@@ -5,7 +5,7 @@ use crate::error::{Error, Result};
 use crate::peer_connection::sdp::{
     codecs_from_media_description, rtp_extensions_from_media_description,
 };
-use crate::rtp_transceiver::fmtp::parse_fmtp;
+use crate::rtp_transceiver::fmtp;
 use crate::rtp_transceiver::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
     RTCRtpHeaderExtensionCapability, RTCRtpHeaderExtensionParameters, RTCRtpParameters,
@@ -573,8 +573,11 @@ impl MediaEngine {
             &self.video_codecs
         };
 
-        let remote_fmtp = parse_fmtp(remote_codec.capability.sdp_fmtp_line.as_str());
-        if let Some(apt) = remote_fmtp.get("apt") {
+        let remote_fmtp = fmtp::parse(
+            &remote_codec.capability.mime_type,
+            remote_codec.capability.sdp_fmtp_line.as_str(),
+        );
+        if let Some(apt) = remote_fmtp.parameter("apt") {
             let payload_type = apt.parse::<u8>()?;
 
             let mut apt_match = CodecMatch::None;

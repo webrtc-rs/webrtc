@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::*;
 use crate::error::{Error, Result};
-use crate::rtp_transceiver::fmtp::*;
+use crate::rtp_transceiver::fmtp;
 
 use std::fmt;
 
@@ -145,15 +145,17 @@ pub(crate) fn codec_parameters_fuzzy_search(
     needle: &RTCRtpCodecParameters,
     haystack: &[RTCRtpCodecParameters],
 ) -> (RTCRtpCodecParameters, CodecMatch) {
-    let needle_fmtp = parse_fmtp(&needle.capability.sdp_fmtp_line);
+    let needle_fmtp = fmtp::parse(
+        &needle.capability.mime_type,
+        &needle.capability.sdp_fmtp_line,
+    );
 
     //TODO: add unicode case-folding equal support
 
     // First attempt to match on mime_type + sdpfmtp_line
     for c in haystack {
-        if c.capability.mime_type.to_uppercase() == needle.capability.mime_type.to_uppercase()
-            && fmtp_consist(&needle_fmtp, &parse_fmtp(&c.capability.sdp_fmtp_line))
-        {
+        let cfmpt = fmtp::parse(&c.capability.mime_type, &c.capability.sdp_fmtp_line);
+        if needle_fmtp.match_fmtp(&*cfmpt) {
             return (c.clone(), CodecMatch::Exact);
         }
     }
