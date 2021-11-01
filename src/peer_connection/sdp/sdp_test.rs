@@ -614,6 +614,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
         media[i].transceivers[0]
             .set_sender(Some(Arc::new(
                 RTCRtpSender::new(
+                    api.setting_engine.get_receive_mtu(),
                     track,
                     Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),

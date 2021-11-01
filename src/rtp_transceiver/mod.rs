@@ -78,6 +78,13 @@ pub struct RTCRtpCapabilities {
     pub header_extensions: Vec<RTCRtpHeaderExtensionCapability>,
 }
 
+/// RTPRtxParameters dictionary contains information relating to retransmission (RTX) settings.
+/// https://draft.ortc.org/#dom-rtcrtprtxparameters
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct RTCRtpRtxParameters {
+    pub ssrc: SSRC,
+}
+
 /// RTPCodingParameters provides information relating to both encoding and decoding.
 /// This is a subset of the RFC since Pion WebRTC doesn't implement encoding/decoding itself
 /// http://draft.ortc.org/#dom-rtcrtpcodingparameters
@@ -86,6 +93,7 @@ pub struct RTCRtpCodingParameters {
     pub rid: String,
     pub ssrc: SSRC,
     pub payload_type: PayloadType,
+    pub rtx: RTCRtpRtxParameters,
 }
 
 /// RTPDecodingParameters provides information relating to both encoding and decoding.

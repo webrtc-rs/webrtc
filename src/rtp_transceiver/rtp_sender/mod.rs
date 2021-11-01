@@ -14,7 +14,6 @@ use crate::rtp_transceiver::{
 use crate::track::track_local::{
     InterceptorToTrackLocalWriter, TrackLocal, TrackLocalContext, TrackLocalWriter,
 };
-use crate::RECEIVE_MTU;
 
 use ice::rand::generate_crypto_random_string;
 use interceptor::stream_info::StreamInfo;
@@ -64,8 +63,9 @@ impl RTPSenderInternal {
     /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
     async fn read_rtcp(
         &self,
+        receive_mtu: usize,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
-        let mut b = vec![0u8; RECEIVE_MTU];
+        let mut b = vec![0u8; receive_mtu];
         let (n, attributes) = self.read(&mut b).await?;
 
         let mut buf = &b[..n];
@@ -88,6 +88,7 @@ pub struct RTCRtpSender {
 
     pub(crate) payload_type: PayloadType,
     pub(crate) ssrc: SSRC,
+    receive_mtu: usize,
 
     /// a transceiver sender since we can just check the
     /// transceiver negotiation status
@@ -98,7 +99,7 @@ pub struct RTCRtpSender {
 
     pub(crate) id: String,
 
-    tr: Mutex<Option<Weak<RTCRtpTransceiver>>>,
+    rtp_transceiver: Mutex<Option<Weak<RTCRtpTransceiver>>>,
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
     stop_called_tx: Arc<Notify>,
@@ -109,6 +110,7 @@ pub struct RTCRtpSender {
 
 impl RTCRtpSender {
     pub async fn new(
+        receive_mtu: usize,
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<RTCDtlsTransport>,
         media_engine: Arc<MediaEngine>,
@@ -157,6 +159,7 @@ impl RTCRtpSender {
 
             payload_type: 0,
             ssrc,
+            receive_mtu,
 
             negotiated: AtomicBool::new(false),
 
@@ -165,7 +168,7 @@ impl RTCRtpSender {
 
             id,
 
-            tr: Mutex::new(None),
+            rtp_transceiver: Mutex::new(None),
 
             send_called_tx: Mutex::new(Some(send_called_tx)),
             stop_called_tx,
@@ -183,9 +186,12 @@ impl RTCRtpSender {
         self.negotiated.store(true, Ordering::SeqCst);
     }
 
-    pub(crate) async fn set_rtp_transceiver(&self, t: Option<Weak<RTCRtpTransceiver>>) {
-        let mut tr = self.tr.lock().await;
-        *tr = t;
+    pub(crate) async fn set_rtp_transceiver(
+        &self,
+        rtp_transceiver: Option<Weak<RTCRtpTransceiver>>,
+    ) {
+        let mut tr = self.rtp_transceiver.lock().await;
+        *tr = rtp_transceiver;
     }
 
     /// transport returns the currently-configured DTLSTransport
@@ -197,38 +203,39 @@ impl RTCRtpSender {
     /// get_parameters describes the current configuration for the encoding and
     /// transmission of media on the sender's track.
     pub async fn get_parameters(&self) -> RTCRtpSendParameters {
-        let mut send_parameters = {
+        let kind = {
             let track = self.track.lock().await;
+            if let Some(t) = &*track {
+                t.kind()
+            } else {
+                RTPCodecType::default()
+            }
+        };
+
+        let mut send_parameters = {
             RTCRtpSendParameters {
                 rtp_parameters: self
                     .media_engine
-                    .get_rtp_parameters_by_kind(
-                        if let Some(t) = &*track {
-                            t.kind()
-                        } else {
-                            RTPCodecType::default()
-                        },
-                        &[RTCRtpTransceiverDirection::Sendonly],
-                    )
+                    .get_rtp_parameters_by_kind(kind, &[RTCRtpTransceiverDirection::Sendonly])
                     .await,
                 encodings: vec![RTCRtpEncodingParameters {
-                    rid: String::new(),
                     ssrc: self.ssrc,
                     payload_type: self.payload_type,
+                    ..Default::default()
                 }],
             }
         };
 
         let codecs = {
-            let tr = self.tr.lock().await;
+            let tr = self.rtp_transceiver.lock().await;
             if let Some(t) = &*tr {
                 if let Some(t) = t.upgrade() {
                     t.get_codecs().await
                 } else {
-                    vec![]
+                    self.media_engine.get_codecs_by_kind(kind).await
                 }
             } else {
-                vec![]
+                self.media_engine.get_codecs_by_kind(kind).await
             }
         };
         send_parameters.rtp_parameters.codecs = codecs;
@@ -250,7 +257,7 @@ impl RTCRtpSender {
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         if let Some(t) = &track {
-            let tr = self.tr.lock().await;
+            let tr = self.rtp_transceiver.lock().await;
             if let Some(r) = &*tr {
                 if let Some(r) = r.upgrade() {
                     if r.kind != t.kind() {
@@ -434,7 +441,7 @@ impl RTCRtpSender {
     pub async fn read_rtcp(
         &self,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
-        self.internal.read_rtcp().await
+        self.internal.read_rtcp(self.receive_mtu).await
     }
 
     /// has_sent tells if data has been ever sent for this instance

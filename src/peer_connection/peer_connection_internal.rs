@@ -510,6 +510,7 @@ impl PeerConnectionInternal {
                 )));
                 let s = Some(Arc::new(
                     RTCRtpSender::new(
+                        self.setting_engine.get_receive_mtu(),
                         Arc::clone(&track),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
@@ -522,6 +523,7 @@ impl PeerConnectionInternal {
             RTCRtpTransceiverDirection::Sendonly => {
                 let s = Some(Arc::new(
                     RTCRtpSender::new(
+                        self.setting_engine.get_receive_mtu(),
                         Arc::clone(&track),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),

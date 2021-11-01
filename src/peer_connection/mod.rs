@@ -1573,6 +1573,7 @@ impl RTCPeerConnection {
                 {
                     let sender = Arc::new(
                         RTCRtpSender::new(
+                            self.internal.setting_engine.get_receive_mtu(),
                             Arc::clone(&track),
                             Arc::clone(&self.internal.dtls_transport),
                             Arc::clone(&self.internal.media_engine),

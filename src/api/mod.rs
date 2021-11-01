@@ -153,6 +153,7 @@ impl API {
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTCRtpSender {
         RTCRtpSender::new(
+            self.setting_engine.get_receive_mtu(),
             track,
             transport,
             Arc::clone(&self.media_engine),

@@ -279,7 +279,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
         .await?;
 
     {
-        let tr = rtp_sender.tr.lock().await;
+        let tr = rtp_sender.rtp_transceiver.lock().await;
         if let Some(t) = &*tr {
             if let Some(t) = t.upgrade() {
                 t.set_codec_preferences(vec![RTCRtpCodecParameters {
