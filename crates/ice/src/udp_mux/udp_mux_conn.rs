@@ -12,7 +12,7 @@ use tokio::sync::watch;
 use util::{Buffer, Conn, Error};
 
 use super::socket_addr_ext::{SocketAddrExt, MAX_ADDR_SIZE};
-use super::{UDPMuxDefault, RECEIVE_MTU};
+use super::{normalize_socket_addr, UDPMuxDefault, RECEIVE_MTU};
 
 #[inline(always)]
 /// Create a buffer of appropriate size to fit both a packet with max RECEIVE_MTU and the
@@ -289,12 +289,16 @@ impl Conn for UDPMuxConn {
         if self.is_closed() {
             return Err(Error::ErrUseClosedNetworkConn);
         }
+        let normalized_target = match self.inner.params.local_addr {
+            Some(addr) => normalize_socket_addr(&target, &addr),
+            None => target,
+        };
 
-        if !self.contains_address(&target) {
-            self.add_address(target);
+        if !self.contains_address(&normalized_target) {
+            self.add_address(normalized_target);
         }
 
-        self.inner.send_to(buf, &target).await
+        self.inner.send_to(buf, &normalized_target).await
     }
 
     async fn local_addr(&self) -> ConnResult<SocketAddr> {

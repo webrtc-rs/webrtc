@@ -34,30 +34,6 @@ impl Network {
             Network::Ipv6 => format!("[::1]:{}", port),
         }
     }
-
-    /// The "remote" ip.  
-    fn remote_ip(&self, port: u16) -> String {
-        match self {
-            // Use Ipv4 mapped IP address for dual stack
-            #[cfg(all(unix, target_pointer_width = "64"))]
-            Network::Ipv4 => format!("[::ffff:127.0.0.1]:{}", port),
-
-            #[cfg(any(not(unix), not(target_pointer_width = "64")))]
-            Network::Ipv4 => format!("127.0.0.1:{}", port),
-
-            Network::Ipv6 => format!("[::1]:{}", port),
-        }
-    }
-}
-
-async fn bind_socket() -> Result<UdpSocket> {
-    #[cfg(all(unix, target_pointer_width = "64"))]
-    let udp_socket = UdpSocket::bind("[::]:0").await?;
-
-    #[cfg(any(not(unix), not(target_pointer_width = "64")))]
-    let udp_socket = UdpSocket::bind("0.0.0.0:0").await?;
-
-    Ok(udp_socket)
 }
 
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -203,10 +179,7 @@ async fn test_mux_connection(
         m.marshal_binary().unwrap()
     };
 
-    let remote_connection_addr = network
-        .remote_ip(remote_connection.local_addr()?.port())
-        .parse::<SocketAddr>()
-        .unwrap();
+    let remote_connection_addr = remote_connection.local_addr()?;
 
     conn.send_to(&stun_msg, remote_connection_addr).await?;
 

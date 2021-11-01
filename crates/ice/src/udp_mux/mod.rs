@@ -30,6 +30,21 @@ use stun::{
 
 use crate::candidate::RECEIVE_MTU;
 
+/// Normalize a target socket addr for sending over a given local socket addr. This is useful when
+/// a dual stack socket is used, in which case an IPv4 target needs to be mapped to an IPv6
+/// address.
+fn normalize_socket_addr(target: &SocketAddr, socket_addr: &SocketAddr) -> SocketAddr {
+    match (target, socket_addr) {
+        (SocketAddr::V4(target_ipv4), SocketAddr::V6(_)) => {
+            let ipv6_mapped = target_ipv4.ip().to_ipv6_mapped();
+
+            SocketAddr::new(std::net::IpAddr::V6(ipv6_mapped), target_ipv4.port())
+        }
+        // This will fail later if target is IPv6 and socket is IPv4, we ignore it here
+        (_, _) => *target,
+    }
+}
+
 #[async_trait]
 pub trait UDPMux {
     /// Close the muxing.
