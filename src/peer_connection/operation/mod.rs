@@ -53,7 +53,7 @@ impl Operations {
     /// the execution will start immediately in a new goroutine.
     pub(crate) async fn enqueue(&self, op: Operation) -> Result<()> {
         if let Some(ops_tx) = &self.ops_tx {
-            return Operations::enqueue_inner(op, &ops_tx, &self.length);
+            return Operations::enqueue_inner(op, ops_tx, &self.length);
         }
 
         Ok(())
