@@ -19,6 +19,7 @@ pub mod sdp_type;
 pub mod session_description;
 
 use crate::peer_connection::MEDIA_SECTION_APPLICATION;
+use crate::SDP_ATTRIBUTE_RID;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::description::common::{Address, ConnectionInformation};
@@ -40,7 +41,8 @@ pub(crate) struct TrackDetails {
     pub(crate) kind: RTPCodecType,
     pub(crate) stream_id: String,
     pub(crate) id: String,
-    pub(crate) ssrc: SSRC,
+    pub(crate) ssrcs: Vec<SSRC>,
+    pub(crate) repair_ssrc: SSRC,
     pub(crate) rids: Vec<String>,
 }
 
@@ -48,19 +50,28 @@ pub(crate) fn track_details_for_ssrc(
     track_details: &[TrackDetails],
     ssrc: SSRC,
 ) -> Option<&TrackDetails> {
-    track_details.iter().find(|x| x.ssrc == ssrc)
+    track_details.iter().find(|x| x.ssrcs.contains(&ssrc))
+}
+
+pub(crate) fn track_details_for_rid<'a>(
+    track_details: &'a [TrackDetails],
+    rid: &'a String,
+) -> Option<&'a TrackDetails> {
+    track_details.iter().find(|x| x.rids.contains(rid))
 }
 
 pub(crate) fn filter_track_with_ssrc(incoming_tracks: &mut Vec<TrackDetails>, ssrc: SSRC) {
-    incoming_tracks.retain(|x| x.ssrc != ssrc);
+    incoming_tracks.retain(|x| !x.ssrcs.contains(&ssrc));
 }
 
 /// extract all TrackDetails from an SDP.
 pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails> {
     let mut incoming_tracks = vec![];
-    let mut rtx_repair_flows = HashMap::new();
 
     for media in &s.media_descriptions {
+        let mut tracks_in_media_section = vec![];
+        let mut rtx_repair_flows = HashMap::new();
+
         // Plan B can have multiple tracks in a signle media section
         let mut stream_id = "";
         let mut track_id = "";
@@ -93,10 +104,13 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
                             // as this declares that the second SSRC (632943048) is a rtx repair flow (RFC4588) for the first
                             // (2231627014) as specified in RFC5576
                             if split.len() == 3 {
-                                if let Err(err) = split[1].parse::<u32>() {
-                                    log::warn!("Failed to parse SSRC: {}", err);
-                                    continue;
-                                }
+                                let base_ssrc = match split[1].parse::<u32>() {
+                                    Ok(ssrc) => ssrc,
+                                    Err(err) => {
+                                        log::warn!("Failed to parse SSRC: {}", err);
+                                        continue;
+                                    }
+                                };
                                 let rtx_repair_flow = match split[2].parse::<u32>() {
                                     Ok(n) => n,
                                     Err(err) => {
@@ -104,10 +118,10 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
                                         continue;
                                     }
                                 };
-                                rtx_repair_flows.insert(rtx_repair_flow, true);
+                                rtx_repair_flows.insert(rtx_repair_flow, base_ssrc);
                                 // Remove if rtx was added as track before
                                 filter_track_with_ssrc(
-                                    &mut incoming_tracks,
+                                    &mut tracks_in_media_section,
                                     rtx_repair_flow as SSRC,
                                 );
                             }
@@ -148,31 +162,41 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
                             track_id = split[2];
                         }
 
-                        let mut track_idx = incoming_tracks.len();
+                        let mut track_idx = tracks_in_media_section.len();
 
-                        for (i, t) in incoming_tracks.iter().enumerate() {
-                            if t.ssrc == ssrc {
+                        for (i, t) in tracks_in_media_section.iter().enumerate() {
+                            if t.ssrcs.contains(&ssrc) {
                                 track_idx = i;
                                 //TODO: no break?
                             }
                         }
 
-                        if track_idx < incoming_tracks.len() {
-                            incoming_tracks[track_idx].mid = mid_value.to_owned();
-                            incoming_tracks[track_idx].kind = codec_type;
-                            incoming_tracks[track_idx].stream_id = stream_id.to_owned();
-                            incoming_tracks[track_idx].id = track_id.to_owned();
-                            incoming_tracks[track_idx].ssrc = ssrc;
+                        let mut repair_ssrc = 0;
+                        for (repair, base) in &rtx_repair_flows {
+                            if *base == ssrc {
+                                repair_ssrc = *repair;
+                                //TODO: no break?
+                            }
+                        }
+
+                        if track_idx < tracks_in_media_section.len() {
+                            tracks_in_media_section[track_idx].mid = mid_value.to_owned();
+                            tracks_in_media_section[track_idx].kind = codec_type;
+                            tracks_in_media_section[track_idx].stream_id = stream_id.to_owned();
+                            tracks_in_media_section[track_idx].id = track_id.to_owned();
+                            tracks_in_media_section[track_idx].ssrcs = vec![ssrc];
+                            tracks_in_media_section[track_idx].repair_ssrc = repair_ssrc;
                         } else {
                             let track_details = TrackDetails {
                                 mid: mid_value.to_owned(),
                                 kind: codec_type,
                                 stream_id: stream_id.to_owned(),
                                 id: track_id.to_owned(),
-                                ssrc,
+                                ssrcs: vec![ssrc],
+                                repair_ssrc,
                                 ..Default::default()
                             };
-                            incoming_tracks.push(track_details);
+                            tracks_in_media_section.push(track_details);
                         }
                     }
                 }
@@ -182,7 +206,7 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
 
         let rids = get_rids(media);
         if !rids.is_empty() && !track_id.is_empty() && !stream_id.is_empty() {
-            let mut new_track = TrackDetails {
+            let mut simulcast_track = TrackDetails {
                 mid: mid_value.to_owned(),
                 kind: codec_type,
                 stream_id: stream_id.to_owned(),
@@ -191,11 +215,18 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
                 ..Default::default()
             };
             for rid in rids.keys() {
-                new_track.rids.push(rid.to_owned());
+                simulcast_track.rids.push(rid.to_owned());
+            }
+            if simulcast_track.rids.len() == tracks_in_media_section.len() {
+                for track in &tracks_in_media_section {
+                    simulcast_track.ssrcs.extend(&track.ssrcs)
+                }
             }
 
-            incoming_tracks.push(new_track);
+            tracks_in_media_section = vec![simulcast_track];
         }
+
+        incoming_tracks.extend(tracks_in_media_section);
     }
 
     incoming_tracks
@@ -204,7 +235,7 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
 pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
     let mut rids = HashMap::new();
     for attr in &media.attributes {
-        if attr.key.as_str() == "rid" {
+        if attr.key.as_str() == SDP_ATTRIBUTE_RID {
             if let Some(value) = &attr.value {
                 let split: Vec<&str> = value.split(' ').collect();
                 rids.insert(split[0].to_owned(), value.to_owned());
@@ -425,6 +456,11 @@ pub(crate) async fn add_transceiver_sdp(
         }
     }
     if codecs.is_empty() {
+        // If we are sender and we have no codecs throw an error early
+        if t.sender().await.is_some() {
+            return Err(Error::ErrSenderWithNoCodecs);
+        }
+
         // Explicitly reject track if we don't have the codec
         d = d.with_media(MediaDescription {
             media_name: sdp::description::media::MediaName {
@@ -474,7 +510,8 @@ pub(crate) async fn add_transceiver_sdp(
         let mut recv_rids: Vec<String> = vec![];
 
         for rid in media_section.rid_map.keys() {
-            media = media.with_value_attribute("rid".to_owned(), rid.to_owned() + " recv");
+            media =
+                media.with_value_attribute(SDP_ATTRIBUTE_RID.to_owned(), rid.to_owned() + " recv");
             recv_rids.push(rid.to_owned());
         }
         // Simulcast
@@ -869,7 +906,6 @@ pub(crate) fn rtp_extensions_from_media_description(
 /// for subsequent calling, it updates Origin for SessionDescription from saved one
 /// and increments session version by one.
 /// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2
-/// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.3.2
 pub(crate) fn update_sdp_origin(origin: &mut Origin, d: &mut SessionDescription) {
     //TODO: if atomic.CompareAndSwapUint64(&origin.SessionVersion, 0, d.Origin.SessionVersion)
     if origin.session_version == 0 {
