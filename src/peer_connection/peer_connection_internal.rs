@@ -170,6 +170,7 @@ impl PeerConnectionInternal {
                         .ok_or(Error::ErrInterceptorNotBind)?;
 
                     let receiver = Arc::new(RTCRtpReceiver::new(
+                        self.setting_engine.get_receive_mtu(),
                         receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
@@ -466,6 +467,7 @@ impl PeerConnectionInternal {
                     .upgrade()
                     .ok_or(Error::ErrInterceptorNotBind)?;
                 let receiver = Arc::new(RTCRtpReceiver::new(
+                    self.setting_engine.get_receive_mtu(),
                     kind,
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
@@ -503,6 +505,7 @@ impl PeerConnectionInternal {
         let (r, s) = match direction {
             RTCRtpTransceiverDirection::Sendrecv => {
                 let r = Some(Arc::new(RTCRtpReceiver::new(
+                    self.setting_engine.get_receive_mtu(),
                     track.kind(),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),

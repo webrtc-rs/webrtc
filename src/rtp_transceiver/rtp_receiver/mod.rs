@@ -205,6 +205,7 @@ impl RTPReceiverInternal {
 
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
 pub struct RTCRtpReceiver {
+    receive_mtu: usize,
     kind: RTPCodecType,
     transport: Arc<RTCDtlsTransport>,
     closed_tx: Arc<Notify>,
@@ -215,6 +216,7 @@ pub struct RTCRtpReceiver {
 
 impl RTCRtpReceiver {
     pub fn new(
+        receive_mtu: usize,
         kind: RTPCodecType,
         transport: Arc<RTCDtlsTransport>,
         media_engine: Arc<MediaEngine>,
@@ -225,6 +227,7 @@ impl RTCRtpReceiver {
         let (received_tx, received_rx) = mpsc::channel(1);
 
         RTCRtpReceiver {
+            receive_mtu,
             kind,
             transport: Arc::clone(&transport),
             closed_tx,
@@ -358,6 +361,7 @@ impl RTCRtpReceiver {
 
                 let t = TrackStreams {
                     track: Arc::new(TrackRemote::new(
+                        self.receive_mtu,
                         self.kind,
                         encoding.ssrc,
                         "".to_owned(),
@@ -378,6 +382,7 @@ impl RTCRtpReceiver {
             for encoding in &parameters.encodings {
                 let t = TrackStreams {
                     track: Arc::new(TrackRemote::new(
+                        self.receive_mtu,
                         self.kind,
                         0,
                         encoding.rid.clone(),

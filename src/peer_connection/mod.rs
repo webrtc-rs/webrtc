@@ -1319,6 +1319,7 @@ impl RTCPeerConnection {
                                     }
                                 } else {
                                     let receiver = Arc::new(RTCRtpReceiver::new(
+                                        self.internal.setting_engine.get_receive_mtu(),
                                         kind,
                                         Arc::clone(&self.internal.dtls_transport),
                                         Arc::clone(&self.internal.media_engine),

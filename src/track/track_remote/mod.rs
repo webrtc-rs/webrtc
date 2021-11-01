@@ -31,6 +31,7 @@ pub struct TrackRemote {
     id: Mutex<String>,
     stream_id: Mutex<String>,
 
+    receive_mtu: usize,
     payload_type: AtomicU8, //PayloadType,
     kind: AtomicU8,         //RTPCodecType,
     ssrc: AtomicU32,        //SSRC,
@@ -62,6 +63,7 @@ impl std::fmt::Debug for TrackRemote {
 
 impl TrackRemote {
     pub(crate) fn new(
+        receive_mtu: usize,
         kind: RTPCodecType,
         ssrc: SSRC,
         rid: String,
@@ -73,6 +75,7 @@ impl TrackRemote {
             tid: TRACK_REMOTE_UNIQUE_ID.fetch_add(1, Ordering::SeqCst),
             id: Default::default(),
             stream_id: Default::default(),
+            receive_mtu,
             payload_type: Default::default(),
             kind: AtomicU8::new(kind as u8),
             ssrc: AtomicU32::new(ssrc),
@@ -245,7 +248,7 @@ impl TrackRemote {
 
     /// read_rtp is a convenience method that wraps Read and unmarshals for you.
     pub async fn read_rtp(&self) -> Result<(rtp::packet::Packet, Attributes)> {
-        let mut b = vec![0u8; RECEIVE_MTU];
+        let mut b = vec![0u8; self.receive_mtu];
         let (n, attributes) = self.read(&mut b).await?;
 
         let mut buf = &b[..n];

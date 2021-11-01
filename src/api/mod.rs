@@ -142,7 +142,13 @@ impl API {
         transport: Arc<RTCDtlsTransport>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTCRtpReceiver {
-        RTCRtpReceiver::new(kind, transport, Arc::clone(&self.media_engine), interceptor)
+        RTCRtpReceiver::new(
+            self.setting_engine.get_receive_mtu(),
+            kind,
+            transport,
+            Arc::clone(&self.media_engine),
+            interceptor,
+        )
     }
 
     /// new_rtp_sender constructs a new RTPSender
