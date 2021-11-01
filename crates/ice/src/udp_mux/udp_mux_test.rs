@@ -56,6 +56,7 @@ async fn test_udp_mux() -> Result<()> {
     //     })
     //     .init();
 
+    // TODO: Support IPv6 dual stack. This works Linux and macOS, but not Windows.
     let udp_socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
     let addr = udp_socket.local_addr()?;
     log::info!("Listening on {}", addr);
@@ -85,6 +86,7 @@ async fn test_udp_mux() -> Result<()> {
 
     #[cfg(all(unix, target_pointer_width = "64"))]
     {
+        // TODO: Support IPv6 dual stack. This works Linux and macOS, but not Windows.
         // let udp_mux_dyn_3 = Arc::clone(&udp_mux_dyn);
         // let h3 = tokio::spawn(async move {
         //     timeout(
