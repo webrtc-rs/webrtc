@@ -1,5 +1,5 @@
 use super::{track_local_static_rtp::*, track_local_static_sample::*, *};
-use crate::api::media_engine::MediaEngine;
+use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::peer_connection_test::*;
@@ -200,7 +200,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
     media_engine_one.register_codec(
         RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
-                mime_type: "video/VP8".to_owned(),
+                mime_type: MIME_TYPE_VP8.to_owned(),
                 clock_rate: 90000,
                 channels: 0,
                 sdp_fmtp_line: "".to_owned(),
@@ -216,7 +216,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
     media_engine_two.register_codec(
         RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
-                mime_type: "video/VP8".to_owned(),
+                mime_type: MIME_TYPE_VP8.to_owned(),
                 clock_rate: 90000,
                 channels: 0,
                 sdp_fmtp_line: "".to_owned(),
@@ -241,7 +241,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     let track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
-            mime_type: "video/vp8".to_owned(),
+            mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
         "video".to_owned(),
@@ -264,7 +264,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
                 Box::pin(async move {
                     if let Some(t) = &track {
                         assert_eq!(t.payload_type(), 100);
-                        assert_eq!(t.codec().await.capability.mime_type, "video/VP8");
+                        assert_eq!(t.codec().await.capability.mime_type, MIME_TYPE_VP8);
                     }
                     {
                         log::debug!("onTrackFiredFunc!!!");
@@ -312,7 +312,7 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
         RTCRtpCodecCapability {
-            mime_type: "video/vp8".to_owned(),
+            mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
         "video".to_owned(),
@@ -379,7 +379,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
         RTCRtpCodecCapability {
-            mime_type: "video/vp8".to_owned(),
+            mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
         "video".to_owned(),
@@ -413,7 +413,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
         b.Fatalf("Failed to create a PC pair for testing")
     }
 
-    track, err := NewTrackLocalStaticRTP(RTPCodecCapability{mime_type: "video/vp8"}, "video", "pion")
+    track, err := NewTrackLocalStaticRTP(RTPCodecCapability{mime_type: MIME_TYPE_VP8}, "video", "pion")
     assert.NoError(b, err)
 
     _, err = offerPC.AddTrack(track)
