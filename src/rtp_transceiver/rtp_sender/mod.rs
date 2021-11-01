@@ -134,6 +134,7 @@ impl RTCRtpSender {
         });
 
         let srtp_stream = Arc::new(SrtpWriterFuture {
+            closed: AtomicBool::new(false),
             ssrc,
             rtp_sender: Arc::downgrade(&internal),
             rtp_transport: Arc::clone(&transport),

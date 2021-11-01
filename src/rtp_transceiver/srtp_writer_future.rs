@@ -9,13 +9,14 @@ use srtp::stream::Stream;
 use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::{Attributes, RTCPReader, RTPWriter};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
 /// SrtpWriterFuture blocks Read/Write calls until
 /// the SRTP Session is available
 pub(crate) struct SrtpWriterFuture {
+    pub(crate) closed: AtomicBool,
     pub(crate) ssrc: SSRC,
     pub(crate) rtp_sender: Weak<RTPSenderInternal>,
     pub(crate) rtp_transport: Arc<RTCDtlsTransport>,
@@ -53,6 +54,10 @@ impl SrtpWriterFuture {
             }
         }
 
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrClosedPipe);
+        }
+
         if let Some(srtcp_session) = self.rtp_transport.get_srtcp_session().await {
             let rtcp_read_stream = srtcp_session.open(self.ssrc).await;
             let mut stream = self.rtcp_read_stream.lock().await;
@@ -69,6 +74,11 @@ impl SrtpWriterFuture {
     }
 
     pub async fn close(&self) -> Result<()> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        self.closed.store(true, Ordering::SeqCst);
+
         let stream = {
             let mut stream = self.rtcp_read_stream.lock().await;
             stream.take()
