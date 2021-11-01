@@ -1,7 +1,11 @@
+#[cfg(test)]
+mod interceptor_registry_test;
+
 use crate::api::media_engine::MediaEngine;
 use crate::error::Result;
 use crate::rtp_transceiver::rtp_codec::RTCRtpHeaderExtensionCapability;
 use crate::rtp_transceiver::{rtp_codec::RTPCodecType, RTCPFeedback, TYPE_RTCP_FB_TRANSPORT_CC};
+
 use interceptor::nack::{generator::Generator, responder::Responder};
 use interceptor::registry::Registry;
 use interceptor::report::{receiver::ReceiverReport, sender::SenderReport};

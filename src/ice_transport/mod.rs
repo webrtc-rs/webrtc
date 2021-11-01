@@ -19,7 +19,6 @@ use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
 use crate::mux::{Config, Mux};
-use crate::RECEIVE_MTU;
 
 #[cfg(test)]
 mod ice_transport_test;
@@ -176,7 +175,7 @@ impl RTCIceTransport {
 
             let config = Config {
                 conn: Arc::clone(&conn),
-                buffer_size: RECEIVE_MTU,
+                buffer_size: self.gatherer.setting_engine.get_receive_mtu(),
             };
 
             {

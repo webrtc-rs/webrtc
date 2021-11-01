@@ -38,3 +38,10 @@ pub(crate) const UNSPECIFIED_STR: &str = "Unspecified";
 
 /// Equal to UDP MTU
 pub(crate) const RECEIVE_MTU: usize = 1460;
+
+pub(crate) const SDP_ATTRIBUTE_RID: &str = "rid";
+pub(crate) const INCOMING_UNHANDLED_RTP_SSRC: &str =
+    "Incoming unhandled RTP ssrc(%d), OnTrack will not be fired. %v";
+pub(crate) const GENERATED_CERTIFICATE_ORIGIN: &str = "WebRTC";
+pub(crate) const SDES_REPAIR_RTP_STREAM_ID_URI: &str =
+    "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id";

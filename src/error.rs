@@ -179,6 +179,11 @@ pub enum Error {
     #[error("unable to start track, codec is not supported by remote")]
     ErrUnsupportedCodec,
 
+    /// ErrSenderWithNoCodecs indicates that a RTPSender was created without any codecs. To send media the MediaEngine needs at
+    /// least one configured codec.
+    #[error("unable to populate media section, RTPSender created with no codecs")]
+    ErrSenderWithNoCodecs,
+
     /// ErrRTPSenderNewTrackHasIncorrectKind indicates that the new track is of a different kind than the previous/original
     #[error("new track must be of the same kind as previous")]
     ErrRTPSenderNewTrackHasIncorrectKind,

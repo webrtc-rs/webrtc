@@ -10,6 +10,7 @@ use ice::network_type::NetworkType;
 
 use crate::error::{Error, Result};
 
+use crate::RECEIVE_MTU;
 use std::sync::Arc;
 use tokio::time::Duration;
 use util::vnet::net::*;
@@ -78,9 +79,18 @@ pub struct SettingEngine {
     //iceProxyDialer                            :proxy.Dialer,?
     pub(crate) disable_media_engine_copy: bool,
     pub(crate) srtp_protection_profiles: Vec<SrtpProtectionProfile>,
+    pub(crate) receive_mtu: usize,
 }
 
 impl SettingEngine {
+    /// get_receive_mtu returns the configured MTU. If SettingEngine's MTU is configured to 0 it returns the default
+    pub(crate) fn get_receive_mtu(&self) -> usize {
+        if self.receive_mtu != 0 {
+            self.receive_mtu
+        } else {
+            RECEIVE_MTU
+        }
+    }
     /// detach_data_channels enables detaching data channels. When enabled
     /// data channels have to be detached in the OnOpen callback using the
     /// DataChannel.Detach method.
@@ -296,5 +306,11 @@ impl SettingEngine {
     /// modify codecs after signaling. Make sure not to share MediaEngines between PeerConnections.
     pub fn disable_media_engine_copy(&mut self, is_disabled: bool) {
         self.disable_media_engine_copy = is_disabled;
+    }
+
+    /// set_receive_mtu sets the size of read buffer that copies incoming packets. This is optional.
+    /// Leave this 0 for the default receive_mtu
+    pub fn set_receive_mtu(&mut self, receive_mtu: usize) {
+        self.receive_mtu = receive_mtu;
     }
 }

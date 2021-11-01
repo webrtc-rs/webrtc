@@ -73,7 +73,9 @@ impl RTCRtpCodecCapability {
         if mime_type == MIME_TYPE_H264.to_lowercase() {
             Ok(Box::new(rtp::codecs::h264::H264Payloader::default()))
         } else if mime_type == MIME_TYPE_VP8.to_lowercase() {
-            Ok(Box::new(rtp::codecs::vp8::Vp8Payloader::default()))
+            let mut vp8_payloader = rtp::codecs::vp8::Vp8Payloader::default();
+            vp8_payloader.enable_picture_id = true;
+            Ok(Box::new(vp8_payloader))
         } else if mime_type == MIME_TYPE_VP9.to_lowercase() {
             Ok(Box::new(rtp::codecs::vp9::Vp9Payloader::default()))
         } else if mime_type == MIME_TYPE_OPUS.to_lowercase() {

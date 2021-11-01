@@ -7,6 +7,8 @@ use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
+use interceptor::stream_info::StreamInfo;
+use interceptor::{Interceptor, RTCPReader, RTPReader};
 use sha2::{Digest, Sha256};
 use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
@@ -26,6 +28,7 @@ use crate::ice_transport::RTCIceTransport;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
 use crate::peer_connection::certificate::RTCCertificate;
+use crate::rtp_transceiver::SSRC;
 
 #[cfg(test)]
 mod dtls_transport_test;
@@ -545,5 +548,44 @@ impl RTCDtlsTransport {
     pub(crate) async fn store_simulcast_stream(&self, stream: Arc<Stream>) {
         let mut simulcast_streams = self.simulcast_streams.lock().await;
         simulcast_streams.push(stream)
+    }
+
+    pub(crate) async fn streams_for_ssrc(
+        &self,
+        ssrc: SSRC,
+        stream_info: &StreamInfo,
+        interceptor: &Arc<dyn Interceptor + Send + Sync>,
+    ) -> Result<(
+        Option<Arc<srtp::stream::Stream>>,
+        Option<Arc<dyn RTPReader + Send + Sync>>,
+        Option<Arc<srtp::stream::Stream>>,
+        Option<Arc<dyn RTCPReader + Send + Sync>>,
+    )> {
+        let srtp_session = self
+            .get_srtp_session()
+            .await
+            .ok_or(Error::ErrDtlsTransportNotStarted)?;
+        //log::debug!("streams_for_ssrc: srtp_session.listen ssrc={}", ssrc);
+        let rtp_read_stream = srtp_session.open(ssrc).await;
+        let rtp_stream_reader = Arc::clone(&rtp_read_stream) as Arc<dyn RTPReader + Send + Sync>;
+        let rtp_interceptor = interceptor
+            .bind_remote_stream(stream_info, rtp_stream_reader)
+            .await;
+
+        let srtcp_session = self
+            .get_srtcp_session()
+            .await
+            .ok_or(Error::ErrDtlsTransportNotStarted)?;
+        //log::debug!("streams_for_ssrc: srtcp_session.listen ssrc={}", ssrc);
+        let rtcp_read_stream = srtcp_session.open(ssrc).await;
+        let rtcp_stream_reader = Arc::clone(&rtcp_read_stream) as Arc<dyn RTCPReader + Send + Sync>;
+        let rtcp_interceptor = interceptor.bind_rtcp_reader(rtcp_stream_reader).await;
+
+        Ok((
+            Some(rtp_read_stream),
+            Some(rtp_interceptor),
+            Some(rtcp_read_stream),
+            Some(rtcp_interceptor),
+        ))
     }
 }
