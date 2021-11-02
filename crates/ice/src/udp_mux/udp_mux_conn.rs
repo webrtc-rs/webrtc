@@ -94,7 +94,6 @@ impl UDPMuxConnInner {
     }
 
     fn close(self: &Arc<Self>) {
-        // TODO: Handle lock error/switch to tokio's Mutex
         let mut closed_tx = self.closed_watch_tx.lock();
 
         if let Some(tx) = closed_tx.take() {
