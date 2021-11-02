@@ -1,19 +1,10 @@
-use std::{
-    collections::HashMap,
-    io::ErrorKind,
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
-    },
-};
+use std::{collections::HashMap, io::ErrorKind, net::SocketAddr, sync::Arc};
 
-use util::{Conn, Error};
+use util::{sync::RwLock, Conn, Error};
 
 use async_trait::async_trait;
 
-use tokio::net::UdpSocket;
-use tokio::sync::Mutex;
+use tokio::sync::{watch, Mutex};
 
 mod udp_mux_conn;
 use udp_mux_conn::{UDPMuxConn, UDPMuxConnParams};
@@ -48,27 +39,30 @@ fn normalize_socket_addr(target: &SocketAddr, socket_addr: &SocketAddr) -> Socke
 #[async_trait]
 pub trait UDPMux {
     /// Close the muxing.
-    async fn close(&self);
+    async fn close(&self) -> Result<(), Error>;
 
     /// Get the underlying connection for a given ufrag.
     async fn get_conn(self: Arc<Self>, ufrag: &str) -> Result<Arc<dyn Conn + Send + Sync>, Error>;
 
     /// Remove the underlying connection for a given ufrag.
-    async fn remove_conn_by_frag(&self, ufrag: &str);
+    async fn remove_conn_by_ufrag(&self, ufrag: &str);
 }
 
-#[derive(Debug)]
 pub struct UDPMuxParams {
-    udp_socket: UdpSocket,
+    conn: Box<dyn Conn + Send + Sync>,
 }
 
 impl UDPMuxParams {
-    pub fn new(udp_socket: UdpSocket) -> Self {
-        Self { udp_socket }
+    pub fn new<C>(conn: C) -> Self
+    where
+        C: Conn + Send + Sync + 'static,
+    {
+        Self {
+            conn: Box::new(conn),
+        }
     }
 }
 
-#[derive(Debug)]
 pub struct UDPMuxDefault {
     /// The params this instance is configured with.
     /// Contains the underlying UDP socket in use
@@ -80,40 +74,46 @@ pub struct UDPMuxDefault {
     /// Maps from ip address to the underlying connection.
     address_map: RwLock<HashMap<SocketAddr, UDPMuxConn>>,
 
-    /// Whether this connection has been closed
-    closed: AtomicBool,
+    // Close sender
+    closed_watch_tx: Mutex<Option<watch::Sender<()>>>,
+
+    /// Close reciever
+    closed_watch_rx: watch::Receiver<()>,
 }
 
 impl UDPMuxDefault {
     pub fn new(params: UDPMuxParams) -> Arc<Self> {
+        let (closed_watch_tx, closed_watch_rx) = watch::channel(());
+
         let mux = Arc::new(Self {
             params,
             conns: Mutex::default(),
             address_map: RwLock::default(),
-            closed: AtomicBool::new(false),
+            closed_watch_tx: Mutex::new(Some(closed_watch_tx)),
+            closed_watch_rx: closed_watch_rx.clone(),
         });
 
         let cloned_mux = Arc::clone(&mux);
-        cloned_mux.start_conn_worker();
+        cloned_mux.start_conn_worker(closed_watch_rx);
 
         mux
     }
 
-    pub fn is_closed(&self) -> bool {
-        self.closed.load(Ordering::SeqCst)
+    pub async fn is_closed(&self) -> bool {
+        self.closed_watch_tx.lock().await.is_none()
     }
 
     async fn send_to(&self, buf: &[u8], target: &SocketAddr) -> Result<usize, Error> {
         self.params
-            .udp_socket
-            .send_to(buf, target)
+            .conn
+            .send_to(buf, *target)
             .await
             .map_err(Into::into)
     }
 
     /// Create a muxed connection for a given ufrag.
-    async fn create_muxed_conn(self: &Arc<Self>, ufrag: &str) -> UDPMuxConn {
-        let local_addr = self.params.udp_socket.local_addr().ok();
+    async fn create_muxed_conn(self: &Arc<Self>, ufrag: &str) -> Result<UDPMuxConn, Error> {
+        let local_addr = self.params.conn.local_addr().await?;
 
         let params = UDPMuxConnParams {
             local_addr,
@@ -121,20 +121,17 @@ impl UDPMuxDefault {
             udp_mux: Arc::clone(self),
         };
 
-        UDPMuxConn::new(params)
+        Ok(UDPMuxConn::new(params))
     }
 
-    fn register_conn_for_address(&self, conn: &UDPMuxConn, addr: SocketAddr) {
-        if self.is_closed() {
+    async fn register_conn_for_address(&self, conn: &UDPMuxConn, addr: SocketAddr) {
+        if self.is_closed().await {
             return;
         }
 
         let key = conn.key();
         {
-            let mut addresses = self
-                .address_map
-                .write()
-                .expect("Failed to obtain write lock");
+            let mut addresses = self.address_map.write();
 
             addresses
                 .entry(addr)
@@ -192,56 +189,59 @@ impl UDPMuxDefault {
         }
     }
 
-    fn start_conn_worker(self: Arc<Self>) {
+    fn start_conn_worker(self: Arc<Self>, mut closed_watch_rx: watch::Receiver<()>) {
         tokio::spawn(async move {
             let mut buffer = [0u8; RECEIVE_MTU];
 
             loop {
                 let loop_self = Arc::clone(&self);
-                let socket = &loop_self.params.udp_socket;
+                let conn = &loop_self.params.conn;
 
-                if loop_self.is_closed() {
-                    break;
-                }
+                tokio::select! {
+                    res = conn.recv_from(&mut buffer) => {
+                        match res {
+                            Ok((len, addr)) => {
+                                // Find connection based on previously having seen this source address
+                                let conn = {
+                                    let address_map = loop_self
+                                        .address_map
+                                        .read();
 
-                match socket.recv_from(&mut buffer).await {
-                    Ok((len, addr)) => {
-                        // Find connection based on previously having seen this source address
-                        let conn = {
-                            let address_map = loop_self
-                                .address_map
-                                .read()
-                                .expect("Failed to acquire read lock");
-                            address_map.get(&addr).map(Clone::clone)
-                        };
+                                    address_map.get(&addr).map(Clone::clone)
+                                };
 
-                        let conn = match conn {
-                            // If we couldn't find the connection based on source address, see if
-                            // this is a STUN mesage and if so if we can find the connection based on ufrag.
-                            None if is_stun_message(&buffer) => {
-                                loop_self.conn_from_stun_message(&buffer, &addr).await
-                            }
-                            s @ Some(_) => s,
-                            _ => None,
-                        };
+                                let conn = match conn {
+                                    // If we couldn't find the connection based on source address, see if
+                                    // this is a STUN mesage and if so if we can find the connection based on ufrag.
+                                    None if is_stun_message(&buffer) => {
+                                        loop_self.conn_from_stun_message(&buffer, &addr).await
+                                    }
+                                    s @ Some(_) => s,
+                                    _ => None,
+                                };
 
-                        match conn {
-                            None => {
-                                log::trace!("Dropping packet from {}", &addr);
-                            }
-                            Some(conn) => {
-                                if let Err(err) = conn.write_packet(&buffer[..len], addr).await {
-                                    log::error!("Failed to write packet: {}", err);
+                                match conn {
+                                    None => {
+                                        log::trace!("Dropping packet from {}", &addr);
+                                    }
+                                    Some(conn) => {
+                                        if let Err(err) = conn.write_packet(&buffer[..len], addr).await {
+                                            log::error!("Failed to write packet: {}", err);
+                                        }
+                                    }
                                 }
+                            }
+                            Err(Error::Io(err)) if err.0.kind() == ErrorKind::TimedOut => continue,
+                            Err(err) => {
+                                log::error!("Could not read udp packet: {}", err);
+                                break;
                             }
                         }
                     }
-                    Err(err) if err.kind() == ErrorKind::TimedOut => continue,
-                    Err(err) => {
-                        log::error!("Could not read udp packet: {}", err);
-                        break;
+                    _ = closed_watch_rx.changed() => {
+                        return;
                     }
-                };
+                }
             }
         });
     }
@@ -249,38 +249,42 @@ impl UDPMuxDefault {
 
 #[async_trait]
 impl UDPMux for UDPMuxDefault {
-    async fn close(&self) {
-        if self.is_closed() {
-            return;
+    async fn close(&self) -> Result<(), Error> {
+        if self.is_closed().await {
+            return Err(Error::ErrAlreadyClosed);
         }
 
-        self.closed.store(true, Ordering::SeqCst);
+        let mut closed_tx = self.closed_watch_tx.lock().await;
 
-        let old_conns = {
-            let mut conns = self.conns.lock().await;
+        if let Some(tx) = closed_tx.take() {
+            let _ = tx.send(());
+            drop(closed_tx);
 
-            std::mem::take(&mut (*conns))
-        };
+            let old_conns = {
+                let mut conns = self.conns.lock().await;
 
-        // NOTE: We don't wait for these closure to complete
-        for (_, conn) in old_conns.into_iter() {
-            conn.close();
+                std::mem::take(&mut (*conns))
+            };
+
+            // NOTE: We don't wait for these closure to complete
+            for (_, conn) in old_conns.into_iter() {
+                conn.close();
+            }
+
+            {
+                let mut address_map = self.address_map.write();
+
+                // NOTE: This is important, we need to drop all instances of `UDPMuxConn` to
+                // avoid a retain cycle due to the use of [`std::sync::Arc`] on both sides.
+                let _ = std::mem::take(&mut (*address_map));
+            }
         }
 
-        {
-            let mut address_map = self
-                .address_map
-                .write()
-                .expect("Failed to obtain address_map lock");
-
-            // NOTE: This is important, we need to drop all instances of `UDPMuxConn` to
-            // avoid a retain cycle due to the use of [`std::sync::Arc`] on both sides.
-            let _ = std::mem::take(&mut (*address_map));
-        }
+        Ok(())
     }
 
     async fn get_conn(self: Arc<Self>, ufrag: &str) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
-        if self.is_closed() {
+        if self.is_closed().await {
             return Err(Error::ErrUseClosedNetworkConn);
         }
 
@@ -292,7 +296,7 @@ impl UDPMux for UDPMuxDefault {
                 return Ok(Arc::new(conn.clone()) as Arc<dyn Conn + Send + Sync>);
             }
 
-            let muxed_conn = self.create_muxed_conn(ufrag).await;
+            let muxed_conn = self.create_muxed_conn(ufrag).await?;
             let mut close_rx = muxed_conn.close_rx();
             let cloned_self = Arc::clone(&self);
             let cloned_ufrag = ufrag.to_string();
@@ -300,7 +304,7 @@ impl UDPMux for UDPMuxDefault {
                 let _ = close_rx.changed().await;
 
                 // Arc needed
-                cloned_self.remove_conn_by_frag(&cloned_ufrag).await;
+                cloned_self.remove_conn_by_ufrag(&cloned_ufrag).await;
             });
 
             conns.insert(ufrag.into(), muxed_conn.clone());
@@ -309,7 +313,7 @@ impl UDPMux for UDPMuxDefault {
         }
     }
 
-    async fn remove_conn_by_frag(&self, ufrag: &str) {
+    async fn remove_conn_by_ufrag(&self, ufrag: &str) {
         // Pion's ice implementation has both `RemoveConnByFrag` and `RemoveConn`, but since `conns`
         // is keyed on `ufrag` their implementation is equivalent.
 
@@ -319,10 +323,7 @@ impl UDPMux for UDPMuxDefault {
         };
 
         if let Some(conn) = removed_conn {
-            let mut address_map = self
-                .address_map
-                .write()
-                .expect("Failed to obtain write lock for address_map");
+            let mut address_map = self.address_map.write();
 
             for address in conn.get_addresses() {
                 address_map.remove(&address);

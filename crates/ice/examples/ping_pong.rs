@@ -109,7 +109,7 @@ async fn main() -> Result<(), Error> {
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
-            Arg::with_name("use mux")
+            Arg::with_name("use-mux")
                 .takes_value(false)
                 .long("use-mux")
                 .short("m")
@@ -135,7 +135,7 @@ async fn main() -> Result<(), Error> {
     }
 
     let is_controlling = matches.is_present("controlling");
-    let use_mux = matches.is_present("use mux");
+    let use_mux = matches.is_present("use-mux");
 
     let (local_http_port, remote_http_port) = if is_controlling {
         (9000, 9001)
@@ -176,25 +176,14 @@ async fn main() -> Result<(), Error> {
         UDPNetwork::Ephemeral(Default::default())
     };
 
-    let ice_agent = if is_controlling {
-        Arc::new(
-            Agent::new(AgentConfig {
-                network_types: vec![NetworkType::Udp4],
-                udp_network,
-                ..Default::default()
-            })
-            .await?,
-        )
-    } else {
-        Arc::new(
-            Agent::new(AgentConfig {
-                network_types: vec![NetworkType::Udp4],
-                udp_network,
-                ..Default::default()
-            })
-            .await?,
-        )
-    };
+    let ice_agent = Arc::new(
+        Agent::new(AgentConfig {
+            network_types: vec![NetworkType::Udp4],
+            udp_network,
+            ..Default::default()
+        })
+        .await?,
+    );
 
     let client = Arc::new(Client::new());
 

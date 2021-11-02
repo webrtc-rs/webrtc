@@ -344,7 +344,7 @@ impl Agent {
 
         if let UDPNetwork::Muxed(ref udp_mux) = self.udp_network {
             let (ufrag, _) = self.get_local_user_credentials().await;
-            udp_mux.remove_conn_by_frag(&ufrag).await;
+            udp_mux.remove_conn_by_ufrag(&ufrag).await;
         }
 
         //FIXME: deadlock here

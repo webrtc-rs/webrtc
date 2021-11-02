@@ -61,7 +61,7 @@ async fn test_udp_mux() -> Result<()> {
     let addr = udp_socket.local_addr()?;
     log::info!("Listening on {}", addr);
 
-    let udp_mux = UDPMuxDefault::new(UDPMuxParams { udp_socket });
+    let udp_mux = UDPMuxDefault::new(UDPMuxParams::new(udp_socket));
     let udp_mux_dyn = Arc::clone(&udp_mux) as Arc<dyn UDPMux + Send + Sync>;
 
     let udp_mux_dyn_1 = Arc::clone(&udp_mux_dyn);
@@ -134,7 +134,8 @@ async fn test_udp_mux() -> Result<()> {
         all_results
     );
 
-    udp_mux.close().await;
+    let res = udp_mux.close().await;
+    assert!(res.is_ok());
     let res = udp_mux.get_conn("failurefrag").await;
 
     assert!(

@@ -1,15 +1,10 @@
 use std::convert::TryInto;
-use std::{
-    collections::HashSet,
-    io,
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashSet, io, net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::sync::watch;
 
-use util::{Buffer, Conn, Error};
+use util::{sync::Mutex, Buffer, Conn, Error};
 
 use super::socket_addr_ext::{SocketAddrExt, MAX_ADDR_SIZE};
 use super::{normalize_socket_addr, UDPMuxDefault, RECEIVE_MTU};
@@ -23,9 +18,8 @@ fn make_buffer() -> Vec<u8> {
     vec![0u8; RECEIVE_MTU + MAX_ADDR_SIZE + 2 + 2]
 }
 
-#[derive(Debug)]
 pub(crate) struct UDPMuxConnParams {
-    pub(super) local_addr: Option<SocketAddr>,
+    pub(super) local_addr: SocketAddr,
 
     pub(super) key: String,
 
@@ -35,7 +29,6 @@ pub(crate) struct UDPMuxConnParams {
     pub(super) udp_mux: Arc<UDPMuxDefault>,
 }
 
-#[derive(Debug)]
 struct UDPMuxConnInner {
     pub(super) params: UDPMuxConnParams,
 
@@ -97,18 +90,12 @@ impl UDPMuxConnInner {
     }
 
     fn is_closed(&self) -> bool {
-        self.closed_watch_tx
-            .lock()
-            .expect("Failed to acquire lock")
-            .is_none()
+        self.closed_watch_tx.lock().is_none()
     }
 
     fn close(self: &Arc<Self>) {
         // TODO: Handle lock error/switch to tokio's Mutex
-        let mut closed_tx = self
-            .closed_watch_tx
-            .lock()
-            .expect("Failed to acquire lock.");
+        let mut closed_tx = self.closed_watch_tx.lock();
 
         if let Some(tx) = closed_tx.take() {
             let _ = tx.send(true);
@@ -117,10 +104,7 @@ impl UDPMuxConnInner {
             let cloned_self = Arc::clone(self);
 
             {
-                let mut addresses = self
-                    .addresses
-                    .lock()
-                    .expect("Failed to obtain addresses lock");
+                let mut addresses = self.addresses.lock();
                 *addresses = Default::default();
             }
 
@@ -132,53 +116,44 @@ impl UDPMuxConnInner {
         }
     }
 
-    fn local_addr(&self) -> Option<SocketAddr> {
+    fn local_addr(&self) -> SocketAddr {
         self.params.local_addr
     }
 
     // Address related methods
     pub(super) fn get_addresses(&self) -> Vec<SocketAddr> {
-        let addresses = self.addresses.lock().expect("Failed to obtain lock");
+        let addresses = self.addresses.lock();
 
         addresses.iter().cloned().collect()
     }
 
     pub(super) fn add_address(self: &Arc<Self>, addr: SocketAddr) {
         {
-            let mut addresses = self.addresses.lock().expect("Failed to obtain lock");
+            let mut addresses = self.addresses.lock();
             addresses.insert(addr);
         }
     }
 
     pub(super) fn remove_address(&self, addr: &SocketAddr) {
         {
-            let mut addresses = self.addresses.lock().expect("Failed to obtain lock");
+            let mut addresses = self.addresses.lock();
             addresses.remove(addr);
         }
     }
 
     pub(super) fn contains_address(&self, addr: &SocketAddr) -> bool {
-        let addresses = self.addresses.lock().expect("Failed to obtain lock");
+        let addresses = self.addresses.lock();
 
         addresses.contains(addr)
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub(crate) struct UDPMuxConn {
     /// Close Receiver. A copy of this can be obtained via [`close_tx`].
     closed_watch_rx: watch::Receiver<bool>,
 
     inner: Arc<UDPMuxConnInner>,
-}
-
-impl Clone for UDPMuxConn {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-            closed_watch_rx: self.closed_watch_rx.clone(),
-        }
-    }
 }
 
 impl UDPMuxConn {
@@ -248,12 +223,13 @@ impl UDPMuxConn {
         self.inner.get_addresses()
     }
 
-    pub(super) fn add_address(&self, addr: SocketAddr) {
+    pub(super) async fn add_address(&self, addr: SocketAddr) {
         self.inner.add_address(addr);
         self.inner
             .params
             .udp_mux
-            .register_conn_for_address(self, addr);
+            .register_conn_for_address(self, addr)
+            .await;
     }
 
     pub(super) fn remove_address(&self, addr: &SocketAddr) {
@@ -289,22 +265,17 @@ impl Conn for UDPMuxConn {
         if self.is_closed() {
             return Err(Error::ErrUseClosedNetworkConn);
         }
-        let normalized_target = match self.inner.params.local_addr {
-            Some(addr) => normalize_socket_addr(&target, &addr),
-            None => target,
-        };
+        let normalized_target = normalize_socket_addr(&target, &self.inner.params.local_addr);
 
         if !self.contains_address(&normalized_target) {
-            self.add_address(normalized_target);
+            self.add_address(normalized_target).await;
         }
 
         self.inner.send_to(buf, &normalized_target).await
     }
 
     async fn local_addr(&self) -> ConnResult<SocketAddr> {
-        self.inner.local_addr().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into()
-        })
+        Ok(self.inner.local_addr())
     }
 
     async fn remote_addr(&self) -> Option<SocketAddr> {
