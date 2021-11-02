@@ -62,7 +62,7 @@ impl fmt::Display for RTCSdpSemantics {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::api::media_engine::MediaEngine;
+    use crate::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
     use crate::api::APIBuilder;
     use crate::error::Result;
     use crate::peer_connection::configuration::RTCConfiguration;
@@ -73,9 +73,8 @@ mod test {
     use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
     use crate::track::track_local::TrackLocal;
 
-    use crate::peer_connection::SSRC_STR;
     use sdp::description::media::MediaDescription;
-    use sdp::description::session::SessionDescription;
+    use sdp::description::session::{SessionDescription, ATTR_KEY_SSRC};
     use std::collections::HashSet;
     use std::sync::Arc;
 
@@ -108,7 +107,7 @@ mod test {
     fn extract_ssrc_list(md: &MediaDescription) -> Vec<String> {
         let mut ssrcs = HashSet::new();
         for attr in &md.attributes {
-            if attr.key == SSRC_STR {
+            if attr.key == ATTR_KEY_SSRC {
                 if let Some(value) = &attr.value {
                     let fields: Vec<&str> = value.split_whitespace().collect();
                     if let Some(ssrc) = fields.first() {
@@ -256,7 +255,7 @@ mod test {
 
         let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "video/h264".to_owned(),
+                mime_type: MIME_TYPE_H264.to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
                         .to_owned(),
@@ -269,7 +268,7 @@ mod test {
 
         let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "video/h264".to_owned(),
+                mime_type: MIME_TYPE_H264.to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
                         .to_owned(),
@@ -282,7 +281,7 @@ mod test {
 
         let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "audio/opus".to_owned(),
+                mime_type: MIME_TYPE_OPUS.to_owned(),
                 ..Default::default()
             },
             "3".to_owned(),
@@ -292,7 +291,7 @@ mod test {
 
         let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "audio/opus".to_owned(),
+                mime_type: MIME_TYPE_OPUS.to_owned(),
                 ..Default::default()
             },
             "4".to_owned(),
@@ -370,7 +369,7 @@ mod test {
 
         let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "video/h264".to_owned(),
+                mime_type: MIME_TYPE_H264.to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
                         .to_owned(),
@@ -383,7 +382,7 @@ mod test {
 
         let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "video/h264".to_owned(),
+                mime_type: MIME_TYPE_H264.to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
                         .to_owned(),
@@ -396,7 +395,7 @@ mod test {
 
         let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "audio/opus".to_owned(),
+                mime_type: MIME_TYPE_OPUS.to_owned(),
                 ..Default::default()
             },
             "3".to_owned(),
@@ -406,7 +405,7 @@ mod test {
 
         let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
-                mime_type: "audio/opus".to_owned(),
+                mime_type: MIME_TYPE_OPUS.to_owned(),
                 ..Default::default()
             },
             "4".to_owned(),

@@ -85,8 +85,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
 
-pub(crate) const SSRC_STR: &str = "ssrc";
-
 /// SIMULCAST_PROBE_COUNT is the amount of RTP Packets
 /// that handleUndeclaredSSRC will read and try to dispatch from
 /// mid and rid values
