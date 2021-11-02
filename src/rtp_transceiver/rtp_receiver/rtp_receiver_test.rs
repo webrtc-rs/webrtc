@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::media_engine::MIME_TYPE_OPUS;
+use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use crate::error::Result;
 use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
@@ -71,7 +71,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
 
     let outgoing_track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
-            mime_type: "video/vp8".to_owned(),
+            mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
         "video".to_owned(),
@@ -174,7 +174,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
 
     let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
-            mime_type: "video/vp8".to_owned(),
+            mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
         "video".to_owned(),
