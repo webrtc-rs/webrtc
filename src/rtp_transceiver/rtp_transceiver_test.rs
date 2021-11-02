@@ -204,7 +204,11 @@ async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()>
     let answer = answer_pc.create_answer(None).await?;
 
     // VP8 with proper PayloadType
-    assert!(answer.sdp.contains("a=rtpmap:96 VP8/90000"));
+    assert!(
+        answer.sdp.contains("a=rtpmap:51 VP8/90000"),
+        "{}",
+        answer.sdp
+    );
 
     // test_codec is ignored since offerer doesn't support
     assert!(!answer.sdp.contains("test_codec"));

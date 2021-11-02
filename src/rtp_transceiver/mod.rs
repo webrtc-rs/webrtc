@@ -222,8 +222,8 @@ impl RTCRtpTransceiver {
 
     /// Codecs returns list of supported codecs
     pub(crate) async fn get_codecs(&self) -> Vec<RTCRtpCodecParameters> {
-        let codecs = self.codecs.lock().await;
-        RTPReceiverInternal::get_codecs(&*codecs, self.kind, &self.media_engine).await
+        let mut codecs = self.codecs.lock().await;
+        RTPReceiverInternal::get_codecs(&mut *codecs, self.kind, &self.media_engine).await
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one
