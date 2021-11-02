@@ -211,7 +211,7 @@ impl TrackRemote {
 
     /// check_and_update_track checks payloadType for every incoming packet
     /// once a different payloadType is detected the track will be updated
-    async fn check_and_update_track(&self, b: &[u8]) -> Result<()> {
+    pub(crate) async fn check_and_update_track(&self, b: &[u8]) -> Result<()> {
         if b.len() < 2 {
             return Err(Error::ErrRTPTooShort);
         }
@@ -271,7 +271,7 @@ impl TrackRemote {
     }
 
     /// peek is like Read, but it doesn't discard the packet read
-    async fn peek(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    pub(crate) async fn peek(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
         let (n, a) = self.read(b).await?;
 
         // this might overwrite data if somebody peeked between the Read

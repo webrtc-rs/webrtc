@@ -147,16 +147,41 @@ impl PeerConnectionInternal {
             current_transceivers.clone()
         };
 
-        if is_renegotiation {
+        if !is_renegotiation {
+            self.undeclared_media_processor();
+        } else {
             for t in &current_transceivers {
                 if let Some(receiver) = t.receiver().await {
-                    if let Some(track) = receiver.track().await {
-                        let ssrc = track.ssrc();
-                        if let Some(details) = track_details_for_ssrc(&track_details, ssrc) {
-                            track.set_id(details.id.clone()).await;
-                            track.set_stream_id(details.stream_id.clone()).await;
-                            continue;
+                    let tracks = receiver.tracks().await;
+                    if tracks.is_empty() {
+                        continue;
+                    }
+
+                    let mut receiver_needs_stopped = false;
+
+                    for t in tracks {
+                        if !t.rid().is_empty() {
+                            if let Some(details) =
+                                track_details_for_rid(&track_details, &t.rid().to_owned())
+                            {
+                                t.set_id(details.id.clone()).await;
+                                t.set_stream_id(details.stream_id.clone()).await;
+                                continue;
+                            }
+                        } else if t.ssrc() != 0 {
+                            if let Some(details) = track_details_for_ssrc(&track_details, t.ssrc())
+                            {
+                                t.set_id(details.id.clone()).await;
+                                t.set_stream_id(details.stream_id.clone()).await;
+                                continue;
+                            }
                         }
+
+                        receiver_needs_stopped = true;
+                    }
+
+                    if !receiver_needs_stopped {
+                        continue;
                     }
 
                     if let Err(err) = receiver.stop().await {
@@ -183,15 +208,10 @@ impl PeerConnectionInternal {
 
         self.start_rtp_receivers(&mut track_details, &current_transceivers, sdp_semantics)
             .await?;
-
         if let Some(parsed) = &remote_desc.parsed {
             if have_application_media_section(parsed) {
                 self.start_sctp().await;
             }
-        }
-
-        if !is_renegotiation {
-            self.undeclared_media_processor()
         }
 
         Ok(())
@@ -245,7 +265,7 @@ impl PeerConnectionInternal {
                         .await;
 
                     let ssrc = stream.get_ssrc();
-                    if let Err(err) = pci2.handle_undeclared_ssrc(stream, ssrc).await {
+                    if let Err(err) = pci2.handle_incoming_ssrc(stream, ssrc).await {
                         log::error!(
                             "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
                             ssrc,
@@ -300,27 +320,24 @@ impl PeerConnectionInternal {
         };
 
         // Ensure we haven't already started a transceiver for this ssrc
-        let ssrcs: Vec<SSRC> = incoming_tracks.iter().map(|x| x.ssrc).collect();
-        for ssrc in ssrcs {
+        let mut filtered_tracks = incoming_tracks.clone();
+        for incoming_track in incoming_tracks {
+            // If we already have a TrackRemote for a given SSRC don't handle it again
             for t in local_transceivers {
                 if let Some(receiver) = t.receiver().await {
-                    if let Some(track) = receiver.track().await {
-                        if track.ssrc() != ssrc {
-                            continue;
+                    for track in receiver.tracks().await {
+                        for ssrc in &incoming_track.ssrcs {
+                            if *ssrc == track.ssrc() {
+                                filter_track_with_ssrc(&mut filtered_tracks, track.ssrc());
+                            }
                         }
-                    } else {
-                        continue;
                     }
-                } else {
-                    continue;
                 }
-
-                filter_track_with_ssrc(incoming_tracks, ssrc);
             }
         }
 
-        let mut unhandled_tracks = vec![]; // incoming_tracks[:0]
-        for incoming_track in incoming_tracks.iter() {
+        let mut unhandled_tracks = vec![]; // filtered_tracks[:0]
+        for incoming_track in filtered_tracks.iter() {
             let mut track_handled = false;
             for t in local_transceivers {
                 if t.mid().await != incoming_track.mid {
@@ -339,6 +356,7 @@ impl PeerConnectionInternal {
                         continue;
                     }
                     PeerConnectionInternal::start_receiver(
+                        self.setting_engine.get_receive_mtu(),
                         incoming_track,
                         receiver,
                         Arc::clone(&self.media_engine),
@@ -370,7 +388,7 @@ impl PeerConnectionInternal {
                     Err(err) => {
                         log::warn!(
                             "Could not add transceiver for remote SSRC {}: {}",
-                            incoming.ssrc,
+                            incoming.ssrcs[0],
                             err
                         );
                         continue;
@@ -378,6 +396,7 @@ impl PeerConnectionInternal {
                 };
                 if let Some(receiver) = t.receiver().await {
                     PeerConnectionInternal::start_receiver(
+                        self.setting_engine.get_receive_mtu(),
                         incoming,
                         receiver,
                         Arc::clone(&self.media_engine),
@@ -954,7 +973,7 @@ impl PeerConnectionInternal {
         }
     }
 
-    async fn handle_undeclared_ssrc(
+    async fn handle_incoming_ssrc(
         self: &Arc<Self>,
         rtp_stream: Arc<Stream>,
         ssrc: SSRC,
@@ -1057,9 +1076,7 @@ impl PeerConnectionInternal {
                             }
 
                             if let Some(receiver) = t.receiver().await {
-                                let track = receiver
-                                    .receive_for_rid(rid.as_str(), &params, ssrc)
-                                    .await?;
+                                let track = receiver.receive_for_rid(rid, params, ssrc).await?;
                                 //println!("handleUndeclaredSSRC got new track: {:?}", track);
                                 RTCPeerConnection::do_track(
                                     Arc::clone(&self.on_track_handler),
@@ -1080,15 +1097,45 @@ impl PeerConnectionInternal {
     }
 
     async fn start_receiver(
+        receive_mtu: usize,
         incoming: &TrackDetails,
         receiver: Arc<RTCRtpReceiver>,
         media_engine: Arc<MediaEngine>,
         on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
     ) {
-        if receiver.start(incoming).await {
+        receiver.start(incoming).await;
+        for t in receiver.tracks().await {
+            if t.ssrc() == 0 {
+                return;
+            }
+
+            let receiver2 = Arc::clone(&receiver);
+            let on_track_handler2 = Arc::clone(&on_track_handler);
             tokio::spawn(async move {
-                if let Some(track) = receiver.track().await {
-                    if let Err(err) = track.determine_payload_type().await {
+                if let Some(track) = receiver2.track().await {
+                    let mut b = vec![0u8; receive_mtu];
+                    let n = match track.peek(&mut b).await {
+                        Ok((n, _)) => n,
+                        Err(err) => {
+                            log::warn!(
+                                "Could not determine PayloadType for SSRC {} ({})",
+                                track.ssrc(),
+                                err
+                            );
+                            return;
+                        }
+                    };
+
+                    if let Err(err) = track.check_and_update_track(&b[..n]).await {
+                        log::warn!(
+                            "Failed to set codec settings for track SSRC {} ({})",
+                            track.ssrc(),
+                            err
+                        );
+                        return;
+                    }
+
+                    /*if let Err(err) = track.determine_payload_type().await {
                         log::warn!(
                             "Could not determine PayloadType for SSRC {} with err {}",
                             track.ssrc(),
@@ -1114,13 +1161,13 @@ impl PeerConnectionInternal {
 
                     track.set_kind(receiver.kind());
                     track.set_codec(params.codecs[0].clone()).await;
-                    track.set_params(params).await;
+                    track.set_params(params).await;*/
 
                     //println!("startReceiver got new track: {:?}", receiver.track().await);
                     RTCPeerConnection::do_track(
-                        on_track_handler,
-                        receiver.track().await,
-                        Some(Arc::clone(&receiver)),
+                        on_track_handler2,
+                        receiver2.track().await,
+                        Some(receiver2),
                     )
                     .await;
                 }
