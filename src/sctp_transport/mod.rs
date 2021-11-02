@@ -5,6 +5,7 @@ pub mod sctp_transport_capabilities;
 pub mod sctp_transport_state;
 
 use sctp_transport_state::RTCSctpTransportState;
+use std::collections::HashSet;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data_channel::RTCDataChannel;
@@ -350,16 +351,6 @@ impl RTCSctpTransport {
         collector.Collect(stats.ID, stats)
     }*/
 
-    async fn is_channel_with_id(&self, id: u16) -> bool {
-        let dcs = self.data_channels.lock().await;
-        for dc in &*dcs {
-            if dc.id() == id {
-                return true;
-            }
-        }
-        false
-    }
-
     pub(crate) async fn generate_and_set_data_channel_id(
         &self,
         dtls_role: DTLSRole,
@@ -369,9 +360,18 @@ impl RTCSctpTransport {
             id += 1;
         }
 
+        // Create map of ids so we can compare without double-looping each time.
+        let mut ids_map = HashSet::new();
+        {
+            let data_channels = self.data_channels.lock().await;
+            for dc in &*data_channels {
+                ids_map.insert(dc.id());
+            }
+        }
+
         let max = self.max_channels();
         while id < max - 1 {
-            if self.is_channel_with_id(id).await {
+            if ids_map.contains(&id) {
                 id += 2;
             } else {
                 return Ok(id);

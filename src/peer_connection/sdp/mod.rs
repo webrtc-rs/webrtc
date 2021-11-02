@@ -53,11 +53,11 @@ pub(crate) fn track_details_for_ssrc(
     track_details.iter().find(|x| x.ssrcs.contains(&ssrc))
 }
 
-pub(crate) fn track_details_for_rid<'a>(
-    track_details: &'a [TrackDetails],
-    rid: &'a String,
-) -> Option<&'a TrackDetails> {
-    track_details.iter().find(|x| x.rids.contains(rid))
+pub(crate) fn track_details_for_rid(
+    track_details: &[TrackDetails],
+    rid: String,
+) -> Option<&TrackDetails> {
+    track_details.iter().find(|x| x.rids.contains(&rid))
 }
 
 pub(crate) fn filter_track_with_ssrc(incoming_tracks: &mut Vec<TrackDetails>, ssrc: SSRC) {

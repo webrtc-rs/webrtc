@@ -67,7 +67,6 @@ use crate::sctp_transport::RTCSctpTransport;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
-use crate::RECEIVE_MTU;
 
 use ::ice::candidate::candidate_base::unmarshal_candidate;
 use ::ice::candidate::Candidate;

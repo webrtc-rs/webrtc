@@ -368,7 +368,7 @@ fn test_track_details_from_sdp() -> Result<()> {
                             value: None,
                         },
                         Attribute {
-                            key: "rid".to_owned(),
+                            key: SDP_ATTRIBUTE_RID.to_owned(),
                             value: Some("f send pt=97;max-width=1280;max-height=720".to_owned()),
                         },
                     ],
@@ -388,14 +388,14 @@ fn test_track_details_from_sdp() -> Result<()> {
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 2000) {
             assert_eq!(RTPCodecType::Audio, track.kind);
-            assert_eq!(2000, track.ssrc);
+            assert_eq!(2000, track.ssrcs[0]);
             assert_eq!("audio_trk_label", track.stream_id);
         } else {
             assert!(false, "missing audio track with ssrc:2000");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 3000) {
             assert_eq!(RTPCodecType::Video, track.kind);
-            assert_eq!(3000, track.ssrc);
+            assert_eq!(3000, track.ssrcs[0]);
             assert_eq!("video_trk_label", track.stream_id);
         } else {
             assert!(false, "missing video track with ssrc:3000");
@@ -408,7 +408,7 @@ fn test_track_details_from_sdp() -> Result<()> {
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 5000) {
             assert_eq!(RTPCodecType::Video, track.kind);
-            assert_eq!(5000, track.ssrc);
+            assert_eq!(5000, track.ssrcs[0]);
             assert_eq!("video_trk_id", track.id);
             assert_eq!("video_stream_id", track.stream_id);
         } else {
@@ -690,7 +690,7 @@ async fn test_populate_sdp() -> Result<()> {
                 continue;
             }
             for a in &desc.attributes {
-                if a.key == "rid" {
+                if a.key == SDP_ATTRIBUTE_RID {
                     if let Some(value) = &a.value {
                         if value.contains("ridkey") {
                             found = true;
@@ -800,7 +800,7 @@ fn test_get_rids() {
                 value: None,
             },
             Attribute {
-                key: "rid".to_owned(),
+                key: SDP_ATTRIBUTE_RID.to_owned(),
                 value: Some("f send pt=97;max-width=1280;max-height=720".to_owned()),
             },
         ],
