@@ -12,7 +12,7 @@ repository = "https://github.com/webrtc-rs/ice"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.0", default-features = false, features = ["conn", "vnet"] }
+util = { package = "webrtc-util", version = "0.5.1", default-features = false, features = ["conn", "vnet", "sync"] }
 mdns = { package = "webrtc-mdns", version = "0.4.0" }
 stun = "0.4.0"
 turn = "0.5.0"
@@ -35,6 +35,7 @@ ipnet = "2.3.0"
 clap = "2"
 lazy_static = "1.3.0"
 hyper = { version = "0.14.13", features = ["full"] }
+sha-1 = "0.9.1"
 
 [[example]]
 name = "ping_pong"

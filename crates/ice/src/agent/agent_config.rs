@@ -3,6 +3,7 @@ use crate::error::*;
 use crate::mdns::*;
 use crate::network_type::*;
 use crate::url::*;
+use crate::UDPNetwork;
 
 use util::vnet::net::*;
 
@@ -57,10 +58,9 @@ pub type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
 pub struct AgentConfig {
     pub urls: Vec<Url>,
 
-    /// This is optional. Leave it as 0 for the default UDP port allocation strategy.
-    pub port_min: u16,
-    /// This is optional. Leave it as 0 for the default UDP port allocation strategy.
-    pub port_max: u16,
+    /// Controls how the UDP network stack works.
+    /// See [`UDPNetwork`]
+    pub udp_network: UDPNetwork,
 
     /// It is used to perform connectivity checks. The values MUST be unguessable, with at least
     /// 128 bits of random number generator output used to generate the password, and at least 24

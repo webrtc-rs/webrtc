@@ -20,7 +20,9 @@ use crate::external_ip_mapper::*;
 use crate::mdns::*;
 use crate::network_type::*;
 use crate::state::*;
+use crate::udp_mux::UDPMux;
 use crate::url::*;
+use crate::UDPNetwork;
 use agent_config::*;
 use agent_internal::*;
 use agent_stats::*;
@@ -93,8 +95,7 @@ struct ChanReceivers {
 pub struct Agent {
     pub(crate) internal: Arc<AgentInternal>,
 
-    pub(crate) port_min: u16,
-    pub(crate) port_max: u16,
+    pub(crate) udp_network: UDPNetwork,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub(crate) mdns_mode: MulticastDnsMode,
     pub(crate) mdns_name: String,
@@ -114,8 +115,13 @@ pub struct Agent {
 impl Agent {
     /// Creates a new Agent.
     pub async fn new(config: AgentConfig) -> Result<Self> {
-        if config.port_max < config.port_min {
-            return Err(Error::ErrPort);
+        match &config.udp_network {
+            crate::UDPNetwork::Ephemeral(ephemeral) => {
+                if ephemeral.port_max < ephemeral.port_min {
+                    return Err(Error::ErrPort);
+                }
+            }
+            crate::UDPNetwork::Muxed(_) => {}
         }
 
         let mut mdns_name = config.multicast_dns_host_name.clone();
@@ -195,8 +201,7 @@ impl Agent {
         };
 
         let agent = Self {
-            port_min: config.port_min,
-            port_max: config.port_max,
+            udp_network: config.udp_network,
             internal: Arc::new(ai),
             interface_filter: Arc::clone(&config.interface_filter),
             mdns_mode,
@@ -337,6 +342,11 @@ impl Agent {
             gather_candidate_cancel();
         }
 
+        if let UDPNetwork::Muxed(ref udp_mux) = self.udp_network {
+            let (ufrag, _) = self.get_local_user_credentials().await;
+            udp_mux.remove_conn_by_ufrag(&ufrag).await;
+        }
+
         //FIXME: deadlock here
         self.internal.close().await
     }
@@ -445,11 +455,10 @@ impl Agent {
         //TODO: a.gatherCandidateCancel = cancel
 
         let params = GatherCandidatesInternalParams {
+            udp_network: self.udp_network.clone(),
             candidate_types: self.candidate_types.clone(),
             urls: self.urls.clone(),
             network_types: self.network_types.clone(),
-            port_max: self.port_max,
-            port_min: self.port_min,
             mdns_mode: self.mdns_mode,
             mdns_name: self.mdns_name.clone(),
             net: Arc::clone(&self.net),

@@ -191,6 +191,8 @@ pub enum Error {
     ErrInvalidUrl,
     #[error("relative URL without a base")]
     ErrUrlParse,
+    #[error("Candidate IP could not be found")]
+    ErrCandidateIpNotFound,
 
     #[error("parse int: {0}")]
     ParseInt(#[from] ParseIntError),

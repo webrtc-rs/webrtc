@@ -3,6 +3,7 @@ use crate::error::*;
 use crate::network_type::*;
 use crate::url::{ProtoType, SchemeType, Url};
 use crate::util::*;
+use crate::UDPNetwork;
 
 use util::{vnet::net::*, Conn};
 
@@ -19,11 +20,10 @@ use waitgroup::WaitGroup;
 const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) struct GatherCandidatesInternalParams {
+    pub(crate) udp_network: UDPNetwork,
     pub(crate) candidate_types: Vec<CandidateType>,
     pub(crate) urls: Vec<Url>,
     pub(crate) network_types: Vec<NetworkType>,
-    pub(crate) port_max: u16,
-    pub(crate) port_min: u16,
     pub(crate) mdns_mode: MulticastDnsMode,
     pub(crate) mdns_name: String,
     pub(crate) net: Arc<Net>,
@@ -35,15 +35,23 @@ pub(crate) struct GatherCandidatesInternalParams {
 }
 
 struct GatherCandidatesLocalParams {
+    udp_network: UDPNetwork,
     network_types: Vec<NetworkType>,
-    port_max: u16,
-    port_min: u16,
     mdns_mode: MulticastDnsMode,
     mdns_name: String,
     interface_filter: Arc<Option<InterfaceFilterFn>>,
     ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<AgentInternal>,
+}
+
+struct GatherCandidatesLocalUDPMuxParams {
+    network_types: Vec<NetworkType>,
+    interface_filter: Arc<Option<InterfaceFilterFn>>,
+    ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
+    net: Arc<Net>,
+    agent_internal: Arc<AgentInternal>,
+    udp_mux: Arc<dyn UDPMux + Send + Sync>,
 }
 
 struct GatherCandidatesSrflxMappedParasm {
@@ -79,9 +87,8 @@ impl Agent {
             match t {
                 CandidateType::Host => {
                     let local_params = GatherCandidatesLocalParams {
+                        udp_network: params.udp_network.clone(),
                         network_types: params.network_types.clone(),
-                        port_max: params.port_max,
-                        port_min: params.port_min,
                         mdns_mode: params.mdns_mode,
                         mdns_name: params.mdns_name.clone(),
                         interface_filter: Arc::clone(&params.interface_filter),
@@ -98,11 +105,17 @@ impl Agent {
                     });
                 }
                 CandidateType::ServerReflexive => {
+                    let ephemeral_config = match &params.udp_network {
+                        UDPNetwork::Ephemeral(e) => e,
+                        // No server reflexive for muxxed connections
+                        UDPNetwork::Muxed(_) => continue,
+                    };
+
                     let srflx_params = GatherCandidatesSrflxParams {
                         urls: params.urls.clone(),
                         network_types: params.network_types.clone(),
-                        port_max: params.port_max,
-                        port_min: params.port_min,
+                        port_max: ephemeral_config.port_max,
+                        port_min: ephemeral_config.port_min,
                         net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
                     };
@@ -116,8 +129,8 @@ impl Agent {
                         if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
                             let srflx_mapped_params = GatherCandidatesSrflxMappedParasm {
                                 network_types: params.network_types.clone(),
-                                port_max: params.port_max,
-                                port_min: params.port_min,
+                                port_max: ephemeral_config.port_max,
+                                port_min: ephemeral_config.port_min,
                                 ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
                                 net: Arc::clone(&params.net),
                                 agent_internal: Arc::clone(&params.agent_internal),
@@ -176,9 +189,8 @@ impl Agent {
 
     async fn gather_candidates_local(params: GatherCandidatesLocalParams) {
         let (
+            udp_network,
             network_types,
-            port_max,
-            port_min,
             mdns_mode,
             mdns_name,
             interface_filter,
@@ -186,9 +198,8 @@ impl Agent {
             net,
             agent_internal,
         ) = (
+            params.udp_network,
             params.network_types,
-            params.port_max,
-            params.port_min,
             params.mdns_mode,
             params.mdns_name,
             params.interface_filter,
@@ -197,12 +208,32 @@ impl Agent {
             params.agent_internal,
         );
 
+        // If we wanna use UDP mux, do so
+        // FIXME: We still need to support TCP in combination with this option
+        if let UDPNetwork::Muxed(udp_mux) = udp_network {
+            let result = Self::gather_candidates_local_udp_mux(GatherCandidatesLocalUDPMuxParams {
+                network_types,
+                interface_filter,
+                ext_ip_mapper,
+                net,
+                agent_internal,
+                udp_mux,
+            })
+            .await;
+
+            if let Err(err) = result {
+                log::error!("Failed to gather local candidates using UDP mux: {}", err);
+            }
+
+            return;
+        }
+
         let ips = local_interfaces(&net, &*interface_filter, &network_types).await;
         for ip in ips {
             let mut mapped_ip = ip;
 
             if mdns_mode != MulticastDnsMode::QueryAndGather && ext_ip_mapper.is_some() {
-                if let Some(ext_ip_mapper2) = &*ext_ip_mapper {
+                if let Some(ext_ip_mapper2) = ext_ip_mapper.as_ref() {
                     if ext_ip_mapper2.candidate_type == CandidateType::Host {
                         if let Ok(mi) = ext_ip_mapper2.find_external_ip(&ip.to_string()) {
                             mapped_ip = mi;
@@ -225,7 +256,7 @@ impl Agent {
 
             //TODO: for network in networks
             let network = UDP.to_owned();
-            {
+            if let UDPNetwork::Ephemeral(ephemeral_config) = &udp_network {
                 /*TODO:switch network {
                 case tcp:
                     // Handle ICE TCP passive mode
@@ -246,8 +277,8 @@ impl Agent {
 
                 let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
                     &net,
-                    port_max,
-                    port_min,
+                    ephemeral_config.port_max,
+                    ephemeral_config.port_min,
                     SocketAddr::new(ip, 0),
                 )
                 .await
@@ -338,6 +369,84 @@ impl Agent {
                 }
             }
         }
+    }
+
+    async fn gather_candidates_local_udp_mux(
+        params: GatherCandidatesLocalUDPMuxParams,
+    ) -> Result<()> {
+        let (udp_mux, agent_internal, interface_filter, ext_ip_mapper, net, network_types) = (
+            params.udp_mux,
+            params.agent_internal,
+            params.interface_filter,
+            params.ext_ip_mapper,
+            params.net,
+            params.network_types,
+        );
+        // Filter out non UDP network types
+        let relevant_network_types: Vec<_> =
+            network_types.into_iter().filter(|n| n.is_udp()).collect();
+
+        let udp_mux = Arc::clone(&udp_mux);
+
+        // There's actually only one, but `local_interfaces` requires a slice.
+        let local_ips = local_interfaces(&net, &interface_filter, &relevant_network_types).await;
+
+        let candidate_ip = ext_ip_mapper
+            .as_ref() // Arc
+            .as_ref() // Option
+            .and_then(|mapper| {
+                if mapper.candidate_type != CandidateType::Host {
+                    return None;
+                }
+
+                local_ips
+                    .iter()
+                    .find_map(|ip| match mapper.find_external_ip(&ip.to_string()) {
+                        Ok(ip) => Some(ip),
+                        Err(err) => {
+                            log::warn!(
+                            "1:1 NAT mapping is enabled but not external IP is found for {}: {}",
+                            ip,
+                            err
+                        );
+                            None
+                        }
+                    })
+            })
+            .or_else(|| local_ips.iter().copied().next());
+
+        let candidate_ip = match candidate_ip {
+            None => return Err(Error::ErrCandidateIpNotFound),
+            Some(ip) => ip,
+        };
+
+        let ufrag = {
+            let ufrag_pwd = agent_internal.ufrag_pwd.lock().await;
+
+            ufrag_pwd.local_ufrag.clone()
+        };
+
+        let conn = udp_mux.get_conn(&ufrag).await?;
+        let port = conn.local_addr().await?.port();
+
+        let host_config = CandidateHostConfig {
+            base_config: CandidateBaseConfig {
+                network: UDP.to_owned(),
+                address: candidate_ip.to_string(),
+                port,
+                conn: Some(conn),
+                component: COMPONENT_RTP,
+                ..Default::default()
+            },
+            tcp_type: TcpType::Unspecified,
+        };
+
+        let candidate: Arc<dyn Candidate + Send + Sync> =
+            Arc::new(host_config.new_candidate_host().await?);
+
+        agent_internal.add_candidate(&candidate).await?;
+
+        Ok(())
     }
 
     async fn gather_candidates_srflx_mapped(params: GatherCandidatesSrflxMappedParasm) {
