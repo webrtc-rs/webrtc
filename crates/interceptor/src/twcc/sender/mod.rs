@@ -177,10 +177,9 @@ impl Sender {
                         let mut recorder = internal.recorder.lock().await;
                         recorder.build_feedback_packet()
                     };
-                    for pkt in pkts{
-                        if let Err(err) = rtcp_writer.write(&*pkt, &a).await{
-                            log::error!("rtcp_writer.write got err: {}", err);
-                        }
+
+                    if let Err(err) = rtcp_writer.write(&pkts, &a).await{
+                        log::error!("rtcp_writer.write got err: {}", err);
                     }
                 }
             }

@@ -4,15 +4,15 @@
 use async_trait::async_trait;
 use error::Result;
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use stream_info::StreamInfo;
 
-#[cfg(test)]
-pub mod mock;
-
 pub mod chain;
 mod error;
+pub mod mock;
 pub mod nack;
 pub mod noop;
 pub mod registry;
@@ -22,6 +22,9 @@ pub mod stream_reader;
 pub mod twcc;
 
 pub use error::Error;
+
+/// Attributes are a generic key/value store used by interceptors
+pub type Attributes = HashMap<usize, usize>;
 
 /// InterceptorBuilder provides an interface for constructing interceptors
 pub trait InterceptorBuilder {
@@ -78,11 +81,41 @@ pub trait RTPWriter {
     async fn write(&self, pkt: &rtp::packet::Packet, attributes: &Attributes) -> Result<usize>;
 }
 
+pub type RTPWriterFn = dyn (Fn(
+        &rtp::packet::Packet,
+        &Attributes,
+    ) -> Pin<Box<dyn Future<Output = Result<usize>> + Send + Sync>>)
+    + Send
+    + Sync;
+
+#[async_trait]
+impl RTPWriter for RTPWriterFn {
+    /// write a rtp packet
+    async fn write(&self, pkt: &rtp::packet::Packet, attributes: &Attributes) -> Result<usize> {
+        self(pkt, attributes).await
+    }
+}
+
 /// RTPReader is used by Interceptor.bind_remote_stream.
 #[async_trait]
 pub trait RTPReader {
     /// read a rtp packet
     async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)>;
+}
+
+pub type RTPReaderFn = dyn (Fn(
+        &mut [u8],
+        &Attributes,
+    ) -> Pin<Box<dyn Future<Output = Result<(usize, Attributes)>> + Send + Sync>>)
+    + Send
+    + Sync;
+
+#[async_trait]
+impl RTPReader for RTPReaderFn {
+    /// read a rtp packet
+    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
+        self(buf, attributes).await
+    }
 }
 
 /// RTCPWriter is used by Interceptor.bind_rtcpwriter.
@@ -91,9 +124,28 @@ pub trait RTCPWriter {
     /// write a batch of rtcp packets
     async fn write(
         &self,
-        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
         attributes: &Attributes,
     ) -> Result<usize>;
+}
+
+pub type RTCPWriterFn = dyn (Fn(
+        &[Box<dyn rtcp::packet::Packet + Send + Sync>],
+        &Attributes,
+    ) -> Pin<Box<dyn Future<Output = Result<usize>> + Send + Sync>>)
+    + Send
+    + Sync;
+
+#[async_trait]
+impl RTCPWriter for RTCPWriterFn {
+    /// write a batch of rtcp packets
+    async fn write(
+        &self,
+        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
+        attributes: &Attributes,
+    ) -> Result<usize> {
+        self(pkts, attributes).await
+    }
 }
 
 /// RTCPReader is used by Interceptor.bind_rtcpreader.
@@ -103,8 +155,20 @@ pub trait RTCPReader {
     async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)>;
 }
 
-/// Attributes are a generic key/value store used by interceptors
-pub type Attributes = HashMap<usize, usize>;
+pub type RTCPReaderFn = dyn (Fn(
+        &mut [u8],
+        &Attributes,
+    ) -> Pin<Box<dyn Future<Output = Result<(usize, Attributes)>> + Send + Sync>>)
+    + Send
+    + Sync;
+
+#[async_trait]
+impl RTCPReader for RTCPReaderFn {
+    /// read a batch of rtcp packets
+    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
+        self(buf, attributes).await
+    }
+}
 
 /// Helper for the tests.
 #[cfg(test)]

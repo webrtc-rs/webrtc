@@ -33,9 +33,10 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
     )
     .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
 
-    if let Some(rr) = pkt
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -99,9 +100,9 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
             .await;
     }
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -175,19 +176,19 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
             * 90000.0) as u32,
     );
     stream
-        .receive_rtcp(Box::new(rtcp::sender_report::SenderReport {
+        .receive_rtcp(vec![Box::new(rtcp::sender_report::SenderReport {
             ssrc: 123456,
             ntp_time: unix2ntp(now),
             rtp_time: rt,
             packet_count: 10,
             octet_count: 0,
             ..Default::default()
-        }))
+        })])
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -259,9 +260,9 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
         })
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -362,9 +363,9 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
         })
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -437,9 +438,9 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
         })
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -468,19 +469,19 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
             * 90000.0) as u32,
     );
     stream
-        .receive_rtcp(Box::new(rtcp::sender_report::SenderReport {
+        .receive_rtcp(vec![Box::new(rtcp::sender_report::SenderReport {
             ssrc: 123456,
             ntp_time: unix2ntp(now),
             rtp_time: rt,
             packet_count: 10,
             octet_count: 0,
             ..Default::default()
-        }))
+        })])
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -551,9 +552,9 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
         })
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -616,9 +617,9 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
             .await;
     }
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -696,9 +697,9 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         })
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
@@ -752,23 +753,23 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
     mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into())
         .await;
     stream
-        .receive_rtcp(Box::new(rtcp::sender_report::SenderReport {
+        .receive_rtcp(vec![Box::new(rtcp::sender_report::SenderReport {
             ssrc: 123456,
             ntp_time: unix2ntp(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into()),
             rtp_time: 987654321,
             packet_count: 0,
             octet_count: 0,
             ..Default::default()
-        }))
+        })])
         .await;
     stream.read_rtcp().await;
 
     mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into())
         .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(rr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {

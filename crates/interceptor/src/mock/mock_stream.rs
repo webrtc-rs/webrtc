@@ -7,6 +7,8 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use util::{Marshal, Unmarshal};
 
+type RTCPPackets = Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>;
+
 /// MockStream is a helper struct for testing interceptors.
 pub struct MockStream {
     interceptor: Arc<dyn Interceptor + Send + Sync>,
@@ -14,18 +16,17 @@ pub struct MockStream {
     rtcp_writer: Mutex<Option<Arc<dyn RTCPWriter + Send + Sync>>>,
     rtp_writer: Mutex<Option<Arc<dyn RTPWriter + Send + Sync>>>,
 
-    rtcp_out_modified_tx: mpsc::Sender<Box<dyn rtcp::packet::Packet + Send + Sync>>,
+    rtcp_out_modified_tx: mpsc::Sender<RTCPPackets>,
     rtp_out_modified_tx: mpsc::Sender<rtp::packet::Packet>,
-    rtcp_in_rx: Mutex<mpsc::Receiver<Box<dyn rtcp::packet::Packet + Send + Sync>>>,
+    rtcp_in_rx: Mutex<mpsc::Receiver<RTCPPackets>>,
     rtp_in_rx: Mutex<mpsc::Receiver<rtp::packet::Packet>>,
 
-    rtcp_out_modified_rx: Mutex<mpsc::Receiver<Box<dyn rtcp::packet::Packet + Send + Sync>>>,
+    rtcp_out_modified_rx: Mutex<mpsc::Receiver<RTCPPackets>>,
     rtp_out_modified_rx: Mutex<mpsc::Receiver<rtp::packet::Packet>>,
-    rtcp_in_tx: Mutex<Option<mpsc::Sender<Box<dyn rtcp::packet::Packet + Send + Sync>>>>,
+    rtcp_in_tx: Mutex<Option<mpsc::Sender<RTCPPackets>>>,
     rtp_in_tx: Mutex<Option<mpsc::Sender<rtp::packet::Packet>>>,
 
-    rtcp_in_modified_rx:
-        Mutex<mpsc::Receiver<Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>>>>,
+    rtcp_in_modified_rx: Mutex<mpsc::Receiver<Result<RTCPPackets>>>,
     rtp_in_modified_rx: Mutex<mpsc::Receiver<Result<rtp::packet::Packet>>>,
 }
 
@@ -149,7 +150,7 @@ impl MockStream {
     /// write_rtcp writes a batch of rtcp packet to the stream, using the interceptor
     pub async fn write_rtcp(
         &self,
-        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkt: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
     ) -> Result<usize> {
         let a = Attributes::new();
         let rtcp_writer = self.rtcp_writer.lock().await;
@@ -172,10 +173,10 @@ impl MockStream {
     }
 
     /// receive_rtcp schedules a new rtcp batch, so it can be read be the stream
-    pub async fn receive_rtcp(&self, pkt: Box<dyn rtcp::packet::Packet + Send + Sync>) {
+    pub async fn receive_rtcp(&self, pkts: Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>) {
         let rtcp_in_tx = self.rtcp_in_tx.lock().await;
         if let Some(tx) = &*rtcp_in_tx {
-            let _ = tx.send(pkt).await;
+            let _ = tx.send(pkts).await;
         }
     }
 
@@ -188,7 +189,7 @@ impl MockStream {
     }
 
     /// written_rtcp returns a channel containing the rtcp batches written, modified by the interceptor
-    pub async fn written_rtcp(&self) -> Option<Box<dyn rtcp::packet::Packet + Send + Sync>> {
+    pub async fn written_rtcp(&self) -> Option<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         let mut rtcp_out_modified_rx = self.rtcp_out_modified_rx.lock().await;
         rtcp_out_modified_rx.recv().await
     }
@@ -231,10 +232,10 @@ impl MockStream {
 impl RTCPWriter for MockStream {
     async fn write(
         &self,
-        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
         _attributes: &Attributes,
     ) -> Result<usize> {
-        let _ = self.rtcp_out_modified_tx.send(pkt.cloned()).await;
+        let _ = self.rtcp_out_modified_tx.send(pkts.to_vec()).await;
 
         Ok(0)
     }
@@ -243,12 +244,12 @@ impl RTCPWriter for MockStream {
 #[async_trait]
 impl RTCPReader for MockStream {
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let pkt = {
+        let pkts = {
             let mut rtcp_in = self.rtcp_in_rx.lock().await;
             rtcp_in.recv().await.ok_or(Error::ErrIoEOF)?
         };
 
-        let marshaled = pkt.marshal()?;
+        let marshaled = rtcp::packet::marshal(&pkts)?;
         let n = marshaled.len();
         if n > buf.len() {
             return Err(Error::ErrShortBuffer);
@@ -298,7 +299,8 @@ mod test {
     async fn test_mock_stream() -> Result<()> {
         let s = MockStream::new(&StreamInfo::default(), Arc::new(NoOp)).await;
 
-        s.write_rtcp(&PictureLossIndication::default()).await?;
+        s.write_rtcp(&[Box::new(PictureLossIndication::default())])
+            .await?;
         timeout_or_fail(Duration::from_millis(10), s.written_rtcp()).await;
         let result = tokio::time::timeout(Duration::from_millis(10), s.written_rtcp()).await;
         assert!(
@@ -314,7 +316,7 @@ mod test {
             "single rtp packet written, but multiple found"
         );
 
-        s.receive_rtcp(Box::new(PictureLossIndication::default()))
+        s.receive_rtcp(vec![Box::new(PictureLossIndication::default())])
             .await;
         assert!(
             timeout_or_fail(Duration::from_millis(10), s.read_rtcp())

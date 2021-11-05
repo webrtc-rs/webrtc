@@ -42,7 +42,7 @@ async fn test_responder_interceptor() -> Result<()> {
     }
 
     stream
-        .receive_rtcp(Box::new(TransportLayerNack {
+        .receive_rtcp(vec![Box::new(TransportLayerNack {
             media_ssrc: 1,
             sender_ssrc: 2,
             nacks: vec![
@@ -51,7 +51,7 @@ async fn test_responder_interceptor() -> Result<()> {
                     lost_packets: 0b1011,
                 }, // sequence numbers: 11, 12, 13, 15
             ],
-        }))
+        })])
         .await;
 
     // seq number 13 was never sent, so it can't be resent

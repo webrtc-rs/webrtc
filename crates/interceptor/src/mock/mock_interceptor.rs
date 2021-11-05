@@ -3,68 +3,58 @@ use crate::*;
 use std::future::Future;
 use std::pin::Pin;
 
-/// MockInterceptor is an mock Interceptor fot testing.
-pub struct MockInterceptor {
-    pub bind_rtcp_reader_fn: Option<
-        Box<
-            dyn (Fn(
-                    Arc<dyn RTCPReader + Send + Sync>,
-                ) -> Pin<
-                    Box<dyn Future<Output = Arc<dyn RTCPReader + Send + Sync>> + Send + 'static>,
-                >) + Send
-                + Sync,
-        >,
-    >,
-    pub bind_rtcp_writer_fn: Option<
-        Box<
-            dyn (Fn(
-                    Arc<dyn RTCPWriter + Send + Sync>,
-                ) -> Pin<
-                    Box<dyn Future<Output = Arc<dyn RTCPWriter + Send + Sync>> + Send + 'static>,
-                >) + Send
-                + Sync,
-        >,
-    >,
-    pub bind_local_stream_fn: Option<
-        Box<
-            dyn (Fn(
-                    &StreamInfo,
-                    Arc<dyn RTPWriter + Send + Sync>,
-                ) -> Pin<
-                    Box<dyn Future<Output = Arc<dyn RTPWriter + Send + Sync>> + Send + 'static>,
-                >) + Send
-                + Sync,
-        >,
-    >,
+pub type BindRtcpReaderFn = Box<
+    dyn (Fn(
+            Arc<dyn RTCPReader + Send + Sync>,
+        )
+            -> Pin<Box<dyn Future<Output = Arc<dyn RTCPReader + Send + Sync>> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
 
-    pub unbind_local_stream_fn: Option<
-        Box<
-            dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-                + Send
-                + Sync,
-        >,
-    >,
-    pub bind_remote_stream_fn: Option<
-        Box<
-            dyn (Fn(
-                    &StreamInfo,
-                    Arc<dyn RTPReader + Send + Sync>,
-                ) -> Pin<
-                    Box<dyn Future<Output = Arc<dyn RTPReader + Send + Sync>> + Send + 'static>,
-                >) + Send
-                + Sync,
-        >,
-    >,
-    pub unbind_remote_stream_fn: Option<
-        Box<
-            dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-                + Send
-                + Sync,
-        >,
-    >,
-    pub close_fn: Option<
-        Box<dyn (Fn() -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>) + Send + Sync>,
-    >,
+pub type BindRtcpWriterFn = Box<
+    dyn (Fn(
+            Arc<dyn RTCPWriter + Send + Sync>,
+        )
+            -> Pin<Box<dyn Future<Output = Arc<dyn RTCPWriter + Send + Sync>> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+pub type BindLocalStreamFn = Box<
+    dyn (Fn(
+            &StreamInfo,
+            Arc<dyn RTPWriter + Send + Sync>,
+        )
+            -> Pin<Box<dyn Future<Output = Arc<dyn RTPWriter + Send + Sync>> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+pub type UnbindLocalStreamFn =
+    Box<dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+pub type BindRemoteStreamFn = Box<
+    dyn (Fn(
+            &StreamInfo,
+            Arc<dyn RTPReader + Send + Sync>,
+        )
+            -> Pin<Box<dyn Future<Output = Arc<dyn RTPReader + Send + Sync>> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+pub type UnbindRemoteStreamFn =
+    Box<dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+pub type CloseFn =
+    Box<dyn (Fn() -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>) + Send + Sync>;
+
+/// MockInterceptor is an mock Interceptor fot testing.
+#[derive(Default)]
+pub struct MockInterceptor {
+    pub bind_rtcp_reader_fn: Option<BindRtcpReaderFn>,
+    pub bind_rtcp_writer_fn: Option<BindRtcpWriterFn>,
+    pub bind_local_stream_fn: Option<BindLocalStreamFn>,
+    pub unbind_local_stream_fn: Option<UnbindLocalStreamFn>,
+    pub bind_remote_stream_fn: Option<BindRemoteStreamFn>,
+    pub unbind_remote_stream_fn: Option<UnbindRemoteStreamFn>,
+    pub close_fn: Option<CloseFn>,
 }
 
 #[async_trait]

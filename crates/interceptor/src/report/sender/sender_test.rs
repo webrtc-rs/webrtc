@@ -36,9 +36,9 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
     let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
     mt.set_now(dt.into()).await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(sr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(sr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::sender_report::SenderReport>()
     {
@@ -103,9 +103,9 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
     let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
     mt.set_now(dt.into()).await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(sr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(sr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::sender_report::SenderReport>()
     {
@@ -208,9 +208,9 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
     let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
     mt.set_now(dt.into()).await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-
-    if let Some(sr) = pkt
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(sr) = pkts[0]
         .as_any()
         .downcast_ref::<rtcp::sender_report::SenderReport>()
     {

@@ -148,7 +148,7 @@ impl Generator {
 
                     let a = Attributes::new();
                     for nack in nacks{
-                        if let Err(err) = rtcp_writer.write(&nack, &a).await{
+                        if let Err(err) = rtcp_writer.write(&[Box::new(nack)], &a).await{
                             log::warn!("failed sending nack: {}", err);
                         }
                     }

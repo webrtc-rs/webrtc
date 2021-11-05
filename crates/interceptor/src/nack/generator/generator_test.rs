@@ -53,7 +53,7 @@ async fn test_generator_interceptor() -> Result<()> {
     let r = timeout_or_fail(Duration::from_millis(10), stream.written_rtcp())
         .await
         .expect("Write rtcp");
-    if let Some(p) = r.as_any().downcast_ref::<TransportLayerNack>() {
+    if let Some(p) = r[0].as_any().downcast_ref::<TransportLayerNack>() {
         assert_eq!(13, p.nacks[0].packet_id);
         assert_eq!(0b10, p.nacks[0].lost_packets); // we want packets: 13, 15 (not packet 17, because skipLastN is setReceived to 2)
     } else {

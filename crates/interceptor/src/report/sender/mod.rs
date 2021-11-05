@@ -71,7 +71,7 @@ impl SenderReport {
                         let pkt = stream.generate_report(now).await;
 
                         let a = Attributes::new();
-                        if let Err(err) = rtcp_writer.write(&pkt, &a).await{
+                        if let Err(err) = rtcp_writer.write(&[Box::new(pkt)], &a).await{
                             log::warn!("failed sending: {}", err);
                         }
                     }

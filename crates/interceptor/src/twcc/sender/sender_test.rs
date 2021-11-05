@@ -26,8 +26,9 @@ async fn test_sender_interceptor_before_any_packets() -> Result<()> {
     )
     .await;
 
-    let pkt = stream.written_rtcp().await.unwrap();
-    if let Some(tlcc) = pkt.as_any().downcast_ref::<TransportLayerCc>() {
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(tlcc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(0, tlcc.packet_status_count);
         assert_eq!(0, tlcc.fb_pkt_count);
         assert_eq!(0, tlcc.base_sequence_number);
@@ -78,8 +79,9 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
             .await;
     }
 
-    let pkt = stream.written_rtcp().await.unwrap();
-    if let Some(cc) = pkt.as_any().downcast_ref::<TransportLayerCc>() {
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(1, cc.media_ssrc);
         assert_eq!(0, cc.base_sequence_number);
         assert_eq!(
@@ -143,8 +145,9 @@ async fn test_sender_interceptor_different_delays_between_rtp_packets() -> Resul
     let _ = stream.written_rtcp().await.unwrap();
 
     // the second 500ms tick will works
-    let pkt = stream.written_rtcp().await.unwrap();
-    if let Some(cc) = pkt.as_any().downcast_ref::<TransportLayerCc>() {
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(0, cc.base_sequence_number);
         assert_eq!(
             vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
@@ -224,8 +227,9 @@ async fn test_sender_interceptor_packet_loss() -> Result<()> {
     let _ = stream.written_rtcp().await.unwrap();
 
     // the second 500ms tick will works
-    let pkt = stream.written_rtcp().await.unwrap();
-    if let Some(cc) = pkt.as_any().downcast_ref::<TransportLayerCc>() {
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(0, cc.base_sequence_number);
         assert_eq!(
             vec![
@@ -311,8 +315,9 @@ async fn test_sender_interceptor_overflow() -> Result<()> {
             .await;
     }
 
-    let pkt = stream.written_rtcp().await.unwrap();
-    if let Some(cc) = pkt.as_any().downcast_ref::<TransportLayerCc>() {
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(65530, cc.base_sequence_number);
         assert_eq!(
             vec![
