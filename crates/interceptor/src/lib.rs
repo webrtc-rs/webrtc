@@ -9,7 +9,7 @@ use std::sync::Arc;
 use stream_info::StreamInfo;
 
 #[cfg(test)]
-pub(crate) mod mock;
+pub mod mock;
 
 pub mod chain;
 mod error;
