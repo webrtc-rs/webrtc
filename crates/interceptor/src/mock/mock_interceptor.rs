@@ -7,7 +7,7 @@ pub type BindRtcpReaderFn = Box<
     dyn (Fn(
             Arc<dyn RTCPReader + Send + Sync>,
         )
-            -> Pin<Box<dyn Future<Output = Arc<dyn RTCPReader + Send + Sync>> + Send + 'static>>)
+            -> Pin<Box<dyn Future<Output = Arc<dyn RTCPReader + Send + Sync>> + Send + Sync>>)
         + Send
         + Sync,
 >;
@@ -16,7 +16,7 @@ pub type BindRtcpWriterFn = Box<
     dyn (Fn(
             Arc<dyn RTCPWriter + Send + Sync>,
         )
-            -> Pin<Box<dyn Future<Output = Arc<dyn RTCPWriter + Send + Sync>> + Send + 'static>>)
+            -> Pin<Box<dyn Future<Output = Arc<dyn RTCPWriter + Send + Sync>> + Send + Sync>>)
         + Send
         + Sync,
 >;
@@ -24,26 +24,24 @@ pub type BindLocalStreamFn = Box<
     dyn (Fn(
             &StreamInfo,
             Arc<dyn RTPWriter + Send + Sync>,
-        )
-            -> Pin<Box<dyn Future<Output = Arc<dyn RTPWriter + Send + Sync>> + Send + 'static>>)
+        ) -> Pin<Box<dyn Future<Output = Arc<dyn RTPWriter + Send + Sync>> + Send + Sync>>)
         + Send
         + Sync,
 >;
 pub type UnbindLocalStreamFn =
-    Box<dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+    Box<dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>) + Send + Sync>;
 pub type BindRemoteStreamFn = Box<
     dyn (Fn(
             &StreamInfo,
             Arc<dyn RTPReader + Send + Sync>,
-        )
-            -> Pin<Box<dyn Future<Output = Arc<dyn RTPReader + Send + Sync>> + Send + 'static>>)
+        ) -> Pin<Box<dyn Future<Output = Arc<dyn RTPReader + Send + Sync>> + Send + Sync>>)
         + Send
         + Sync,
 >;
 pub type UnbindRemoteStreamFn =
-    Box<dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+    Box<dyn (Fn(&StreamInfo) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>) + Send + Sync>;
 pub type CloseFn =
-    Box<dyn (Fn() -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>) + Send + Sync>;
+    Box<dyn (Fn() -> Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>) + Send + Sync>;
 
 /// MockInterceptor is an mock Interceptor fot testing.
 #[derive(Default)]
