@@ -1322,9 +1322,9 @@ type IResult<T> = std::result::Result<T, interceptor::Error>;
 impl RTCPWriter for PeerConnectionInternal {
     async fn write(
         &self,
-        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
         _a: &Attributes,
     ) -> IResult<usize> {
-        Ok(self.dtls_transport.write_rtcp(pkt).await?)
+        Ok(self.dtls_transport.write_rtcp(pkts).await?)
     }
 }

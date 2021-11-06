@@ -138,11 +138,12 @@ impl RTCDtlsTransport {
     /// packet is discarded.
     pub async fn write_rtcp(
         &self,
-        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
     ) -> Result<usize> {
         let srtcp_session = self.srtcp_session.lock().await;
         if let Some(srtcp_session) = &*srtcp_session {
-            Ok(srtcp_session.write_rtcp(pkt).await?)
+            let raw = rtcp::packet::marshal(pkts)?;
+            Ok(srtcp_session.write(&raw, false).await?)
         } else {
             Ok(0)
         }

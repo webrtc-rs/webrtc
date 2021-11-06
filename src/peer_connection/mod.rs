@@ -1827,10 +1827,10 @@ impl RTCPeerConnection {
     /// packet is discarded. It also runs any configured interceptors.
     pub async fn write_rtcp(
         &self,
-        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
     ) -> Result<usize> {
         let a = Attributes::new();
-        Ok(self.interceptor_rtcp_writer.write(pkt, &a).await?)
+        Ok(self.interceptor_rtcp_writer.write(pkts, &a).await?)
     }
 
     /// close ends the PeerConnection
