@@ -1,6 +1,6 @@
 [package]
 name = "interceptor"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of Pluggable RTP/RTCP processors"
@@ -11,9 +11,9 @@ repository = "https://github.com/webrtc-rs/interceptor"
 
 [dependencies]
 util = { package = "webrtc-util", version = "0.5.0", default-features = false, features = ["marshal"] }
-rtp = "0.6.0"
+rtp = "0.6.1"
 rtcp = "0.6.1"
-srtp = { package = "webrtc-srtp", version = "0.8.2" }
+srtp = { package = "webrtc-srtp", version = "0.8.3" }
 tokio = { version = "1.12.0", features = ["sync", "time"] }
 async-trait = "0.1.51"
 bytes = "1.1.0"
