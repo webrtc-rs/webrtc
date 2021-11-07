@@ -136,11 +136,13 @@ impl RTPReceiverInternal {
 
         //log::debug!("read_rtp enter tracks tid {}", tid);
         let mut rtp_interceptor = None;
+        //let mut ssrc = 0;
         {
             let tracks = self.tracks.lock().await;
             for t in &*tracks {
                 if t.track.tid() == tid {
                     rtp_interceptor = t.stream.rtp_interceptor.clone();
+                    //ssrc = t.track.ssrc();
                     break;
                 }
             }
@@ -153,6 +155,10 @@ impl RTPReceiverInternal {
 
         if let Some(rtp_interceptor) = rtp_interceptor {
             let a = Attributes::new();
+            //println!(
+            //    "read_rtp rtp_interceptor.read enter with tid {} ssrc {}",
+            //    tid, ssrc
+            //);
             tokio::select! {
                 _ = self.closed_rx.notified() => {
                     Err(Error::ErrClosedPipe)
@@ -609,6 +615,7 @@ impl RTCRtpReceiver {
                     let mut b = vec![0u8; receive_mtu];
                     while let Some(repair_rtp_interceptor) = &track.repair_stream.rtp_interceptor {
                         //TODO: cancel repair_rtp_interceptor.read gracefully
+                        //println!("repair_rtp_interceptor read begin with ssrc={}", ssrc);
                         if repair_rtp_interceptor.read(&mut b, &a).await.is_err() {
                             break;
                         }

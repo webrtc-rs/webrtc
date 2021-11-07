@@ -25,7 +25,7 @@ srtp = { package = "webrtc-srtp", version = "0.8.3" }
 sctp = { package = "webrtc-sctp", version = "0.4.1" }
 data = { package = "webrtc-data", version = "0.3.1" }
 media = { package = "webrtc-media", version = "0.4.1" }
-interceptor = "0.6.4"
+interceptor = "0.7.0"
 tokio = { version = "1.12.0", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.42"
