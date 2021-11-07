@@ -155,10 +155,8 @@ impl Feedback {
                 self.chunks.push(self.last_chunk.encode());
             }
             self.last_chunk.add(SymbolTypeTcc::PacketNotReceived as u16);
-            let (sequence_number_count, _) = self.sequence_number_count.overflowing_add(1);
-            let (next_sequence_number, _) = self.next_sequence_number.overflowing_add(1);
-            self.sequence_number_count = sequence_number_count;
-            self.next_sequence_number = next_sequence_number;
+            self.sequence_number_count = self.sequence_number_count.wrapping_add(1);
+            self.next_sequence_number = self.next_sequence_number.wrapping_add(1);
         }
 
         let recv_delta = if (0..=0xff).contains(&delta250us) {
@@ -178,10 +176,8 @@ impl Feedback {
             delta: delta_us,
         });
         self.last_timestamp_us = timestamp_us;
-        let (sequence_number_count, _) = self.sequence_number_count.overflowing_add(1);
-        let (next_sequence_number, _) = self.next_sequence_number.overflowing_add(1);
-        self.sequence_number_count = sequence_number_count;
-        self.next_sequence_number = next_sequence_number;
+        self.sequence_number_count = self.sequence_number_count.wrapping_add(1);
+        self.next_sequence_number = self.next_sequence_number.wrapping_add(1);
         true
     }
 }

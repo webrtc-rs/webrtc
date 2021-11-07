@@ -31,26 +31,25 @@ impl GeneratorStreamInternal {
             return;
         }
 
-        let (last_consecutive_plus1, _) = self.last_consecutive.overflowing_add(1);
-        let (diff, _) = seq.overflowing_sub(self.end);
+        let last_consecutive_plus1 = self.last_consecutive.wrapping_add(1);
+        let diff = seq.wrapping_sub(self.end);
         if diff == 0 {
             return;
         } else if diff < UINT16SIZE_HALF {
             // this means a positive diff, in other words seq > end (with counting for rollovers)
-            let (mut i, _) = self.end.overflowing_add(1);
+            let mut i = self.end.wrapping_add(1);
             while i != seq {
                 // clear packets between end and seq (these may contain packets from a "size" ago)
                 self.del_received(i);
-                let (j, _) = i.overflowing_add(1);
-                i = j;
+                i = i.wrapping_add(1);
             }
             self.end = seq;
 
-            let (seq_sub_last_consecutive, _) = seq.overflowing_sub(self.last_consecutive);
+            let seq_sub_last_consecutive = seq.wrapping_sub(self.last_consecutive);
             if last_consecutive_plus1 == seq {
                 self.last_consecutive = seq;
             } else if seq_sub_last_consecutive > self.size {
-                let (diff, _) = seq.overflowing_sub(self.size);
+                let diff = seq.wrapping_sub(self.size);
                 self.last_consecutive = diff;
                 self.fix_last_consecutive(); // there might be valid packets at the beginning of the buffer now
             }
@@ -64,7 +63,7 @@ impl GeneratorStreamInternal {
     }
 
     fn get(&self, seq: u16) -> bool {
-        let (diff, _) = self.end.overflowing_sub(seq);
+        let diff = self.end.wrapping_sub(seq);
         if diff >= UINT16SIZE_HALF {
             return false;
         }
@@ -77,22 +76,21 @@ impl GeneratorStreamInternal {
     }
 
     fn missing_seq_numbers(&self, skip_last_n: u16) -> Vec<u16> {
-        let (until, _) = self.end.overflowing_sub(skip_last_n);
-        let (diff, _) = until.overflowing_sub(self.last_consecutive);
+        let until = self.end.wrapping_sub(skip_last_n);
+        let diff = until.wrapping_sub(self.last_consecutive);
         if diff >= UINT16SIZE_HALF {
             // until < s.last_consecutive (counting for rollover)
             return vec![];
         }
 
         let mut missing_packet_seq_nums = vec![];
-        let (mut i, _) = self.last_consecutive.overflowing_add(1);
-        let (util_plus1, _) = until.overflowing_add(1);
+        let mut i = self.last_consecutive.wrapping_add(1);
+        let util_plus1 = until.wrapping_add(1);
         while i != util_plus1 {
             if !self.get_received(i) {
                 missing_packet_seq_nums.push(i);
             }
-            let (j, _) = i.overflowing_add(1);
-            i = j;
+            i = i.wrapping_add(1);
         }
 
         missing_packet_seq_nums
@@ -179,11 +177,10 @@ mod test {
             let all = |min: u16, max: u16| -> Vec<u16> {
                 let mut result = vec![];
                 let mut i = min;
-                let (max_plus_1, _) = max.overflowing_add(1);
+                let max_plus_1 = max.wrapping_add(1);
                 while i != max_plus_1 {
                     result.push(i);
-                    let (j, _) = i.overflowing_add(1);
-                    i = j;
+                    i = i.wrapping_add(1);
                 }
                 result
             };
@@ -198,21 +195,21 @@ mod test {
 
             let add = |rl: &mut GeneratorStreamInternal, nums: &[u16]| {
                 for n in nums {
-                    let (seq, _) = start.overflowing_add(*n);
+                    let seq = start.wrapping_add(*n);
                     rl.add(seq);
                 }
             };
 
             let assert_get = |rl: &GeneratorStreamInternal, nums: &[u16]| {
                 for n in nums {
-                    let (seq, _) = start.overflowing_add(*n);
+                    let seq = start.wrapping_add(*n);
                     assert!(rl.get(seq), "not found: {}", seq);
                 }
             };
 
             let assert_not_get = |rl: &GeneratorStreamInternal, nums: &[u16]| {
                 for n in nums {
-                    let (seq, _) = start.overflowing_add(*n);
+                    let seq = start.wrapping_add(*n);
                     assert!(
                         !rl.get(seq),
                         "packet found: start {}, n {}, seq {}",
@@ -227,14 +224,14 @@ mod test {
                 let missing = rl.missing_seq_numbers(skip_last_n);
                 let mut want = vec![];
                 for n in nums {
-                    let (seq, _) = start.overflowing_add(*n);
+                    let seq = start.wrapping_add(*n);
                     want.push(seq);
                 }
                 assert_eq!(want, missing, "missing want/got, ");
             };
 
             let assert_last_consecutive = |rl: &GeneratorStreamInternal, last_consecutive: u16| {
-                let (want, _) = last_consecutive.overflowing_add(start);
+                let want = last_consecutive.wrapping_add(start);
                 assert_eq!(rl.last_consecutive, want, "invalid last_consecutive want");
             };
 

@@ -169,7 +169,7 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
     }
 
     let now: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into();
-    let (rt, _) = 987654321u32.overflowing_add(
+    let rt = 987654321u32.wrapping_add(
         (now.duration_since(rtp_time)
             .unwrap_or(Duration::from_secs(0))
             .as_secs_f64()
@@ -462,7 +462,7 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
     }
 
     let now: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into();
-    let (rt, _) = 987654321u32.overflowing_add(
+    let rt = 987654321u32.wrapping_add(
         (now.duration_since(rtp_time)
             .unwrap_or(Duration::from_secs(0))
             .as_secs_f64()

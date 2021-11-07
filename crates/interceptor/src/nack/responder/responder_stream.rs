@@ -32,15 +32,14 @@ impl ResponderStreamInternal {
             return;
         }
 
-        let (diff, _) = seq.overflowing_sub(self.last_added);
+        let diff = seq.wrapping_sub(self.last_added);
         if diff == 0 {
             return;
         } else if diff < UINT16SIZE_HALF {
-            let (mut i, _) = self.last_added.overflowing_add(1);
+            let mut i = self.last_added.wrapping_add(1);
             while i != seq {
                 self.packets[(i % self.size) as usize] = None;
-                let (j, _) = i.overflowing_add(1);
-                i = j;
+                i = i.wrapping_add(1);
             }
         }
 
@@ -49,7 +48,7 @@ impl ResponderStreamInternal {
     }
 
     fn get(&self, seq: u16) -> Option<&rtp::packet::Packet> {
-        let (diff, _) = self.last_added.overflowing_sub(seq);
+        let diff = self.last_added.wrapping_sub(seq);
         if diff >= UINT16SIZE_HALF {
             return None;
         }
@@ -112,7 +111,7 @@ mod test {
 
             let add = |sb: &mut ResponderStreamInternal, nums: &[u16]| {
                 for n in nums {
-                    let (seq, _) = start.overflowing_add(*n);
+                    let seq = start.wrapping_add(*n);
                     sb.add(&rtp::packet::Packet {
                         header: rtp::header::Header {
                             sequence_number: seq,
@@ -125,7 +124,7 @@ mod test {
 
             let assert_get = |sb: &ResponderStreamInternal, nums: &[u16]| {
                 for n in nums {
-                    let (seq, _) = start.overflowing_add(*n);
+                    let seq = start.wrapping_add(*n);
                     if let Some(packet) = sb.get(seq) {
                         assert_eq!(
                             packet.header.sequence_number, seq,
@@ -140,7 +139,7 @@ mod test {
 
             let assert_not_get = |sb: &ResponderStreamInternal, nums: &[u16]| {
                 for n in nums {
-                    let (seq, _) = start.overflowing_add(*n);
+                    let seq = start.wrapping_add(*n);
                     if let Some(packet) = sb.get(seq) {
                         assert!(
                             false,

@@ -98,8 +98,7 @@ impl ReceiverStreamInternal {
                     if !self.get_received(i) {
                         ret += 1;
                     }
-                    let (j, _) = i.overflowing_add(1);
-                    i = j;
+                    i = i.wrapping_add(1);
                 }
                 ret
             }
