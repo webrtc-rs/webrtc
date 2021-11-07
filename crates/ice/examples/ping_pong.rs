@@ -6,7 +6,7 @@ use ice::agent::Agent;
 use ice::candidate::{candidate_base::*, *};
 use ice::state::*;
 use ice::Error;
-use ice::{network_type::*, UDPNetwork};
+use ice::{network_type::*, udp_network::UDPNetwork};
 
 use clap::{App, AppSettings, Arg};
 use hyper::service::{make_service_fn, service_fn};

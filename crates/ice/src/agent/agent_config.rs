@@ -2,8 +2,8 @@ use super::*;
 use crate::error::*;
 use crate::mdns::*;
 use crate::network_type::*;
+use crate::udp_network::UDPNetwork;
 use crate::url::*;
-use crate::UDPNetwork;
 
 use util::vnet::net::*;
 
