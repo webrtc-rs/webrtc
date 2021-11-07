@@ -21,8 +21,8 @@ use crate::mdns::*;
 use crate::network_type::*;
 use crate::state::*;
 use crate::udp_mux::UDPMux;
+use crate::udp_network::UDPNetwork;
 use crate::url::*;
-use crate::UDPNetwork;
 use agent_config::*;
 use agent_internal::*;
 use agent_stats::*;
@@ -115,15 +115,6 @@ pub struct Agent {
 impl Agent {
     /// Creates a new Agent.
     pub async fn new(config: AgentConfig) -> Result<Self> {
-        match &config.udp_network {
-            crate::UDPNetwork::Ephemeral(ephemeral) => {
-                if ephemeral.port_max < ephemeral.port_min {
-                    return Err(Error::ErrPort);
-                }
-            }
-            crate::UDPNetwork::Muxed(_) => {}
-        }
-
         let mut mdns_name = config.multicast_dns_host_name.clone();
         if mdns_name.is_empty() {
             mdns_name = generate_multicast_dns_name();

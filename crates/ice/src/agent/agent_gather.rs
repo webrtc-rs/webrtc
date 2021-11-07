@@ -1,9 +1,9 @@
 use super::*;
 use crate::error::*;
 use crate::network_type::*;
+use crate::udp_network::UDPNetwork;
 use crate::url::{ProtoType, SchemeType, Url};
 use crate::util::*;
-use crate::UDPNetwork;
 
 use util::{vnet::net::*, Conn};
 
@@ -114,8 +114,8 @@ impl Agent {
                     let srflx_params = GatherCandidatesSrflxParams {
                         urls: params.urls.clone(),
                         network_types: params.network_types.clone(),
-                        port_max: ephemeral_config.port_max,
-                        port_min: ephemeral_config.port_min,
+                        port_max: ephemeral_config.port_max(),
+                        port_min: ephemeral_config.port_min(),
                         net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
                     };
@@ -129,8 +129,8 @@ impl Agent {
                         if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
                             let srflx_mapped_params = GatherCandidatesSrflxMappedParasm {
                                 network_types: params.network_types.clone(),
-                                port_max: ephemeral_config.port_max,
-                                port_min: ephemeral_config.port_min,
+                                port_max: ephemeral_config.port_max(),
+                                port_min: ephemeral_config.port_min(),
                                 ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
                                 net: Arc::clone(&params.net),
                                 agent_internal: Arc::clone(&params.agent_internal),
@@ -277,8 +277,8 @@ impl Agent {
 
                 let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
                     &net,
-                    ephemeral_config.port_max,
-                    ephemeral_config.port_min,
+                    ephemeral_config.port_max(),
+                    ephemeral_config.port_min(),
                     SocketAddr::new(ip, 0),
                 )
                 .await
