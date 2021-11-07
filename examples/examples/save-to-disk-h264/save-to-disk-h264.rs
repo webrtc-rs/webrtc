@@ -219,10 +219,10 @@ async fn main() -> Result<()> {
                     tokio::select! {
                         _ = timeout.as_mut() =>{
                             if let Some(pc) = pc2.upgrade(){
-                                result = pc.write_rtcp(&PictureLossIndication{
+                                result = pc.write_rtcp(&[Box::new(PictureLossIndication{
                                     sender_ssrc: 0,
                                     media_ssrc,
-                                }).await.map_err(Into::into);
+                                })]).await.map_err(Into::into);
                             }else {
                                 break;
                             }

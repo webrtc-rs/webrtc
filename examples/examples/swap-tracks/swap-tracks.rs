@@ -180,10 +180,10 @@ async fn main() -> Result<()> {
                                     is_curr_track = true;
                                     if let Some(pc) = pc2.upgrade() {
                                         if let Err(err) = pc
-                                            .write_rtcp(&PictureLossIndication {
+                                            .write_rtcp(&[Box::new(PictureLossIndication {
                                                 sender_ssrc: 0,
                                                 media_ssrc: track.ssrc(),
-                                            })
+                                            })])
                                             .await
                                         {
                                             println!("write_rtcp err: {}", err);
