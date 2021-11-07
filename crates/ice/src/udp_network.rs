@@ -74,7 +74,7 @@ impl UDPNetwork {
 
 #[cfg(test)]
 mod test {
-    use super::{EphemeralUDP, UDPNetwork};
+    use super::EphemeralUDP;
 
     #[test]
     fn test_ephemeral_udp_constructor() {
