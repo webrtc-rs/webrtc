@@ -91,3 +91,15 @@ fn test_issue1734_next_nal() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_trailing01after_start_code() -> Result<()> {
+    let test = vec![0x0, 0x0, 0x0, 0x1, 0x01, 0x0, 0x0, 0x0, 0x1, 0x01];
+    let mut r = H264Reader::new(Cursor::new(test));
+
+    for _ in 0..=1 {
+        let _nal = r.next_nal()?;
+    }
+
+    Ok(())
+}

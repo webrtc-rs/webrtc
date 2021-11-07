@@ -11,10 +11,15 @@ fn test_is_key_frame() -> Result<()> {
             false,
         ),
         (
-            "When given a keyframe; it should return true",
+            "When given a SPS packetized with STAP-A;; it should return true",
             vec![
                 0x38, 0x00, 0x03, 0x27, 0x90, 0x90, 0x00, 0x05, 0x28, 0x90, 0x90, 0x90, 0x90,
             ],
+            true,
+        ),
+        (
+            "When given a SPS with no packetization; it should return true",
+            vec![0x27, 0x90, 0x90, 0x00],
             true,
         ),
     ];

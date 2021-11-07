@@ -8,18 +8,18 @@ use rtp::codecs::h264::H264Packet;
 use rtp::packetizer::Depacketizer;
 use std::io::{Seek, Write};
 
-const TYPE_STAPA: u32 = 24;
+const NALU_TTYPE_STAP_A: u32 = 24;
+const NALU_TTYPE_SPS: u32 = 7;
+const NALU_TYPE_BITMASK: u32 = 0x1F;
 
 fn is_key_frame(data: &[u8]) -> bool {
     if data.len() < 4 {
         false
     } else {
         let word = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-        if (word & 0x1F000000) >> 24 != TYPE_STAPA {
-            false
-        } else {
-            word & 0x1F == 7
-        }
+        let nalu_type = (word >> 24) & NALU_TYPE_BITMASK;
+        (nalu_type == NALU_TTYPE_STAP_A && (word & NALU_TYPE_BITMASK) == NALU_TTYPE_SPS)
+            || (nalu_type == NALU_TTYPE_SPS)
     }
 }
 

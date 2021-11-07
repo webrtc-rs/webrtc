@@ -283,9 +283,8 @@ impl<R: Read> H264Reader<R> {
                         let _ = self.nal_buffer.split_off(nal_unit_length);
                         nal_found = true;
                     }
-                } else {
-                    self.count_of_consecutive_zero_bytes = 0;
                 }
+                self.count_of_consecutive_zero_bytes = 0;
             }
             _ => {
                 self.count_of_consecutive_zero_bytes = 0;
