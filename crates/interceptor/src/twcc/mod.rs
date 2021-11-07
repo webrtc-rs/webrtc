@@ -77,7 +77,7 @@ impl Recorder {
             if !built {
                 let p: Box<dyn rtcp::packet::Packet + Send + Sync> = Box::new(feedback.get_rtcp());
                 pkts.push(p);
-                self.fb_pkt_cnt += 1;
+                self.fb_pkt_cnt = self.fb_pkt_cnt.wrapping_add(1);
                 feedback = Feedback::new(self.sender_ssrc, self.media_ssrc, self.fb_pkt_cnt);
                 feedback.add_received((pkt.sequence_number & 0xffff) as u16, pkt.arrival_time);
             }
@@ -86,7 +86,7 @@ impl Recorder {
         let p: Box<dyn rtcp::packet::Packet + Send + Sync> = Box::new(feedback.get_rtcp());
         pkts.push(p);
 
-        self.fb_pkt_cnt += 1;
+        self.fb_pkt_cnt = self.fb_pkt_cnt.wrapping_add(1);
 
         pkts
     }
