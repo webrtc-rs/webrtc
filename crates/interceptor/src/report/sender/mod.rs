@@ -113,7 +113,9 @@ impl Interceptor for SenderReport {
         let internal = Arc::clone(&self.internal);
         tokio::spawn(async move {
             let _d = w.take();
-            let _ = SenderReport::run(writer2, internal).await;
+            if let Err(err) = SenderReport::run(writer2, internal).await {
+                log::warn!("bind_rtcp_writer Generator::run got error: {}", err);
+            }
         });
 
         writer

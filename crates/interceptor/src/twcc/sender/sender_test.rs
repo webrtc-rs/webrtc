@@ -1,363 +1,83 @@
 use super::*;
 use crate::mock::mock_stream::MockStream;
 use crate::stream_info::RTPHeaderExtension;
-use rtcp::transport_feedbacks::transport_layer_cc::{
-    PacketStatusChunk, RunLengthChunk, StatusChunkTypeTcc, StatusVectorChunk, SymbolSizeTypeTcc,
-    SymbolTypeTcc, TransportLayerCc,
-};
-use util::Marshal;
+use rtp::packet::Packet;
+use tokio::sync::mpsc;
+use tokio::time::Duration;
+use util::Unmarshal;
+use waitgroup::WaitGroup;
 
 #[tokio::test]
-async fn test_sender_interceptor_before_any_packets() -> Result<()> {
-    let builder = Sender::builder();
+async fn test_twcc_sender_interceptor() -> Result<()> {
+    // "add transport wide cc to each packet"
+    let builder = Sender::builder().with_init_sequence_nr(0);
     let icpr = builder.build("")?;
 
-    let stream = MockStream::new(
-        &StreamInfo {
-            ssrc: 1,
-            rtp_header_extensions: vec![RTPHeaderExtension {
-                uri: TRANSPORT_CC_URI.to_owned(),
-                id: 1,
-                ..Default::default()
-            }],
-            ..Default::default()
-        },
-        icpr,
-    )
-    .await;
+    let (p_chan_tx, mut p_chan_rx) = mpsc::channel::<Packet>(10 * 5);
+    tokio::spawn(async move {
+        // start some parallel streams using the same interceptor to test for race conditions
+        let wg = WaitGroup::new();
+        for i in 0..10 {
+            let w = wg.worker();
+            let p_chan_tx2 = p_chan_tx.clone();
+            let icpr2 = Arc::clone(&icpr);
+            tokio::spawn(async move {
+                let _d = w;
+                let stream = MockStream::new(
+                    &StreamInfo {
+                        rtp_header_extensions: vec![RTPHeaderExtension {
+                            uri: TRANSPORT_CC_URI.to_owned(),
+                            id: 1,
+                        }],
+                        ..Default::default()
+                    },
+                    icpr2,
+                )
+                .await;
 
-    let pkts = stream.written_rtcp().await.unwrap();
-    assert_eq!(pkts.len(), 1);
-    if let Some(tlcc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(0, tlcc.packet_status_count);
-        assert_eq!(0, tlcc.fb_pkt_count);
-        assert_eq!(0, tlcc.base_sequence_number);
-        assert_eq!(0, tlcc.media_ssrc);
-        assert_eq!(0, tlcc.reference_time);
-        assert_eq!(0, tlcc.recv_deltas.len());
-        assert_eq!(0, tlcc.packet_chunks.len());
-    } else {
-        assert!(false);
-    }
+                let id = i + 1;
+                for seq_num in vec![id * 1, id * 2, id * 3, id * 4, id * 5] {
+                    stream
+                        .write_rtp(&rtp::packet::Packet {
+                            header: rtp::header::Header {
+                                sequence_number: seq_num,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        })
+                        .await
+                        .unwrap();
 
-    stream.close().await?;
+                    let timeout = tokio::time::sleep(Duration::from_millis(10));
+                    tokio::pin!(timeout);
 
-    Ok(())
-}
+                    tokio::select! {
+                        p = stream.written_rtp() =>{
+                            if let Some(p) = p {
+                                assert_eq!(seq_num, p.header.sequence_number);
+                                let _ = p_chan_tx2.send(p).await;
+                            }else{
+                                assert!(false, "stream.written_rtp none");
+                            }
+                        }
+                        _ = timeout.as_mut()=>{
+                            assert!(false, "written rtp packet not found");
+                        }
+                    };
+                }
 
-#[tokio::test]
-async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
-    let builder = Sender::builder();
-    let icpr = builder.build("")?;
-
-    let stream = MockStream::new(
-        &StreamInfo {
-            ssrc: 1,
-            rtp_header_extensions: vec![RTPHeaderExtension {
-                uri: TRANSPORT_CC_URI.to_owned(),
-                id: 1,
-                ..Default::default()
-            }],
-            ..Default::default()
-        },
-        icpr,
-    )
-    .await;
-
-    for i in 0..10 {
-        let mut hdr = rtp::header::Header::default();
-        let tcc = TransportCcExtension {
-            transport_sequence: i,
+                let _ = stream.close().await;
+            });
         }
-        .marshal()?;
-        hdr.set_extension(1, tcc)?;
-        stream
-            .receive_rtp(rtp::packet::Packet {
-                header: hdr,
-                ..Default::default()
-            })
-            .await;
+        wg.wait().await;
+    });
+
+    while let Some(p) = p_chan_rx.recv().await {
+        // Can't check for increasing transport cc sequence number, since we can't ensure ordering between the streams
+        // on pChan is same as in the interceptor, but at least make sure each packet has a seq nr.
+        let mut extension_header = p.header.get_extension(1).unwrap();
+        let _twcc = TransportCcExtension::unmarshal(&mut extension_header)?;
     }
-
-    let pkts = stream.written_rtcp().await.unwrap();
-    assert_eq!(pkts.len(), 1);
-    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(1, cc.media_ssrc);
-        assert_eq!(0, cc.base_sequence_number);
-        assert_eq!(
-            vec![PacketStatusChunk::RunLengthChunk(RunLengthChunk {
-                type_tcc: StatusChunkTypeTcc::RunLengthChunk,
-                packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
-                run_length: 10,
-            })],
-            cc.packet_chunks
-        );
-    } else {
-        assert!(false);
-    }
-
-    stream.close().await?;
-
-    Ok(())
-}
-
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
-#[tokio::test]
-async fn test_sender_interceptor_different_delays_between_rtp_packets() -> Result<()> {
-    let builder = Sender::builder().with_interval(Duration::from_millis(500));
-    let icpr = builder.build("")?;
-
-    let stream = MockStream::new(
-        &StreamInfo {
-            ssrc: 1,
-            rtp_header_extensions: vec![RTPHeaderExtension {
-                uri: TRANSPORT_CC_URI.to_owned(),
-                id: 1,
-                ..Default::default()
-            }],
-            ..Default::default()
-        },
-        icpr,
-    )
-    .await;
-
-    let delays = vec![0, 10, 100, 200];
-    for (i, d) in delays.iter().enumerate() {
-        tokio::time::sleep(Duration::from_millis(*d)).await;
-
-        let mut hdr = rtp::header::Header::default();
-        let tcc = TransportCcExtension {
-            transport_sequence: i as u16,
-        }
-        .marshal()?;
-
-        hdr.set_extension(1, tcc)?;
-        stream
-            .receive_rtp(rtp::packet::Packet {
-                header: hdr,
-                ..Default::default()
-            })
-            .await;
-    }
-
-    // tick immediately, let's ignore the first rtcp pkt
-    let _ = stream.written_rtcp().await.unwrap();
-
-    // the second 500ms tick will works
-    let pkts = stream.written_rtcp().await.unwrap();
-    assert_eq!(pkts.len(), 1);
-    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(0, cc.base_sequence_number);
-        assert_eq!(
-            vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
-                type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
-                symbol_size: SymbolSizeTypeTcc::TwoBit,
-                symbol_list: vec![
-                    SymbolTypeTcc::PacketReceivedSmallDelta,
-                    SymbolTypeTcc::PacketReceivedSmallDelta,
-                    SymbolTypeTcc::PacketReceivedLargeDelta,
-                    SymbolTypeTcc::PacketReceivedLargeDelta,
-                ],
-            })],
-            cc.packet_chunks
-        );
-    } else {
-        assert!(false);
-    }
-
-    stream.close().await?;
-
-    Ok(())
-}
-
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
-#[tokio::test]
-async fn test_sender_interceptor_packet_loss() -> Result<()> {
-    let builder = Sender::builder().with_interval(Duration::from_secs(2));
-    let icpr = builder.build("")?;
-
-    let stream = MockStream::new(
-        &StreamInfo {
-            ssrc: 1,
-            rtp_header_extensions: vec![RTPHeaderExtension {
-                uri: TRANSPORT_CC_URI.to_owned(),
-                id: 1,
-                ..Default::default()
-            }],
-            ..Default::default()
-        },
-        icpr,
-    )
-    .await;
-
-    let sequence_number_to_delay: HashMap<u16, u64> = [
-        (0, 0),
-        (1, 10),
-        (4, 100),
-        (8, 200),
-        (9, 20),
-        (10, 20),
-        (30, 300),
-    ]
-    .iter()
-    .cloned()
-    .collect();
-
-    for i in &[0, 1, 4, 8, 9, 10, 30] {
-        let d = sequence_number_to_delay.get(i).unwrap();
-        tokio::time::sleep(Duration::from_millis(*d)).await;
-
-        let mut hdr = rtp::header::Header::default();
-        let tcc = TransportCcExtension {
-            transport_sequence: *i as u16,
-        }
-        .marshal()?;
-        hdr.set_extension(1, tcc)?;
-        stream
-            .receive_rtp(rtp::packet::Packet {
-                header: hdr,
-                ..Default::default()
-            })
-            .await;
-    }
-
-    // tick immediately, let's ignore the first rtcp pkt
-    let _ = stream.written_rtcp().await.unwrap();
-
-    // the second 500ms tick will works
-    let pkts = stream.written_rtcp().await.unwrap();
-    assert_eq!(pkts.len(), 1);
-    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(0, cc.base_sequence_number);
-        assert_eq!(
-            vec![
-                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTcc::TwoBit,
-                    symbol_list: vec![
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketReceivedLargeDelta,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                    ],
-                }),
-                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTcc::TwoBit,
-                    symbol_list: vec![
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketReceivedLargeDelta,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                    ],
-                }),
-                PacketStatusChunk::RunLengthChunk(RunLengthChunk {
-                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
-                    packet_status_symbol: SymbolTypeTcc::PacketNotReceived,
-                    run_length: 16,
-                }),
-                PacketStatusChunk::RunLengthChunk(RunLengthChunk {
-                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
-                    packet_status_symbol: SymbolTypeTcc::PacketReceivedLargeDelta,
-                    run_length: 1,
-                }),
-            ],
-            cc.packet_chunks
-        );
-    } else {
-        assert!(false);
-    }
-
-    stream.close().await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_sender_interceptor_overflow() -> Result<()> {
-    let builder = Sender::builder();
-    let icpr = builder.build("")?;
-
-    let stream = MockStream::new(
-        &StreamInfo {
-            ssrc: 1,
-            rtp_header_extensions: vec![RTPHeaderExtension {
-                uri: TRANSPORT_CC_URI.to_owned(),
-                id: 1,
-                ..Default::default()
-            }],
-            ..Default::default()
-        },
-        icpr,
-    )
-    .await;
-
-    for i in [65530, 65534, 65535, 1, 2, 10] {
-        let mut hdr = rtp::header::Header::default();
-        let tcc = TransportCcExtension {
-            transport_sequence: i,
-        }
-        .marshal()?;
-        hdr.set_extension(1, tcc)?;
-        stream
-            .receive_rtp(rtp::packet::Packet {
-                header: hdr,
-                ..Default::default()
-            })
-            .await;
-    }
-
-    let pkts = stream.written_rtcp().await.unwrap();
-    assert_eq!(pkts.len(), 1);
-    if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(65530, cc.base_sequence_number);
-        assert_eq!(
-            vec![
-                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTcc::OneBit,
-                    symbol_list: vec![
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                    ],
-                }),
-                PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTcc::TwoBit,
-                    symbol_list: vec![
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketNotReceived,
-                        SymbolTypeTcc::PacketReceivedSmallDelta,
-                    ],
-                }),
-            ],
-            cc.packet_chunks
-        );
-    } else {
-        assert!(false);
-    }
-
-    stream.close().await?;
 
     Ok(())
 }

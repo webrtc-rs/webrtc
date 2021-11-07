@@ -190,7 +190,9 @@ impl Interceptor for Generator {
         let internal = Arc::clone(&self.internal);
         tokio::spawn(async move {
             let _d = w.take();
-            let _ = Generator::run(writer2, internal).await;
+            if let Err(err) = Generator::run(writer2, internal).await {
+                log::warn!("bind_rtcp_writer NACK Generator::run got error: {}", err);
+            }
         });
 
         writer

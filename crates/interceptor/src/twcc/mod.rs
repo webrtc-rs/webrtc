@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod twcc_test;
 
-pub mod header_extension;
+pub mod receiver;
 pub mod sender;
 
 use rtcp::transport_feedbacks::transport_layer_cc::{
