@@ -159,6 +159,11 @@ impl Session {
                 Session::get_or_create_stream(streams_map, close_stream_tx.clone(), is_rtp, ssrc)
                     .await;
             if is_new {
+                log::trace!(
+                    "srtp session got new {} stream {}",
+                    if is_rtp { "rtp" } else { "rtcp" },
+                    ssrc
+                );
                 let _ = new_stream_tx.send(Arc::clone(&stream)).await?;
             }
 
