@@ -382,11 +382,15 @@ async fn write_video_to_track(video_file: String, t: Arc<TrackLocalStaticSample>
     let reader = BufReader::new(file);
     let (mut ivf, header) = IVFReader::new(reader)?;
 
+    // It is important to use a time.Ticker instead of time.Sleep because
+    // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
+    // * works around latency issues with Sleep
     // Send our video file frame at a time. Pace our sending so we send it at the same speed it should be played back as.
     // This isn't required since the video is timestamped, but we will such much higher loss if we send all at once.
     let sleep_time = Duration::from_millis(
         ((1000 * header.timebase_numerator) / header.timebase_denominator) as u64,
     );
+    let mut ticker = tokio::time::interval(sleep_time);
     loop {
         let frame = match ivf.parse_next_frame() {
             Ok((frame, _)) => frame,
@@ -396,13 +400,13 @@ async fn write_video_to_track(video_file: String, t: Arc<TrackLocalStaticSample>
             }
         };
 
-        tokio::time::sleep(sleep_time).await;
-
         t.write_sample(&Sample {
             data: frame.freeze(),
             duration: Duration::from_secs(1),
             ..Default::default()
         })
         .await?;
+
+        let _ = ticker.tick().await;
     }
 }

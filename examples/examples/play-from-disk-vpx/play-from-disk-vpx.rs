@@ -24,6 +24,8 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 use webrtc::track::track_local::TrackLocal;
 use webrtc::Error;
 
+const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut app = App::new("play-from-disk-vpx")
@@ -263,7 +265,7 @@ async fn main() -> Result<()> {
             // It is important to use a time.Ticker instead of time.Sleep because
             // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
             // * works around latency issues with Sleep
-            let mut ticker = tokio::time::interval(Duration::from_millis(20));
+            let mut ticker = tokio::time::interval(OGG_PAGE_DURATION);
 
             // Keep track of last granule, the difference is the amount of samples in the buffer
             let mut last_granule: u64 = 0;
