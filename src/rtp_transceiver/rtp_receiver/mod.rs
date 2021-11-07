@@ -346,7 +346,6 @@ impl RTCRtpReceiver {
             RTCRtpCodecCapability::default()
         };
 
-        let mut tracks = vec![];
         for encoding in &parameters.encodings {
             let (stream_info, rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
                 if encoding.ssrc != 0 {
@@ -400,7 +399,10 @@ impl RTCRtpReceiver {
                 },
             };
 
-            tracks.push(t);
+            {
+                let mut tracks = self.internal.tracks.lock().await;
+                tracks.push(t);
+            };
 
             let rtx_ssrc = encoding.rtx.ssrc;
             if rtx_ssrc != 0 {
@@ -430,11 +432,6 @@ impl RTCRtpReceiver {
                 .await?;
             }
         }
-
-        {
-            let mut internal_tracks = self.internal.tracks.lock().await;
-            internal_tracks.extend(tracks);
-        };
 
         Ok(())
     }
@@ -574,9 +571,11 @@ impl RTCRtpReceiver {
     ) -> Result<Arc<TrackRemote>> {
         let mut tracks = self.internal.tracks.lock().await;
         for t in &mut *tracks {
-            if t.track.rid() == rid && !params.codecs.is_empty() {
+            if t.track.rid() == rid {
                 t.track.set_kind(self.kind);
-                t.track.set_codec(params.codecs[0].clone()).await;
+                if let Some(codec) = params.codecs.first() {
+                    t.track.set_codec(codec.clone()).await;
+                }
                 t.track.set_params(params.clone()).await;
                 t.track
                     .set_ssrc(stream.stream_info.as_ref().map_or(0, |s| s.ssrc));
