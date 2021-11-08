@@ -263,11 +263,12 @@ impl PeerConnectionInternal {
                 let simulcast_routine_count2 = Arc::clone(&simulcast_routine_count);
                 let pci2 = Arc::clone(&pci);
                 tokio::spawn(async move {
+                    let ssrc = stream.get_ssrc();
+
                     dtls_transport2
-                        .store_simulcast_stream(Arc::clone(&stream))
+                        .store_simulcast_stream(ssrc, Arc::clone(&stream))
                         .await;
 
-                    let ssrc = stream.get_ssrc();
                     if let Err(err) = pci2.handle_incoming_ssrc(stream, ssrc).await {
                         log::error!(
                             "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
@@ -1182,6 +1183,7 @@ impl PeerConnectionInternal {
                         let _ = rtcp_read_stream.close().await;
                     }
                     icpr.unbind_remote_stream(&stream_info).await;
+                    self.dtls_transport.remove_simulcast_stream(ssrc).await;
                 }
 
                 return Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed);

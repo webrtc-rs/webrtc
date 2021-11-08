@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -73,7 +74,7 @@ pub struct RTCDtlsTransport {
     pub(crate) srtp_endpoint: Mutex<Option<Arc<Endpoint>>>,
     pub(crate) srtcp_endpoint: Mutex<Option<Arc<Endpoint>>>,
 
-    pub(crate) simulcast_streams: Mutex<Vec<Arc<Stream>>>,
+    pub(crate) simulcast_streams: Mutex<HashMap<SSRC, Arc<Stream>>>,
 
     pub(crate) srtp_ready_signal: Arc<AtomicBool>,
     pub(crate) srtp_ready_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -488,13 +489,17 @@ impl RTCDtlsTransport {
         {
             let simulcast_streams: Vec<Arc<Stream>> = {
                 let mut simulcast_streams = self.simulcast_streams.lock().await;
-                simulcast_streams.drain(..).collect()
+                simulcast_streams.drain().map(|(_, v)| v).collect()
             };
             for ss in simulcast_streams {
                 match ss.close().await {
                     Ok(_) => {}
                     Err(err) => {
-                        close_errs.push(err.into());
+                        close_errs.push(Error::new(format!(
+                            "simulcast_streams ssrc={}: {}",
+                            ss.get_ssrc(),
+                            err
+                        )));
                     }
                 };
             }
@@ -546,9 +551,14 @@ impl RTCDtlsTransport {
         }
     }
 
-    pub(crate) async fn store_simulcast_stream(&self, stream: Arc<Stream>) {
+    pub(crate) async fn store_simulcast_stream(&self, ssrc: SSRC, stream: Arc<Stream>) {
         let mut simulcast_streams = self.simulcast_streams.lock().await;
-        simulcast_streams.push(stream)
+        simulcast_streams.insert(ssrc, stream);
+    }
+
+    pub(crate) async fn remove_simulcast_stream(&self, ssrc: SSRC) {
+        let mut simulcast_streams = self.simulcast_streams.lock().await;
+        simulcast_streams.remove(&ssrc);
     }
 
     pub(crate) async fn streams_for_ssrc(

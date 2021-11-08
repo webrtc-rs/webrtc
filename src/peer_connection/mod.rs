@@ -1857,7 +1857,7 @@ impl RTCPeerConnection {
         let mut close_errs = vec![];
 
         if let Err(err) = self.interceptor.close().await {
-            close_errs.push(err);
+            close_errs.push(Error::new(format!("interceptor: {}", err)));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)
@@ -1865,7 +1865,7 @@ impl RTCPeerConnection {
             let mut rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if let Err(err) = t.stop().await {
-                    close_errs.push(err.into());
+                    close_errs.push(Error::new(format!("rtp_transceivers: {}", err)));
                 }
             }
             rtp_transceivers.clear();
@@ -1876,7 +1876,7 @@ impl RTCPeerConnection {
             let mut data_channels = self.internal.sctp_transport.data_channels.lock().await;
             for d in &*data_channels {
                 if let Err(err) = d.close().await {
-                    close_errs.push(err.into());
+                    close_errs.push(Error::new(format!("data_channels: {}", err)));
                 }
             }
             data_channels.clear();
@@ -1884,17 +1884,17 @@ impl RTCPeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)
         if let Err(err) = self.internal.sctp_transport.stop().await {
-            close_errs.push(err.into());
+            close_errs.push(Error::new(format!("sctp_transport: {}", err)));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #7)
         if let Err(err) = self.internal.dtls_transport.stop().await {
-            close_errs.push(err.into());
+            close_errs.push(Error::new(format!("dtls_transport: {}", err)));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #8, #9, #10)
         if let Err(err) = self.internal.ice_transport.stop().await {
-            close_errs.push(err.into());
+            close_errs.push(Error::new(format!("dtls_transport: {}", err)));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
@@ -1908,7 +1908,7 @@ impl RTCPeerConnection {
         .await;
 
         if let Err(err) = self.internal.ops.close().await {
-            close_errs.push(err.into());
+            close_errs.push(Error::new(format!("ops: {}", err)));
         }
 
         flatten_errs(close_errs)
