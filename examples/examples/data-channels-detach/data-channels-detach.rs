@@ -8,13 +8,13 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
-use webrtc::util::math_rand_alpha;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::math_rand_alpha;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 const MESSAGE_SIZE: usize = 1500;
 
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Since this behavior diverges from the WebRTC API it has to be
     // enabled using a settings engine. Mixing both detached and the
@@ -107,6 +107,8 @@ async fn main() -> Result<()> {
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -118,7 +120,7 @@ async fn main() -> Result<()> {
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -198,7 +200,14 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
+    };
 
     peer_connection.close().await?;
 
@@ -206,7 +215,7 @@ async fn main() -> Result<()> {
 }
 
 // read_loop shows how to read from the datachannel directly
-async fn read_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Result<()> {
+async fn read_loop(d: Arc<webrtc::data::data_channel::DataChannel>) -> Result<()> {
     let mut buffer = vec![0u8; MESSAGE_SIZE];
     loop {
         let n = match d.read(&mut buffer).await {
@@ -225,7 +234,7 @@ async fn read_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Re
 }
 
 // write_loop shows how to write to the datachannel directly
-async fn write_loop(d: Arc<webrtc::webrtc_data::data_channel::DataChannel>) -> Result<()> {
+async fn write_loop(d: Arc<webrtc::data::data_channel::DataChannel>) -> Result<()> {
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
         let timeout = tokio::time::sleep(Duration::from_secs(5));

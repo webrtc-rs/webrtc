@@ -11,16 +11,16 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection::RTCPeerConnection;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
-use webrtc::util::math_rand_alpha;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::math_rand_alpha;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
 
 #[macro_use]
 extern crate lazy_static;
@@ -266,7 +266,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -279,24 +279,26 @@ async fn main() -> Result<()> {
 
     // When an ICE candidate is available send to the other Pion instance
     // the other Pion instance will add this candidate by calling AddICECandidate
-    let peer_connection2 = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = offer_addr.clone();
     peer_connection
         .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
             //println!("on_ice_candidate {:?}", c);
 
-            let peer_connection3 = Arc::clone(&peer_connection2);
+            let pc2 = pc.clone();
             let pending_candidates3 = Arc::clone(&pending_candidates2);
             let addr3 = addr2.clone();
             Box::pin(async move {
                 if let Some(c) = c {
-                    let desc = peer_connection3.remote_description().await;
-                    if desc.is_none() {
-                        let mut cs = pending_candidates3.lock().await;
-                        cs.push(c);
-                    } else if let Err(err) = signal_candidate(&addr3, &c).await {
-                        assert!(false, "{}", err);
+                    if let Some(pc) = pc2.upgrade() {
+                        let desc = pc.remote_description().await;
+                        if desc.is_none() {
+                            let mut cs = pending_candidates3.lock().await;
+                            cs.push(c);
+                        } else if let Err(err) = signal_candidate(&addr3, &c).await {
+                            assert!(false, "{}", err);
+                        }
                     }
                 }
             })
@@ -320,6 +322,8 @@ async fn main() -> Result<()> {
         }
     });
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -331,7 +335,7 @@ async fn main() -> Result<()> {
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -378,7 +382,14 @@ async fn main() -> Result<()> {
     })).await;
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
+    };
 
     peer_connection.close().await?;
 

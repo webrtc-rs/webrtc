@@ -12,12 +12,12 @@ use tokio_util::codec::{BytesCodec, FramedRead};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::interceptor::registry::Registry;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_connection_state::RTCIceConnectionState;
-use webrtc::peer::peer_connection::RTCPeerConnection;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
 
 #[macro_use]
 extern crate lazy_static;
@@ -89,7 +89,7 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
             let mut registry = Registry::new();
 
             // Use the default set of Interceptors
-            registry = match register_default_interceptors(registry, &mut m) {
+            registry = match register_default_interceptors(registry, &mut m).await {
                 Ok(r) => r,
                 Err(err) => panic!("{}", err),
             };

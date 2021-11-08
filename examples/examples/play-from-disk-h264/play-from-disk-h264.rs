@@ -10,19 +10,21 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
-use webrtc::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
-use webrtc::media::track::track_local::TrackLocal;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_connection_state::RTCIceConnectionState;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
-use webrtc::webrtc_media::io::h264_reader::H264Reader;
-use webrtc::webrtc_media::io::ogg_reader::OggReader;
-use webrtc::webrtc_media::Sample;
+use webrtc::media::io::h264_reader::H264Reader;
+use webrtc::media::io::ogg_reader::OggReader;
+use webrtc::media::Sample;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use webrtc::track::track_local::TrackLocal;
 use webrtc::Error;
+
+const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -112,7 +114,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -135,6 +137,10 @@ async fn main() -> Result<()> {
     let notify_tx = Arc::new(Notify::new());
     let notify_video = notify_tx.clone();
     let notify_audio = notify_tx.clone();
+
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let video_done_tx = done_tx.clone();
+    let audio_done_tx = done_tx.clone();
 
     if let Some(video_file) = video_file {
         // Create a video track
@@ -206,6 +212,8 @@ async fn main() -> Result<()> {
                 let _ = ticker.tick().await;
             }
 
+            let _ = video_done_tx.try_send(());
+
             Result::<()>::Ok(())
         });
     }
@@ -251,7 +259,7 @@ async fn main() -> Result<()> {
             // It is important to use a time.Ticker instead of time.Sleep because
             // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
             // * works around latency issues with Sleep
-            let mut ticker = tokio::time::interval(Duration::from_millis(20));
+            let mut ticker = tokio::time::interval(OGG_PAGE_DURATION);
 
             // Keep track of last granule, the difference is the amount of samples in the buffer
             let mut last_granule: u64 = 0;
@@ -271,6 +279,8 @@ async fn main() -> Result<()> {
 
                 let _ = ticker.tick().await;
             }
+
+            let _ = audio_done_tx.try_send(());
 
             Result::<()>::Ok(())
         });
@@ -292,14 +302,14 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -338,7 +348,14 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
+    };
 
     peer_connection.close().await?;
 

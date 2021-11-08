@@ -3,19 +3,20 @@ use clap::{App, AppSettings, Arg};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::sync::Arc;
+use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data::data_channel::data_channel_parameters::DataChannelParameters;
-use webrtc::data::data_channel::RTCDataChannel;
-use webrtc::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
-use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
-use webrtc::media::ice_transport::ice_parameters::RTCIceParameters;
-use webrtc::media::ice_transport::ice_role::RTCIceRole;
-use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
-use webrtc::peer::ice::ice_gather::RTCIceGatherOptions;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::util::math_rand_alpha;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::data_channel_parameters::DataChannelParameters;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::dtls_transport::dtls_parameters::DTLSParameters;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_gatherer::RTCIceGatherOptions;
+use webrtc::ice_transport::ice_parameters::RTCIceParameters;
+use webrtc::ice_transport::ice_role::RTCIceRole;
+use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::peer_connection::math_rand_alpha;
+use webrtc::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -94,33 +95,46 @@ async fn main() -> Result<()> {
     // Construct the SCTP transport
     let sctp = Arc::new(api.new_sctp_transport(Arc::clone(&dtls))?);
 
+    let done = Arc::new(Notify::new());
+    let done_answer = done.clone();
+    let done_offer = done.clone();
+
     // Handle incoming data channels
-    sctp.on_data_channel(Box::new(|d: Arc<RTCDataChannel>| {
+    sctp.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
         println!("New DataChannel {} {}", d_label, d_id);
 
+        let done_answer1 = done_answer.clone();
         // Register the handlers
         Box::pin(async move {
+            // no need to downgrade this to Weak, since on_open is FnOnce callback
             let d2 = Arc::clone(&d);
-            let d_label2 = d_label.clone();
-            let d_id2 = d_id;
+            let done_answer2 = done_answer1.clone();
             d.on_open(Box::new(move || {
-                println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
-
                 Box::pin(async move {
-                    let _ = handle_on_open(d2).await;
+                    tokio::select! {
+                        _ = done_answer2.notified() => {
+                            println!("received done_answer signal!");
+                        }
+                        _ = handle_on_open(d2) => {}
+                    };
+
+                    println!("exit data answer");
                 })
-            })).await;
+            }))
+            .await;
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
                 println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
                 Box::pin(async {})
-            })).await;
+            }))
+            .await;
         })
-    })).await;
+    }))
+    .await;
 
     let (gather_finished_tx, mut gather_finished_rx) = tokio::sync::mpsc::channel::<()>(1);
     let mut gather_finished_tx = Some(gather_finished_tx);
@@ -191,14 +205,23 @@ async fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let d = Arc::new(api.new_data_channel(sctp, dc_params).await?);
+        let d = Arc::new(api.new_data_channel(Arc::clone(&sctp), dc_params).await?);
 
         // Register the handlers
         // channel.OnOpen(handleOnOpen(channel)) // TODO: OnOpen on handle ChannelAck
         // Temporary alternative
+
+        // no need to downgrade this to Weak
         let d2 = Arc::clone(&d);
         tokio::spawn(async move {
-            let _ = handle_on_open(d2).await;
+            tokio::select! {
+                _ = done_offer.notified() => {
+                    println!("received done_offer signal!");
+                }
+                _ = handle_on_open(d2) => {}
+            };
+
+            println!("exit data offer");
         });
 
         let d_label = d.label().to_owned();
@@ -212,6 +235,11 @@ async fn main() -> Result<()> {
 
     println!("Press ctrl-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
+    done.notify_waiters();
+
+    sctp.stop().await?;
+    dtls.stop().await?;
+    ice.stop().await?;
 
     Ok(())
 }
@@ -235,6 +263,8 @@ struct Signal {
 }
 
 async fn handle_on_open(d: Arc<RTCDataChannel>) -> Result<()> {
+    println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d.label(), d.id());
+
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
         let timeout = tokio::time::sleep(Duration::from_secs(5));

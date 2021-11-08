@@ -8,20 +8,22 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
-use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
-use webrtc::media::track::track_remote::TrackRemote;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_connection_state::RTCIceConnectionState;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::media::io::h264_writer::H264Writer;
+use webrtc::media::io::ogg_writer::OggWriter;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
-use webrtc::webrtc_media::io::h264_writer::H264Writer;
-use webrtc::webrtc_media::io::ogg_writer::OggWriter;
+use webrtc::rtp_transceiver::rtp_codec::{
+    RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
+};
+use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use webrtc::track::track_remote::TrackRemote;
 
 async fn save_to_disk(
-    writer: Arc<Mutex<dyn webrtc::webrtc_media::io::Writer + Send + Sync>>,
+    writer: Arc<Mutex<dyn webrtc::media::io::Writer + Send + Sync>>,
     track: Arc<TrackRemote>,
     notify: Arc<Notify>,
 ) -> Result<()> {
@@ -118,11 +120,11 @@ async fn main() -> Result<()> {
     let video_file = matches.value_of("video").unwrap();
     let audio_file = matches.value_of("audio").unwrap();
 
-    let h264_writer: Arc<Mutex<dyn webrtc::webrtc_media::io::Writer + Send + Sync>> =
+    let h264_writer: Arc<Mutex<dyn webrtc::media::io::Writer + Send + Sync>> =
         Arc::new(Mutex::new(H264Writer::new(File::create(video_file)?)));
-    let ogg_writer: Arc<Mutex<dyn webrtc::webrtc_media::io::Writer + Send + Sync>> = Arc::new(
-        Mutex::new(OggWriter::new(File::create(audio_file)?, 48000, 2)?),
-    );
+    let ogg_writer: Arc<Mutex<dyn webrtc::media::io::Writer + Send + Sync>> = Arc::new(Mutex::new(
+        OggWriter::new(File::create(audio_file)?, 48000, 2)?,
+    ));
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
@@ -168,7 +170,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -202,12 +204,12 @@ async fn main() -> Result<()> {
     // Set a handler for when a new remote track starts, this handler saves buffers to disk as
     // an ivf file, since we could have multiple video tracks we provide a counter.
     // In your application this is where you would handle/process video
-    let pc = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     peer_connection.on_track(Box::new(move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
         if let Some(track) = track {
             // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
             let media_ssrc = track.ssrc();
-            let pc2 = Arc::clone(&pc);
+            let pc2 = pc.clone();
             tokio::spawn(async move {
                 let mut result = Result::<usize>::Ok(0);
                 while result.is_ok() {
@@ -216,10 +218,14 @@ async fn main() -> Result<()> {
 
                     tokio::select! {
                         _ = timeout.as_mut() =>{
-                            result = pc2.write_rtcp(&PictureLossIndication{
+                            if let Some(pc) = pc2.upgrade(){
+                                result = pc.write_rtcp(&[Box::new(PictureLossIndication{
                                     sender_ssrc: 0,
                                     media_ssrc,
-                            }).await.map_err(Into::into);
+                                })]).await.map_err(Into::into);
+                            }else {
+                                break;
+                            }
                         }
                     };
                 }
@@ -248,31 +254,24 @@ async fn main() -> Result<()> {
         }
 	})).await;
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    let pc = Arc::clone(&peer_connection);
     peer_connection
         .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
             println!("Connection State has changed {}", connection_state);
 
-            let pc2 = Arc::clone(&pc);
-            let notify_tx2 = Arc::clone(&notify_tx);
-            Box::pin(async move {
-                if connection_state == RTCIceConnectionState::Connected {
-                    println!("Ctrl+C the remote client to stop the demo");
-                } else if connection_state == RTCIceConnectionState::Failed {
-                    notify_tx2.notify_waiters();
+            if connection_state == RTCIceConnectionState::Connected {
+                println!("Ctrl+C the remote client to stop the demo");
+            } else if connection_state == RTCIceConnectionState::Failed {
+                notify_tx.notify_waiters();
 
-                    println!("Done writing media files");
+                println!("Done writing media files");
 
-                    // Gracefully shutdown the peer connection
-                    if let Err(err) = pc2.close().await {
-                        println!("peer_connection close err: {}", err);
-                    }
-
-                    std::process::exit(0);
-                }
-            })
+                let _ = done_tx.try_send(());
+            }
+            Box::pin(async {})
         }))
         .await;
 
@@ -308,7 +307,16 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
+    };
+
+    peer_connection.close().await?;
 
     Ok(())
 }

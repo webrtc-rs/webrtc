@@ -6,15 +6,15 @@ use tokio::net::UdpSocket;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
-use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_connection_state::RTCIceConnectionState;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
+use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 use webrtc::Error;
 
 #[tokio::main]
@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -120,24 +120,22 @@ async fn main() -> Result<()> {
         Result::<()>::Ok(())
     });
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
+    let done_tx1 = done_tx.clone();
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    let pc = Arc::clone(&peer_connection);
     peer_connection
         .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
             println!("Connection State has changed {}", connection_state);
-            let pc2 = Arc::clone(&pc);
-            Box::pin(async move {
-                if connection_state == RTCIceConnectionState::Failed {
-                    if let Err(err) = pc2.close().await {
-                        println!("peer connection close err: {}", err);
-                        std::process::exit(0);
-                    }
-                }
-            })
+            if connection_state == RTCIceConnectionState::Failed {
+                let _ = done_tx1.try_send(());
+            }
+            Box::pin(async {})
         }))
         .await;
 
+    let done_tx2 = done_tx.clone();
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -149,7 +147,7 @@ async fn main() -> Result<()> {
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting: Done forwarding");
-                std::process::exit(0);
+                let _ = done_tx2.try_send(());
             }
 
             Box::pin(async {})
@@ -190,6 +188,7 @@ async fn main() -> Result<()> {
     // Open a UDP Listener for RTP Packets on port 5004
     let listener = UdpSocket::bind("127.0.0.1:5004").await?;
 
+    let done_tx3 = done_tx.clone();
     // Read RTP packets forever and send them to the WebRTC Client
     tokio::spawn(async move {
         let mut inbound_rtp_packet = vec![0u8; 1600]; // UDP MTU
@@ -197,17 +196,26 @@ async fn main() -> Result<()> {
             if let Err(err) = video_track.write(&inbound_rtp_packet[..n]).await {
                 if Error::ErrClosedPipe == err {
                     // The peerConnection has been closed.
-                    return;
                 } else {
                     println!("video_track write err: {}", err);
-                    std::process::exit(0);
                 }
+                let _ = done_tx3.try_send(());
+                return;
             }
         }
     });
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
+    };
+
+    peer_connection.close().await?;
 
     Ok(())
 }

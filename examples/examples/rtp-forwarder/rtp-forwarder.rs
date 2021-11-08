@@ -5,25 +5,26 @@ use std::io::Write;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
-use util::{Conn, Marshal, Unmarshal};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
-use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
-use webrtc::media::track::track_remote::TrackRemote;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_connection_state::RTCIceConnectionState;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use webrtc::rtp_transceiver::rtp_codec::{
+    RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
+};
+use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use webrtc::track::track_remote::TrackRemote;
+use webrtc::util::{Conn, Marshal, Unmarshal};
 
 #[derive(Clone)]
 struct UdpConn {
     conn: Arc<dyn Conn + Send + Sync>,
-    port: u16,
     payload_type: u8,
 }
 
@@ -116,7 +117,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -156,7 +157,6 @@ async fn main() -> Result<()> {
                 sock.connect(format!("127.0.0.1:{}", 4000)).await?;
                 Arc::new(sock)
             },
-            port: 4000,
             payload_type: 111,
         },
     );
@@ -168,7 +168,6 @@ async fn main() -> Result<()> {
                 sock.connect(format!("127.0.0.1:{}", 4002)).await?;
                 Arc::new(sock)
             },
-            port: 4002,
             payload_type: 96,
         },
     );
@@ -176,7 +175,7 @@ async fn main() -> Result<()> {
     // Set a handler for when a new remote track starts, this handler will forward data to
     // our UDP listeners.
     // In your application this is where you would handle/process audio/video
-    let pc = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     peer_connection
         .on_track(Box::new(
             move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
@@ -190,7 +189,7 @@ async fn main() -> Result<()> {
 
                     // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
                     let media_ssrc = track.ssrc();
-                    let pc2 = Arc::clone(&pc);
+                    let pc2 = pc.clone();
                     tokio::spawn(async move {
                         let mut result = Result::<usize>::Ok(0);
                         while result.is_ok() {
@@ -199,10 +198,14 @@ async fn main() -> Result<()> {
 
                             tokio::select! {
                                 _ = timeout.as_mut() =>{
-                                    result = pc2.write_rtcp(&PictureLossIndication{
+                                    if let Some(pc) = pc2.upgrade(){
+                                        result = pc.write_rtcp(&[Box::new(PictureLossIndication{
                                             sender_ssrc: 0,
                                             media_ssrc,
-                                    }).await.map_err(Into::into);
+                                        })]).await.map_err(Into::into);
+                                    }else{
+                                        break;
+                                    }
                                 }
                             };
                         }
@@ -262,6 +265,8 @@ async fn main() -> Result<()> {
         }))
         .await;
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -273,7 +278,7 @@ async fn main() -> Result<()> {
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting: Done forwarding");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -312,7 +317,14 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::select! {
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
+    };
 
     peer_connection.close().await?;
 

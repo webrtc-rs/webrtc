@@ -9,16 +9,16 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
-use webrtc::data::data_channel::data_channel_init::RTCDataChannelInit;
-use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
+use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection::RTCPeerConnection;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::RTCPeerConnection;
 
 const BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 512 * 1024; // 512 KB
 const MAX_BUFFERED_AMOUNT: usize = 1024 * 1024; // 1 MB
@@ -46,7 +46,7 @@ async fn create_offerer() -> Result<Arc<RTCPeerConnection>> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -82,30 +82,30 @@ async fn create_offerer() -> Result<Arc<RTCPeerConnection>> {
     let dc = pc.create_data_channel("data", options).await?;
 
     // Register channel opening handling
+
+    // no need to downgrade this to Weak, since on_open is FnOnce callback
     let dc2 = Arc::clone(&dc);
     dc.on_open(Box::new(|| {
         println!(
-            "OnOpen: {}-{}. Start sending a series of 1024-byte packets as fast as it can",
+            "OnOpen-{}-{} : Start sending a series of 1024-byte packets as fast as it can",
             dc2.label(),
             dc2.id()
         );
 
         tokio::spawn(async move {
             let buf = Bytes::from_static(&[0u8; 1024]);
-            while dc2.send(&buf).await.is_ok() {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+            loop {
+                if dc2.send(&buf).await.is_err() {
+                    break;
+                }
+
+                tokio::time::sleep(Duration::from_micros(1)).await;
                 let buffered_amount = dc2.buffered_amount().await;
                 if buffered_amount + buf.len() > MAX_BUFFERED_AMOUNT {
-                    // Wait until the bufferedAmount becomes lower than the threshold
-                    // println!(
-                    //     "buffered_amount {} + sent {} > MAX_BUFFERED_AMOUNT {}",
-                    //     buffered_amount,
-                    //     buf.len(),
-                    //     MAX_BUFFERED_AMOUNT
-                    // );
                     let _ = send_more_ch_rx.recv().await;
                 }
             }
+            println!("exit on_open");
         });
         Box::pin(async {})
     }))
@@ -142,7 +142,7 @@ async fn create_answerer() -> Result<Arc<RTCPeerConnection>> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -167,10 +167,9 @@ async fn create_answerer() -> Result<Arc<RTCPeerConnection>> {
 
         Box::pin(async move {
             // Register channel opening handling
-            let dc2 = Arc::clone(&dc);
             let total_bytes_received2 = Arc::clone(&total_bytes_received);
             dc.on_open(Box::new(move || {
-                println!("OnOpen: {}-{}. Start receiving data", dc2.label(), dc2.id());
+                println!("OnOpen: Start receiving data"); //, dc2.label(), dc2.id());
                 tokio::spawn(async move {
                     let since = SystemTime::now();
 
@@ -207,8 +206,6 @@ async fn create_answerer() -> Result<Arc<RTCPeerConnection>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    console_subscriber::init();
-
     let mut app = App::new("data-channels-flow-control")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
@@ -225,6 +222,12 @@ async fn main() -> Result<()> {
                 .long("debug")
                 .short("d")
                 .help("Prints debug log information"),
+        )
+        .arg(
+            Arg::with_name("console_subscriber")
+                .long("console_subscriber")
+                .short("c")
+                .help("Enable console subscriber"),
         );
 
     let matches = app.clone().get_matches();
@@ -232,6 +235,11 @@ async fn main() -> Result<()> {
     if matches.is_present("FULLHELP") {
         app.print_long_help().unwrap();
         std::process::exit(0);
+    }
+
+    let enable_console_subscriber = matches.is_present("console_subscriber");
+    if enable_console_subscriber {
+        console_subscriber::init();
     }
 
     let debug = matches.is_present("debug");
@@ -252,95 +260,119 @@ async fn main() -> Result<()> {
             .init();
     }
 
-    let offer_pc = create_offerer().await?;
-    let answer_pc = create_answerer().await?;
+    {
+        let offer_pc = create_offerer().await?;
+        let answer_pc = create_answerer().await?;
 
-    // Set ICE Candidate handler. As soon as a PeerConnection has gathered a candidate
-    // send it to the other peer
-    let offer_pc2 = Arc::clone(&offer_pc);
-    answer_pc
-        .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            let offer_pc3 = Arc::clone(&offer_pc2);
-            Box::pin(async move {
-                if let Some(c) = c {
-                    if let Ok(c) = c.to_json().await {
-                        let _ = offer_pc3.add_ice_candidate(c).await;
+        // Set ICE Candidate handler. As soon as a PeerConnection has gathered a candidate
+        // send it to the other peer
+        let offer_pc2 = Arc::downgrade(&offer_pc);
+        answer_pc
+            .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+                let offer_pc3 = offer_pc2.clone();
+                Box::pin(async move {
+                    if let Some(c) = c {
+                        if let Ok(c) = c.to_json().await {
+                            if let Some(offer_pc3) = offer_pc3.upgrade() {
+                                let _ = offer_pc3.add_ice_candidate(c).await;
+                            }
+                        }
                     }
-                }
-            })
-        }))
-        .await;
+                })
+            }))
+            .await;
 
-    // Set ICE Candidate handler. As soon as a PeerConnection has gathered a candidate
-    // send it to the other peer
-    let answer_pc2 = Arc::clone(&answer_pc);
-    offer_pc
-        .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            let answer_pc3 = Arc::clone(&answer_pc2);
-            Box::pin(async move {
-                if let Some(c) = c {
-                    if let Ok(c) = c.to_json().await {
-                        let _ = answer_pc3.add_ice_candidate(c).await;
+        // Set ICE Candidate handler. As soon as a PeerConnection has gathered a candidate
+        // send it to the other peer
+        let answer_pc2 = Arc::downgrade(&answer_pc);
+        offer_pc
+            .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+                let answer_pc3 = answer_pc2.clone();
+                Box::pin(async move {
+                    if let Some(c) = c {
+                        if let Ok(c) = c.to_json().await {
+                            if let Some(answer_pc3) = answer_pc3.upgrade() {
+                                let _ = answer_pc3.add_ice_candidate(c).await;
+                            }
+                        }
                     }
+                })
+            }))
+            .await;
+
+        let (offer_done_tx, mut offer_done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
+        // Set the handler for Peer connection state
+        // This will notify you when the peer has connected/disconnected
+        offer_pc
+            .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+                println!("Peer Connection State has changed: {} (offerer)", s);
+
+                if s == RTCPeerConnectionState::Failed {
+                    // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                    // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                    // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                    println!("Peer Connection (offerer) has gone to failed exiting");
+                    let _ = offer_done_tx.try_send(());
                 }
-            })
-        }))
-        .await;
+                Box::pin(async {})
+            }))
+            .await;
 
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    offer_pc
-        .on_peer_connection_state_change(Box::new(|s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {} (offerer)", s);
+        let (answer_done_tx, mut answer_done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection (offerer) has gone to failed exiting");
-                std::process::exit(0);
+        // Set the handler for Peer connection state
+        // This will notify you when the peer has connected/disconnected
+        answer_pc
+            .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+                println!("Peer Connection State has changed: {} (answerer)", s);
+
+                if s == RTCPeerConnectionState::Failed {
+                    // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                    // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                    // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                    println!("Peer Connection (answerer) has gone to failed exiting");
+                    let _ = answer_done_tx.try_send(());
+                }
+                Box::pin(async {})
+            }))
+            .await;
+
+        // Now, create an offer
+        let offer = offer_pc.create_offer(None).await?;
+        let desc = serde_json::to_string(&offer)?;
+        offer_pc.set_local_description(offer).await?;
+        set_remote_description(&answer_pc, &desc).await?;
+
+        let answer = answer_pc.create_answer(None).await?;
+        let desc2 = serde_json::to_string(&answer)?;
+        answer_pc.set_local_description(answer).await?;
+        set_remote_description(&offer_pc, &desc2).await?;
+
+        println!("Press ctrl-c to stop or wait for 5s");
+        let timeout = tokio::time::sleep(Duration::from_secs(5));
+        tokio::pin!(timeout);
+
+        tokio::select! {
+            _ = timeout.as_mut() => {}
+            _ = tokio::signal::ctrl_c() => {
+                println!("");
             }
-            Box::pin(async {})
-        }))
-        .await;
-
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    answer_pc
-        .on_peer_connection_state_change(Box::new(|s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {} (answerer)", s);
-
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection (answerer) has gone to failed exiting");
-                std::process::exit(0);
+            _ = offer_done_rx.recv() => {
+                println!("received offer done signal!");
             }
-            Box::pin(async {})
-        }))
-        .await;
+            _ = answer_done_rx.recv() => {
+                println!("received answer done signal!");
+            }
+        }
 
-    // Now, create an offer
-    let offer = offer_pc.create_offer(None).await?;
-    let desc = serde_json::to_string(&offer)?;
-    offer_pc.set_local_description(offer).await?;
-    set_remote_description(&answer_pc, &desc).await?;
+        if let Err(err) = offer_pc.close().await {
+            println!("cannot close offer_pc: {}", err);
+        }
 
-    let answer = answer_pc.create_answer(None).await?;
-    let desc2 = serde_json::to_string(&answer)?;
-    answer_pc.set_local_description(answer).await?;
-    set_remote_description(&offer_pc, &desc2).await?;
-
-    println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
-
-    if let Err(err) = offer_pc.close().await {
-        println!("cannot close offer_pc: {}", err);
-    }
-
-    if let Err(err) = answer_pc.close().await {
-        println!("cannot close answer_pc: {}", err);
+        if let Err(err) = answer_pc.close().await {
+            println!("cannot close answer_pc: {}", err);
+        }
     }
 
     Ok(())

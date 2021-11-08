@@ -1,23 +1,23 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::io::Write;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
-use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
-use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::media::track::track_remote::TrackRemote;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
+use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
+use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
 
 #[tokio::main]
@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -142,7 +142,7 @@ async fn main() -> Result<()> {
 
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
-    let pc1 = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     let curr_track1 = Arc::clone(&curr_track);
     let track_count1 = Arc::clone(&track_count);
     peer_connection
@@ -152,7 +152,7 @@ async fn main() -> Result<()> {
                     let track_num = track_count1.fetch_add(1, Ordering::SeqCst);
 
                     let curr_track2 = Arc::clone(&curr_track1);
-                    let pc2 = Arc::clone(&pc1);
+                    let pc2 = pc.clone();
                     let packets_tx2 = Arc::clone(&packets_tx);
                     tokio::spawn(async move {
                         println!(
@@ -178,14 +178,18 @@ async fn main() -> Result<()> {
                                 // If just switched to this track, send PLI to get picture refresh
                                 if !is_curr_track {
                                     is_curr_track = true;
-                                    if let Err(err) = pc2
-                                        .write_rtcp(&PictureLossIndication {
-                                            sender_ssrc: 0,
-                                            media_ssrc: track.ssrc(),
-                                        })
-                                        .await
-                                    {
-                                        println!("write_rtcp err: {}", err);
+                                    if let Some(pc) = pc2.upgrade() {
+                                        if let Err(err) = pc
+                                            .write_rtcp(&[Box::new(PictureLossIndication {
+                                                sender_ssrc: 0,
+                                                media_ssrc: track.ssrc(),
+                                            })])
+                                            .await
+                                        {
+                                            println!("write_rtcp err: {}", err);
+                                        }
+                                    } else {
+                                        break;
                                     }
                                 }
                                 let _ = packets_tx2.send(rtp).await;
@@ -207,24 +211,23 @@ async fn main() -> Result<()> {
         ))
         .await;
 
-    let done = Arc::new(AtomicBool::new(false));
+    let (connected_tx, mut connected_rx) = tokio::sync::mpsc::channel(1);
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel(1);
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    let done1 = Arc::clone(&done);
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             println!("Peer Connection State has changed: {}", s);
-
-            let done2 = Arc::clone(&done1);
-            Box::pin(async move {
-                if s == RTCPeerConnectionState::Failed {
-                    // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                    // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                    // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                    done2.store(true, Ordering::SeqCst);
-                }
-            })
+            if s == RTCPeerConnectionState::Connected {
+                let _ = connected_tx.try_send(());
+            } else if s == RTCPeerConnectionState::Failed {
+                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                let _ = done_tx.try_send(());
+            }
+            Box::pin(async move {})
         }))
         .await;
 
@@ -277,24 +280,44 @@ async fn main() -> Result<()> {
 
     // Wait for connection, then rotate the track every 5s
     println!("Waiting for connection");
-    while !done.load(Ordering::SeqCst) {
-        println!("Waiting 5 seconds then changing...");
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        // We haven't gotten any tracks yet
-        if track_count.load(Ordering::SeqCst) == 0 {
-            continue;
-        }
+    tokio::select! {
+        _ = connected_rx.recv() =>{
+            loop {
+                println!("Press ctrl-c to stop, or waiting 5 seconds then changing...");
+                let timeout = tokio::time::sleep(Duration::from_secs(5));
+                tokio::pin!(timeout);
 
-        if curr_track.load(Ordering::SeqCst) == track_count.load(Ordering::SeqCst) - 1 {
-            curr_track.store(0, Ordering::SeqCst);
-        } else {
-            curr_track.fetch_add(1, Ordering::SeqCst);
+                tokio::select! {
+                    _ = timeout.as_mut() => {
+                        // We haven't gotten any tracks yet
+                        if track_count.load(Ordering::SeqCst) == 0 {
+                            continue;
+                        }
+
+                        if curr_track.load(Ordering::SeqCst) == track_count.load(Ordering::SeqCst) - 1 {
+                            curr_track.store(0, Ordering::SeqCst);
+                        } else {
+                            curr_track.fetch_add(1, Ordering::SeqCst);
+                        }
+                        println!(
+                            "Switched to track {}",
+                            curr_track.load(Ordering::SeqCst) + 1,
+                        );
+                    }
+                    _ = done_rx.recv() => {
+                        println!("received done signal!");
+                        break;
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        println!("");
+                        break;
+                    }
+                };
+            }
         }
-        println!(
-            "Switched to track {}",
-            curr_track.load(Ordering::SeqCst) + 1,
-        );
-    }
+        _ = done_rx.recv() => {}
+    };
+
     peer_connection.close().await?;
 
     Ok(())

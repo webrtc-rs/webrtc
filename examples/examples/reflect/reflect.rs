@@ -7,17 +7,19 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
-use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
-use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::media::track::track_remote::TrackRemote;
-use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use webrtc::rtp_transceiver::rtp_codec::{
+    RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
+};
+use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
+use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
+use webrtc::track::track_remote::TrackRemote;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -37,6 +39,16 @@ async fn main() -> Result<()> {
                 .long("debug")
                 .short("d")
                 .help("Prints debug log information"),
+        ).arg(
+            Arg::with_name("audio")
+                .long("audio")
+                .short("a")
+                .help("Enable audio reflect"),
+        ).arg(
+            Arg::with_name("video")
+                .long("video")
+                .short("v")
+                .help("Enable video reflect"),
         );
 
     let matches = app.clone().get_matches();
@@ -46,6 +58,12 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 
+    let audio = matches.is_present("audio");
+    let video = matches.is_present("video");
+    if !audio && !video {
+        println!("one of audio or video must be enabled");
+        std::process::exit(0);
+    }
     let debug = matches.is_present("debug");
     if debug {
         env_logger::Builder::new()
@@ -70,33 +88,37 @@ async fn main() -> Result<()> {
     let mut m = MediaEngine::default();
 
     // Setup the codecs you want to use.
-    m.register_codec(
-        RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_OPUS.to_owned(),
+    if audio {
+        m.register_codec(
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_OPUS.to_owned(),
+                    ..Default::default()
+                },
+                payload_type: 120,
                 ..Default::default()
             },
-            payload_type: 120,
-            ..Default::default()
-        },
-        RTPCodecType::Audio,
-    )?;
+            RTPCodecType::Audio,
+        )?;
+    }
 
     // We'll use a VP8 and Opus but you can also define your own
-    m.register_codec(
-        RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_VP8.to_owned(),
-                clock_rate: 90000,
-                channels: 0,
-                sdp_fmtp_line: "".to_owned(),
-                rtcp_feedback: vec![],
+    if video {
+        m.register_codec(
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_VP8.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 96,
+                ..Default::default()
             },
-            payload_type: 96,
-            ..Default::default()
-        },
-        RTPCodecType::Video,
-    )?;
+            RTPCodecType::Video,
+        )?;
+    }
 
     // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
     // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
@@ -105,7 +127,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    registry = register_default_interceptors(registry, &mut m).await?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
@@ -125,7 +147,14 @@ async fn main() -> Result<()> {
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
     let mut output_tracks = HashMap::new();
-    for s in vec!["audio", "video"] {
+    let mut media = vec![];
+    if audio {
+        media.push("audio");
+    }
+    if video {
+        media.push("video");
+    };
+    for s in media {
         let output_track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
                 mime_type: if s == "video" {
@@ -147,9 +176,11 @@ async fn main() -> Result<()> {
         // Read incoming RTCP packets
         // Before these packets are returned they are processed by interceptors. For things
         // like NACK this needs to be called.
+        let m = s.to_owned();
         tokio::spawn(async move {
             let mut rtcp_buf = vec![0u8; 1500];
             while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
+            println!("{} rtp_sender.read loop exit", m);
             Result::<()>::Ok(())
         });
 
@@ -166,7 +197,7 @@ async fn main() -> Result<()> {
 
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
-    let pc = Arc::clone(&peer_connection);
+    let pc = Arc::downgrade(&peer_connection);
     peer_connection
         .on_track(Box::new(
             move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
@@ -176,7 +207,7 @@ async fn main() -> Result<()> {
                     let media_ssrc = track.ssrc();
 
                     if track.kind() == RTPCodecType::Video {
-                        let pc2 = Arc::clone(&pc);
+                        let pc2 = pc.clone();
                         tokio::spawn(async move {
                             let mut result = Result::<usize>::Ok(0);
                             while result.is_ok() {
@@ -185,10 +216,14 @@ async fn main() -> Result<()> {
 
                                 tokio::select! {
                                     _ = timeout.as_mut() =>{
-                                        result = pc2.write_rtcp(&PictureLossIndication{
-                                                sender_ssrc: 0,
-                                                media_ssrc,
-                                        }).await.map_err(Into::into);
+                                        if let Some(pc) = pc2.upgrade(){
+                                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                                    sender_ssrc: 0,
+                                                    media_ssrc,
+                                            })]).await.map_err(Into::into);
+                                        }else{
+                                            break;
+                                        }
                                     }
                                 };
                             }
@@ -209,20 +244,24 @@ async fn main() -> Result<()> {
 
                     let output_track2 = Arc::clone(&output_track);
                     tokio::spawn(async move {
-                        print!(
-                            "Track has started, of type {}: {} \n",
+                        println!(
+                            "Track has started, of type {}: {}",
                             track.payload_type(),
                             track.codec().await.capability.mime_type
                         );
                         // Read RTP packets being sent to webrtc-rs
                         while let Ok((rtp, _)) = track.read_rtp().await {
                             if let Err(err) = output_track2.write_rtp(&rtp).await {
-                                print!("output track write_rtp got error: {}", err);
+                                println!("output track write_rtp got error: {}", err);
                                 break;
                             }
                         }
 
-                        print!("on_track finished!");
+                        println!(
+                            "on_track finished, of type {}: {}",
+                            track.payload_type(),
+                            track.codec().await.capability.mime_type
+                        );
                     });
                 }
                 Box::pin(async {})
@@ -230,18 +269,20 @@ async fn main() -> Result<()> {
         ))
         .await;
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
                 println!("Peer Connection has gone to failed exiting");
-                std::process::exit(0);
+                let _ = done_tx.try_send(());
             }
 
             Box::pin(async {})
@@ -272,7 +313,20 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    //let timeout = tokio::time::sleep(Duration::from_secs(20));
+    //tokio::pin!(timeout);
+
+    tokio::select! {
+        //_ = timeout.as_mut() => {
+        //    println!("received timeout signal!");
+        //}
+        _ = done_rx.recv() => {
+            println!("received done signal!");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("");
+        }
+    };
 
     peer_connection.close().await?;
 
