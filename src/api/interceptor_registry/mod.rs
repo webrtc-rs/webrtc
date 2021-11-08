@@ -22,7 +22,7 @@ pub async fn register_default_interceptors(
 
     registry = configure_rtcp_reports(registry);
 
-    registry = configure_twcc(registry, media_engine).await?;
+    registry = configure_twcc_receiver_only(registry, media_engine).await?;
 
     Ok(registry)
 }
