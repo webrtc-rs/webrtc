@@ -80,11 +80,8 @@ impl Stream {
 
     /// Close removes the ReadStream from the session and cleans up any associated state
     pub async fn close(&self) -> Result<()> {
-        //println!("srtp stream close: buffer.close");
         self.buffer.close().await;
-        //println!("srtp stream close: tx.send");
-        self.tx.send(self.ssrc).await?;
-        //println!("srtp stream close: end");
+        let _ = self.tx.send(self.ssrc).await;
         Ok(())
     }
 }
