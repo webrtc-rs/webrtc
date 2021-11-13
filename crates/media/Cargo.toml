@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-media"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of WebRTC Media API"
@@ -12,17 +12,17 @@ repository = "https://github.com/webrtc-rs/media"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.1", default-features = false, features = ["marshal"] }
-rtp = "0.6.1"
+util = { package = "webrtc-util", version = "0.5.2", default-features = false, features = ["marshal"] }
+rtp = "0.6.2"
 byteorder = "1.4.3"
-bytes = "1.0.1"
-displaydoc = "0.2.1"
-thiserror = "1.0"
+bytes = "1.1.0"
+displaydoc = "0.2.3"
+thiserror = "1.0.30"
 rand = "0.8.4"
 derive_builder = "0.10.2"
 
 [dev-dependencies]
-criterion = { version = "0.3.4", features = ["html_reports"] }
+criterion = { version = "0.3.5", features = ["html_reports"] }
 nearly_eq = "0.2.4"
 
 [[bench]]
