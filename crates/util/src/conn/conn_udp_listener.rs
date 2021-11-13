@@ -8,7 +8,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, watch, Mutex};
 
 const RECEIVE_MTU: usize = 8192;
 const DEFAULT_LISTEN_BACKLOG: usize = 128; // same as Linux default
@@ -16,7 +16,7 @@ const DEFAULT_LISTEN_BACKLOG: usize = 128; // same as Linux default
 pub type AcceptFilterFn =
     Box<dyn (Fn(&[u8]) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>;
 
-type AcceptDoneCh = (mpsc::Receiver<Arc<UdpConn>>, mpsc::Receiver<()>);
+type AcceptDoneCh = (mpsc::Receiver<Arc<UdpConn>>, watch::Receiver<()>);
 
 /// listener is used in the [DTLS](https://github.com/webrtc-rs/dtls) and
 /// [SCTP](https://github.com/webrtc-rs/sctp) transport to provide a connection-oriented
@@ -25,7 +25,7 @@ struct ListenerImpl {
     pconn: Arc<dyn Conn + Send + Sync>,
     accepting: Arc<AtomicBool>,
     accept_ch_tx: Arc<Mutex<Option<mpsc::Sender<Arc<UdpConn>>>>>,
-    done_ch_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    done_ch_tx: Arc<Mutex<Option<watch::Sender<()>>>>,
     ch_rx: Arc<Mutex<AcceptDoneCh>>,
     conns: Arc<Mutex<HashMap<String, Arc<UdpConn>>>>,
 }
@@ -45,7 +45,7 @@ impl Listener for ListenerImpl {
                     Err(Error::ErrClosedListenerAcceptCh)
                 }
             }
-            _ = done_ch_rx.recv() =>  Err(Error::ErrClosedListener),
+            _ = done_ch_rx.changed() =>  Err(Error::ErrClosedListener),
         }
     }
 
@@ -102,14 +102,14 @@ impl ListenConfig {
 
         let pconn = Arc::new(UdpSocket::bind(laddr).await?);
         let (accept_ch_tx, accept_ch_rx) = mpsc::channel(self.backlog);
-        let (done_ch_tx, done_ch_rx) = mpsc::channel(1);
+        let (done_ch_tx, done_ch_rx) = watch::channel(());
 
         let l = ListenerImpl {
             pconn,
             accepting: Arc::new(AtomicBool::new(true)),
             accept_ch_tx: Arc::new(Mutex::new(Some(accept_ch_tx))),
             done_ch_tx: Arc::new(Mutex::new(Some(done_ch_tx))),
-            ch_rx: Arc::new(Mutex::new((accept_ch_rx, done_ch_rx))),
+            ch_rx: Arc::new(Mutex::new((accept_ch_rx, done_ch_rx.clone()))),
             conns: Arc::new(Mutex::new(HashMap::new())),
         };
 
@@ -119,7 +119,15 @@ impl ListenConfig {
         let accept_ch_tx = Arc::clone(&l.accept_ch_tx);
         let conns = Arc::clone(&l.conns);
         tokio::spawn(async move {
-            ListenConfig::read_loop(pconn, accepting, accept_filter, accept_ch_tx, conns).await;
+            ListenConfig::read_loop(
+                done_ch_rx,
+                pconn,
+                accepting,
+                accept_filter,
+                accept_ch_tx,
+                conns,
+            )
+            .await;
         });
 
         Ok(l)
@@ -130,6 +138,7 @@ impl ListenConfig {
     ///    It can therefore not be ended until all Conns are closed.
     /// 2. Creating a new Conn when receiving from a new remote.
     async fn read_loop(
+        mut done_ch_rx: watch::Receiver<()>,
         pconn: Arc<dyn Conn + Send + Sync>,
         accepting: Arc<AtomicBool>,
         accept_filter: Option<AcceptFilterFn>,
@@ -138,25 +147,39 @@ impl ListenConfig {
     ) {
         let mut buf = vec![0u8; RECEIVE_MTU];
 
-        //TODO: add cancel handling
-        while let Ok((n, raddr)) = pconn.recv_from(&mut buf).await {
-            let udp_conn = match ListenConfig::get_udp_conn(
-                &pconn,
-                &accepting,
-                &accept_filter,
-                &accept_ch_tx,
-                &conns,
-                raddr,
-                &buf[..n],
-            )
-            .await
-            {
-                Ok(conn) => conn,
-                Err(_) => continue,
-            };
+        loop {
+            tokio::select! {
+                _ = done_ch_rx.changed() => {
+                    break;
+                }
+                result = pconn.recv_from(&mut buf) => {
+                    match result {
+                        Ok((n, raddr)) => {
+                            let udp_conn = match ListenConfig::get_udp_conn(
+                                &pconn,
+                                &accepting,
+                                &accept_filter,
+                                &accept_ch_tx,
+                                &conns,
+                                raddr,
+                                &buf[..n],
+                            )
+                            .await
+                            {
+                                Ok(conn) => conn,
+                                Err(_) => continue,
+                            };
 
-            if let Some(conn) = udp_conn {
-                let _ = conn.buffer.write(&buf[..n]).await;
+                            if let Some(conn) = udp_conn {
+                                let _ = conn.buffer.write(&buf[..n]).await;
+                            }
+                        }
+                        Err(err) => {
+                            log::warn!("ListenConfig pconn.recv_from error: {}", err);
+                            break;
+                        }
+                    };
+                }
             }
         }
     }
