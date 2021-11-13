@@ -67,6 +67,6 @@ impl Conn for Endpoint {
     }
 
     async fn close(&self) -> Result<()> {
-        Ok(())
+        self.next_conn.close().await
     }
 }
