@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-sctp"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SCTP"
@@ -12,21 +12,21 @@ repository = "https://github.com/webrtc-rs/sctp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.0", default-features = false, features = ["conn"] }
-tokio = { version = "1.12.0", features = ["full"] }
-bytes = "1"
-rand = "0.8.0"
-crc = "2.0.0"
-async-trait = "0.1"
-log = "0.4"
-thiserror = "1.0"
+util = { package = "webrtc-util", version = "0.5.2", default-features = false, features = ["conn"] }
+tokio = { version = "1.13.0", features = ["full"] }
+bytes = "1.1.0"
+rand = "0.8.4"
+crc = "2.1.0"
+async-trait = "0.1.51"
+log = "0.4.14"
+thiserror = "1.0.30"
 
 [dev-dependencies]
-tokio-test = "0.4"
-lazy_static = "1.4"
+tokio-test = "0.4.2"
+lazy_static = "1.4.0"
 env_logger = "0.9.0"
 chrono = "0.4.19"
-clap = "2"
+clap = "2.33.3"
 
 [[example]]
 name = "ping"
