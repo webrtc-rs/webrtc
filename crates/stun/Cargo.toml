@@ -1,6 +1,6 @@
 [package]
 name = "stun"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of STUN"
@@ -14,21 +14,21 @@ default = []
 bench = []
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.0", default-features = false, features = ["conn"] }
-tokio = { version = "1.12.0", features = ["full"] }
+util = { package = "webrtc-util", version = "0.5.2", default-features = false, features = ["conn"] }
+tokio = { version = "1.13.0", features = ["full"] }
 lazy_static = "1.4.0"
-url = "2.2.0"
-rand = "0.8.0"
+url = "2.2.2"
+rand = "0.8.4"
 base64 = "0.13.0"
-subtle = "2.1.1"
-crc = "2.0.0"
-ring = "0.16.19"
+subtle = "2.4.1"
+crc = "2.1.0"
+ring = "0.16.20"
 md-5 = "0.9.1"
-thiserror = "1.0"
+thiserror = "1.0.30"
 
 [dev-dependencies]
-tokio-test = "0.4"
-clap = "2"
+tokio-test = "0.4.2"
+clap = "2.33.3"
 criterion = "0.3.5"
 
 
