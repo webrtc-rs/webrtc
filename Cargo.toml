@@ -12,42 +12,41 @@ repository = "https://github.com/webrtc-rs/webrtc"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.1" }
+util = { package = "webrtc-util", version = "0.5.2" }
 sdp = "0.4.0"
-mdns = { package = "webrtc-mdns", version = "0.4.0" }
-stun = "0.4.0"
-turn = "0.5.1"
-ice = { package = "webrtc-ice", version = "0.6.1" }
-dtls = { package = "webrtc-dtls", version = "0.5.0" }
-rtp = "0.6.1"
-rtcp = "0.6.1"
-srtp = { package = "webrtc-srtp", version = "0.8.4" }
-sctp = { package = "webrtc-sctp", version = "0.4.1" }
-data = { package = "webrtc-data", version = "0.3.1" }
-media = { package = "webrtc-media", version = "0.4.1" }
-interceptor = "0.7.1"
-tokio = { version = "1.12.0", features = ["full"] }
+mdns = { package = "webrtc-mdns", version = "0.4.1" }
+stun = "0.4.1"
+turn = "0.5.2"
+ice = { package = "webrtc-ice", version = "0.6.2" }
+dtls = { package = "webrtc-dtls", version = "0.5.1" }
+rtp = "0.6.2"
+rtcp = "0.6.2"
+srtp = { package = "webrtc-srtp", version = "0.8.5" }
+sctp = { package = "webrtc-sctp", version = "0.4.2" }
+data = { package = "webrtc-data", version = "0.3.2" }
+media = { package = "webrtc-media", version = "0.4.2" }
+interceptor = "0.7.2"
+tokio = { version = "1.13.0", features = ["full"] }
 log = "0.4.14"
-async-trait = "0.1.42"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-rand = "0.8"
-bytes = "1"
-thiserror = "1.0"
+async-trait = "0.1.51"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.70"
+rand = "0.8.4"
+bytes = "1.1.0"
+thiserror = "1.0.30"
 waitgroup = "0.1.2"
-regex = "1"
+regex = "1.5.4"
 url = "2.2.2"
 rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
-rcgen = { version = "0.8.13", features = ["pem", "x509-parser"]}
-ring = "0.16.19"
-sha2 = "0.9.1"
-lazy_static = "1.4"
+rcgen = { version = "0.8.14", features = ["pem", "x509-parser"]}
+ring = "0.16.20"
+sha2 = "0.9.8"
+lazy_static = "1.4.0"
 hex = "0.4.3"
 
 [dev-dependencies]
-tokio-test = "0.4"
+tokio-test = "0.4.2"
 env_logger = "0.9.0"
-# chrono = "0.4.19"
 
 [profile.dev]
 opt-level = 0
