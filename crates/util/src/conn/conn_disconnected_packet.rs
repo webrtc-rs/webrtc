@@ -62,6 +62,6 @@ impl Conn for DisconnectedPacketConn {
     }
 
     async fn close(&self) -> Result<()> {
-        Ok(())
+        self.pconn.close().await
     }
 }
