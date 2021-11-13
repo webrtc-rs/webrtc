@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-mdns"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of mDNS"
@@ -16,16 +16,16 @@ default = [ "reuse_port" ]
 reuse_port = []
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.0", default-features = false, features = ["ifaces"] }
-tokio = { version = "1.12.0", features = ["full"] }
+util = { package = "webrtc-util", version = "0.5.2", default-features = false, features = ["ifaces"] }
+tokio = { version = "1.13.0", features = ["full"] }
 socket2 = { version = "0.4.2", features = ["all"] }
-log = "0.4"
-thiserror = "1.0"
+log = "0.4.14"
+thiserror = "1.0.30"
 
 [dev-dependencies]
-env_logger = "0.9"
-chrono = "0.4"
-clap = "2"
+env_logger = "0.9.0"
+chrono = "0.4.19"
+clap = "2.33.3"
 
 [[example]]
 name = "mdns_query"
