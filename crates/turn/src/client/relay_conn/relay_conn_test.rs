@@ -56,7 +56,7 @@ async fn test_relay_conn() -> Result<()> {
         read_ch_rx: Arc::new(Mutex::new(read_ch_rx)),
     };
 
-    let rc = RelayConn::new(Arc::new(Mutex::new(obs)), config);
+    let rc = RelayConn::new(Arc::new(Mutex::new(obs)), config).await;
 
     let rci = rc.relay_conn.lock().await;
     let (bind_addr, bind_number) = {

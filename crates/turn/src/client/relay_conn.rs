@@ -81,10 +81,10 @@ pub struct RelayConn<T: 'static + RelayConnObserver + Send + Sync> {
 
 impl<T: 'static + RelayConnObserver + Send + Sync> RelayConn<T> {
     // new creates a new instance of UDPConn
-    pub(crate) fn new(obs: Arc<Mutex<T>>, config: RelayConnConfig) -> Self {
+    pub(crate) async fn new(obs: Arc<Mutex<T>>, config: RelayConnConfig) -> Self {
         log::debug!("initial lifetime: {} seconds", config.lifetime.as_secs());
 
-        let mut c = RelayConn {
+        let c = RelayConn {
             refresh_alloc_timer: PeriodicTimer::new(TimerIdRefresh::Alloc, config.lifetime / 2),
             refresh_perms_timer: PeriodicTimer::new(TimerIdRefresh::Perms, PERM_REFRESH_INTERVAL),
             relayed_addr: config.relayed_addr,
@@ -95,24 +95,14 @@ impl<T: 'static + RelayConnObserver + Send + Sync> RelayConn<T> {
         let rci1 = Arc::clone(&c.relay_conn);
         let rci2 = Arc::clone(&c.relay_conn);
 
-        if c.refresh_alloc_timer.start(rci1) {
+        if c.refresh_alloc_timer.start(rci1).await {
             log::debug!("refresh_alloc_timer started");
         }
-        if c.refresh_perms_timer.start(rci2) {
+        if c.refresh_perms_timer.start(rci2).await {
             log::debug!("refresh_perms_timer started");
         }
 
         c
-    }
-
-    // Close closes the connection.
-    // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
-    pub async fn close(&mut self) -> Result<(), Error> {
-        self.refresh_alloc_timer.stop();
-        self.refresh_perms_timer.stop();
-
-        let mut relay_conn = self.relay_conn.lock().await;
-        relay_conn.close().await
     }
 }
 
@@ -185,7 +175,17 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
         None
     }
 
+    // Close closes the connection.
+    // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
     async fn close(&self) -> Result<(), util::Error> {
+        self.refresh_alloc_timer.stop().await;
+        self.refresh_perms_timer.stop().await;
+
+        let mut relay_conn = self.relay_conn.lock().await;
+        let _ = relay_conn
+            .close()
+            .await
+            .map_err(|err| util::Error::Other(format!("{}", err)));
         Ok(())
     }
 }

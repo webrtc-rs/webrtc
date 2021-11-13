@@ -31,7 +31,7 @@ pub trait PeriodicTimerTimeoutHandler {
 pub struct PeriodicTimer {
     id: TimerIdRefresh,
     interval: Duration,
-    close_tx: Option<mpsc::Sender<()>>,
+    close_tx: Mutex<Option<mpsc::Sender<()>>>,
 }
 
 impl PeriodicTimer {
@@ -40,18 +40,21 @@ impl PeriodicTimer {
         PeriodicTimer {
             id,
             interval,
-            close_tx: None,
+            close_tx: Mutex::new(None),
         }
     }
 
     // Start starts the timer.
-    pub fn start<T: 'static + PeriodicTimerTimeoutHandler + std::marker::Send>(
-        &mut self,
+    pub async fn start<T: 'static + PeriodicTimerTimeoutHandler + std::marker::Send>(
+        &self,
         timeout_handler: Arc<Mutex<T>>,
     ) -> bool {
         // this is a noop if the timer is always running
-        if self.close_tx.is_some() {
-            return false;
+        {
+            let close_tx = self.close_tx.lock().await;
+            if close_tx.is_some() {
+                return false;
+            }
         }
 
         let (close_tx, mut close_rx) = mpsc::channel(1);
@@ -73,18 +76,24 @@ impl PeriodicTimer {
             }
         });
 
-        self.close_tx = Some(close_tx);
+        {
+            let mut close = self.close_tx.lock().await;
+            *close = Some(close_tx);
+        }
+
         true
     }
 
     // Stop stops the timer.
-    pub fn stop(&mut self) {
-        self.close_tx.take();
+    pub async fn stop(&self) {
+        let mut close_tx = self.close_tx.lock().await;
+        close_tx.take();
     }
 
     // is_running tests if the timer is running.
     // Debug purpose only
-    pub fn is_running(&self) -> bool {
-        self.close_tx.is_some()
+    pub async fn is_running(&self) -> bool {
+        let close_tx = self.close_tx.lock().await;
+        close_tx.is_some()
     }
 }

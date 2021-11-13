@@ -598,7 +598,7 @@ impl Client {
             ci.allocate().await?
         };
 
-        Ok(RelayConn::new(Arc::clone(&self.client_internal), config))
+        Ok(RelayConn::new(Arc::clone(&self.client_internal), config).await)
     }
 
     pub async fn close(&self) -> Result<()> {
