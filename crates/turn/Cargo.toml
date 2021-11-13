@@ -1,6 +1,6 @@
 [package]
 name = "turn"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of TURN"
@@ -12,23 +12,23 @@ repository = "https://github.com/webrtc-rs/turn"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.0", default-features = false, features = ["conn", "vnet"] }
-stun = "0.4.0"
-tokio = { version = "1.12.0", features = ["full"] }
-async-trait = "0.1"
-log = "0.4"
+util = { package = "webrtc-util", version = "0.5.2", default-features = false, features = ["conn", "vnet"] }
+stun = "0.4.1"
+tokio = { version = "1.13.0", features = ["full"] }
+async-trait = "0.1.51"
+log = "0.4.14"
 base64 = "0.13.0"
-rand = "0.8.2"
-ring = "0.16.19"
+rand = "0.8.4"
+ring = "0.16.20"
 md-5 = "0.9.1"
-thiserror = "1.0"
+thiserror = "1.0.30"
 
 [dev-dependencies]
-tokio-test = "0.4"
+tokio-test = "0.4.2"
 env_logger = "0.9.0"
 chrono = "0.4.19"
-hex = "0.4.2"
-clap = "2"
+hex = "0.4.3"
+clap = "2.33.3"
 criterion = "0.3.5"
 
 [[bench]]
