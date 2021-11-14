@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of WebRTC media
+ A pure Rust implementation of WebRTC Media. Rewrite <a href="https://github.com/pion/mediadevices/releases/tag/v0.3.0">Pion</a> MediaDevices in Rust
 </p>
