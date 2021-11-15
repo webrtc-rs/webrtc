@@ -222,12 +222,6 @@ async fn main() -> Result<()> {
                 .long("debug")
                 .short("d")
                 .help("Prints debug log information"),
-        )
-        .arg(
-            Arg::with_name("console_subscriber")
-                .long("console_subscriber")
-                .short("c")
-                .help("Enable console subscriber"),
         );
 
     let matches = app.clone().get_matches();
@@ -235,11 +229,6 @@ async fn main() -> Result<()> {
     if matches.is_present("FULLHELP") {
         app.print_long_help().unwrap();
         std::process::exit(0);
-    }
-
-    let enable_console_subscriber = matches.is_present("console_subscriber");
-    if enable_console_subscriber {
-        console_subscriber::init();
     }
 
     let debug = matches.is_present("debug");
