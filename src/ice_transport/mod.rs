@@ -13,7 +13,7 @@ use ice_candidate_pair::RTCIceCandidatePair;
 use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
 
-use crate::error::{Error, Result};
+use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::mux::endpoint::Endpoint;
@@ -148,6 +148,11 @@ impl RTCIceTransport {
             };
 
             let (cancel_tx, cancel_rx) = mpsc::channel(1);
+            {
+                let mut internal = self.internal.lock().await;
+                internal.role = role;
+                internal.cancel_tx = Some(cancel_tx);
+            }
 
             let conn: Arc<dyn Conn + Send + Sync> = match role {
                 RTCIceRole::Controlling => {
@@ -180,8 +185,6 @@ impl RTCIceTransport {
 
             {
                 let mut internal = self.internal.lock().await;
-                internal.role = role;
-                internal.cancel_tx = Some(cancel_tx);
                 internal.conn = Some(conn);
                 internal.mux = Some(Mux::new(config));
             }
@@ -216,17 +219,25 @@ impl RTCIceTransport {
     pub async fn stop(&self) -> Result<()> {
         self.set_state(RTCIceTransportState::Closed);
 
+        let mut errs: Vec<Error> = vec![];
         {
             let mut internal = self.internal.lock().await;
             internal.cancel_tx.take();
             if let Some(mut mux) = internal.mux.take() {
                 mux.close().await;
             }
+            if let Some(conn) = internal.conn.take() {
+                if let Err(err) = conn.close().await {
+                    errs.push(err.into());
+                }
+            }
         }
 
-        self.gatherer.close().await?;
+        if let Err(err) = self.gatherer.close().await {
+            errs.push(err);
+        }
 
-        Ok(())
+        flatten_errs(errs)
     }
 
     /// on_selected_candidate_pair_change sets a handler that is invoked when a new

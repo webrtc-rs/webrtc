@@ -220,6 +220,8 @@ impl RTCIceGatherer {
 
     /// Close prunes all local candidates, and closes the ports.
     pub async fn close(&self) -> Result<()> {
+        self.set_state(RTCIceGathererState::Closed).await;
+
         let agent = {
             let mut agent_opt = self.agent.lock().await;
             agent_opt.take()
@@ -228,7 +230,6 @@ impl RTCIceGatherer {
         if let Some(agent) = agent {
             agent.close().await?;
         }
-        self.set_state(RTCIceGathererState::Closed).await;
 
         Ok(())
     }
