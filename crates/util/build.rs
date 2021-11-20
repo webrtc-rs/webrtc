@@ -4,7 +4,7 @@ fn main() {
         .contains("android")
     {
         cc::Build::new()
-            .file("src/ifaces/ffi/android/ifaddrs.cpp")
+            .file("src/ifaces/ffi/android/ifaddrs.c")
             .compile("ifaddrs-android");
     }
 }
