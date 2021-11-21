@@ -69,7 +69,6 @@ pub struct SettingEngine {
     pub(crate) vnet: Option<Arc<Net>>,
     //BufferFactory                             :func(packetType packetio.BufferPacketType, ssrc uint32) io.ReadWriteCloser,
     //iceTCPMux                                 :ice.TCPMux,?
-    //iceUDPMux                                 :ice.UDPMux,?
     //iceProxyDialer                            :proxy.Dialer,?
     pub(crate) udp_network: UDPNetwork,
     pub(crate) disable_media_engine_copy: bool,
@@ -134,6 +133,9 @@ impl SettingEngine {
         self.timeout.ice_relay_acceptance_min_wait = t;
     }
 
+    /// set_udp_network allows ICE traffic to come through Ephemeral or UDPMux.
+    /// UDPMux drastically simplifying deployments where ports will need to be opened/forwarded.
+    /// UDPMux should be started prior to creating PeerConnections.
     pub fn set_udp_network(&mut self, udp_network: UDPNetwork) {
         self.udp_network = udp_network;
     }
@@ -273,13 +275,6 @@ impl SettingEngine {
     // NetworkTypeTCP4 or NetworkTypeTCP6 is enabled as well.
     //pub fn SetICETCPMux(&mut self, tcpMux ice.TCPMux) {
     //    self.iceTCPMux = tcpMux
-    //}
-
-    // SetICEUDPMux allows ICE traffic to come through a single UDP port, drastically
-    // simplifying deployments where ports will need to be opened/forwarded.
-    // UDPMux should be started prior to creating PeerConnections.
-    //pub fn SetICEUDPMux(&mut self, udpMux ice.UDPMux) {
-    //    self.iceUDPMux = udpMux
     //}
 
     // SetICEProxyDialer sets the proxy dialer interface based on golang.org/x/net/proxy.
