@@ -159,7 +159,7 @@ impl Packetizer for PacketizerImpl {
     /// skip_samples causes a gap in sample count between Packetize requests so the
     /// RTP payloads produced have a gap in timestamps
     fn skip_samples(&mut self, skipped_samples: u32) {
-        self.timestamp += skipped_samples;
+        self.timestamp = self.timestamp.wrapping_add(skipped_samples);
     }
 
     fn clone_to(&self) -> Box<dyn Packetizer + Send + Sync> {

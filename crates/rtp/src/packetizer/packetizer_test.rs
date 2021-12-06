@@ -102,9 +102,11 @@ async fn test_packetizer_timestamp_rollover_does_not_panic() -> Result<()> {
     let payload = Bytes::from_static(&[0; 128]);
     let mut packetizer = new_packetizer(100, 98, 0x1234ABCD, g722, seq, 90000);
 
-    packetizer.packetize(&payload, u64::MAX as _).await?;
-
     packetizer.packetize(&payload, 10).await?;
+
+    packetizer.packetize(&payload, u32::MAX).await?;
+
+    packetizer.skip_samples(u32::MAX);
 
     Ok(())
 }
