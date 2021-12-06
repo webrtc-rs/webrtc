@@ -104,5 +104,7 @@ async fn test_packetizer_timestamp_rollover_does_not_panic() -> Result<()> {
 
     packetizer.packetize(&payload, u64::MAX as _).await?;
 
+    packetizer.packetize(&payload, 10).await?;
+
     Ok(())
 }

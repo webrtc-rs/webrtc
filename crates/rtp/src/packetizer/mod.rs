@@ -135,7 +135,7 @@ impl Packetizer for PacketizerImpl {
             i += 1;
         }
 
-        self.timestamp.wrapping_add(samples);
+        self.timestamp = self.timestamp.wrapping_add(samples);
 
         if l != 0 && self.abs_send_time != 0 {
             let st = if let Some(fn_time_gen) = &self.time_gen {
