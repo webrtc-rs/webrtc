@@ -1,6 +1,6 @@
 [package]
 name = "webrtc"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of WebRTC API"
@@ -19,13 +19,13 @@ stun = "0.4.1"
 turn = "0.5.2"
 ice = { package = "webrtc-ice", version = "0.6.2" }
 dtls = { package = "webrtc-dtls", version = "0.5.1" }
-rtp = "0.6.2"
+rtp = "0.6.3"
 rtcp = "0.6.2"
-srtp = { package = "webrtc-srtp", version = "0.8.5" }
+srtp = { package = "webrtc-srtp", version = "0.8.6" }
 sctp = { package = "webrtc-sctp", version = "0.4.2" }
 data = { package = "webrtc-data", version = "0.3.2" }
-media = { package = "webrtc-media", version = "0.4.2" }
-interceptor = "0.7.2"
+media = { package = "webrtc-media", version = "0.4.3" }
+interceptor = "0.7.3"
 tokio = { version = "1.13.0", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.51"
