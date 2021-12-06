@@ -93,3 +93,16 @@ async fn test_packetizer_abs_send_time() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_packetizer_timestamp_rollover_does_not_panic() -> Result<()> {
+    let g722 = Box::new(g7xx::G722Payloader {});
+    let seq = Box::new(new_random_sequencer());
+
+    let payload = Bytes::from_static(&[0; 128]);
+    let mut packetizer = new_packetizer(100, 98, 0x1234ABCD, g722, seq, 90000);
+
+    packetizer.packetize(&payload, u64::MAX as _).await?;
+
+    Ok(())
+}
