@@ -261,9 +261,6 @@ impl Conn for UDPMuxConn {
     }
 
     async fn send_to(&self, buf: &[u8], target: SocketAddr) -> ConnResult<usize> {
-        if self.is_closed() {
-            return Err(Error::ErrUseClosedNetworkConn);
-        }
         let normalized_target = normalize_socket_addr(&target, &self.inner.params.local_addr);
 
         if !self.contains_address(&normalized_target) {
