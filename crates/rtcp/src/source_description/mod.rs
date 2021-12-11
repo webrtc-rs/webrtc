@@ -430,7 +430,9 @@ impl Unmarshal for SourceDescription {
             return Err(Error::InvalidHeader.into());
         }
 
-        if h.padding && raw_packet.has_remaining() {
+        if
+        /*h.padding &&*/
+        raw_packet.has_remaining() {
             raw_packet.advance(raw_packet.remaining());
         }
 

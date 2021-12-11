@@ -182,7 +182,9 @@ impl Unmarshal for Goodbye {
             Bytes::new()
         };
 
-        if header.padding && raw_packet.has_remaining() {
+        if
+        /*header.padding &&*/
+        raw_packet.has_remaining() {
             raw_packet.advance(raw_packet.remaining());
         }
 

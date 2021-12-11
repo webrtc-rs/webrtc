@@ -153,7 +153,9 @@ impl Unmarshal for FullIntraRequest {
             i += 8;
         }
 
-        if h.padding && raw_packet.has_remaining() {
+        if
+        /*h.padding &&*/
+        raw_packet.has_remaining() {
             raw_packet.advance(raw_packet.remaining());
         }
 

@@ -267,7 +267,9 @@ impl Unmarshal for ReceiverEstimatedMaximumBitrate {
             ssrcs.push(raw_packet.get_u32());
         }
 
-        if header.padding && raw_packet.has_remaining() {
+        if
+        /*header.padding &&*/
+        raw_packet.has_remaining() {
             raw_packet.advance(raw_packet.remaining());
         }
 

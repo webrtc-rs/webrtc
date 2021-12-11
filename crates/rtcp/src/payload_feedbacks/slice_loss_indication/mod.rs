@@ -161,7 +161,9 @@ impl Unmarshal for SliceLossIndication {
             i += 4;
         }
 
-        if h.padding && raw_packet.has_remaining() {
+        if
+        /*h.padding &&*/
+        raw_packet.has_remaining() {
             raw_packet.advance(raw_packet.remaining());
         }
 
