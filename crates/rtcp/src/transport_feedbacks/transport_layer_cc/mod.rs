@@ -590,7 +590,7 @@ impl Unmarshal for TransportLayerCc {
         // header's length + payload's length
         let total_length = 4 * (h.length + 1) as usize;
 
-        if total_length <= HEADER_LENGTH + PACKET_CHUNK_OFFSET {
+        if total_length < HEADER_LENGTH + PACKET_CHUNK_OFFSET {
             return Err(Error::PacketTooShort.into());
         }
 

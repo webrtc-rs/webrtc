@@ -583,6 +583,23 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                 ],
             },
         ),
+        (
+            "example3",
+            Bytes::from_static(&[
+                0x8f, 0xcd, 0x0, 0x4, 0x9a, 0xcb, 0x4, 0x42, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+                0x0, 0x0, 0x0, 0x0, 0x0,
+            ]),
+            TransportLayerCc {
+                sender_ssrc: 2596996162,
+                media_ssrc: 0,
+                base_sequence_number: 0,
+                packet_status_count: 0,
+                reference_time: 0,
+                fb_pkt_count: 0,
+                packet_chunks: vec![],
+                recv_deltas: vec![],
+            },
+        ),
     ];
 
     for (name, mut data, want) in tests {
