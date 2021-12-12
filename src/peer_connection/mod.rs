@@ -328,14 +328,15 @@ impl RTCPeerConnection {
     }
 
     async fn after_negotiation_needed_op(params: NegotiationNeededParams) -> bool {
-        if params.negotiation_needed_state.load(Ordering::SeqCst)
-            == NegotiationNeededState::Queue as u8
-        {
+        let old_negotiation_needed_state = params.negotiation_needed_state.load(Ordering::SeqCst);
+
+        params
+            .negotiation_needed_state
+            .store(NegotiationNeededState::Empty as u8, Ordering::SeqCst);
+
+        if old_negotiation_needed_state == NegotiationNeededState::Queue as u8 {
             RTCPeerConnection::do_negotiation_needed_inner(&params)
         } else {
-            params
-                .negotiation_needed_state
-                .store(NegotiationNeededState::Empty as u8, Ordering::SeqCst);
             false
         }
     }
