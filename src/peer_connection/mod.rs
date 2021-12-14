@@ -1693,10 +1693,10 @@ impl RTCPeerConnection {
     }
 
     /// add_transceiver_from_track Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
-    pub async fn add_transceiver_from_track(
-        &self,
-        track: &Arc<dyn TrackLocal + Send + Sync>, //Why compiler complains if "track: Arc<dyn TrackLocal + Send + Sync>"?
-        init: &[RTCRtpTransceiverInit],
+    pub async fn add_transceiver_from_track<'a>(
+        &'a self,
+        track: Arc<dyn TrackLocal + Send + Sync>,
+        init: &'a [RTCRtpTransceiverInit],
     ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
@@ -1710,7 +1710,7 @@ impl RTCPeerConnection {
 
         let t = self
             .internal
-            .new_transceiver_from_track(direction, Arc::clone(track))
+            .new_transceiver_from_track(direction, track)
             .await?;
 
         self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
