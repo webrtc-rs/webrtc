@@ -434,11 +434,10 @@ impl RTCPeerConnection {
                             || t.direction() == RTCRtpTransceiverDirection::Sendonly
                         {
                             if let (Some(desc_msid), Some(sender)) =
-                                (m.attribute(ATTR_KEY_MSID), t.sender().await)
+                                (m.attribute(ATTR_KEY_MSID).and_then(|o| o), t.sender().await)
                             {
                                 if let Some(track) = &sender.track().await {
-                                    if desc_msid.as_str()
-                                        != track.stream_id().to_owned() + " " + track.id()
+                                    if desc_msid != track.stream_id().to_owned() + " " + track.id()
                                     {
                                         return true;
                                     }
