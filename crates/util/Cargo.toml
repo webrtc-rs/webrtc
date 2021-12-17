@@ -52,3 +52,8 @@ cc = "1.0.72"
 tokio-test = "0.4.2"
 env_logger = "0.9.0"
 chrono = "0.4.19"
+criterion = { version = "0.3.5", features = ["stable"]}
+
+[[bench]]
+name = "bench"
+harness = false

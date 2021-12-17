@@ -4,7 +4,7 @@ mod buffer_test;
 use crate::error::{Error, Result};
 
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, Notify};
 use tokio::time::{timeout, Duration};
 
 const MIN_SIZE: usize = 2048;
@@ -19,10 +19,8 @@ struct BufferInternal {
     head: usize,
     tail: usize,
 
-    notify_tx: Option<mpsc::Sender<()>>,
-    notify_rx: Option<mpsc::Receiver<()>>,
-    subs: bool,
     closed: bool,
+    subs: bool,
 
     count: usize,
     limit_count: usize,
@@ -99,28 +97,25 @@ impl BufferInternal {
 #[derive(Debug, Clone)]
 pub struct Buffer {
     buffer: Arc<Mutex<BufferInternal>>,
+    notify: Arc<Notify>,
 }
 
 impl Buffer {
     pub fn new(limit_count: usize, limit_size: usize) -> Self {
-        let (notify_tx, notify_rx) = mpsc::channel(1);
-
         Buffer {
             buffer: Arc::new(Mutex::new(BufferInternal {
                 data: vec![],
                 head: 0,
                 tail: 0,
 
-                notify_tx: Some(notify_tx),
-                notify_rx: Some(notify_rx),
-
-                subs: false,
                 closed: false,
+                subs: false,
 
                 count: 0,
                 limit_count,
                 limit_size,
             })),
+            notify: Arc::new(Notify::new()),
         }
     }
 
@@ -149,24 +144,6 @@ impl Buffer {
         while !b.available(packet.len()) {
             b.grow()?;
         }
-
-        let mut notify = if b.subs {
-            // readers are waiting.  Prepare to notify, but only
-            // actually do it after we release the lock.
-            let notify = b.notify_tx.take();
-
-            let (notify_tx, notify_rx) = mpsc::channel(1);
-
-            b.notify_tx = Some(notify_tx);
-            b.notify_rx = Some(notify_rx);
-
-            // Reset the subs marker.
-            b.subs = false;
-
-            notify
-        } else {
-            None
-        };
 
         // store the length of the packet
         let tail = b.tail;
@@ -197,9 +174,10 @@ impl Buffer {
         }
         b.count += 1;
 
-        // Actually close the notify channel down here.
-        if notify.is_some() {
-            notify.take(); //drop notify
+        if b.subs {
+            // we have other are waiting data
+            self.notify.notify_one();
+            b.subs = false;
         }
 
         Ok(packet.len())
@@ -211,7 +189,6 @@ impl Buffer {
     // Returns io.EOF if the buffer is closed.
     pub async fn read(&self, packet: &mut [u8], duration: Option<Duration>) -> Result<usize> {
         loop {
-            let notify;
             {
                 // use {} to let LockGuard RAII
                 let mut b = self.buffer.lock().await;
@@ -264,27 +241,23 @@ impl Buffer {
                         return Err(Error::ErrBufferShort);
                     }
                     return Ok(copied);
+                } else {
+                    // Dont have data -> need wait
+                    b.subs = true;
                 }
 
                 if b.closed {
                     return Err(Error::ErrBufferClosed);
                 }
-
-                notify = b.notify_rx.take();
-
-                // Set the subs marker, telling the writer we're waiting.
-                b.subs = true
             }
 
-            // Wake for the broadcast.
-            if let Some(mut notify) = notify {
-                if let Some(d) = duration {
-                    if timeout(d, notify.recv()).await.is_err() {
-                        return Err(Error::ErrTimeout);
-                    }
-                } else {
-                    notify.recv().await;
+            // Wait for signal.
+            if let Some(d) = duration {
+                if timeout(d, self.notify.notified()).await.is_err() {
+                    return Err(Error::ErrTimeout);
                 }
+            } else {
+                self.notify.notified().await;
             }
         }
     }
@@ -300,8 +273,8 @@ impl Buffer {
             return;
         }
 
-        b.notify_tx.take();
         b.closed = true;
+        self.notify.notify_waiters();
     }
 
     pub async fn is_closed(&self) -> bool {
