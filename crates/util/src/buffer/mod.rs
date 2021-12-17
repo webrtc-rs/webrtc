@@ -4,7 +4,7 @@ mod buffer_test;
 use crate::error::{Error, Result};
 
 use std::sync::Arc;
-use tokio::sync::{Notify, Mutex};
+use tokio::sync::{Mutex, Notify};
 use tokio::time::{timeout, Duration};
 
 const MIN_SIZE: usize = 2048;
@@ -97,7 +97,7 @@ impl BufferInternal {
 #[derive(Debug, Clone)]
 pub struct Buffer {
     buffer: Arc<Mutex<BufferInternal>>,
-    notify: Arc<Notify>
+    notify: Arc<Notify>,
 }
 
 impl Buffer {
@@ -115,7 +115,7 @@ impl Buffer {
                 limit_count,
                 limit_size,
             })),
-            notify: Arc::new(Notify::new())
+            notify: Arc::new(Notify::new()),
         }
     }
 

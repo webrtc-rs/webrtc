@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion};
 use criterion::async_executor::FuturesExecutor;
+use criterion::{criterion_group, criterion_main, Criterion};
 
 use webrtc_util::Buffer;
 
@@ -15,15 +15,18 @@ async fn buffer_write_then_read(times: u32) {
 fn benchmark_buffer(c: &mut Criterion) {
     ///////////////////////////////////////////////////////////////////////////////////////////////
     c.bench_function("Benchmark Buffer WriteThenRead 1", |b| {
-        b.to_async(FuturesExecutor).iter(|| buffer_write_then_read(1));
+        b.to_async(FuturesExecutor)
+            .iter(|| buffer_write_then_read(1));
     });
 
     c.bench_function("Benchmark Buffer WriteThenRead 10", |b| {
-        b.to_async(FuturesExecutor).iter(|| buffer_write_then_read(10));
+        b.to_async(FuturesExecutor)
+            .iter(|| buffer_write_then_read(10));
     });
 
     c.bench_function("Benchmark Buffer WriteThenRead 100", |b| {
-        b.to_async(FuturesExecutor).iter(|| buffer_write_then_read(100));
+        b.to_async(FuturesExecutor)
+            .iter(|| buffer_write_then_read(100));
     });
 }
 

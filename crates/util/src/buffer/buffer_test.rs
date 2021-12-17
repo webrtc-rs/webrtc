@@ -1,9 +1,9 @@
 use super::*;
 use crate::error::Error;
 
+use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 use tokio_test::assert_ok;
-use tokio::sync::mpsc;
 
 #[tokio::test]
 async fn test_buffer() {
