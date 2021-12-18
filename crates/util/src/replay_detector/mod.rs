@@ -166,13 +166,8 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
     }
 }
 
-pub struct NoOpReplayDetector {}
-
-impl Default for NoOpReplayDetector {
-    fn default() -> Self {
-        NoOpReplayDetector {}
-    }
-}
+#[derive(Default)]
+pub struct NoOpReplayDetector;
 
 impl ReplayDetector for NoOpReplayDetector {
     fn check(&mut self, _: u64) -> bool {
