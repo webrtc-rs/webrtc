@@ -414,7 +414,7 @@ impl MediaEngine {
 
     /// register_header_extension adds a header extension to the MediaEngine
     /// To determine the negotiated value use `GetHeaderExtensionID` after signaling is complete
-    pub async fn register_header_extension(
+    pub fn register_header_extension(
         &mut self,
         extension: RTCRtpHeaderExtensionCapability,
         typ: RTPCodecType,
