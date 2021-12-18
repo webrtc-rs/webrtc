@@ -120,7 +120,7 @@ impl DnsType {
 }
 
 // A Class is a type of network.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct DnsClass(pub u16);
 
 // ResourceHeader.Class and question.Class
@@ -130,12 +130,6 @@ pub const DNSCLASS_CHAOS: DnsClass = DnsClass(3);
 pub const DNSCLASS_HESIOD: DnsClass = DnsClass(4);
 // question.Class
 pub const DNSCLASS_ANY: DnsClass = DnsClass(255);
-
-impl Default for DnsClass {
-    fn default() -> Self {
-        DnsClass(0)
-    }
-}
 
 impl fmt::Display for DnsClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
