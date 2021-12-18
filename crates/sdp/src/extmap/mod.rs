@@ -35,7 +35,7 @@ impl fmt::Display for ExtMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = format!("{}", self.value);
         if self.direction != Direction::Unspecified {
-            output += format!("/{}", self.direction.to_string()).as_str();
+            output += format!("/{}", self.direction).as_str();
         }
 
         if let Some(uri) = &self.uri {
