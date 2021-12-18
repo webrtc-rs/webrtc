@@ -14,7 +14,7 @@ use interceptor::twcc::{receiver::Receiver, sender::Sender};
 /// register_default_interceptors will register some useful interceptors.
 /// If you want to customize which interceptors are loaded, you should copy the
 /// code from this method and remove unwanted interceptors.
-pub async fn register_default_interceptors(
+pub fn register_default_interceptors(
     mut registry: Registry,
     media_engine: &mut MediaEngine,
 ) -> Result<Registry> {
@@ -22,7 +22,7 @@ pub async fn register_default_interceptors(
 
     registry = configure_rtcp_reports(registry);
 
-    registry = configure_twcc_receiver_only(registry, media_engine).await?;
+    registry = configure_twcc_receiver_only(registry, media_engine)?;
 
     Ok(registry)
 }
@@ -62,10 +62,7 @@ pub fn configure_nack(mut registry: Registry, media_engine: &mut MediaEngine) ->
 
 /// configure_twcc will setup everything necessary for adding
 /// a TWCC header extension to outgoing RTP packets and generating TWCC reports.
-pub async fn configure_twcc(
-    mut registry: Registry,
-    media_engine: &mut MediaEngine,
-) -> Result<Registry> {
+pub fn configure_twcc(mut registry: Registry, media_engine: &mut MediaEngine) -> Result<Registry> {
     media_engine.register_feedback(
         RTCPFeedback {
             typ: TYPE_RTCP_FB_TRANSPORT_CC.to_owned(),
@@ -73,15 +70,13 @@ pub async fn configure_twcc(
         },
         RTPCodecType::Video,
     );
-    media_engine
-        .register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
-            },
-            RTPCodecType::Video,
-            vec![],
-        )
-        .await?;
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
+        },
+        RTPCodecType::Video,
+        vec![],
+    )?;
 
     media_engine.register_feedback(
         RTCPFeedback {
@@ -90,15 +85,13 @@ pub async fn configure_twcc(
         },
         RTPCodecType::Audio,
     );
-    media_engine
-        .register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
-            },
-            RTPCodecType::Audio,
-            vec![],
-        )
-        .await?;
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
+        },
+        RTPCodecType::Audio,
+        vec![],
+    )?;
 
     let sender = Box::new(Sender::builder());
     let receiver = Box::new(Receiver::builder());
@@ -109,29 +102,25 @@ pub async fn configure_twcc(
 
 /// configure_twcc_sender will setup everything necessary for adding
 /// a TWCC header extension to outgoing RTP packets. This will allow the remote peer to generate TWCC reports.
-pub async fn configure_twcc_sender_only(
+pub fn configure_twcc_sender_only(
     mut registry: Registry,
     media_engine: &mut MediaEngine,
 ) -> Result<Registry> {
-    media_engine
-        .register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
-            },
-            RTPCodecType::Video,
-            vec![],
-        )
-        .await?;
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
+        },
+        RTPCodecType::Video,
+        vec![],
+    )?;
 
-    media_engine
-        .register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
-            },
-            RTPCodecType::Audio,
-            vec![],
-        )
-        .await?;
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
+        },
+        RTPCodecType::Audio,
+        vec![],
+    )?;
 
     let sender = Box::new(Sender::builder());
     registry.add(sender);
@@ -139,7 +128,7 @@ pub async fn configure_twcc_sender_only(
 }
 
 /// configure_twcc_receiver will setup everything necessary for generating TWCC reports.
-pub async fn configure_twcc_receiver_only(
+pub fn configure_twcc_receiver_only(
     mut registry: Registry,
     media_engine: &mut MediaEngine,
 ) -> Result<Registry> {
@@ -150,15 +139,13 @@ pub async fn configure_twcc_receiver_only(
         },
         RTPCodecType::Video,
     );
-    media_engine
-        .register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
-            },
-            RTPCodecType::Video,
-            vec![],
-        )
-        .await?;
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
+        },
+        RTPCodecType::Video,
+        vec![],
+    )?;
 
     media_engine.register_feedback(
         RTCPFeedback {
@@ -167,15 +154,13 @@ pub async fn configure_twcc_receiver_only(
         },
         RTPCodecType::Audio,
     );
-    media_engine
-        .register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
-            },
-            RTPCodecType::Audio,
-            vec![],
-        )
-        .await?;
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
+        },
+        RTPCodecType::Audio,
+        vec![],
+    )?;
 
     let receiver = Box::new(Receiver::builder());
     registry.add(receiver);
