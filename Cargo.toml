@@ -12,25 +12,25 @@ repository = "https://github.com/webrtc-rs/webrtc"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.2" }
-sdp = "0.5.0"
-mdns = { package = "webrtc-mdns", version = "0.4.1" }
-stun = "0.4.1"
-turn = "0.5.2"
-ice = { package = "webrtc-ice", version = "0.6.3" }
-dtls = { package = "webrtc-dtls", version = "0.5.1" }
-rtp = "0.6.3"
-rtcp = "0.6.3"
-srtp = { package = "webrtc-srtp", version = "0.8.7" }
-sctp = { package = "webrtc-sctp", version = "0.4.2" }
-data = { package = "webrtc-data", version = "0.3.2" }
-media = { package = "webrtc-media", version = "0.4.3" }
-interceptor = "0.7.4"
-tokio = { version = "1.13.0", features = ["full"] }
+util = { package = "webrtc-util", version = "0.5.3" }
+sdp = "0.5.1"
+mdns = { package = "webrtc-mdns", version = "0.4.2" }
+stun = "0.4.2"
+turn = "0.5.3"
+ice = { package = "webrtc-ice", version = "0.6.4" }
+dtls = { package = "webrtc-dtls", version = "0.5.2" }
+rtp = "0.6.4"
+rtcp = "0.6.4"
+srtp = { package = "webrtc-srtp", version = "0.8.8" }
+sctp = { package = "webrtc-sctp", version = "0.4.3" }
+data = { package = "webrtc-data", version = "0.3.3" }
+media = { package = "webrtc-media", version = "0.4.4" }
+interceptor = "0.7.5"
+tokio = { version = "1.15.0", features = ["full"] }
 log = "0.4.14"
-async-trait = "0.1.51"
-serde = { version = "1.0.130", features = ["derive"] }
-serde_json = "1.0.70"
+async-trait = "0.1.52"
+serde = { version = "1.0.132", features = ["derive"] }
+serde_json = "1.0.73"
 rand = "0.8.4"
 bytes = "1.1.0"
 thiserror = "1.0.30"
