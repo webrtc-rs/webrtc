@@ -43,9 +43,7 @@ impl Manager {
     // get_allocation fetches the allocation matching the passed FiveTuple
     pub async fn get_allocation(&self, five_tuple: &FiveTuple) -> Option<Arc<Mutex<Allocation>>> {
         let allocations = self.allocations.lock().await;
-        allocations
-            .get(&five_tuple.fingerprint())
-            .map(|a| Arc::clone(a))
+        allocations.get(&five_tuple.fingerprint()).map(Arc::clone)
     }
 
     // create_allocation creates a new allocation and starts relaying
