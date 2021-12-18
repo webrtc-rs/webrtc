@@ -26,7 +26,7 @@ pub(crate) struct SrtpSsrcState {
     rollover_counter: u32,
     rollover_has_processed: bool,
     last_sequence_number: u16,
-    replay_detector: Option<Box<dyn ReplayDetector>>,
+    replay_detector: Option<Box<dyn ReplayDetector + Send + 'static>>,
 }
 
 /// Encrypt/Decrypt state for a single SRTCP SSRC
@@ -34,7 +34,7 @@ pub(crate) struct SrtpSsrcState {
 pub(crate) struct SrtcpSsrcState {
     srtcp_index: usize,
     ssrc: u32,
-    replay_detector: Option<Box<dyn ReplayDetector>>,
+    replay_detector: Option<Box<dyn ReplayDetector + Send + 'static>>,
 }
 
 impl SrtpSsrcState {
@@ -108,8 +108,6 @@ pub struct Context {
     new_srtp_replay_detector: ContextOption,
     new_srtcp_replay_detector: ContextOption,
 }
-
-unsafe impl Send for Context {}
 
 impl Context {
     /// CreateContext creates a new SRTP Context
