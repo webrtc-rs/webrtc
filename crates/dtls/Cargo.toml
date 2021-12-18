@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-dtls"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of DTLS"
@@ -12,7 +12,7 @@ repository = "https://github.com/webrtc-rs/dtls"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.2", default-features = false, features = ["conn"] }
+util = { package = "webrtc-util", version = "0.5.3", default-features = false, features = ["conn"] }
 byteorder = "1.4.3"
 lazy_static = "1.4.0"
 rand_core = "0.5"
@@ -27,8 +27,8 @@ aes = "0.6.0"
 block-modes = "0.7.0"
 aes-gcm = "0.8.0"
 ccm = "0.3.0"
-tokio = { version = "1.12.0", features = ["full"] }
-async-trait = "0.1"
+tokio = { version = "1.15.0", features = ["full"] }
+async-trait = "0.1.52"
 x25519-dalek = "1.1.0"
 signature = "1.2.2"
 oid-registry = "0.1.1"
@@ -49,7 +49,7 @@ thiserror = "1.0.30"
 tokio-test = "0.4.2"
 env_logger = "0.9.0"
 chrono = "0.4.19"
-clap = "2.33.3"
+clap = "2.34.0"
 hub = {path = "examples/hub"}
 
 [[example]]
