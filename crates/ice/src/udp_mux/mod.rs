@@ -136,8 +136,10 @@ impl UDPMuxDefault {
             addresses
                 .entry(addr)
                 .and_modify(|e| {
-                    e.remove_address(&addr);
-                    *e = conn.clone()
+                    if e.key() != key {
+                        e.remove_address(&addr);
+                        *e = conn.clone()
+                    }
                 })
                 .or_insert_with(|| conn.clone());
         }
