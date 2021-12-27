@@ -2,9 +2,9 @@ name: cargo
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, proto ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, proto ]
 
 env:
   CARGO_TERM_COLOR: always
