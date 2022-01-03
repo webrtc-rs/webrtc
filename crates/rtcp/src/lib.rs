@@ -28,7 +28,7 @@
 //!          .as_any()
 //!          .downcast_ref::<Goodbye>(){}
 //!     ....
-//!
+//!```
 //!
 //! Encoding RTCP packets:
 //!```nobuild
@@ -39,6 +39,7 @@
 //!
 //!     let pli_data = pkt.marshal().unwrap();
 //!     // ...
+//!```
 
 pub mod compound_packet;
 mod error;
