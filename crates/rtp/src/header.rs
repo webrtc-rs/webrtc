@@ -93,7 +93,7 @@ impl Unmarshal for Header {
         let timestamp = raw_packet.get_u32();
         let ssrc = raw_packet.get_u32();
 
-        let mut csrc = vec![];
+        let mut csrc = Vec::with_capacity(cc);
         for _ in 0..cc {
             csrc.push(raw_packet.get_u32());
         }

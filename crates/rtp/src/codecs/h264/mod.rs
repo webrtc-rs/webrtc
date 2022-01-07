@@ -73,7 +73,8 @@ impl H264Payloader {
             let sps_len = (sps_nalu.len() as u16).to_be_bytes();
             let pps_len = (pps_nalu.len() as u16).to_be_bytes();
 
-            let mut stap_a_nalu = vec![OUTPUT_STAP_AHEADER];
+            let mut stap_a_nalu = Vec::with_capacity(1 + 2 + sps_nalu.len() + 2 + pps_nalu.len());
+            stap_a_nalu.push(OUTPUT_STAP_AHEADER);
             stap_a_nalu.extend(sps_len);
             stap_a_nalu.extend_from_slice(sps_nalu);
             stap_a_nalu.extend(pps_len);

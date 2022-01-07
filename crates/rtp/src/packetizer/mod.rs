@@ -115,15 +115,15 @@ impl Packetizer for PacketizerImpl {
 
     async fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>> {
         let payloads = self.payloader.payload(self.mtu - 12, payload)?;
-        let mut packets = vec![];
-        let (mut i, l) = (0, payloads.len());
-        for payload in payloads {
+        let payloads_len = payloads.len();
+        let mut packets = Vec::with_capacity(payloads_len);
+        for (i, payload) in payloads.into_iter().enumerate() {
             packets.push(Packet {
                 header: Header {
                     version: 2,
                     padding: false,
                     extension: false,
-                    marker: i == l - 1,
+                    marker: i == payloads_len - 1,
                     payload_type: self.payload_type,
                     sequence_number: self.sequencer.next_sequence_number(),
                     timestamp: self.timestamp, //TODO: Figure out how to do timestamps
@@ -132,12 +132,11 @@ impl Packetizer for PacketizerImpl {
                 },
                 payload,
             });
-            i += 1;
         }
 
         self.timestamp = self.timestamp.wrapping_add(samples);
 
-        if l != 0 && self.abs_send_time != 0 {
+        if payloads_len != 0 && self.abs_send_time != 0 {
             let st = if let Some(fn_time_gen) = &self.time_gen {
                 fn_time_gen().await
             } else {
@@ -148,7 +147,7 @@ impl Packetizer for PacketizerImpl {
             let mut raw = BytesMut::with_capacity(send_time.marshal_size());
             raw.resize(send_time.marshal_size(), 0);
             let _ = send_time.marshal_to(&mut raw)?;
-            packets[l - 1]
+            packets[payloads_len - 1]
                 .header
                 .set_extension(self.abs_send_time, raw.freeze())?;
         }
