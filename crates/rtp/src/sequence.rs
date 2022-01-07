@@ -29,7 +29,7 @@ pub fn new_random_sequencer() -> impl Sequencer {
 pub fn new_fixed_sequencer(s: u16) -> impl Sequencer {
     SequencerImpl {
         sequence_number: if s == 0 {
-            Arc::new(AtomicU16::new(0xFFFF))
+            Arc::new(AtomicU16::new(u16::MAX))
         } else {
             Arc::new(AtomicU16::new(s - 1))
         },
@@ -48,7 +48,7 @@ impl Sequencer for SequencerImpl {
     /// building RTP packets
     fn next_sequence_number(&self) -> u16 {
         let sequence_number = self.sequence_number.load(Ordering::SeqCst);
-        if sequence_number == std::u16::MAX {
+        if sequence_number == u16::MAX {
             self.roll_over_count.fetch_add(1, Ordering::SeqCst);
             self.sequence_number.store(0, Ordering::SeqCst);
             0
