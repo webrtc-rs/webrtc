@@ -228,7 +228,8 @@ impl Marshal for Header {
          * |                             ....                              |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        if buf.remaining_mut() < self.marshal_size() {
+        let remaining_before = buf.remaining_mut();
+        if remaining_before < self.marshal_size() {
             return Err(Error::ErrBufferTooSmall.into());
         }
 
@@ -254,15 +255,12 @@ impl Marshal for Header {
         buf.put_u32(self.timestamp);
         buf.put_u32(self.ssrc);
 
-        let mut n = 12;
         for csrc in &self.csrc {
             buf.put_u32(*csrc);
-            n += 4;
         }
 
         if self.extension {
             buf.put_u16(self.extension_profile);
-            n += 2;
 
             // calculate extensions size and round to 4 bytes boundaries
             let extension_payload_len = self.get_extension_payload_len();
@@ -275,27 +273,21 @@ impl Marshal for Header {
             }
             let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
             buf.put_u16(extension_payload_size);
-            n += 2;
 
             match self.extension_profile {
                 // RFC 8285 RTP One Byte Header Extension
                 EXTENSION_PROFILE_ONE_BYTE => {
                     for extension in &self.extensions {
                         buf.put_u8((extension.id << 4) | (extension.payload.len() as u8 - 1));
-                        n += 1;
                         buf.put(&*extension.payload);
-                        n += extension.payload.len();
                     }
                 }
                 // RFC 8285 RTP Two Byte Header Extension
                 EXTENSION_PROFILE_TWO_BYTE => {
                     for extension in &self.extensions {
                         buf.put_u8(extension.id);
-                        n += 1;
                         buf.put_u8(extension.payload.len() as u8);
-                        n += 1;
                         buf.put(&*extension.payload);
-                        n += extension.payload.len();
                     }
                 }
                 // RFC3550 Extension
@@ -310,7 +302,6 @@ impl Marshal for Header {
                             return Err(Error::HeaderExtensionPayloadNot32BitWords.into());
                         }
                         buf.put(&*extension.payload);
-                        n += ext_len;
                     }
                 }
             };
@@ -318,11 +309,11 @@ impl Marshal for Header {
             // add padding to reach 4 bytes boundaries
             for _ in extension_payload_len..extension_payload_size as usize * 4 {
                 buf.put_u8(0);
-                n += 1;
             }
         }
 
-        Ok(n)
+        let remaining_after = buf.remaining_mut();
+        Ok(remaining_before - remaining_after)
     }
 }
 
