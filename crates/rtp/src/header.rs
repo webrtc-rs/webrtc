@@ -319,26 +319,20 @@ impl Marshal for Header {
 
 impl Header {
     pub fn get_extension_payload_len(&self) -> usize {
-        let mut extension_length = 0;
-        match self.extension_profile {
-            EXTENSION_PROFILE_ONE_BYTE => {
-                for extension in &self.extensions {
-                    extension_length += 1 + extension.payload.len();
-                }
-            }
-            EXTENSION_PROFILE_TWO_BYTE => {
-                for extension in &self.extensions {
-                    extension_length += 2 + extension.payload.len();
-                }
-            }
-            _ => {
-                for extension in &self.extensions {
-                    extension_length += extension.payload.len();
-                }
-            }
-        };
+        let payload_len: usize = self
+            .extensions
+            .iter()
+            .map(|extension| extension.payload.len())
+            .sum();
 
-        extension_length
+        let profile_len = self.extensions.len()
+            * match self.extension_profile {
+                EXTENSION_PROFILE_ONE_BYTE => 1,
+                EXTENSION_PROFILE_TWO_BYTE => 2,
+                _ => 0,
+            };
+
+        payload_len + profile_len
     }
 
     /// SetExtension sets an RTP header extension
@@ -369,64 +363,66 @@ impl Header {
             };
 
             // Update existing if it exists else add new extension
-            for extension in &mut self.extensions {
-                if extension.id == id {
-                    extension.payload = payload;
-                    return Ok(());
-                }
+            if let Some(extension) = self
+                .extensions
+                .iter_mut()
+                .find(|extension| extension.id == id)
+            {
+                extension.payload = payload;
+            } else {
+                self.extensions.push(Extension { id, payload });
             }
+        } else {
+            // No existing header extensions
+            self.extension = true;
+
+            self.extension_profile = match payload.len() {
+                0..=16 => EXTENSION_PROFILE_ONE_BYTE,
+                17..=255 => EXTENSION_PROFILE_TWO_BYTE,
+                _ => self.extension_profile,
+            };
+
             self.extensions.push(Extension { id, payload });
-            return Ok(());
         }
-
-        // No existing header extensions
-        self.extension = true;
-
-        let len = payload.len();
-        if len <= 16 {
-            self.extension_profile = EXTENSION_PROFILE_ONE_BYTE
-        } else if len > 16 && len < 256 {
-            self.extension_profile = EXTENSION_PROFILE_TWO_BYTE
-        }
-
-        self.extensions.push(Extension { id, payload });
-
         Ok(())
     }
 
     /// returns an extension id array
     pub fn get_extension_ids(&self) -> Vec<u8> {
-        if !self.extension {
-            return vec![];
+        if self.extension {
+            self.extensions.iter().map(|e| e.id).collect()
+        } else {
+            vec![]
         }
-        self.extensions.iter().map(|e| e.id).collect()
     }
 
     /// returns an RTP header extension
     pub fn get_extension(&self, id: u8) -> Option<Bytes> {
-        if !self.extension {
-            return None;
+        if self.extension {
+            self.extensions
+                .iter()
+                .find(|extension| extension.id == id)
+                .map(|extension| extension.payload.clone())
+        } else {
+            None
         }
-
-        for extension in &self.extensions {
-            if extension.id == id {
-                return Some(extension.payload.clone());
-            }
-        }
-        None
     }
 
     /// Removes an RTP Header extension
     pub fn del_extension(&mut self, id: u8) -> Result<(), Error> {
-        if !self.extension {
-            return Err(Error::ErrHeaderExtensionsNotEnabled);
-        }
-        for index in 0..self.extensions.len() {
-            if self.extensions[index].id == id {
+        if self.extension {
+            if let Some(index) = self
+                .extensions
+                .iter()
+                .position(|extension| extension.id == id)
+            {
                 self.extensions.remove(index);
-                return Ok(());
+                Ok(())
+            } else {
+                Err(Error::ErrHeaderExtensionNotFound)
             }
+        } else {
+            Err(Error::ErrHeaderExtensionsNotEnabled)
         }
-        Err(Error::ErrHeaderExtensionNotFound)
     }
 }
