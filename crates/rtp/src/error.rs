@@ -71,8 +71,9 @@ impl From<Error> for util::Error {
 impl PartialEq<util::Error> for Error {
     fn eq(&self, other: &util::Error) -> bool {
         if let Some(down) = other.downcast_ref::<Error>() {
-            return self == down;
+            self == down
+        } else {
+            false
         }
-        false
     }
 }

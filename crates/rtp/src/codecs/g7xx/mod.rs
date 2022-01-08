@@ -21,11 +21,11 @@ impl Payloader for G7xxPayloader {
             return Ok(vec![]);
         }
 
-        let mut payloads = vec![];
         let mut payload_data_remaining = payload.len();
         let mut payload_data_index = 0;
+        let mut payloads = Vec::with_capacity(payload_data_remaining / mtu);
         while payload_data_remaining > 0 {
-            let current_fragment_size = std::cmp::min(mtu as usize, payload_data_remaining);
+            let current_fragment_size = std::cmp::min(mtu, payload_data_remaining);
             payloads.push(
                 payload.slice(payload_data_index..payload_data_index + current_fragment_size),
             );
