@@ -15,30 +15,24 @@ use waitgroup::WaitGroup;
 pub(crate) struct ReceiverReportInternal {
     pub(crate) interval: Duration,
     pub(crate) now: Option<FnTimeGen>,
-    pub(crate) parent_rtcp_reader: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
     pub(crate) streams: Mutex<HashMap<u32, Arc<ReceiverStream>>>,
     pub(crate) close_rx: Mutex<Option<mpsc::Receiver<()>>>,
 }
 
+pub(crate) struct ReceiverReportRtcpReader {
+    pub(crate) internal: Arc<ReceiverReportInternal>,
+    pub(crate) parent_rtcp_reader: Arc<dyn RTCPReader + Send + Sync>,
+}
+
 #[async_trait]
-impl RTCPReader for ReceiverReportInternal {
+impl RTCPReader for ReceiverReportRtcpReader {
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = {
-            let parent_rtcp_reader = {
-                let parent_rtcp_reader = self.parent_rtcp_reader.lock().await;
-                parent_rtcp_reader.clone()
-            };
-            if let Some(reader) = parent_rtcp_reader {
-                reader.read(buf, a).await?
-            } else {
-                return Err(Error::ErrInvalidParentRtcpReader);
-            }
-        };
+        let (n, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
 
         let mut b = &buf[..n];
         let pkts = rtcp::packet::unmarshal(&mut b)?;
 
-        let now = if let Some(f) = &self.now {
+        let now = if let Some(f) = &self.internal.now {
             f().await
         } else {
             SystemTime::now()
@@ -50,7 +44,7 @@ impl RTCPReader for ReceiverReportInternal {
                 .downcast_ref::<rtcp::sender_report::SenderReport>()
             {
                 let stream = {
-                    let m = self.streams.lock().await;
+                    let m = self.internal.streams.lock().await;
                     m.get(&sr.ssrc).cloned()
                 };
                 if let Some(stream) = stream {
@@ -136,12 +130,10 @@ impl Interceptor for ReceiverReport {
         &self,
         reader: Arc<dyn RTCPReader + Send + Sync>,
     ) -> Arc<dyn RTCPReader + Send + Sync> {
-        {
-            let mut parent_rtcp_reader = self.internal.parent_rtcp_reader.lock().await;
-            *parent_rtcp_reader = Some(reader);
-        }
-
-        Arc::clone(&self.internal) as Arc<dyn RTCPReader + Send + Sync>
+        Arc::new(ReceiverReportRtcpReader {
+            internal: Arc::clone(&self.internal),
+            parent_rtcp_reader: reader,
+        })
     }
 
     /// bind_rtcp_writer lets you modify any outgoing RTCP packets. It is called once per PeerConnection. The returned method

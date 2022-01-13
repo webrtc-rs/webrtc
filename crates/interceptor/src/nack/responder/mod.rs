@@ -8,7 +8,7 @@ use crate::{
 };
 use responder_stream::ResponderStream;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::nack::stream_support_nack;
 
 use async_trait::async_trait;
@@ -44,7 +44,6 @@ impl InterceptorBuilder for ResponderBuilder {
                     13 // 8192 = 1 << 13
                 },
                 streams: Arc::new(Mutex::new(HashMap::new())),
-                parent_rtcp_reader: Mutex::new(None),
             }),
         }))
     }
@@ -53,7 +52,6 @@ impl InterceptorBuilder for ResponderBuilder {
 pub struct ResponderInternal {
     log2_size: u8,
     streams: Arc<Mutex<HashMap<u32, Arc<ResponderStream>>>>,
-    parent_rtcp_reader: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
 }
 
 impl ResponderInternal {
@@ -92,27 +90,22 @@ impl ResponderInternal {
     }
 }
 
+pub struct ResponderRtcpReader {
+    parent_rtcp_reader: Arc<dyn RTCPReader + Send + Sync>,
+    internal: Arc<ResponderInternal>,
+}
+
 #[async_trait]
-impl RTCPReader for ResponderInternal {
+impl RTCPReader for ResponderRtcpReader {
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = {
-            let parent_rtcp_reader = {
-                let parent_rtcp_reader = self.parent_rtcp_reader.lock().await;
-                parent_rtcp_reader.clone()
-            };
-            if let Some(reader) = parent_rtcp_reader {
-                reader.read(buf, a).await?
-            } else {
-                return Err(Error::ErrInvalidParentRtcpReader);
-            }
-        };
+        let (n, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
 
         let mut b = &buf[..n];
         let pkts = rtcp::packet::unmarshal(&mut b)?;
         for p in &pkts {
             if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
                 let nack = nack.clone();
-                let streams = Arc::clone(&self.streams);
+                let streams = Arc::clone(&self.internal.streams);
                 tokio::spawn(async move {
                     ResponderInternal::resend_packets(streams, nack).await;
                 });
@@ -143,12 +136,10 @@ impl Interceptor for Responder {
         &self,
         reader: Arc<dyn RTCPReader + Send + Sync>,
     ) -> Arc<dyn RTCPReader + Send + Sync> {
-        {
-            let mut parent_rtcp_reader = self.internal.parent_rtcp_reader.lock().await;
-            *parent_rtcp_reader = Some(reader);
-        }
-
-        Arc::clone(&self.internal) as Arc<dyn RTCPReader + Send + Sync>
+        Arc::new(ResponderRtcpReader {
+            internal: Arc::clone(&self.internal),
+            parent_rtcp_reader: reader,
+        }) as Arc<dyn RTCPReader + Send + Sync>
     }
 
     /// bind_rtcp_writer lets you modify any outgoing RTCP packets. It is called once per PeerConnection. The returned method
