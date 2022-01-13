@@ -44,7 +44,6 @@ impl ReportBuilder {
                     Duration::from_secs(1)
                 },
                 now: self.now.clone(),
-                parent_rtcp_reader: Mutex::new(None),
                 streams: Mutex::new(HashMap::new()),
                 close_rx: Mutex::new(Some(close_rx)),
             }),
