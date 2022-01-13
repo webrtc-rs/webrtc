@@ -905,7 +905,7 @@ pub(crate) fn rtp_extensions_from_media_description(
 /// update_sdp_origin saves sdp.Origin in PeerConnection when creating 1st local SDP;
 /// for subsequent calling, it updates Origin for SessionDescription from saved one
 /// and increments session version by one.
-/// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2
+/// <https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2>
 pub(crate) fn update_sdp_origin(origin: &mut Origin, d: &mut SessionDescription) {
     //TODO: if atomic.CompareAndSwapUint64(&origin.SessionVersion, 0, d.Origin.SessionVersion)
     if origin.session_version == 0 {
