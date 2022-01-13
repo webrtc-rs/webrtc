@@ -142,7 +142,7 @@ impl RTCIceCandidate {
     }
 
     /// to_json returns an ICECandidateInit
-    /// as indicated by the spec https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson
+    /// as indicated by the spec <https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson>
     pub async fn to_json(&self) -> Result<RTCIceCandidateInit> {
         let candidate = self.to_ice().await?;
 

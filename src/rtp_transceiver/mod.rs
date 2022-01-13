@@ -31,14 +31,14 @@ pub(crate) mod srtp_writer_future;
 /// A synchronization source is a randomly chosen
 /// value meant to be globally unique within a particular
 /// RTP session. Used to identify a single stream of media.
-/// https://tools.ietf.org/html/rfc3550#section-3
+/// <https://tools.ietf.org/html/rfc3550#section-3>
 #[allow(clippy::upper_case_acronyms)]
 pub type SSRC = u32;
 
 /// PayloadType identifies the format of the RTP payload and determines
 /// its interpretation by the application. Each codec in a RTP Session
 /// will have a different PayloadType
-/// https://tools.ietf.org/html/rfc3550#section-3
+/// <https://tools.ietf.org/html/rfc3550#section-3>
 pub type PayloadType = u8;
 
 /// TYPE_RTCP_FBT_RANSPORT_CC ..
@@ -57,11 +57,11 @@ pub const TYPE_RTCP_FB_CCM: &str = "ccm";
 pub const TYPE_RTCP_FB_NACK: &str = "nack";
 
 /// rtcpfeedback signals the connection to use additional RTCP packet types.
-/// https://draft.ortc.org/#dom-rtcrtcpfeedback
+/// <https://draft.ortc.org/#dom-rtcrtcpfeedback>
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTCPFeedback {
     /// Type is the type of feedback.
-    /// see: https://draft.ortc.org/#dom-rtcrtcpfeedback
+    /// see: <https://draft.ortc.org/#dom-rtcrtcpfeedback>
     /// valid: ack, ccm, nack, goog-remb, transport-cc
     pub typ: String,
 
@@ -71,7 +71,7 @@ pub struct RTCPFeedback {
 }
 
 /// RTPCapabilities represents the capabilities of a transceiver
-/// https://w3c.github.io/webrtc-pc/#rtcrtpcapabilities
+/// <https://w3c.github.io/webrtc-pc/#rtcrtpcapabilities>
 #[derive(Default, Debug, Clone)]
 pub struct RTCRtpCapabilities {
     pub codecs: Vec<RTCRtpCodecCapability>,
@@ -79,7 +79,7 @@ pub struct RTCRtpCapabilities {
 }
 
 /// RTPRtxParameters dictionary contains information relating to retransmission (RTX) settings.
-/// https://draft.ortc.org/#dom-rtcrtprtxparameters
+/// <https://draft.ortc.org/#dom-rtcrtprtxparameters>
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct RTCRtpRtxParameters {
     pub ssrc: SSRC,
@@ -87,7 +87,7 @@ pub struct RTCRtpRtxParameters {
 
 /// RTPCodingParameters provides information relating to both encoding and decoding.
 /// This is a subset of the RFC since Pion WebRTC doesn't implement encoding/decoding itself
-/// http://draft.ortc.org/#dom-rtcrtpcodingparameters
+/// <http://draft.ortc.org/#dom-rtcrtpcodingparameters>
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct RTCRtpCodingParameters {
     pub rid: String,
@@ -98,12 +98,12 @@ pub struct RTCRtpCodingParameters {
 
 /// RTPDecodingParameters provides information relating to both encoding and decoding.
 /// This is a subset of the RFC since Pion WebRTC doesn't implement decoding itself
-/// http://draft.ortc.org/#dom-rtcrtpdecodingparameters
+/// <http://draft.ortc.org/#dom-rtcrtpdecodingparameters>
 pub type RTCRtpDecodingParameters = RTCRtpCodingParameters;
 
 /// RTPEncodingParameters provides information relating to both encoding and decoding.
 /// This is a subset of the RFC since Pion WebRTC doesn't implement encoding itself
-/// http://draft.ortc.org/#dom-rtcrtpencodingparameters
+/// <http://draft.ortc.org/#dom-rtcrtpencodingparameters>
 pub type RTCRtpEncodingParameters = RTCRtpCodingParameters;
 
 /// RTPReceiveParameters contains the RTP stack settings used by receivers

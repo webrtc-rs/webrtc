@@ -55,7 +55,7 @@ impl fmt::Display for RTPCodecType {
 }
 
 /// RTPCodecCapability provides information about codec capabilities.
-/// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpcodeccapability-members
+/// <https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpcodeccapability-members>
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTCRtpCodecCapability {
     pub mime_type: String,
@@ -92,14 +92,14 @@ impl RTCRtpCodecCapability {
 }
 
 /// RTPHeaderExtensionCapability is used to define a RFC5285 RTP header extension supported by the codec.
-/// https://w3c.github.io/webrtc-pc/#dom-rtcrtpcapabilities-headerextensions
+/// <https://w3c.github.io/webrtc-pc/#dom-rtcrtpcapabilities-headerextensions>
 #[derive(Default, Debug, Clone)]
 pub struct RTCRtpHeaderExtensionCapability {
     pub uri: String,
 }
 
 /// RTPHeaderExtensionParameter represents a negotiated RFC5285 RTP header extension.
-/// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpheaderextensionparameters-members
+/// <https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpheaderextensionparameters-members>
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTCRtpHeaderExtensionParameters {
     pub uri: String,
@@ -109,7 +109,7 @@ pub struct RTCRtpHeaderExtensionParameters {
 /// RTPCodecParameters is a sequence containing the media codecs that an RtpSender
 /// will choose from, as well as entries for RTX, RED and FEC mechanisms. This also
 /// includes the PayloadType that has been negotiated
-/// https://w3c.github.io/webrtc-pc/#rtcrtpcodecparameters
+/// <https://w3c.github.io/webrtc-pc/#rtcrtpcodecparameters>
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTCRtpCodecParameters {
     pub capability: RTCRtpCodecCapability,
@@ -118,7 +118,7 @@ pub struct RTCRtpCodecParameters {
 }
 
 /// RTPParameters is a list of negotiated codecs and header extensions
-/// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpparameters-members
+/// <https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpparameters-members>
 #[derive(Default, Debug, Clone)]
 pub struct RTCRtpParameters {
     pub header_extensions: Vec<RTCRtpHeaderExtensionParameters>,
