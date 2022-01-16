@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-srtp"
-version = "0.8.8"
+version = "0.8.9"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SRTP"
@@ -15,8 +15,8 @@ util = { package = "webrtc-util", version = "0.5.3", default-features = false, f
     "buffer",
     "marshal",
 ] }
-rtp = "0.6.4"
-rtcp = "0.6.4"
+rtp = "0.6.5"
+rtcp = "0.6.5"
 byteorder = "1.4.3"
 bytes = "1.1.0"
 thiserror = "1.0.30"
