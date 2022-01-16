@@ -40,7 +40,7 @@ url = "2.2.2"
 rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
 rcgen = { version = "0.8.14", features = ["pem", "x509-parser"]}
 ring = "0.16.20"
-sha2 = "0.9.8"
+sha2 = "0.10.1"
 lazy_static = "1.4.0"
 hex = "0.4.3"
 
