@@ -26,19 +26,19 @@ async fn main() -> Result<()> {
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
-            Arg::with_name("FULLHELP")
+            Arg::new("FULLHELP")
                 .help("Prints more detailed help information")
                 .long("fullhelp"),
         )
         .arg(
-            Arg::with_name("debug")
+            Arg::new("debug")
                 .long("debug")
-                .short("d")
+                .short('d')
                 .help("Prints debug log information"),
         )
         .arg(
-            Arg::with_name("close-after")
-                .required_unless("FULLHELP")
+            Arg::new("close-after")
+                .required_unless_present("FULLHELP")
                 .takes_value(true)
                 .default_value("5")
                 .long("close-after")
@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m).await?;
+    registry = register_default_interceptors(registry, &mut m)?;
 
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()

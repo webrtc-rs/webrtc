@@ -26,14 +26,14 @@ async fn main() -> Result<()> {
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
-            Arg::with_name("FULLHELP")
+            Arg::new("FULLHELP")
                 .help("Prints more detailed help information")
                 .long("fullhelp"),
         )
         .arg(
-            Arg::with_name("debug")
+            Arg::new("debug")
                 .long("debug")
-                .short("d")
+                .short('d')
                 .help("Prints debug log information"),
         );
 
@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
     let mut registry = Registry::new();
 
     // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m).await?;
+    registry = register_default_interceptors(registry, &mut m)?;
 
     // Since this behavior diverges from the WebRTC API it has to be
     // enabled using a settings engine. Mixing both detached and the

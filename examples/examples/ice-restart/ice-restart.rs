@@ -89,7 +89,7 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
             let mut registry = Registry::new();
 
             // Use the default set of Interceptors
-            registry = match register_default_interceptors(registry, &mut m).await {
+            registry = match register_default_interceptors(registry, &mut m) {
                 Ok(r) => r,
                 Err(err) => panic!("{}", err),
             };
@@ -204,14 +204,14 @@ async fn main() -> Result<()> {
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
-            Arg::with_name("FULLHELP")
+            Arg::new("FULLHELP")
                 .help("Prints more detailed help information")
                 .long("fullhelp"),
         )
         .arg(
-            Arg::with_name("debug")
+            Arg::new("debug")
                 .long("debug")
-                .short("d")
+                .short('d')
                 .help("Prints debug log information"),
         );
 
