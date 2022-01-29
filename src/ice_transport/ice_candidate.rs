@@ -148,9 +148,9 @@ impl RTCIceCandidate {
 
         Ok(RTCIceCandidateInit {
             candidate: format!("candidate:{}", candidate.marshal()),
-            sdp_mid: "".to_owned(),
-            sdp_mline_index: 0u16,
-            username_fragment: "".to_owned(),
+            sdp_mid: Some("".to_owned()),
+            sdp_mline_index: Some(0u16),
+            username_fragment: None,
         })
     }
 }
@@ -167,9 +167,11 @@ impl fmt::Display for RTCIceCandidate {
 
 /// ICECandidateInit is used to serialize ice candidates
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RTCIceCandidateInit {
     pub candidate: String,
-    pub sdp_mid: String,
-    pub sdp_mline_index: u16,
-    pub username_fragment: String,
+    pub sdp_mid: Option<String>,
+    #[serde(rename = "sdpMLineIndex")]
+    pub sdp_mline_index: Option<u16>,
+    pub username_fragment: Option<String>,
 }
