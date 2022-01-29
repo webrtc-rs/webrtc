@@ -175,3 +175,45 @@ pub struct RTCIceCandidateInit {
     pub sdp_mline_index: Option<u16>,
     pub username_fragment: Option<String>,
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_ice_candidate_serialization() {
+        let tests = vec![
+            (
+                RTCIceCandidateInit {
+                    candidate: "candidate:abc123".to_string(),
+                    sdp_mid: Some("0".to_string()),
+                    sdp_mline_index: Some(0),
+                    username_fragment: Some("def".to_string()),
+                },
+                r#"{"candidate":"candidate:abc123","sdpMid":"0","sdpMLineIndex":0,"usernameFragment":"def"}"#,
+            ),
+            (
+                RTCIceCandidateInit {
+                    candidate: "candidate:abc123".to_string(),
+                    sdp_mid: None,
+                    sdp_mline_index: None,
+                    username_fragment: None,
+                },
+                r#"{"candidate":"candidate:abc123","sdpMid":null,"sdpMLineIndex":null,"usernameFragment":null}"#,
+            ),
+        ];
+
+        for (candidate_init, expected_string) in tests {
+            let result = serde_json::to_string(&candidate_init);
+            assert!(result.is_ok(), "testCase: marshal err: {:?}", result);
+            let candidate_data = result.unwrap();
+            assert_eq!(candidate_data, expected_string, "string is not expected");
+
+            let result = serde_json::from_str::<RTCIceCandidateInit>(&candidate_data);
+            assert!(result.is_ok(), "testCase: unmarshal err: {:?}", result);
+            if let Ok(actual_candidate_init) = result {
+                assert_eq!(candidate_init, actual_candidate_init);
+            }
+        }
+    }
+}
