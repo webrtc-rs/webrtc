@@ -81,12 +81,12 @@ impl Request {
 
     // handle_request processes the give Request
     pub async fn handle_request(&mut self) -> Result<()> {
-        log::debug!(
+        /*log::debug!(
             "received {} bytes of udp from {} on {}",
             self.buff.len(),
             self.src_addr,
             self.conn.local_addr().await?
-        );
+        );*/
 
         if ChannelData::is_channel_data(&self.buff) {
             self.handle_data_packet().await
