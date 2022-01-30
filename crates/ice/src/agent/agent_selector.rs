@@ -367,11 +367,11 @@ impl ControllingSelector for AgentInternal {
             };
 
             log::trace!(
-                "controllingSelector: after findPair {}, p.state: {}, {}, {}",
+                "controllingSelector: after findPair {}, p.state: {}, {}",
                 p,
                 p.state.load(Ordering::SeqCst),
                 nominated_pair_is_none,
-                self.agent_conn.get_selected_pair().await.is_none()
+                //self.agent_conn.get_selected_pair().await.is_none() //, {}
             );
             if p.state.load(Ordering::SeqCst) == CandidatePairState::Succeeded as u8
                 && nominated_pair_is_none

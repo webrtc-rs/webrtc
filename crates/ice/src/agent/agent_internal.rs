@@ -1185,9 +1185,9 @@ impl AgentInternal {
             }
         } else if !self.validate_non_stun_traffic(c, src_addr).await {
             log::warn!(
-                "[{}]: Discarded message from {}, not a valid remote candidate",
+                "[{}]: Discarded message, not a valid remote candidate",
                 self.get_name(),
-                c.addr().await
+                //c.addr().await //from {}
             );
         } else if let Err(err) = self.agent_conn.buffer.write(buf).await {
             // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
