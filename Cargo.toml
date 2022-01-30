@@ -16,8 +16,8 @@ util = { package = "webrtc-util", version = "0.5.3" }
 sdp = "0.5.1"
 mdns = { package = "webrtc-mdns", version = "0.4.2" }
 stun = "0.4.2"
-turn = "0.5.3"
-ice = { package = "webrtc-ice", version = "0.6.4" }
+turn = "0.5.4"
+ice = { package = "webrtc-ice", version = "0.6.6" }
 dtls = { package = "webrtc-dtls", version = "0.5.2" }
 rtp = "0.6.5"
 rtcp = "0.6.5"
