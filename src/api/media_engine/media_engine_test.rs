@@ -721,3 +721,94 @@ async fn test_update_header_extenstion_to_cloned_media_engine() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_extension_id_collision() -> Result<()> {
+    let must_parse = |raw: &str| -> Result<SessionDescription> {
+        let mut reader = Cursor::new(raw.as_bytes());
+        Ok(SessionDescription::unmarshal(&mut reader)?)
+    };
+
+    const HEADER_EXTENSIONS: &str = "v=0
+o=- 4596489990601351948 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+m=audio 9 UDP/TLS/RTP/SAVPF 111
+a=extmap:7 urn:ietf:params:rtp-hdrext:sdes:mid
+a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level
+a=extmap:5 urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id
+a=rtpmap:111 opus/48000/2
+";
+
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    for extension in ["urn:3gpp:video-orientation"] {
+        m.register_header_extension(
+            RTCRtpHeaderExtensionCapability {
+                uri: extension.to_owned(),
+            },
+            RTPCodecType::Video,
+            vec![],
+        )?;
+    }
+    for extension in [
+        "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+        "urn:ietf:params:rtp-hdrext:sdes:mid",
+        "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
+    ] {
+        m.register_header_extension(
+            RTCRtpHeaderExtensionCapability {
+                uri: extension.to_owned(),
+            },
+            RTPCodecType::Audio,
+            vec![],
+        )?;
+    }
+
+    m.update_from_remote_description(&must_parse(HEADER_EXTENSIONS)?)
+        .await?;
+
+    assert!(!m.negotiated_video.load(Ordering::SeqCst));
+    assert!(m.negotiated_audio.load(Ordering::SeqCst));
+
+    let (abs_id, abs_audio_enabled, abs_video_enabled) = m
+        .get_header_extension_id(RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::ABS_SEND_TIME_URI.to_owned(),
+        })
+        .await;
+    assert_eq!(abs_id, 0);
+    assert!(!abs_audio_enabled);
+    assert!(!abs_video_enabled);
+
+    let (mid_id, mid_audio_enabled, mid_video_enabled) = m
+        .get_header_extension_id(RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::SDES_MID_URI.to_owned(),
+        })
+        .await;
+    assert_eq!(mid_id, 7);
+    assert!(mid_audio_enabled);
+    assert!(!mid_video_enabled);
+
+    let (mid_id, mid_audio_enabled, mid_video_enabled) = m
+        .get_header_extension_id(RTCRtpHeaderExtensionCapability {
+            uri: sdp::extmap::AUDIO_LEVEL_URI.to_owned(),
+        })
+        .await;
+    assert_eq!(mid_id, 1);
+    assert!(mid_audio_enabled);
+    assert!(!mid_video_enabled);
+
+    let params = m
+        .get_rtp_parameters_by_kind(RTPCodecType::Video, &[RTCRtpTransceiverDirection::Sendonly])
+        .await;
+    dbg!(&params);
+
+    let orientation = params
+        .header_extensions
+        .iter()
+        .find(|ext| ext.uri == "urn:3gpp:video-orientation")
+        .unwrap();
+    assert_ne!(orientation.id, 1);
+
+    Ok(())
+}
