@@ -33,7 +33,7 @@ fn long_term_credentials(username: &str, shared_secret: &str) -> String {
     base64::encode(&password)
 }
 
-// generate_auth_key is a convince function to easily generate keys in the format used by AuthHandler
+// generate_auth_key is a convenience function to easily generate keys in the format used by AuthHandler
 pub fn generate_auth_key(username: &str, realm: &str, password: &str) -> Vec<u8> {
     let s = format!("{}:{}:{}", username, realm, password);
 
