@@ -19,8 +19,54 @@ pub struct RTCSessionDescription {
     pub(crate) parsed: Option<SessionDescription>,
 }
 
-/// Unmarshal is a helper to deserialize the sdp
 impl RTCSessionDescription {
+    /// Given SDP representing an answer, wrap it in an RTCSessionDescription
+    /// that can be given to an RTCPeerConnection.
+    pub fn answer(sdp: String) -> Result<RTCSessionDescription> {
+        let mut desc = RTCSessionDescription {
+            sdp,
+            sdp_type: RTCSdpType::Answer,
+            parsed: None,
+        };
+
+        let parsed = desc.unmarshal()?;
+        desc.parsed = Some(parsed);
+
+        Ok(desc)
+    }
+
+    /// Given SDP representing an offer, wrap it in an RTCSessionDescription
+    /// that can be given to an RTCPeerConnection.
+    pub fn offer(sdp: String) -> Result<RTCSessionDescription> {
+        let mut desc = RTCSessionDescription {
+            sdp,
+            sdp_type: RTCSdpType::Offer,
+            parsed: None,
+        };
+
+        let parsed = desc.unmarshal()?;
+        desc.parsed = Some(parsed);
+
+        Ok(desc)
+    }
+
+    /// Given SDP representing an answer, wrap it in an RTCSessionDescription
+    /// that can be given to an RTCPeerConnection. `pranswer` is used when the
+    /// answer may not be final, or when updating a previously sent pranswer.
+    pub fn pranswer(sdp: String) -> Result<RTCSessionDescription> {
+        let mut desc = RTCSessionDescription {
+            sdp,
+            sdp_type: RTCSdpType::Pranswer,
+            parsed: None,
+        };
+
+        let parsed = desc.unmarshal()?;
+        desc.parsed = Some(parsed);
+
+        Ok(desc)
+    }
+
+    /// Unmarshal is a helper to deserialize the sdp
     pub fn unmarshal(&self) -> Result<SessionDescription> {
         let mut reader = Cursor::new(self.sdp.as_bytes());
         let parsed = SessionDescription::unmarshal(&mut reader)?;
@@ -92,6 +138,73 @@ mod test {
                 assert!(sd.sdp == desc.sdp && sd.sdp_type == desc.sdp_type);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_session_description_answer() -> Result<()> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
+
+        let offer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+        let answer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+
+        let _ = offer_pc.create_data_channel("foo", None).await?;
+        let offer = offer_pc.create_offer(None).await?;
+        answer_pc.set_remote_description(offer).await?;
+
+        let answer = answer_pc.create_answer(None).await?;
+
+        let desc = RTCSessionDescription::answer(answer.sdp.clone())?;
+
+        assert!(desc.sdp_type == RTCSdpType::Answer);
+        assert!(desc.parsed.is_some());
+
+        assert_eq!(answer.unmarshal()?.marshal(), desc.unmarshal()?.marshal());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_session_description_offer() -> Result<()> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
+
+        let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+        let offer = pc.create_offer(None).await?;
+
+        let desc = RTCSessionDescription::offer(offer.sdp.clone())?;
+
+        assert!(desc.sdp_type == RTCSdpType::Offer);
+        assert!(desc.parsed.is_some());
+
+        assert_eq!(offer.unmarshal()?.marshal(), desc.unmarshal()?.marshal());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_session_description_pranswer() -> Result<()> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
+
+        let offer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+        let answer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+
+        let _ = offer_pc.create_data_channel("foo", None).await?;
+        let offer = offer_pc.create_offer(None).await?;
+        answer_pc.set_remote_description(offer).await?;
+
+        let answer = answer_pc.create_answer(None).await?;
+
+        let desc = RTCSessionDescription::pranswer(answer.sdp.clone())?;
+
+        assert!(desc.sdp_type == RTCSdpType::Pranswer);
+        assert!(desc.parsed.is_some());
+
+        Ok(())
     }
 
     #[tokio::test]
