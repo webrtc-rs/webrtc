@@ -409,6 +409,10 @@ impl RTCDtlsTransport {
                     srtp::protection_profile::ProtectionProfile::Aes128CmHmacSha1_80
                 }
                 _ => {
+                    if let Err(err) = dtls_conn.close().await {
+                        log::error!("{}", err);
+                    }
+
                     self.state_change(RTCDtlsTransportState::Failed).await;
                     return Err(Error::ErrNoSRTPProtectionProfile);
                 }
@@ -422,6 +426,10 @@ impl RTCDtlsTransport {
             // Check the fingerprint if a certificate was exchanged
             let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
             if remote_certs.is_empty() {
+                if let Err(err) = dtls_conn.close().await {
+                    log::error!("{}", err);
+                }
+
                 self.state_change(RTCDtlsTransportState::Failed).await;
                 return Err(Error::ErrNoRemoteCertificate);
             }
@@ -432,8 +440,8 @@ impl RTCDtlsTransport {
             }
 
             if let Err(err) = self.validate_fingerprint(&remote_certs[0]).await {
-                if dtls_conn.close().await.is_err() {
-                    log::error!("{}", err);
+                if let Err(close_err) = dtls_conn.close().await {
+                    log::error!("{}", close_err);
                 }
 
                 self.state_change(RTCDtlsTransportState::Failed).await;
