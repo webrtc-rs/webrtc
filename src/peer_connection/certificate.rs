@@ -7,7 +7,7 @@ use rcgen::{CertificateParams, KeyPair, RcgenError};
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
 use std::ops::Add;
-use std::time::{SystemTime, Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
 pub struct RTCCertificate {
@@ -72,10 +72,14 @@ impl RTCCertificate {
         };
         params.key_pair = Some(key_pair);
 
-        //let expires = params.not_after.into();
-        // Workaround for issue overflow when adding duration to instant on armv7
-        // https://github.com/webrtc-rs/examples/issues/5 https://github.com/chronotope/chrono/issues/343
-        let expires = SystemTime::now().add(Duration::from_secs(172800)); //60*60*48 or 2 days
+        let expires = if cfg!(armv7) {
+            // Workaround for issue overflow when adding duration to instant on armv7
+            // https://github.com/webrtc-rs/examples/issues/5 https://github.com/chronotope/chrono/issues/343
+            SystemTime::now().add(Duration::from_secs(172800)) //60*60*48 or 2 days
+        } else {
+            params.not_after.into()
+        };
+
         let x509_cert = rcgen::Certificate::from_params(params)?;
         let certificate = x509_cert.serialize_der()?;
 
