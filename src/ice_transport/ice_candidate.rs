@@ -142,15 +142,15 @@ impl RTCIceCandidate {
     }
 
     /// to_json returns an ICECandidateInit
-    /// as indicated by the spec https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson
+    /// as indicated by the spec <https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson>
     pub async fn to_json(&self) -> Result<RTCIceCandidateInit> {
         let candidate = self.to_ice().await?;
 
         Ok(RTCIceCandidateInit {
             candidate: format!("candidate:{}", candidate.marshal()),
-            sdp_mid: "".to_owned(),
-            sdp_mline_index: 0u16,
-            username_fragment: "".to_owned(),
+            sdp_mid: Some("".to_owned()),
+            sdp_mline_index: Some(0u16),
+            username_fragment: None,
         })
     }
 }
@@ -167,9 +167,53 @@ impl fmt::Display for RTCIceCandidate {
 
 /// ICECandidateInit is used to serialize ice candidates
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RTCIceCandidateInit {
     pub candidate: String,
-    pub sdp_mid: String,
-    pub sdp_mline_index: u16,
-    pub username_fragment: String,
+    pub sdp_mid: Option<String>,
+    #[serde(rename = "sdpMLineIndex")]
+    pub sdp_mline_index: Option<u16>,
+    pub username_fragment: Option<String>,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_ice_candidate_serialization() {
+        let tests = vec![
+            (
+                RTCIceCandidateInit {
+                    candidate: "candidate:abc123".to_string(),
+                    sdp_mid: Some("0".to_string()),
+                    sdp_mline_index: Some(0),
+                    username_fragment: Some("def".to_string()),
+                },
+                r#"{"candidate":"candidate:abc123","sdpMid":"0","sdpMLineIndex":0,"usernameFragment":"def"}"#,
+            ),
+            (
+                RTCIceCandidateInit {
+                    candidate: "candidate:abc123".to_string(),
+                    sdp_mid: None,
+                    sdp_mline_index: None,
+                    username_fragment: None,
+                },
+                r#"{"candidate":"candidate:abc123","sdpMid":null,"sdpMLineIndex":null,"usernameFragment":null}"#,
+            ),
+        ];
+
+        for (candidate_init, expected_string) in tests {
+            let result = serde_json::to_string(&candidate_init);
+            assert!(result.is_ok(), "testCase: marshal err: {:?}", result);
+            let candidate_data = result.unwrap();
+            assert_eq!(candidate_data, expected_string, "string is not expected");
+
+            let result = serde_json::from_str::<RTCIceCandidateInit>(&candidate_data);
+            assert!(result.is_ok(), "testCase: unmarshal err: {:?}", result);
+            if let Ok(actual_candidate_init) = result {
+                assert_eq!(candidate_init, actual_candidate_init);
+            }
+        }
+    }
 }

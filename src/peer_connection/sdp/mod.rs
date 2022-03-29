@@ -706,8 +706,8 @@ pub(crate) fn extract_fingerprint(desc: &SessionDescription) -> Result<(String, 
     }
 
     for m in &desc.media_descriptions {
-        if let Some(fingerprint) = m.attribute("fingerprint") {
-            fingerprints.push(fingerprint.clone());
+        if let Some(fingerprint) = m.attribute("fingerprint").and_then(|o| o) {
+            fingerprints.push(fingerprint.to_owned());
         }
     }
 
@@ -744,11 +744,11 @@ pub(crate) async fn extract_ice_details(
     }
 
     for m in &desc.media_descriptions {
-        if let Some(ufrag) = m.attribute("ice-ufrag") {
-            remote_ufrags.push(ufrag.clone());
+        if let Some(ufrag) = m.attribute("ice-ufrag").and_then(|o| o) {
+            remote_ufrags.push(ufrag.to_owned());
         }
-        if let Some(pwd) = m.attribute("ice-pwd") {
-            remote_pwds.push(pwd.clone());
+        if let Some(pwd) = m.attribute("ice-pwd").and_then(|o| o) {
+            remote_pwds.push(pwd.to_owned());
         }
 
         for a in &m.attributes {
@@ -800,7 +800,7 @@ pub(crate) fn get_by_mid<'a, 'b>(
 ) -> Option<&'b MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
-            if let Some(mid) = m.attribute(ATTR_KEY_MID) {
+            if let Some(mid) = m.attribute(ATTR_KEY_MID).and_then(|o| o) {
                 if mid == search_mid {
                     return Some(m);
                 }
@@ -905,7 +905,7 @@ pub(crate) fn rtp_extensions_from_media_description(
 /// update_sdp_origin saves sdp.Origin in PeerConnection when creating 1st local SDP;
 /// for subsequent calling, it updates Origin for SessionDescription from saved one
 /// and increments session version by one.
-/// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2
+/// <https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2>
 pub(crate) fn update_sdp_origin(origin: &mut Origin, d: &mut SessionDescription) {
     //TODO: if atomic.CompareAndSwapUint64(&origin.SessionVersion, 0, d.Origin.SessionVersion)
     if origin.session_version == 0 {

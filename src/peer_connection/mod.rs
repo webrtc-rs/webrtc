@@ -209,7 +209,7 @@ impl RTCPeerConnection {
         let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
         let interceptor_rtcp_writer = interceptor.bind_rtcp_writer(internal_rtcp_writer).await;
 
-        // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
+        // <https://w3c.github.io/webrtc-pc/#constructor> (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
         // allow better readability to understand what is happening.
         Ok(RTCPeerConnection {
@@ -241,7 +241,7 @@ impl RTCPeerConnection {
             }
         }
 
-        // https://www.w3.org/TR/webrtc/#constructor (step #3)
+        // <https://www.w3.org/TR/webrtc/#constructor> (step #3)
         if !configuration.certificates.is_empty() {
             let now = SystemTime::now();
             for cert in &configuration.certificates {
@@ -328,14 +328,15 @@ impl RTCPeerConnection {
     }
 
     async fn after_negotiation_needed_op(params: NegotiationNeededParams) -> bool {
-        if params.negotiation_needed_state.load(Ordering::SeqCst)
-            == NegotiationNeededState::Queue as u8
-        {
+        let old_negotiation_needed_state = params.negotiation_needed_state.load(Ordering::SeqCst);
+
+        params
+            .negotiation_needed_state
+            .store(NegotiationNeededState::Empty as u8, Ordering::SeqCst);
+
+        if old_negotiation_needed_state == NegotiationNeededState::Queue as u8 {
             RTCPeerConnection::do_negotiation_needed_inner(&params)
         } else {
-            params
-                .negotiation_needed_state
-                .store(NegotiationNeededState::Empty as u8, Ordering::SeqCst);
             false
         }
     }
@@ -433,11 +434,10 @@ impl RTCPeerConnection {
                             || t.direction() == RTCRtpTransceiverDirection::Sendonly
                         {
                             if let (Some(desc_msid), Some(sender)) =
-                                (m.attribute(ATTR_KEY_MSID), t.sender().await)
+                                (m.attribute(ATTR_KEY_MSID).and_then(|o| o), t.sender().await)
                             {
                                 if let Some(track) = &sender.track().await {
-                                    if desc_msid.as_str()
-                                        != track.stream_id().to_owned() + " " + track.id()
+                                    if desc_msid != track.stream_id().to_owned() + " " + track.id()
                                     {
                                         return true;
                                     }
@@ -655,7 +655,7 @@ impl RTCPeerConnection {
     /// configuration of this PeerConnection object. The returned object is a
     /// copy and direct mutation on it will not take affect until set_configuration
     /// has been called with Configuration passed as its only argument.
-    /// https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-getconfiguration
+    /// <https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-getconfiguration>
     pub fn get_configuration(&self) -> &RTCConfiguration {
         &self.configuration
     }
@@ -665,7 +665,7 @@ impl RTCPeerConnection {
     }
 
     /// create_offer starts the PeerConnection and generates the localDescription
-    /// https://w3c.github.io/webrtc-pc/#dom-rtcpeerconnection-createoffer
+    /// <https://w3c.github.io/webrtc-pc/#dom-rtcpeerconnection-createoffer>
     pub async fn create_offer(
         &self,
         options: Option<RTCOfferOptions>,
@@ -806,7 +806,7 @@ impl RTCPeerConnection {
     }
 
     /// Update the PeerConnectionState given the state of relevant transports
-    /// https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum
+    /// <https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum>
     async fn update_connection_state(
         on_peer_connection_state_change_handler: &Arc<
             Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
@@ -1229,7 +1229,7 @@ impl RTCPeerConnection {
     /// local_description returns PendingLocalDescription if it is not null and
     /// otherwise it returns CurrentLocalDescription. This property is used to
     /// determine if set_local_description has already been called.
-    /// https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-localdescription
+    /// <https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-localdescription>
     pub async fn local_description(&self) -> Option<RTCSessionDescription> {
         if let Some(pending_local_description) = self.pending_local_description().await {
             return Some(pending_local_description);
@@ -1482,7 +1482,7 @@ impl RTCPeerConnection {
     /// remote_description returns pending_remote_description if it is not null and
     /// otherwise it returns current_remote_description. This property is used to
     /// determine if setRemoteDescription has already been called.
-    /// https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-remotedescription
+    /// <https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-remotedescription>
     pub async fn remote_description(&self) -> Option<RTCSessionDescription> {
         self.internal.remote_description().await
     }
@@ -1692,10 +1692,10 @@ impl RTCPeerConnection {
     }
 
     /// add_transceiver_from_track Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
-    pub async fn add_transceiver_from_track(
-        &self,
-        track: &Arc<dyn TrackLocal + Send + Sync>, //Why compiler complains if "track: Arc<dyn TrackLocal + Send + Sync>"?
-        init: &[RTCRtpTransceiverInit],
+    pub async fn add_transceiver_from_track<'a>(
+        &'a self,
+        track: Arc<dyn TrackLocal + Send + Sync>,
+        init: &'a [RTCRtpTransceiverInit],
     ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
@@ -1709,7 +1709,7 @@ impl RTCPeerConnection {
 
         let t = self
             .internal
-            .new_transceiver_from_track(direction, Arc::clone(track))
+            .new_transceiver_from_track(direction, track)
             .await?;
 
         self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
@@ -2049,7 +2049,7 @@ impl RTCPeerConnection {
     /// sctp returns the SCTPTransport for this PeerConnection
     ///
     /// The SCTP transport over which SCTP data is sent and received. If SCTP has not been negotiated, the value is nil.
-    /// https://www.w3.org/TR/webrtc/#attributes-15
+    /// <https://www.w3.org/TR/webrtc/#attributes-15>
     pub fn sctp(&self) -> Arc<RTCSctpTransport> {
         Arc::clone(&self.internal.sctp_transport)
     }

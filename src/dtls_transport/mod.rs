@@ -409,38 +409,44 @@ impl RTCDtlsTransport {
                     srtp::protection_profile::ProtectionProfile::Aes128CmHmacSha1_80
                 }
                 _ => {
+                    if let Err(err) = dtls_conn.close().await {
+                        log::error!("{}", err);
+                    }
+
                     self.state_change(RTCDtlsTransportState::Failed).await;
                     return Err(Error::ErrNoSRTPProtectionProfile);
                 }
             };
         }
 
-        if self
+        if !self
             .setting_engine
             .disable_certificate_fingerprint_verification
         {
-            return Ok(());
-        }
+            // Check the fingerprint if a certificate was exchanged
+            let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
+            if remote_certs.is_empty() {
+                if let Err(err) = dtls_conn.close().await {
+                    log::error!("{}", err);
+                }
 
-        // Check the fingerprint if a certificate was exchanged
-        let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
-        if remote_certs.is_empty() {
-            self.state_change(RTCDtlsTransportState::Failed).await;
-            return Err(Error::ErrNoRemoteCertificate);
-        }
-
-        {
-            let mut remote_certificate = self.remote_certificate.lock().await;
-            *remote_certificate = Bytes::from(remote_certs[0].clone());
-        }
-
-        if let Err(err) = self.validate_fingerprint(&remote_certs[0]).await {
-            if dtls_conn.close().await.is_err() {
-                log::error!("{}", err);
+                self.state_change(RTCDtlsTransportState::Failed).await;
+                return Err(Error::ErrNoRemoteCertificate);
             }
 
-            self.state_change(RTCDtlsTransportState::Failed).await;
-            return Err(err);
+            {
+                let mut remote_certificate = self.remote_certificate.lock().await;
+                *remote_certificate = Bytes::from(remote_certs[0].clone());
+            }
+
+            if let Err(err) = self.validate_fingerprint(&remote_certs[0]).await {
+                if let Err(close_err) = dtls_conn.close().await {
+                    log::error!("{}", close_err);
+                }
+
+                self.state_change(RTCDtlsTransportState::Failed).await;
+                return Err(err);
+            }
         }
 
         {

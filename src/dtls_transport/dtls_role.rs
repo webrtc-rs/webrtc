@@ -24,7 +24,7 @@ pub enum DTLSRole {
     Server = 3,
 }
 
-/// https://tools.ietf.org/html/rfc5763
+/// <https://tools.ietf.org/html/rfc5763>
 /// The answerer MUST use either a
 /// setup attribute value of setup:active or setup:passive.  Note that
 /// if the answerer uses setup:passive, then the DTLS handshake will

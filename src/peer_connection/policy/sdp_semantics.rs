@@ -9,13 +9,13 @@ pub enum RTCSdpSemantics {
 
     /// UnifiedPlan uses unified-plan offers and answers
     /// (the default in Chrome since M72)
-    /// https://tools.ietf.org/html/draft-roach-mmusic-unified-plan-00
+    /// <https://tools.ietf.org/html/draft-roach-mmusic-unified-plan-00>
     #[serde(rename = "unified-plan")]
     UnifiedPlan = 1,
 
     /// PlanB uses plan-b offers and answers
     /// NB: This format should be considered deprecated
-    /// https://tools.ietf.org/html/draft-uberti-rtcweb-plan-00
+    /// <https://tools.ietf.org/html/draft-uberti-rtcweb-plan-00>
     #[serde(rename = "plan-b")]
     PlanB = 2,
 
