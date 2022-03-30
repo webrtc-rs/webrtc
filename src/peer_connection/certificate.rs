@@ -72,7 +72,7 @@ impl RTCCertificate {
         };
         params.key_pair = Some(key_pair);
 
-        let expires = if cfg!(armv7) {
+        let expires = if cfg!(target_arch = "arm") {
             // Workaround for issue overflow when adding duration to instant on armv7
             // https://github.com/webrtc-rs/examples/issues/5 https://github.com/chronotope/chrono/issues/343
             SystemTime::now().add(Duration::from_secs(172800)) //60*60*48 or 2 days
