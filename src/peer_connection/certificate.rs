@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 use waitgroup::Worker;
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
+#[derive(Clone)]
 pub struct RTCCertificate {
     pub(crate) certificate: dtls::crypto::Certificate,
     pub(crate) stats_id: String,
