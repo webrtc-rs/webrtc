@@ -64,6 +64,7 @@ use crate::rtp_transceiver::{RTCRtpTransceiverInit, SSRC};
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::sctp_transport::RTCSctpTransport;
+use crate::stats::StatsReport;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
@@ -1984,6 +1985,9 @@ impl RTCPeerConnection {
             .into()
     }
 
+    pub async fn get_stats(&self) -> StatsReport {
+        self.internal.get_stats().await.into()
+    }
     // GetStats return data providing statistics about the overall connection
     /*TODO: func (pc *PeerConnection) GetStats() StatsReport {
         var (

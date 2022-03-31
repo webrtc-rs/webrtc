@@ -1,9 +1,11 @@
 use super::*;
 use crate::rtp_transceiver::create_stream_info;
+use crate::stats::stats_collector::StatsCollector;
 use crate::track::TrackStream;
 use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
 use std::sync::atomic::AtomicIsize;
 use std::sync::Weak;
+use waitgroup::WaitGroup;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -1315,6 +1317,16 @@ impl PeerConnectionInternal {
             }
         }
         false
+    }
+
+    pub(super) async fn get_stats(&self) -> Arc<Mutex<StatsCollector>> {
+        let mut collector = Arc::new(Mutex::new(StatsCollector::new()));
+        let wg = WaitGroup::new();
+
+        self.ice_gatherer.collect_stats(&mut collector, wg.worker());
+
+        wg.wait().await;
+        collector
     }
 }
 

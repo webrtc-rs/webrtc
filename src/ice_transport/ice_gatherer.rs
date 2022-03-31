@@ -6,6 +6,7 @@ use crate::ice_transport::ice_gatherer_state::RTCIceGathererState;
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
+use crate::stats::stats_collector::StatsCollector;
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
@@ -16,6 +17,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use waitgroup::Worker;
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
@@ -302,6 +304,11 @@ impl RTCIceGatherer {
         agent.clone()
     }
 
+    pub(crate) fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>, worker: Worker) {
+        tokio::spawn(async move {
+            drop(worker);
+        });
+    }
     /*TODO:func (g *ICEGatherer) collectStats(collector *statsReportCollector) {
 
         agent := g.getAgent()
