@@ -7,6 +7,7 @@ use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::stats::stats_collector::StatsCollector;
+use crate::stats::StatsReportType;
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
@@ -304,10 +305,34 @@ impl RTCIceGatherer {
         agent.clone()
     }
 
-    pub(crate) fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>, worker: Worker) {
-        tokio::spawn(async move {
-            drop(worker);
-        });
+    pub(crate) async fn collect_stats(
+        &self,
+        collector: &Arc<Mutex<StatsCollector>>,
+        worker: Worker,
+    ) {
+        if let Some(agent) = self.get_agent().await {
+            let collector = collector.clone();
+            tokio::spawn(async move {
+                let mut reports = vec![];
+
+                for stats in agent.get_candidate_pairs_stats().await {
+                    reports.push(StatsReportType::from(stats));
+                }
+
+                for stats in agent.get_local_candidates_stats().await {
+                    reports.push(StatsReportType::from(stats));
+                }
+
+                for stats in agent.get_remote_candidates_stats().await {
+                    reports.push(StatsReportType::from(stats));
+                }
+
+                let mut lock = collector.try_lock().unwrap();
+                lock.append(&mut reports);
+
+                drop(worker);
+            });
+        }
     }
     /*TODO:func (g *ICEGatherer) collectStats(collector *statsReportCollector) {
 
