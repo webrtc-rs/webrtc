@@ -1,5 +1,6 @@
 use super::StatsReportType;
 
+#[derive(Default)]
 pub struct StatsCollector {
     reports: Vec<StatsReportType>,
 }
@@ -7,7 +8,7 @@ pub struct StatsCollector {
 impl StatsCollector {
     pub(crate) fn new() -> Self {
         StatsCollector {
-            reports: vec![]
+            ..Default::default()
         }
     }
 
