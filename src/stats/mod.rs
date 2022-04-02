@@ -43,7 +43,7 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
 
 pub struct ICECandidatePairStats {
     timestamp: Instant,
-    // id: String,
+    id: String,
     local_candidate_id: String,
     remote_candidate_id: String,
     state: CandidatePairState,
@@ -74,6 +74,7 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
     fn from(stats: CandidatePairStats) -> Self {
         ICECandidatePairStats {
             timestamp: stats.timestamp,
+            id: format!("{}-{}", stats.local_candidate_id, stats.remote_candidate_id),
             local_candidate_id: stats.local_candidate_id,
             remote_candidate_id: stats.remote_candidate_id,
             state: stats.state,
@@ -104,7 +105,7 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
 
 pub struct ICECandidateStats {
     timestamp: Instant,
-    // id: String,
+    id: String,
     candidate_type: CandidateType,
     deleted: bool,
     ip: String,
@@ -119,7 +120,7 @@ impl From<CandidateStats> for ICECandidateStats {
     fn from(stats: CandidateStats) -> Self {
         ICECandidateStats {
             timestamp: stats.timestamp,
-            // id: String,
+            id: stats.id,
             network_type: stats.network_type,
             ip: stats.ip,
             port: stats.port,
