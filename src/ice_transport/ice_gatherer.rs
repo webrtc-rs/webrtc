@@ -7,6 +7,7 @@ use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::stats::stats_collector::StatsCollector;
+use crate::stats::SourceStatsType::*;
 use crate::stats::StatsReportType;
 
 use ice::agent::Agent;
@@ -316,15 +317,15 @@ impl RTCIceGatherer {
                 let mut reports = vec![];
 
                 for stats in agent.get_candidate_pairs_stats().await {
-                    reports.push(StatsReportType::from(stats));
+                    reports.push(StatsReportType::from(CandidatePair(stats)));
                 }
 
                 for stats in agent.get_local_candidates_stats().await {
-                    reports.push(StatsReportType::from(stats));
+                    reports.push(StatsReportType::from(LocalCandidate(stats)));
                 }
 
                 for stats in agent.get_remote_candidates_stats().await {
-                    reports.push(StatsReportType::from(stats));
+                    reports.push(StatsReportType::from(RemoteCandidate(stats)));
                 }
 
                 let mut lock = collector.try_lock().unwrap();

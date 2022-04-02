@@ -1,44 +1,35 @@
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
+use ice::candidate::{CandidatePairState, CandidateType};
+use ice::network_type::NetworkType;
 use stats_collector::StatsCollector;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 
 pub mod stats_collector;
 
-pub enum StatsType {
-    CSRC,
-    CandidatePair,
-    Certificate,
-    Codec,
-    DataChannel,
-    InboundRTP,
-    LocalCandidate,
-    OutboundRTP,
-    PeerConnection,
-    Receiver,
-    RemoteCandidate,
-    RemoteInboundRTP,
-    RemoteOutboundRTP,
-    Sender,
-    Stream,
-    Track,
-    Transport,
+pub enum SourceStatsType {
+    CandidatePair(CandidatePairStats),
+    LocalCandidate(CandidateStats),
+    RemoteCandidate(CandidateStats),
 }
 
 pub enum StatsReportType {
-  StatsType(ICECandidatePairStats),
+    CandidatePair(ICECandidatePairStats),
+    LocalCandidate(ICECandidateStats),
+    RemoteCandidate(ICECandidateStats),
 }
 
-impl From<CandidatePairStats> for StatsReportType {
-    fn from(stats: CandidatePairStats) -> Self {
-       StatsReportType::StatsType(stats.into())
-    }
-}
-
-impl From<CandidateStats> for StatsReportType {
-    fn from(stats: CandidateStats) -> Self {
-       StatsReportType::StatsType(stats.into())
+impl From<SourceStatsType> for StatsReportType {
+    fn from(stats: SourceStatsType) -> Self {
+        match stats {
+            SourceStatsType::CandidatePair(stats) => StatsReportType::CandidatePair(stats.into()),
+            SourceStatsType::LocalCandidate(stats) => StatsReportType::LocalCandidate(stats.into()),
+            SourceStatsType::RemoteCandidate(stats) => {
+                StatsReportType::RemoteCandidate(stats.into())
+            }
+        }
     }
 }
 
@@ -50,16 +41,93 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
     }
 }
 
-pub struct ICECandidatePairStats {}
+pub struct ICECandidatePairStats {
+    timestamp: Instant,
+    // id: String,
+    local_candidate_id: String,
+    remote_candidate_id: String,
+    state: CandidatePairState,
+    nominated: bool,
+    packets_sent: u32,
+    packets_received: u32,
+    bytes_sent: u64,
+    bytes_received: u64,
+    last_packet_sent_timestamp: Instant,
+    last_packet_received_timstamp: Instant,
+    first_request_timestamp: Instant,
+    last_request_timestamp: Instant,
+    total_round_trip_time: f64,
+    current_round_trip_time: f64,
+    available_outgoing_bitrate: f64,
+    available_incoming_bitrate: f64,
+    circuit_breaker_trigger_count: u32,
+    requests_received: u64,
+    requests_sent: u64,
+    responses_received: u64,
+    responses_sent: u64,
+    retransmissions_sent: u64,
+    consent_requests_sent: u64,
+    consent_expired_timestamp: Instant,
+}
 
 impl From<CandidatePairStats> for ICECandidatePairStats {
-    fn from(_stats: CandidatePairStats) -> Self {
-        ICECandidatePairStats {}
+    fn from(stats: CandidatePairStats) -> Self {
+        ICECandidatePairStats {
+            timestamp: stats.timestamp,
+            local_candidate_id: stats.local_candidate_id,
+            remote_candidate_id: stats.remote_candidate_id,
+            state: stats.state,
+            nominated: stats.nominated,
+            packets_sent: stats.packets_sent,
+            packets_received: stats.packets_received,
+            bytes_sent: stats.bytes_sent,
+            bytes_received: stats.bytes_received,
+            last_packet_sent_timestamp: stats.last_packet_sent_timestamp,
+            last_packet_received_timstamp: stats.last_packet_received_timestamp,
+            first_request_timestamp: stats.first_request_timestamp,
+            last_request_timestamp: stats.last_request_timestamp,
+            total_round_trip_time: stats.total_round_trip_time,
+            current_round_trip_time: stats.current_round_trip_time,
+            available_outgoing_bitrate: stats.available_outgoing_bitrate,
+            available_incoming_bitrate: stats.available_incoming_bitrate,
+            circuit_breaker_trigger_count: stats.circuit_breaker_trigger_count,
+            requests_received: stats.requests_received,
+            requests_sent: stats.requests_sent,
+            responses_received: stats.responses_received,
+            responses_sent: stats.responses_sent,
+            retransmissions_sent: stats.retransmissions_sent,
+            consent_requests_sent: stats.consent_requests_sent,
+            consent_expired_timestamp: stats.consent_expired_timestamp,
+        }
     }
 }
 
-impl From<CandidateStats> for ICECandidatePairStats {
-    fn from(_stats: CandidateStats) -> Self {
-        ICECandidatePairStats {}
+pub struct ICECandidateStats {
+    timestamp: Instant,
+    // id: String,
+    candidate_type: CandidateType,
+    deleted: bool,
+    ip: String,
+    network_type: NetworkType,
+    port: u16,
+    priority: u32,
+    relay_protocol: String,
+    url: String,
+}
+
+impl From<CandidateStats> for ICECandidateStats {
+    fn from(stats: CandidateStats) -> Self {
+        ICECandidateStats {
+            timestamp: stats.timestamp,
+            // id: String,
+            network_type: stats.network_type,
+            ip: stats.ip,
+            port: stats.port,
+            candidate_type: stats.candidate_type,
+            priority: stats.priority,
+            url: stats.url,
+            relay_protocol: stats.relay_protocol,
+            deleted: stats.deleted,
+        }
     }
 }
