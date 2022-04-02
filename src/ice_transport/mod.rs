@@ -6,7 +6,6 @@ use std::sync::Arc;
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::Instant;
 use util::Conn;
 
 use ice_candidate::RTCIceCandidate;
@@ -335,13 +334,10 @@ impl RTCIceTransport {
         let mut internal = self.internal.lock().await;
         if let Some(_conn) = internal.conn.take() {
             let collector = collector.clone();
-            let stats = ICETransportStats {
-                timestamp: Instant::now(),
-                id: "ice_transport".to_owned(),
-                // TODO: get bytes out of Conn.
-                // bytes_received: conn.bytes_received,
-                // bytes_sent: conn.bytes_sent,
-            };
+            let stats = ICETransportStats::new();
+            // TODO: get bytes out of Conn.
+            // bytes_received: conn.bytes_received,
+            // bytes_sent: conn.bytes_sent,
 
             let mut lock = collector.try_lock().unwrap();
             lock.push(Transport(stats));

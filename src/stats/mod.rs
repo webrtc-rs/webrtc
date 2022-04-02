@@ -135,8 +135,17 @@ impl From<CandidateStats> for ICECandidateStats {
 }
 
 pub struct ICETransportStats {
-    pub timestamp: Instant,
-    pub id: String,
+    timestamp: Instant,
+    id: String,
     // bytes_received: u64,
     // bytes_sent: u64,
+}
+
+impl ICETransportStats {
+    pub(crate) fn new() -> Self {
+        ICETransportStats {
+            timestamp: Instant::now(),
+            id: "ice_transport".to_owned(),
+        }
+    }
 }
