@@ -19,6 +19,7 @@ pub enum StatsReportType {
     CandidatePair(ICECandidatePairStats),
     LocalCandidate(ICECandidateStats),
     RemoteCandidate(ICECandidateStats),
+    Transport(ICETransportStats),
 }
 
 impl From<SourceStatsType> for StatsReportType {
@@ -131,4 +132,11 @@ impl From<CandidateStats> for ICECandidateStats {
             deleted: stats.deleted,
         }
     }
+}
+
+pub struct ICETransportStats {
+    pub timestamp: Instant,
+    pub id: String,
+    // bytes_received: u64,
+    // bytes_sent: u64,
 }

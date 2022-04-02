@@ -6,12 +6,14 @@ use std::sync::Arc;
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
+use tokio::time::Instant;
 use util::Conn;
 
 use ice_candidate::RTCIceCandidate;
 use ice_candidate_pair::RTCIceCandidatePair;
 use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
+use waitgroup::Worker;
 
 use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
@@ -19,6 +21,9 @@ use crate::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
 use crate::mux::{Config, Mux};
+use crate::stats::stats_collector::StatsCollector;
+use crate::stats::ICETransportStats;
+use crate::stats::StatsReportType::Transport;
 
 #[cfg(test)]
 mod ice_transport_test;
@@ -322,6 +327,28 @@ impl RTCIceTransport {
         }
     }
 
+    pub(crate) async fn collect_stats(
+        &self,
+        collector: &Arc<Mutex<StatsCollector>>,
+        worker: Worker,
+    ) {
+        let mut internal = self.internal.lock().await;
+        if let Some(_conn) = internal.conn.take() {
+            let collector = collector.clone();
+            let stats = ICETransportStats {
+                timestamp: Instant::now(),
+                id: "ice_transport".to_owned(),
+                // TODO: get bytes out of Conn.
+                // bytes_received: conn.bytes_received,
+                // bytes_sent: conn.bytes_sent,
+            };
+
+            let mut lock = collector.try_lock().unwrap();
+            lock.push(Transport(stats));
+
+            drop(worker);
+        }
+    }
     /*TODO: func (t *ICETransport) collectStats(collector *statsReportCollector) {
         t.lock.Lock()
         conn := t.conn

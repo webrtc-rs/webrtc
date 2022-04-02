@@ -1320,10 +1320,14 @@ impl PeerConnectionInternal {
     }
 
     pub(super) async fn get_stats(&self) -> Arc<Mutex<StatsCollector>> {
-        let mut collector = Arc::new(Mutex::new(StatsCollector::new()));
+        let collector = Arc::new(Mutex::new(StatsCollector::new()));
         let wg = WaitGroup::new();
 
-        tokio::join!(self.ice_gatherer.collect_stats(&mut collector, wg.worker()));
+        tokio::join!(
+            self.ice_gatherer.collect_stats(&collector, wg.worker()),
+            self.ice_transport
+                .collect_stats(&collector, wg.worker()),
+        );
 
         wg.wait().await;
         collector
