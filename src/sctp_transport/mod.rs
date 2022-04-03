@@ -6,6 +6,7 @@ pub mod sctp_transport_state;
 
 use sctp_transport_state::RTCSctpTransportState;
 use std::collections::HashSet;
+use waitgroup::Worker;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data_channel::RTCDataChannel;
@@ -13,6 +14,9 @@ use crate::dtls_transport::dtls_role::DTLSRole;
 use crate::dtls_transport::*;
 use crate::error::*;
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use crate::stats::stats_collector::StatsCollector;
+use crate::stats::ICETransportStats;
+use crate::stats::StatsReportType::SCTPTransport;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;
@@ -333,6 +337,25 @@ impl RTCSctpTransport {
         self.state.load(Ordering::SeqCst).into()
     }
 
+    pub(crate) async fn collect_stats(
+        &self,
+        collector: &Arc<Mutex<StatsCollector>>,
+        worker: Worker,
+    ) {
+        let dtls_transport = self.transport();
+        if let Some(_net_conn) = dtls_transport.conn().await{
+            let collector = collector.clone();
+            let stats = ICETransportStats::new("sctp_transport".to_owned());
+            // TODO: get bytes out of Conn.
+            // bytes_received: conn.bytes_received,
+            // bytes_sent: conn.bytes_sent,
+
+            let mut lock = collector.try_lock().unwrap();
+            lock.push(SCTPTransport(stats));
+
+            drop(worker);
+        }
+    }
     /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
         collector.Collecting()
 

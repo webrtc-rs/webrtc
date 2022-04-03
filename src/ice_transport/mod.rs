@@ -334,7 +334,7 @@ impl RTCIceTransport {
         let mut internal = self.internal.lock().await;
         if let Some(_conn) = internal.conn.take() {
             let collector = collector.clone();
-            let stats = ICETransportStats::new();
+            let stats = ICETransportStats::new("ice_transport".to_owned());
             // TODO: get bytes out of Conn.
             // bytes_received: conn.bytes_received,
             // bytes_sent: conn.bytes_sent,

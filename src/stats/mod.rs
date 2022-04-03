@@ -19,6 +19,7 @@ pub enum StatsReportType {
     CandidatePair(ICECandidatePairStats),
     LocalCandidate(ICECandidateStats),
     RemoteCandidate(ICECandidateStats),
+    SCTPTransport(ICETransportStats),
     Transport(ICETransportStats),
 }
 
@@ -42,8 +43,13 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
     }
 }
 
+// TODO: should timestamps be cast here, or during serialization?
+// func statsTimestampFrom(t time.Time) StatsTimestamp {
+// 	return StatsTimestamp(t.UnixNano() / int64(time.Millisecond))
+// }
+
 pub struct ICECandidatePairStats {
-    timestamp: Instant,
+    timestamp: Instant, // StatsTimestamp
     id: String,
     local_candidate_id: String,
     remote_candidate_id: String,
@@ -53,10 +59,10 @@ pub struct ICECandidatePairStats {
     packets_received: u32,
     bytes_sent: u64,
     bytes_received: u64,
-    last_packet_sent_timestamp: Instant,
-    last_packet_received_timstamp: Instant,
-    first_request_timestamp: Instant,
-    last_request_timestamp: Instant,
+    last_packet_sent_timestamp: Instant,    // statsTimestampFrom
+    last_packet_received_timstamp: Instant, // statsTimestampFrom
+    first_request_timestamp: Instant,       // statsTimestampFrom
+    last_request_timestamp: Instant,        // statsTimestampFrom
     total_round_trip_time: f64,
     current_round_trip_time: f64,
     available_outgoing_bitrate: f64,
@@ -68,7 +74,7 @@ pub struct ICECandidatePairStats {
     responses_sent: u64,
     retransmissions_sent: u64,
     consent_requests_sent: u64,
-    consent_expired_timestamp: Instant,
+    consent_expired_timestamp: Instant, // statsTimestampFrom
 }
 
 impl From<CandidatePairStats> for ICECandidatePairStats {
@@ -142,10 +148,10 @@ pub struct ICETransportStats {
 }
 
 impl ICETransportStats {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(id: String) -> Self {
         ICETransportStats {
             timestamp: Instant::now(),
-            id: "ice_transport".to_owned(),
+            id: id,
         }
     }
 }
