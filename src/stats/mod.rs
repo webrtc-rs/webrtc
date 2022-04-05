@@ -1,3 +1,6 @@
+use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
+use crate::peer_connection::certificate::RTCCertificate;
+
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
 use ice::candidate::{CandidatePairState, CandidateType};
 use ice::network_type::NetworkType;
@@ -158,11 +161,23 @@ impl ICETransportStats {
 }
 
 pub struct CertificateStats {
-    pub timestamp: Instant,
-    pub id: String,
+    timestamp: Instant,
+    id: String,
     // base64_certificate: String,
-    pub fingerprint: String,
-    pub fingerprint_algorithm: String,
+    fingerprint: String,
+    fingerprint_algorithm: String,
     // issuer_certificate_id: String,
 }
 
+impl CertificateStats {
+    pub(crate) fn new(cert: &RTCCertificate, fingerprint: RTCDtlsFingerprint) -> Self {
+        CertificateStats {
+            timestamp: Instant::now(),
+            id: cert.stats_id.clone(),
+            // TODO: base64_certificate
+            fingerprint: fingerprint.value,
+            fingerprint_algorithm: fingerprint.algorithm,
+            // TODO: issuer_certificate_id
+        }
+    }
+}
