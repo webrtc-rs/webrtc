@@ -18,6 +18,7 @@ use tokio::sync::{mpsc, Mutex};
 use util::Conn;
 
 use dtls_role::*;
+use waitgroup::Worker;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::dtls_transport::dtls_parameters::DTLSParameters;
@@ -30,6 +31,7 @@ use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
 use crate::peer_connection::certificate::RTCCertificate;
 use crate::rtp_transceiver::SSRC;
+use crate::stats::stats_collector::StatsCollector;
 
 #[cfg(test)]
 mod dtls_transport_test;
@@ -303,6 +305,16 @@ impl RTCDtlsTransport {
         }
 
         DEFAULT_DTLS_ROLE_ANSWER
+    }
+
+    pub(crate) async fn collect_stats(
+        &self,
+        collector: &Arc<Mutex<StatsCollector>>,
+        worker: Worker,
+    ) {
+        for cert in &self.certificates {
+            cert.collect_stats(&collector, worker.clone()).await;
+        }
     }
 
     async fn prepare_transport(

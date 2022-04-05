@@ -17,6 +17,7 @@ pub enum SourceStatsType {
 
 pub enum StatsReportType {
     CandidatePair(ICECandidatePairStats),
+    CertificateStats(CertificateStats),
     LocalCandidate(ICECandidateStats),
     RemoteCandidate(ICECandidateStats),
     SCTPTransport(ICETransportStats),
@@ -150,8 +151,18 @@ pub struct ICETransportStats {
 impl ICETransportStats {
     pub(crate) fn new(id: String) -> Self {
         ICETransportStats {
+            id,
             timestamp: Instant::now(),
-            id: id,
         }
     }
 }
+
+pub struct CertificateStats {
+    pub timestamp: Instant,
+    pub id: String,
+    // base64_certificate: String,
+    pub fingerprint: String,
+    pub fingerprint_algorithm: String,
+    // issuer_certificate_id: String,
+}
+
