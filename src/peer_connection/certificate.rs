@@ -1,13 +1,19 @@
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::error::{Error, Result};
 use crate::peer_connection::math_rand_alpha;
+use crate::stats::{CertificateStats, StatsReportType};
+use crate::stats::stats_collector::StatsCollector;
 
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
 use rcgen::{CertificateParams, KeyPair, RcgenError};
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
+use tokio::time::Instant;
 use std::ops::Add;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex;
+use waitgroup::Worker;
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
 pub struct RTCCertificate {
@@ -159,6 +165,29 @@ impl RTCCertificate {
         );*/
 
         RTCCertificate::from_params(params)
+    }
+
+    pub(crate) async fn collect_stats(
+        &self,
+        collector: &Arc<Mutex<StatsCollector>>,
+        worker: Worker,
+    ) {
+        let fingerprints = self.get_fingerprints().unwrap();
+        if let Some(fingerprint) = fingerprints.into_iter().nth(0) {
+            let stats = CertificateStats {
+                timestamp: Instant::now(),
+                id: self.stats_id.clone(),
+                // base64_certificate
+                fingerprint: fingerprint.value,
+                fingerprint_algorithm: fingerprint.algorithm,
+                // issuer_certificate_id
+
+            };
+            let mut lock = collector.try_lock().unwrap();
+            lock.push(StatsReportType::CertificateStats(stats));
+
+            drop(worker);
+        }
     }
 
     /*TODO:
