@@ -133,8 +133,8 @@ To build all webrtc examples:
 cd webrtc/examples
 cargo test # build all examples (maybe very slow)
 #[ or just build single example (much faster)
-cargo build --example play-from-disk-vp8 # build play-from-disk-vp8 example only
-cargo build --example play-from-disk-vp9 # build play-from-disk-vp9 example only
+cargo build --example play-from-disk-vpx # build play-from-disk-vpx example only
+cargo build --example play-from-disk-h264 # build play-from-disk-h264 example only
 #...
 #]   
 ```
