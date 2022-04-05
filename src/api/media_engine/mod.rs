@@ -15,12 +15,17 @@ use crate::rtp_transceiver::rtp_transceiver_direction::{
     have_rtp_transceiver_direction_intersection, RTCRtpTransceiverDirection,
 };
 use crate::rtp_transceiver::{PayloadType, RTCPFeedback};
+use crate::stats::stats_collector::StatsCollector;
+use crate::stats::CodecStats;
+use crate::stats::StatsReportType::Codec;
 
 use sdp::description::session::SessionDescription;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
+use waitgroup::Worker;
 
 /// MIME_TYPE_H264 H264 MIME type.
 /// Note: Matching should be case insensitive.
@@ -534,6 +539,26 @@ impl MediaEngine {
         Err(Error::ErrCodecNotFound)
     }
 
+    pub(crate) async fn collect_stats(
+        &self,
+        collector: &Arc<Mutex<StatsCollector>>,
+        worker: Worker,
+    ) {
+        let mut reports = vec![];
+
+        for codec in &self.video_codecs {
+            reports.push(Codec(CodecStats::from(codec)));
+        }
+
+        for codec in &self.audio_codecs {
+            reports.push(Codec(CodecStats::from(codec)));
+        }
+
+        let mut lock = collector.try_lock().unwrap();
+        lock.append(&mut reports);
+
+        drop(worker);
+    }
     /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {
 
             statsLoop := func(codecs []RTPCodecParameters) {
