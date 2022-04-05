@@ -1329,7 +1329,7 @@ impl PeerConnectionInternal {
             self.sctp_transport.collect_stats(&collector, wg.worker()),
             self.dtls_transport.collect_stats(&collector, wg.worker()),
             // TODO: data channels
-            // TODO: media engine
+            self.media_engine.collect_stats(&collector, wg.worker()),
         );
 
         wg.wait().await;

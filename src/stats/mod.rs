@@ -1,5 +1,7 @@
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::peer_connection::certificate::RTCCertificate;
+use crate::rtp_transceiver::PayloadType;
+use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
 use ice::candidate::{CandidatePairState, CandidateType};
@@ -21,6 +23,7 @@ pub enum SourceStatsType {
 pub enum StatsReportType {
     CandidatePair(ICECandidatePairStats),
     CertificateStats(CertificateStats),
+    Codec(CodecStats),
     LocalCandidate(ICECandidateStats),
     RemoteCandidate(ICECandidateStats),
     SCTPTransport(ICETransportStats),
@@ -179,5 +182,30 @@ impl CertificateStats {
             fingerprint_algorithm: fingerprint.algorithm,
             // TODO: issuer_certificate_id
         }
+    }
+}
+
+pub struct CodecStats {
+    timestamp: Instant,
+    id: String,
+    payload_type: PayloadType,
+    mime_type: String,
+    clock_rate: u32,
+    channels: u16,
+    sdp_fmtp_line: String,
+}
+
+impl From<&RTCRtpCodecParameters> for CodecStats {
+    fn from(codec: &RTCRtpCodecParameters) -> Self {
+        CodecStats {
+            timestamp: Instant::now(),
+            id: codec.stats_id.clone(),
+            payload_type: codec.payload_type,
+            mime_type: codec.capability.mime_type.clone(),
+            clock_rate: codec.capability.clock_rate,
+            channels: codec.capability.channels,
+            sdp_fmtp_line: codec.capability.sdp_fmtp_line.clone(),
+        }
+
     }
 }
