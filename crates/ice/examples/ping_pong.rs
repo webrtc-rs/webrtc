@@ -215,7 +215,6 @@ async fn main() -> Result<(), Error> {
                                     "http://localhost:{}/remoteCandidate",
                                     remote_http_port
                                 ))
-                                .header("content-type", "application/json")
                                 .body(Body::from(c.marshal()))
                             {
                                 Ok(req) => req,
@@ -257,7 +256,6 @@ async fn main() -> Result<(), Error> {
         let req = match Request::builder()
             .method(Method::POST)
             .uri(format!("http://localhost:{}/remoteAuth", remote_http_port))
-            .header("content-type", "application/json")
             .body(Body::from(format!("{}:{}", local_ufrag, local_pwd)))
         {
             Ok(req) => req,
