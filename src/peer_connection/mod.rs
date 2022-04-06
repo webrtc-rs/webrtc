@@ -1986,7 +1986,10 @@ impl RTCPeerConnection {
     }
 
     pub async fn get_stats(&self) -> StatsReport {
-        self.internal.get_stats(self.get_stats_id().to_owned()).await.into()
+        self.internal
+            .get_stats(self.get_stats_id().to_owned())
+            .await
+            .into()
     }
     // GetStats return data providing statistics about the overall connection
     /*TODO: func (pc *PeerConnection) GetStats() StatsReport {
