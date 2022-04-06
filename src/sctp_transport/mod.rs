@@ -342,6 +342,7 @@ impl RTCSctpTransport {
         &self,
         collector: &Arc<Mutex<StatsCollector>>,
         worker: Worker,
+        peer_connection_id: String,
     ) {
         let dtls_transport = self.transport();
 
@@ -363,7 +364,7 @@ impl RTCSctpTransport {
         }
 
         let mut reports = vec![];
-        reports.push(PeerConnection(PeerConnectionStats::new(self, data_channels_closed)));
+        reports.push(PeerConnection(PeerConnectionStats::new(self, peer_connection_id, data_channels_closed)));
 
         // conn
         if let Some(_net_conn) = dtls_transport.conn().await {
