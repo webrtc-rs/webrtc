@@ -15,6 +15,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::SystemTime;
+use waitgroup::Worker;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
@@ -25,6 +26,8 @@ use data_channel_state::RTCDataChannelState;
 use crate::api::setting_engine::SettingEngine;
 use crate::error::{Error, OnErrorHdlrFn, Result};
 use crate::sctp_transport::RTCSctpTransport;
+use crate::stats::{StatsReportType, DataChannelStats};
+use crate::stats::stats_collector::StatsCollector;
 
 /// message size limit for Chromium
 const DATA_CHANNEL_BUFFER_SIZE: u16 = u16::MAX;
@@ -529,6 +532,15 @@ impl RTCDataChannel {
         self.stats_id.as_str()
     }
 
+    pub(crate) async fn collect_stats(
+        &self,
+        collector: &Arc<Mutex<StatsCollector>>,
+        worker: Worker,
+    ) {
+        let mut lock = collector.try_lock().unwrap();
+        lock.push(StatsReportType::DataChannel(DataChannelStats::from(self)));
+        drop(worker);
+    }
     /*TODO: func (d *DataChannel) collectStats(collector *statsReportCollector) {
         collector.Collecting()
 

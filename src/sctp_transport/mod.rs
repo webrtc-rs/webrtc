@@ -9,14 +9,15 @@ use std::collections::HashSet;
 use waitgroup::Worker;
 
 use crate::api::setting_engine::SettingEngine;
+use crate::data_channel::data_channel_state::RTCDataChannelState;
 use crate::data_channel::RTCDataChannel;
 use crate::dtls_transport::dtls_role::DTLSRole;
 use crate::dtls_transport::*;
 use crate::error::*;
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::stats::stats_collector::StatsCollector;
-use crate::stats::ICETransportStats;
-use crate::stats::StatsReportType::SCTPTransport;
+use crate::stats::{ICETransportStats, PeerConnectionStats};
+use crate::stats::StatsReportType::{PeerConnection, SCTPTransport};
 
 use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;
@@ -343,18 +344,39 @@ impl RTCSctpTransport {
         worker: Worker,
     ) {
         let dtls_transport = self.transport();
-        if let Some(_net_conn) = dtls_transport.conn().await{
-            let collector = collector.clone();
+
+        // TODO: should this be collected?
+        dtls_transport
+            .collect_stats(collector, worker.clone())
+            .await;
+
+        // data channels
+        let mut data_channels_closed = 0;
+        let data_channels = self.data_channels.try_lock().unwrap();
+        for data_channel in &*data_channels {
+            match data_channel.ready_state() {
+                RTCDataChannelState::Connecting => (),
+                RTCDataChannelState::Open => (),
+                _ => data_channels_closed += 1,
+            }
+            data_channel.collect_stats(collector, worker.clone()).await;
+        }
+
+        let mut reports = vec![];
+        reports.push(PeerConnection(PeerConnectionStats::new(self, data_channels_closed)));
+
+        // conn
+        if let Some(_net_conn) = dtls_transport.conn().await {
             let stats = ICETransportStats::new("sctp_transport".to_owned());
             // TODO: get bytes out of Conn.
             // bytes_received: conn.bytes_received,
             // bytes_sent: conn.bytes_sent,
-
-            let mut lock = collector.try_lock().unwrap();
-            lock.push(SCTPTransport(stats));
-
-            drop(worker);
+            reports.push(SCTPTransport(stats));
         }
+
+        let collector = collector.clone();
+        let mut lock = collector.try_lock().unwrap();
+        lock.append(&mut reports);
     }
     /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
         collector.Collecting()
@@ -407,5 +429,17 @@ impl RTCSctpTransport {
     pub(crate) async fn association(&self) -> Option<Arc<Association>> {
         let sctp_association = self.sctp_association.lock().await;
         sctp_association.clone()
+    }
+
+    pub(crate) fn data_channels_accepted(&self) -> u32 {
+        self.data_channels_accepted.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn data_channels_opened(&self) -> u32 {
+        self.data_channels_opened.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn data_channels_requested(&self) -> u32 {
+        self.data_channels_requested.load(Ordering::SeqCst)
     }
 }

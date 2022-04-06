@@ -1,7 +1,10 @@
+use crate::data_channel::data_channel_state::RTCDataChannelState;
+use crate::data_channel::RTCDataChannel;
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::peer_connection::certificate::RTCCertificate;
-use crate::rtp_transceiver::PayloadType;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
+use crate::rtp_transceiver::PayloadType;
+use crate::sctp_transport::RTCSctpTransport;
 
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
 use ice::candidate::{CandidatePairState, CandidateType};
@@ -24,7 +27,9 @@ pub enum StatsReportType {
     CandidatePair(ICECandidatePairStats),
     CertificateStats(CertificateStats),
     Codec(CodecStats),
+    DataChannel(DataChannelStats),
     LocalCandidate(ICECandidateStats),
+    PeerConnection(PeerConnectionStats),
     RemoteCandidate(ICECandidateStats),
     SCTPTransport(ICETransportStats),
     Transport(ICETransportStats),
@@ -206,6 +211,73 @@ impl From<&RTCRtpCodecParameters> for CodecStats {
             channels: codec.capability.channels,
             sdp_fmtp_line: codec.capability.sdp_fmtp_line.clone(),
         }
+    }
+}
 
+pub struct DataChannelStats {
+    timestamp: Instant,
+    id: String,
+    data_channel_identifier: u16,
+    bytes_received: usize,
+    bytes_sent: usize,
+    label: String,
+    messages_received: usize,
+    messages_sent: usize,
+    protocol: String,
+    state: RTCDataChannelState,
+}
+
+impl From<&RTCDataChannel> for DataChannelStats {
+    fn from(data_channel: &RTCDataChannel) -> Self {
+        let state = data_channel.ready_state();
+
+        let mut bytes_received = 0;
+        let mut bytes_sent = 0;
+        let mut messages_received = 0;
+        let mut messages_sent = 0;
+
+        let lock = data_channel.data_channel.try_lock().unwrap();
+
+        if let Some(internal) = &*lock {
+            bytes_received = internal.bytes_received();
+            bytes_sent = internal.bytes_sent();
+            messages_received = internal.messages_received();
+            messages_sent = internal.messages_sent();
+        }
+
+        DataChannelStats {
+            state,
+            timestamp: Instant::now(),
+            id: data_channel.stats_id.clone(),
+            data_channel_identifier: data_channel.id(), // TODO: "The value is initially null"
+            label: data_channel.label.clone(),
+            protocol: data_channel.protocol.clone(),
+            bytes_received,
+            bytes_sent,
+            messages_received,
+            messages_sent,
+        }
+    }
+}
+
+pub struct PeerConnectionStats {
+    timestamp: Instant,
+    // id: String,
+    data_channels_accepted: u32,
+    data_channels_closed: u32,
+    data_channels_opened: u32,
+    data_channels_requested: u32,
+}
+
+impl PeerConnectionStats {
+    pub fn new(transport: &RTCSctpTransport, data_channels_closed: u32) -> Self {
+        PeerConnectionStats {
+            timestamp: Instant::now(),
+            // id: transport.stats_id.clone(), // TODO: pass this into sctp_transport.collect_stats ?
+            data_channels_accepted: transport.data_channels_accepted(),
+            data_channels_opened: transport.data_channels_opened(),
+            data_channels_requested: transport.data_channels_requested(),
+            data_channels_closed,
+        }
     }
 }
