@@ -16,8 +16,8 @@ use crate::dtls_transport::*;
 use crate::error::*;
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::stats::stats_collector::StatsCollector;
-use crate::stats::{ICETransportStats, PeerConnectionStats};
 use crate::stats::StatsReportType::{PeerConnection, SCTPTransport};
+use crate::stats::{ICETransportStats, PeerConnectionStats};
 
 use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;
@@ -364,7 +364,11 @@ impl RTCSctpTransport {
         }
 
         let mut reports = vec![];
-        reports.push(PeerConnection(PeerConnectionStats::new(self, peer_connection_id, data_channels_closed)));
+        reports.push(PeerConnection(PeerConnectionStats::new(
+            self,
+            peer_connection_id,
+            data_channels_closed,
+        )));
 
         // conn
         if let Some(_net_conn) = dtls_transport.conn().await {

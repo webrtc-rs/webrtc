@@ -1326,7 +1326,8 @@ impl PeerConnectionInternal {
         tokio::join!(
             self.ice_gatherer.collect_stats(&collector, wg.worker()),
             self.ice_transport.collect_stats(&collector, wg.worker()),
-            self.sctp_transport.collect_stats(&collector, wg.worker(), stats_id),
+            self.sctp_transport
+                .collect_stats(&collector, wg.worker(), stats_id),
             self.dtls_transport.collect_stats(&collector, wg.worker()),
             self.media_engine.collect_stats(&collector, wg.worker()),
         );
