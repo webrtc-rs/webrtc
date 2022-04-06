@@ -262,7 +262,7 @@ impl From<&RTCDataChannel> for DataChannelStats {
 
 pub struct PeerConnectionStats {
     timestamp: Instant,
-    // id: String,
+    id: String,
     data_channels_accepted: u32,
     data_channels_closed: u32,
     data_channels_opened: u32,
@@ -270,10 +270,10 @@ pub struct PeerConnectionStats {
 }
 
 impl PeerConnectionStats {
-    pub fn new(transport: &RTCSctpTransport, data_channels_closed: u32) -> Self {
+    pub fn new(transport: &RTCSctpTransport, stats_id: String, data_channels_closed: u32) -> Self {
         PeerConnectionStats {
             timestamp: Instant::now(),
-            // id: transport.stats_id.clone(), // TODO: pass this into sctp_transport.collect_stats ?
+            id: stats_id,
             data_channels_accepted: transport.data_channels_accepted(),
             data_channels_opened: transport.data_channels_opened(),
             data_channels_requested: transport.data_channels_requested(),
