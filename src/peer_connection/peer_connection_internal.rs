@@ -1328,7 +1328,6 @@ impl PeerConnectionInternal {
             self.ice_transport.collect_stats(&collector, wg.worker()),
             self.sctp_transport.collect_stats(&collector, wg.worker()),
             self.dtls_transport.collect_stats(&collector, wg.worker()),
-            // TODO: data channels
             self.media_engine.collect_stats(&collector, wg.worker()),
         );
 
