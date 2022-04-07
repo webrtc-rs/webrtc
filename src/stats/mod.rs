@@ -48,7 +48,7 @@ impl From<SourceStatsType> for StatsReportType {
     }
 }
 
-// TODO: should this be some form of String-indexed map?
+// TODO: should this be some form of String-indexed HashMap?
 pub struct StatsReport {
     reports: Vec<StatsReportType>,
 }
