@@ -23,6 +23,7 @@ pub enum SourceStatsType {
     RemoteCandidate(CandidateStats),
 }
 
+#[derive(Debug)]
 pub enum StatsReportType {
     CandidatePair(ICECandidatePairStats),
     CertificateStats(CertificateStats),
@@ -47,11 +48,19 @@ impl From<SourceStatsType> for StatsReportType {
     }
 }
 
-pub struct StatsReport {}
+// TODO: should this be some form of String-indexed map?
+pub struct StatsReport {
+    reports: Vec<StatsReportType>,
+}
 
 impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
-    fn from(_collector: Arc<Mutex<StatsCollector>>) -> Self {
-        StatsReport {}
+    fn from(collector: Arc<Mutex<StatsCollector>>) -> Self {
+        let lock = Arc::try_unwrap(collector).unwrap();
+        let collector = lock.into_inner();
+
+        StatsReport {
+            reports: collector.reports,
+        }
     }
 }
 
@@ -60,6 +69,7 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
 // 	return StatsTimestamp(t.UnixNano() / int64(time.Millisecond))
 // }
 
+#[derive(Debug)]
 pub struct ICECandidatePairStats {
     timestamp: Instant, // StatsTimestamp
     id: String,
@@ -122,6 +132,7 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
     }
 }
 
+#[derive(Debug)]
 pub struct ICECandidateStats {
     timestamp: Instant,
     id: String,
@@ -152,6 +163,7 @@ impl From<CandidateStats> for ICECandidateStats {
     }
 }
 
+#[derive(Debug)]
 pub struct ICETransportStats {
     timestamp: Instant,
     id: String,
@@ -168,6 +180,7 @@ impl ICETransportStats {
     }
 }
 
+#[derive(Debug)]
 pub struct CertificateStats {
     timestamp: Instant,
     id: String,
@@ -190,6 +203,7 @@ impl CertificateStats {
     }
 }
 
+#[derive(Debug)]
 pub struct CodecStats {
     timestamp: Instant,
     id: String,
@@ -214,6 +228,7 @@ impl From<&RTCRtpCodecParameters> for CodecStats {
     }
 }
 
+#[derive(Debug)]
 pub struct DataChannelStats {
     timestamp: Instant,
     id: String,
@@ -260,6 +275,7 @@ impl From<&RTCDataChannel> for DataChannelStats {
     }
 }
 
+#[derive(Debug)]
 pub struct PeerConnectionStats {
     timestamp: Instant,
     id: String,

@@ -1,8 +1,8 @@
 use super::StatsReportType;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct StatsCollector {
-    reports: Vec<StatsReportType>,
+    pub(crate) reports: Vec<StatsReportType>,
 }
 
 impl StatsCollector {
