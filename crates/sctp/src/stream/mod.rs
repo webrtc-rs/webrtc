@@ -14,6 +14,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::io;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::{mpsc, Mutex, Notify};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -469,5 +472,52 @@ impl Stream {
 
         self.awake_write_loop();
         Ok(())
+    }
+}
+
+impl AsyncRead for Stream {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        loop {
+            match Pin::new(&mut Box::pin(self.read(buf.initialized_mut()))).poll(cx) {
+                Poll::Pending => return Poll::Pending,
+                // retry immediately upon empty data or incomplete chunks
+                // since there's no way to setup a waker.
+                Poll::Ready(Err(Error::ErrTryAgain)) => {},
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                Poll::Ready(Ok(_)) => return Poll::Ready(Ok(())),
+            }
+        }
+    }
+}
+
+impl AsyncWrite for Stream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        match Pin::new(&mut Box::pin(self.write(&Bytes::copy_from_slice(buf)))).poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Ok(n)) => Poll::Ready(Ok(n)),
+        }
+    }
+
+    #[inline]
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+        // sctp flush is a no-op
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match Pin::new(&mut Box::pin(self.close())).poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
+        }
     }
 }

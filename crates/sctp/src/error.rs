@@ -1,3 +1,4 @@
+use std::io;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -221,4 +222,16 @@ pub enum Error {
 
     #[error("{0}")]
     Other(String),
+}
+
+impl From<Error> for io::Error {
+    fn from(error: Error) -> Self {
+        match error {
+            e @ Error::ErrEof => io::Error::new(io::ErrorKind::UnexpectedEof, e.to_string()),
+            e @ Error::ErrStreamClosed => {
+                io::Error::new(io::ErrorKind::ConnectionAborted, e.to_string())
+            }
+            e => io::Error::new(io::ErrorKind::Other, e.to_string()),
+        }
+    }
 }
