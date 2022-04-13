@@ -475,14 +475,39 @@ impl Stream {
     }
 }
 
-impl AsyncRead for Stream {
+/// PollStream is a wrapper around [`Stream`], which implements [`AsyncRead`] and [`AsyncWrite`].
+struct PollStream {
+    stream: Arc<Stream>,
+    read_op: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
+    write_op: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
+    shutdown_op: Option<Pin<Box<dyn Future<Output = Result<()>>>>>,
+}
+
+impl PollStream {
+    /// Creates a new PollStream.
+    pub fn new(stream: Arc<Stream>) -> Self {
+        Self { 
+            stream,
+            read_op: None,
+            write_op: None,
+            shutdown_op: None,
+        }
+    }
+}
+
+impl AsyncRead for PollStream {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
+        if self.read_op.is_none() { 
+            self.read_op = Some(Box::pin(self.stream.clone().read(buf.initialized_mut())));
+        }
+
+        let read_op = Pin::new(&mut self.read_op.unwrap());
         loop {
-            match Pin::new(&mut Box::pin(self.read(buf.initialized_mut()))).poll(cx) {
+            match read_op.poll(cx) {
                 Poll::Pending => return Poll::Pending,
                 // retry immediately upon empty data or incomplete chunks
                 // since there's no way to setup a waker.
@@ -494,27 +519,43 @@ impl AsyncRead for Stream {
     }
 }
 
-impl AsyncWrite for Stream {
+impl AsyncWrite for PollStream {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        match Pin::new(&mut Box::pin(self.write(&Bytes::copy_from_slice(buf)))).poll(cx) {
+        if self.write_op.is_none() { 
+            self.write_op = Some(Box::pin(self.stream.clone().write(&Bytes::copy_from_slice(buf))));
+        }
+
+        let write_op = Pin::new(&mut self.write_op.unwrap());
+        match write_op.poll(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
             Poll::Ready(Ok(n)) => Poll::Ready(Ok(n)),
         }
     }
 
-    #[inline]
-    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
-        // sctp flush is a no-op
-        Poll::Ready(Ok(()))
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.write_op {
+            Some(op) =>
+                match Pin::new(&mut op).poll(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+                    Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
+                },
+            None => Poll::Ready(Ok(())),
+        }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match Pin::new(&mut Box::pin(self.close())).poll(cx) {
+        if self.shutdown_op.is_none() { 
+            self.shutdown_op = Some(Box::pin(self.stream.clone().close()));
+        }
+
+        let shutdown_op = Pin::new(&mut self.shutdown_op.unwrap());
+        match shutdown_op.poll(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
             Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
