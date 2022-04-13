@@ -1,8 +1,10 @@
 use super::*;
 
 use crate::api::APIBuilder;
+use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
 use bytes::Bytes;
 use media::Sample;
+use std::sync::atomic::AtomicU32;
 use tokio::time::Duration;
 use util::vnet::net::{Net, NetConfig};
 use util::vnet::router::{Router, RouterConfig};
@@ -241,4 +243,51 @@ pub(crate) async fn until_connection_state(
         })
     }))
     .await;
+}
+
+#[tokio::test]
+async fn test_get_stats() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
+
+    let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
+    let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
+    pc_answer
+        .on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
+            let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
+            Box::pin(async move {
+                if ice_state == RTCIceConnectionState::Connected {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    let mut done = ice_complete_tx2.lock().await;
+                    done.take();
+                }
+            })
+        }))
+        .await;
+
+    let sender_called_candidate_change = Arc::new(AtomicU32::new(0));
+    let sender_called_candidate_change2 = Arc::clone(&sender_called_candidate_change);
+    pc_offer
+        .sctp()
+        .transport()
+        .ice_transport()
+        .on_selected_candidate_pair_change(Box::new(move |_: RTCIceCandidatePair| {
+            sender_called_candidate_change2.store(1, Ordering::SeqCst);
+            Box::pin(async {})
+        }))
+        .await;
+
+    signal_pair(&mut pc_offer, &mut pc_answer).await?;
+
+    let _ = ice_complete_rx.recv().await;
+
+    let stats = pc_offer.get_stats().await;
+    assert!(stats.reports.len() > 0);
+
+    close_pair_now(&pc_offer, &pc_answer).await;
+
+    Ok(())
 }

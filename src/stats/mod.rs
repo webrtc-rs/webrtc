@@ -49,8 +49,9 @@ impl From<SourceStatsType> for StatsReportType {
 }
 
 // TODO: should this be some form of String-indexed HashMap?
+#[derive(Debug)]
 pub struct StatsReport {
-    reports: Vec<StatsReportType>,
+    pub(crate) reports: Vec<StatsReportType>,
 }
 
 impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
