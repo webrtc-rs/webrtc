@@ -11,11 +11,11 @@ use crate::queue::pending_queue::PendingQueue;
 use bytes::Bytes;
 use std::fmt;
 use std::future::Future;
+use std::io;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::io;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::{mpsc, Mutex, Notify};
 
@@ -479,6 +479,7 @@ impl Stream {
 struct PollStream {
     stream: Arc<Stream>,
     read_op: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
+    read_buf: Vec<u8>,
     write_op: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
     shutdown_op: Option<Pin<Box<dyn Future<Output = Result<()>>>>>,
 }
@@ -486,9 +487,10 @@ struct PollStream {
 impl PollStream {
     /// Creates a new PollStream.
     pub fn new(stream: Arc<Stream>) -> Self {
-        Self { 
+        Self {
             stream,
             read_op: None,
+            read_buf: Vec::new(),
             write_op: None,
             shutdown_op: None,
         }
@@ -501,8 +503,11 @@ impl AsyncRead for PollStream {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        if self.read_op.is_none() { 
-            self.read_op = Some(Box::pin(self.stream.clone().read(buf.initialized_mut())));
+        if self.read_op.is_none() {
+            self.read_buf = Pin::new(Vec::with_capacity(buf.capacity()));
+            self.read_op = Some(Box::pin(
+                self.stream.clone().read(self.read_buf.as_mut_slice()),
+            ));
         }
 
         let read_op = Pin::new(&mut self.read_op.unwrap());
@@ -511,9 +516,13 @@ impl AsyncRead for PollStream {
                 Poll::Pending => return Poll::Pending,
                 // retry immediately upon empty data or incomplete chunks
                 // since there's no way to setup a waker.
-                Poll::Ready(Err(Error::ErrTryAgain)) => {},
+                Poll::Ready(Err(Error::ErrTryAgain)) => {}
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
-                Poll::Ready(Ok(_)) => return Poll::Ready(Ok(())),
+                Poll::Ready(Ok(n)) => {
+                    self.read_op = None;
+                    buf.put_slice(self.read_buf.as_slice());
+                    return Poll::Ready(Ok(()));
+                }
             }
         }
     }
@@ -525,32 +534,39 @@ impl AsyncWrite for PollStream {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        if self.write_op.is_none() { 
-            self.write_op = Some(Box::pin(self.stream.clone().write(&Bytes::copy_from_slice(buf))));
+        if self.write_op.is_none() {
+            self.write_op = Some(Box::pin(
+                self.stream.clone().write(&Bytes::copy_from_slice(buf)),
+            ));
         }
 
         let write_op = Pin::new(&mut self.write_op.unwrap());
         match write_op.poll(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-            Poll::Ready(Ok(n)) => Poll::Ready(Ok(n)),
+            Poll::Ready(Ok(n)) => {
+                self.write_op = None;
+                Poll::Ready(Ok(n))
+            }
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.write_op {
-            Some(op) =>
-                match Pin::new(&mut op).poll(cx) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-                    Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
-                },
+            Some(op) => match Pin::new(&mut op).poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+                Poll::Ready(Ok(_)) => {
+                    self.write_op = None;
+                    Poll::Ready(Ok(()))
+                }
+            },
             None => Poll::Ready(Ok(())),
         }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        if self.shutdown_op.is_none() { 
+        if self.shutdown_op.is_none() {
             self.shutdown_op = Some(Box::pin(self.stream.clone().close()));
         }
 
