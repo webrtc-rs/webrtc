@@ -419,6 +419,8 @@ impl Stream {
         }
     }
 
+    /// get_num_bytes_in_reassembly_queue returns the number of bytes of data currently queued to
+    /// be read (once chunk is complete).
     pub(crate) async fn get_num_bytes_in_reassembly_queue(&self) -> usize {
         // No lock is required as it reads the size with atomic load function.
         let reassembly_queue = self.reassembly_queue.lock().await;
@@ -475,52 +477,127 @@ impl Stream {
     }
 }
 
-/// PollStream is a wrapper around [`Stream`], which implements [`AsyncRead`] and [`AsyncWrite`].
-struct PollStream {
+// struct ReadFuture {
+//     buf: Arc<Vec<u8>>,
+//     inner: Pin<Box<dyn Future<Output = Result<usize>> + Send>>,
+// }
+
+// impl ReadFuture {
+//     pub fn new(mut buf: Vec<u8>, stream: Arc<Stream>) -> Self {
+//         let mut buf = Arc::new(buf);
+//         Self { buf: buf.clone(), inner: Box::pin(stream.read(buf.as_mut_slice())) }
+//     }
+// }
+
+// impl Future for ReadFuture {
+//     type Output = Result<Vec<u8>>;
+//     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+//         match self.as_mut().inner.as_mut().poll(cx) {
+//             Poll::Ready(Ok(n)) => Poll::Ready(Ok(self.buf.to_vec())),
+//             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+//             Poll::Pending => Poll::Pending,
+//         }
+//     }
+// }
+
+/// A wrapper around around [`Stream`], which implements [`AsyncRead`] and
+/// [`AsyncWrite`].
+///
+/// Both `poll_read` and `poll_write` calls allocate temporary buffers, which results in an
+/// additional overhead.
+struct PollStream<'a> {
     stream: Arc<Stream>,
-    read_op: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
+
+    read_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
+    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
+    shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
+
     read_buf: Vec<u8>,
-    write_op: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
-    shutdown_op: Option<Pin<Box<dyn Future<Output = Result<()>>>>>,
 }
 
-impl PollStream {
+impl PollStream<'_> {
     /// Creates a new PollStream.
     pub fn new(stream: Arc<Stream>) -> Self {
         Self {
             stream,
-            read_op: None,
+            read_fut: None,
+            write_fut: None,
+            shutdown_fut: None,
             read_buf: Vec::new(),
-            write_op: None,
-            shutdown_op: None,
         }
+    }
+    
+    /// Get back the inner stream.
+    pub fn into_inner(self) -> Arc<Stream> {
+        self.stream
+    }
+    
+    /// Obtain a clone of the inner stream.
+    pub fn clone_inner(&self) -> Arc<Stream> {
+        self.stream.clone()
+    }
+
+    /// stream_identifier returns the Stream identifier associated to the stream.
+    pub fn stream_identifier(&self) -> u16 {
+        self.stream.stream_identifier
+    }
+
+    /// buffered_amount returns the number of bytes of data currently queued to be sent over this stream.
+    pub fn buffered_amount(&self) -> usize {
+        self.stream.buffered_amount.load(Ordering::SeqCst)
+    }
+
+    /// buffered_amount_low_threshold returns the number of bytes of buffered outgoing data that is
+    /// considered "low." Defaults to 0.
+    pub fn buffered_amount_low_threshold(&self) -> usize {
+        self.stream.buffered_amount_low.load(Ordering::SeqCst)
+    }
+
+    /// get_num_bytes_in_reassembly_queue returns the number of bytes of data currently queued to
+    /// be read (once chunk is complete).
+    pub(crate) async fn get_num_bytes_in_reassembly_queue(&self) -> usize {
+        // No lock is required as it reads the size with atomic load function.
+        let reassembly_queue = self.stream.reassembly_queue.lock().await;
+        reassembly_queue.get_num_bytes()
     }
 }
 
-impl AsyncRead for PollStream {
+impl AsyncRead for PollStream<'_> {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        if self.read_op.is_none() {
-            self.read_buf = Pin::new(Vec::with_capacity(buf.capacity()));
-            self.read_op = Some(Box::pin(
-                self.stream.clone().read(self.read_buf.as_mut_slice()),
-            ));
+        if buf.remaining() == 0 {
+            return Poll::Ready(Ok(()));
         }
 
-        let read_op = Pin::new(&mut self.read_op.unwrap());
+        let fut = match self.read_fut.as_mut() {
+            Some(fut) => fut,
+            None => {
+
+                // read into a temporary buffer because `buf` has an unonymous lifetime, which can be
+                // shorter than the lifetime of `read_fut`.
+                let stream = self.stream.clone();
+                let temp_buf = Vec::with_capacity(buf.capacity());
+                self.read_fut.get_or_insert(Box::pin(( move || {
+                    stream.read(temp_buf.as_mut_slice())
+                })()
+                ))
+            }
+        };
+
         loop {
-            match read_op.poll(cx) {
+            match fut.as_mut().poll(cx) {
                 Poll::Pending => return Poll::Pending,
                 // retry immediately upon empty data or incomplete chunks
                 // since there's no way to setup a waker.
                 Poll::Ready(Err(Error::ErrTryAgain)) => {}
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
-                Poll::Ready(Ok(n)) => {
-                    self.read_op = None;
-                    buf.put_slice(self.read_buf.as_slice());
+                Poll::Ready(Ok(read_buf)) => {
+                    let len = std::cmp::min(read_buf, buf.remaining());
+                    buf.put_slice(&self.read_buf[..len]);
+                    self.read_fut = None;
                     return Poll::Ready(Ok(()));
                 }
             }
@@ -528,53 +605,77 @@ impl AsyncRead for PollStream {
     }
 }
 
-impl AsyncWrite for PollStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        if self.write_op.is_none() {
-            self.write_op = Some(Box::pin(
-                self.stream.clone().write(&Bytes::copy_from_slice(buf)),
-            ));
-        }
+// impl AsyncWrite for PollStream<'a> {
+//     fn poll_write(
+//         self: Pin<&mut Self>,
+//         cx: &mut Context<'_>,
+//         buf: &[u8],
+//     ) -> Poll<io::Result<usize>> {
+//         if self.write_fut.is_none() {
+//             let s = Pin::into_inner(self);
+//             s.write_fut = Some(Box::pin(
+//                 self.stream.write(&Bytes::copy_from_slice(buf)),
+//             ));
+//         }
 
-        let write_op = Pin::new(&mut self.write_op.unwrap());
-        match write_op.poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-            Poll::Ready(Ok(n)) => {
-                self.write_op = None;
-                Poll::Ready(Ok(n))
-            }
-        }
+//         let write_fut = self.write_fut.unwrap().as_mut();
+//         match write_fut.poll(cx) {
+//             Poll::Pending => Poll::Pending,
+//             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+//             Poll::Ready(Ok(n)) => {
+//                 let s = Pin::into_inner(self);
+//                 s.write_fut = None;
+//                 Poll::Ready(Ok(n))
+//             }
+//         }
+//     }
+
+//     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+//         match self.write_fut {
+//             Some(op) => match op.as_mut().poll(cx) {
+//                 Poll::Pending => Poll::Pending,
+//                 Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+//                 Poll::Ready(Ok(_)) => {
+//                     let s = Pin::into_inner(self);
+//                     s.write_fut = None;
+//                     Poll::Ready(Ok(()))
+//                 }
+//             },
+//             None => Poll::Ready(Ok(())),
+//         }
+//     }
+
+//     fn poll_shutdown(self: Pin<&'a mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+//         if self.shutdown_fut.is_none() {
+//             let s = Pin::into_inner(self);
+//             s.shutdown_fut = Some(Box::pin(self.stream.close()));
+//         }
+        
+//         let shutdown_fut = self.shutdown_fut.unwrap().as_mut();
+//         match shutdown_fut.poll(cx) {
+//             Poll::Pending => Poll::Pending,
+//             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+//             Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
+//         }
+//     }
+// }
+
+impl<'a> Clone for PollStream<'a> {
+    fn clone(&self) -> PollStream<'a> {
+        PollStream::new(self.clone_inner())
     }
+}
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.write_op {
-            Some(op) => match Pin::new(&mut op).poll(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-                Poll::Ready(Ok(_)) => {
-                    self.write_op = None;
-                    Poll::Ready(Ok(()))
-                }
-            },
-            None => Poll::Ready(Ok(())),
-        }
+impl fmt::Debug for PollStream<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PollStream")
+            .field("stream", &self.stream)
+            .finish()
     }
+}
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        if self.shutdown_op.is_none() {
-            self.shutdown_op = Some(Box::pin(self.stream.clone().close()));
-        }
-
-        let shutdown_op = Pin::new(&mut self.shutdown_op.unwrap());
-        match shutdown_op.poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-            Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
-        }
+impl AsRef<Stream> for PollStream<'_> {
+    fn as_ref(&self) -> &Stream {
+        &*self.stream
     }
 }
