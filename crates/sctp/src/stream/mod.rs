@@ -482,14 +482,12 @@ impl Stream {
 ///
 /// Both `poll_read` and `poll_write` calls allocate temporary buffers, which results in an
 /// additional overhead.
-struct PollStream<'a> {
+pub struct PollStream<'a> {
     stream: Arc<Stream>,
 
     read_fut: Option<Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>>>,
     write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
     shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
-
-    read_buf: Vec<u8>,
 }
 
 impl PollStream<'_> {
@@ -500,7 +498,6 @@ impl PollStream<'_> {
             read_fut: None,
             write_fut: None,
             shutdown_fut: None,
-            read_buf: Vec::new(),
         }
     }
 
