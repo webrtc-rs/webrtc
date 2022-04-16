@@ -503,12 +503,12 @@ impl PollStream<'_> {
             read_buf: Vec::new(),
         }
     }
-    
+
     /// Get back the inner stream.
     pub fn into_inner(self) -> Arc<Stream> {
         self.stream
     }
-    
+
     /// Obtain a clone of the inner stream.
     pub fn clone_inner(&self) -> Arc<Stream> {
         self.stream.clone()
@@ -559,10 +559,10 @@ impl AsyncRead for PollStream<'_> {
                 self.read_fut.get_or_insert(Box::pin(async move {
                     let res = stream.read(temp_buf.as_mut_slice()).await;
                     match res {
-                        Ok(n) => { 
+                        Ok(n) => {
                             temp_buf.truncate(n);
-                            Ok(temp_buf) 
-                        },
+                            Ok(temp_buf)
+                        }
                         Err(e) => Err(e),
                     }
                 }))
@@ -575,7 +575,10 @@ impl AsyncRead for PollStream<'_> {
                 // retry immediately upon empty data or incomplete chunks
                 // since there's no way to setup a waker.
                 Poll::Ready(Err(Error::ErrTryAgain)) => {}
-                Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                Poll::Ready(Err(e)) => {
+                    self.read_fut = None;
+                    return Poll::Ready(Err(e.into()));
+                }
                 Poll::Ready(Ok(read_buf)) => {
                     let len = std::cmp::min(read_buf.len(), buf.remaining());
                     buf.put_slice(&read_buf[..len]);
@@ -598,15 +601,17 @@ impl AsyncWrite for PollStream<'_> {
             None => {
                 let stream = self.stream.clone();
                 let bytes = Bytes::copy_from_slice(buf);
-                self.write_fut.get_or_insert(Box::pin(async move {
-                    stream.write(&bytes).await
-                }))
+                self.write_fut
+                    .get_or_insert(Box::pin(async move { stream.write(&bytes).await }))
             }
         };
 
         match fut.as_mut().poll(cx) {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Err(e)) => {
+                self.write_fut = None;
+                Poll::Ready(Err(e.into()))
+            }
             Poll::Ready(Ok(n)) => {
                 self.write_fut = None;
                 Poll::Ready(Ok(n))
@@ -618,9 +623,11 @@ impl AsyncWrite for PollStream<'_> {
         match self.write_fut.as_mut() {
             Some(fut) => match fut.as_mut().poll(cx) {
                 Poll::Pending => Poll::Pending,
-                Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+                Poll::Ready(Err(e)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Err(e.into()))
+                }
                 Poll::Ready(Ok(_)) => {
-                    // XXX: is a data race between poll_write and poll_flush possible?
                     self.write_fut = None;
                     Poll::Ready(Ok(()))
                 }
@@ -634,12 +641,11 @@ impl AsyncWrite for PollStream<'_> {
             Some(fut) => fut,
             None => {
                 let stream = self.stream.clone();
-                self.shutdown_fut.get_or_insert(Box::pin(async move {
-                    stream.close().await
-                }))
+                self.shutdown_fut
+                    .get_or_insert(Box::pin(async move { stream.close().await }))
             }
         };
-        
+
         match fut.as_mut().poll(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
