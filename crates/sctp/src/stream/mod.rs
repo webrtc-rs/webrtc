@@ -491,7 +491,17 @@ pub struct PollStream<'a> {
 }
 
 impl PollStream<'_> {
-    /// Creates a new PollStream.
+    /// Constructs a new `PollStream`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use webrtc_sctp::stream::{Stream, PollStream};
+    /// use std::sync::Arc;
+    ///
+    /// let stream = Stream::default();
+    /// let poll_stream = PollStream::new(Arc::new(stream));
+    /// ```
     pub fn new(stream: Arc<Stream>) -> Self {
         Self {
             stream,
