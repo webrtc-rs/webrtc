@@ -477,29 +477,6 @@ impl Stream {
     }
 }
 
-// struct ReadFuture {
-//     buf: Arc<Vec<u8>>,
-//     inner: Pin<Box<dyn Future<Output = Result<usize>> + Send>>,
-// }
-
-// impl ReadFuture {
-//     pub fn new(mut buf: Vec<u8>, stream: Arc<Stream>) -> Self {
-//         let mut buf = Arc::new(buf);
-//         Self { buf: buf.clone(), inner: Box::pin(stream.read(buf.as_mut_slice())) }
-//     }
-// }
-
-// impl Future for ReadFuture {
-//     type Output = Result<Vec<u8>>;
-//     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-//         match self.as_mut().inner.as_mut().poll(cx) {
-//             Poll::Ready(Ok(n)) => Poll::Ready(Ok(self.buf.to_vec())),
-//             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-//             Poll::Pending => Poll::Pending,
-//         }
-//     }
-// }
-
 /// A wrapper around around [`Stream`], which implements [`AsyncRead`] and
 /// [`AsyncWrite`].
 ///
@@ -508,7 +485,7 @@ impl Stream {
 struct PollStream<'a> {
     stream: Arc<Stream>,
 
-    read_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
+    read_fut: Option<Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>>>,
     write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
     shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
 
@@ -575,15 +552,20 @@ impl AsyncRead for PollStream<'_> {
         let fut = match self.read_fut.as_mut() {
             Some(fut) => fut,
             None => {
-
                 // read into a temporary buffer because `buf` has an unonymous lifetime, which can be
                 // shorter than the lifetime of `read_fut`.
                 let stream = self.stream.clone();
-                let temp_buf = Vec::with_capacity(buf.capacity());
-                self.read_fut.get_or_insert(Box::pin(( move || {
-                    stream.read(temp_buf.as_mut_slice())
-                })()
-                ))
+                let mut temp_buf = Vec::with_capacity(buf.capacity());
+                self.read_fut.get_or_insert(Box::pin(async move {
+                    let res = stream.read(temp_buf.as_mut_slice()).await;
+                    match res {
+                        Ok(n) => { 
+                            temp_buf.truncate(n);
+                            Ok(temp_buf) 
+                        },
+                        Err(e) => Err(e),
+                    }
+                }))
             }
         };
 
@@ -595,8 +577,8 @@ impl AsyncRead for PollStream<'_> {
                 Poll::Ready(Err(Error::ErrTryAgain)) => {}
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
                 Poll::Ready(Ok(read_buf)) => {
-                    let len = std::cmp::min(read_buf, buf.remaining());
-                    buf.put_slice(&self.read_buf[..len]);
+                    let len = std::cmp::min(read_buf.len(), buf.remaining());
+                    buf.put_slice(&read_buf[..len]);
                     self.read_fut = None;
                     return Poll::Ready(Ok(()));
                 }
@@ -605,60 +587,66 @@ impl AsyncRead for PollStream<'_> {
     }
 }
 
-// impl AsyncWrite for PollStream<'a> {
-//     fn poll_write(
-//         self: Pin<&mut Self>,
-//         cx: &mut Context<'_>,
-//         buf: &[u8],
-//     ) -> Poll<io::Result<usize>> {
-//         if self.write_fut.is_none() {
-//             let s = Pin::into_inner(self);
-//             s.write_fut = Some(Box::pin(
-//                 self.stream.write(&Bytes::copy_from_slice(buf)),
-//             ));
-//         }
+impl AsyncWrite for PollStream<'_> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let fut = match self.write_fut.as_mut() {
+            Some(fut) => fut,
+            None => {
+                let stream = self.stream.clone();
+                let bytes = Bytes::copy_from_slice(buf);
+                self.write_fut.get_or_insert(Box::pin(async move {
+                    stream.write(&bytes).await
+                }))
+            }
+        };
 
-//         let write_fut = self.write_fut.unwrap().as_mut();
-//         match write_fut.poll(cx) {
-//             Poll::Pending => Poll::Pending,
-//             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-//             Poll::Ready(Ok(n)) => {
-//                 let s = Pin::into_inner(self);
-//                 s.write_fut = None;
-//                 Poll::Ready(Ok(n))
-//             }
-//         }
-//     }
+        match fut.as_mut().poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Ok(n)) => {
+                self.write_fut = None;
+                Poll::Ready(Ok(n))
+            }
+        }
+    }
 
-//     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-//         match self.write_fut {
-//             Some(op) => match op.as_mut().poll(cx) {
-//                 Poll::Pending => Poll::Pending,
-//                 Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-//                 Poll::Ready(Ok(_)) => {
-//                     let s = Pin::into_inner(self);
-//                     s.write_fut = None;
-//                     Poll::Ready(Ok(()))
-//                 }
-//             },
-//             None => Poll::Ready(Ok(())),
-//         }
-//     }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.write_fut.as_mut() {
+            Some(fut) => match fut.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+                Poll::Ready(Ok(_)) => {
+                    // XXX: is a data race between poll_write and poll_flush possible?
+                    self.write_fut = None;
+                    Poll::Ready(Ok(()))
+                }
+            },
+            None => Poll::Ready(Ok(())),
+        }
+    }
 
-//     fn poll_shutdown(self: Pin<&'a mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-//         if self.shutdown_fut.is_none() {
-//             let s = Pin::into_inner(self);
-//             s.shutdown_fut = Some(Box::pin(self.stream.close()));
-//         }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        let fut = match self.shutdown_fut.as_mut() {
+            Some(fut) => fut,
+            None => {
+                let stream = self.stream.clone();
+                self.shutdown_fut.get_or_insert(Box::pin(async move {
+                    stream.close().await
+                }))
+            }
+        };
         
-//         let shutdown_fut = self.shutdown_fut.unwrap().as_mut();
-//         match shutdown_fut.poll(cx) {
-//             Poll::Pending => Poll::Pending,
-//             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-//             Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
-//         }
-//     }
-// }
+        match fut.as_mut().poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
+            Poll::Ready(Ok(_)) => Poll::Ready(Ok(())),
+        }
+    }
+}
 
 impl<'a> Clone for PollStream<'a> {
     fn clone(&self) -> PollStream<'a> {
