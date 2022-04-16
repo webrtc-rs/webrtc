@@ -575,6 +575,11 @@ impl AsyncRead for PollStream<'_> {
                 // retry immediately upon empty data or incomplete chunks
                 // since there's no way to setup a waker.
                 Poll::Ready(Err(Error::ErrTryAgain)) => {}
+                // EOF has been reached => don't touch buf and just return Ok
+                Poll::Ready(Err(Error::ErrEof)) => {
+                    self.read_fut = None;
+                    return Poll::Ready(Ok(()));
+                }
                 Poll::Ready(Err(e)) => {
                     self.read_fut = None;
                     return Poll::Ready(Err(e.into()));
