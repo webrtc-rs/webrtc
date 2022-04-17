@@ -73,7 +73,7 @@ async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_poll_stream() -> std::result::Result<(), std::io::Error> {
+async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     let s = Arc::new(Stream::new(
         "test_poll_stream".to_owned(),
         0,
@@ -85,14 +85,15 @@ async fn test_poll_stream() -> std::result::Result<(), std::io::Error> {
     ));
     let mut poll_stream = PollStream::new(s.clone());
 
-    // write
+    // async write
     let n = poll_stream.write(&[1, 2, 3]).await?;
     assert_eq!(3, n);
     assert_eq!(3, poll_stream.buffered_amount());
 
-    // read
-    s.clone()
-        .handle_data(ChunkPayloadData {
+    // async read
+    //  1. pretend that we've received a chunk
+    let sc = s.clone();
+    sc.handle_data(ChunkPayloadData {
             unordered: true,
             beginning_fragment: true,
             ending_fragment: true,
@@ -101,9 +102,15 @@ async fn test_poll_stream() -> std::result::Result<(), std::io::Error> {
             ..Default::default()
         })
         .await;
+    //  2. read it
     let mut buf = [0; 5];
     poll_stream.read(&mut buf).await?;
     assert_eq!(buf, [0, 1, 2, 3, 4]);
+
+    // shutdown
+    poll_stream.shutdown().await?;
+    assert_eq!(true, sc.closed.load(Ordering::Relaxed));
+    assert!(poll_stream.read(&mut buf).await.is_err());
 
     Ok(())
 }
