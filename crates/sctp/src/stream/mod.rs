@@ -499,8 +499,8 @@ impl PollStream<'_> {
     /// use webrtc_sctp::stream::{Stream, PollStream};
     /// use std::sync::Arc;
     ///
-    /// let stream = Stream::default();
-    /// let poll_stream = PollStream::new(Arc::new(stream));
+    /// let stream = Arc::new(Stream::default());
+    /// let poll_stream = PollStream::new(stream);
     /// ```
     pub fn new(stream: Arc<Stream>) -> Self {
         Self {

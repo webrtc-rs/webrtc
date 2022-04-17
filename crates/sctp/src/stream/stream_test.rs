@@ -85,6 +85,12 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     ));
     let mut poll_stream = PollStream::new(s.clone());
 
+    // getters
+    assert_eq!(0, poll_stream.stream_identifier());
+    assert_eq!(0, poll_stream.buffered_amount());
+    assert_eq!(0, poll_stream.buffered_amount_low_threshold());
+    assert_eq!(0, poll_stream.get_num_bytes_in_reassembly_queue().await);
+
     // async write
     let n = poll_stream.write(&[1, 2, 3]).await?;
     assert_eq!(3, n);
@@ -111,6 +117,10 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     poll_stream.shutdown().await?;
     assert_eq!(true, sc.closed.load(Ordering::Relaxed));
     assert!(poll_stream.read(&mut buf).await.is_err());
+
+    // misc.
+    let clone = poll_stream.clone();
+    assert_eq!(clone.stream_identifier(), poll_stream.stream_identifier());
 
     Ok(())
 }
