@@ -1,6 +1,8 @@
 use super::*;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 
 #[test]
 fn test_stream_buffered_amount() -> Result<()> {
@@ -66,6 +68,42 @@ async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
     s.on_buffer_released(1024).await; // bufferedAmount = 0
     assert_eq!(0, s.buffered_amount(), "unexpected bufferedAmount");
     assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_poll_stream() -> std::result::Result<(), std::io::Error> {
+    let s = Arc::new(Stream::new(
+        "test_poll_stream".to_owned(),
+        0,
+        4096,
+        Arc::new(AtomicU32::new(4096)),
+        Arc::new(AtomicU8::new(AssociationState::Established as u8)),
+        None,
+        Arc::new(PendingQueue::new()),
+    ));
+    let mut poll_stream = PollStream::new(s.clone());
+
+    // write
+    let n = poll_stream.write(&[1, 2, 3]).await?;
+    assert_eq!(3, n);
+    assert_eq!(3, poll_stream.buffered_amount());
+
+    // read
+    s.clone()
+        .handle_data(ChunkPayloadData {
+            unordered: true,
+            beginning_fragment: true,
+            ending_fragment: true,
+            user_data: Bytes::from_static(&[0, 1, 2, 3, 4]),
+            payload_type: PayloadProtocolIdentifier::Binary,
+            ..Default::default()
+        })
+        .await;
+    let mut buf = [0; 5];
+    poll_stream.read(&mut buf).await?;
+    assert_eq!(buf, [0, 1, 2, 3, 4]);
 
     Ok(())
 }

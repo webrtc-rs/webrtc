@@ -562,7 +562,7 @@ impl AsyncRead for PollStream<'_> {
                 // read into a temporary buffer because `buf` has an unonymous lifetime, which can be
                 // shorter than the lifetime of `read_fut`.
                 let stream = self.stream.clone();
-                let mut temp_buf = Vec::with_capacity(buf.capacity());
+                let mut temp_buf = vec![0; buf.remaining()];
                 self.read_fut.get_or_insert(Box::pin(async move {
                     let res = stream.read(temp_buf.as_mut_slice()).await;
                     match res {
