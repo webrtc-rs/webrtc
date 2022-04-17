@@ -94,20 +94,21 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     // async write
     let n = poll_stream.write(&[1, 2, 3]).await?;
     assert_eq!(3, n);
+    poll_stream.flush().await?;
     assert_eq!(3, poll_stream.buffered_amount());
 
     // async read
     //  1. pretend that we've received a chunk
     let sc = s.clone();
     sc.handle_data(ChunkPayloadData {
-            unordered: true,
-            beginning_fragment: true,
-            ending_fragment: true,
-            user_data: Bytes::from_static(&[0, 1, 2, 3, 4]),
-            payload_type: PayloadProtocolIdentifier::Binary,
-            ..Default::default()
-        })
-        .await;
+        unordered: true,
+        beginning_fragment: true,
+        ending_fragment: true,
+        user_data: Bytes::from_static(&[0, 1, 2, 3, 4]),
+        payload_type: PayloadProtocolIdentifier::Binary,
+        ..Default::default()
+    })
+    .await;
     //  2. read it
     let mut buf = [0; 5];
     poll_stream.read(&mut buf).await?;
