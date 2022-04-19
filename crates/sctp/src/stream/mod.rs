@@ -477,6 +477,9 @@ impl Stream {
     }
 }
 
+/// Default capacity of a temporary read buffer used by [`PollStream`].
+const DEFAULT_READ_BUF_SIZE: usize = 4096;
+
 /// A wrapper around around [`Stream`], which implements [`AsyncRead`] and
 /// [`AsyncWrite`].
 ///
@@ -488,6 +491,8 @@ pub struct PollStream<'a> {
     read_fut: Option<Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>>>,
     write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
     shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
+
+    read_buf_cap: usize,
 }
 
 impl PollStream<'_> {
@@ -508,6 +513,7 @@ impl PollStream<'_> {
             read_fut: None,
             write_fut: None,
             shutdown_fut: None,
+            read_buf_cap: DEFAULT_READ_BUF_SIZE,
         }
     }
 
@@ -544,6 +550,12 @@ impl PollStream<'_> {
         let reassembly_queue = self.stream.reassembly_queue.lock().await;
         reassembly_queue.get_num_bytes()
     }
+
+
+    /// Set the capacity of the temporary read buffer (default: 4096).
+    pub fn set_read_buf_capacity(&mut self, capacity: usize) {
+        self.read_buf_cap = capacity
+    }
 }
 
 impl AsyncRead for PollStream<'_> {
@@ -562,7 +574,7 @@ impl AsyncRead for PollStream<'_> {
                 // read into a temporary buffer because `buf` has an unonymous lifetime, which can be
                 // shorter than the lifetime of `read_fut`.
                 let stream = self.stream.clone();
-                let mut temp_buf = vec![0; buf.remaining()];
+                let mut temp_buf = vec![0; self.read_buf_cap];
                 self.read_fut.get_or_insert(Box::pin(async move {
                     let res = stream.read(temp_buf.as_mut_slice()).await;
                     match res {
