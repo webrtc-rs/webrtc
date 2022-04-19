@@ -610,10 +610,16 @@ impl AsyncRead for PollStream<'_> {
                 self.read_fut.get_reading_mut()
             }
             ReadFut::Reading(ref mut fut) => fut,
-            ReadFut::RemainingData(ref data) => {
-                let len = std::cmp::min(data.len(), buf.remaining());
+            ReadFut::RemainingData(ref mut data) => {
+                let remaining = buf.remaining();
+                let len = std::cmp::min(data.len(), remaining);
                 buf.put_slice(&data[..len]);
-                self.read_fut = ReadFut::Idle;
+                if data.len() > remaining {
+                    // ReadFut remains to be RemainingData
+                    data.drain(0..len);
+                } else {
+                    self.read_fut = ReadFut::Idle;
+                }
                 return Poll::Ready(Ok(()));
             }
         };
