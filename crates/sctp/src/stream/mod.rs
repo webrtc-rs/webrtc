@@ -477,8 +477,32 @@ impl Stream {
     }
 }
 
-/// Default capacity of a temporary read buffer used by [`PollStream`].
+/// Default capacity of the temporary read buffer used by [`PollStream`].
 const DEFAULT_READ_BUF_SIZE: usize = 4096;
+
+/// State of the read `Future` in [`PollStream`].
+enum ReadFut<'a> {
+    /// Nothing in progress.
+    Idle,
+    /// Reading data from the underlying stream.
+    Reading(Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>>),
+    /// Finished reading, but there's unread data in the temporary buffer.
+    RemainingData(Vec<u8>),
+}
+
+impl<'a> ReadFut<'a> {
+    /// Gets a mutable reference to the future stored inside `Reading(future)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ReadFut` variant is not `Reading`.
+    fn get_reading_mut(&mut self) -> &mut Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>> {
+        match self {
+            ReadFut::Reading(ref mut fut) => fut,
+            _ => panic!("expected ReadFut to be Reading"),
+        }
+    }
+}
 
 /// A wrapper around around [`Stream`], which implements [`AsyncRead`] and
 /// [`AsyncWrite`].
@@ -488,7 +512,7 @@ const DEFAULT_READ_BUF_SIZE: usize = 4096;
 pub struct PollStream<'a> {
     stream: Arc<Stream>,
 
-    read_fut: Option<Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>>>,
+    read_fut: ReadFut<'a>,
     write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
     shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
 
@@ -510,7 +534,7 @@ impl PollStream<'_> {
     pub fn new(stream: Arc<Stream>) -> Self {
         Self {
             stream,
-            read_fut: None,
+            read_fut: ReadFut::Idle,
             write_fut: None,
             shutdown_fut: None,
             read_buf_cap: DEFAULT_READ_BUF_SIZE,
@@ -551,7 +575,6 @@ impl PollStream<'_> {
         reassembly_queue.get_num_bytes()
     }
 
-
     /// Set the capacity of the temporary read buffer (default: 4096).
     pub fn set_read_buf_capacity(&mut self, capacity: usize) {
         self.read_buf_cap = capacity
@@ -568,14 +591,13 @@ impl AsyncRead for PollStream<'_> {
             return Poll::Ready(Ok(()));
         }
 
-        let fut = match self.read_fut.as_mut() {
-            Some(fut) => fut,
-            None => {
-                // read into a temporary buffer because `buf` has an unonymous lifetime, which can be
-                // shorter than the lifetime of `read_fut`.
+        let fut = match self.read_fut {
+            ReadFut::Idle => {
+                // read into a temporary buffer because `buf` has an unonymous lifetime, which can
+                // be shorter than the lifetime of `read_fut`.
                 let stream = self.stream.clone();
                 let mut temp_buf = vec![0; self.read_buf_cap];
-                self.read_fut.get_or_insert(Box::pin(async move {
+                self.read_fut = ReadFut::Reading(Box::pin(async move {
                     let res = stream.read(temp_buf.as_mut_slice()).await;
                     match res {
                         Ok(n) => {
@@ -584,7 +606,15 @@ impl AsyncRead for PollStream<'_> {
                         }
                         Err(e) => Err(e),
                     }
-                }))
+                }));
+                self.read_fut.get_reading_mut()
+            }
+            ReadFut::Reading(ref mut fut) => fut,
+            ReadFut::RemainingData(ref data) => {
+                let len = std::cmp::min(data.len(), buf.remaining());
+                buf.put_slice(&data[..len]);
+                self.read_fut = ReadFut::Idle;
+                return Poll::Ready(Ok(()));
             }
         };
 
@@ -596,17 +626,23 @@ impl AsyncRead for PollStream<'_> {
                 Poll::Ready(Err(Error::ErrTryAgain)) => {}
                 // EOF has been reached => don't touch buf and just return Ok
                 Poll::Ready(Err(Error::ErrEof)) => {
-                    self.read_fut = None;
+                    self.read_fut = ReadFut::Idle;
                     return Poll::Ready(Ok(()));
                 }
                 Poll::Ready(Err(e)) => {
-                    self.read_fut = None;
+                    self.read_fut = ReadFut::Idle;
                     return Poll::Ready(Err(e.into()));
                 }
-                Poll::Ready(Ok(read_buf)) => {
-                    let len = std::cmp::min(read_buf.len(), buf.remaining());
-                    buf.put_slice(&read_buf[..len]);
-                    self.read_fut = None;
+                Poll::Ready(Ok(mut temp_buf)) => {
+                    let remaining = buf.remaining();
+                    let len = std::cmp::min(temp_buf.len(), remaining);
+                    buf.put_slice(&temp_buf[..len]);
+                    if temp_buf.len() > remaining {
+                        temp_buf.drain(0..len);
+                        self.read_fut = ReadFut::RemainingData(temp_buf);
+                    } else {
+                        self.read_fut = ReadFut::Idle;
+                    }
                     return Poll::Ready(Ok(()));
                 }
             }
