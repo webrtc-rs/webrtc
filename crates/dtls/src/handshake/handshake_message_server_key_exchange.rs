@@ -17,8 +17,7 @@ pub struct HandshakeMessageServerKeyExchange {
     pub(crate) elliptic_curve_type: EllipticCurveType,
     pub(crate) named_curve: NamedCurve,
     pub(crate) public_key: Vec<u8>,
-    pub(crate) hash_algorithm: HashAlgorithm,
-    pub(crate) signature_algorithm: SignatureAlgorithm,
+    pub(crate) algorithm: SignatureHashAlgorithm,
     pub(crate) signature: Vec<u8>,
 }
 
@@ -48,8 +47,8 @@ impl HandshakeMessageServerKeyExchange {
         writer.write_u8(self.public_key.len() as u8)?;
         writer.write_all(&self.public_key)?;
 
-        writer.write_u8(self.hash_algorithm as u8)?;
-        writer.write_u8(self.signature_algorithm as u8)?;
+        writer.write_u8(self.algorithm.hash as u8)?;
+        writer.write_u8(self.algorithm.signature as u8)?;
 
         writer.write_u16::<BigEndian>(self.signature.len() as u16)?;
         writer.write_all(&self.signature)?;
@@ -70,8 +69,10 @@ impl HandshakeMessageServerKeyExchange {
                 elliptic_curve_type: EllipticCurveType::Unsupported,
                 named_curve: NamedCurve::Unsupported,
                 public_key: vec![],
-                hash_algorithm: HashAlgorithm::Unsupported,
-                signature_algorithm: SignatureAlgorithm::Unsupported,
+                algorithm: SignatureHashAlgorithm {
+                    hash: HashAlgorithm::Unsupported,
+                    signature: SignatureAlgorithm::Unsupported,
+                },
                 signature: vec![],
             });
         }
@@ -121,8 +122,10 @@ impl HandshakeMessageServerKeyExchange {
             elliptic_curve_type,
             named_curve,
             public_key,
-            hash_algorithm,
-            signature_algorithm,
+            algorithm: SignatureHashAlgorithm {
+                hash: hash_algorithm,
+                signature: signature_algorithm,
+            },
             signature,
         })
     }

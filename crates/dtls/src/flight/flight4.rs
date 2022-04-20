@@ -194,7 +194,7 @@ impl Flight for Flight4 {
             // Verify that the pair of hash algorithm and signature is listed.
             let mut valid_signature_scheme = false;
             for ss in &cfg.local_signature_schemes {
-                if ss.hash == h.hash_algorithm && ss.signature == h.signature_algorithm {
+                if ss.hash == h.algorithm.hash && ss.signature == h.algorithm.signature {
                     valid_signature_scheme = true;
                     break;
                 }
@@ -211,7 +211,8 @@ impl Flight for Flight4 {
 
             if let Err(err) = verify_certificate_verify(
                 &plain_text,
-                /*h.hash_algorithm,*/ &h.signature,
+                &h.algorithm,
+                &h.signature,
                 &state.peer_certificates,
             ) {
                 return Err((
@@ -640,8 +641,10 @@ impl Flight for Flight4 {
                                 elliptic_curve_type: EllipticCurveType::NamedCurve,
                                 named_curve: state.named_curve,
                                 public_key: local_keypair.public_key.clone(),
-                                hash_algorithm: signature_hash_algo.hash,
-                                signature_algorithm: signature_hash_algo.signature,
+                                algorithm: SignatureHashAlgorithm {
+                                    hash: signature_hash_algo.hash,
+                                    signature: signature_hash_algo.signature,
+                                },
                                 signature: state.local_key_signature.clone(),
                             },
                         ))),
@@ -686,8 +689,10 @@ impl Flight for Flight4 {
                             elliptic_curve_type: EllipticCurveType::Unsupported,
                             named_curve: NamedCurve::Unsupported,
                             public_key: vec![],
-                            hash_algorithm: HashAlgorithm::Unsupported,
-                            signature_algorithm: SignatureAlgorithm::Unsupported,
+                            algorithm: SignatureHashAlgorithm {
+                                hash: HashAlgorithm::Unsupported,
+                                signature: SignatureAlgorithm::Unsupported,
+                            },
                             signature: vec![],
                         },
                     ))),
