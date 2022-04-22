@@ -12,8 +12,10 @@ fn test_handshake_message_certificate_request() -> Result<()> {
         0x00, 0x2c, 0xe5, 0x94, 0xbb, 0x03, 0x0e, 0xf1, 0xcb, 0x28, 0x22, 0x33, 0x23, 0x88, 0xad,
     ];
     let parsed_certificate_verify = HandshakeMessageCertificateVerify {
-        hash_algorithm: raw_certificate_verify[0].into(),
-        signature_algorithm: raw_certificate_verify[1].into(),
+        algorithm: SignatureHashAlgorithm {
+            hash: raw_certificate_verify[0].into(),
+            signature: raw_certificate_verify[1].into(),
+        },
         signature: raw_certificate_verify[4..].to_vec(),
     };
 

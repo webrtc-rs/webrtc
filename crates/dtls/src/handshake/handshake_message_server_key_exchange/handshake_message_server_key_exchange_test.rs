@@ -21,8 +21,11 @@ fn test_handshake_message_server_key_exchange() -> Result<()> {
         elliptic_curve_type: EllipticCurveType::NamedCurve,
         named_curve: NamedCurve::X25519,
         public_key: raw_server_key_exchange[4..69].to_vec(),
-        hash_algorithm: HashAlgorithm::Sha1,
-        signature_algorithm: SignatureAlgorithm::Ecdsa,
+        algorithm: SignatureHashAlgorithm {
+            hash: HashAlgorithm::Sha1,
+            signature: SignatureAlgorithm::Ecdsa,
+        },
+
         signature: raw_server_key_exchange[73..144].to_vec(),
     };
 
