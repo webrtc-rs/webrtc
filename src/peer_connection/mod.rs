@@ -194,6 +194,23 @@ pub struct RTCPeerConnection {
     pub(crate) internal: Arc<PeerConnectionInternal>,
 }
 
+impl std::fmt::Debug for RTCPeerConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RTCPeerConnection")
+            .field("stats_id", &self.stats_id)
+            .field("idp_login_url", &self.idp_login_url)
+            .field("signaling_state", &self.signaling_state())
+            .field("ice_connection_state", &self.ice_connection_state())
+            .finish()
+    }
+}
+
+impl std::fmt::Display for RTCPeerConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(RTCPeerConnection {})", self.stats_id)
+    }
+}
+
 impl RTCPeerConnection {
     /// creates a PeerConnection with the default codecs and
     /// interceptors.  See register_default_codecs and register_default_interceptors.
