@@ -2221,8 +2221,10 @@ async fn test_protocol_version_validation() -> Result<()> {
                             elliptic_curve_type: EllipticCurveType::NamedCurve,
                             named_curve: NamedCurve::X25519,
                             public_key: local_keypair.public_key.clone(),
-                            hash_algorithm: HashAlgorithm::Sha256,
-                            signature_algorithm: SignatureAlgorithm::Ecdsa,
+                            algorithm: SignatureHashAlgorithm {
+                                hash: HashAlgorithm::Sha256,
+                                signature: SignatureAlgorithm::Ecdsa,
+                            },
                             signature: vec![0; 64],
                         },
                     ));

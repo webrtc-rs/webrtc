@@ -183,6 +183,10 @@ fn test_certificate_verify() -> Result<()> {
         generate_certificate_verify(&plain_text, &certificate_ecdsa256.private_key)?;
     verify_certificate_verify(
         &plain_text,
+        &SignatureHashAlgorithm {
+            hash: HashAlgorithm::Sha256,
+            signature: SignatureAlgorithm::Ecdsa,
+        },
         &cert_verify_ecdsa256,
         &certificate_ecdsa256
             .certificate
@@ -200,6 +204,10 @@ fn test_certificate_verify() -> Result<()> {
         generate_certificate_verify(&plain_text, &certificate_ed25519.private_key)?;
     verify_certificate_verify(
         &plain_text,
+        &SignatureHashAlgorithm {
+            hash: HashAlgorithm::Sha256,
+            signature: SignatureAlgorithm::Ed25519,
+        },
         &cert_verify_ed25519,
         &certificate_ed25519
             .certificate

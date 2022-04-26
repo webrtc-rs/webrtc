@@ -9,8 +9,7 @@ use std::io::{Read, Write};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageCertificateVerify {
-    pub(crate) hash_algorithm: HashAlgorithm,
-    pub(crate) signature_algorithm: SignatureAlgorithm,
+    pub(crate) algorithm: SignatureHashAlgorithm,
     pub(crate) signature: Vec<u8>,
 }
 
@@ -26,8 +25,8 @@ impl HandshakeMessageCertificateVerify {
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
-        writer.write_u8(self.hash_algorithm as u8)?;
-        writer.write_u8(self.signature_algorithm as u8)?;
+        writer.write_u8(self.algorithm.hash as u8)?;
+        writer.write_u8(self.algorithm.signature as u8)?;
         writer.write_u16::<BigEndian>(self.signature.len() as u16)?;
         writer.write_all(&self.signature)?;
 
@@ -42,8 +41,10 @@ impl HandshakeMessageCertificateVerify {
         reader.read_exact(&mut signature)?;
 
         Ok(HandshakeMessageCertificateVerify {
-            hash_algorithm,
-            signature_algorithm,
+            algorithm: SignatureHashAlgorithm {
+                hash: hash_algorithm,
+                signature: signature_algorithm,
+            },
             signature,
         })
     }

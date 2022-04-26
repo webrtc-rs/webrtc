@@ -9,6 +9,7 @@ pub mod padding;
 use crate::curve::named_curve::*;
 use crate::error::*;
 use crate::record_layer::record_layer_header::*;
+use crate::signature_hash_algorithm::{HashAlgorithm, SignatureAlgorithm, SignatureHashAlgorithm};
 
 use der_parser::{oid, oid::Oid};
 use rcgen::KeyPair;
@@ -277,7 +278,7 @@ pub const OID_ECDSA: Oid<'static> = oid!(1.2.840 .10045 .2 .1);
 
 fn verify_signature(
     message: &[u8],
-    /*_hash_algorithm: HashAlgorithm,*/
+    hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
 ) -> Result<()> {
@@ -288,34 +289,30 @@ fn verify_signature(
     let (_, certificate) = x509_parser::parse_x509_certificate(&raw_certificates[0])
         .map_err(|e| Error::Other(e.to_string()))?;
 
-    let pki_alg = &certificate.tbs_certificate.subject_pki.algorithm.algorithm;
-    let sign_alg = &certificate.tbs_certificate.signature.algorithm;
-
-    let verify_alg: &dyn ring::signature::VerificationAlgorithm = if *pki_alg == OID_ED25519 {
-        &ring::signature::ED25519
-    } else if *pki_alg == OID_ECDSA {
-        if *sign_alg == oid_registry::OID_SIG_ECDSA_WITH_SHA256 {
+    let verify_alg: &dyn ring::signature::VerificationAlgorithm = match hash_algorithm.signature {
+        SignatureAlgorithm::Ed25519 => &ring::signature::ED25519,
+        SignatureAlgorithm::Ecdsa if hash_algorithm.hash == HashAlgorithm::Sha256 => {
             &ring::signature::ECDSA_P256_SHA256_ASN1
-        } else if *sign_alg == oid_registry::OID_SIG_ECDSA_WITH_SHA384 {
+        }
+        SignatureAlgorithm::Ecdsa if hash_algorithm.hash == HashAlgorithm::Sha384 => {
             &ring::signature::ECDSA_P384_SHA384_ASN1
-        } else {
-            return Err(Error::ErrKeySignatureVerifyUnimplemented);
         }
-    } else if *pki_alg == oid_registry::OID_PKCS1_RSAENCRYPTION {
-        if *sign_alg == oid_registry::OID_PKCS1_SHA1WITHRSA {
+        SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha1 => {
             &ring::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
-        } else if *sign_alg == oid_registry::OID_PKCS1_SHA256WITHRSA {
-            &ring::signature::RSA_PKCS1_2048_8192_SHA256
-        } else if *sign_alg == oid_registry::OID_PKCS1_SHA384WITHRSA {
-            &ring::signature::RSA_PKCS1_2048_8192_SHA384
-        } else if *sign_alg == oid_registry::OID_PKCS1_SHA512WITHRSA {
-            &ring::signature::RSA_PKCS1_2048_8192_SHA512
-        } else {
-            return Err(Error::ErrKeySignatureVerifyUnimplemented);
         }
-    } else {
-        return Err(Error::ErrKeySignatureVerifyUnimplemented);
+        SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha256 => {
+            &ring::signature::RSA_PKCS1_2048_8192_SHA256
+        }
+        SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha384 => {
+            &ring::signature::RSA_PKCS1_2048_8192_SHA384
+        }
+        SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha512 => {
+            &ring::signature::RSA_PKCS1_2048_8192_SHA512
+        }
+        _ => return Err(Error::ErrKeySignatureVerifyUnimplemented),
     };
+
+    log::trace!("Picked an algorithm {:?}", verify_alg);
 
     let public_key = ring::signature::UnparsedPublicKey::new(
         verify_alg,
@@ -335,11 +332,16 @@ fn verify_signature(
 
 pub(crate) fn verify_key_signature(
     message: &[u8],
-    /*_hash_algorithm: HashAlgorithm,*/
+    hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
 ) -> Result<()> {
-    verify_signature(message, remote_key_signature, raw_certificates)
+    verify_signature(
+        message,
+        hash_algorithm,
+        remote_key_signature,
+        raw_certificates,
+    )
 }
 
 // If the server has sent a CertificateRequest message, the client MUST send the Certificate
@@ -383,11 +385,16 @@ pub(crate) fn generate_certificate_verify(
 
 pub(crate) fn verify_certificate_verify(
     handshake_bodies: &[u8],
-    /*hashAlgorithm hashAlgorithm,*/
+    hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
 ) -> Result<()> {
-    verify_signature(handshake_bodies, remote_key_signature, raw_certificates)
+    verify_signature(
+        handshake_bodies,
+        hash_algorithm,
+        remote_key_signature,
+        raw_certificates,
+    )
 }
 
 pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Certificate>> {

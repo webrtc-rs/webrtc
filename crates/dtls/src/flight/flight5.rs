@@ -256,8 +256,10 @@ impl Flight for Flight5 {
             elliptic_curve_type: EllipticCurveType::Unsupported,
             named_curve: NamedCurve::Unsupported,
             public_key: vec![],
-            hash_algorithm: HashAlgorithm::Unsupported,
-            signature_algorithm: SignatureAlgorithm::Unsupported,
+            algorithm: SignatureHashAlgorithm {
+                hash: HashAlgorithm::Unsupported,
+                signature: SignatureAlgorithm::Unsupported,
+            },
             signature: vec![],
         };
 
@@ -437,8 +439,7 @@ impl Flight for Flight5 {
                     0,
                     Content::Handshake(Handshake::new(HandshakeMessage::CertificateVerify(
                         HandshakeMessageCertificateVerify {
-                            hash_algorithm: signature_hash_algo.hash,
-                            signature_algorithm: signature_hash_algo.signature,
+                            algorithm: signature_hash_algo,
                             signature: state.local_certificates_verify.clone(),
                         },
                     ))),
@@ -686,7 +687,7 @@ async fn initalize_cipher_suite(
         // Verify that the pair of hash algorithm and signiture is listed.
         let mut valid_signature_scheme = false;
         for ss in &cfg.local_signature_schemes {
-            if ss.hash == h.hash_algorithm && ss.signature == h.signature_algorithm {
+            if ss.hash == h.algorithm.hash && ss.signature == h.algorithm.signature {
                 valid_signature_scheme = true;
                 break;
             }
@@ -705,8 +706,9 @@ async fn initalize_cipher_suite(
             value_key_message(&client_random, &server_random, &h.public_key, h.named_curve);
         if let Err(err) = verify_key_signature(
             &expected_msg,
+            &h.algorithm,
             &h.signature,
-            /*h.hash_algorithm,*/ &state.peer_certificates,
+            &state.peer_certificates,
         ) {
             return Err((
                 Some(Alert {
