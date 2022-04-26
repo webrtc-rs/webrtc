@@ -107,11 +107,13 @@ pub type RTCRtpDecodingParameters = RTCRtpCodingParameters;
 pub type RTCRtpEncodingParameters = RTCRtpCodingParameters;
 
 /// RTPReceiveParameters contains the RTP stack settings used by receivers
+#[derive(Debug)]
 pub struct RTCRtpReceiveParameters {
     pub encodings: Vec<RTCRtpDecodingParameters>,
 }
 
 /// RTPSendParameters contains the RTP stack settings used by receivers
+#[derive(Debug)]
 pub struct RTCRtpSendParameters {
     pub rtp_parameters: RTCRtpParameters,
     pub encodings: Vec<RTCRtpEncodingParameters>,

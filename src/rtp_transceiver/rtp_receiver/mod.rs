@@ -230,6 +230,14 @@ pub struct RTCRtpReceiver {
     pub internal: Arc<RTPReceiverInternal>,
 }
 
+impl std::fmt::Debug for RTCRtpReceiver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RTCRtpReceiver")
+            .field("kind", &self.kind)
+            .finish()
+    }
+}
+
 impl RTCRtpReceiver {
     pub fn new(
         receive_mtu: usize,

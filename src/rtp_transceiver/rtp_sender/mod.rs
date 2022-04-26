@@ -108,6 +108,14 @@ pub struct RTCRtpSender {
     internal: Arc<RTPSenderInternal>,
 }
 
+impl std::fmt::Debug for RTCRtpSender {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RTCRtpSender")
+            .field("id", &self.id)
+            .finish()
+    }
+}
+
 impl RTCRtpSender {
     pub async fn new(
         receive_mtu: usize,
