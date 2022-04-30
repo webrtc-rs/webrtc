@@ -224,9 +224,9 @@ impl RTCSctpTransport {
                 }
             };
 
-            let mut max_retransmits = 0;
-            let mut max_packet_lifetime = 0;
-            let val = dc.config.reliability_parameter as u16;
+            let mut max_retransmits: Option<u16> = None;
+            let mut max_packet_lifetime: Option<u16> = None;
+            let val: Option<u16> = dc.config.reliability_parameter;
             let ordered;
 
             match dc.config.channel_type {
@@ -257,7 +257,7 @@ impl RTCSctpTransport {
             let id = dc.stream_identifier();
             let rtc_dc = Arc::new(RTCDataChannel::new(
                 DataChannelParameters {
-                    id,
+                    id: Some(id),
                     label: dc.config.label.clone(),
                     protocol: dc.config.protocol.clone(),
                     negotiated: dc.config.negotiated,

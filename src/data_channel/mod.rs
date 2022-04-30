@@ -52,10 +52,11 @@ pub struct RTCDataChannel {
     pub(crate) stats_id: String,
     pub(crate) label: String,
     pub(crate) ordered: bool,
-    pub(crate) max_packet_lifetime: u16,
-    pub(crate) max_retransmits: u16,
+    pub(crate) max_packet_lifetime: Option<u16>,
+    pub(crate) max_retransmits: Option<u16>,
     pub(crate) protocol: String,
     pub(crate) negotiated: bool,
+    pub(crate) has_id: AtomicBool,
     pub(crate) id: AtomicU16,
     pub(crate) ready_state: Arc<AtomicU8>, // DataChannelState
     pub(crate) buffered_amount_low_threshold: AtomicUsize,
@@ -87,6 +88,11 @@ pub struct RTCDataChannel {
 impl RTCDataChannel {
     // create the DataChannel object before the networking is set up.
     pub(crate) fn new(params: DataChannelParameters, setting_engine: Arc<SettingEngine>) -> Self {
+        let id = match params.id {
+            Some(inner) => inner,
+            None => 0,
+        };
+
         RTCDataChannel {
             stats_id: format!(
                 "DataChannel-{}",
@@ -97,7 +103,8 @@ impl RTCDataChannel {
             label: params.label,
             protocol: params.protocol,
             negotiated: params.negotiated,
-            id: AtomicU16::new(params.id),
+            has_id: AtomicBool::new(params.id.is_some()),
+            id: AtomicU16::new(id),
             ordered: params.ordered,
             max_packet_lifetime: params.max_packet_life_time,
             max_retransmits: params.max_retransmits,
@@ -124,24 +131,24 @@ impl RTCDataChannel {
             }
 
             let channel_type;
-            let reliability_parameter;
+            let reliability_parameter: Option<u16>;
 
-            if self.max_packet_lifetime == 0 && self.max_retransmits == 0 {
-                reliability_parameter = 0u32;
+            if self.max_packet_lifetime.is_none() && self.max_retransmits.is_none() {
+                reliability_parameter = None;
                 if self.ordered {
                     channel_type = ChannelType::Reliable;
                 } else {
                     channel_type = ChannelType::ReliableUnordered;
                 }
-            } else if self.max_retransmits != 0 {
-                reliability_parameter = self.max_retransmits as u32;
+            } else if self.max_retransmits.is_some() {
+                reliability_parameter = self.max_retransmits;
                 if self.ordered {
                     channel_type = ChannelType::PartialReliableRexmit;
                 } else {
                     channel_type = ChannelType::PartialReliableRexmitUnordered;
                 }
             } else {
-                reliability_parameter = self.max_packet_lifetime as u32;
+                reliability_parameter = self.max_packet_lifetime;
                 if self.ordered {
                     channel_type = ChannelType::PartialReliableTimed;
                 } else {
@@ -158,7 +165,8 @@ impl RTCDataChannel {
                 negotiated: self.negotiated,
             };
 
-            if self.id.load(Ordering::SeqCst) == 0 {
+            if !self.has_id.load(Ordering::SeqCst) {
+                self.has_id.store(true, Ordering::SeqCst);
                 self.id.store(
                     sctp_transport
                         .generate_and_set_data_channel_id(
@@ -433,13 +441,13 @@ impl RTCDataChannel {
 
     /// max_packet_lifetime represents the length of the time window (msec) during
     /// which transmissions and retransmissions may occur in unreliable mode.
-    pub fn max_packet_lifetime(&self) -> u16 {
+    pub fn max_packet_lifetime(&self) -> Option<u16> {
         self.max_packet_lifetime
     }
 
     /// max_retransmits represents the maximum number of retransmissions that are
     /// attempted in unreliable mode.
-    pub fn max_retransmits(&self) -> u16 {
+    pub fn max_retransmits(&self) -> Option<u16> {
         self.max_retransmits
     }
 

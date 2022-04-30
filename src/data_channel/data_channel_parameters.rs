@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct DataChannelParameters {
     pub label: String,
     pub protocol: String,
-    pub id: u16,
+    pub id: Option<u16>,
     pub ordered: bool,
-    pub max_packet_life_time: u16,
-    pub max_retransmits: u16,
+    pub max_packet_life_time: Option<u16>,
+    pub max_retransmits: Option<u16>,
     pub negotiated: bool,
 }
