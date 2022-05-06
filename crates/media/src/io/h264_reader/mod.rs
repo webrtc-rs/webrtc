@@ -143,6 +143,7 @@ pub struct H264Reader<R: Read> {
     count_of_consecutive_zero_bytes: usize,
     nal_prefix_parsed: bool,
     read_buffer: Vec<u8>,
+    temp_buf: Vec<u8>,
 }
 
 impl<R: Read> H264Reader<R> {
@@ -154,13 +155,14 @@ impl<R: Read> H264Reader<R> {
             count_of_consecutive_zero_bytes: 0,
             nal_prefix_parsed: false,
             read_buffer: vec![],
+            temp_buf: vec![0u8; 4096],
         }
     }
 
     fn read(&mut self, num_to_read: usize) -> Bytes {
-        let mut buf = vec![0u8; 4096];
+        let buf = &mut self.temp_buf;
         while self.read_buffer.len() < num_to_read {
-            let n = match self.reader.read(&mut buf) {
+            let n = match self.reader.read(buf) {
                 Ok(n) => {
                     if n == 0 {
                         break;
