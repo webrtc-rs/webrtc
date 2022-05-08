@@ -63,3 +63,36 @@ fn test_network_type_is_tcp() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_network_type_serialization() {
+    let tests = vec![
+        (NetworkType::Tcp4, "\"tcp4\""),
+        (NetworkType::Tcp6, "\"tcp6\""),
+        (NetworkType::Udp4, "\"udp4\""),
+        (NetworkType::Udp6, "\"udp6\""),
+        (NetworkType::Unspecified, "\"unspecified\""),
+    ];
+
+    for (network_type, expected_string) in tests {
+        assert_eq!(
+            expected_string.to_string(),
+            serde_json::to_string(&network_type).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_network_type_to_string() {
+    let tests = vec![
+        (NetworkType::Tcp4, "tcp4"),
+        (NetworkType::Tcp6, "tcp6"),
+        (NetworkType::Udp4, "udp4"),
+        (NetworkType::Udp6, "udp6"),
+        (NetworkType::Unspecified, "unspecified"),
+    ];
+
+    for (network_type, expected_string) in tests {
+        assert_eq!(expected_string, network_type.to_string());
+    }
+}

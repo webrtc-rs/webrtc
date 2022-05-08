@@ -234,6 +234,73 @@ fn test_candidate_foundation() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_candidate_pair_state_serialization() {
+    let tests = vec![
+        (CandidatePairState::Unspecified, "\"unspecified\""),
+        (CandidatePairState::Waiting, "\"waiting\""),
+        (CandidatePairState::InProgress, "\"in-progress\""),
+        (CandidatePairState::Failed, "\"failed\""),
+        (CandidatePairState::Succeeded, "\"succeeded\""),
+    ];
+
+    for (candidate_pair_state, expected_string) in tests {
+        assert_eq!(
+            expected_string.to_string(),
+            serde_json::to_string(&candidate_pair_state).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_candidate_pair_state_to_string() {
+    let tests = vec![
+        (CandidatePairState::Unspecified, "unspecified"),
+        (CandidatePairState::Waiting, "waiting"),
+        (CandidatePairState::InProgress, "in-progress"),
+        (CandidatePairState::Failed, "failed"),
+        (CandidatePairState::Succeeded, "succeeded"),
+    ];
+
+    for (candidate_pair_state, expected_string) in tests {
+        assert_eq!(expected_string, candidate_pair_state.to_string());
+    }
+}
+
+
+#[test]
+fn test_candidate_type_serialization() {
+    let tests = vec![
+        (CandidateType::Unspecified, "\"unspecified\""),
+        (CandidateType::Host, "\"host\""),
+        (CandidateType::ServerReflexive, "\"srflx\""),
+        (CandidateType::PeerReflexive, "\"prflx\""),
+        (CandidateType::Relay, "\"relay\""),
+    ];
+
+    for (candidate_type, expected_string) in tests {
+        assert_eq!(
+            expected_string.to_string(),
+            serde_json::to_string(&candidate_type).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_candidate_type_to_string() {
+    let tests = vec![
+        (CandidateType::Unspecified, "Unknown candidate type"),
+        (CandidateType::Host, "host"),
+        (CandidateType::ServerReflexive, "srflx"),
+        (CandidateType::PeerReflexive, "prflx"),
+        (CandidateType::Relay, "relay"),
+    ];
+
+    for (candidate_type, expected_string) in tests {
+        assert_eq!(expected_string, candidate_type.to_string());
+    }
+}
+
 #[tokio::test]
 async fn test_candidate_marshal() -> Result<()> {
     let tests = vec![
