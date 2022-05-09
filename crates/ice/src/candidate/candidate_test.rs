@@ -267,7 +267,6 @@ fn test_candidate_pair_state_to_string() {
     }
 }
 
-
 #[test]
 fn test_candidate_type_serialization() {
     let tests = vec![
