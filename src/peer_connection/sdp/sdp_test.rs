@@ -787,6 +787,113 @@ async fn test_populate_sdp() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_populate_sdp_reject() -> Result<()> {
+    let se = SettingEngine::default();
+    let mut me = MediaEngine::default();
+    me.register_codec(
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_VP8.to_owned(),
+                clock_rate: 90_000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: vec![],
+            },
+            payload_type: 2,
+            stats_id: "id".to_owned(),
+        },
+        RTPCodecType::Video,
+    )?;
+
+    let me = Arc::new(me);
+
+    let trv = RTCRtpTransceiver::new(
+        None,
+        None,
+        RTCRtpTransceiverDirection::Recvonly,
+        RTPCodecType::Video,
+        me.video_codecs.clone(),
+        Arc::clone(&me),
+    )
+    .await;
+
+    let tra = RTCRtpTransceiver::new(
+        None,
+        None,
+        RTCRtpTransceiverDirection::Recvonly,
+        RTPCodecType::Audio,
+        me.audio_codecs.clone(),
+        Arc::clone(&me),
+    )
+    .await;
+
+    let media_sections = vec![
+        MediaSection {
+            id: "video".to_owned(),
+            transceivers: vec![trv],
+            data: false,
+            rid_map: HashMap::new(),
+        },
+        MediaSection {
+            id: "audio".to_owned(),
+            transceivers: vec![tra],
+            data: false,
+            rid_map: HashMap::new(),
+        },
+    ];
+
+    let d = SessionDescription::default();
+
+    let params = PopulateSdpParams {
+        is_plan_b: false,
+        media_description_fingerprint: se.sdp_media_level_fingerprints,
+        is_icelite: se.candidates.ice_lite,
+        connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+        ice_gathering_state: RTCIceGatheringState::Complete,
+    };
+    let offer_sdp = populate_sdp(
+        d,
+        &[],
+        &me,
+        &[],
+        &RTCIceParameters::default(),
+        &media_sections,
+        params,
+    )
+    .await?;
+
+    let mut found_rejected_track = false;
+
+    for desc in offer_sdp.media_descriptions {
+        if desc.media_name.media != "audio" {
+            continue;
+        }
+        found_rejected_track = true;
+
+        assert!(
+            desc.connection_information.is_some(),
+            "connection_information should not be None, even for rejected tracks"
+        );
+        assert_eq!(
+            desc.media_name.formats,
+            vec!["0"],
+            "Format for rejected track should be 0"
+        );
+        assert_eq!(
+            desc.media_name.port.value, 0,
+            "Port for rejected track should be 0"
+        );
+    }
+
+    assert!(
+        found_rejected_track,
+        "There should've been a rejected track"
+    );
+
+    Ok(())
+}
+
 #[test]
 fn test_get_rids() {
     let m = vec![MediaDescription {

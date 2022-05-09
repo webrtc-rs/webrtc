@@ -478,7 +478,19 @@ pub(crate) async fn add_transceiver_sdp(
                 formats: vec!["0".to_owned()],
             },
             media_title: None,
-            connection_information: None,
+            // We need to include connection information even if we're rejecting a track, otherwise Firefox will fail to
+            // parse the SDP with an error like:
+            // SIPCC Failed to parse SDP: SDP Parse Error on line 50:  c= connection line not specified for every media level, validation failed.
+            // In addition this makes our SDP compliant with RFC 4566 Section 5.7: https://datatracker.ietf.org/doc/html/rfc4566#section-5.7
+            connection_information: Some(ConnectionInformation {
+                network_type: "IN".to_owned(),
+                address_type: "IP4".to_owned(),
+                address: Some(Address {
+                    address: "0.0.0.0".to_owned(),
+                    ttl: None,
+                    range: None,
+                }),
+            }),
             bandwidth: vec![],
             encryption_key: None,
             attributes: vec![],
