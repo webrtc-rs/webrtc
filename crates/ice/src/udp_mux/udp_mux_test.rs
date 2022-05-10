@@ -114,19 +114,20 @@ async fn test_udp_mux() -> Result<()> {
         // Timeout error
         match timeout_result {
             Err(timeout_err) => {
-                assert!(false, "Mux test timedout: {:?}", timeout_err)
+                panic!("Mux test timedout: {:?}", timeout_err)
             }
 
             // Join error
             Ok(join_result) => match join_result {
                 Err(err) => {
-                    assert!(false, "Mux test failed with join error: {:?}", err)
+                    panic!("Mux test failed with join error: {:?}", err)
                 }
                 // Actual error
-                Ok(mux_result) => match mux_result {
-                    Err(err) => assert!(false, "Mux test failed with error: {:?}", err),
-                    _ => (),
-                },
+                Ok(mux_result) => {
+                    if let Err(err) = mux_result {
+                        panic!("Mux test failed with error: {:?}", err);
+                    }
+                }
             },
         }
     }
@@ -180,8 +181,11 @@ async fn test_mux_connection(
     sleep(Duration::from_millis(1)).await;
 
     let stun_msg = {
-        let mut m = Message::default();
-        m.typ = BINDING_REQUEST;
+        let mut m = Message {
+            typ: BINDING_REQUEST,
+            ..Message::default()
+        };
+
         m.add(ATTR_USERNAME, format!("{}:otherufrag", ufrag).as_bytes());
 
         m.marshal_binary().unwrap()
@@ -195,7 +199,7 @@ async fn test_mux_connection(
     let len = remote_connection.recv(&mut buffer).await?;
     assert_eq!(buffer[..len], stun_msg);
 
-    const TARGET_SIZE: usize = 1 * 1024 * 1024;
+    const TARGET_SIZE: usize = 1024 * 1024;
 
     // Read on the muxed side
     let conn_2 = Arc::clone(&conn);

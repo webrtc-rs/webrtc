@@ -152,8 +152,8 @@ async fn test_pair_priority() -> Result<()> {
                     }
                     .to_string(),
                     "Unexpected bestPair {} (expected remote: {})",
-                    best_pair.to_string(),
-                    remote.to_string(),
+                    best_pair,
+                    remote,
                 );
             } else {
                 panic!("expected Some, but got None");

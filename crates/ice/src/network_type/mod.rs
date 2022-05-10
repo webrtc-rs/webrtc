@@ -3,6 +3,7 @@ mod network_type_test;
 
 use crate::error::*;
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::net::IpAddr;
 
@@ -20,20 +21,25 @@ pub fn supported_network_types() -> Vec<NetworkType> {
 }
 
 /// Represents the type of network.
-#[derive(PartialEq, Debug, Copy, Clone, Eq, Hash)]
+#[derive(PartialEq, Debug, Copy, Clone, Eq, Hash, Serialize, Deserialize)]
 pub enum NetworkType {
+    #[serde(rename = "unspecified")]
     Unspecified,
 
     /// Indicates UDP over IPv4.
+    #[serde(rename = "udp4")]
     Udp4,
 
     /// Indicates UDP over IPv6.
+    #[serde(rename = "udp6")]
     Udp6,
 
     /// Indicates TCP over IPv4.
+    #[serde(rename = "tcp4")]
     Tcp4,
 
     /// Indicates TCP over IPv6.
+    #[serde(rename = "tcp6")]
     Tcp6,
 }
 

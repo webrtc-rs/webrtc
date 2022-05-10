@@ -19,6 +19,7 @@ use crate::tcp_type::*;
 use candidate_base::*;
 
 use async_trait::async_trait;
+use serde::Serialize;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
@@ -86,12 +87,17 @@ pub trait Candidate: fmt::Display {
 }
 
 /// Represents the type of candidate `CandidateType` enum.
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum CandidateType {
+    #[serde(rename = "unspecified")]
     Unspecified,
+    #[serde(rename = "host")]
     Host,
+    #[serde(rename = "srflx")]
     ServerReflexive,
+    #[serde(rename = "prflx")]
     PeerReflexive,
+    #[serde(rename = "relay")]
     Relay,
 }
 
@@ -163,21 +169,26 @@ impl fmt::Display for CandidateRelatedAddress {
 }
 
 /// Represent the ICE candidate pair state.
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum CandidatePairState {
+    #[serde(rename = "unspecified")]
     Unspecified = 0,
 
     /// Means a check has not been performed for this pair.
+    #[serde(rename = "waiting")]
     Waiting = 1,
 
     /// Means a check has been sent for this pair, but the transaction is in progress.
+    #[serde(rename = "in-progress")]
     InProgress = 2,
 
     /// Means a check for this pair was already done and failed, either never producing any response
     /// or producing an unrecoverable failure response.
+    #[serde(rename = "failed")]
     Failed = 3,
 
     /// Means a check for this pair was already done and produced a successful result.
+    #[serde(rename = "succeeded")]
     Succeeded = 4,
 }
 
