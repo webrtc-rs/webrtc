@@ -20,7 +20,7 @@ fn test_connected_state_string() -> Result<()> {
             connection_state.to_string(),
             "testCase: {} vs {}",
             expected_string,
-            connection_state.to_string(),
+            connection_state,
         )
     }
 
@@ -42,7 +42,7 @@ fn test_gathering_state_string() -> Result<()> {
             gathering_state.to_string(),
             "testCase: {} vs {}",
             expected_string,
-            gathering_state.to_string(),
+            gathering_state,
         )
     }
 
