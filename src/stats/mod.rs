@@ -11,10 +11,12 @@ use ice::candidate::{CandidatePairState, CandidateType};
 use ice::network_type::NetworkType;
 use stats_collector::StatsCollector;
 
+use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
+mod serialize;
 pub mod stats_collector;
 
 pub enum SourceStatsType {
@@ -70,8 +72,9 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
 // 	return StatsTimestamp(t.UnixNano() / int64(time.Millisecond))
 // }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ICECandidatePairStats {
+    #[serde(with = "serialize::approx_instant")]
     timestamp: Instant, // StatsTimestamp
     id: String,
     local_candidate_id: String,
@@ -82,10 +85,14 @@ pub struct ICECandidatePairStats {
     packets_received: u32,
     bytes_sent: u64,
     bytes_received: u64,
-    last_packet_sent_timestamp: Instant,    // statsTimestampFrom
+    #[serde(with = "serialize::approx_instant")]
+    last_packet_sent_timestamp: Instant, // statsTimestampFrom
+    #[serde(with = "serialize::approx_instant")]
     last_packet_received_timstamp: Instant, // statsTimestampFrom
-    first_request_timestamp: Instant,       // statsTimestampFrom
-    last_request_timestamp: Instant,        // statsTimestampFrom
+    #[serde(with = "serialize::approx_instant")]
+    first_request_timestamp: Instant, // statsTimestampFrom
+    #[serde(with = "serialize::approx_instant")]
+    last_request_timestamp: Instant, // statsTimestampFrom
     total_round_trip_time: f64,
     current_round_trip_time: f64,
     available_outgoing_bitrate: f64,
@@ -97,6 +104,7 @@ pub struct ICECandidatePairStats {
     responses_sent: u64,
     retransmissions_sent: u64,
     consent_requests_sent: u64,
+    #[serde(with = "serialize::approx_instant")]
     consent_expired_timestamp: Instant, // statsTimestampFrom
 }
 
@@ -133,8 +141,9 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ICECandidateStats {
+    #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
     candidate_type: CandidateType,
@@ -164,8 +173,9 @@ impl From<CandidateStats> for ICECandidateStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ICETransportStats {
+    #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
     // bytes_received: u64,
@@ -181,8 +191,9 @@ impl ICETransportStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct CertificateStats {
+    #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
     // base64_certificate: String,
@@ -204,8 +215,9 @@ impl CertificateStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct CodecStats {
+    #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
     payload_type: PayloadType,
@@ -229,8 +241,9 @@ impl From<&RTCRtpCodecParameters> for CodecStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct DataChannelStats {
+    #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
     data_channel_identifier: u16,
@@ -276,8 +289,9 @@ impl From<&RTCDataChannel> for DataChannelStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct PeerConnectionStats {
+    #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
     data_channels_accepted: u32,
