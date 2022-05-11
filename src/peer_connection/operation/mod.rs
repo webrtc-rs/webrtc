@@ -14,11 +14,24 @@ use crate::error::Result;
 /// Operation is a function
 pub struct Operation(
     pub Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>,
+    pub &'static str,
 );
+
+impl Operation {
+    pub(crate) fn new(
+        op: impl FnMut() -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> + Send + Sync + 'static,
+        description: &'static str,
+    ) -> Self {
+        Self(Box::new(op), description)
+    }
+}
 
 impl fmt::Debug for Operation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Operation").finish()
+        f.debug_tuple("Operation")
+            .field(&"_")
+            .field(&self.1)
+            .finish()
     }
 }
 
@@ -81,10 +94,13 @@ impl Operations {
         let wg = WaitGroup::new();
         let mut w = Some(wg.worker());
         let _ = self
-            .enqueue(Operation(Box::new(move || {
-                let _d = w.take();
-                Box::pin(async { false })
-            })))
+            .enqueue(Operation::new(
+                move || {
+                    let _d = w.take();
+                    Box::pin(async { false })
+                },
+                "Operation::done",
+            ))
             .await;
         wg.wait().await;
     }
