@@ -809,6 +809,8 @@ a=rtpmap:111 opus/48000/2
         .find(|ext| ext.uri == "urn:3gpp:video-orientation")
         .unwrap();
     assert_ne!(orientation.id, 1);
+    assert_ne!(orientation.id, 7);
+    assert_ne!(orientation.id, 5);
 
     Ok(())
 }
