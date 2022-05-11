@@ -181,7 +181,7 @@ impl RTCCertificate {
         worker: Worker,
     ) {
         let fingerprints = self.get_fingerprints().unwrap();
-        if let Some(fingerprint) = fingerprints.into_iter().nth(0) {
+        if let Some(fingerprint) = fingerprints.into_iter().next() {
             let stats = CertificateStats::new(self, fingerprint);
             let mut lock = collector.try_lock().unwrap();
             lock.push(StatsReportType::CertificateStats(stats));

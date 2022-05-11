@@ -313,7 +313,7 @@ impl RTCDtlsTransport {
         worker: Worker,
     ) {
         for cert in &self.certificates {
-            cert.collect_stats(&collector, worker.clone()).await;
+            cert.collect_stats(collector, worker.clone()).await;
         }
     }
 

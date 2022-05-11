@@ -374,12 +374,11 @@ impl RTCSctpTransport {
             data_channel.collect_stats(collector, worker.clone()).await;
         }
 
-        let mut reports = vec![];
-        reports.push(PeerConnection(PeerConnectionStats::new(
+        let mut reports = vec![PeerConnection(PeerConnectionStats::new(
             self,
             peer_connection_id,
             data_channels_closed,
-        )));
+        ))];
 
         // conn
         if let Some(_net_conn) = dtls_transport.conn().await {
