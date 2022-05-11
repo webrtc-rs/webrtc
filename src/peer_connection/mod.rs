@@ -338,10 +338,13 @@ impl RTCPeerConnection {
         let params2 = params.clone();
         let _ = params
             .ops
-            .enqueue(Operation(Box::new(move || {
-                let params3 = params2.clone();
-                Box::pin(async move { RTCPeerConnection::negotiation_needed_op(params3).await })
-            })))
+            .enqueue(Operation::new(
+                move || {
+                    let params3 = params2.clone();
+                    Box::pin(async move { RTCPeerConnection::negotiation_needed_op(params3).await })
+                },
+                "do_negotiation_needed",
+            ))
             .await;
     }
 
@@ -1223,16 +1226,19 @@ impl RTCPeerConnection {
                 let remote_desc = Arc::new(remote_desc);
                 self.internal
                     .ops
-                    .enqueue(Operation(Box::new(move || {
-                        let pc = Arc::clone(&pci);
-                        let rd = Arc::clone(&remote_desc);
-                        Box::pin(async move {
-                            let _ = pc
-                                .start_rtp(have_local_description, rd, sdp_semantics)
-                                .await;
-                            false
-                        })
-                    })))
+                    .enqueue(Operation::new(
+                        move || {
+                            let pc = Arc::clone(&pci);
+                            let rd = Arc::clone(&remote_desc);
+                            Box::pin(async move {
+                                let _ = pc
+                                    .start_rtp(have_local_description, rd, sdp_semantics)
+                                    .await;
+                                false
+                            })
+                        },
+                        "set_local_description",
+                    ))
                     .await?;
             }
         }
@@ -1406,14 +1412,17 @@ impl RTCPeerConnection {
                     let remote_desc = Arc::new(desc);
                     self.internal
                         .ops
-                        .enqueue(Operation(Box::new(move || {
-                            let pc = Arc::clone(&pci);
-                            let rd = Arc::clone(&remote_desc);
-                            Box::pin(async move {
-                                let _ = pc.start_rtp(true, rd, sdp_semantics).await;
-                                false
-                            })
-                        })))
+                        .enqueue(Operation::new(
+                            move || {
+                                let pc = Arc::clone(&pci);
+                                let rd = Arc::clone(&remote_desc);
+                                Box::pin(async move {
+                                    let _ = pc.start_rtp(true, rd, sdp_semantics).await;
+                                    false
+                                })
+                            },
+                            "set_remote_description renegotiation",
+                        ))
                         .await?;
                 }
                 return Ok(());
@@ -1455,28 +1464,31 @@ impl RTCPeerConnection {
             let remote_desc = Arc::new(desc);
             self.internal
                 .ops
-                .enqueue(Operation(Box::new(move || {
-                    let pc = Arc::clone(&pci);
-                    let rd = Arc::clone(&remote_desc);
-                    let ru = remote_ufrag.clone();
-                    let rp = remote_pwd.clone();
-                    let fp = fingerprint.clone();
-                    let fp_hash = fingerprint_hash.clone();
-                    Box::pin(async move {
-                        log::trace!(
-                            "start_transports: ice_role={}, dtls_role={}",
-                            ice_role,
-                            dtls_role,
-                        );
-                        pc.start_transports(ice_role, dtls_role, ru, rp, fp, fp_hash)
-                            .await;
+                .enqueue(Operation::new(
+                    move || {
+                        let pc = Arc::clone(&pci);
+                        let rd = Arc::clone(&remote_desc);
+                        let ru = remote_ufrag.clone();
+                        let rp = remote_pwd.clone();
+                        let fp = fingerprint.clone();
+                        let fp_hash = fingerprint_hash.clone();
+                        Box::pin(async move {
+                            log::trace!(
+                                "start_transports: ice_role={}, dtls_role={}",
+                                ice_role,
+                                dtls_role,
+                            );
+                            pc.start_transports(ice_role, dtls_role, ru, rp, fp, fp_hash)
+                                .await;
 
-                        if we_offer {
-                            let _ = pc.start_rtp(false, rd, sdp_semantics).await;
-                        }
-                        false
-                    })
-                })))
+                            if we_offer {
+                                let _ = pc.start_rtp(false, rd, sdp_semantics).await;
+                            }
+                            false
+                        })
+                    },
+                    "set_remote_description",
+                ))
                 .await?;
         }
 

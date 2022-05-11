@@ -10,14 +10,17 @@ async fn test_operations_enqueue() -> Result<()> {
         let results = Arc::new(Mutex::new(vec![0; 16]));
         for k in 0..16 {
             let r = Arc::clone(&results);
-            ops.enqueue(Operation(Box::new(move || {
-                let r2 = Arc::clone(&r);
-                Box::pin(async move {
-                    let mut r3 = r2.lock().await;
-                    r3[k] += k * k;
-                    r3[k] == 225
-                })
-            })))
+            ops.enqueue(Operation::new(
+                move || {
+                    let r2 = Arc::clone(&r);
+                    Box::pin(async move {
+                        let mut r3 = r2.lock().await;
+                        r3[k] += k * k;
+                        r3[k] == 225
+                    })
+                },
+                "test_operations_enqueue",
+            ))
             .await?;
         }
 
