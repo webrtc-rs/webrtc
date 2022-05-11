@@ -76,7 +76,7 @@ pub struct MediaEngine {
     pub(crate) negotiated_audio_codecs: Mutex<Vec<RTCRtpCodecParameters>>,
 
     header_extensions: Vec<MediaEngineHeaderExtension>,
-    pub(crate) proposed_header_extensions: Mutex<HashMap<isize, MediaEngineHeaderExtension>>,
+    proposed_header_extensions: Mutex<HashMap<isize, MediaEngineHeaderExtension>>,
     pub(crate) negotiated_header_extensions: Mutex<HashMap<isize, MediaEngineHeaderExtension>>,
 }
 
@@ -674,7 +674,7 @@ impl MediaEngine {
                     n_ext.1.is_audio |= typ == RTPCodecType::Audio;
                 } else {
                     let nid = n_ext.0;
-                    log::warn!("Invalid ext id mapping in update_header_extension. {extension} was negotiated as {nid}, but was {id} in call");
+                    log::warn!("Invalid ext id mapping in update_header_extension. {} was negotiated as {}, but was {} in call", extension, nid, id);
                 }
             } else {
                 // We either only have a proposal or we have neither proposal nor a negotiated id
@@ -682,7 +682,7 @@ impl MediaEngine {
 
                 if let Some(prev_ext) = negotiated_header_extensions.get(&id) {
                     let prev_uri = &prev_ext.uri;
-                    log::warn!("Assigning {id} to {extension} would override previous assignment to {prev_uri}, no action taken");
+                    log::warn!("Assigning {} to {} would override previous assignment to {}, no action taken", id, extension, prev_uri);
                 } else {
                     let h = MediaEngineHeaderExtension {
                         uri: extension.to_owned(),
@@ -861,7 +861,7 @@ impl MediaEngine {
                         !negotiated_header_extensions.keys().any(|nid| nid == id)
                             && !proposed_header_extensions.keys().any(|pid| pid == id)
                     })
-                    .nth(0);
+                    .next();
 
                 if let Some(id) = id {
                     proposed_header_extensions.insert(
