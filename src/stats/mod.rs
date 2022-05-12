@@ -77,35 +77,35 @@ pub struct ICECandidatePairStats {
     #[serde(with = "serialize::approx_instant")]
     timestamp: Instant, // StatsTimestamp
     id: String,
-    local_candidate_id: String,
-    remote_candidate_id: String,
-    state: CandidatePairState,
-    nominated: bool,
-    packets_sent: u32,
-    packets_received: u32,
-    bytes_sent: u64,
+    available_incoming_bitrate: f64,
+    available_outgoing_bitrate: f64,
     bytes_received: u64,
+    bytes_sent: u64,
+    circuit_breaker_trigger_count: u32,
     #[serde(with = "serialize::approx_instant")]
-    last_packet_sent_timestamp: Instant, // statsTimestampFrom
-    #[serde(with = "serialize::approx_instant")]
-    last_packet_received_timstamp: Instant, // statsTimestampFrom
+    consent_expired_timestamp: Instant, // statsTimestampFrom
+    consent_requests_sent: u64,
+    current_round_trip_time: f64,
     #[serde(with = "serialize::approx_instant")]
     first_request_timestamp: Instant, // statsTimestampFrom
     #[serde(with = "serialize::approx_instant")]
+    last_packet_received_timstamp: Instant, // statsTimestampFrom
+    #[serde(with = "serialize::approx_instant")]
+    last_packet_sent_timestamp: Instant, // statsTimestampFrom
+    #[serde(with = "serialize::approx_instant")]
     last_request_timestamp: Instant, // statsTimestampFrom
-    total_round_trip_time: f64,
-    current_round_trip_time: f64,
-    available_outgoing_bitrate: f64,
-    available_incoming_bitrate: f64,
-    circuit_breaker_trigger_count: u32,
+    local_candidate_id: String,
+    nominated: bool,
+    packets_received: u32,
+    packets_sent: u32,
+    remote_candidate_id: String,
     requests_received: u64,
     requests_sent: u64,
     responses_received: u64,
     responses_sent: u64,
     retransmissions_sent: u64,
-    consent_requests_sent: u64,
-    #[serde(with = "serialize::approx_instant")]
-    consent_expired_timestamp: Instant, // statsTimestampFrom
+    state: CandidatePairState,
+    total_round_trip_time: f64,
 }
 
 impl From<CandidatePairStats> for ICECandidatePairStats {
@@ -113,30 +113,30 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
         ICECandidatePairStats {
             timestamp: stats.timestamp,
             id: format!("{}-{}", stats.local_candidate_id, stats.remote_candidate_id),
-            local_candidate_id: stats.local_candidate_id,
-            remote_candidate_id: stats.remote_candidate_id,
-            state: stats.state,
-            nominated: stats.nominated,
-            packets_sent: stats.packets_sent,
-            packets_received: stats.packets_received,
-            bytes_sent: stats.bytes_sent,
-            bytes_received: stats.bytes_received,
-            last_packet_sent_timestamp: stats.last_packet_sent_timestamp,
-            last_packet_received_timstamp: stats.last_packet_received_timestamp,
-            first_request_timestamp: stats.first_request_timestamp,
-            last_request_timestamp: stats.last_request_timestamp,
-            total_round_trip_time: stats.total_round_trip_time,
-            current_round_trip_time: stats.current_round_trip_time,
-            available_outgoing_bitrate: stats.available_outgoing_bitrate,
             available_incoming_bitrate: stats.available_incoming_bitrate,
+            available_outgoing_bitrate: stats.available_outgoing_bitrate,
+            bytes_received: stats.bytes_received,
+            bytes_sent: stats.bytes_sent,
             circuit_breaker_trigger_count: stats.circuit_breaker_trigger_count,
+            consent_expired_timestamp: stats.consent_expired_timestamp,
+            consent_requests_sent: stats.consent_requests_sent,
+            current_round_trip_time: stats.current_round_trip_time,
+            first_request_timestamp: stats.first_request_timestamp,
+            last_packet_received_timstamp: stats.last_packet_received_timestamp,
+            last_packet_sent_timestamp: stats.last_packet_sent_timestamp,
+            last_request_timestamp: stats.last_request_timestamp,
+            local_candidate_id: stats.local_candidate_id,
+            nominated: stats.nominated,
+            packets_received: stats.packets_received,
+            packets_sent: stats.packets_sent,
+            remote_candidate_id: stats.remote_candidate_id,
             requests_received: stats.requests_received,
             requests_sent: stats.requests_sent,
             responses_received: stats.responses_received,
             responses_sent: stats.responses_sent,
             retransmissions_sent: stats.retransmissions_sent,
-            consent_requests_sent: stats.consent_requests_sent,
-            consent_expired_timestamp: stats.consent_expired_timestamp,
+            state: stats.state,
+            total_round_trip_time: stats.total_round_trip_time,
         }
     }
 }
@@ -220,10 +220,10 @@ pub struct CodecStats {
     #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
-    payload_type: PayloadType,
-    mime_type: String,
-    clock_rate: u32,
     channels: u16,
+    clock_rate: u32,
+    mime_type: String,
+    payload_type: PayloadType,
     sdp_fmtp_line: String,
 }
 
@@ -232,10 +232,10 @@ impl From<&RTCRtpCodecParameters> for CodecStats {
         CodecStats {
             timestamp: Instant::now(),
             id: codec.stats_id.clone(),
-            payload_type: codec.payload_type,
-            mime_type: codec.capability.mime_type.clone(),
-            clock_rate: codec.capability.clock_rate,
             channels: codec.capability.channels,
+            clock_rate: codec.capability.clock_rate,
+            mime_type: codec.capability.mime_type.clone(),
+            payload_type: codec.payload_type,
             sdp_fmtp_line: codec.capability.sdp_fmtp_line.clone(),
         }
     }
@@ -246,9 +246,9 @@ pub struct DataChannelStats {
     #[serde(with = "serialize::approx_instant")]
     timestamp: Instant,
     id: String,
-    data_channel_identifier: u16,
     bytes_received: usize,
     bytes_sent: usize,
+    data_channel_identifier: u16,
     label: String,
     messages_received: usize,
     messages_sent: usize,
@@ -278,13 +278,13 @@ impl From<&RTCDataChannel> for DataChannelStats {
             state,
             timestamp: Instant::now(),
             id: data_channel.stats_id.clone(),
-            data_channel_identifier: data_channel.id(), // TODO: "The value is initially null"
-            label: data_channel.label.clone(),
-            protocol: data_channel.protocol.clone(),
             bytes_received,
             bytes_sent,
+            data_channel_identifier: data_channel.id(), // TODO: "The value is initially null"
+            label: data_channel.label.clone(),
             messages_received,
             messages_sent,
+            protocol: data_channel.protocol.clone(),
         }
     }
 }
