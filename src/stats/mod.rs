@@ -11,7 +11,7 @@ use ice::candidate::{CandidatePairState, CandidateType};
 use ice::network_type::NetworkType;
 use stats_collector::StatsCollector;
 
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
@@ -50,8 +50,27 @@ impl From<SourceStatsType> for StatsReportType {
     }
 }
 
+impl Serialize for StatsReportType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            StatsReportType::CandidatePair(stats) => stats.serialize(serializer),
+            StatsReportType::CertificateStats(stats) => stats.serialize(serializer),
+            StatsReportType::Codec(stats) => stats.serialize(serializer),
+            StatsReportType::DataChannel(stats) => stats.serialize(serializer),
+            StatsReportType::LocalCandidate(stats) => stats.serialize(serializer),
+            StatsReportType::PeerConnection(stats) => stats.serialize(serializer),
+            StatsReportType::RemoteCandidate(stats) => stats.serialize(serializer),
+            StatsReportType::SCTPTransport(stats) => stats.serialize(serializer),
+            StatsReportType::Transport(stats) => stats.serialize(serializer),
+        }
+    }
+}
+
 // TODO: should this be some form of String-indexed HashMap?
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct StatsReport {
     pub(crate) reports: Vec<StatsReportType>,
 }
