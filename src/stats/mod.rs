@@ -120,11 +120,6 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
     }
 }
 
-// TODO: should timestamps be cast here, or during serialization?
-// func statsTimestampFrom(t time.Time) StatsTimestamp {
-// 	return StatsTimestamp(t.UnixNano() / int64(time.Millisecond))
-// }
-
 #[derive(Debug, Serialize)]
 pub struct ICECandidatePairStats {
     available_incoming_bitrate: f64,
