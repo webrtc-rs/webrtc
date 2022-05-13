@@ -19,6 +19,38 @@ use tokio::time::Instant;
 mod serialize;
 pub mod stats_collector;
 
+#[derive(Debug, Serialize)]
+pub enum RTCStatsType {
+    #[serde(rename = "candidate-pair")]
+    CandidatePair,
+    #[serde(rename = "certificate")]
+    Certificate,
+    #[serde(rename = "codec")]
+    Codec,
+    #[serde(rename = "csrc")]
+    CSRC,
+    #[serde(rename = "data-channel")]
+    DataChannel,
+    #[serde(rename = "inbound-rtp")]
+    InboundRTP,
+    #[serde(rename = "local-candidate")]
+    LocalCandidate,
+    #[serde(rename = "outbound-rtp")]
+    OutboundRTP,
+    #[serde(rename = "peer-connection")]
+    PeerConnection,
+    #[serde(rename = "receiver")]
+    Receiver,
+    #[serde(rename = "remote-candidate")]
+    RemoteCandidate,
+    #[serde(rename = "remote-inbound-rtp")]
+    RemoteInboundRTP,
+    #[serde(rename = "sender")]
+    Sender,
+    #[serde(rename = "transport")]
+    Transport,
+}
+
 pub enum SourceStatsType {
     CandidatePair(CandidatePairStats),
     LocalCandidate(CandidateStats),
@@ -42,10 +74,12 @@ impl From<SourceStatsType> for StatsReportType {
     fn from(stats: SourceStatsType) -> Self {
         match stats {
             SourceStatsType::CandidatePair(stats) => StatsReportType::CandidatePair(stats.into()),
-            SourceStatsType::LocalCandidate(stats) => StatsReportType::LocalCandidate(stats.into()),
-            SourceStatsType::RemoteCandidate(stats) => {
-                StatsReportType::RemoteCandidate(stats.into())
-            }
+            SourceStatsType::LocalCandidate(stats) => StatsReportType::LocalCandidate(
+                ICECandidateStats::new(stats, RTCStatsType::LocalCandidate),
+            ),
+            SourceStatsType::RemoteCandidate(stats) => StatsReportType::RemoteCandidate(
+                ICECandidateStats::new(stats, RTCStatsType::RemoteCandidate),
+            ),
         }
     }
 }
@@ -93,9 +127,6 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
 
 #[derive(Debug, Serialize)]
 pub struct ICECandidatePairStats {
-    #[serde(with = "serialize::approx_instant")]
-    timestamp: Instant, // StatsTimestamp
-    id: String,
     available_incoming_bitrate: f64,
     available_outgoing_bitrate: f64,
     bytes_received: u64,
@@ -107,6 +138,7 @@ pub struct ICECandidatePairStats {
     current_round_trip_time: f64,
     #[serde(with = "serialize::approx_instant")]
     first_request_timestamp: Instant, // statsTimestampFrom
+    id: String,
     #[serde(with = "serialize::approx_instant")]
     last_packet_received_timstamp: Instant, // statsTimestampFrom
     #[serde(with = "serialize::approx_instant")]
@@ -124,14 +156,16 @@ pub struct ICECandidatePairStats {
     responses_sent: u64,
     retransmissions_sent: u64,
     state: CandidatePairState,
+    #[serde(rename = "type")]
+    stats_type: RTCStatsType,
+    #[serde(with = "serialize::approx_instant")]
+    timestamp: Instant, // StatsTimestamp
     total_round_trip_time: f64,
 }
 
 impl From<CandidatePairStats> for ICECandidatePairStats {
     fn from(stats: CandidatePairStats) -> Self {
         ICECandidatePairStats {
-            timestamp: stats.timestamp,
-            id: format!("{}-{}", stats.local_candidate_id, stats.remote_candidate_id),
             available_incoming_bitrate: stats.available_incoming_bitrate,
             available_outgoing_bitrate: stats.available_outgoing_bitrate,
             bytes_received: stats.bytes_received,
@@ -141,6 +175,7 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
             consent_requests_sent: stats.consent_requests_sent,
             current_round_trip_time: stats.current_round_trip_time,
             first_request_timestamp: stats.first_request_timestamp,
+            id: format!("{}-{}", stats.local_candidate_id, stats.remote_candidate_id),
             last_packet_received_timstamp: stats.last_packet_received_timestamp,
             last_packet_sent_timestamp: stats.last_packet_sent_timestamp,
             last_request_timestamp: stats.last_request_timestamp,
@@ -155,6 +190,8 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
             responses_sent: stats.responses_sent,
             retransmissions_sent: stats.retransmissions_sent,
             state: stats.state,
+            stats_type: RTCStatsType::CandidatePair,
+            timestamp: stats.timestamp,
             total_round_trip_time: stats.total_round_trip_time,
         }
     }
@@ -162,49 +199,55 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
 
 #[derive(Debug, Serialize)]
 pub struct ICECandidateStats {
-    #[serde(with = "serialize::approx_instant")]
-    timestamp: Instant,
-    id: String,
     candidate_type: CandidateType,
     deleted: bool,
+    id: String,
     ip: String,
     network_type: NetworkType,
     port: u16,
     priority: u32,
     relay_protocol: String,
+    #[serde(rename = "type")]
+    stats_type: RTCStatsType,
+    #[serde(with = "serialize::approx_instant")]
+    timestamp: Instant,
     url: String,
 }
 
-impl From<CandidateStats> for ICECandidateStats {
-    fn from(stats: CandidateStats) -> Self {
+impl ICECandidateStats {
+    fn new(stats: CandidateStats, stats_type: RTCStatsType) -> Self {
         ICECandidateStats {
-            timestamp: stats.timestamp,
-            id: stats.id,
-            network_type: stats.network_type,
-            ip: stats.ip,
-            port: stats.port,
             candidate_type: stats.candidate_type,
-            priority: stats.priority,
-            url: stats.url,
-            relay_protocol: stats.relay_protocol,
             deleted: stats.deleted,
+            id: stats.id,
+            ip: stats.ip,
+            network_type: stats.network_type,
+            port: stats.port,
+            priority: stats.priority,
+            relay_protocol: stats.relay_protocol,
+            stats_type,
+            timestamp: stats.timestamp,
+            url: stats.url,
         }
     }
 }
 
 #[derive(Debug, Serialize)]
 pub struct ICETransportStats {
-    #[serde(with = "serialize::approx_instant")]
-    timestamp: Instant,
     id: String,
     // bytes_received: u64,
     // bytes_sent: u64,
+    #[serde(rename = "type")]
+    stats_type: RTCStatsType,
+    #[serde(with = "serialize::approx_instant")]
+    timestamp: Instant,
 }
 
 impl ICETransportStats {
     pub(crate) fn new(id: String) -> Self {
         ICETransportStats {
             id,
+            stats_type: RTCStatsType::Transport,
             timestamp: Instant::now(),
         }
     }
@@ -212,67 +255,75 @@ impl ICETransportStats {
 
 #[derive(Debug, Serialize)]
 pub struct CertificateStats {
-    #[serde(with = "serialize::approx_instant")]
-    timestamp: Instant,
-    id: String,
     // base64_certificate: String,
     fingerprint: String,
     fingerprint_algorithm: String,
+    id: String,
     // issuer_certificate_id: String,
+    #[serde(rename = "type")]
+    stats_type: RTCStatsType,
+    #[serde(with = "serialize::approx_instant")]
+    timestamp: Instant,
 }
 
 impl CertificateStats {
     pub(crate) fn new(cert: &RTCCertificate, fingerprint: RTCDtlsFingerprint) -> Self {
         CertificateStats {
-            timestamp: Instant::now(),
-            id: cert.stats_id.clone(),
             // TODO: base64_certificate
             fingerprint: fingerprint.value,
             fingerprint_algorithm: fingerprint.algorithm,
+            id: cert.stats_id.clone(),
             // TODO: issuer_certificate_id
+            stats_type: RTCStatsType::Certificate,
+            timestamp: Instant::now(),
         }
     }
 }
 
 #[derive(Debug, Serialize)]
 pub struct CodecStats {
-    #[serde(with = "serialize::approx_instant")]
-    timestamp: Instant,
-    id: String,
     channels: u16,
     clock_rate: u32,
+    id: String,
     mime_type: String,
     payload_type: PayloadType,
     sdp_fmtp_line: String,
+    #[serde(rename = "type")]
+    stats_type: RTCStatsType,
+    #[serde(with = "serialize::approx_instant")]
+    timestamp: Instant,
 }
 
 impl From<&RTCRtpCodecParameters> for CodecStats {
     fn from(codec: &RTCRtpCodecParameters) -> Self {
         CodecStats {
-            timestamp: Instant::now(),
-            id: codec.stats_id.clone(),
             channels: codec.capability.channels,
             clock_rate: codec.capability.clock_rate,
+            id: codec.stats_id.clone(),
             mime_type: codec.capability.mime_type.clone(),
             payload_type: codec.payload_type,
             sdp_fmtp_line: codec.capability.sdp_fmtp_line.clone(),
+            stats_type: RTCStatsType::Codec,
+            timestamp: Instant::now(),
         }
     }
 }
 
 #[derive(Debug, Serialize)]
 pub struct DataChannelStats {
-    #[serde(with = "serialize::approx_instant")]
-    timestamp: Instant,
-    id: String,
     bytes_received: usize,
     bytes_sent: usize,
     data_channel_identifier: u16,
+    id: String,
     label: String,
     messages_received: usize,
     messages_sent: usize,
     protocol: String,
     state: RTCDataChannelState,
+    #[serde(rename = "type")]
+    stats_type: RTCStatsType,
+    #[serde(with = "serialize::approx_instant")]
+    timestamp: Instant,
 }
 
 impl From<&RTCDataChannel> for DataChannelStats {
@@ -294,40 +345,44 @@ impl From<&RTCDataChannel> for DataChannelStats {
         }
 
         DataChannelStats {
-            state,
-            timestamp: Instant::now(),
-            id: data_channel.stats_id.clone(),
             bytes_received,
             bytes_sent,
             data_channel_identifier: data_channel.id(), // TODO: "The value is initially null"
+            id: data_channel.stats_id.clone(),
             label: data_channel.label.clone(),
             messages_received,
             messages_sent,
             protocol: data_channel.protocol.clone(),
+            state,
+            stats_type: RTCStatsType::DataChannel,
+            timestamp: Instant::now(),
         }
     }
 }
 
 #[derive(Debug, Serialize)]
 pub struct PeerConnectionStats {
-    #[serde(with = "serialize::approx_instant")]
-    timestamp: Instant,
-    id: String,
     data_channels_accepted: u32,
     data_channels_closed: u32,
     data_channels_opened: u32,
     data_channels_requested: u32,
+    id: String,
+    #[serde(rename = "type")]
+    stats_type: RTCStatsType,
+    #[serde(with = "serialize::approx_instant")]
+    timestamp: Instant,
 }
 
 impl PeerConnectionStats {
     pub fn new(transport: &RTCSctpTransport, stats_id: String, data_channels_closed: u32) -> Self {
         PeerConnectionStats {
-            timestamp: Instant::now(),
-            id: stats_id,
             data_channels_accepted: transport.data_channels_accepted(),
+            data_channels_closed,
             data_channels_opened: transport.data_channels_opened(),
             data_channels_requested: transport.data_channels_requested(),
-            data_channels_closed,
+            id: stats_id,
+            stats_type: RTCStatsType::PeerConnection,
+            timestamp: Instant::now(),
         }
     }
 }
