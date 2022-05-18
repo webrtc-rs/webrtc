@@ -138,7 +138,11 @@ fn append_message(target_offset: u32, frags: &[Fragment], raw_message: &mut Vec<
         if f.handshake_header.fragment_offset == target_offset {
             let fragment_end =
                 f.handshake_header.fragment_offset + f.handshake_header.fragment_length;
+
+            // NB: Order here is imporant, the `f.handshake_header.fragment_length != 0`
+            // MUST come before the recursive call.
             if fragment_end != f.handshake_header.length
+                && f.handshake_header.fragment_length != 0
                 && !append_message(fragment_end, frags, raw_message)
             {
                 return false;
