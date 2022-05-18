@@ -144,6 +144,11 @@ pub enum Error {
     #[error("Alert is Fatal or Close Notify")]
     ErrAlertFatalOrClose,
 
+    #[error(
+        "Fragment buffer overflow. New size {new_size} is greater than specified max {max_size}"
+    )]
+    ErrFragmentBufferOverflow { new_size: usize, max_size: usize },
+
     #[error("{0}")]
     Io(#[source] IoError),
     #[error("{0}")]
