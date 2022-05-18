@@ -718,10 +718,14 @@ impl AsyncWrite for PollStream<'_> {
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        let stream = self.stream.clone();
-        let fut = self
-            .shutdown_fut
-            .get_or_insert_with(|| Box::pin(async move { stream.close().await }));
+        let fut = match self.shutdown_fut.as_mut() {
+            Some(fut) => fut,
+            None => {
+                let stream = self.stream.clone();
+                self.shutdown_fut
+                    .get_or_insert(Box::pin(async move { stream.close().await }))
+            }
+        };
 
         match fut.as_mut().poll(cx) {
             Poll::Pending => Poll::Pending,
