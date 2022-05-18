@@ -143,3 +143,23 @@ fn test_fragment_buffer() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_fragment_buffer_overflow() -> Result<()> {
+    let mut fragment_buffer = FragmentBuffer::new();
+
+    fragment_buffer.push(&[
+        0x16, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x03, 0x00,
+        0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xfe, 0xff, 0x00,
+    ])?;
+
+    let big_buffer = vec![0; 2_000_000];
+    let result = fragment_buffer.push(&big_buffer);
+
+    assert!(
+        result.is_err(),
+        "Pushing a buffer of size 2MB should have caused FragmentBuffer::push to return an error"
+    );
+
+    Ok(())
+}

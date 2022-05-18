@@ -9,6 +9,9 @@ use crate::record_layer::record_layer_header::*;
 use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
 
+// 2 mb max buffer size
+const FRAGMENT_BUFFER_MAX_SIZE: usize = 2_000_000;
+
 pub(crate) struct Fragment {
     record_layer_header: RecordLayerHeader,
     handshake_header: HandshakeHeader,
@@ -34,6 +37,14 @@ impl FragmentBuffer {
     // when it returns true it means the FragmentBuffer has inserted and the buffer shouldn't be handled
     // when an error returns it is fatal, and the DTLS connection should be stopped
     pub fn push(&mut self, mut buf: &[u8]) -> Result<bool> {
+        let current_size = self.size();
+        if current_size + buf.len() >= FRAGMENT_BUFFER_MAX_SIZE {
+            return Err(Error::ErrFragmentBufferOverflow {
+                new_size: current_size + buf.len(),
+                max_size: FRAGMENT_BUFFER_MAX_SIZE,
+            });
+        }
+
         let mut reader = Cursor::new(buf);
         let record_layer_header = RecordLayerHeader::unmarshal(&mut reader)?;
 
@@ -112,6 +123,13 @@ impl FragmentBuffer {
         self.current_message_sequence_number += 1;
 
         Ok((content, epoch))
+    }
+
+    fn size(&self) -> usize {
+        self.cache
+            .iter()
+            .map(|(_, fragment)| fragment.iter().map(|f| f.data.len()).sum::<usize>())
+            .sum()
     }
 }
 
