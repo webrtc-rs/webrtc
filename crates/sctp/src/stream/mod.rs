@@ -481,24 +481,22 @@ impl Stream {
 const DEFAULT_READ_BUF_SIZE: usize = 4096;
 
 /// State of the read `Future` in [`PollStream`].
-enum ReadFut<'a> {
+enum ReadFut {
     /// Nothing in progress.
     Idle,
     /// Reading data from the underlying stream.
-    Reading(Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>>),
+    Reading(Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>>),
     /// Finished reading, but there's unread data in the temporary buffer.
     RemainingData(Vec<u8>),
 }
 
-impl<'a> ReadFut<'a> {
+impl ReadFut {
     /// Gets a mutable reference to the future stored inside `Reading(future)`.
     ///
     /// # Panics
     ///
     /// Panics if `ReadFut` variant is not `Reading`.
-    fn get_reading_mut(
-        &mut self,
-    ) -> &mut Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + 'a>> {
+    fn get_reading_mut(&mut self) -> &mut Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>> {
         match self {
             ReadFut::Reading(ref mut fut) => fut,
             _ => panic!("expected ReadFut to be Reading"),
@@ -514,7 +512,7 @@ impl<'a> ReadFut<'a> {
 pub struct PollStream<'a> {
     stream: Arc<Stream>,
 
-    read_fut: ReadFut<'a>,
+    read_fut: ReadFut,
     write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
     shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
 
@@ -600,14 +598,10 @@ impl AsyncRead for PollStream<'_> {
                 let stream = self.stream.clone();
                 let mut temp_buf = vec![0; self.read_buf_cap];
                 self.read_fut = ReadFut::Reading(Box::pin(async move {
-                    let res = stream.read(temp_buf.as_mut_slice()).await;
-                    match res {
-                        Ok(n) => {
-                            temp_buf.truncate(n);
-                            Ok(temp_buf)
-                        }
-                        Err(e) => Err(e),
-                    }
+                    stream.read(temp_buf.as_mut_slice()).await.map(|n| {
+                        temp_buf.truncate(n);
+                        temp_buf
+                    })
                 }));
                 self.read_fut.get_reading_mut()
             }
