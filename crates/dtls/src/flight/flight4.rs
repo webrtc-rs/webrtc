@@ -725,6 +725,50 @@ impl Flight for Flight4 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Result;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    struct MockCipherSuite {}
+
+    impl CipherSuite for MockCipherSuite {
+        fn to_string(&self) -> String {
+            "MockCipherSuite".into()
+        }
+        fn id(&self) -> CipherSuiteId {
+            unimplemented!();
+        }
+        fn certificate_type(&self) -> ClientCertificateType {
+            unimplemented!();
+        }
+        fn hash_func(&self) -> CipherSuiteHash {
+            unimplemented!();
+        }
+        fn is_psk(&self) -> bool {
+            false
+        }
+        fn is_initialized(&self) -> bool {
+            panic!("is_initialized called with Certificate but not CertificateVerify");
+        }
+
+        // Generate the internal encryption state
+        fn init(
+            &mut self,
+            _master_secret: &[u8],
+            _client_random: &[u8],
+            _server_random: &[u8],
+            _is_client: bool,
+        ) -> Result<()> {
+            unimplemented!();
+        }
+
+        fn encrypt(&self, _pkt_rlh: &RecordLayerHeader, _raw: &[u8]) -> Result<Vec<u8>> {
+            unimplemented!();
+        }
+        fn decrypt(&self, _input: &[u8]) -> Result<Vec<u8>> {
+            unimplemented!();
+        }
+    }
 
     // Assert that if a client sends a certificate they must also send a `CertificateVerify`
     // message. The `Flight4` must not interact with the `cipher_suite` if the `CertificateVerify`
@@ -732,6 +776,7 @@ mod tests {
     #[tokio::test]
     async fn test_flight4_process_certificateverify() {
         let mut state = State::default();
+        state.cipher_suite = Arc::new(Mutex::new(Some(Box::new(MockCipherSuite {}))));
 
         let raw_certificate = vec![
             0x0b, 0x00, 0x01, 0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x9b, 0x00, 0x01,
