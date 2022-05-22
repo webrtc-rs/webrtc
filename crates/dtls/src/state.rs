@@ -266,7 +266,7 @@ impl KeyingMaterialExporter for State {
             return Err(HandshakeInProgress);
         } else if !context.is_empty() {
             return Err(ContextUnsupported);
-        } else if INVALID_KEYING_LABELS.contains_key(label) {
+        } else if INVALID_KEYING_LABELS.contains(&label) {
             return Err(ReservedExportKeyingMaterial);
         }
 

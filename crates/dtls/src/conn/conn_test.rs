@@ -479,7 +479,7 @@ async fn test_export_keying_material() -> Result<()> {
         assert!(false, "expect error but export_keying_material returns OK");
     }
 
-    for (k, _v) in INVALID_KEYING_LABELS.iter() {
+    for k in INVALID_KEYING_LABELS.iter() {
         let state = c.connection_state().await;
         if let Err(err) = state.export_keying_material(k, &[], 0).await {
             assert!(

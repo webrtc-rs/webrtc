@@ -28,7 +28,6 @@ use util::{replay_detector::*, Conn};
 
 use async_trait::async_trait;
 use log::*;
-use std::collections::HashMap;
 use std::io::{BufReader, BufWriter};
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
@@ -44,16 +43,12 @@ pub(crate) const INBOUND_BUFFER_SIZE: usize = 8192;
 // Default replay protection window is specified by RFC 6347 Section 4.1.2.6
 pub(crate) const DEFAULT_REPLAY_PROTECTION_WINDOW: usize = 64;
 
-lazy_static! {
-    pub static ref INVALID_KEYING_LABELS: HashMap<&'static str, bool> = {
-        let mut map = HashMap::new();
-        map.insert("client finished", true);
-        map.insert("server finished", true);
-        map.insert("master secret", true);
-        map.insert("key expansion", true);
-        map
-    };
-}
+pub static INVALID_KEYING_LABELS: &[&str] = &[
+    "client finished",
+    "server finished",
+    "master secret",
+    "key expansion",
+];
 
 type PacketSendRequest = (Vec<Packet>, Option<mpsc::Sender<Result<()>>>);
 
