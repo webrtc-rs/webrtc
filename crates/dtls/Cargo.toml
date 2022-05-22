@@ -14,7 +14,6 @@ repository = "https://github.com/webrtc-rs/dtls"
 [dependencies]
 util = { package = "webrtc-util", version = "0.5.3", default-features = false, features = ["conn"] }
 byteorder = "1.4.3"
-lazy_static = "1.4.0"
 rand_core = "0.6.3"
 elliptic-curve = { version = "0.11.12", features = ["default", "ecdh"] }
 p256 = { version = "0.10", features=["default", "ecdh", "ecdsa"] }
