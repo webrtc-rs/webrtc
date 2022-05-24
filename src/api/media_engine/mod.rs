@@ -40,6 +40,9 @@ pub const MIME_TYPE_VP8: &str = "video/VP8";
 /// MIME_TYPE_VP9 VP9 MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_VP9: &str = "video/VP9";
+/// MIME_TYPE_AV1 AV1 MIME type
+/// Note: Matching should be case insensitive.
+pub const MIME_TYPE_AV1: &str = "video/AV1";
 /// MIME_TYPE_G722 G722 MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_G722: &str = "audio/G722";
@@ -278,6 +281,17 @@ impl MediaEngine {
                     rtcp_feedback: video_rtcp_feedback.clone(),
                 },
                 payload_type: 125,
+                ..Default::default()
+            },
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_AV1.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "profile-id=0".to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 41,
                 ..Default::default()
             },
             RTCRtpCodecParameters {
