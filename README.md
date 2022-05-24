@@ -108,7 +108,7 @@ This project is still in active and early development stage, please refer to the
 
 ### Toolchain
 
-webrtc-rs currently requires Rust 1.55.0+ to build.
+webrtc-rs currently requires Rust 1.56.0+ to build.
 
 ### Monorepo Setup
 
@@ -149,6 +149,7 @@ cargo build [or clippy or test or fmt]
 
 ### Testing with Local Dependencies
 Follows this instruction about how to replace dependencies with patch for local testing:
+
 https://doc.rust-lang.org/edition-guide/rust-2018/cargo-and-crates-io/replacing-dependencies-with-patch.html
 
 
