@@ -8,6 +8,11 @@ use regex::Regex;
 use tokio::sync::{mpsc, Mutex};
 
 #[tokio::test]
+// This test is disabled on Windows for now because it gets stuck and never finishes.
+// This does not seem to have happened due to a code change. It started happening with
+// `ce55c3a066ab461c3e74f0d5ac6f1209205e79bc` but was verified as happening on
+// `92cc698a3dc6da459f3bf3789fd046c2dffdf107` too.
+#[cfg(not(windows))]
 async fn test_multicast_dns_only_connection() -> Result<()> {
     let cfg0 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
