@@ -128,18 +128,18 @@ pub struct ICECandidatePairStats {
     bytes_sent: u64,
     circuit_breaker_trigger_count: u32,
     #[serde(with = "serialize::instant_to_epoch_ms")]
-    consent_expired_timestamp: Instant, // statsTimestampFrom
+    consent_expired_timestamp: Instant,
     consent_requests_sent: u64,
     current_round_trip_time: f64,
     #[serde(with = "serialize::instant_to_epoch_ms")]
-    first_request_timestamp: Instant, // statsTimestampFrom
+    first_request_timestamp: Instant,
     id: String,
     #[serde(with = "serialize::instant_to_epoch_ms")]
-    last_packet_received_timstamp: Instant, // statsTimestampFrom
+    last_packet_received_timstamp: Instant,
     #[serde(with = "serialize::instant_to_epoch_ms")]
-    last_packet_sent_timestamp: Instant, // statsTimestampFrom
+    last_packet_sent_timestamp: Instant,
     #[serde(with = "serialize::instant_to_epoch_ms")]
-    last_request_timestamp: Instant, // statsTimestampFrom
+    last_request_timestamp: Instant,
     local_candidate_id: String,
     nominated: bool,
     packets_received: u32,
@@ -154,7 +154,7 @@ pub struct ICECandidatePairStats {
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
     #[serde(with = "serialize::instant_to_epoch_ms")]
-    timestamp: Instant, // StatsTimestamp
+    timestamp: Instant,
     total_round_trip_time: f64,
 }
 
