@@ -285,17 +285,6 @@ impl MediaEngine {
             },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
-                    mime_type: MIME_TYPE_AV1.to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "profile-id=0".to_owned(),
-                    rtcp_feedback: video_rtcp_feedback.clone(),
-                },
-                payload_type: 41,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
