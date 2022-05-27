@@ -40,6 +40,9 @@ pub const MIME_TYPE_VP8: &str = "video/VP8";
 /// MIME_TYPE_VP9 VP9 MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_VP9: &str = "video/VP9";
+/// MIME_TYPE_AV1 AV1 MIME type
+/// Note: Matching should be case insensitive.
+pub const MIME_TYPE_AV1: &str = "video/AV1";
 /// MIME_TYPE_G722 G722 MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_G722: &str = "audio/G722";
