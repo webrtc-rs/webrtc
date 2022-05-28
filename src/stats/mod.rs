@@ -103,8 +103,7 @@ impl Serialize for StatsReportType {
     }
 }
 
-// TODO: should this be some form of String-indexed HashMap?
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct StatsReport {
     pub(crate) reports: HashMap<String, StatsReportType>,
 }
@@ -117,6 +116,15 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
         StatsReport {
             reports: collector.reports,
         }
+    }
+}
+
+impl Serialize for StatsReport {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.reports.serialize(serializer)
     }
 }
 
