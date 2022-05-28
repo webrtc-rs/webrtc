@@ -230,8 +230,8 @@ impl ICECandidateStats {
 #[derive(Debug, Serialize)]
 pub struct ICETransportStats {
     pub(crate) id: String,
-    bytes_received: usize,
-    bytes_sent: usize,
+    pub(crate) bytes_received: usize,
+    pub(crate) bytes_sent: usize,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
     #[serde(with = "serialize::instant_to_epoch_ms")]
