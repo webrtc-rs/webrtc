@@ -6,6 +6,7 @@ use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 use crate::rtp_transceiver::PayloadType;
 use crate::sctp_transport::RTCSctpTransport;
 
+use ice::agent::Agent;
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
 use ice::candidate::{CandidatePairState, CandidateType};
 use ice::network_type::NetworkType;
@@ -230,8 +231,8 @@ impl ICECandidateStats {
 #[derive(Debug, Serialize)]
 pub struct ICETransportStats {
     id: String,
-    // bytes_received: u64,
-    // bytes_sent: u64,
+    bytes_received: usize,
+    bytes_sent: usize,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
     #[serde(with = "serialize::instant_to_epoch_ms")]
@@ -239,9 +240,11 @@ pub struct ICETransportStats {
 }
 
 impl ICETransportStats {
-    pub(crate) fn new(id: String) -> Self {
+    pub(crate) async fn new(id: String, agent: Arc<Agent>) -> Self {
         ICETransportStats {
             id,
+            bytes_received: agent.get_bytes_received().await,
+            bytes_sent: agent.get_bytes_sent().await,
             stats_type: RTCStatsType::Transport,
             timestamp: Instant::now(),
         }

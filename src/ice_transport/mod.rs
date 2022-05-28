@@ -65,7 +65,7 @@ struct ICETransportInternal {
 /// transport over which packets are sent and received.
 #[derive(Default)]
 pub struct RTCIceTransport {
-    gatherer: Arc<RTCIceGatherer>,
+    pub(crate) gatherer: Arc<RTCIceGatherer>,
     on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
     on_selected_candidate_pair_change_handler:
         Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
@@ -331,13 +331,9 @@ impl RTCIceTransport {
         collector: &Arc<Mutex<StatsCollector>>,
         worker: Worker,
     ) {
-        let mut internal = self.internal.lock().await;
-        if let Some(_conn) = internal.conn.take() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             let collector = collector.clone();
-            let stats = ICETransportStats::new("ice_transport".to_owned());
-            // TODO: get bytes out of Conn.
-            // bytes_received: conn.bytes_received,
-            // bytes_sent: conn.bytes_sent,
+            let stats = ICETransportStats::new("ice_transport".to_owned(), agent).await;
 
             let mut lock = collector.try_lock().unwrap();
             lock.push(Transport(stats));

@@ -381,11 +381,8 @@ impl RTCSctpTransport {
         ))];
 
         // conn
-        if let Some(_net_conn) = dtls_transport.conn().await {
-            let stats = ICETransportStats::new("sctp_transport".to_owned());
-            // TODO: get bytes out of Conn.
-            // bytes_received: conn.bytes_received,
-            // bytes_sent: conn.bytes_sent,
+        if let Some(agent) = dtls_transport.ice_transport.gatherer.get_agent().await {
+            let stats = ICETransportStats::new("sctp_transport".to_owned(), agent).await;
             reports.push(SCTPTransport(stats));
         }
 

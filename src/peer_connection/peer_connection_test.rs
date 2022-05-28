@@ -287,6 +287,9 @@ async fn test_get_stats() -> Result<()> {
     let stats = pc_offer.get_stats().await;
     assert!(stats.reports.len() > 0);
 
+    // send data between pcs
+    // verify ice_transport bytes sent/received
+
     close_pair_now(&pc_offer, &pc_answer).await;
 
     Ok(())
