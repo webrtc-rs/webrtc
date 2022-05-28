@@ -333,10 +333,10 @@ impl RTCIceTransport {
     ) {
         if let Some(agent) = self.gatherer.get_agent().await {
             let collector = collector.clone();
-            let stats = ICETransportStats::new("ice_transport".to_owned(), agent).await;
+            let stats = ICETransportStats::new("ice_transport".to_string(), agent).await;
 
             let mut lock = collector.try_lock().unwrap();
-            lock.push(Transport(stats));
+            lock.insert("ice_transport".to_string(), Transport(stats));
 
             drop(worker);
         }

@@ -6,13 +6,14 @@ use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 use crate::rtp_transceiver::PayloadType;
 use crate::sctp_transport::RTCSctpTransport;
 
-use ice::agent::Agent;
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
+use ice::agent::Agent;
 use ice::candidate::{CandidatePairState, CandidateType};
 use ice::network_type::NetworkType;
 use stats_collector::StatsCollector;
 
 use serde::{Serialize, Serializer};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
@@ -53,7 +54,6 @@ pub enum RTCStatsType {
 }
 
 pub enum SourceStatsType {
-    CandidatePair(CandidatePairStats),
     LocalCandidate(CandidateStats),
     RemoteCandidate(CandidateStats),
 }
@@ -74,7 +74,6 @@ pub enum StatsReportType {
 impl From<SourceStatsType> for StatsReportType {
     fn from(stats: SourceStatsType) -> Self {
         match stats {
-            SourceStatsType::CandidatePair(stats) => StatsReportType::CandidatePair(stats.into()),
             SourceStatsType::LocalCandidate(stats) => StatsReportType::LocalCandidate(
                 ICECandidateStats::new(stats, RTCStatsType::LocalCandidate),
             ),
@@ -107,7 +106,7 @@ impl Serialize for StatsReportType {
 // TODO: should this be some form of String-indexed HashMap?
 #[derive(Debug, Serialize)]
 pub struct StatsReport {
-    pub(crate) reports: Vec<StatsReportType>,
+    pub(crate) reports: HashMap<String, StatsReportType>,
 }
 
 impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
@@ -123,6 +122,7 @@ impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
 
 #[derive(Debug, Serialize)]
 pub struct ICECandidatePairStats {
+    pub(crate) id: String,
     available_incoming_bitrate: f64,
     available_outgoing_bitrate: f64,
     bytes_received: u64,
@@ -134,7 +134,6 @@ pub struct ICECandidatePairStats {
     current_round_trip_time: f64,
     #[serde(with = "serialize::instant_to_epoch_ms")]
     first_request_timestamp: Instant,
-    id: String,
     #[serde(with = "serialize::instant_to_epoch_ms")]
     last_packet_received_timstamp: Instant,
     #[serde(with = "serialize::instant_to_epoch_ms")]
@@ -230,7 +229,7 @@ impl ICECandidateStats {
 
 #[derive(Debug, Serialize)]
 pub struct ICETransportStats {
-    id: String,
+    pub(crate) id: String,
     bytes_received: usize,
     bytes_sent: usize,
     #[serde(rename = "type")]

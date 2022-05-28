@@ -25,6 +25,7 @@ use sctp::association::Association;
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
 
 use data::data_channel::DataChannel;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
@@ -374,21 +375,20 @@ impl RTCSctpTransport {
             data_channel.collect_stats(collector, worker.clone()).await;
         }
 
-        let mut reports = vec![PeerConnection(PeerConnectionStats::new(
-            self,
-            peer_connection_id,
-            data_channels_closed,
-        ))];
+        let mut reports = HashMap::new();
+        let peer_connection_stats =
+            PeerConnectionStats::new(self, peer_connection_id.clone(), data_channels_closed);
+        reports.insert(peer_connection_id, PeerConnection(peer_connection_stats));
 
         // conn
         if let Some(agent) = dtls_transport.ice_transport.gatherer.get_agent().await {
             let stats = ICETransportStats::new("sctp_transport".to_owned(), agent).await;
-            reports.push(SCTPTransport(stats));
+            reports.insert(stats.id.clone(), SCTPTransport(stats));
         }
 
         let collector = collector.clone();
         let mut lock = collector.try_lock().unwrap();
-        lock.append(&mut reports);
+        lock.merge(reports);
     }
     /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
         collector.Collecting()

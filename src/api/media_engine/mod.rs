@@ -558,18 +558,18 @@ impl MediaEngine {
         collector: &Arc<Mutex<StatsCollector>>,
         worker: Worker,
     ) {
-        let mut reports = vec![];
+        let mut reports = HashMap::new();
 
         for codec in &self.video_codecs {
-            reports.push(Codec(CodecStats::from(codec)));
+            reports.insert(codec.stats_id.clone(), Codec(CodecStats::from(codec)));
         }
 
         for codec in &self.audio_codecs {
-            reports.push(Codec(CodecStats::from(codec)));
+            reports.insert(codec.stats_id.clone(), Codec(CodecStats::from(codec)));
         }
 
         let mut lock = collector.try_lock().unwrap();
-        lock.append(&mut reports);
+        lock.merge(reports);
 
         drop(worker);
     }

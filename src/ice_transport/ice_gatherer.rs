@@ -8,12 +8,13 @@ use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::SourceStatsType::*;
-use crate::stats::StatsReportType;
+use crate::stats::{ICECandidatePairStats, StatsReportType};
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
 use ice::url::Url;
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -314,22 +315,29 @@ impl RTCIceGatherer {
         if let Some(agent) = self.get_agent().await {
             let collector = collector.clone();
             tokio::spawn(async move {
-                let mut reports = vec![];
+                let mut reports = HashMap::new();
 
                 for stats in agent.get_candidate_pairs_stats().await {
-                    reports.push(StatsReportType::from(CandidatePair(stats)));
+                    let stats: ICECandidatePairStats = stats.into();
+                    reports.insert(stats.id.clone(), StatsReportType::CandidatePair(stats));
                 }
 
                 for stats in agent.get_local_candidates_stats().await {
-                    reports.push(StatsReportType::from(LocalCandidate(stats)));
+                    reports.insert(
+                        stats.id.clone(),
+                        StatsReportType::from(LocalCandidate(stats)),
+                    );
                 }
 
                 for stats in agent.get_remote_candidates_stats().await {
-                    reports.push(StatsReportType::from(RemoteCandidate(stats)));
+                    reports.insert(
+                        stats.id.clone(),
+                        StatsReportType::from(RemoteCandidate(stats)),
+                    );
                 }
 
                 let mut lock = collector.try_lock().unwrap();
-                lock.append(&mut reports);
+                lock.merge(reports);
 
                 drop(worker);
             });

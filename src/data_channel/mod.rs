@@ -553,7 +553,10 @@ impl RTCDataChannel {
         worker: Worker,
     ) {
         let mut lock = collector.try_lock().unwrap();
-        lock.push(StatsReportType::DataChannel(DataChannelStats::from(self)));
+        lock.insert(
+            self.stats_id.clone(),
+            StatsReportType::DataChannel(DataChannelStats::from(self)),
+        );
         drop(worker);
     }
     /*TODO: func (d *DataChannel) collectStats(collector *statsReportCollector) {
