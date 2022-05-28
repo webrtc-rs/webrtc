@@ -166,6 +166,27 @@ async fn test_pair_priority() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_agent_get_stats() -> Result<()> {
+    let (conn_a, conn_b, agent_a, agent_b) = pipe(None, None).await?;
+    assert_eq!(agent_a.get_bytes_received().await, 0);
+    assert_eq!(agent_a.get_bytes_sent().await, 0);
+    assert_eq!(agent_b.get_bytes_received().await, 0);
+    assert_eq!(agent_b.get_bytes_sent().await, 0);
+
+    let _na = conn_a.send(&[0u8; 10]).await?;
+    let mut buf = vec![0u8; 10];
+    let _nb = conn_b.recv(&mut buf).await?;
+
+    assert_eq!(agent_a.get_bytes_received().await, 0);
+    assert_eq!(agent_a.get_bytes_sent().await, 10);
+
+    assert_eq!(agent_b.get_bytes_received().await, 10);
+    assert_eq!(agent_b.get_bytes_sent().await, 0);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_on_selected_candidate_pair_change() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
     let (callback_called_tx, mut callback_called_rx) = mpsc::channel::<()>(1);

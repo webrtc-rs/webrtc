@@ -227,6 +227,14 @@ impl Agent {
         Ok(agent)
     }
 
+    pub async fn get_bytes_received(&self) -> usize {
+        self.internal.agent_conn.bytes_received()
+    }
+
+    pub async fn get_bytes_sent(&self) -> usize {
+        self.internal.agent_conn.bytes_sent()
+    }
+
     /// Sets a handler that is fired when the connection state changes.
     pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
         let mut on_connection_state_change_hdlr =
