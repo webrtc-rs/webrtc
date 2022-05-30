@@ -1311,9 +1311,6 @@ impl RTCPeerConnection {
                                 let t = if let Some(t) =
                                     find_by_mid(mid_value, &mut local_transceivers).await
                                 {
-                                    if direction == RTCRtpTransceiverDirection::Inactive {
-                                        t.stop().await?;
-                                    }
                                     Some(t)
                                 } else {
                                     satisfy_type_and_direction(
@@ -1325,6 +1322,7 @@ impl RTCPeerConnection {
                                 };
 
                                 if let Some(t) = t {
+                                    let previous_direction = t.direction();
                                     if direction == RTCRtpTransceiverDirection::Recvonly {
                                         if t.direction() == RTCRtpTransceiverDirection::Sendrecv {
                                             t.set_direction(RTCRtpTransceiverDirection::Sendonly);
@@ -1333,11 +1331,22 @@ impl RTCPeerConnection {
                                         && t.direction() == RTCRtpTransceiverDirection::Sendonly
                                     {
                                         t.set_direction(RTCRtpTransceiverDirection::Sendrecv);
+                                    } else if t.direction() == RTCRtpTransceiverDirection::Inactive
+                                    {
+                                        use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection::*;
+                                        match direction {
+                                            Sendrecv => t.set_direction(Sendrecv),
+                                            Recvonly => t.set_direction(Sendonly),
+                                            Sendonly => t.set_direction(Recvonly),
+                                            _ => {}
+                                        }
                                     }
 
                                     if t.mid().await.is_empty() {
                                         t.set_mid(mid_value.to_owned()).await?;
                                     }
+
+                                    t.process_new_direection(previous_direction).await?;
                                 } else {
                                     let receiver = Arc::new(RTCRtpReceiver::new(
                                         self.internal.setting_engine.get_receive_mtu(),

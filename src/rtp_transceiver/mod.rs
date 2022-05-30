@@ -313,6 +313,38 @@ impl RTCRtpTransceiver {
         self.direction.store(d as u8, Ordering::SeqCst);
     }
 
+    pub(crate) async fn process_new_direection(
+        &self,
+        previous_direction: RTCRtpTransceiverDirection,
+    ) -> Result<()> {
+        if self.stopped.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        let current_direction = self.direction();
+
+        match (previous_direction, current_direction) {
+            (a, b) if a == b => {
+                // No change, do nothing
+            }
+            // All others imply a change
+            (_, RTCRtpTransceiverDirection::Inactive | RTCRtpTransceiverDirection::Sendonly) => {
+                if let Some(receiver) = &*self.receiver.lock().await {
+                    receiver.pause()?;
+                }
+            }
+            (_, RTCRtpTransceiverDirection::Recvonly | RTCRtpTransceiverDirection::Sendrecv) => {
+                if let Some(receiver) = &*self.receiver.lock().await {
+                    receiver.unpause()?;
+                }
+            }
+            // TODO: Senders
+            (_, _) => {}
+        }
+
+        Ok(())
+    }
+
     /// stop irreversibly stops the RTPTransceiver
     pub async fn stop(&self) -> Result<()> {
         if self.stopped.load(Ordering::SeqCst) {

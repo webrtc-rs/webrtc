@@ -6,6 +6,8 @@ use std::string::FromUtf8Error;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 
+use crate::rtp_transceiver::rtp_receiver;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug, PartialEq)]
@@ -299,6 +301,11 @@ pub enum Error {
     ErrRTPReceiverForSSRCTrackStreamNotFound,
     #[error("no trackStreams found for RID")]
     ErrRTPReceiverForRIDTrackStreamNotFound,
+    #[error("invalid RTP Receiver transition from {from} to {to}")]
+    ErrRTPReceiverStateChangeInvalid {
+        from: rtp_receiver::State,
+        to: rtp_receiver::State,
+    },
     #[error("Track must not be nil")]
     ErrRTPSenderTrackNil,
     #[error("RTPSender must not be nil")]
