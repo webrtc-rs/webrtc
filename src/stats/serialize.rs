@@ -1,4 +1,9 @@
 pub mod instant_to_epoch_ms {
+    // Serializes a `tokio::time::Instant` to an approximation of epoch time in the form
+    // of an `f64` where the integer portion is seconds and the decimal portion is milliseconds.
+    //
+    // Note that an `Instant` is not connected to real world time, so this conversion is
+    // approximate.
     use serde::{Serialize, Serializer};
     use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::time::Instant;
