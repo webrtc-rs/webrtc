@@ -15,7 +15,6 @@ use stats_collector::StatsCollector;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::time::Instant;
 
 mod serialize;
@@ -108,11 +107,8 @@ pub struct StatsReport {
     pub(crate) reports: HashMap<String, StatsReportType>,
 }
 
-impl From<Arc<Mutex<StatsCollector>>> for StatsReport {
-    fn from(collector: Arc<Mutex<StatsCollector>>) -> Self {
-        let lock = Arc::try_unwrap(collector).unwrap();
-        let collector = lock.into_inner();
-
+impl From<StatsCollector> for StatsReport {
+    fn from(collector: StatsCollector) -> Self {
         StatsReport {
             reports: collector.reports,
         }

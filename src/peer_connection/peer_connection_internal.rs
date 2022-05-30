@@ -1328,7 +1328,7 @@ impl PeerConnectionInternal {
         false
     }
 
-    pub(super) async fn get_stats(&self, stats_id: String) -> Arc<Mutex<StatsCollector>> {
+    pub(super) async fn get_stats(&self, stats_id: String) -> StatsCollector {
         let collector = Arc::new(Mutex::new(StatsCollector::new()));
         let wg = WaitGroup::new();
 
@@ -1342,7 +1342,7 @@ impl PeerConnectionInternal {
         );
 
         wg.wait().await;
-        collector
+        Arc::try_unwrap(collector).unwrap().into_inner()
     }
 }
 
