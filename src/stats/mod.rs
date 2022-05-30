@@ -139,7 +139,7 @@ pub struct ICECandidatePairStats {
     #[serde(with = "serialize::instant_to_epoch_ms")]
     first_request_timestamp: Instant,
     #[serde(with = "serialize::instant_to_epoch_ms")]
-    last_packet_received_timstamp: Instant,
+    last_packet_received_timestamp: Instant,
     #[serde(with = "serialize::instant_to_epoch_ms")]
     last_packet_sent_timestamp: Instant,
     #[serde(with = "serialize::instant_to_epoch_ms")]
@@ -175,7 +175,7 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
             current_round_trip_time: stats.current_round_trip_time,
             first_request_timestamp: stats.first_request_timestamp,
             id: format!("{}-{}", stats.local_candidate_id, stats.remote_candidate_id),
-            last_packet_received_timstamp: stats.last_packet_received_timestamp,
+            last_packet_received_timestamp: stats.last_packet_received_timestamp,
             last_packet_sent_timestamp: stats.last_packet_sent_timestamp,
             last_request_timestamp: stats.last_request_timestamp,
             local_candidate_id: stats.local_candidate_id,
