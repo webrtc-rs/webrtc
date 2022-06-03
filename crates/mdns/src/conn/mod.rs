@@ -240,12 +240,6 @@ impl DnsConn {
         }
     }
 
-    async fn get_interface_addr_for_ip(addr: impl ToSocketAddrs) -> std::io::Result<SocketAddr> {
-        let socket = UdpSocket::bind("0.0.0.0:0").await?;
-        socket.connect(addr).await?;
-        socket.local_addr()
-    }
-
     async fn start(
         mut closed_rx: mpsc::Receiver<()>,
         close_server: Arc<atomic::AtomicBool>,
@@ -290,17 +284,7 @@ impl DnsConn {
                 continue;
             }
 
-            let interface_addr = Self::get_interface_addr_for_ip(src).await?;
-            run(
-                &mut p,
-                &socket,
-                &interface_addr,
-                &local_names,
-                src,
-                dst_addr,
-                &queries,
-            )
-            .await
+            run(&mut p, &socket, &local_names, src, dst_addr, &queries).await
         }
     }
 }
@@ -308,7 +292,6 @@ impl DnsConn {
 async fn run(
     p: &mut Parser<'_>,
     socket: &Arc<UdpSocket>,
-    interface_addr: &SocketAddr,
     local_names: &[String],
     src: SocketAddr,
     dst_addr: SocketAddr,
@@ -330,6 +313,18 @@ async fn run(
 
         for local_name in local_names {
             if *local_name == q.name.data {
+                let interface_addr = match get_interface_addr_for_ip(src).await {
+                    Ok(e) => e,
+                    Err(e) => {
+                        log::warn!(
+                            "Failed to get local interface to communicate with {}: {:?}",
+                            &src,
+                            e
+                        );
+                        continue;
+                    }
+                };
+
                 log::trace!(
                     "Found local name: {} to send answer, IP {}, interface addr {}",
                     local_name,
@@ -379,7 +374,7 @@ async fn run(
 
 async fn send_answer(
     socket: &Arc<UdpSocket>,
-    interface_addr: &SocketAddr,
+    interface_addr: SocketAddr,
     name: &str,
     dst: IpAddr,
     dst_addr: SocketAddr,
@@ -419,4 +414,10 @@ async fn send_answer(
     log::trace!("Sent answer to IP {}", dst);
 
     Ok(())
+}
+
+async fn get_interface_addr_for_ip(addr: impl ToSocketAddrs) -> std::io::Result<SocketAddr> {
+    let socket = UdpSocket::bind("0.0.0.0:0").await?;
+    socket.connect(addr).await?;
+    socket.local_addr()
 }
