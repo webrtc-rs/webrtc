@@ -478,7 +478,7 @@ impl Stream {
 }
 
 /// Default capacity of the temporary read buffer used by [`PollStream`].
-const DEFAULT_READ_BUF_SIZE: usize = 4096;
+const DEFAULT_READ_BUF_SIZE: usize = 8192;
 
 /// State of the read `Future` in [`PollStream`].
 enum ReadFut {
@@ -575,7 +575,7 @@ impl PollStream<'_> {
         reassembly_queue.get_num_bytes()
     }
 
-    /// Set the capacity of the temporary read buffer (default: 4096).
+    /// Set the capacity of the temporary read buffer (default: 8192).
     pub fn set_read_buf_capacity(&mut self, capacity: usize) {
         self.read_buf_cap = capacity
     }
@@ -745,6 +745,7 @@ impl fmt::Debug for PollStream<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PollStream")
             .field("stream", &self.stream)
+            .field("read_buf_cap", &self.read_buf_cap)
             .finish()
     }
 }
