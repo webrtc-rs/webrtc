@@ -509,17 +509,17 @@ impl ReadFut {
 ///
 /// Both `poll_read` and `poll_write` calls allocate temporary buffers, which results in an
 /// additional overhead.
-pub struct PollStream<'a> {
+pub struct PollStream {
     stream: Arc<Stream>,
 
     read_fut: ReadFut,
-    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + 'a>>>,
-    shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>>,
+    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send>>>,
+    shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send>>>,
 
     read_buf_cap: usize,
 }
 
-impl PollStream<'_> {
+impl PollStream {
     /// Constructs a new `PollStream`.
     ///
     /// # Examples
@@ -542,11 +542,13 @@ impl PollStream<'_> {
     }
 
     /// Get back the inner stream.
+    #[must_use]
     pub fn into_inner(self) -> Arc<Stream> {
         self.stream
     }
 
     /// Obtain a clone of the inner stream.
+    #[must_use]
     pub fn clone_inner(&self) -> Arc<Stream> {
         self.stream.clone()
     }
@@ -581,7 +583,7 @@ impl PollStream<'_> {
     }
 }
 
-impl AsyncRead for PollStream<'_> {
+impl AsyncRead for PollStream {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -652,7 +654,7 @@ impl AsyncRead for PollStream<'_> {
     }
 }
 
-impl AsyncWrite for PollStream<'_> {
+impl AsyncWrite for PollStream {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -735,13 +737,13 @@ impl AsyncWrite for PollStream<'_> {
     }
 }
 
-impl<'a> Clone for PollStream<'a> {
-    fn clone(&self) -> PollStream<'a> {
+impl Clone for PollStream {
+    fn clone(&self) -> PollStream {
         PollStream::new(self.clone_inner())
     }
 }
 
-impl fmt::Debug for PollStream<'_> {
+impl fmt::Debug for PollStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PollStream")
             .field("stream", &self.stream)
@@ -750,7 +752,7 @@ impl fmt::Debug for PollStream<'_> {
     }
 }
 
-impl AsRef<Stream> for PollStream<'_> {
+impl AsRef<Stream> for PollStream {
     fn as_ref(&self) -> &Stream {
         &*self.stream
     }
