@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::ErrorKind, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, io::ErrorKind, net::SocketAddr, sync::Arc, sync::Weak};
 
 use util::{sync::RwLock, Conn, Error};
 
@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use tokio::sync::{watch, Mutex};
 
 mod udp_mux_conn;
-use udp_mux_conn::{UDPMuxConn, UDPMuxConnParams};
+pub use udp_mux_conn::{UDPMuxConn, UDPMuxConnParams, UDPMuxWriter};
 
 #[cfg(test)]
 mod udp_mux_test;
@@ -103,14 +103,6 @@ impl UDPMuxDefault {
         self.closed_watch_tx.lock().await.is_none()
     }
 
-    async fn send_to(&self, buf: &[u8], target: &SocketAddr) -> Result<usize, Error> {
-        self.params
-            .conn
-            .send_to(buf, *target)
-            .await
-            .map_err(Into::into)
-    }
-
     /// Create a muxed connection for a given ufrag.
     async fn create_muxed_conn(self: &Arc<Self>, ufrag: &str) -> Result<UDPMuxConn, Error> {
         let local_addr = self.params.conn.local_addr().await?;
@@ -118,33 +110,10 @@ impl UDPMuxDefault {
         let params = UDPMuxConnParams {
             local_addr,
             key: ufrag.into(),
-            udp_mux: Arc::clone(self),
+            udp_mux: Arc::downgrade(self) as Weak<dyn UDPMuxWriter + Send + Sync>,
         };
 
         Ok(UDPMuxConn::new(params))
-    }
-
-    async fn register_conn_for_address(&self, conn: &UDPMuxConn, addr: SocketAddr) {
-        if self.is_closed().await {
-            return;
-        }
-
-        let key = conn.key();
-        {
-            let mut addresses = self.address_map.write();
-
-            addresses
-                .entry(addr)
-                .and_modify(|e| {
-                    if e.key() != key {
-                        e.remove_address(&addr);
-                        *e = conn.clone()
-                    }
-                })
-                .or_insert_with(|| conn.clone());
-        }
-
-        log::debug!("Registered {} for {}", addr, key);
     }
 
     async fn conn_from_stun_message(&self, buffer: &[u8], addr: &SocketAddr) -> Option<UDPMuxConn> {
@@ -331,5 +300,39 @@ impl UDPMux for UDPMuxDefault {
                 address_map.remove(&address);
             }
         }
+    }
+}
+
+#[async_trait]
+impl UDPMuxWriter for UDPMuxDefault {
+    async fn register_conn_for_address(&self, conn: &UDPMuxConn, addr: SocketAddr) {
+        if self.is_closed().await {
+            return;
+        }
+
+        let key = conn.key();
+        {
+            let mut addresses = self.address_map.write();
+
+            addresses
+                .entry(addr)
+                .and_modify(|e| {
+                    if e.key() != key {
+                        e.remove_address(&addr);
+                        *e = conn.clone()
+                    }
+                })
+                .or_insert_with(|| conn.clone());
+        }
+
+        log::debug!("Registered {} for {}", addr, key);
+    }
+
+    async fn send_to(&self, buf: &[u8], target: &SocketAddr) -> Result<usize, Error> {
+        self.params
+            .conn
+            .send_to(buf, *target)
+            .await
+            .map_err(Into::into)
     }
 }
