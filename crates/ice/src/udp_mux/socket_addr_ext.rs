@@ -25,7 +25,7 @@ pub(super) const MAX_ADDR_SIZE: usize = IPV6_ADDRESS_SIZE;
 
 impl SocketAddrExt for SocketAddr {
     fn encode(&self, buffer: &mut [u8]) -> Result<usize, Error> {
-        use std::net::SocketAddr::*;
+        use std::net::SocketAddr::{V4, V6};
 
         if buffer.len() < MAX_ADDR_SIZE {
             return Err(Error::ErrBufferShort);
@@ -62,7 +62,7 @@ impl SocketAddrExt for SocketAddr {
     }
 
     fn decode(buffer: &[u8]) -> Result<SocketAddr, Error> {
-        use std::net::*;
+        use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 
         match buffer[0] {
             IPV4_MARKER => {
@@ -121,7 +121,7 @@ impl SocketAddrExt for SocketAddr {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::net::*;
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 
     #[test]
     fn test_ipv4() {

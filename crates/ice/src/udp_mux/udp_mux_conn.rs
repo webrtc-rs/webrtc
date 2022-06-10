@@ -237,7 +237,7 @@ impl UDPMuxConnInner {
     pub(super) fn get_addresses(&self) -> Vec<SocketAddr> {
         let addresses = self.addresses.lock();
 
-        addresses.iter().cloned().collect()
+        addresses.iter().copied().collect()
     }
 
     pub(super) fn add_address(self: &Arc<Self>, addr: SocketAddr) {

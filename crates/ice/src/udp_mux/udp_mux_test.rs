@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::error::Result;
-use stun::message::*;
+use stun::message::{Message, BINDING_REQUEST};
 
 use tokio::net::UdpSocket;
 use tokio::time::{sleep, timeout};
@@ -20,7 +20,7 @@ enum Network {
 
 impl Network {
     /// Bind the UDP socket for the "remote".
-    async fn bind(&self) -> io::Result<UdpSocket> {
+    async fn bind(self) -> io::Result<UdpSocket> {
         match self {
             Network::Ipv4 => UdpSocket::bind("0.0.0.0:0").await,
             Network::Ipv6 => UdpSocket::bind("[::]:0").await,
@@ -28,7 +28,7 @@ impl Network {
     }
 
     /// Connnect ip from the "remote".
-    fn connect_ip(&self, port: u16) -> String {
+    fn connect_ip(self, port: u16) -> String {
         match self {
             Network::Ipv4 => format!("127.0.0.1:{}", port),
             Network::Ipv6 => format!("[::1]:{}", port),
@@ -114,13 +114,13 @@ async fn test_udp_mux() -> Result<()> {
         // Timeout error
         match timeout_result {
             Err(timeout_err) => {
-                panic!("Mux test timedout: {:?}", timeout_err)
+                panic!("Mux test timedout: {:?}", timeout_err);
             }
 
             // Join error
             Ok(join_result) => match join_result {
                 Err(err) => {
-                    panic!("Mux test failed with join error: {:?}", err)
+                    panic!("Mux test failed with join error: {:?}", err);
                 }
                 // Actual error
                 Ok(mux_result) => {

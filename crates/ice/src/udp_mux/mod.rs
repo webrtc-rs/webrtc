@@ -238,7 +238,7 @@ impl UDPMux for UDPMuxDefault {
             };
 
             // NOTE: We don't wait for these closure to complete
-            for (_, conn) in old_conns.into_iter() {
+            for (_, conn) in old_conns {
                 conn.close();
             }
 
@@ -319,7 +319,7 @@ impl UDPMuxWriter for UDPMuxDefault {
                 .and_modify(|e| {
                     if e.key() != key {
                         e.remove_address(&addr);
-                        *e = conn.clone()
+                        *e = conn.clone();
                     }
                 })
                 .or_insert_with(|| conn.clone());
