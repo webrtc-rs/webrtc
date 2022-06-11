@@ -1,4 +1,4 @@
-pub mod instant_to_epoch_ms {
+pub mod instant_to_epoch_seconds {
     // Serializes a `tokio::time::Instant` to an approximation of epoch time in the form
     // of an `f64` where the integer portion is seconds and the decimal portion is milliseconds.
     // For instance, `Monday, May 30, 2022 10:45:26.456 PM UTC` converts to `1653950726.456`.

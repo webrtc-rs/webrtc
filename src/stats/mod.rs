@@ -132,17 +132,17 @@ pub struct ICECandidatePairStats {
     bytes_received: u64,
     bytes_sent: u64,
     circuit_breaker_trigger_count: u32,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     consent_expired_timestamp: Instant,
     consent_requests_sent: u64,
     current_round_trip_time: f64,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     first_request_timestamp: Instant,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     last_packet_received_timestamp: Instant,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     last_packet_sent_timestamp: Instant,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     last_request_timestamp: Instant,
     local_candidate_id: String,
     nominated: bool,
@@ -157,7 +157,7 @@ pub struct ICECandidatePairStats {
     state: CandidatePairState,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     timestamp: Instant,
     total_round_trip_time: f64,
 }
@@ -208,7 +208,7 @@ pub struct ICECandidateStats {
     relay_protocol: String,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     timestamp: Instant,
     url: String,
 }
@@ -238,7 +238,7 @@ pub struct ICETransportStats {
     pub(crate) bytes_sent: usize,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     timestamp: Instant,
 }
 
@@ -263,7 +263,7 @@ pub struct CertificateStats {
     // issuer_certificate_id: String,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     timestamp: Instant,
 }
 
@@ -291,7 +291,7 @@ pub struct CodecStats {
     sdp_fmtp_line: String,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     timestamp: Instant,
 }
 
@@ -323,7 +323,7 @@ pub struct DataChannelStats {
     state: RTCDataChannelState,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     timestamp: Instant,
 }
 
@@ -370,7 +370,7 @@ pub struct PeerConnectionStats {
     id: String,
     #[serde(rename = "type")]
     stats_type: RTCStatsType,
-    #[serde(with = "serialize::instant_to_epoch_ms")]
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
     timestamp: Instant,
 }
 
