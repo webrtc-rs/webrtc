@@ -294,8 +294,11 @@ impl AssociationInternal {
     fn unregister_stream(&mut self, stream_identifier: u16) {
         let s = self.streams.remove(&stream_identifier);
         if let Some(s) = s {
-            s.closed.store(true, Ordering::SeqCst);
-            s.read_notifier.notify_waiters();
+            // NOTE: shutdown is not used here because it resets the stream.
+            if !s.read_shutdown.swap(true, Ordering::SeqCst) {
+                s.read_notifier.notify_waiters();
+            }
+            s.write_shutdown.store(true, Ordering::SeqCst);
         }
     }
 

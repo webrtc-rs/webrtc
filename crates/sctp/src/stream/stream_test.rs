@@ -73,6 +73,80 @@ async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_stream() -> std::result::Result<(), io::Error> {
+    let s = Stream::new(
+        "test_poll_stream".to_owned(),
+        0,
+        4096,
+        Arc::new(AtomicU32::new(4096)),
+        Arc::new(AtomicU8::new(AssociationState::Established as u8)),
+        None,
+        Arc::new(PendingQueue::new()),
+    );
+
+    // getters
+    assert_eq!(0, s.stream_identifier());
+    assert_eq!(0, s.buffered_amount());
+    assert_eq!(0, s.buffered_amount_low_threshold());
+    assert_eq!(0, s.get_num_bytes_in_reassembly_queue().await);
+
+    // setters
+    s.set_default_payload_type(PayloadProtocolIdentifier::Binary);
+    s.set_reliability_params(true, ReliabilityType::Reliable, 0);
+
+    // write
+    let n = s.write(&Bytes::from("Hello ")).await?;
+    assert_eq!(6, n);
+    assert_eq!(6, s.buffered_amount());
+    let n = s
+        .write_sctp(&Bytes::from("world"), PayloadProtocolIdentifier::Binary)
+        .await?;
+    assert_eq!(5, n);
+    assert_eq!(11, s.buffered_amount());
+
+    // async read
+    //  1. pretend that we've received a chunk
+    s.handle_data(ChunkPayloadData {
+        unordered: true,
+        beginning_fragment: true,
+        ending_fragment: true,
+        user_data: Bytes::from_static(&[0, 1, 2, 3, 4]),
+        payload_type: PayloadProtocolIdentifier::Binary,
+        ..Default::default()
+    })
+    .await;
+    //  2. read it
+    let mut buf = [0; 5];
+    s.read(&mut buf).await?;
+    assert_eq!(buf, [0, 1, 2, 3, 4]);
+
+    // shutdown write
+    s.shutdown(Shutdown::Write).await?;
+    // write must fail
+    assert!(s.write(&Bytes::from("error")).await.is_err());
+    // read should continue working
+    s.handle_data(ChunkPayloadData {
+        unordered: true,
+        beginning_fragment: true,
+        ending_fragment: true,
+        user_data: Bytes::from_static(&[5, 6, 7, 8, 9]),
+        payload_type: PayloadProtocolIdentifier::Binary,
+        ..Default::default()
+    })
+    .await;
+    let mut buf = [0; 5];
+    s.read(&mut buf).await?;
+    assert_eq!(buf, [5, 6, 7, 8, 9]);
+
+    // shutdown read
+    s.shutdown(Shutdown::Read).await?;
+    // read must return 0
+    assert_eq!(Ok(0), s.read(&mut buf).await);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     let s = Arc::new(Stream::new(
         "test_poll_stream".to_owned(),
@@ -114,10 +188,23 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     poll_stream.read(&mut buf).await?;
     assert_eq!(buf, [0, 1, 2, 3, 4]);
 
-    // shutdown
+    // shutdown write
     poll_stream.shutdown().await?;
-    assert_eq!(true, sc.closed.load(Ordering::Relaxed));
-    assert!(poll_stream.read(&mut buf).await.is_err());
+    // write must fail
+    assert!(poll_stream.write(&[1, 2, 3]).await.is_err());
+    // read should continue working
+    sc.handle_data(ChunkPayloadData {
+        unordered: true,
+        beginning_fragment: true,
+        ending_fragment: true,
+        user_data: Bytes::from_static(&[5, 6, 7, 8, 9]),
+        payload_type: PayloadProtocolIdentifier::Binary,
+        ..Default::default()
+    })
+    .await;
+    let mut buf = [0; 5];
+    poll_stream.read(&mut buf).await?;
+    assert_eq!(buf, [5, 6, 7, 8, 9]);
 
     // misc.
     let clone = poll_stream.clone();

@@ -5,6 +5,7 @@ use webrtc_sctp::Error;
 
 use bytes::Bytes;
 use clap::{App, AppSettings, Arg};
+use std::net::Shutdown;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::signal;
@@ -108,7 +109,7 @@ async fn main() -> Result<(), Error> {
     signal::ctrl_c().await.expect("failed to listen for event");
     println!("Closing stream and association...");
 
-    stream.close().await?;
+    stream.shutdown(Shutdown::Both).await?;
     a.close().await?;
 
     let _ = done_rx.recv().await;
