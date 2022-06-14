@@ -125,6 +125,7 @@ impl Serialize for StatsReport {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ICECandidatePairStats {
     pub(crate) id: String,
     available_incoming_bitrate: f64,
@@ -197,6 +198,7 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ICECandidateStats {
     candidate_type: CandidateType,
     deleted: bool,
@@ -232,6 +234,7 @@ impl ICECandidateStats {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ICETransportStats {
     pub(crate) id: String,
     pub(crate) bytes_received: usize,
@@ -255,6 +258,7 @@ impl ICETransportStats {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CertificateStats {
     // base64_certificate: String,
     fingerprint: String,
@@ -282,6 +286,7 @@ impl CertificateStats {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CodecStats {
     channels: u16,
     clock_rate: u32,
@@ -311,6 +316,7 @@ impl From<&RTCRtpCodecParameters> for CodecStats {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DataChannelStats {
     bytes_received: usize,
     bytes_sent: usize,
@@ -362,6 +368,7 @@ impl From<&RTCDataChannel> for DataChannelStats {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PeerConnectionStats {
     data_channels_accepted: u32,
     data_channels_closed: u32,
