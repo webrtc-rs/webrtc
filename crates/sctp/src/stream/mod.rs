@@ -173,8 +173,8 @@ impl Stream {
 
     /// Reads a packet of len(p) bytes, dropping the Payload Protocol Identifier.
     ///
-    /// Returns EOF when the stream is reset or an error if `p` is too short.
-    /// Returns `0` if the reading half of this stream is shutdown.
+    /// Returns `Error::ErrShortBuffer` if `p` is too short.
+    /// Returns `0` if the reading half of this stream is shutdown or it (the stream) was reset.
     pub async fn read(&self, p: &mut [u8]) -> Result<usize> {
         let (n, _) = self.read_sctp(p).await?;
         Ok(n)
@@ -182,8 +182,8 @@ impl Stream {
 
     /// Reads a packet of len(p) bytes and returns the associated Payload Protocol Identifier.
     ///
-    /// Returns EOF when the stream is reset or an error if `p` is too short.
-    /// Returns `(0, PayloadProtocolIdentifier::Unknown)` if the reading half of this stream is shutdown.
+    /// Returns `Error::ErrShortBuffer` if `p` is too short.
+    /// Returns `(0, PayloadProtocolIdentifier::Unknown)` if the reading half of this stream is shutdown or it (the stream) was reset.
     pub async fn read_sctp(&self, p: &mut [u8]) -> Result<(usize, PayloadProtocolIdentifier)> {
         loop {
             if self.read_shutdown.load(Ordering::SeqCst) {
