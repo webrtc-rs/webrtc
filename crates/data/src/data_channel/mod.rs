@@ -9,12 +9,18 @@ use crate::{
 use sctp::{
     association::Association, chunk::chunk_payload_data::PayloadProtocolIdentifier, stream::*,
 };
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use util::marshal::*;
 
 use bytes::{Buf, Bytes};
 use derive_builder::Builder;
+use std::fmt;
+use std::io;
+use std::net::Shutdown;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 const RECEIVE_MTU: usize = 8192;
 
@@ -146,7 +152,7 @@ impl DataChannel {
                 Err(err) => {
                     // When the peer sees that an incoming stream was
                     // reset, it also resets its corresponding outgoing stream.
-                    self.stream.close().await?;
+                    self.stream.shutdown(Shutdown::Both).await?;
 
                     return Err(err.into());
                 }
@@ -289,7 +295,7 @@ impl DataChannel {
         // a corresponding notification to the application layer that the reset
         // has been performed.  Streams are available for reuse after a reset
         // has been performed.
-        Ok(self.stream.close().await?)
+        Ok(self.stream.shutdown(Shutdown::Both).await?)
     }
 
     /// BufferedAmount returns the number of bytes of data currently queued to be
@@ -331,5 +337,121 @@ impl DataChannel {
             reliability_type,
             self.config.reliability_parameter,
         );
+    }
+}
+
+/// A wrapper around around [`DataChannel`], which implements [`AsyncRead`] and
+/// [`AsyncWrite`].
+///
+/// Both `poll_read` and `poll_write` calls allocate temporary buffers, which results in an
+/// additional overhead.
+pub struct PollDataChannel {
+    data_channel: Arc<DataChannel>,
+    poll_stream: PollStream,
+}
+
+impl PollDataChannel {
+    /// Constructs a new `PollDataChannel`.
+    pub fn new(data_channel: Arc<DataChannel>) -> Self {
+        let stream = data_channel.stream.clone();
+        Self {
+            data_channel,
+            poll_stream: PollStream::new(stream),
+        }
+    }
+
+    /// Get back the inner data_channel.
+    pub fn into_inner(self) -> Arc<DataChannel> {
+        self.data_channel
+    }
+
+    /// Obtain a clone of the inner data_channel.
+    pub fn clone_inner(&self) -> Arc<DataChannel> {
+        self.data_channel.clone()
+    }
+
+    /// MessagesSent returns the number of messages sent
+    pub fn messages_sent(&self) -> usize {
+        self.data_channel.messages_sent.load(Ordering::SeqCst)
+    }
+
+    /// MessagesReceived returns the number of messages received
+    pub fn messages_received(&self) -> usize {
+        self.data_channel.messages_received.load(Ordering::SeqCst)
+    }
+
+    /// BytesSent returns the number of bytes sent
+    pub fn bytes_sent(&self) -> usize {
+        self.data_channel.bytes_sent.load(Ordering::SeqCst)
+    }
+
+    /// BytesReceived returns the number of bytes received
+    pub fn bytes_received(&self) -> usize {
+        self.data_channel.bytes_received.load(Ordering::SeqCst)
+    }
+
+    /// StreamIdentifier returns the Stream identifier associated to the stream.
+    pub fn stream_identifier(&self) -> u16 {
+        self.poll_stream.stream_identifier()
+    }
+
+    /// BufferedAmount returns the number of bytes of data currently queued to be
+    /// sent over this stream.
+    pub fn buffered_amount(&self) -> usize {
+        self.poll_stream.buffered_amount()
+    }
+
+    /// BufferedAmountLowThreshold returns the number of bytes of buffered outgoing
+    /// data that is considered "low." Defaults to 0.
+    pub fn buffered_amount_low_threshold(&self) -> usize {
+        self.poll_stream.buffered_amount_low_threshold()
+    }
+}
+
+impl AsyncRead for PollDataChannel {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.poll_stream).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for PollDataChannel {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.poll_stream).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.poll_stream).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.poll_stream).poll_shutdown(cx)
+    }
+}
+
+impl Clone for PollDataChannel {
+    fn clone(&self) -> PollDataChannel {
+        PollDataChannel::new(self.clone_inner())
+    }
+}
+
+impl fmt::Debug for PollDataChannel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PollDataChannel")
+            .field("data_channel", &self.data_channel)
+            .finish()
+    }
+}
+
+impl AsRef<DataChannel> for PollDataChannel {
+    fn as_ref(&self) -> &DataChannel {
+        &*self.data_channel
     }
 }

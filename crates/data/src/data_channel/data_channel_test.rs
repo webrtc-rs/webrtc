@@ -5,6 +5,8 @@ use super::*;
 use util::conn::conn_bridge::*;
 use util::conn::*;
 
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::Duration;
 
@@ -406,8 +408,6 @@ async fn test_data_channel_channel_type_partial_reliable_timed_unordered() -> Re
     pr_ordered_unordered_test(ChannelType::PartialReliableTimedUnordered, false).await
 }
 
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_data_channel_buffered_amount() -> Result<()> {
     let sbuf = vec![0u8; 1000];
@@ -482,6 +482,9 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     let dc1_cloned = Arc::clone(&dc1);
     tokio::spawn(async move {
         while let Ok(n) = dc1_cloned.read(&mut rbuf[..]).await {
+            if n == 0 {
+                break;
+            }
             assert_eq!(n, rbuf.len(), "received length should match");
         }
     });
@@ -509,8 +512,6 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     Ok(())
 }
 
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_stats() -> Result<()> {
     let sbuf = vec![0u8; 1000];
@@ -594,6 +595,60 @@ async fn test_stats() -> Result<()> {
 
     assert_eq!(dc1.bytes_received(), bytes_read);
     assert_eq!(dc1.messages_received(), 4);
+
+    dc0.close().await?;
+    dc1.close().await?;
+    bridge_process_at_least_one(&br).await;
+
+    close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_poll_data_channel() -> Result<()> {
+    let mut sbuf = vec![0u8; 1000];
+    let mut rbuf = vec![0u8; 1500];
+
+    let (br, ca, cb) = Bridge::new(0, None, None);
+
+    let (a0, a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
+
+    let cfg = Config {
+        channel_type: ChannelType::Reliable,
+        reliability_parameter: 123,
+        label: "data".to_string(),
+        ..Default::default()
+    };
+
+    let dc0 = Arc::new(DataChannel::dial(&a0, 100, cfg.clone()).await?);
+    bridge_process_at_least_one(&br).await;
+
+    let dc1 = Arc::new(DataChannel::accept(&a1, Config::default()).await?);
+    bridge_process_at_least_one(&br).await;
+
+    let mut poll_dc0 = PollDataChannel::new(dc0.clone());
+    let mut poll_dc1 = PollDataChannel::new(dc1.clone());
+
+    sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
+    let n = poll_dc0
+        .write(&Bytes::from(sbuf.clone()))
+        .await
+        .map_err(|e| Error::new(e.to_string()))?;
+    assert_eq!(sbuf.len(), n, "data length should match");
+
+    bridge_process_at_least_one(&br).await;
+
+    let n = poll_dc1
+        .read(&mut rbuf[..])
+        .await
+        .map_err(|e| Error::new(e.to_string()))?;
+    assert_eq!(sbuf.len(), n, "data length should match");
+    assert_eq!(
+        1,
+        u32::from_be_bytes([rbuf[0], rbuf[1], rbuf[2], rbuf[3]]),
+        "data should match"
+    );
 
     dc0.close().await?;
     dc1.close().await?;
