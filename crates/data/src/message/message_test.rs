@@ -50,7 +50,7 @@ fn test_message_unmarshal_invalid_message_type() {
     if let Err(err) = actual {
         assert_eq!(expected, err);
     } else {
-        assert!(false, "expected err, but got ok");
+        panic!("expected err, but got ok");
     }
 }
 

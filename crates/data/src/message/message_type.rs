@@ -86,23 +86,18 @@ mod tests {
     fn test_message_type_unmarshal_invalid() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x01]);
         match MessageType::unmarshal(&mut bytes) {
-            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Ok(_) => panic!("expected Error, but got Ok"),
             Err(err) => {
-                if let Some(err) = err.downcast_ref::<Error>() {
-                    match err {
-                        &Error::InvalidMessageType(0x01) => return Ok(()),
-                        _ => {}
-                    };
+                if let Some(&Error::InvalidMessageType(0x01)) = err.downcast_ref::<Error>() {
+                    return Ok(());
                 }
-                assert!(
-                    false,
+                panic!(
                     "unexpected err {:?}, want {:?}",
                     err,
                     Error::InvalidMessageType(0x01)
                 );
             }
         }
-        Ok(())
     }
 
     #[test]

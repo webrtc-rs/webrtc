@@ -246,50 +246,40 @@ mod tests {
     fn test_channel_type_unmarshal_invalid() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x11]);
         match ChannelType::unmarshal(&mut bytes) {
-            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Ok(_) => panic!("expected Error, but got Ok"),
             Err(err) => {
-                if let Some(err) = err.downcast_ref::<Error>() {
-                    match err {
-                        &Error::InvalidChannelType(0x11) => return Ok(()),
-                        _ => {}
-                    };
+                if let Some(&Error::InvalidChannelType(0x11)) = err.downcast_ref::<Error>() {
+                    return Ok(());
                 }
-                assert!(
-                    false,
+                panic!(
                     "unexpected err {:?}, want {:?}",
                     err,
                     Error::InvalidMessageType(0x01)
                 );
             }
         }
-        Ok(())
     }
 
     #[test]
     fn test_channel_type_unmarshal_unexpected_end_of_buffer() -> Result<()> {
         let mut bytes = Bytes::from_static(&[]);
         match ChannelType::unmarshal(&mut bytes) {
-            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Ok(_) => panic!("expected Error, but got Ok"),
             Err(err) => {
-                if let Some(err) = err.downcast_ref::<Error>() {
-                    match err {
-                        &Error::UnexpectedEndOfBuffer {
-                            expected: 1,
-                            actual: 0,
-                        } => return Ok(()),
-                        _ => {}
-                    };
+                if let Some(&Error::UnexpectedEndOfBuffer {
+                    expected: 1,
+                    actual: 0,
+                }) = err.downcast_ref::<Error>()
+                {
+                    return Ok(());
                 }
-                assert!(
-                    false,
+                panic!(
                     "unexpected err {:?}, want {:?}",
                     err,
                     Error::InvalidMessageType(0x01)
                 );
             }
         }
-
-        Ok(())
     }
 
     #[test]
@@ -348,49 +338,40 @@ mod tests {
             0x00, 0x08, // protocol length
         ]);
         match DataChannelOpen::unmarshal(&mut bytes) {
-            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Ok(_) => panic!("expected Error, but got Ok"),
             Err(err) => {
-                if let Some(err) = err.downcast_ref::<Error>() {
-                    match err {
-                        &Error::InvalidChannelType(0x11) => return Ok(()),
-                        _ => {}
-                    };
+                if let Some(&Error::InvalidChannelType(0x11)) = err.downcast_ref::<Error>() {
+                    return Ok(());
                 }
-                assert!(
-                    false,
+                panic!(
                     "unexpected err {:?}, want {:?}",
                     err,
                     Error::InvalidMessageType(0x01)
                 );
             }
         }
-        Ok(())
     }
 
     #[test]
     fn test_channel_open_unmarshal_unexpected_end_of_buffer() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x00; 5]);
         match DataChannelOpen::unmarshal(&mut bytes) {
-            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Ok(_) => panic!("expected Error, but got Ok"),
             Err(err) => {
-                if let Some(err) = err.downcast_ref::<Error>() {
-                    match err {
-                        &Error::UnexpectedEndOfBuffer {
-                            expected: 11,
-                            actual: 5,
-                        } => return Ok(()),
-                        _ => {}
-                    };
+                if let Some(&Error::UnexpectedEndOfBuffer {
+                    expected: 11,
+                    actual: 5,
+                }) = err.downcast_ref::<Error>()
+                {
+                    return Ok(());
                 }
-                assert!(
-                    false,
+                panic!(
                     "unexpected err {:?}, want {:?}",
                     err,
                     Error::InvalidMessageType(0x01)
                 );
             }
         }
-        Ok(())
     }
 
     #[test]
@@ -403,26 +384,22 @@ mod tests {
             0x00, 0x08, // Protocol length
         ]);
         match DataChannelOpen::unmarshal(&mut bytes) {
-            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Ok(_) => panic!("expected Error, but got Ok"),
             Err(err) => {
-                if let Some(err) = err.downcast_ref::<Error>() {
-                    match err {
-                        &Error::UnexpectedEndOfBuffer {
-                            expected: 13,
-                            actual: 0,
-                        } => return Ok(()),
-                        _ => {}
-                    };
+                if let Some(&Error::UnexpectedEndOfBuffer {
+                    expected: 13,
+                    actual: 0,
+                }) = err.downcast_ref::<Error>()
+                {
+                    return Ok(());
                 }
-                assert!(
-                    false,
+                panic!(
                     "unexpected err {:?}, want {:?}",
                     err,
                     Error::InvalidMessageType(0x01)
                 );
             }
         }
-        Ok(())
     }
 
     #[test]
