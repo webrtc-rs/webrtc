@@ -627,8 +627,8 @@ async fn test_poll_data_channel() -> Result<()> {
     let dc1 = Arc::new(DataChannel::accept(&a1, Config::default()).await?);
     bridge_process_at_least_one(&br).await;
 
-    let mut poll_dc0 = PollDataChannel::new(dc0.clone());
-    let mut poll_dc1 = PollDataChannel::new(dc1.clone());
+    let mut poll_dc0 = PollDataChannel::new(dc0);
+    let mut poll_dc1 = PollDataChannel::new(dc1);
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = poll_dc0
@@ -650,8 +650,8 @@ async fn test_poll_data_channel() -> Result<()> {
         "data should match"
     );
 
-    dc0.close().await?;
-    dc1.close().await?;
+    poll_dc0.into_inner().close().await?;
+    poll_dc1.into_inner().close().await?;
     bridge_process_at_least_one(&br).await;
 
     close_association_pair(&br, a0, a1).await;

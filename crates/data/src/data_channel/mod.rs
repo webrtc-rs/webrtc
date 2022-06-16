@@ -406,6 +406,11 @@ impl PollDataChannel {
     pub fn buffered_amount_low_threshold(&self) -> usize {
         self.poll_stream.buffered_amount_low_threshold()
     }
+
+    /// Set the capacity of the temporary read buffer (default: 8192).
+    pub fn set_read_buf_capacity(&mut self, capacity: usize) {
+        self.poll_stream.set_read_buf_capacity(capacity)
+    }
 }
 
 impl AsyncRead for PollDataChannel {
@@ -433,6 +438,14 @@ impl AsyncWrite for PollDataChannel {
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Pin::new(&mut self.poll_stream).poll_shutdown(cx)
+    }
+
+    fn poll_write_vectored(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.poll_stream).poll_write_vectored(cx, bufs)
     }
 }
 
