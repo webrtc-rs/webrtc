@@ -313,7 +313,7 @@ impl RTCRtpTransceiver {
         self.direction.store(d as u8, Ordering::SeqCst);
     }
 
-    pub(crate) async fn process_new_direection(
+    pub(crate) async fn process_new_direction(
         &self,
         previous_direction: RTCRtpTransceiverDirection,
     ) -> Result<()> {

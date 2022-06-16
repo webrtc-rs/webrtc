@@ -1346,7 +1346,7 @@ impl RTCPeerConnection {
                                         t.set_mid(mid_value.to_owned()).await?;
                                     }
 
-                                    t.process_new_direection(previous_direction).await?;
+                                    t.process_new_direction(previous_direction).await?;
                                 } else {
                                     let receiver = Arc::new(RTCRtpReceiver::new(
                                         self.internal.setting_engine.get_receive_mtu(),
