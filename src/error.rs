@@ -6,6 +6,8 @@ use std::string::FromUtf8Error;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 
+use crate::peer_connection::sdp::sdp_type::RTCSdpType;
+use crate::peer_connection::signaling_state::RTCSignalingState;
 use crate::rtp_transceiver::rtp_receiver;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -336,8 +338,17 @@ pub enum Error {
     ErrSettingEngineSetAnsweringDTLSRole,
     #[error("can't rollback from stable state")]
     ErrSignalingStateCannotRollback,
-    #[error("invalid proposed signaling state transition")]
-    ErrSignalingStateProposedTransitionInvalid,
+    #[error(
+        "invalid proposed signaling state transition from {} applying {} {}", 
+        from, 
+        if *is_local { "local" } else {  "remote" }, 
+        applying
+    )]
+    ErrSignalingStateProposedTransitionInvalid {
+        from: RTCSignalingState,
+        applying: RTCSdpType,
+        is_local: bool,
+    },
     #[error("cannot convert to StatsICECandidatePairStateSucceeded invalid ice candidate state")]
     ErrStatsICECandidateStateInvalid,
     #[error("ICETransport can only be called in ICETransportStateNew")]

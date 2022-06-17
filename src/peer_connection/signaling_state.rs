@@ -204,11 +204,19 @@ pub(crate) fn check_next_signaling_state(
             }
         }
         _ => {
-            return Err(Error::ErrSignalingStateProposedTransitionInvalid);
+            return Err(Error::ErrSignalingStateProposedTransitionInvalid {
+                from: cur,
+                applying: sdp_type,
+                is_local: op == StateChangeOp::SetLocal,
+            });
         }
     };
 
-    Err(Error::ErrSignalingStateProposedTransitionInvalid)
+    Err(Error::ErrSignalingStateProposedTransitionInvalid {
+        from: cur,
+        is_local: op == StateChangeOp::SetLocal,
+        applying: sdp_type,
+    })
 }
 
 #[cfg(test)]
@@ -328,7 +336,11 @@ mod test {
                 RTCSignalingState::HaveRemotePranswer,
                 StateChangeOp::SetRemote,
                 RTCSdpType::Pranswer,
-                Some(Error::ErrSignalingStateProposedTransitionInvalid),
+                Some(Error::ErrSignalingStateProposedTransitionInvalid {
+                    from: RTCSignalingState::Stable,
+                    is_local: false,
+                    applying: RTCSdpType::Pranswer,
+                }),
             ),
             (
                 "(invalid) stable->SetRemote(rollback)->have-local-offer",
