@@ -604,8 +604,13 @@ impl AsyncWrite for PollDataChannel {
             Some(fut) => fut,
             None => {
                 let data_channel = self.data_channel.clone();
-                self.shutdown_fut
-                    .get_or_insert(Box::pin(async move { data_channel.close().await }))
+                self.shutdown_fut.get_or_insert(Box::pin(async move {
+                    data_channel
+                        .stream
+                        .shutdown(Shutdown::Write)
+                        .await
+                        .map_err(|e| Error::Sctp(e))
+                }))
             }
         };
 
