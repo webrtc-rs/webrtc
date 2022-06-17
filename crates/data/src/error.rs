@@ -1,3 +1,4 @@
+use std::io;
 use std::string::FromUtf8Error;
 use thiserror::Error;
 
@@ -34,6 +35,20 @@ pub enum Error {
 impl From<Error> for util::Error {
     fn from(e: Error) -> Self {
         util::Error::from_std(e)
+    }
+}
+
+impl From<Error> for io::Error {
+    fn from(error: Error) -> Self {
+        match error {
+            e @ Error::Sctp(sctp::Error::ErrEof) => {
+                io::Error::new(io::ErrorKind::UnexpectedEof, e.to_string())
+            }
+            e @ Error::ErrStreamClosed => {
+                io::Error::new(io::ErrorKind::ConnectionAborted, e.to_string())
+            }
+            e => io::Error::new(io::ErrorKind::Other, e.to_string()),
+        }
     }
 }
 
