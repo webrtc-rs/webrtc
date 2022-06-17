@@ -408,6 +408,8 @@ async fn test_data_channel_channel_type_partial_reliable_timed_unordered() -> Re
     pr_ordered_unordered_test(ChannelType::PartialReliableTimedUnordered, false).await
 }
 
+//TODO: remove this conditional test
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_data_channel_buffered_amount() -> Result<()> {
     let sbuf = vec![0u8; 1000];
@@ -512,6 +514,8 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     Ok(())
 }
 
+//TODO: remove this conditional test
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_stats() -> Result<()> {
     let sbuf = vec![0u8; 1000];
