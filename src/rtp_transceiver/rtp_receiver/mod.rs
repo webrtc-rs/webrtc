@@ -137,7 +137,7 @@ pub struct RTPReceiverInternal {
 impl RTPReceiverInternal {
     /// read reads incoming RTCP for this RTPReceiver
     async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
-        let mut state_watch_rx = self.state_rx.clone();
+        let mut state_watch_rx = self.state_tx.subscribe();
         // Ensure we are running or paused. When paused we still receive RTCP even if RTP traffic
         // isn't flowing.
         State::wait_for(&mut state_watch_rx, &[State::Running, State::Paused]).await?;
@@ -168,7 +168,7 @@ impl RTPReceiverInternal {
 
     /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
     async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
-        let mut state_watch_rx = self.state_rx.clone();
+        let mut state_watch_rx = self.state_tx.subscribe();
 
         // Ensure we are running or paused. When paused we still recevie RTCP even if RTP traffic
         // isn't flowing.
@@ -231,7 +231,7 @@ impl RTPReceiverInternal {
     }
 
     pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: usize) -> Result<(usize, Attributes)> {
-        let mut state_watch_rx = self.state_rx.clone();
+        let mut state_watch_rx = self.state_tx.subscribe();
 
         // Ensure we are running.
         State::wait_for(&mut state_watch_rx, &[State::Running]).await?;
@@ -330,7 +330,7 @@ impl RTPReceiverInternal {
 
     /// Get the current state and a receiver for the next state change.
     pub(crate) fn current_state(&self) -> State {
-        *self.state_tx.borrow()
+        *self.state_rx.borrow()
     }
 
     pub(crate) fn start(&self) -> Result<()> {
