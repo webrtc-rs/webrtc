@@ -94,7 +94,7 @@ impl RTPWriter for SenderStream {
     /// write a rtp packet
     async fn write(&self, pkt: &rtp::packet::Packet, a: &Attributes) -> Result<usize> {
         let now = if let Some(f) = &self.now {
-            f().await
+            f()
         } else {
             SystemTime::now()
         };

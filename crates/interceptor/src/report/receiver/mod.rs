@@ -33,7 +33,7 @@ impl RTCPReader for ReceiverReportRtcpReader {
         let pkts = rtcp::packet::unmarshal(&mut b)?;
 
         let now = if let Some(f) = &self.internal.now {
-            f().await
+            f()
         } else {
             SystemTime::now()
         };
@@ -48,7 +48,7 @@ impl RTCPReader for ReceiverReportRtcpReader {
                     m.get(&sr.ssrc).cloned()
                 };
                 if let Some(stream) = stream {
-                    stream.process_sender_report(now, sr).await;
+                    stream.process_sender_report(now, sr);
                 }
             }
         }
@@ -96,9 +96,11 @@ impl ReceiverReport {
         loop {
             tokio::select! {
                 _ = ticker.tick() =>{
+                    // TODO(cancel safety): This branch isn't cancel safe
+
                     let now = if let Some(f) = &internal.now {
-                        f().await
-                    }else{
+                        f()
+                    } else {
                         SystemTime::now()
                     };
                     let streams:Vec<Arc<ReceiverStream>> = {
@@ -106,7 +108,7 @@ impl ReceiverReport {
                         m.values().cloned().collect()
                     };
                     for stream in streams {
-                        let pkt = stream.generate_report(now).await;
+                        let pkt = stream.generate_report(now);
 
                         let a = Attributes::new();
                         if let Err(err) = rtcp_writer.write(&[Box::new(pkt)], &a).await{
