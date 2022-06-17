@@ -10,13 +10,10 @@ use std::pin::Pin;
 #[tokio::test]
 async fn test_sender_interceptor_before_any_packet() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = SenderReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -34,7 +31,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
     .await;
 
     let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
-    mt.set_now(dt.into()).await;
+    mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
@@ -45,7 +42,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
         assert_eq!(
             &rtcp::sender_report::SenderReport {
                 ssrc: 123456,
-                ntp_time: unix2ntp(mt.now().await),
+                ntp_time: unix2ntp(mt.now()),
                 rtp_time: 4294967295, // pion: 2269117121,
                 packet_count: 0,
                 octet_count: 0,
@@ -65,13 +62,10 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
 #[tokio::test]
 async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = SenderReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -101,7 +95,7 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
     }
 
     let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
-    mt.set_now(dt.into()).await;
+    mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
@@ -112,7 +106,7 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
         assert_eq!(
             &rtcp::sender_report::SenderReport {
                 ssrc: 123456,
-                ntp_time: unix2ntp(mt.now().await),
+                ntp_time: unix2ntp(mt.now()),
                 rtp_time: 4294967295, // pion: 2269117121,
                 packet_count: 10,
                 octet_count: 20,
@@ -132,13 +126,10 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
 #[tokio::test]
 async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = SenderReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -206,7 +197,7 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
         .await?;
 
     let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
-    mt.set_now(dt.into()).await;
+    mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
@@ -217,7 +208,7 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
         assert_eq!(
             &rtcp::sender_report::SenderReport {
                 ssrc: 123456,
-                ntp_time: unix2ntp(mt.now().await),
+                ntp_time: unix2ntp(mt.now()),
                 rtp_time: 4294967295, // pion: 2269117121,
                 packet_count: 5,
                 octet_count: 10,

@@ -10,13 +10,10 @@ use std::pin::Pin;
 #[tokio::test]
 async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -65,13 +62,10 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
 #[tokio::test]
 async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -133,13 +127,10 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
     let rtp_time: SystemTime = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0).into();
 
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -218,12 +209,10 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
 async fn test_receiver_interceptor_overflow() -> Result<()> {
     let mt = Arc::new(MockTime::default());
     let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -290,13 +279,10 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
 #[tokio::test]
 async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -395,13 +381,10 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
     let rtp_time: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into();
 
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -509,13 +492,10 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
 #[tokio::test]
 async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -582,13 +562,10 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
 #[tokio::test]
 async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -647,13 +624,10 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
 #[tokio::test]
 async fn test_receiver_interceptor_jitter() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -670,8 +644,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
     )
     .await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into())
-        .await;
+    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into());
     stream
         .receive_rtp(rtp::packet::Packet {
             header: rtp::header::Header {
@@ -684,8 +657,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         .await;
     stream.read_rtp().await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into())
-        .await;
+    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into());
     stream
         .receive_rtp(rtp::packet::Packet {
             header: rtp::header::Header {
@@ -727,13 +699,10 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
 #[tokio::test]
 async fn test_receiver_interceptor_delay() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
-    let time_gen = Arc::new(
-        move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            let mt3 = Arc::clone(&mt2);
-            Box::pin(async move { mt3.now().await })
-        },
-    );
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
         .with_interval(Duration::from_millis(50))
@@ -750,8 +719,7 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
     )
     .await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into())
-        .await;
+    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into());
     stream
         .receive_rtcp(vec![Box::new(rtcp::sender_report::SenderReport {
             ssrc: 123456,
@@ -764,8 +732,7 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
         .await;
     stream.read_rtcp().await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into())
-        .await;
+    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into());
 
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);

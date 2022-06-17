@@ -2,7 +2,7 @@ use super::*;
 use crate::{Attributes, RTPReader};
 
 use async_trait::async_trait;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use util::Unmarshal;
 
@@ -184,25 +184,22 @@ impl ReceiverStream {
         }
     }
 
-    pub(crate) async fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet) {
-        let mut internal = self.internal.lock().await;
+    pub(crate) fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet) {
+        let mut internal = self.internal.lock().unwrap();
         internal.process_rtp(now, pkt);
     }
 
-    pub(crate) async fn process_sender_report(
+    pub(crate) fn process_sender_report(
         &self,
         now: SystemTime,
         sr: &rtcp::sender_report::SenderReport,
     ) {
-        let mut internal = self.internal.lock().await;
+        let mut internal = self.internal.lock().unwrap();
         internal.process_sender_report(now, sr);
     }
 
-    pub(crate) async fn generate_report(
-        &self,
-        now: SystemTime,
-    ) -> rtcp::receiver_report::ReceiverReport {
-        let mut internal = self.internal.lock().await;
+    pub(crate) fn generate_report(&self, now: SystemTime) -> rtcp::receiver_report::ReceiverReport {
+        let mut internal = self.internal.lock().unwrap();
         internal.generate_report(now)
     }
 }
@@ -217,11 +214,11 @@ impl RTPReader for ReceiverStream {
         let mut b = &buf[..n];
         let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
         let now = if let Some(f) = &self.now {
-            f().await
+            f()
         } else {
             SystemTime::now()
         };
-        self.process_rtp(now, &pkt).await;
+        self.process_rtp(now, &pkt);
 
         Ok((n, attr))
     }

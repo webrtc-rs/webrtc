@@ -58,9 +58,10 @@ impl SenderReport {
         loop {
             tokio::select! {
                 _ = ticker.tick() =>{
+                    // TODO(cancel safety): This branch isn't cancel safe
                     let now = if let Some(f) = &internal.now {
-                        f().await
-                    }else{
+                        f()
+                    } else {
                         SystemTime::now()
                     };
                     let streams:Vec<Arc<SenderStream>> = {

@@ -132,7 +132,7 @@ impl Generator {
                         let mut nacks = vec![];
                         let streams = internal.streams.lock().await;
                         for (ssrc, stream) in streams.iter() {
-                            let missing = stream.missing_seq_numbers(internal.skip_last_n).await;
+                            let missing = stream.missing_seq_numbers(internal.skip_last_n);
                             if missing.is_empty(){
                                 continue;
                             }

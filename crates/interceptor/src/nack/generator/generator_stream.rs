@@ -1,4 +1,7 @@
+use std::sync::Mutex;
+
 use super::*;
+
 use crate::nack::UINT16SIZE_HALF;
 
 use util::Unmarshal;
@@ -135,13 +138,13 @@ impl GeneratorStream {
         }
     }
 
-    pub(super) async fn missing_seq_numbers(&self, skip_last_n: u16) -> Vec<u16> {
-        let internal = self.internal.lock().await;
+    pub(super) fn missing_seq_numbers(&self, skip_last_n: u16) -> Vec<u16> {
+        let internal = self.internal.lock().unwrap();
         internal.missing_seq_numbers(skip_last_n)
     }
 
-    pub(super) async fn add(&self, seq: u16) {
-        let mut internal = self.internal.lock().await;
+    pub(super) fn add(&self, seq: u16) {
+        let mut internal = self.internal.lock().unwrap();
         internal.add(seq);
     }
 }
@@ -155,7 +158,7 @@ impl RTPReader for GeneratorStream {
 
         let mut b = &buf[..n];
         let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
-        self.add(pkt.header.sequence_number).await;
+        self.add(pkt.header.sequence_number);
 
         Ok((n, attr))
     }
