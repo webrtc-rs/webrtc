@@ -138,7 +138,7 @@ impl RTPReceiverInternal {
     /// read reads incoming RTCP for this RTPReceiver
     async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
         let mut state_watch_rx = self.state_rx.clone();
-        // Ensure we are running or paused. When paused we still recevie RTCP even if RTP traffic
+        // Ensure we are running or paused. When paused we still receive RTCP even if RTP traffic
         // isn't flowing.
         State::wait_for(&mut state_watch_rx, &[State::Running, State::Paused]).await?;
 
@@ -341,7 +341,7 @@ impl RTPReceiverInternal {
         State::transition(State::Paused, &self.state_tx)
     }
 
-    pub(crate) fn unpause(&self) -> Result<()> {
+    pub(crate) fn resume(&self) -> Result<()> {
         State::transition(State::Running, &self.state_tx)
     }
 
@@ -770,7 +770,7 @@ impl RTCRtpReceiver {
         self.internal.pause()
     }
 
-    pub(crate) fn unpause(&self) -> Result<()> {
-        self.internal.unpause()
+    pub(crate) fn resume(&self) -> Result<()> {
+        self.internal.resume()
     }
 }

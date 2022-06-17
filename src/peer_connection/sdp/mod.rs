@@ -67,7 +67,7 @@ pub(crate) fn filter_track_with_ssrc(incoming_tracks: &mut Vec<TrackDetails>, ss
 /// extract all TrackDetails from an SDP.
 pub(crate) fn track_details_from_sdp(
     s: &SessionDescription,
-    include_inactive: bool,
+    exclude_inactive: bool,
 ) -> Vec<TrackDetails> {
     let mut incoming_tracks = vec![];
 
@@ -81,7 +81,7 @@ pub(crate) fn track_details_from_sdp(
 
         // If media section is recvonly or inactive skip
         if media.attribute(ATTR_KEY_RECV_ONLY).is_some()
-            || (!include_inactive && media.attribute(ATTR_KEY_INACTIVE).is_some())
+            || (exclude_inactive && media.attribute(ATTR_KEY_INACTIVE).is_some())
         {
             continue;
         }

@@ -378,7 +378,7 @@ fn test_track_details_from_sdp() -> Result<()> {
             ..Default::default()
         };
 
-        let tracks = track_details_from_sdp(&s, false);
+        let tracks = track_details_from_sdp(&s, true);
         assert_eq!(3, tracks.len());
         if track_details_for_ssrc(&tracks, 1000).is_some() {
             assert!(
@@ -466,13 +466,13 @@ fn test_track_details_from_sdp() -> Result<()> {
         };
         assert_eq!(
             0,
-            track_details_from_sdp(&s, false).len(),
-            "inactive and recvonly tracks should be ignored when passing include_inactive: false"
+            track_details_from_sdp(&s, true).len(),
+            "inactive and recvonly tracks should be ignored when passing exclude_inactive: true"
         );
         assert_eq!(
             1,
-            track_details_from_sdp(&s, true).len(),
-            "Inactive tracks should not be ignored when passing include_inactive: true"
+            track_details_from_sdp(&s, false).len(),
+            "Inactive tracks should not be ignored when passing exclude_inactive: false"
         );
     }
 

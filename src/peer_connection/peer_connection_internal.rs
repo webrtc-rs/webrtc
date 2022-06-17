@@ -142,7 +142,7 @@ impl PeerConnectionInternal {
         sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
-            track_details_from_sdp(parsed, true)
+            track_details_from_sdp(parsed, false)
         } else {
             vec![]
         };
