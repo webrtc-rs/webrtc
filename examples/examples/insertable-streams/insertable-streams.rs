@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{App, AppSettings, Arg};
+use clap::{AppSettings, Arg, Command};
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
@@ -27,12 +27,12 @@ const CIPHER_KEY: u8 = 0xAA;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("insertable-streams")
+    let mut app = Command::new("insertable-streams")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of insertable-streams.")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandsNegateReqs)
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("FULLHELP")
                 .help("Prints more detailed help information")

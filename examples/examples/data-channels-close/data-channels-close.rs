@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{App, AppSettings, Arg};
+use clap::{AppSettings, Arg, Command};
 use std::io::Write;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
@@ -19,12 +19,12 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("data-channels-close")
+    let mut app = Command::new("data-channels-close")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of Data-Channels-Close.")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandsNegateReqs)
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("FULLHELP")
                 .help("Prints more detailed help information")

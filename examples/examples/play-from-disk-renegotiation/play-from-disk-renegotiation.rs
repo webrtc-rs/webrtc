@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{App, AppSettings, Arg};
+use clap::{AppSettings, Arg, Command};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use std::fs::File;
@@ -224,12 +224,12 @@ async fn remove_video(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("play-from-disk-renegotiation")
+    let mut app = Command::new("play-from-disk-renegotiation")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of play-from-disk-renegotiation.")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandsNegateReqs)
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("FULLHELP")
                 .help("Prints more detailed help information")

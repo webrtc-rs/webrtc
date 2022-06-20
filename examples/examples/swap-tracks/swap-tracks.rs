@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{App, AppSettings, Arg};
+use clap::{AppSettings, Arg, Command};
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -22,12 +22,12 @@ use webrtc::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("swap-tracks")
+    let mut app = Command::new("swap-tracks")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of swap-tracks.")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandsNegateReqs)
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("FULLHELP")
                 .help("Prints more detailed help information")

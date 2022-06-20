@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{App, AppSettings, Arg};
+use clap::{AppSettings, Arg, Command};
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
@@ -28,12 +28,12 @@ const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("play-from-disk-h264")
+    let mut app = Command::new("play-from-disk-h264")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of play-from-disk-h264.")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandsNegateReqs)
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("FULLHELP")
                 .help("Prints more detailed help information")

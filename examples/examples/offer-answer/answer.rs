@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{App, AppSettings, Arg};
+use clap::{AppSettings, Arg, Command};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use std::io::Write;
@@ -183,12 +183,12 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("Answer")
+    let mut app = Command::new("Answer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of WebRTC-rs Answer.")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandsNegateReqs)
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("FULLHELP")
                 .help("Prints more detailed help information")

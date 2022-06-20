@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Command, AppSettings, Arg};
+use clap::{AppSettings, Arg, Command};
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
@@ -256,10 +256,10 @@ async fn main() -> Result<()> {
             let reader = BufReader::new(file);
             // Open on oggfile in non-checksum mode.
             let (mut ogg, _) = match OggReader::new(reader, true) {
-                Ok(tup) => {  tup }
+                Ok(tup) => tup,
                 Err(err) => {
-                    println!("error while opening audio file output.ogg: {}", err );
-                    return Err(err.into())
+                    println!("error while opening audio file output.ogg: {}", err);
+                    return Err(err.into());
                 }
             };
             // Wait for connection established
