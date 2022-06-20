@@ -64,8 +64,6 @@ pub struct RTCSctpTransport {
     pub(crate) dtls_transport: Arc<RTCDtlsTransport>,
 
     // State represents the current state of the SCTP transport.
-    
-    // bugfix@Udp connection not close (reopen #174) #195
     state: AtomicU8, // RTCSctpTransportState
 
     // SCTPTransportState doesn't have an enum to distinguish between New/Connecting
@@ -147,7 +145,6 @@ impl RTCSctpTransport {
 
         let dtls_transport = self.transport();
         if let Some(net_conn) = &dtls_transport.conn().await {
-            // bugfix@Udp connection not close (reopen #174) #195
             let sctp_association = loop {
                 tokio::select! {
                     _ = self.notify_tx.notified() => {
