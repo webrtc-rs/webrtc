@@ -1323,29 +1323,18 @@ impl RTCPeerConnection {
 
                                 if let Some(t) = t {
                                     let previous_direction = t.direction();
-                                    if direction == RTCRtpTransceiverDirection::Recvonly {
-                                        if t.direction() == RTCRtpTransceiverDirection::Sendrecv {
-                                            t.set_direction(RTCRtpTransceiverDirection::Sendonly);
-                                        }
-                                    } else if direction == RTCRtpTransceiverDirection::Sendrecv
-                                        && t.direction() == RTCRtpTransceiverDirection::Sendonly
-                                    {
-                                        t.set_direction(RTCRtpTransceiverDirection::Sendrecv);
-                                    } else if t.direction() == RTCRtpTransceiverDirection::Inactive
-                                    {
-                                        use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection::*;
-                                        match direction {
-                                            Sendrecv => t.set_direction(Sendrecv),
-                                            Recvonly => t.set_direction(Sendonly),
-                                            Sendonly => t.set_direction(Recvonly),
-                                            _ => {}
-                                        }
-                                    }
+                                    // 4.7.9.2.
+                                    // Let direction be an RTCRtpTransceiverDirection value representing the
+                                    // direction from the media description, but with the send and receive directions
+                                    // reversed to represent this peer's point of view.
+                                    // If the media description is rejected, set direction to "inactive".
+                                    let new_direction = direction.reverse();
 
                                     if t.mid().await.is_empty() {
                                         t.set_mid(mid_value.to_owned()).await?;
                                     }
 
+                                    t.set_direction(new_direction);
                                     t.process_new_direction(previous_direction).await?;
                                 } else {
                                     let receiver = Arc::new(RTCRtpReceiver::new(
