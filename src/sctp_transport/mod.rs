@@ -64,7 +64,7 @@ pub struct RTCSctpTransport {
     pub(crate) dtls_transport: Arc<RTCDtlsTransport>,
 
     // State represents the current state of the SCTP transport.
-    state: AtomicU8, //SCTPTransportState,
+    state: AtomicU8, // RTCSctpTransportState
 
     // SCTPTransportState doesn't have an enum to distinguish between New/Connecting
     // so we need a dedicated field
@@ -145,15 +145,26 @@ impl RTCSctpTransport {
 
         let dtls_transport = self.transport();
         if let Some(net_conn) = &dtls_transport.conn().await {
-            let sctp_association = Arc::new(
-                sctp::association::Association::client(sctp::association::Config {
-                    net_conn: Arc::clone(net_conn) as Arc<dyn Conn + Send + Sync>,
-                    max_receive_buffer_size: 0,
-                    max_message_size: 0,
-                    name: String::new(),
-                })
-                .await?,
-            );
+            let sctp_association = loop {
+                tokio::select! {
+                    _ = self.notify_tx.notified() => {
+                        // It seems like notify_tx is only notified on Stop so perhaps this check
+                        // is redundant.
+                        // TODO: Consider renaming notify_tx to shutdown_tx.
+                        if self.state.load(Ordering::SeqCst) == RTCSctpTransportState::Closed as u8 {
+                            return Err(Error::ErrSCTPTransportDTLS);
+                        }
+                    },
+                    association = sctp::association::Association::client(sctp::association::Config {
+                        net_conn: Arc::clone(net_conn) as Arc<dyn Conn + Send + Sync>,
+                        max_receive_buffer_size: 0,
+                        max_message_size: 0,
+                        name: String::new(),
+                    }) => {
+                        break Arc::new(association?);
+                    }
+                };
+            };
 
             {
                 let mut sa = self.sctp_association.lock().await;
