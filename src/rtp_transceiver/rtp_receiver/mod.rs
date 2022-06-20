@@ -18,6 +18,7 @@ use crate::track::{TrackStream, TrackStreams};
 
 use interceptor::stream_info::RTPHeaderExtension;
 use interceptor::{Attributes, Interceptor};
+use log::trace;
 use std::fmt;
 
 use std::sync::Arc;
@@ -261,23 +262,28 @@ impl RTPReceiverInternal {
             //    "read_rtp rtp_interceptor.read enter with tid {} ssrc {}",
             //    tid, ssrc
             //);
+            let mut current_state = *state_watch_rx.borrow();
             loop {
                 tokio::select! {
                     _ = state_watch_rx.changed() => {
                         let new_state = *state_watch_rx.borrow();
 
                         match new_state {
-                            State::Paused => {
-                                return Ok((0, Default::default()));
-                            },
                             State::Closed => {
                                 return Err(Error::ErrClosedPipe);
                             },
                             _ => {},
                         }
+                        current_state = new_state;
                     }
                     result = rtp_interceptor.read(b, &a) => {
-                        return Ok(result?);
+                        let result = result?;
+
+                        if current_state == State::Paused {
+                            trace!("Dropping {} read bytes received while RTPReceiver was paused", result.0);
+                            continue;
+                        }
+                        return Ok(result);
                     }
                 }
             }
