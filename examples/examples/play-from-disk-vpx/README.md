@@ -6,7 +6,7 @@ play-from-disk-vpx demonstrates how to send vp8/vp8 video and/or audio to your b
 ```
 ffmpeg -i $INPUT_FILE -g 30 output_vp8.ivf
 ffmpeg -i $INPUT_FILE -g 30 -c libvpx-vp9 output_vp9.ivf
-ffmpeg -i $INPUT_FILE -c:a libopus -page_duration 20000 -vn output.ogg
+ffmpeg -i $INPUT_FILE -map 0:a -c:a dca -ac 2 -c:a libopus -page_duration 20000 -vn output.ogg
 ```
 
 ### Build play-from-disk-vpx

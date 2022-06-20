@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{App, AppSettings, Arg};
+use clap::{Command, AppSettings, Arg};
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
@@ -28,12 +28,12 @@ const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("play-from-disk-vpx")
+    let mut app = Command::new("play-from-disk-vpx")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of play-from-disk-vpx.")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandsNegateReqs)
+        .subcommand_negates_reqs(true)
         .arg(
             Arg::new("FULLHELP")
                 .help("Prints more detailed help information")
@@ -255,8 +255,13 @@ async fn main() -> Result<()> {
             let file = File::open(audio_file_name)?;
             let reader = BufReader::new(file);
             // Open on oggfile in non-checksum mode.
-            let (mut ogg, _) = OggReader::new(reader, true)?;
-
+            let (mut ogg, _) = match OggReader::new(reader, true) {
+                Ok(tup) => {  tup }
+                Err(err) => {
+                    println!("error while opening audio file output.ogg: {}", err );
+                    return Err(err.into())
+                }
+            };
             // Wait for connection established
             let _ = notify_audio.notified().await;
 
