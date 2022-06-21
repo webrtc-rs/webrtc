@@ -107,10 +107,15 @@ impl RTCCertificate {
         })
     }
 
-    /// new constructs a `RTCCertificate` from an existing certificate. Use this method when you
-    /// have a persistent certificate (i.e. you don't want to generate a new one for each DTLS
-    /// connection).
-    pub fn new(certificate: dtls::crypto::Certificate, pem: &str, expires: SystemTime) -> Self {
+    /// Constructs a `RTCCertificate` from an existing certificate.
+    ///
+    /// Use this method when you have a persistent certificate (i.e. you don't want to generate a
+    /// new one for each DTLS connection).
+    pub fn from_existing(
+        certificate: dtls::crypto::Certificate,
+        pem: &str,
+        expires: SystemTime,
+    ) -> Self {
         Self {
             certificate,
             stats_id: format!(
@@ -389,7 +394,7 @@ mod test {
     }
 
     #[test]
-    fn test_new() -> Result<()> {
+    fn test_from_existing() -> Result<()> {
         // NOTE `dtls_cert` key pair and `key_pair` are different, but it's fine here.
         let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let dtls_cert = dtls::crypto::Certificate::generate_self_signed(["localhost".to_owned()])?;
@@ -397,7 +402,7 @@ mod test {
         let expires = SystemTime::now();
         let pem = key_pair.serialize_pem();
 
-        let cert = RTCCertificate::new(dtls_cert, &pem, expires);
+        let cert = RTCCertificate::from_existing(dtls_cert, &pem, expires);
 
         assert_ne!("", cert.stats_id);
         assert_eq!(expires, cert.expires());
