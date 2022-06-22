@@ -772,11 +772,31 @@ impl RTCRtpReceiver {
         self.internal.current_state()
     }
 
-    pub(crate) fn pause(&self) -> Result<()> {
-        self.internal.pause()
+    pub(crate) async fn pause(&self) -> Result<()> {
+        self.internal.pause()?;
+
+        let streams = self.internal.tracks.read().await;
+
+        for stream in streams.iter() {
+            // TODO: If we introduce futures as a direct dependency this and other futures could be
+            // ran concurrently with [`join_all`](https://docs.rs/futures/0.3.21/futures/future/fn.join_all.html)
+            stream.track.fire_onmute().await;
+        }
+
+        Ok(())
     }
 
-    pub(crate) fn resume(&self) -> Result<()> {
-        self.internal.resume()
+    pub(crate) async fn resume(&self) -> Result<()> {
+        self.internal.resume()?;
+
+        let streams = self.internal.tracks.read().await;
+
+        for stream in streams.iter() {
+            // TODO: If we introduce futures as a direct dependency this and other futures could be
+            // ran concurrently with [`join_all`](https://docs.rs/futures/0.3.21/futures/future/fn.join_all.html)
+            stream.track.fire_onunmute().await;
+        }
+
+        Ok(())
     }
 }

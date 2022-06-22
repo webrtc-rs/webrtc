@@ -334,12 +334,12 @@ impl RTCRtpTransceiver {
             // All others imply a change
             (_, RTCRtpTransceiverDirection::Inactive | RTCRtpTransceiverDirection::Sendonly) => {
                 if let Some(receiver) = &*self.receiver.lock().await {
-                    receiver.pause()?;
+                    receiver.pause().await?;
                 }
             }
             (_, RTCRtpTransceiverDirection::Recvonly | RTCRtpTransceiverDirection::Sendrecv) => {
                 if let Some(receiver) = &*self.receiver.lock().await {
-                    receiver.resume()?;
+                    receiver.resume().await?;
                 }
             }
             // TODO: Senders
