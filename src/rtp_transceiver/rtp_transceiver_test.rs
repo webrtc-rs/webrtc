@@ -250,9 +250,8 @@ async fn test_rtp_transceiver_direction_change() -> Result<()> {
     answer_pc.set_remote_description(offer).await?;
 
     let answer = answer_pc.create_answer(None).await?;
-    dbg!(&answer);
     assert!(answer.sdp.contains("a=inactive"),);
-    // offer_pc.set_remote_description(answer).await?;
+    offer_pc.set_remote_description(answer).await?;
 
     close_pair_now(&offer_pc, &answer_pc).await;
 
