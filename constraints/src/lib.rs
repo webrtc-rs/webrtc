@@ -3,3 +3,5 @@
 //! [mediacapture_streams]: https://www.w3.org/TR/mediacapture-streams/
 
 pub mod property;
+
+mod macros;
