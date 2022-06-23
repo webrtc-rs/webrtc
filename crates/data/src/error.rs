@@ -60,12 +60,3 @@ impl PartialEq<util::Error> for Error {
         false
     }
 }
-
-impl PartialEq<sctp::Error> for Error {
-    fn eq(&self, other: &sctp::Error) -> bool {
-        if let Error::Sctp(e) = self {
-            return e == other;
-        }
-        false
-    }
-}
