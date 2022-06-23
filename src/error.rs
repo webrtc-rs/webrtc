@@ -340,8 +340,8 @@ pub enum Error {
     ErrSignalingStateCannotRollback,
     #[error(
         "invalid proposed signaling state transition from {} applying {} {}", 
-        from, 
-        if *is_local { "local" } else {  "remote" }, 
+        from,
+        if *is_local { "local" } else {  "remote" },
         applying
     )]
     ErrSignalingStateProposedTransitionInvalid {
