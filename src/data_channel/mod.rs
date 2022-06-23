@@ -305,7 +305,9 @@ impl RTCDataChannel {
                 _ = notify_rx.notified() => break,
                 result = data_channel.read_data_channel(&mut buffer) => {
                     match result{
-                        Ok((0, _)) => // EOF => no more reads from now on.
+                        // EOF (`data_channel` was either closed or the underlying stream got
+                        // reset by the remote) => close and run `on_close` handler.
+                        Ok((0, _)) =>
                         {
                             ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
 
