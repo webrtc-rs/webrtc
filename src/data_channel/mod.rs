@@ -305,18 +305,33 @@ impl RTCDataChannel {
                 _ = notify_rx.notified() => break,
                 result = data_channel.read_data_channel(&mut buffer) => {
                     match result{
+                        // EOF (`data_channel` was either closed or the underlying stream got
+                        // reset by the remote) => close and run `on_close` handler.
+                        Ok((0, _)) =>
+                        {
+                            ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
+
+                            let on_close_handler2 = Arc::clone(&on_close_handler);
+                            tokio::spawn(async move {
+                                let mut handler = on_close_handler2.lock().await;
+                                if let Some(f) = &mut *handler {
+                                    f().await;
+                                }
+                            });
+
+                            break;
+                        }
                         Ok((n, is_string)) => (n, is_string),
                         Err(err) => {
                             ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
-                            if err != sctp::Error::ErrStreamClosed {
-                                let on_error_handler2 = Arc::clone(&on_error_handler);
-                                tokio::spawn(async move {
-                                    let mut handler = on_error_handler2.lock().await;
-                                    if let Some(f) = &mut *handler {
-                                        f(err.into()).await;
-                                    }
-                                });
-                            }
+
+                            let on_error_handler2 = Arc::clone(&on_error_handler);
+                            tokio::spawn(async move {
+                                let mut handler = on_error_handler2.lock().await;
+                                if let Some(f) = &mut *handler {
+                                    f(err.into()).await;
+                                }
+                            });
 
                             let on_close_handler2 = Arc::clone(&on_close_handler);
                             tokio::spawn(async move {
