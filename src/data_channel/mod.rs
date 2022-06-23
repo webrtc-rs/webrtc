@@ -305,7 +305,7 @@ impl RTCDataChannel {
                 _ = notify_rx.notified() => break,
                 result = data_channel.read_data_channel(&mut buffer) => {
                     match result{
-                        Ok((0, _)) => 
+                        Ok((0, _)) =>
                         {
                             ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
 
