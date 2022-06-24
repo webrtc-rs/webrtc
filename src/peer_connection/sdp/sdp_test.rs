@@ -378,7 +378,7 @@ fn test_track_details_from_sdp() -> Result<()> {
             ..Default::default()
         };
 
-        let tracks = track_details_from_sdp(&s);
+        let tracks = track_details_from_sdp(&s, true);
         assert_eq!(3, tracks.len());
         if track_details_for_ssrc(&tracks, 1000).is_some() {
             assert!(
@@ -416,7 +416,6 @@ fn test_track_details_from_sdp() -> Result<()> {
         }
     }
 
-    //"inactive and recvonly tracks ignored"
     {
         let s = SessionDescription {
             media_descriptions: vec![
@@ -426,6 +425,10 @@ fn test_track_details_from_sdp() -> Result<()> {
                         ..Default::default()
                     },
                     attributes: vec![
+                        Attribute {
+                            key: "mid".to_owned(),
+                            value: Some("1".to_owned()),
+                        },
                         Attribute {
                             key: "inactive".to_owned(),
                             value: None,
@@ -444,6 +447,10 @@ fn test_track_details_from_sdp() -> Result<()> {
                     },
                     attributes: vec![
                         Attribute {
+                            key: "mid".to_owned(),
+                            value: Some("1".to_owned()),
+                        },
+                        Attribute {
                             key: "recvonly".to_owned(),
                             value: None,
                         },
@@ -457,7 +464,16 @@ fn test_track_details_from_sdp() -> Result<()> {
             ],
             ..Default::default()
         };
-        assert_eq!(0, track_details_from_sdp(&s).len());
+        assert_eq!(
+            0,
+            track_details_from_sdp(&s, true).len(),
+            "inactive and recvonly tracks should be ignored when passing exclude_inactive: true"
+        );
+        assert_eq!(
+            1,
+            track_details_from_sdp(&s, false).len(),
+            "Inactive tracks should not be ignored when passing exclude_inactive: false"
+        );
     }
 
     Ok(())

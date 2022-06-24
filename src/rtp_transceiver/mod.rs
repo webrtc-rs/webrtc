@@ -313,6 +313,42 @@ impl RTCRtpTransceiver {
         self.direction.store(d as u8, Ordering::SeqCst);
     }
 
+    /// Perform any subsequent actions after altering the transceiver's direction.
+    ///
+    /// After changing the transceiver's direction this method should be called to perform any
+    /// side-effects that results from the new direction, such as pausing/resuming the RTP receiver.
+    pub(crate) async fn process_new_direction(
+        &self,
+        previous_direction: RTCRtpTransceiverDirection,
+    ) -> Result<()> {
+        if self.stopped.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        let current_direction = self.direction();
+
+        match (previous_direction, current_direction) {
+            (a, b) if a == b => {
+                // No change, do nothing
+            }
+            // All others imply a change
+            (_, RTCRtpTransceiverDirection::Inactive | RTCRtpTransceiverDirection::Sendonly) => {
+                if let Some(receiver) = &*self.receiver.lock().await {
+                    receiver.pause().await?;
+                }
+            }
+            (_, RTCRtpTransceiverDirection::Recvonly | RTCRtpTransceiverDirection::Sendrecv) => {
+                if let Some(receiver) = &*self.receiver.lock().await {
+                    receiver.resume().await?;
+                }
+            }
+            // TODO: Senders
+            (_, _) => {}
+        }
+
+        Ok(())
+    }
+
     /// stop irreversibly stops the RTPTransceiver
     pub async fn stop(&self) -> Result<()> {
         if self.stopped.load(Ordering::SeqCst) {

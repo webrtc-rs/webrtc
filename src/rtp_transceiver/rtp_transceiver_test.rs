@@ -2,7 +2,8 @@ use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::APIBuilder;
 use crate::peer_connection::configuration::RTCConfiguration;
-use crate::peer_connection::peer_connection_test::close_pair_now;
+use crate::peer_connection::peer_connection_test::{close_pair_now, create_vnet_pair};
+use crate::peer_connection::signaling_state::RTCSignalingState;
 
 #[tokio::test]
 async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
@@ -212,6 +213,45 @@ async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()>
 
     // test_codec is ignored since offerer doesn't support
     assert!(!answer.sdp.contains("test_codec"));
+
+    close_pair_now(&offer_pc, &answer_pc).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rtp_transceiver_direction_change() -> Result<()> {
+    let (offer_pc, answer_pc, _) = create_vnet_pair().await?;
+
+    let offer_transceiver = offer_pc
+        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .await?;
+
+    let answer_transceiver = answer_pc
+        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .await?;
+
+    let offer = offer_pc.create_offer(None).await?;
+
+    offer_pc.set_local_description(offer.clone()).await?;
+    answer_pc.set_remote_description(offer).await?;
+
+    let answer = answer_pc.create_answer(None).await?;
+    assert!(answer.sdp.contains("a=sendrecv"),);
+    answer_pc.set_local_description(answer.clone()).await?;
+    offer_pc.set_remote_description(answer).await?;
+
+    offer_transceiver.set_direction(RTCRtpTransceiverDirection::Inactive);
+
+    let offer = offer_pc.create_offer(None).await?;
+    assert!(offer.sdp.contains("a=inactive"),);
+
+    offer_pc.set_local_description(offer.clone()).await?;
+    answer_pc.set_remote_description(offer).await?;
+
+    let answer = answer_pc.create_answer(None).await?;
+    assert!(answer.sdp.contains("a=inactive"),);
+    offer_pc.set_remote_description(answer).await?;
 
     close_pair_now(&offer_pc, &answer_pc).await;
 

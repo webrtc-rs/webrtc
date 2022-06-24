@@ -142,7 +142,7 @@ impl PeerConnectionInternal {
         sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
-            track_details_from_sdp(parsed)
+            track_details_from_sdp(parsed, false)
         } else {
             vec![]
         };
@@ -189,6 +189,7 @@ impl PeerConnectionInternal {
                         continue;
                     }
 
+                    log::info!("Stopping receiver {:?}", receiver);
                     if let Err(err) = receiver.stop().await {
                         log::warn!("Failed to stop RtpReceiver: {}", err);
                         continue;
@@ -726,7 +727,15 @@ impl PeerConnectionInternal {
         } else {
             {
                 for t in &local_transceivers {
+                    if t.stopped.load(Ordering::SeqCst) {
+                        // An "m=" section is generated for each
+                        // RtpTransceiver that has been added to the PeerConnection, excluding
+                        // any stopped RtpTransceivers;
+                        continue;
+                    }
+
                     if let Some(sender) = t.sender().await {
+                        // TODO: This is dubious because of rollbacks.
                         sender.set_negotiated();
                     }
                     media_sections.push(MediaSection {

@@ -65,7 +65,10 @@ pub(crate) fn filter_track_with_ssrc(incoming_tracks: &mut Vec<TrackDetails>, ss
 }
 
 /// extract all TrackDetails from an SDP.
-pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails> {
+pub(crate) fn track_details_from_sdp(
+    s: &SessionDescription,
+    exclude_inactive: bool,
+) -> Vec<TrackDetails> {
     let mut incoming_tracks = vec![];
 
     for media in &s.media_descriptions {
@@ -78,7 +81,7 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
 
         // If media section is recvonly or inactive skip
         if media.attribute(ATTR_KEY_RECV_ONLY).is_some()
-            || media.attribute(ATTR_KEY_INACTIVE).is_some()
+            || (exclude_inactive && media.attribute(ATTR_KEY_INACTIVE).is_some())
         {
             continue;
         }
@@ -134,11 +137,15 @@ pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails
                 // figure this out automatically when an ontrack event is emitted on RTCPeerConnection.
                 ATTR_KEY_MSID => {
                     if let Some(value) = &attr.value {
-                        let split: Vec<&str> = value.split(' ').collect();
-                        if split.len() == 2 {
-                            stream_id = split[0];
-                            track_id = split[1];
-                        }
+                        let mut split = value.split(' ');
+
+                        match (split.next(), split.next(), split.next()) {
+                            (Some(sid), Some(tid), None) => {
+                                stream_id = sid;
+                                track_id = tid;
+                            }
+                            _ => {}
+                        };
                     }
                 }
 
