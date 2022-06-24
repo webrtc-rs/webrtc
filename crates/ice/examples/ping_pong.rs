@@ -112,7 +112,7 @@ async fn main() -> Result<(), Error> {
             Arg::with_name("use-mux")
                 .takes_value(false)
                 .long("use-mux")
-                .short("m")
+                .short('m')
                 .help("Use a muxed UDP connection over a single listening port"),
         )
         .arg(
