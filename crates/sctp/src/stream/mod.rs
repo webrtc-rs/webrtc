@@ -375,10 +375,10 @@ impl Stream {
             self.write_shutdown.store(true, Ordering::SeqCst);
         }
 
-        if how == Shutdown::Read || how == Shutdown::Both {
-            if !self.read_shutdown.swap(true, Ordering::SeqCst) {
-                self.read_notifier.notify_waiters();
-            }
+        if (how == Shutdown::Read || how == Shutdown::Both)
+            && !self.read_shutdown.swap(true, Ordering::SeqCst)
+        {
+            self.read_notifier.notify_waiters();
         }
 
         if how == Shutdown::Both
