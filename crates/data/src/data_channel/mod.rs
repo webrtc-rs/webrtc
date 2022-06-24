@@ -545,7 +545,7 @@ impl AsyncWrite for PollDataChannel {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        if buf.len() == 0 {
+        if buf.is_empty() {
             return Poll::Ready(Ok(0));
         }
 
@@ -618,7 +618,7 @@ impl AsyncWrite for PollDataChannel {
                         .stream
                         .shutdown(Shutdown::Write)
                         .await
-                        .map_err(|e| Error::Sctp(e))
+                        .map_err(Error::Sctp)
                 }))
             }
         };

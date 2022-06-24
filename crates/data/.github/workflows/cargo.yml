@@ -10,24 +10,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build and test
+  check_and_test:
+    name: Check and test
     strategy:
       matrix:
         os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+        toolchain:
+          - 1.56.1 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
+          - stable
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
+      - uses: actions/checkout@v3
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          profile: minimal
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
 
   rustfmt_and_clippy:
-    name: Check rustfmt style && run clippy
+    name: Check rustfmt style and run clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -35,7 +50,7 @@ jobs:
           components: clippy, rustfmt
           override: true
       - name: Cache cargo registry
-        uses: actions/cache@v1
+        uses: actions/cache@v3
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -43,8 +58,28 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
+          args: -- -D warnings
       - name: Check formating
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
+
+  minimal_versions:
+    name: Compile and test with minimal versions
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            override: true
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: taiki-e/install-action@cargo-minimal-versions
+      - run: cargo minimal-versions check --workspace --all-features --ignore-private -v
+      - run: cargo minimal-versions build --workspace --all-features --ignore-private -v
+      - run: cargo minimal-versions test --workspace --all-features -v
