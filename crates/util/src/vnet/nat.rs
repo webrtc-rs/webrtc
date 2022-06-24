@@ -22,7 +22,7 @@ const DEFAULT_NAT_MAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
 //  - Port Mapping behavior
 //  - Filtering behavior
 // See: https://tools.ietf.org/html/rfc4787
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EndpointDependencyType {
     // EndpointIndependent means the behavior is independent of the endpoint's address or port
     EndpointIndependent,
@@ -39,7 +39,7 @@ impl Default for EndpointDependencyType {
 }
 
 // NATMode defines basic behavior of the NAT
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NatMode {
     // NATModeNormal means the NAT behaves as a standard NAPT (RFC 2663).
     Normal,

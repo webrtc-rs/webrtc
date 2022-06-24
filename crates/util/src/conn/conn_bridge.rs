@@ -84,8 +84,8 @@ pub struct Bridge {
 impl Bridge {
     pub fn new(
         loss_chance: u8,
-        filter_cb0: Option<Box<dyn Fn(&Bytes) -> bool + Send + Sync>>,
-        filter_cb1: Option<Box<dyn Fn(&Bytes) -> bool + Send + Sync>>,
+        filter_cb0: Option<FilterCbFn>,
+        filter_cb1: Option<FilterCbFn>,
     ) -> (Arc<Bridge>, impl Conn, impl Conn) {
         let (wr_tx0, rd_rx0) = mpsc::channel(1024);
         let (wr_tx1, rd_rx1) = mpsc::channel(1024);
