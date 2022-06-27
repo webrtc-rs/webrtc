@@ -15,7 +15,7 @@ use stun::message::*;
 // that relayed transport address for the allocation.
 //
 // RFC 5766 Section 14.9
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ReservationToken(pub Vec<u8>);
 
 const RESERVATION_TOKEN_SIZE: usize = 8; // 8 bytes

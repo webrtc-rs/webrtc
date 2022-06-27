@@ -765,7 +765,7 @@ impl Request {
                 MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE),
                 vec![Box::new(message_integrity)],
             )?;
-            return build_and_send(&self.conn, self.src_addr, msg).await;
+            build_and_send(&self.conn, self.src_addr, msg).await
         } else {
             Err(Error::ErrNoAllocationFound)
         }

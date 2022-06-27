@@ -72,7 +72,7 @@ async fn test_client_with_stun_send_binding_request() -> Result<()> {
 
 #[tokio::test]
 async fn test_client_with_stun_send_binding_request_to_parallel() -> Result<()> {
-    //env_logger::init();
+    env_logger::init();
 
     let c1 = create_listening_test_client(0).await?;
     let c2 = c1.clone();

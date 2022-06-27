@@ -102,10 +102,7 @@ async fn main() -> Result<(), Error> {
 
     // The relayConn's local address is actually the transport
     // address assigned on the TURN server.
-    println!(
-        "relayed-address={}",
-        relay_conn.local_addr().await?.to_string()
-    );
+    println!("relayed-address={}", relay_conn.local_addr().await?);
 
     // If you provided `-ping`, perform a ping test agaist the
     // relayConn we have just allocated.

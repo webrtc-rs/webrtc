@@ -13,7 +13,7 @@ use stun::message::*;
 // reserve the next-higher port number.
 //
 // RFC 5766 Section 14.6
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct EvenPort {
     // reserve_port means that the server is requested to reserve
     // the next-higher port number (on the same IP address)

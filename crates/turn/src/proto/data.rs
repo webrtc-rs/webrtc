@@ -13,7 +13,7 @@ use stun::message::*;
 // and the peer).
 //
 // RFC 5766 Section 14.4
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct Data(pub Vec<u8>);
 
 impl Setter for Data {
