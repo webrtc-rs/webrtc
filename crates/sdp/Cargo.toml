@@ -10,10 +10,10 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/sdp"
 
 [dependencies]
-url = "2.2.2"
-rand = "0.8.4"
-thiserror = "1.0.30"
-substring = "1.4.5"
+url = "2.2"
+rand = "0.8.5"
+thiserror = "~1.0.10"
+substring = "1.4"
 
 [dev-dependencies]
 criterion = "0.3.5"

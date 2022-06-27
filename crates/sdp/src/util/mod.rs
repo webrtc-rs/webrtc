@@ -9,7 +9,7 @@ use std::fmt;
 pub const ATTRIBUTE_KEY: &str = "a=";
 
 /// ConnectionRole indicates which of the end points should initiate the connection establishment
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ConnectionRole {
     Unspecified,
 
@@ -84,7 +84,7 @@ pub(crate) fn new_session_id() -> u64 {
 }
 
 // Codec represents a codec
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Codec {
     pub payload_type: u8,
     pub name: String,
