@@ -382,7 +382,6 @@ impl RTCSctpTransport {
             reports.insert(stats.id.clone(), SCTPTransport(stats));
         }
 
-        let collector = collector.clone();
         let mut lock = collector.lock().await;
         lock.merge(reports);
     }
