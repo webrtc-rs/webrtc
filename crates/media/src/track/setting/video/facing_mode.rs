@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Debug, str::FromStr};
 
 use thiserror::Error;
 
-#[derive(Error, PartialEq, Debug)]
+#[derive(Error, PartialEq, Eq, Debug)]
 pub enum FacingModeParsingError {
     #[error("Unknown facing mode: {value}")]
     UnknownValue { value: String },

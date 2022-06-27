@@ -14,7 +14,7 @@ pub const IVF_FRAME_HEADER_SIZE: usize = 12;
 
 /// IVFFileHeader 32-byte header for IVF files
 /// https://wiki.multimedia.cx/index.php/IVF
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct IVFFileHeader {
     pub signature: [u8; 4],        // 0-3
     pub version: u16,              // 4-5
@@ -30,7 +30,7 @@ pub struct IVFFileHeader {
 
 /// IVFFrameHeader 12-byte header for IVF frames
 /// https://wiki.multimedia.cx/index.php/IVF
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct IVFFrameHeader {
     pub frame_size: u32, // 0-3
     pub timestamp: u64,  // 4-11

@@ -31,7 +31,7 @@ pub trait ToByteBufferRef<L>: Sized {
     ) -> Result<usize, Self::Error>;
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum Error {
     #[error("Unexpected end of buffer: (expected: {expected}, actual: {actual})")]
     UnexpectedEndOfBuffer { expected: usize, actual: usize },

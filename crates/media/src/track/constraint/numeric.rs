@@ -232,7 +232,7 @@ mod tests {
     #[test]
     fn fitness_distance_exists() {
         fn fitness(is_expected: bool, is_required: bool, setting: Option<u32>) -> f64 {
-            let actual = setting.map(|t| t);
+            let actual = setting;
             Numeric::<u32>::exists(is_expected)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
@@ -251,7 +251,7 @@ mod tests {
     #[test]
     fn fitness_distance_exactly() {
         fn fitness(value: u32, is_required: bool, setting: Option<u32>) -> f64 {
-            let actual = setting.map(|t| t);
+            let actual = setting;
             Numeric::<u32>::exactly(value)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
@@ -270,8 +270,8 @@ mod tests {
     #[test]
     fn fitness_distance_at_least() {
         fn fitness(min: u32, ideal: Option<u32>, is_required: bool, setting: Option<u32>) -> f64 {
-            let ideal = ideal.map(|t| t);
-            let actual = setting.map(|t| t);
+            let ideal = ideal;
+            let actual = setting;
             Numeric::<u32>::at_least(min, ideal)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
@@ -298,8 +298,8 @@ mod tests {
     #[test]
     fn fitness_distance_at_most() {
         fn fitness(max: u32, ideal: Option<u32>, is_required: bool, setting: Option<u32>) -> f64 {
-            let ideal = ideal.map(|t| t);
-            let actual = setting.map(|t| t);
+            let ideal = ideal;
+            let actual = setting;
             Numeric::<u32>::at_most(max, ideal)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
@@ -332,8 +332,8 @@ mod tests {
             is_required: bool,
             setting: Option<u32>,
         ) -> f64 {
-            let ideal = ideal.map(|t| t);
-            let actual = setting.map(|t| t);
+            let ideal = ideal;
+            let actual = setting;
             Numeric::<u32>::within(min, max, ideal)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())

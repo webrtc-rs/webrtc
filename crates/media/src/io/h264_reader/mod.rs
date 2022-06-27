@@ -9,7 +9,7 @@ use std::io::Read;
 
 /// NalUnitType is the type of a NAL
 /// Enums for NalUnitTypes
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NalUnitType {
     /// Unspecified
     Unspecified = 0,
