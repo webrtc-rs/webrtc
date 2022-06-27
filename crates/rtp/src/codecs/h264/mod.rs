@@ -199,7 +199,7 @@ impl Payloader for H264Payloader {
 }
 
 /// H264Packet represents the H264 header that is stored in the payload of an RTP Packet
-#[derive(PartialEq, Debug, Default, Clone)]
+#[derive(PartialEq, Eq, Debug, Default, Clone)]
 pub struct H264Packet {
     pub is_avc: bool,
     fua_buffer: Option<BytesMut>,

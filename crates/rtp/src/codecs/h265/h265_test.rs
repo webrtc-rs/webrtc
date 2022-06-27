@@ -669,7 +669,7 @@ fn test_h265_paci_packet() -> Result<()> {
             raw: Bytes::from_static(&[0x64, 0x01, 0x64, 0x00, 0xab, 0xcd, 0xef]),
             expected_fu: Some(H265PACIPacket {
                 payload_header: H265NALUHeader::new(0x64, 0x01),
-                paci_header_fields: ((0x64) << 8) | (0x00),
+                paci_header_fields: ((0x64) << 8),
                 phes: Bytes::from_static(&[]),
                 payload: Bytes::from_static(&[0xab, 0xcd, 0xef]),
             }),

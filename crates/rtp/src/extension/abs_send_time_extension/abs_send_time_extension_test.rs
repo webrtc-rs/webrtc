@@ -13,15 +13,15 @@ fn test_ntp_conversion() -> Result<()> {
     let tests = vec![
         (
             loc.ymd(1985, 6, 23).and_hms_nano(4, 0, 0, 0),
-            0xa0c65b1000000000 as u64,
+            0xa0c65b1000000000_u64,
         ),
         (
             loc.ymd(1999, 12, 31).and_hms_nano(23, 59, 59, 500000),
-            0xbc18084f0020c49b as u64,
+            0xbc18084f0020c49b_u64,
         ),
         (
             loc.ymd(2019, 3, 27).and_hms_nano(13, 39, 30, 8675309),
-            0xe04641e202388b88 as u64,
+            0xe04641e202388b88_u64,
         ),
     ];
 
@@ -35,7 +35,7 @@ fn test_ntp_conversion() -> Result<()> {
             let actual = ntp as i128;
             let expected = *n as i128;
             let diff = actual - expected;
-            if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
+            if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
                 assert!(false, "unix2ntp error, expected: {:?}, got: {:?}", ntp, *n,);
             }
         } else {
@@ -49,7 +49,7 @@ fn test_ntp_conversion() -> Result<()> {
             .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
             .unwrap_or(UNIX_EPOCH);
         let diff = input.duration_since(output).unwrap().as_nanos() as i128;
-        if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
+        if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
             assert!(
                 false,
                 "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
@@ -103,7 +103,7 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
 
         let estimated = receive.estimate(ntp2unix(receive_ntp));
         let diff = estimated.duration_since(in_time).unwrap().as_nanos() as i128;
-        if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
+        if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
             assert!(
                 false,
                 "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",

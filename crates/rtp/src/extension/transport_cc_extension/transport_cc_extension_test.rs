@@ -31,8 +31,8 @@ fn test_transport_cc_extension() -> Result<()> {
 
 #[test]
 fn test_transport_cc_extension_extra_bytes() -> Result<()> {
-    let raw = Bytes::from_static(&[0x00, 0x02, 0x00, 0xff, 0xff]);
-    let buf = &mut raw.clone();
+    let mut raw = Bytes::from_static(&[0x00, 0x02, 0x00, 0xff, 0xff]);
+    let buf = &mut raw;
     let t1 = TransportCcExtension::unmarshal(buf)?;
     let t2 = TransportCcExtension {
         transport_sequence: 2,

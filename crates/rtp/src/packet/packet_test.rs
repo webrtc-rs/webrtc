@@ -75,21 +75,21 @@ fn test_basic() -> Result<()> {
 
 #[test]
 fn test_extension() -> Result<()> {
-    let missing_extension_pkt = Bytes::from_static(&[
+    let mut missing_extension_pkt = Bytes::from_static(&[
         0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82,
     ]);
-    let buf = &mut missing_extension_pkt.clone();
+    let buf = &mut missing_extension_pkt;
     let result = Packet::unmarshal(buf);
     assert!(
         result.is_err(),
         "Unmarshal did not error on packet with missing extension data"
     );
 
-    let invalid_extension_length_pkt = Bytes::from_static(&[
+    let mut invalid_extension_length_pkt = Bytes::from_static(&[
         0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x99, 0x99, 0x99,
         0x99,
     ]);
-    let buf = &mut invalid_extension_length_pkt.clone();
+    let buf = &mut invalid_extension_length_pkt;
     let result = Packet::unmarshal(buf);
     assert!(
         result.is_err(),
@@ -284,13 +284,13 @@ fn test_rfc_8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
     // |                          data                                 |
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-    let raw_pkt = Bytes::from_static(&[
+    let mut raw_pkt = Bytes::from_static(&[
         0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
         0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x00, 0x00, 0x33, 0xCC, 0xCC, 0xCC, 0xCC,
         // Payload
         0x98, 0x36, 0xbe, 0x88, 0x9e,
     ]);
-    let buf = &mut raw_pkt.clone();
+    let buf = &mut raw_pkt;
     let packet = Packet::unmarshal(buf)?;
     let ext1 = packet
         .header
@@ -465,13 +465,13 @@ fn test_rfc8285_two_byte_multiple_extension_with_padding() -> Result<()> {
     // |                          data                                 |
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-    let raw_pkt = Bytes::from_static(&[
+    let mut raw_pkt = Bytes::from_static(&[
         0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00, 0x00,
         0x03, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x00, 0x03, 0x04, 0xCC, 0xCC, 0xCC, 0xCC, 0x98, 0x36,
         0xbe, 0x88, 0x9e,
     ]);
 
-    let p = Packet::unmarshal(&mut raw_pkt.clone())?;
+    let p = Packet::unmarshal(&mut raw_pkt)?;
 
     let ext = p.header.get_extension(1);
     let ext_expect = Some(Bytes::from_static(&[]));

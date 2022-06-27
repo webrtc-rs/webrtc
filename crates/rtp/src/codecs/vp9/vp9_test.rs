@@ -187,10 +187,10 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
             "ScalabilityStructureNoPayload",
             Bytes::from_static(&[
                 0x0A,
-                (1 << 5) | (0 << 4) | (1 << 3), // NS:1 Y:0 G:1
+                (1 << 5) | (1 << 3), // NS:1 Y:0 G:1
                 2,
-                (0 << 5) | (1 << 4) | (0 << 2), // T:0 U:1 R:0 -
-                (2 << 5) | (0 << 4) | (1 << 2), // T:2 U:0 R:1 -
+                (1 << 4),            // T:0 U:1 R:0 -
+                (2 << 5) | (1 << 2), // T:2 U:0 R:1 -
                 33,
             ]),
             Vp9Packet {
