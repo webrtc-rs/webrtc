@@ -6,7 +6,6 @@ pub mod sctp_transport_state;
 
 use sctp_transport_state::RTCSctpTransportState;
 use std::collections::HashSet;
-use waitgroup::Worker;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data_channel::data_channel_state::RTCDataChannelState;
@@ -353,15 +352,12 @@ impl RTCSctpTransport {
     pub(crate) async fn collect_stats(
         &self,
         collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
         peer_connection_id: String,
     ) {
         let dtls_transport = self.transport();
 
         // TODO: should this be collected?
-        dtls_transport
-            .collect_stats(collector, worker.clone())
-            .await;
+        dtls_transport.collect_stats(collector).await;
 
         // data channels
         let mut data_channels_closed = 0;
@@ -372,7 +368,7 @@ impl RTCSctpTransport {
                 RTCDataChannelState::Open => (),
                 _ => data_channels_closed += 1,
             }
-            data_channel.collect_stats(collector, worker.clone()).await;
+            data_channel.collect_stats(collector).await;
         }
 
         let mut reports = HashMap::new();

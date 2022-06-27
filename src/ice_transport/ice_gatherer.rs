@@ -20,7 +20,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use waitgroup::Worker;
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
@@ -307,40 +306,32 @@ impl RTCIceGatherer {
         agent.clone()
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
         if let Some(agent) = self.get_agent().await {
             let collector = collector.clone();
-            tokio::spawn(async move {
-                let mut reports = HashMap::new();
+            let mut reports = HashMap::new();
 
-                for stats in agent.get_candidate_pairs_stats().await {
-                    let stats: ICECandidatePairStats = stats.into();
-                    reports.insert(stats.id.clone(), StatsReportType::CandidatePair(stats));
-                }
+            for stats in agent.get_candidate_pairs_stats().await {
+                let stats: ICECandidatePairStats = stats.into();
+                reports.insert(stats.id.clone(), StatsReportType::CandidatePair(stats));
+            }
 
-                for stats in agent.get_local_candidates_stats().await {
-                    reports.insert(
-                        stats.id.clone(),
-                        StatsReportType::from(LocalCandidate(stats)),
-                    );
-                }
+            for stats in agent.get_local_candidates_stats().await {
+                reports.insert(
+                    stats.id.clone(),
+                    StatsReportType::from(LocalCandidate(stats)),
+                );
+            }
 
-                for stats in agent.get_remote_candidates_stats().await {
-                    reports.insert(
-                        stats.id.clone(),
-                        StatsReportType::from(RemoteCandidate(stats)),
-                    );
-                }
+            for stats in agent.get_remote_candidates_stats().await {
+                reports.insert(
+                    stats.id.clone(),
+                    StatsReportType::from(RemoteCandidate(stats)),
+                );
+            }
 
-                let mut lock = collector.try_lock().unwrap();
-                lock.merge(reports);
-
-                drop(worker);
-            });
+            let mut lock = collector.try_lock().unwrap();
+            lock.merge(reports);
         }
     }
     /*TODO:func (g *ICEGatherer) collectStats(collector *statsReportCollector) {

@@ -12,7 +12,6 @@ use ice_candidate::RTCIceCandidate;
 use ice_candidate_pair::RTCIceCandidatePair;
 use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
-use waitgroup::Worker;
 
 use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
@@ -326,19 +325,13 @@ impl RTCIceTransport {
         }
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
         if let Some(agent) = self.gatherer.get_agent().await {
             let collector = collector.clone();
             let stats = ICETransportStats::new("ice_transport".to_string(), agent).await;
 
             let mut lock = collector.try_lock().unwrap();
             lock.insert("ice_transport".to_string(), Transport(stats));
-
-            drop(worker);
         }
     }
     /*TODO: func (t *ICETransport) collectStats(collector *statsReportCollector) {

@@ -12,7 +12,6 @@ use std::ops::Add;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
-use waitgroup::Worker;
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
 pub struct RTCCertificate {
@@ -175,11 +174,7 @@ impl RTCCertificate {
     }
     */
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
         let fingerprints = self.get_fingerprints().unwrap();
         if let Some(fingerprint) = fingerprints.into_iter().next() {
             let stats = CertificateStats::new(self, fingerprint);
@@ -188,8 +183,6 @@ impl RTCCertificate {
                 self.stats_id.clone(),
                 StatsReportType::CertificateStats(stats),
             );
-
-            drop(worker);
         }
     }
 

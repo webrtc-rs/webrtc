@@ -26,7 +26,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
-use waitgroup::Worker;
 
 /// MIME_TYPE_H264 H264 MIME type.
 /// Note: Matching should be case insensitive.
@@ -553,11 +552,7 @@ impl MediaEngine {
         Err(Error::ErrCodecNotFound)
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
         let mut reports = HashMap::new();
 
         for codec in &self.video_codecs {
@@ -570,8 +565,6 @@ impl MediaEngine {
 
         let mut lock = collector.try_lock().unwrap();
         lock.merge(reports);
-
-        drop(worker);
     }
     /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {
 

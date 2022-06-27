@@ -15,7 +15,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::SystemTime;
-use waitgroup::Worker;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
@@ -547,17 +546,12 @@ impl RTCDataChannel {
         self.stats_id.as_str()
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
         let mut lock = collector.try_lock().unwrap();
         lock.insert(
             self.stats_id.clone(),
             StatsReportType::DataChannel(DataChannelStats::from(self)),
         );
-        drop(worker);
     }
     /*TODO: func (d *DataChannel) collectStats(collector *statsReportCollector) {
         collector.Collecting()
