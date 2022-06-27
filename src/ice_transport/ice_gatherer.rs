@@ -330,7 +330,7 @@ impl RTCIceGatherer {
                 );
             }
 
-            let mut lock = collector.try_lock().unwrap();
+            let mut lock = collector.lock().await;
             lock.merge(reports);
         }
     }

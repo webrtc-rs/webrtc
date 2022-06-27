@@ -330,7 +330,7 @@ impl RTCIceTransport {
             let collector = collector.clone();
             let stats = ICETransportStats::new("ice_transport".to_string(), agent).await;
 
-            let mut lock = collector.try_lock().unwrap();
+            let mut lock = collector.lock().await;
             lock.insert("ice_transport".to_string(), Transport(stats));
         }
     }

@@ -383,7 +383,7 @@ impl RTCSctpTransport {
         }
 
         let collector = collector.clone();
-        let mut lock = collector.try_lock().unwrap();
+        let mut lock = collector.lock().await;
         lock.merge(reports);
     }
     /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {

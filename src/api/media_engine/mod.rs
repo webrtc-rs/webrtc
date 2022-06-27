@@ -563,7 +563,7 @@ impl MediaEngine {
             reports.insert(codec.stats_id.clone(), Codec(CodecStats::from(codec)));
         }
 
-        let mut lock = collector.try_lock().unwrap();
+        let mut lock = collector.lock().await;
         lock.merge(reports);
     }
     /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {
