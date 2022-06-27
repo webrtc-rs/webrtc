@@ -10,27 +10,27 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/srtp"
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.3", default-features = false, features = [
+util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = [
     "conn",
     "buffer",
     "marshal",
 ] }
 rtp = "0.6.5"
 rtcp = "0.6.5"
-byteorder = "1.4.3"
-bytes = "1.1.0"
-thiserror = "1.0.30"
+byteorder = "1"
+bytes = "1"
+thiserror = "1.0"
 hmac = { version = "0.11.0", features = ["std"] }
 sha-1 = "0.9.8"
 ctr = "0.8.0"
 aes = "0.7.5"
-subtle = "2.4.1"
-tokio = { version = "1.15.0", features = ["full"] }
-async-trait = "0.1.52"
-log = "0.4.14"
+subtle = "2.4"
+tokio = { version = "1.19", features = ["full"] }
+async-trait = "0.1.56"
+log = "0.4"
 aead = { version = "0.4.3", features = ["std"] }
 aes-gcm = "0.9.4"
 
 [dev-dependencies]
-tokio-test = "0.4.2"
+tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 lazy_static = "1.4.0"
