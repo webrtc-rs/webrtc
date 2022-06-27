@@ -52,7 +52,7 @@ impl ReceiverStreamInternal {
             self.set_received(pkt.header.sequence_number);
 
             let diff = pkt.header.sequence_number as i32 - self.last_seq_num as i32;
-            if diff > 0 || diff < -0x0FFF {
+            if !(-0x0FFF..=0).contains(&diff) {
                 // overflow
                 if diff < -0x0FFF {
                     self.seq_num_cycles += 1;

@@ -10,18 +10,18 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/interceptor"
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.3", default-features = false, features = ["marshal"] }
+util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = ["marshal"] }
 rtp = "0.6.5"
 rtcp = "0.6.5"
 srtp = { package = "webrtc-srtp", version = "0.8.9" }
-tokio = { version = "1.15.0", features = ["sync", "time"] }
-async-trait = "0.1.52"
-bytes = "1.1.0"
-thiserror = "1.0.30"
-rand = "0.8.4"
+tokio = { version = "1.19", features = ["sync", "time"] }
+async-trait = "0.1.56"
+bytes = "1"
+thiserror = "1.0"
+rand = "0.8.5"
 waitgroup = "0.1.2"
-log = "0.4.14"
+log = "0.4"
 
 [dev-dependencies]
-tokio-test = "0.4.2"
+tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 chrono = "0.4.19"
