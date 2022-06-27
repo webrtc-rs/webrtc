@@ -110,7 +110,7 @@ mod test {
             } else if let Ok(got) = res {
                 assert_eq!(got, result, "setNBitsOfUint16 {}", name);
             } else {
-                assert!(false, "setNBitsOfUint16 {} :unexpected error result", name);
+                panic!("setNBitsOfUint16 {} :unexpected error result", name);
             }
         }
 

@@ -3,7 +3,7 @@ use super::*;
 const DLRR_REPORT_LENGTH: u16 = 12;
 
 /// DLRRReport encodes a single report inside a DLRRReportBlock.
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct DLRRReport {
     pub ssrc: u32,
     pub last_rr: u32,
@@ -34,7 +34,7 @@ impl fmt::Display for DLRRReport {
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ block
 /// :                               ...                             :   2
 /// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct DLRRReportBlock {
     pub reports: Vec<DLRRReport>,
 }

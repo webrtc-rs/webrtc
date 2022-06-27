@@ -15,7 +15,7 @@ const RRR_HEADER_LENGTH: usize = SSRC_LENGTH * 2;
 const RRR_MEDIA_OFFSET: usize = 4;
 
 /// The RapidResynchronizationRequest packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct RapidResynchronizationRequest {
     /// SSRC of sender
     pub sender_ssrc: u32,

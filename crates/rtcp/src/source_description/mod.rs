@@ -20,7 +20,7 @@ const SDES_TEXT_OFFSET: usize = 2;
 
 /// SDESType is the item type used in the RTCP SDES control packet.
 /// RTP SDES item types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-5
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SdesType {
     SdesEnd = 0,      // end of SDES list                RFC 3550, 6.5
@@ -74,7 +74,7 @@ impl From<u8> for SdesType {
 }
 
 /// A SourceDescriptionChunk contains items describing a single RTP source
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct SourceDescriptionChunk {
     /// The source (ssrc) or contributing source (csrc) identifier this packet describes
     pub source: u32,
@@ -176,7 +176,7 @@ impl Unmarshal for SourceDescriptionChunk {
 }
 
 /// A SourceDescriptionItem is a part of a SourceDescription that describes a stream.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct SourceDescriptionItem {
     /// The type identifier for this item. eg, SDESCNAME for canonical name description.
     ///
@@ -274,7 +274,7 @@ impl Unmarshal for SourceDescriptionItem {
 }
 
 /// A SourceDescription (SDES) packet describes the sources in an RTP stream.
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct SourceDescription {
     pub chunks: Vec<SourceDescriptionChunk>,
 }

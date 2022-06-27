@@ -26,7 +26,7 @@ const VM_REPORT_BLOCK_LENGTH: u16 = 4 + 4 + 2 * 4 + 10 + 2 * 3;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |          JB maximum           |          JB abs max           |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct VoIPMetricsReportBlock {
     pub ssrc: u32,
     pub loss_rate: u8,

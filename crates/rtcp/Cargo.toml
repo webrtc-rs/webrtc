@@ -10,10 +10,10 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtcp"
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.3", default-features = false, features = ["marshal"] }
-bytes = "1.1.0"
-thiserror = "1.0.30"
+util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = ["marshal"] }
+bytes = "1"
+thiserror = "1.0"
 
 [dev-dependencies]
-tokio = { version = "1.15.0", features = ["sync"] }
-tokio-test = "0.4.2"
+tokio = { version = "1.19", features = ["sync"] }
+tokio-test = "0.4.0" # must match the min version of the `tokio` crate above

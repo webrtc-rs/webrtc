@@ -24,7 +24,7 @@ pub(crate) const SR_OCTET_COUNT_OFFSET: usize = SR_PACKET_COUNT_OFFSET + SR_PACK
 pub(crate) const SR_OCTET_COUNT_LENGTH: usize = 4;
 
 /// A SenderReport (SR) packet provides reception quality feedback for an RTP stream
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct SenderReport {
     /// The synchronization source identifier for the originator of this SR packet.
     pub ssrc: u32,

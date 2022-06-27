@@ -28,7 +28,7 @@ const SSR_REPORT_BLOCK_LENGTH: u16 = 4 + 2 * 2 + 4 * 6 + 4;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// | min_ttl_or_hl | max_ttl_or_hl |mean_ttl_or_hl | dev_ttl_or_hl |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct StatisticsSummaryReportBlock {
     //not included in marshal/unmarshal
     pub loss_reports: bool,
@@ -60,7 +60,7 @@ impl fmt::Display for StatisticsSummaryReportBlock {
 
 /// TTLorHopLimitType encodes values for the ToH field in
 /// a StatisticsSummaryReportBlock
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TTLorHopLimitType {
     Missing = 0,
     IPv4 = 1,

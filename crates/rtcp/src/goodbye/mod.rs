@@ -11,7 +11,7 @@ use std::fmt;
 type Result<T> = std::result::Result<T, util::Error>;
 
 /// The Goodbye packet indicates that one or more sources are no longer active.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct Goodbye {
     /// The SSRC/CSRC identifiers that are no longer active
     pub sources: Vec<u32>,

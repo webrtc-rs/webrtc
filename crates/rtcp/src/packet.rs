@@ -212,7 +212,7 @@ mod test {
             let want = Error::InvalidHeader;
             assert_eq!(want, got, "Unmarshal(nil) err = {}, want {}", got, want);
         } else {
-            assert!(false, "want error");
+            panic!("want error");
         }
 
         Ok(())
@@ -235,7 +235,7 @@ mod test {
                 got, want
             );
         } else {
-            assert!(false, "want error");
+            panic!("want error");
         }
 
         Ok(())

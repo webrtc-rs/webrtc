@@ -15,7 +15,7 @@ pub(crate) const DELAY_OFFSET: usize = 20;
 
 /// A ReceptionReport block conveys statistics on the reception of RTP packets
 /// from a single synchronization source.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct ReceptionReport {
     /// The SSRC identifier of the source to which the information in this
     /// reception report block pertains.

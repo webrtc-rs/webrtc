@@ -22,7 +22,7 @@ const PRT_REPORT_BLOCK_MIN_LENGTH: u16 = 8;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |       Receipt time of packet (end_seq - 1) mod 65536          |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct PacketReceiptTimesReportBlock {
     //not included in marshal/unmarshal
     pub t: u8,

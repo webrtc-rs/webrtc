@@ -11,7 +11,7 @@ use std::fmt;
 type Result<T> = std::result::Result<T, util::Error>;
 
 /// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct FirEntry {
     pub ssrc: u32,
     pub sequence_number: u8,
@@ -20,7 +20,7 @@ pub struct FirEntry {
 /// The FullIntraRequest packet is used to reliably request an Intra frame
 /// in a video stream.  See RFC 5104 Section 3.5.1.  This is not for loss
 /// recovery, which should use PictureLossIndication (PLI) instead.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct FullIntraRequest {
     pub sender_ssrc: u32,
     pub media_ssrc: u32,

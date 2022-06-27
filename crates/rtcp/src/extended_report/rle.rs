@@ -3,7 +3,7 @@ use super::*;
 const RLE_REPORT_BLOCK_MIN_LENGTH: u16 = 8;
 
 /// ChunkType enumerates the three kinds of chunks described in RFC 3611 section 4.1.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ChunkType {
     RunLength = 0,
     BitVector = 1,
@@ -36,7 +36,7 @@ pub enum ChunkType {
 ///  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///  |0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0|
 ///  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Chunk(pub u16);
 
 impl fmt::Display for Chunk {
@@ -102,7 +102,7 @@ impl Chunk {
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |          chunk n-1            |             chunk n           |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct RLEReportBlock {
     //not included in marshal/unmarshal
     pub is_loss_rle: bool,

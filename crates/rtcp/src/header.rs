@@ -5,7 +5,7 @@ use bytes::{Buf, BufMut};
 
 /// PacketType specifies the type of an RTCP packet
 /// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PacketType {
     Unsupported = 0,
@@ -88,7 +88,7 @@ pub const SSRC_LENGTH: usize = 4;
 pub const SDES_MAX_OCTET_COUNT: usize = (1 << 8) - 1;
 
 /// A Header is the common header shared by all RTCP packets
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct Header {
     /// If the padding bit is set, this individual RTCP packet contains
     /// some additional padding octets at the end which are not part of

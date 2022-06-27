@@ -75,13 +75,14 @@ fn test_bad_compound() {
         compound_len, 2
     );
 
-    if let None = compound.0[0].as_any().downcast_ref::<Goodbye>() {
+    if compound.0[0].as_any().downcast_ref::<Goodbye>().is_none() {
         panic!("Unmarshal(badcompound), want Goodbye")
     }
 
-    if let None = compound.0[1]
+    if compound.0[1]
         .as_any()
         .downcast_ref::<PictureLossIndication>()
+        .is_none()
     {
         panic!("Unmarshal(badcompound), want PictureLossIndication")
     }
@@ -311,7 +312,7 @@ fn test_compound_packet_roundtrip() {
                     name, got, err
                 );
             } else {
-                assert!(false, "want error in test {}", name);
+                panic!("want error in test {}", name);
             }
             continue;
         } else {

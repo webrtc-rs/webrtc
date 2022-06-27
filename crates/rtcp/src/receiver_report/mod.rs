@@ -14,7 +14,7 @@ pub(super) const RR_SSRC_OFFSET: usize = HEADER_LENGTH;
 pub(super) const RR_REPORT_OFFSET: usize = RR_SSRC_OFFSET + SSRC_LENGTH;
 
 /// A ReceiverReport (RR) packet provides reception quality feedback for an RTP stream
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct ReceiverReport {
     /// The synchronization source identifier for the originator of this RR packet.
     pub ssrc: u32,

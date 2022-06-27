@@ -8,7 +8,7 @@ use std::fmt;
 
 /// RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
 /// a packet with an unknown type is encountered.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct RawPacket(pub Bytes);
 
 impl fmt::Display for RawPacket {
