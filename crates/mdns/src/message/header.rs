@@ -1,7 +1,7 @@
 use super::*;
 
 // Header is a representation of a DNS message header.
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Header {
     pub id: u16,
     pub response: bool,
@@ -54,7 +54,7 @@ impl Header {
     }
 }
 
-#[derive(Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub enum Section {
     NotStarted = 0,
     Header = 1,

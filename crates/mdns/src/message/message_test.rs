@@ -44,7 +44,7 @@ fn small_test_msg() -> Result<Message> {
         }],
         additionals: vec![Resource {
             header: ResourceHeader {
-                name: name,
+                name,
                 typ: DnsType::A,
                 class: DNSCLASS_INET,
                 ..Default::default()
@@ -201,7 +201,7 @@ fn large_test_msg() -> Result<Message> {
             },
             Resource {
                 header: ResourceHeader {
-                    name: name,
+                    name,
                     typ: DnsType::Txt,
                     class: DNSCLASS_INET,
                     ..Default::default()

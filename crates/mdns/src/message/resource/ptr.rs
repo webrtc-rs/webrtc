@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::message::name::*;
 
 // A PTRResource is a PTR Resource record.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct PtrResource {
     pub ptr: Name,
 }

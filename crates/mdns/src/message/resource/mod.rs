@@ -103,7 +103,7 @@ impl Resource {
 
 // A ResourceHeader is the header of a DNS resource record. There are
 // many types of DNS resource records, but they all share the same header.
-#[derive(Clone, Default, PartialEq, Debug)]
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct ResourceHeader {
     // Name is the domain name for which this resource record pertains.
     pub name: Name,

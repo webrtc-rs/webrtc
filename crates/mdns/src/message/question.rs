@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 // A question is a DNS query.
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct Question {
     pub name: Name,
     pub typ: DnsType,
