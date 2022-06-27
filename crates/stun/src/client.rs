@@ -299,15 +299,14 @@ impl Client {
                         t.remove(&id);
                     }
                     EventType::Callback(id) => {
-                        let mut ct;
-                        if t.contains_key(&id) {
-                            ct = t.remove(&id).unwrap();
+                        let mut ct = if t.contains_key(&id) {
+                            t.remove(&id).unwrap()
                         } else {
                             /*if c.handler != nil && !errors.Is(e.Error, ErrTransactionStopped) {
                                 c.handler(e)
                             }*/
                             continue;
-                        }
+                        };
 
                         if ct.attempt >= max_attempts || event.event_body.is_ok() {
                             if let Some(handler) = ct.handler {
