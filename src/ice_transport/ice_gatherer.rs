@@ -306,9 +306,8 @@ impl RTCIceGatherer {
         agent.clone()
     }
 
-    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
+    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
         if let Some(agent) = self.get_agent().await {
-            let collector = collector.clone();
             let mut reports = HashMap::new();
 
             for stats in agent.get_candidate_pairs_stats().await {

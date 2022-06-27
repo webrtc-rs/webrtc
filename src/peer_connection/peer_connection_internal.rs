@@ -1327,8 +1327,8 @@ impl PeerConnectionInternal {
         false
     }
 
-    pub(super) async fn get_stats(&self, stats_id: String) -> Result<StatsCollector> {
-        let collector = Arc::new(Mutex::new(StatsCollector::new()));
+    pub(super) async fn get_stats(&self, stats_id: String) -> StatsCollector {
+        let collector = Mutex::new(StatsCollector::new());
 
         tokio::join!(
             self.ice_gatherer.collect_stats(&collector),
@@ -1338,10 +1338,7 @@ impl PeerConnectionInternal {
             self.media_engine.collect_stats(&collector),
         );
 
-        match Arc::try_unwrap(collector) {
-            Ok(lock) => Ok(lock.into_inner()),
-            Err(_) => Err(Error::ErrPeerConnStatsCollectionFailed),
-        }
+        collector.into_inner()
     }
 }
 

@@ -306,9 +306,9 @@ impl RTCDtlsTransport {
         DEFAULT_DTLS_ROLE_ANSWER
     }
 
-    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
+    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
         for cert in &self.certificates {
-            cert.collect_stats(&collector).await;
+            cert.collect_stats(collector).await;
         }
     }
 

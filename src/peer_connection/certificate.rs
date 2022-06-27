@@ -9,7 +9,6 @@ use rcgen::{CertificateParams, KeyPair, RcgenError};
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
 use std::ops::Add;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
@@ -174,7 +173,7 @@ impl RTCCertificate {
     }
     */
 
-    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
+    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
         let fingerprints = self.get_fingerprints().unwrap();
         if let Some(fingerprint) = fingerprints.into_iter().next() {
             let stats = CertificateStats::new(self, fingerprint);

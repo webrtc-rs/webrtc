@@ -325,9 +325,8 @@ impl RTCIceTransport {
         }
     }
 
-    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
+    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
         if let Some(agent) = self.gatherer.get_agent().await {
-            let collector = collector.clone();
             let stats = ICETransportStats::new("ice_transport".to_string(), agent).await;
 
             let mut lock = collector.lock().await;

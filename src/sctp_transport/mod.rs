@@ -351,7 +351,7 @@ impl RTCSctpTransport {
 
     pub(crate) async fn collect_stats(
         &self,
-        collector: &Arc<Mutex<StatsCollector>>,
+        collector: &Mutex<StatsCollector>,
         peer_connection_id: String,
     ) {
         let dtls_transport = self.transport();

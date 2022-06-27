@@ -23,7 +23,6 @@ use sdp::description::session::SessionDescription;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
@@ -552,7 +551,7 @@ impl MediaEngine {
         Err(Error::ErrCodecNotFound)
     }
 
-    pub(crate) async fn collect_stats(&self, collector: &Arc<Mutex<StatsCollector>>) {
+    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
         let mut reports = HashMap::new();
 
         for codec in &self.video_codecs {
