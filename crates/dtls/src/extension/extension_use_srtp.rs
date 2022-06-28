@@ -6,7 +6,7 @@ use super::*;
 // SRTPProtectionProfile defines the parameters and options that are in effect for the SRTP processing
 // https://tools.ietf.org/html/rfc5764#section-4.1.2
 #[allow(non_camel_case_types)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SrtpProtectionProfile {
     Srtp_Aes128_Cm_Hmac_Sha1_80 = 0x0001,
     Srtp_Aes128_Cm_Hmac_Sha1_32 = 0x0002,
@@ -31,7 +31,7 @@ const EXTENSION_USE_SRTPHEADER_SIZE: usize = 6;
 
 // https://tools.ietf.org/html/rfc8422
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtensionUseSrtp {
     pub(crate) protection_profiles: Vec<SrtpProtectionProfile>,
 }

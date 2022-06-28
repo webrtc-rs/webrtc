@@ -25,7 +25,7 @@ use cipher_suite_tls_psk_with_aes_128_gcm_sha256::*;
 // CipherSuiteID is an ID for our supported CipherSuites
 // Supported Cipher Suites
 #[allow(non_camel_case_types)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CipherSuiteId {
     // AES-128-CCM
     Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm = 0xc0ac,

@@ -15,7 +15,7 @@ message, if sent, will immediately follow the ServerKeyExchange
 message (if it is sent; otherwise, this message follows the
 server's Certificate message).
 */
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageCertificateRequest {
     pub(crate) certificate_types: Vec<ClientCertificateType>,
     pub(crate) signature_hash_algorithms: Vec<SignatureHashAlgorithm>,

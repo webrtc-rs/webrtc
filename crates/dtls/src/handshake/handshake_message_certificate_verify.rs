@@ -7,7 +7,7 @@ use crate::signature_hash_algorithm::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageCertificateVerify {
     pub(crate) algorithm: SignatureHashAlgorithm,
     pub(crate) signature: Vec<u8>,

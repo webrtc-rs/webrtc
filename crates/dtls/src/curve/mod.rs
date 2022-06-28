@@ -1,7 +1,7 @@
 pub mod named_curve;
 
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-10
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum EllipticCurveType {
     NamedCurve = 0x03,
     Unsupported,

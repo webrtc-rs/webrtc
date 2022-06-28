@@ -92,7 +92,7 @@ fn elliptic_curve_pre_master_secret(
                 p256::EncodedPoint::from_bytes(public_key).map_err(elliptic_curve::Error::from)?;
             let public = p256::PublicKey::from_sec1_bytes(pub_key.as_ref())?;
             if let NamedCurvePrivateKey::EphemeralSecretP256(secret) = private_key {
-                return Ok(secret.diffie_hellman(&public).as_bytes().to_vec());
+                return Ok(secret.diffie_hellman(&public).raw_secret_bytes().to_vec());
             }
         }
         NamedCurve::X25519 => {

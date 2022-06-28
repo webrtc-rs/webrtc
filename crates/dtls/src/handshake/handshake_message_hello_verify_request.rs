@@ -24,7 +24,7 @@ use std::io::{Read, Write};
 
    https://tools.ietf.org/html/rfc6347#section-4.2.1
 */
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageHelloVerifyRequest {
     pub(crate) version: ProtocolVersion,
     pub(crate) cookie: Vec<u8>,

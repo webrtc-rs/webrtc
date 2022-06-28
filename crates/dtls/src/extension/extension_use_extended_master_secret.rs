@@ -6,7 +6,7 @@ use super::*;
 const EXTENSION_USE_EXTENDED_MASTER_SECRET_HEADER_SIZE: usize = 4;
 
 // https://tools.ietf.org/html/rfc8422
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtensionUseExtendedMasterSecret {
     pub(crate) supported: bool,
 }

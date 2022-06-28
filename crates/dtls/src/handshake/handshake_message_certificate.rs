@@ -8,7 +8,7 @@ mod handshake_message_certificate_test;
 
 const HANDSHAKE_MESSAGE_CERTIFICATE_LENGTH_FIELD_SIZE: usize = 3;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct HandshakeMessageCertificate {
     pub(crate) certificate: Vec<Vec<u8>>,
 }

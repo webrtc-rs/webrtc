@@ -10,7 +10,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Read, Write};
 
 // Structure supports ECDH and PSK
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageServerKeyExchange {
     pub(crate) identity_hint: Vec<u8>,
 

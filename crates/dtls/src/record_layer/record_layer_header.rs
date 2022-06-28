@@ -28,13 +28,13 @@ pub const PROTOCOL_VERSION1_2: ProtocolVersion = ProtocolVersion {
 };
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
-#[derive(Copy, Clone, PartialEq, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct ProtocolVersion {
     pub major: u8,
     pub minor: u8,
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct RecordLayerHeader {
     pub content_type: ContentType,
     pub protocol_version: ProtocolVersion,

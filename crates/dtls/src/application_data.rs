@@ -8,7 +8,7 @@ use crate::error::Result;
 // state.  The messages are treated as transparent data to the record
 // layer.
 // https://tools.ietf.org/html/rfc5246#section-10
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ApplicationData {
     pub data: Vec<u8>,
 }

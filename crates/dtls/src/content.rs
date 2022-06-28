@@ -7,7 +7,7 @@ use crate::error::*;
 use std::io::{Read, Write};
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ContentType {
     ChangeCipherSpec = 20,
     Alert = 21,

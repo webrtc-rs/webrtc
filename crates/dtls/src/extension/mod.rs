@@ -20,7 +20,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 
 // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExtensionValue {
     ServerName = 0,
     SupportedEllipticCurves = 10,
@@ -47,7 +47,7 @@ impl From<u16> for ExtensionValue {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Extension {
     ServerName(ExtensionServerName),
     SupportedEllipticCurves(ExtensionSupportedEllipticCurves),

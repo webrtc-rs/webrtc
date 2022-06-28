@@ -3,7 +3,7 @@ use crate::error::Result;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CompressionMethodId {
     Null = 0,
     Unsupported,
@@ -18,7 +18,7 @@ impl From<u8> for CompressionMethodId {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompressionMethods {
     pub ids: Vec<CompressionMethodId>,
 }
