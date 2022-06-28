@@ -765,8 +765,25 @@ impl RTCPeerConnection {
                     if !t.mid().await.is_empty() {
                         continue;
                     }
-                    let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
-                    t.set_mid(format!("{}", greater_mid + 1)).await?;
+
+                    if let Some(gen) = &self.internal.setting_engine.mid_generator {
+                        let current_greatest = self.internal.greater_mid.load(Ordering::SeqCst);
+                        let mid = (gen)(current_greatest);
+
+                        // If it's possible to parse the returned mid as numeric, we will update the greater_mid field.
+                        if let Ok(numeric_mid) = mid.parse::<isize>() {
+                            if numeric_mid > self.internal.greater_mid.load(Ordering::SeqCst) {
+                                self.internal
+                                    .greater_mid
+                                    .store(numeric_mid, Ordering::SeqCst);
+                            }
+                        }
+
+                        t.set_mid(mid).await?;
+                    } else {
+                        let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
+                        t.set_mid(format!("{}", greater_mid + 1)).await?;
+                    }
                 }
             }
 
