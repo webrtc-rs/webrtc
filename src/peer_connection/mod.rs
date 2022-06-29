@@ -1324,85 +1324,84 @@ impl RTCPeerConnection {
             let we_offer = desc.sdp_type == RTCSdpType::Answer;
 
             if !we_offer && !detected_plan_b {
-                if let Some(remote_desc) = &remote_description {
-                    if let Some(parsed) = &remote_desc.parsed {
-                        for media in &parsed.media_descriptions {
-                            if let Some(mid_value) = get_mid_value(media) {
-                                if mid_value.is_empty() {
+                if let Some(parsed) = remote_description.as_ref().and_then(|r| r.parsed.as_ref()) {
+                    for media in &parsed.media_descriptions {
+                        let mid_value = match get_mid_value(media) {
+                            Some(m) => {
+                                if m.is_empty() {
                                     return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue);
-                                }
-
-                                if media.media_name.media == MEDIA_SECTION_APPLICATION {
-                                    continue;
-                                }
-
-                                let kind = RTPCodecType::from(media.media_name.media.as_str());
-                                let direction = get_peer_direction(media);
-                                if kind == RTPCodecType::Unspecified
-                                    || direction == RTCRtpTransceiverDirection::Unspecified
-                                {
-                                    continue;
-                                }
-
-                                let t = if let Some(t) =
-                                    find_by_mid(mid_value, &mut local_transceivers).await
-                                {
-                                    Some(t)
                                 } else {
-                                    satisfy_type_and_direction(
-                                        kind,
-                                        direction,
-                                        &mut local_transceivers,
-                                    )
-                                    .await
+                                    m
+                                }
+                            }
+                            None => continue,
+                        };
+
+                        if media.media_name.media == MEDIA_SECTION_APPLICATION {
+                            continue;
+                        }
+
+                        let kind = RTPCodecType::from(media.media_name.media.as_str());
+                        let direction = get_peer_direction(media);
+                        if kind == RTPCodecType::Unspecified
+                            || direction == RTCRtpTransceiverDirection::Unspecified
+                        {
+                            continue;
+                        }
+
+                        let t = if let Some(t) =
+                            find_by_mid(mid_value, &mut local_transceivers).await
+                        {
+                            Some(t)
+                        } else {
+                            satisfy_type_and_direction(kind, direction, &mut local_transceivers)
+                                .await
+                        };
+
+                        if let Some(t) = t {
+                            if direction == RTCRtpTransceiverDirection::Recvonly {
+                                if t.direction() == RTCRtpTransceiverDirection::Sendrecv {
+                                    t.set_direction(RTCRtpTransceiverDirection::Sendonly);
+                                }
+                            } else if direction == RTCRtpTransceiverDirection::Sendrecv
+                                && t.direction() == RTCRtpTransceiverDirection::Sendonly
+                            {
+                                t.set_direction(RTCRtpTransceiverDirection::Sendrecv);
+                            }
+
+                            if t.mid().await.is_empty() {
+                                t.set_mid(mid_value.to_owned()).await?;
+                            }
+                        } else {
+                            let receiver = Arc::new(RTCRtpReceiver::new(
+                                self.internal.setting_engine.get_receive_mtu(),
+                                kind,
+                                Arc::clone(&self.internal.dtls_transport),
+                                Arc::clone(&self.internal.media_engine),
+                                Arc::clone(&self.interceptor),
+                            ));
+
+                            let local_direction =
+                                if direction == RTCRtpTransceiverDirection::Recvonly {
+                                    RTCRtpTransceiverDirection::Sendonly
+                                } else {
+                                    RTCRtpTransceiverDirection::Recvonly
                                 };
 
-                                if let Some(t) = t {
-                                    if direction == RTCRtpTransceiverDirection::Recvonly {
-                                        if t.direction() == RTCRtpTransceiverDirection::Sendrecv {
-                                            t.set_direction(RTCRtpTransceiverDirection::Sendonly);
-                                        }
-                                    } else if direction == RTCRtpTransceiverDirection::Sendrecv
-                                        && t.direction() == RTCRtpTransceiverDirection::Sendonly
-                                    {
-                                        t.set_direction(RTCRtpTransceiverDirection::Sendrecv);
-                                    }
+                            let t = RTCRtpTransceiver::new(
+                                Some(receiver),
+                                None,
+                                local_direction,
+                                kind,
+                                vec![],
+                                Arc::clone(&self.internal.media_engine),
+                            )
+                            .await;
 
-                                    if t.mid().await.is_empty() {
-                                        t.set_mid(mid_value.to_owned()).await?;
-                                    }
-                                } else {
-                                    let receiver = Arc::new(RTCRtpReceiver::new(
-                                        self.internal.setting_engine.get_receive_mtu(),
-                                        kind,
-                                        Arc::clone(&self.internal.dtls_transport),
-                                        Arc::clone(&self.internal.media_engine),
-                                        Arc::clone(&self.interceptor),
-                                    ));
+                            self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
-                                    let local_direction =
-                                        if direction == RTCRtpTransceiverDirection::Recvonly {
-                                            RTCRtpTransceiverDirection::Sendonly
-                                        } else {
-                                            RTCRtpTransceiverDirection::Recvonly
-                                        };
-
-                                    let t = RTCRtpTransceiver::new(
-                                        Some(receiver),
-                                        None,
-                                        local_direction,
-                                        kind,
-                                        vec![],
-                                        Arc::clone(&self.internal.media_engine),
-                                    )
-                                    .await;
-
-                                    self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
-
-                                    if t.mid().await.is_empty() {
-                                        t.set_mid(mid_value.to_owned()).await?;
-                                    }
-                                }
+                            if t.mid().await.is_empty() {
+                                t.set_mid(mid_value.to_owned()).await?;
                             }
                         }
                     }
@@ -1415,46 +1414,51 @@ impl RTCPeerConnection {
                 // This is an answer from the remote.
                 if let Some(parsed) = remote_description.as_ref().and_then(|r| r.parsed.as_ref()) {
                     for media in &parsed.media_descriptions {
-                        if let Some(mid_value) = get_mid_value(media) {
-                            if mid_value.is_empty() {
-                                return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue);
+                        let mid_value = match get_mid_value(media) {
+                            Some(m) => {
+                                if m.is_empty() {
+                                    return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue);
+                                } else {
+                                    m
+                                }
                             }
+                            None => continue,
+                        };
 
-                            if media.media_name.media == MEDIA_SECTION_APPLICATION {
-                                continue;
-                            }
-                            let kind = RTPCodecType::from(media.media_name.media.as_str());
-                            let direction = get_peer_direction(media);
-                            if kind == RTPCodecType::Unspecified
-                                || direction == RTCRtpTransceiverDirection::Unspecified
-                            {
-                                continue;
-                            }
+                        if media.media_name.media == MEDIA_SECTION_APPLICATION {
+                            continue;
+                        }
+                        let kind = RTPCodecType::from(media.media_name.media.as_str());
+                        let direction = get_peer_direction(media);
+                        if kind == RTPCodecType::Unspecified
+                            || direction == RTCRtpTransceiverDirection::Unspecified
+                        {
+                            continue;
+                        }
 
-                            let kind = RTPCodecType::from(media.media_name.media.as_str());
-                            let direction = get_peer_direction(media);
-                            if kind == RTPCodecType::Unspecified
-                                || direction == RTCRtpTransceiverDirection::Unspecified
-                            {
-                                continue;
-                            }
+                        let kind = RTPCodecType::from(media.media_name.media.as_str());
+                        let direction = get_peer_direction(media);
+                        if kind == RTPCodecType::Unspecified
+                            || direction == RTCRtpTransceiverDirection::Unspecified
+                        {
+                            continue;
+                        }
 
-                            if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
-                                let previous_direction = t.direction();
+                        if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
+                            let previous_direction = t.direction();
 
-                                // 4.9.2.9
-                                // Let direction be an RTCRtpTransceiverDirection value representing the direction
-                                // from the media description, but with the send and receive directions reversed to
-                                // represent this peer's point of view. If the media description is rejected,
-                                // set direction to "inactive".
-                                let reversed_direction = direction.reverse();
+                            // 4.9.2.9
+                            // Let direction be an RTCRtpTransceiverDirection value representing the direction
+                            // from the media description, but with the send and receive directions reversed to
+                            // represent this peer's point of view. If the media description is rejected,
+                            // set direction to "inactive".
+                            let reversed_direction = direction.reverse();
 
-                                // 4.9.2.13.2
-                                // Set transceiver.[[CurrentDirection]] and transceiver.[[Direction]]s to direction.
-                                t.set_direction(reversed_direction);
-                                t.set_current_direction(reversed_direction);
-                                t.process_new_current_direction(previous_direction).await?;
-                            }
+                            // 4.9.2.13.2
+                            // Set transceiver.[[CurrentDirection]] and transceiver.[[Direction]]s to direction.
+                            t.set_direction(reversed_direction);
+                            t.set_current_direction(reversed_direction);
+                            t.process_new_current_direction(previous_direction).await?;
                         }
                     }
                 }
