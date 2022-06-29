@@ -425,6 +425,10 @@ impl RTCPeerConnection {
             let current_local_description = params.current_local_description.lock().await;
             current_local_description.clone()
         };
+        let current_remote_description = {
+            let current_remote_description = params.current_remote_description.lock().await;
+            current_remote_description.clone()
+        };
 
         if let Some(local_desc) = &current_local_description {
             let len_data_channel = {
@@ -470,9 +474,7 @@ impl RTCPeerConnection {
                         match local_desc.sdp_type {
                             RTCSdpType::Offer => {
                                 // Step 5.3.2
-                                let current_remote_description =
-                                    params.current_remote_description.lock().await;
-                                if let Some(remote_desc) = &*current_remote_description {
+                                if let Some(remote_desc) = &current_remote_description {
                                     if let Some(rm) =
                                         get_by_mid(t.mid().await.as_str(), remote_desc)
                                     {
@@ -487,8 +489,28 @@ impl RTCPeerConnection {
                                 }
                             }
                             RTCSdpType::Answer => {
+                                let remote_desc = match &current_remote_description {
+                                    Some(d) => d,
+                                    None => return true,
+                                };
+                                let offered_direction =
+                                    match get_by_mid(t.mid().await.as_str(), remote_desc) {
+                                        Some(d) => {
+                                            let dir = get_peer_direction(d);
+                                            if dir == RTCRtpTransceiverDirection::Unspecified {
+                                                RTCRtpTransceiverDirection::Inactive
+                                            } else {
+                                                dir
+                                            }
+                                        }
+                                        None => RTCRtpTransceiverDirection::Inactive,
+                                    };
+
+                                let current_direction = get_peer_direction(m);
                                 // Step 5.3.3
-                                if m.attribute(t.direction().to_string().as_str()).is_none() {
+                                if current_direction
+                                    != t.direction().intersect(offered_direction.reverse())
+                                {
                                     return true;
                                 }
                             }
