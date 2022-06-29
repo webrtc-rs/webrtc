@@ -1241,42 +1241,42 @@ impl RTCPeerConnection {
         let remote_description = self.remote_description().await;
         let mut local_transceivers = self.get_transceivers().await;
         if we_answer {
-            if let Some(remote_desc) = remote_description {
-                if let Some(parsed) = &remote_desc.parsed {
-                    // WebRTC Spec 1.0 https://www.w3.org/TR/webrtc/
-                    // Section 4.4.1.5
-                    for media in &parsed.media_descriptions {
-                        let mid_value = match get_mid_value(media) {
-                            Some(mid) => mid,
-                            None => continue,
-                        };
+            if let Some(parsed) = desc.parsed {
+                // WebRTC Spec 1.0 https://www.w3.org/TR/webrtc/
+                // Section 4.4.1.5
+                for media in &parsed.media_descriptions {
+                    let mid_value = match get_mid_value(media) {
+                        Some(mid) => mid,
+                        None => continue,
+                    };
 
-                        if media.media_name.media == MEDIA_SECTION_APPLICATION {
-                            continue;
-                        }
-
-                        let kind = RTPCodecType::from(media.media_name.media.as_str());
-                        let direction = get_peer_direction(media);
-                        if kind == RTPCodecType::Unspecified
-                            || direction == RTCRtpTransceiverDirection::Unspecified
-                        {
-                            continue;
-                        }
-
-                        let t = match find_by_mid(mid_value, &mut local_transceivers).await {
-                            Some(t) => t,
-                            None => continue,
-                        };
-                        let previous_direction = t.current_direction();
-                        // 4.9.1.7.3 applying a local answer or pranswer
-                        // Set transceiver.[[CurrentDirection]] and transceiver.[[FiredDirection]] to direction.
-
-                        // TODO: Also set FiredDirection here.
-                        t.set_current_direction(direction);
-                        t.process_new_current_direction(previous_direction).await?;
+                    if media.media_name.media == MEDIA_SECTION_APPLICATION {
+                        continue;
                     }
-                }
 
+                    let kind = RTPCodecType::from(media.media_name.media.as_str());
+                    let direction = get_peer_direction(media);
+                    if kind == RTPCodecType::Unspecified
+                        || direction == RTCRtpTransceiverDirection::Unspecified
+                    {
+                        continue;
+                    }
+
+                    let t = match find_by_mid(mid_value, &mut local_transceivers).await {
+                        Some(t) => t,
+                        None => continue,
+                    };
+                    let previous_direction = t.current_direction();
+                    // 4.9.1.7.3 applying a local answer or pranswer
+                    // Set transceiver.[[CurrentDirection]] and transceiver.[[FiredDirection]] to direction.
+
+                    // TODO: Also set FiredDirection here.
+                    t.set_current_direction(direction);
+                    t.process_new_current_direction(previous_direction).await?;
+                }
+            }
+
+            if let Some(remote_desc) = remote_description {
                 self.start_rtp_senders().await?;
 
                 let pci = Arc::clone(&self.internal);
