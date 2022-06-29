@@ -118,14 +118,14 @@ impl State {
                 _ => {}
             }
 
-            if let Err(_) = rx.changed().await {
+            if rx.changed().await.is_err() {
                 return Err(Error::ErrClosedPipe);
             }
         }
     }
 
     async fn error_on_close(rx: &mut watch::Receiver<State>) -> Result<()> {
-        if let Err(_) = rx.changed().await {
+        if rx.changed().await.is_err() {
             return Err(Error::ErrClosedPipe);
         }
 
@@ -291,11 +291,8 @@ impl RTPReceiverInternal {
                     _ = state_watch_rx.changed() => {
                         let new_state = *state_watch_rx.borrow();
 
-                        match new_state {
-                            State::Stopped => {
-                                return Err(Error::ErrClosedPipe);
-                            },
-                            _ => {},
+                        if new_state == State::Stopped {
+                            return Err(Error::ErrClosedPipe);
                         }
                         current_state = new_state;
                     }

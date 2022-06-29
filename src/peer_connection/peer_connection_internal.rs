@@ -599,7 +599,7 @@ impl PeerConnectionInternal {
         .await;
     }
 
-    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<RTCSessionDescription> {
+    pub(super) async fn remote_description(&self) -> Option<RTCSessionDescription> {
         let pending_remote_description = self.pending_remote_description.lock().await;
         if pending_remote_description.is_some() {
             pending_remote_description.clone()
