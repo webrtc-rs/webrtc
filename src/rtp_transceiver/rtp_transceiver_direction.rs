@@ -200,4 +200,25 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn test_rtp_transceiver_intersect() {
+        use RTCRtpTransceiverDirection::*;
+
+        let tests = vec![
+            ((Sendrecv, Recvonly), Recvonly),
+            ((Sendrecv, Sendonly), Sendonly),
+            ((Sendrecv, Inactive), Inactive),
+            ((Sendonly, Inactive), Inactive),
+            ((Recvonly, Inactive), Inactive),
+            ((Recvonly, Sendrecv), Recvonly),
+            ((Sendonly, Sendrecv), Sendonly),
+            ((Sendonly, Recvonly), Inactive),
+            ((Recvonly, Recvonly), Recvonly),
+        ];
+
+        for ((a, b), expected_direction) in tests {
+            assert_eq!(expected_direction, a.intersect(b));
+        }
+    }
 }
