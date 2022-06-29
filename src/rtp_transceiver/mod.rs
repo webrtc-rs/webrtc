@@ -168,7 +168,9 @@ pub struct RTCRtpTransceiver {
     mid: Mutex<String>,                           //atomic.Value
     sender: Mutex<Option<Arc<RTCRtpSender>>>,     //atomic.Value
     receiver: Mutex<Option<Arc<RTCRtpReceiver>>>, //atomic.Value
-    direction: AtomicU8,                          //RTPTransceiverDirection, //atomic.Value
+    //
+    direction: AtomicU8,         //RTPTransceiverDirection
+    current_direction: AtomicU8, //RTPTransceiverDirection
 
     codecs: Arc<Mutex<Vec<RTCRtpCodecParameters>>>, // User provided codecs via set_codec_preferences
 
@@ -191,7 +193,10 @@ impl RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
             sender: Mutex::new(None),
             receiver: Mutex::new(None),
+
             direction: AtomicU8::new(direction as u8),
+            current_direction: AtomicU8::new(RTCRtpTransceiverDirection::Unspecified as u8),
+
             codecs: Arc::new(Mutex::new(codecs)),
             stopped: AtomicBool::new(false),
             kind,
@@ -304,7 +309,7 @@ impl RTCRtpTransceiver {
         self.kind
     }
 
-    /// direction returns the RTPTransceiver's current direction
+    /// direction returns the RTPTransceiver's desired direction.
     pub fn direction(&self) -> RTCRtpTransceiverDirection {
         self.direction.load(Ordering::SeqCst).into()
     }
@@ -313,11 +318,26 @@ impl RTCRtpTransceiver {
         self.direction.store(d as u8, Ordering::SeqCst);
     }
 
+    /// current_direction returns the RTPTransceiver's current direction as negotiated.
+    ///
+    /// If this transceiver has never been negotiated or if it's stopped this returns [`RTCRtpTransceiverDirection::Unspecified`].
+    pub fn current_direction(&self) -> RTCRtpTransceiverDirection {
+        if self.stopped.load(Ordering::SeqCst) {
+            return RTCRtpTransceiverDirection::Unspecified;
+        }
+
+        self.current_direction.load(Ordering::SeqCst).into()
+    }
+
+    pub(crate) fn set_current_direction(&self, d: RTCRtpTransceiverDirection) {
+        self.current_direction.store(d as u8, Ordering::SeqCst);
+    }
+
     /// Perform any subsequent actions after altering the transceiver's direction.
     ///
     /// After changing the transceiver's direction this method should be called to perform any
     /// side-effects that results from the new direction, such as pausing/resuming the RTP receiver.
-    pub(crate) async fn process_new_direction(
+    pub(crate) async fn process_new_current_direction(
         &self,
         previous_direction: RTCRtpTransceiverDirection,
     ) -> Result<()> {
@@ -325,7 +345,7 @@ impl RTCRtpTransceiver {
             return Ok(());
         }
 
-        let current_direction = self.direction();
+        let current_direction = self.current_direction();
 
         match (previous_direction, current_direction) {
             (a, b) if a == b => {
