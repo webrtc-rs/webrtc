@@ -18,7 +18,7 @@ use crate::track::{TrackStream, TrackStreams};
 
 use interceptor::stream_info::RTPHeaderExtension;
 use interceptor::{Attributes, Interceptor};
-use log::{info, trace};
+use log::trace;
 use std::fmt;
 
 use std::sync::Arc;
