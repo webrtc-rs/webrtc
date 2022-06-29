@@ -14,6 +14,7 @@ use interceptor::{
     Attributes,
 };
 
+use log::trace;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -315,6 +316,12 @@ impl RTCRtpTransceiver {
     }
 
     pub(crate) fn set_direction(&self, d: RTCRtpTransceiverDirection) {
+        let previous: RTCRtpTransceiverDirection = self.direction.load(Ordering::SeqCst).into();
+        trace!(
+            "Setting direction of transceiver to {} from {}",
+            d,
+            previous
+        );
         self.direction.store(d as u8, Ordering::SeqCst);
     }
 
@@ -330,6 +337,13 @@ impl RTCRtpTransceiver {
     }
 
     pub(crate) fn set_current_direction(&self, d: RTCRtpTransceiverDirection) {
+        let previous: RTCRtpTransceiverDirection =
+            self.current_direction.load(Ordering::SeqCst).into();
+        trace!(
+            "Setting current direction of transceiver to {} from {}",
+            d,
+            previous
+        );
         self.current_direction.store(d as u8, Ordering::SeqCst);
     }
 
@@ -346,6 +360,11 @@ impl RTCRtpTransceiver {
         }
 
         let current_direction = self.current_direction();
+        trace!(
+            "Processing transceiver direction change from {} to {}",
+            previous_direction,
+            current_direction
+        );
 
         match (previous_direction, current_direction) {
             (a, b) if a == b => {
@@ -354,11 +373,13 @@ impl RTCRtpTransceiver {
             // All others imply a change
             (_, RTCRtpTransceiverDirection::Inactive | RTCRtpTransceiverDirection::Sendonly) => {
                 if let Some(receiver) = &*self.receiver.lock().await {
+                    trace!("Pausing receiver {:?}", receiver);
                     receiver.pause().await?;
                 }
             }
             (_, RTCRtpTransceiverDirection::Recvonly | RTCRtpTransceiverDirection::Sendrecv) => {
                 if let Some(receiver) = &*self.receiver.lock().await {
+                    trace!("Unpausing receiver {:?}", receiver);
                     receiver.resume().await?;
                 }
             }

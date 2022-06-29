@@ -566,24 +566,14 @@ pub(crate) async fn add_transceiver_sdp(
             let transceiver_direction = t.direction();
 
             match offered_direction {
-                Sendonly => {
+                Sendonly | Recvonly => {
                     // If a stream is offered as sendonly, the corresponding stream MUST be
                     // marked as recvonly or inactive in the answer.
-                    if [Recvonly, Sendrecv].contains(&transceiver_direction) {
-                        Recvonly
-                    } else {
-                        Inactive
-                    }
-                }
-                Recvonly => {
+
                     // If a media stream is
                     // listed as recvonly in the offer, the answer MUST be marked as
                     // sendonly or inactive in the answer.
-                    if [Sendonly, Sendrecv].contains(&transceiver_direction) {
-                        Sendonly
-                    } else {
-                        Inactive
-                    }
+                    offered_direction.reverse().intersect(transceiver_direction)
                 }
                 // If an offered media stream is
                 // listed as sendrecv (or if there is no direction attribute at the
