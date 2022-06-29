@@ -677,6 +677,7 @@ async fn test_populate_sdp() -> Result<()> {
             transceivers: vec![tr],
             data: false,
             rid_map,
+            ..Default::default()
         }];
 
         let d = SessionDescription::default();
@@ -757,6 +758,7 @@ async fn test_populate_sdp() -> Result<()> {
             transceivers: vec![tr],
             data: false,
             rid_map: HashMap::new(),
+            ..Default::default()
         }];
 
         let d = SessionDescription::default();
@@ -850,12 +852,14 @@ async fn test_populate_sdp_reject() -> Result<()> {
             transceivers: vec![trv],
             data: false,
             rid_map: HashMap::new(),
+            ..Default::default()
         },
         MediaSection {
             id: "audio".to_owned(),
             transceivers: vec![tra],
             data: false,
             rid_map: HashMap::new(),
+            ..Default::default()
         },
     ];
 

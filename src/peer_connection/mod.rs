@@ -1359,16 +1359,6 @@ impl RTCPeerConnection {
                         };
 
                         if let Some(t) = t {
-                            if direction == RTCRtpTransceiverDirection::Recvonly {
-                                if t.direction() == RTCRtpTransceiverDirection::Sendrecv {
-                                    t.set_direction(RTCRtpTransceiverDirection::Sendonly);
-                                }
-                            } else if direction == RTCRtpTransceiverDirection::Sendrecv
-                                && t.direction() == RTCRtpTransceiverDirection::Sendonly
-                            {
-                                t.set_direction(RTCRtpTransceiverDirection::Sendrecv);
-                            }
-
                             if t.mid().await.is_empty() {
                                 t.set_mid(mid_value.to_owned()).await?;
                             }
