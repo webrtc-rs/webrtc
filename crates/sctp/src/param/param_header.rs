@@ -3,7 +3,7 @@ use super::{param_type::*, *};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParamHeader {
     pub(crate) typ: ParamType,
     pub(crate) value_length: u16,
@@ -44,7 +44,7 @@ impl Param for ParamHeader {
     }
 
     fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
-        writer.put_u16(self.typ as u16);
+        writer.put_u16(self.typ.into());
         writer.put_u16(self.value_length + PARAM_HEADER_LENGTH as u16);
         Ok(writer.len())
     }

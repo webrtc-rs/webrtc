@@ -18,6 +18,7 @@ use crate::chunk::chunk_type::*;
 use crate::error::{Error, Result};
 use crate::util::*;
 
+use crate::chunk::chunk_unknown::ChunkUnknown;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
@@ -126,7 +127,7 @@ impl Packet {
                 CT_SHUTDOWN_COMPLETE => {
                     Box::new(ChunkShutdownComplete::unmarshal(&raw.slice(offset..))?)
                 }
-                _ => return Err(Error::ErrUnmarshalUnknownChunkType),
+                _ => Box::new(ChunkUnknown::unmarshal(&raw.slice(offset..))?),
             };
 
             let chunk_value_padding = get_padding_size(c.value_length());
