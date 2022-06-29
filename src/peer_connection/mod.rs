@@ -1426,14 +1426,6 @@ impl RTCPeerConnection {
                             continue;
                         }
 
-                        let kind = RTPCodecType::from(media.media_name.media.as_str());
-                        let direction = get_peer_direction(media);
-                        if kind == RTPCodecType::Unspecified
-                            || direction == RTCRtpTransceiverDirection::Unspecified
-                        {
-                            continue;
-                        }
-
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
                             let previous_direction = t.direction();
 
