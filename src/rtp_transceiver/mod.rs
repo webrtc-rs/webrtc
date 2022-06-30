@@ -169,7 +169,7 @@ pub struct RTCRtpTransceiver {
     mid: Mutex<String>,                           //atomic.Value
     sender: Mutex<Option<Arc<RTCRtpSender>>>,     //atomic.Value
     receiver: Mutex<Option<Arc<RTCRtpReceiver>>>, //atomic.Value
-    //
+
     direction: AtomicU8,         //RTPTransceiverDirection
     current_direction: AtomicU8, //RTPTransceiverDirection
 

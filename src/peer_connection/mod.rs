@@ -1245,11 +1245,6 @@ impl RTCPeerConnection {
                 // WebRTC Spec 1.0 https://www.w3.org/TR/webrtc/
                 // Section 4.4.1.5
                 for media in &parsed.media_descriptions {
-                    let mid_value = match get_mid_value(media) {
-                        Some(mid) => mid,
-                        None => continue,
-                    };
-
                     if media.media_name.media == MEDIA_SECTION_APPLICATION {
                         continue;
                     }
@@ -1261,6 +1256,17 @@ impl RTCPeerConnection {
                     {
                         continue;
                     }
+
+                    let mid_value = match get_mid_value(media) {
+                        Some(mid) => {
+                            if mid.is_empty() {
+                                continue;
+                            } else {
+                                mid
+                            }
+                        }
+                        None => continue,
+                    };
 
                     let t = match find_by_mid(mid_value, &mut local_transceivers).await {
                         Some(t) => t,
