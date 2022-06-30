@@ -316,13 +316,13 @@ impl RTCRtpTransceiver {
     }
 
     pub(crate) fn set_direction(&self, d: RTCRtpTransceiverDirection) {
-        let previous: RTCRtpTransceiverDirection = self.direction.load(Ordering::SeqCst).into();
+        let previous: RTCRtpTransceiverDirection =
+            self.direction.swap(d as u8, Ordering::SeqCst).into();
         trace!(
-            "Setting direction of transceiver to {} from {}",
-            d,
-            previous
+            "Changing direction of transceiver from {} to {}",
+            previous,
+            d
         );
-        self.direction.store(d as u8, Ordering::SeqCst);
     }
 
     /// current_direction returns the RTPTransceiver's current direction as negotiated.
@@ -337,14 +337,15 @@ impl RTCRtpTransceiver {
     }
 
     pub(crate) fn set_current_direction(&self, d: RTCRtpTransceiverDirection) {
-        let previous: RTCRtpTransceiverDirection =
-            self.current_direction.load(Ordering::SeqCst).into();
+        let previous: RTCRtpTransceiverDirection = self
+            .current_direction
+            .swap(d as u8, Ordering::SeqCst)
+            .into();
         trace!(
-            "Setting current direction of transceiver to {} from {}",
+            "Changing current direction of transceiver from {} to {}",
+            previous,
             d,
-            previous
         );
-        self.current_direction.store(d as u8, Ordering::SeqCst);
     }
 
     /// Perform any subsequent actions after altering the transceiver's direction.
