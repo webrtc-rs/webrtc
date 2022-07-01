@@ -599,7 +599,7 @@ impl PeerConnectionInternal {
         .await;
     }
 
-    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<RTCSessionDescription> {
+    pub(super) async fn remote_description(&self) -> Option<RTCSessionDescription> {
         let pending_remote_description = self.pending_remote_description.lock().await;
         if pending_remote_description.is_some() {
             pending_remote_description.clone()
@@ -800,16 +800,7 @@ impl PeerConnectionInternal {
         let ice_params = self.ice_gatherer.get_local_parameters().await?;
         let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        let remote_description = {
-            let pending_remote_description = self.pending_remote_description.lock().await;
-            if pending_remote_description.is_some() {
-                pending_remote_description.clone()
-            } else {
-                let current_remote_description = self.current_remote_description.lock().await;
-                current_remote_description.clone()
-            }
-        };
-
+        let remote_description = self.remote_description().await;
         let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
         let mut media_sections = vec![];
         let mut already_have_application_media_section = false;
@@ -898,6 +889,7 @@ impl PeerConnectionInternal {
                                     id: mid_value.to_owned(),
                                     transceivers: media_transceivers,
                                     rid_map: get_rids(media),
+                                    offered_direction: (!include_unmatched).then(|| direction),
                                     ..Default::default()
                                 });
                             } else {

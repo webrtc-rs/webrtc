@@ -80,6 +80,30 @@ impl RTCRtpTransceiverDirection {
             _ => *self,
         }
     }
+
+    pub fn intersect(&self, other: RTCRtpTransceiverDirection) -> RTCRtpTransceiverDirection {
+        Self::from_send_recv(
+            self.has_send() && other.has_send(),
+            self.has_recv() && other.has_recv(),
+        )
+    }
+
+    pub fn from_send_recv(send: bool, recv: bool) -> RTCRtpTransceiverDirection {
+        match (send, recv) {
+            (true, true) => Self::Sendrecv,
+            (true, false) => Self::Sendonly,
+            (false, true) => Self::Recvonly,
+            (false, false) => Self::Inactive,
+        }
+    }
+
+    fn has_send(&self) -> bool {
+        matches!(self, Self::Sendrecv | Self::Sendonly)
+    }
+
+    fn has_recv(&self) -> bool {
+        matches!(self, Self::Sendrecv | Self::Recvonly)
+    }
 }
 
 pub(crate) fn have_rtp_transceiver_direction_intersection(
@@ -127,6 +151,74 @@ mod test {
 
         for (d, expected_string) in tests {
             assert_eq!(expected_string, d.to_string());
+        }
+    }
+
+    #[test]
+    fn test_rtp_transceiver_has_send() {
+        let tests = vec![
+            (RTCRtpTransceiverDirection::Unspecified, false),
+            (RTCRtpTransceiverDirection::Sendrecv, true),
+            (RTCRtpTransceiverDirection::Sendonly, true),
+            (RTCRtpTransceiverDirection::Recvonly, false),
+            (RTCRtpTransceiverDirection::Inactive, false),
+        ];
+
+        for (d, expected_value) in tests {
+            assert_eq!(expected_value, d.has_send());
+        }
+    }
+
+    #[test]
+    fn test_rtp_transceiver_has_recv() {
+        let tests = vec![
+            (RTCRtpTransceiverDirection::Unspecified, false),
+            (RTCRtpTransceiverDirection::Sendrecv, true),
+            (RTCRtpTransceiverDirection::Sendonly, false),
+            (RTCRtpTransceiverDirection::Recvonly, true),
+            (RTCRtpTransceiverDirection::Inactive, false),
+        ];
+
+        for (d, expected_value) in tests {
+            assert_eq!(expected_value, d.has_recv());
+        }
+    }
+
+    #[test]
+    fn test_rtp_transceiver_from_send_recv() {
+        let tests = vec![
+            (RTCRtpTransceiverDirection::Sendrecv, (true, true)),
+            (RTCRtpTransceiverDirection::Sendonly, (true, false)),
+            (RTCRtpTransceiverDirection::Recvonly, (false, true)),
+            (RTCRtpTransceiverDirection::Inactive, (false, false)),
+        ];
+
+        for (expected_value, (send, recv)) in tests {
+            assert_eq!(
+                expected_value,
+                RTCRtpTransceiverDirection::from_send_recv(send, recv)
+            );
+        }
+    }
+
+    #[test]
+    fn test_rtp_transceiver_intersect() {
+        use RTCRtpTransceiverDirection::*;
+
+        let tests = vec![
+            ((Sendrecv, Recvonly), Recvonly),
+            ((Sendrecv, Sendonly), Sendonly),
+            ((Sendrecv, Inactive), Inactive),
+            ((Sendonly, Inactive), Inactive),
+            ((Recvonly, Inactive), Inactive),
+            ((Recvonly, Sendrecv), Recvonly),
+            ((Sendonly, Sendrecv), Sendonly),
+            ((Sendonly, Recvonly), Inactive),
+            ((Recvonly, Recvonly), Recvonly),
+        ];
+
+        for ((a, b), expected_direction) in tests {
+            assert_eq!(expected_direction, a.intersect(b));
         }
     }
 }

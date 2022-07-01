@@ -401,6 +401,7 @@ pub(crate) struct AddTransceiverSdpParams {
     mid_value: String,
     dtls_role: ConnectionRole,
     ice_gathering_state: RTCIceGatheringState,
+    offered_direction: Option<RTCRtpTransceiverDirection>,
 }
 
 pub(crate) async fn add_transceiver_sdp(
@@ -559,7 +560,45 @@ pub(crate) async fn add_transceiver_sdp(
         }
     }
 
-    media = media.with_property_attribute(t.direction().to_string());
+    let direction = match params.offered_direction {
+        Some(offered_direction) => {
+            use RTCRtpTransceiverDirection::*;
+            let transceiver_direction = t.direction();
+
+            match offered_direction {
+                Sendonly | Recvonly => {
+                    // If a stream is offered as sendonly, the corresponding stream MUST be
+                    // marked as recvonly or inactive in the answer.
+
+                    // If a media stream is
+                    // listed as recvonly in the offer, the answer MUST be marked as
+                    // sendonly or inactive in the answer.
+                    offered_direction.reverse().intersect(transceiver_direction)
+                }
+                // If an offered media stream is
+                // listed as sendrecv (or if there is no direction attribute at the
+                // media or session level, in which case the stream is sendrecv by
+                // default), the corresponding stream in the answer MAY be marked as
+                // sendonly, recvonly, sendrecv, or inactive
+                Sendrecv | Unspecified => t.direction(),
+                // If an offered media
+                // stream is listed as inactive, it MUST be marked as inactive in the
+                // answer.
+                Inactive => Inactive,
+            }
+        }
+        None => {
+            // If don't have an offered direction to intersect with just use the transceivers
+            // current direction.
+            //
+            // https://datatracker.ietf.org/doc/html/rfc8829#section-4.2.3
+            //
+            //    When creating offers, the transceiver direction is directly reflected
+            //    in the output, even for re-offers.
+            t.direction()
+        }
+    };
+    media = media.with_property_attribute(direction.to_string());
 
     for fingerprint in dtls_fingerprints {
         media = media.with_fingerprint(
@@ -582,6 +621,7 @@ pub(crate) struct MediaSection {
     pub(crate) transceivers: Vec<Arc<RTCRtpTransceiver>>,
     pub(crate) data: bool,
     pub(crate) rid_map: HashMap<String, String>,
+    pub(crate) offered_direction: Option<RTCRtpTransceiverDirection>,
 }
 
 pub(crate) struct PopulateSdpParams {
@@ -641,6 +681,7 @@ pub(crate) async fn populate_sdp(
                 mid_value: m.id.clone(),
                 dtls_role: params.connection_role,
                 ice_gathering_state: params.ice_gathering_state,
+                offered_direction: m.offered_direction,
             };
             let (d1, should_add_id) = add_transceiver_sdp(
                 d,

@@ -27,19 +27,29 @@ use tokio::sync::{watch, Mutex, RwLock};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum State {
-    Initial = 0,
-    Running = 1,
-    Paused = 2,
-    Closed = 3,
+    /// We haven't started yet.
+    Unstarted = 0,
+    /// We haven't started yet and additionally we've been paused.
+    UnstartedPaused = 1,
+
+    /// We have started and are running.
+    Started = 2,
+
+    /// We have been paused after starting.
+    Paused = 3,
+
+    /// We have been stopped.
+    Stopped = 4,
 }
 
 impl From<u8> for State {
     fn from(value: u8) -> Self {
         match value {
-            v if v == State::Initial as u8 => State::Initial,
-            v if v == State::Running as u8 => State::Running,
+            v if v == State::Unstarted as u8 => State::Unstarted,
+            v if v == State::UnstartedPaused as u8 => State::UnstartedPaused,
+            v if v == State::Started as u8 => State::Started,
             v if v == State::Paused as u8 => State::Paused,
-            v if v == State::Closed as u8 => State::Closed,
+            v if v == State::Stopped as u8 => State::Stopped,
             _ => unreachable!(
                 "Invalid serialization of {}: {}",
                 std::any::type_name::<Self>(),
@@ -52,10 +62,11 @@ impl From<u8> for State {
 impl fmt::Display for State {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            State::Initial => write!(f, "Initial"),
-            State::Running => write!(f, "Running"),
+            State::Unstarted => write!(f, "Unstarted"),
+            State::UnstartedPaused => write!(f, "UnstartedPaused"),
+            State::Started => write!(f, "Running"),
             State::Paused => write!(f, "Paused"),
-            State::Closed => write!(f, "Closed"),
+            State::Stopped => write!(f, "Closed"),
         }
     }
 }
@@ -69,15 +80,23 @@ impl State {
         }
 
         match current {
-            Self::Initial if matches!(to, Self::Running | Self::Paused | Self::Closed) => {
+            Self::Unstarted
+                if matches!(to, Self::Started | Self::Stopped | Self::UnstartedPaused) =>
+            {
                 let _ = tx.send(to);
                 return Ok(());
             }
-            State::Running if matches!(to, Self::Paused | Self::Closed) => {
+            Self::UnstartedPaused
+                if matches!(to, Self::Unstarted | Self::Stopped | Self::Paused) =>
+            {
                 let _ = tx.send(to);
                 return Ok(());
             }
-            State::Paused if matches!(to, Self::Running | Self::Closed) => {
+            State::Started if matches!(to, Self::Paused | Self::Stopped) => {
+                let _ = tx.send(to);
+                return Ok(());
+            }
+            State::Paused if matches!(to, Self::Started | Self::Stopped) => {
                 let _ = tx.send(to);
                 return Ok(());
             }
@@ -93,29 +112,33 @@ impl State {
 
             match state {
                 _ if states.contains(&state) => return Ok(()),
-                State::Closed => {
+                State::Stopped => {
                     return Err(Error::ErrClosedPipe);
                 }
                 _ => {}
             }
 
-            if let Err(_) = rx.changed().await {
+            if rx.changed().await.is_err() {
                 return Err(Error::ErrClosedPipe);
             }
         }
     }
 
     async fn error_on_close(rx: &mut watch::Receiver<State>) -> Result<()> {
-        if let Err(_) = rx.changed().await {
+        if rx.changed().await.is_err() {
             return Err(Error::ErrClosedPipe);
         }
 
         let state = *rx.borrow();
-        if state == State::Closed {
+        if state == State::Stopped {
             return Err(Error::ErrClosedPipe);
         }
 
         Ok(())
+    }
+
+    fn is_started(&self) -> bool {
+        matches!(self, Self::Started | Self::Paused)
     }
 }
 
@@ -141,7 +164,7 @@ impl RTPReceiverInternal {
         let mut state_watch_rx = self.state_tx.subscribe();
         // Ensure we are running or paused. When paused we still receive RTCP even if RTP traffic
         // isn't flowing.
-        State::wait_for(&mut state_watch_rx, &[State::Running, State::Paused]).await?;
+        State::wait_for(&mut state_watch_rx, &[State::Started, State::Paused]).await?;
 
         let tracks = self.tracks.read().await;
         if let Some(t) = tracks.first() {
@@ -173,7 +196,7 @@ impl RTPReceiverInternal {
 
         // Ensure we are running or paused. When paused we still recevie RTCP even if RTP traffic
         // isn't flowing.
-        State::wait_for(&mut state_watch_rx, &[State::Running, State::Paused]).await?;
+        State::wait_for(&mut state_watch_rx, &[State::Started, State::Paused]).await?;
 
         let tracks = self.tracks.read().await;
         for t in &*tracks {
@@ -235,7 +258,7 @@ impl RTPReceiverInternal {
         let mut state_watch_rx = self.state_tx.subscribe();
 
         // Ensure we are running.
-        State::wait_for(&mut state_watch_rx, &[State::Running]).await?;
+        State::wait_for(&mut state_watch_rx, &[State::Started]).await?;
 
         //log::debug!("read_rtp enter tracks tid {}", tid);
         let mut rtp_interceptor = None;
@@ -268,11 +291,8 @@ impl RTPReceiverInternal {
                     _ = state_watch_rx.changed() => {
                         let new_state = *state_watch_rx.borrow();
 
-                        match new_state {
-                            State::Closed => {
-                                return Err(Error::ErrClosedPipe);
-                            },
-                            _ => {},
+                        if new_state == State::Stopped {
+                            return Err(Error::ErrClosedPipe);
                         }
                         current_state = new_state;
                     }
@@ -340,19 +360,31 @@ impl RTPReceiverInternal {
     }
 
     pub(crate) fn start(&self) -> Result<()> {
-        State::transition(State::Running, &self.state_tx)
+        State::transition(State::Started, &self.state_tx)
     }
 
     pub(crate) fn pause(&self) -> Result<()> {
-        State::transition(State::Paused, &self.state_tx)
+        let current = self.current_state();
+
+        match current {
+            State::Unstarted => State::transition(State::UnstartedPaused, &self.state_tx),
+            State::Started => State::transition(State::Paused, &self.state_tx),
+            _ => Ok(()),
+        }
     }
 
     pub(crate) fn resume(&self) -> Result<()> {
-        State::transition(State::Running, &self.state_tx)
+        let current = self.current_state();
+
+        match current {
+            State::UnstartedPaused => State::transition(State::Unstarted, &self.state_tx),
+            State::Paused => State::transition(State::Started, &self.state_tx),
+            _ => Ok(()),
+        }
     }
 
     pub(crate) fn close(&self) -> Result<()> {
-        State::transition(State::Closed, &self.state_tx)
+        State::transition(State::Stopped, &self.state_tx)
     }
 }
 
@@ -381,7 +413,7 @@ impl RTCRtpReceiver {
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
-        let (state_tx, state_rx) = watch::channel(State::Initial);
+        let (state_tx, state_rx) = watch::channel(State::Unstarted);
 
         RTCRtpReceiver {
             receive_mtu,
@@ -475,7 +507,8 @@ impl RTCRtpReceiver {
     pub async fn receive(&self, parameters: &RTCRtpReceiveParameters) -> Result<()> {
         let receiver = Arc::downgrade(&self.internal);
 
-        if self.internal.current_state() != State::Initial {
+        let current_state = self.internal.current_state();
+        if current_state.is_started() {
             return Err(Error::ErrRTPReceiverReceiveAlreadyCalled);
         }
         self.internal.start()?;
@@ -613,7 +646,7 @@ impl RTCRtpReceiver {
     }
 
     pub(crate) async fn have_received(&self) -> bool {
-        self.internal.current_state() != State::Initial
+        self.internal.current_state().is_started()
     }
 
     pub(crate) async fn start(&self, incoming: &TrackDetails) {
@@ -641,9 +674,14 @@ impl RTCRtpReceiver {
 
         // set track id and label early so they can be set as new track information
         // is received from the SDP.
+        let is_unpaused = self.current_state() == State::Started;
         for track_remote in &self.tracks().await {
             track_remote.set_id(incoming.id.clone()).await;
             track_remote.set_stream_id(incoming.stream_id.clone()).await;
+
+            if is_unpaused {
+                track_remote.fire_onunmute().await;
+            }
         }
     }
 
@@ -653,7 +691,8 @@ impl RTCRtpReceiver {
         self.internal.close()?;
 
         let mut errs = vec![];
-        if previous_state != State::Initial {
+        let was_ever_started = previous_state.is_started();
+        if was_ever_started {
             let tracks = self.internal.tracks.write().await;
             for t in &*tracks {
                 if let Some(rtcp_read_stream) = &t.stream.rtcp_read_stream {
@@ -775,6 +814,10 @@ impl RTCRtpReceiver {
     pub(crate) async fn pause(&self) -> Result<()> {
         self.internal.pause()?;
 
+        if !self.internal.current_state().is_started() {
+            return Ok(());
+        }
+
         let streams = self.internal.tracks.read().await;
 
         for stream in streams.iter() {
@@ -788,6 +831,10 @@ impl RTCRtpReceiver {
 
     pub(crate) async fn resume(&self) -> Result<()> {
         self.internal.resume()?;
+
+        if !self.internal.current_state().is_started() {
+            return Ok(());
+        }
 
         let streams = self.internal.tracks.read().await;
 
