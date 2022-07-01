@@ -1258,14 +1258,8 @@ impl RTCPeerConnection {
                     }
 
                     let mid_value = match get_mid_value(media) {
-                        Some(mid) => {
-                            if mid.is_empty() {
-                                continue;
-                            } else {
-                                mid
-                            }
-                        }
-                        None => continue,
+                        Some(mid) if !mid.is_empty() => mid,
+                        _ => continue,
                     };
 
                     let t = match find_by_mid(mid_value, &mut local_transceivers).await {
