@@ -10,7 +10,6 @@ use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
 use std::ops::Add;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
 pub struct RTCCertificate {
@@ -173,12 +172,11 @@ impl RTCCertificate {
     }
     */
 
-    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
         let fingerprints = self.get_fingerprints().unwrap();
         if let Some(fingerprint) = fingerprints.into_iter().next() {
             let stats = CertificateStats::new(self, fingerprint);
-            let mut lock = collector.lock().await;
-            lock.insert(
+            collector.insert(
                 self.stats_id.clone(),
                 StatsReportType::CertificateStats(stats),
             );

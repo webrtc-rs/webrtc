@@ -1328,7 +1328,7 @@ impl PeerConnectionInternal {
     }
 
     pub(super) async fn get_stats(&self, stats_id: String) -> StatsCollector {
-        let collector = Mutex::new(StatsCollector::new());
+        let collector = StatsCollector::new();
 
         tokio::join!(
             self.ice_gatherer.collect_stats(&collector),
@@ -1338,7 +1338,7 @@ impl PeerConnectionInternal {
             self.media_engine.collect_stats(&collector),
         );
 
-        collector.into_inner()
+        collector
     }
 }
 

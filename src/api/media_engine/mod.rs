@@ -551,7 +551,7 @@ impl MediaEngine {
         Err(Error::ErrCodecNotFound)
     }
 
-    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
         let mut reports = HashMap::new();
 
         for codec in &self.video_codecs {
@@ -562,8 +562,7 @@ impl MediaEngine {
             reports.insert(codec.stats_id.clone(), Codec(CodecStats::from(codec)));
         }
 
-        let mut lock = collector.lock().await;
-        lock.merge(reports);
+        collector.merge(reports);
     }
     /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {
 

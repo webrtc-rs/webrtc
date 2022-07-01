@@ -306,7 +306,7 @@ impl RTCIceGatherer {
         agent.clone()
     }
 
-    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
         if let Some(agent) = self.get_agent().await {
             let mut reports = HashMap::new();
 
@@ -329,8 +329,7 @@ impl RTCIceGatherer {
                 );
             }
 
-            let mut lock = collector.lock().await;
-            lock.merge(reports);
+            collector.merge(reports);
         }
     }
     /*TODO:func (g *ICEGatherer) collectStats(collector *statsReportCollector) {

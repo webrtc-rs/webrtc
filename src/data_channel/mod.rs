@@ -546,9 +546,8 @@ impl RTCDataChannel {
         self.stats_id.as_str()
     }
 
-    pub(crate) async fn collect_stats(&self, collector: &Mutex<StatsCollector>) {
-        let mut lock = collector.lock().await;
-        lock.insert(
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
+        collector.insert(
             self.stats_id.clone(),
             StatsReportType::DataChannel(DataChannelStats::from(self)),
         );

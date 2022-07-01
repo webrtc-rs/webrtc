@@ -351,7 +351,7 @@ impl RTCSctpTransport {
 
     pub(crate) async fn collect_stats(
         &self,
-        collector: &Mutex<StatsCollector>,
+        collector: &StatsCollector,
         peer_connection_id: String,
     ) {
         let dtls_transport = self.transport();
@@ -382,8 +382,7 @@ impl RTCSctpTransport {
             reports.insert(stats.id.clone(), SCTPTransport(stats));
         }
 
-        let mut lock = collector.lock().await;
-        lock.merge(reports);
+        collector.merge(reports);
     }
     /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
         collector.Collecting()
