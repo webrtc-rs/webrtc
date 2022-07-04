@@ -1400,6 +1400,7 @@ impl RTCPeerConnection {
                                 kind,
                                 vec![],
                                 Arc::clone(&self.internal.media_engine),
+                                Some(Box::new(self.internal.make_negotiation_needed_trigger())),
                             )
                             .await;
 

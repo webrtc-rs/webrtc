@@ -24,6 +24,7 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
         RTPCodecType::Video,
         media_video_codecs.clone(),
         Arc::clone(&api.media_engine),
+        None,
     )
     .await;
 

@@ -16,6 +16,8 @@ use interceptor::{
 
 use log::trace;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -179,6 +181,9 @@ pub struct RTCRtpTransceiver {
     pub(crate) kind: RTPCodecType,
 
     media_engine: Arc<MediaEngine>,
+
+    trigger_negotiation_needed:
+        Mutex<Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send>>>,
 }
 
 impl RTCRtpTransceiver {
@@ -189,6 +194,9 @@ impl RTCRtpTransceiver {
         kind: RTPCodecType,
         codecs: Vec<RTCRtpCodecParameters>,
         media_engine: Arc<MediaEngine>,
+        trigger_negotiation_needed: Option<
+            Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send>,
+        >,
     ) -> Arc<Self> {
         let t = Arc::new(RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
@@ -202,6 +210,7 @@ impl RTCRtpTransceiver {
             stopped: AtomicBool::new(false),
             kind,
             media_engine,
+            trigger_negotiation_needed: Mutex::new(trigger_negotiation_needed),
         });
 
         t.set_receiver(receiver).await;
@@ -313,6 +322,18 @@ impl RTCRtpTransceiver {
     /// direction returns the RTPTransceiver's desired direction.
     pub fn direction(&self) -> RTCRtpTransceiverDirection {
         self.direction.load(Ordering::SeqCst).into()
+    }
+
+    /// Set the direction of this transceiver. This might trigger a renegotiation.
+    pub async fn set_direction(&self, d: RTCRtpTransceiverDirection) {
+        let changed = self.set_direction_internal(d);
+
+        if changed {
+            let lock = self.trigger_negotiation_needed.lock().await;
+            if let Some(trigger) = &*lock {
+                (trigger)().await;
+            }
+        }
     }
 
     pub(crate) fn set_direction_internal(&self, d: RTCRtpTransceiverDirection) -> bool {

@@ -505,6 +505,7 @@ impl PeerConnectionInternal {
                     kind,
                     vec![],
                     Arc::clone(&self.media_engine),
+                    Some(Box::new(self.make_negotiation_needed_trigger())),
                 )
                 .await
             }
@@ -570,6 +571,7 @@ impl PeerConnectionInternal {
             track.kind(),
             vec![],
             Arc::clone(&self.media_engine),
+            Some(Box::new(self.make_negotiation_needed_trigger())),
         )
         .await)
     }
@@ -605,6 +607,19 @@ impl PeerConnectionInternal {
                 current_local_description: Arc::clone(&self.current_local_description),
                 current_remote_description: Arc::clone(&self.current_remote_description),
             },
+        }
+    }
+
+    pub(crate) fn make_negotiation_needed_trigger(
+        &self,
+    ) -> impl Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send {
+        let params = self.create_negotiation_needed_params();
+        move || {
+            let params = params.clone();
+            Box::pin(async move {
+                let params = params.clone();
+                RTCPeerConnection::do_negotiation_needed(params).await;
+            })
         }
     }
 
@@ -871,6 +886,7 @@ impl PeerConnectionInternal {
                                             kind,
                                             vec![],
                                             Arc::clone(&self.media_engine),
+                                            Some(Box::new(self.make_negotiation_needed_trigger())),
                                         )
                                         .await;
                                         media_transceivers.push(t);
