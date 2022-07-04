@@ -589,6 +589,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                         .get_codecs_by_kind(RTPCodecType::Video)
                         .await,
                     Arc::clone(&api.media_engine),
+                    None,
                 )
                 .await,
             ],
@@ -606,6 +607,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                         .get_codecs_by_kind(RTPCodecType::Audio)
                         .await,
                     Arc::clone(&api.media_engine),
+                    None,
                 )
                 .await,
             ],
@@ -639,7 +641,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                 .await,
             )))
             .await;
-        media[i].transceivers[0].set_direction(RTCRtpTransceiverDirection::Sendonly);
+        media[i].transceivers[0].set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
     }
 
     //"Per-Media Description Fingerprints",
@@ -667,6 +669,7 @@ async fn test_populate_sdp() -> Result<()> {
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
+            None,
         )
         .await;
 
@@ -738,6 +741,7 @@ async fn test_populate_sdp() -> Result<()> {
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
+            None,
         )
         .await;
         tr.set_codec_preferences(vec![RTCRtpCodecParameters {
@@ -833,6 +837,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
         RTPCodecType::Video,
         me.video_codecs.clone(),
         Arc::clone(&me),
+        None,
     )
     .await;
 
@@ -843,6 +848,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
         RTPCodecType::Audio,
         me.audio_codecs.clone(),
         Arc::clone(&me),
+        None,
     )
     .await;
 

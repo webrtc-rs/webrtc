@@ -1400,6 +1400,7 @@ impl RTCPeerConnection {
                                 kind,
                                 vec![],
                                 Arc::clone(&self.internal.media_engine),
+                                Some(Box::new(self.internal.make_negotiation_needed_trigger())),
                             )
                             .await;
 
@@ -1453,7 +1454,7 @@ impl RTCPeerConnection {
 
                             // 4.9.2.13.2
                             // Set transceiver.[[CurrentDirection]] and transceiver.[[Direction]]s to direction.
-                            t.set_direction(reversed_direction);
+                            t.set_direction_internal(reversed_direction);
                             t.set_current_direction(reversed_direction);
                             t.process_new_current_direction(previous_direction).await?;
                         }

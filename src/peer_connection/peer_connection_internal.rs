@@ -23,7 +23,7 @@ pub(crate) struct PeerConnectionInternal {
     /// ops is an operations queue which will ensure the enqueued actions are
     /// executed in order. It is used for asynchronously, but serially processing
     /// remote and local descriptions
-    pub(super) ops: Arc<Operations>,
+    pub(crate) ops: Arc<Operations>,
     pub(super) negotiation_needed_state: Arc<AtomicU8>,
     pub(super) is_negotiation_needed: Arc<AtomicBool>,
     pub(super) signaling_state: Arc<AtomicU8>,
@@ -505,6 +505,7 @@ impl PeerConnectionInternal {
                     kind,
                     vec![],
                     Arc::clone(&self.media_engine),
+                    Some(Box::new(self.make_negotiation_needed_trigger())),
                 )
                 .await
             }
@@ -570,6 +571,7 @@ impl PeerConnectionInternal {
             track.kind(),
             vec![],
             Arc::clone(&self.media_engine),
+            Some(Box::new(self.make_negotiation_needed_trigger())),
         )
         .await)
     }
@@ -587,7 +589,12 @@ impl PeerConnectionInternal {
 
     /// Helper to trigger a negotiation needed.
     pub(crate) async fn trigger_negotiation_needed(&self) {
-        RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
+        RTCPeerConnection::do_negotiation_needed(self.create_negotiation_needed_params()).await;
+    }
+
+    /// Creates the parameters needed to trigger a negotiation needed.
+    fn create_negotiation_needed_params(&self) -> NegotiationNeededParams {
+        NegotiationNeededParams {
             on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.is_closed),
             ops: Arc::clone(&self.ops),
@@ -600,8 +607,20 @@ impl PeerConnectionInternal {
                 current_local_description: Arc::clone(&self.current_local_description),
                 current_remote_description: Arc::clone(&self.current_remote_description),
             },
-        })
-        .await;
+        }
+    }
+
+    pub(crate) fn make_negotiation_needed_trigger(
+        &self,
+    ) -> impl Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send {
+        let params = self.create_negotiation_needed_params();
+        move || {
+            let params = params.clone();
+            Box::pin(async move {
+                let params = params.clone();
+                RTCPeerConnection::do_negotiation_needed(params).await;
+            })
+        }
     }
 
     pub(super) async fn remote_description(&self) -> Option<RTCSessionDescription> {
@@ -867,6 +886,7 @@ impl PeerConnectionInternal {
                                             kind,
                                             vec![],
                                             Arc::clone(&self.media_engine),
+                                            Some(Box::new(self.make_negotiation_needed_trigger())),
                                         )
                                         .await;
                                         media_transceivers.push(t);

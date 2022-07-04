@@ -16,6 +16,8 @@ use interceptor::{
 
 use log::trace;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -179,6 +181,9 @@ pub struct RTCRtpTransceiver {
     pub(crate) kind: RTPCodecType,
 
     media_engine: Arc<MediaEngine>,
+
+    trigger_negotiation_needed:
+        Mutex<Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send>>>,
 }
 
 impl RTCRtpTransceiver {
@@ -189,6 +194,9 @@ impl RTCRtpTransceiver {
         kind: RTPCodecType,
         codecs: Vec<RTCRtpCodecParameters>,
         media_engine: Arc<MediaEngine>,
+        trigger_negotiation_needed: Option<
+            Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send>,
+        >,
     ) -> Arc<Self> {
         let t = Arc::new(RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
@@ -202,6 +210,7 @@ impl RTCRtpTransceiver {
             stopped: AtomicBool::new(false),
             kind,
             media_engine,
+            trigger_negotiation_needed: Mutex::new(trigger_negotiation_needed),
         });
 
         t.set_receiver(receiver).await;
@@ -315,14 +324,33 @@ impl RTCRtpTransceiver {
         self.direction.load(Ordering::SeqCst).into()
     }
 
-    pub(crate) fn set_direction(&self, d: RTCRtpTransceiverDirection) {
+    /// Set the direction of this transceiver. This might trigger a renegotiation.
+    pub async fn set_direction(&self, d: RTCRtpTransceiverDirection) {
+        let changed = self.set_direction_internal(d);
+
+        if changed {
+            let lock = self.trigger_negotiation_needed.lock().await;
+            if let Some(trigger) = &*lock {
+                (trigger)().await;
+            }
+        }
+    }
+
+    pub(crate) fn set_direction_internal(&self, d: RTCRtpTransceiverDirection) -> bool {
         let previous: RTCRtpTransceiverDirection =
             self.direction.swap(d as u8, Ordering::SeqCst).into();
-        trace!(
-            "Changing direction of transceiver from {} to {}",
-            previous,
-            d
-        );
+
+        let changed = d != previous;
+
+        if changed {
+            trace!(
+                "Changing direction of transceiver from {} to {}",
+                previous,
+                d
+            );
+        }
+
+        changed
     }
 
     /// current_direction returns the RTPTransceiver's current direction as negotiated.
@@ -412,7 +440,7 @@ impl RTCRtpTransceiver {
             }
         }
 
-        self.set_direction(RTCRtpTransceiverDirection::Inactive);
+        self.set_direction_internal(RTCRtpTransceiverDirection::Inactive);
 
         Ok(())
     }
@@ -434,11 +462,11 @@ impl RTCRtpTransceiver {
 
         let direction = self.direction();
         if !track_is_none && direction == RTCRtpTransceiverDirection::Recvonly {
-            self.set_direction(RTCRtpTransceiverDirection::Sendrecv);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Sendrecv);
         } else if !track_is_none && direction == RTCRtpTransceiverDirection::Inactive {
-            self.set_direction(RTCRtpTransceiverDirection::Sendonly);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
         } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendrecv {
-            self.set_direction(RTCRtpTransceiverDirection::Recvonly);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Recvonly);
         } else if !track_is_none
             && (direction == RTCRtpTransceiverDirection::Sendonly
                 || direction == RTCRtpTransceiverDirection::Sendrecv)
@@ -449,7 +477,7 @@ impl RTCRtpTransceiver {
             //} else if !track_is_none && self.direction == RTPTransceiverDirection::Sendrecv {
             // Similar to above, but for sendrecv transceiver.
         } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendonly {
-            self.set_direction(RTCRtpTransceiverDirection::Inactive);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Inactive);
         } else {
             return Err(Error::ErrRTPTransceiverSetSendingInvalidState);
         }
