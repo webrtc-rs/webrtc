@@ -587,7 +587,12 @@ impl PeerConnectionInternal {
 
     /// Helper to trigger a negotiation needed.
     pub(crate) async fn trigger_negotiation_needed(&self) {
-        RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
+        RTCPeerConnection::do_negotiation_needed(self.create_negotiation_needed_params()).await;
+    }
+
+    /// Creates the parameters needed to trigger a negotiation needed.
+    fn create_negotiation_needed_params(&self) -> NegotiationNeededParams {
+        NegotiationNeededParams {
             on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.is_closed),
             ops: Arc::clone(&self.ops),
@@ -600,8 +605,7 @@ impl PeerConnectionInternal {
                 current_local_description: Arc::clone(&self.current_local_description),
                 current_remote_description: Arc::clone(&self.current_remote_description),
             },
-        })
-        .await;
+        }
     }
 
     pub(super) async fn remote_description(&self) -> Option<RTCSessionDescription> {
