@@ -612,7 +612,7 @@ impl PeerConnectionInternal {
 
     pub(crate) fn make_negotiation_needed_trigger(
         &self,
-    ) -> impl Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send {
+    ) -> impl Fn() -> Pin<Box<dyn Future<Output = ()> + Sync>> + Send {
         let params = self.create_negotiation_needed_params();
         move || {
             let params = params.clone();

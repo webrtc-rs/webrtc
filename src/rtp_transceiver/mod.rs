@@ -183,7 +183,7 @@ pub struct RTCRtpTransceiver {
     media_engine: Arc<MediaEngine>,
 
     trigger_negotiation_needed:
-        Mutex<Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send>>>,
+        Mutex<Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Sync>> + Send>>>,
 }
 
 impl RTCRtpTransceiver {
@@ -195,7 +195,7 @@ impl RTCRtpTransceiver {
         codecs: Vec<RTCRtpCodecParameters>,
         media_engine: Arc<MediaEngine>,
         trigger_negotiation_needed: Option<
-            Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send>,
+            Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Sync>> + Send>,
         >,
     ) -> Arc<Self> {
         let t = Arc::new(RTCRtpTransceiver {
