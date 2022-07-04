@@ -1192,31 +1192,7 @@ impl RTCPeerConnection {
                     self.internal
                         .is_negotiation_needed
                         .store(false, Ordering::SeqCst);
-                    RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
-                        on_negotiation_needed_handler: Arc::clone(
-                            &self.internal.on_negotiation_needed_handler,
-                        ),
-                        is_closed: Arc::clone(&self.internal.is_closed),
-                        ops: Arc::clone(&self.internal.ops),
-                        negotiation_needed_state: Arc::clone(
-                            &self.internal.negotiation_needed_state,
-                        ),
-                        is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
-                        signaling_state: Arc::clone(&self.internal.signaling_state),
-                        check_negotiation_needed_params: CheckNegotiationNeededParams {
-                            sctp_transport: Arc::clone(&self.internal.sctp_transport),
-                            rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
-                            current_local_description: self
-                                .internal
-                                .current_local_description
-                                .clone(),
-                            current_remote_description: self
-                                .internal
-                                .current_remote_description
-                                .clone(),
-                        },
-                    })
-                    .await;
+                    self.internal.trigger_negotiation_needed().await;
                 }
                 self.do_signaling_state_change(next_state).await;
                 Ok(())
@@ -1728,31 +1704,7 @@ impl RTCPeerConnection {
                         return Err(err);
                     }
 
-                    RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
-                        on_negotiation_needed_handler: Arc::clone(
-                            &self.internal.on_negotiation_needed_handler,
-                        ),
-                        is_closed: Arc::clone(&self.internal.is_closed),
-                        ops: Arc::clone(&self.internal.ops),
-                        negotiation_needed_state: Arc::clone(
-                            &self.internal.negotiation_needed_state,
-                        ),
-                        is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
-                        signaling_state: Arc::clone(&self.internal.signaling_state),
-                        check_negotiation_needed_params: CheckNegotiationNeededParams {
-                            sctp_transport: Arc::clone(&self.internal.sctp_transport),
-                            rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
-                            current_local_description: self
-                                .internal
-                                .current_local_description
-                                .clone(),
-                            current_remote_description: self
-                                .internal
-                                .current_remote_description
-                                .clone(),
-                        },
-                    })
-                    .await;
+                    self.internal.trigger_negotiation_needed().await;
 
                     return Ok(sender);
                 }
@@ -1794,26 +1746,7 @@ impl RTCPeerConnection {
 
         if let Some(t) = transceiver {
             if sender.stop().await.is_ok() && t.set_sending_track(None).await.is_ok() {
-                RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
-                    on_negotiation_needed_handler: Arc::clone(
-                        &self.internal.on_negotiation_needed_handler,
-                    ),
-                    is_closed: Arc::clone(&self.internal.is_closed),
-                    ops: Arc::clone(&self.internal.ops),
-                    negotiation_needed_state: Arc::clone(&self.internal.negotiation_needed_state),
-                    is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
-                    signaling_state: Arc::clone(&self.internal.signaling_state),
-                    check_negotiation_needed_params: CheckNegotiationNeededParams {
-                        sctp_transport: Arc::clone(&self.internal.sctp_transport),
-                        rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
-                        current_local_description: self.internal.current_local_description.clone(),
-                        current_remote_description: self
-                            .internal
-                            .current_remote_description
-                            .clone(),
-                    },
-                })
-                .await;
+                self.internal.trigger_negotiation_needed().await;
             }
             Ok(())
         } else {
@@ -1938,21 +1871,7 @@ impl RTCPeerConnection {
             d.open(Arc::clone(&self.internal.sctp_transport)).await?;
         }
 
-        RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
-            on_negotiation_needed_handler: Arc::clone(&self.internal.on_negotiation_needed_handler),
-            is_closed: Arc::clone(&self.internal.is_closed),
-            ops: Arc::clone(&self.internal.ops),
-            negotiation_needed_state: Arc::clone(&self.internal.negotiation_needed_state),
-            is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
-            signaling_state: Arc::clone(&self.internal.signaling_state),
-            check_negotiation_needed_params: CheckNegotiationNeededParams {
-                sctp_transport: Arc::clone(&self.internal.sctp_transport),
-                rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
-                current_local_description: self.internal.current_local_description.clone(),
-                current_remote_description: self.internal.current_remote_description.clone(),
-            },
-        })
-        .await;
+        self.internal.trigger_negotiation_needed().await;
 
         Ok(d)
     }
