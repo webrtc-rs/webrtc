@@ -582,6 +582,11 @@ impl PeerConnectionInternal {
             let mut rtp_transceivers = self.rtp_transceivers.lock().await;
             rtp_transceivers.push(t);
         }
+        self.trigger_negotiation_needed().await;
+    }
+
+    /// Helper to trigger a negotiation needed.
+    pub(crate) async fn trigger_negotiation_needed(&self) {
         RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
             on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.is_closed),
