@@ -332,27 +332,6 @@ impl RTCIceTransport {
             collector.insert("ice_transport".to_string(), Transport(stats));
         }
     }
-    /*TODO: func (t *ICETransport) collectStats(collector *statsReportCollector) {
-        t.lock.Lock()
-        conn := t.conn
-        t.lock.Unlock()
-
-        collector.Collecting()
-
-        stats := TransportStats{
-            Timestamp: statsTimestampFrom(time.Now()),
-            Type:      StatsTypeTransport,
-            ID:        "ice_transport",
-        }
-
-        if conn != nil {
-            stats.BytesSent = conn.BytesSent()
-            stats.BytesReceived = conn.BytesReceived()
-        }
-
-        collector.Collect(stats.ID, stats)
-    }
-    */
 
     pub(crate) async fn have_remote_credentials_change(
         &self,

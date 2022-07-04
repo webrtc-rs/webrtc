@@ -183,31 +183,6 @@ impl RTCCertificate {
         }
     }
 
-    /*
-    func (c Certificate) collectStats(report *statsReportCollector) error {
-        report.Collecting()
-
-        fingerPrintAlgo, err := c.get_fingerprints()
-        if err != nil {
-            return err
-        }
-
-        base64Certificate := base64.RawURLEncoding.EncodeToString(c.x509Cert.Raw)
-
-        stats := CertificateStats{
-            Timestamp:            statsTimestampFrom(time.Now()),
-            Type:                 StatsTypeCertificate,
-            ID:                   c.statsID,
-            Fingerprint:          fingerPrintAlgo[0].Value,
-            FingerprintAlgorithm: fingerPrintAlgo[0].Algorithm,
-            Base64Certificate:    base64Certificate,
-            IssuerCertificateID:  c.x509Cert.Issuer.String(),
-        }
-
-        report.Collect(stats.ID, stats)
-        return nil
-    }*/
-
     /// from_pem creates a fresh certificate based on a string containing
     /// pem blocks fort the private key and x509 certificate
     pub fn from_pem(pem_str: &str, key_pair: KeyPair) -> Result<Self> {

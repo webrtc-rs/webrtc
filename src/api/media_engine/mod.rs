@@ -564,30 +564,6 @@ impl MediaEngine {
 
         collector.merge(reports);
     }
-    /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {
-
-            statsLoop := func(codecs []RTPCodecParameters) {
-                for _, codec := range codecs {
-                    collector.Collecting()
-                    stats := CodecStats{
-                        Timestamp:   statsTimestampFrom(time.Now()),
-                        Type:        StatsTypeCodec,
-                        ID:          codec.statsID,
-                        PayloadType: codec.PayloadType,
-                        mime_type:    codec.mime_type,
-                        clock_rate:   codec.clock_rate,
-                        channels:    uint8(codec.channels),
-                        sdpfmtp_line: codec.sdpfmtp_line,
-                    }
-
-                    collector.Collect(stats.ID, stats)
-                }
-            }
-
-            statsLoop(m.videoCodecs)
-            statsLoop(m.audioCodecs)
-        }
-    */
 
     /// Look up a codec and enable if it exists
     pub(crate) fn match_remote_codec(

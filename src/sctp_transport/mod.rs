@@ -384,23 +384,6 @@ impl RTCSctpTransport {
 
         collector.merge(reports);
     }
-    /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
-        collector.Collecting()
-
-        stats := TransportStats{
-            Timestamp: statsTimestampFrom(time.Now()),
-            Type:      StatsTypeTransport,
-            ID:        "sctpTransport",
-        }
-
-        association := r.association()
-        if association != nil {
-            stats.BytesSent = association.BytesSent()
-            stats.BytesReceived = association.BytesReceived()
-        }
-
-        collector.Collect(stats.ID, stats)
-    }*/
 
     pub(crate) async fn generate_and_set_data_channel_id(
         &self,

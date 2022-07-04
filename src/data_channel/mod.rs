@@ -552,37 +552,6 @@ impl RTCDataChannel {
             StatsReportType::DataChannel(DataChannelStats::from(self)),
         );
     }
-    /*TODO: func (d *DataChannel) collectStats(collector *statsReportCollector) {
-        collector.Collecting()
-
-        d.mu.Lock()
-        defer d.mu.Unlock()
-
-        stats := DataChannelStats{
-            Timestamp: statsTimestampNow(),
-            Type:      StatsTypeDataChannel,
-            ID:        d.stats_id,
-            Label:     d.label,
-            Protocol:  d.protocol,
-            // TransportID string `json:"transportId"`
-            State: d.ready_state(),
-        }
-
-        if d.id != nil {
-            stats.DataChannelIdentifier = int32(*d.id)
-        }
-
-        if d.dataChannel != nil {
-            stats.MessagesSent = d.dataChannel.MessagesSent()
-            stats.BytesSent = d.dataChannel.BytesSent()
-            stats.MessagesReceived = d.dataChannel.MessagesReceived()
-            stats.BytesReceived = d.dataChannel.BytesReceived()
-        }
-
-        collector.Collect(stats.ID, stats)
-    }
-
-    */
 
     pub(crate) fn set_ready_state(&self, r: RTCDataChannelState) {
         self.ready_state.store(r as u8, Ordering::SeqCst);
