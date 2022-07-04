@@ -243,7 +243,9 @@ async fn test_rtp_transceiver_direction_change() -> Result<()> {
     answer_pc.set_local_description(answer.clone()).await?;
     offer_pc.set_remote_description(answer).await?;
 
-    offer_transceiver.set_direction_internal(RTCRtpTransceiverDirection::Inactive);
+    offer_transceiver
+        .set_direction(RTCRtpTransceiverDirection::Inactive)
+        .await;
 
     let offer = offer_pc.create_offer(None).await?;
     assert!(offer.sdp.contains("a=inactive"),);
