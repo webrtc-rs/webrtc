@@ -315,14 +315,21 @@ impl RTCRtpTransceiver {
         self.direction.load(Ordering::SeqCst).into()
     }
 
-    pub(crate) fn set_direction(&self, d: RTCRtpTransceiverDirection) {
+    pub(crate) fn set_direction_internal(&self, d: RTCRtpTransceiverDirection) -> bool {
         let previous: RTCRtpTransceiverDirection =
             self.direction.swap(d as u8, Ordering::SeqCst).into();
-        trace!(
-            "Changing direction of transceiver from {} to {}",
-            previous,
-            d
-        );
+
+        let changed = d != previous;
+
+        if changed {
+            trace!(
+                "Changing direction of transceiver from {} to {}",
+                previous,
+                d
+            );
+        }
+
+        changed
     }
 
     /// current_direction returns the RTPTransceiver's current direction as negotiated.
@@ -412,7 +419,7 @@ impl RTCRtpTransceiver {
             }
         }
 
-        self.set_direction(RTCRtpTransceiverDirection::Inactive);
+        self.set_direction_internal(RTCRtpTransceiverDirection::Inactive);
 
         Ok(())
     }
@@ -434,11 +441,11 @@ impl RTCRtpTransceiver {
 
         let direction = self.direction();
         if !track_is_none && direction == RTCRtpTransceiverDirection::Recvonly {
-            self.set_direction(RTCRtpTransceiverDirection::Sendrecv);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Sendrecv);
         } else if !track_is_none && direction == RTCRtpTransceiverDirection::Inactive {
-            self.set_direction(RTCRtpTransceiverDirection::Sendonly);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
         } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendrecv {
-            self.set_direction(RTCRtpTransceiverDirection::Recvonly);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Recvonly);
         } else if !track_is_none
             && (direction == RTCRtpTransceiverDirection::Sendonly
                 || direction == RTCRtpTransceiverDirection::Sendrecv)
@@ -449,7 +456,7 @@ impl RTCRtpTransceiver {
             //} else if !track_is_none && self.direction == RTPTransceiverDirection::Sendrecv {
             // Similar to above, but for sendrecv transceiver.
         } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendonly {
-            self.set_direction(RTCRtpTransceiverDirection::Inactive);
+            self.set_direction_internal(RTCRtpTransceiverDirection::Inactive);
         } else {
             return Err(Error::ErrRTPTransceiverSetSendingInvalidState);
         }

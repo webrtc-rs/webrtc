@@ -639,7 +639,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                 .await,
             )))
             .await;
-        media[i].transceivers[0].set_direction(RTCRtpTransceiverDirection::Sendonly);
+        media[i].transceivers[0].set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
     }
 
     //"Per-Media Description Fingerprints",
