@@ -23,7 +23,7 @@ pub(crate) struct PeerConnectionInternal {
     /// ops is an operations queue which will ensure the enqueued actions are
     /// executed in order. It is used for asynchronously, but serially processing
     /// remote and local descriptions
-    pub(super) ops: Arc<Operations>,
+    pub(crate) ops: Arc<Operations>,
     pub(super) negotiation_needed_state: Arc<AtomicU8>,
     pub(super) is_negotiation_needed: Arc<AtomicBool>,
     pub(super) signaling_state: Arc<AtomicU8>,

@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicUsize;
+
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::APIBuilder;
@@ -252,6 +254,66 @@ async fn test_rtp_transceiver_direction_change() -> Result<()> {
     let answer = answer_pc.create_answer(None).await?;
     assert!(answer.sdp.contains("a=inactive"),);
     offer_pc.set_remote_description(answer).await?;
+
+    close_pair_now(&offer_pc, &answer_pc).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> {
+    let (offer_pc, answer_pc, _) = create_vnet_pair().await?;
+
+    let count = Arc::new(AtomicUsize::new(0));
+
+    {
+        let count = count.clone();
+        offer_pc
+            .on_negotiation_needed(Box::new(move || {
+                let count = count.clone();
+                Box::pin(async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                })
+            }))
+            .await;
+    }
+
+    let offer_transceiver = offer_pc
+        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .await?;
+
+    let _ = answer_pc
+        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .await?;
+
+    let offer = offer_pc.create_offer(None).await?;
+    offer_pc.set_local_description(offer.clone()).await?;
+    answer_pc.set_remote_description(offer).await?;
+
+    let answer = answer_pc.create_answer(None).await?;
+    answer_pc.set_local_description(answer.clone()).await?;
+    offer_pc.set_remote_description(answer).await?;
+
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    let offer = offer_pc.create_offer(None).await?;
+    offer_pc.set_local_description(offer.clone()).await?;
+    answer_pc.set_remote_description(offer).await?;
+
+    let answer = answer_pc.create_answer(None).await?;
+    answer_pc.set_local_description(answer.clone()).await?;
+    offer_pc.set_remote_description(answer).await?;
+
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    offer_transceiver
+        .set_direction(RTCRtpTransceiverDirection::Inactive)
+        .await;
+
+    // wait for negotiation ops queue to finish.
+    offer_pc.internal.ops.done().await;
+
+    assert_eq!(count.load(Ordering::SeqCst), 1);
 
     close_pair_now(&offer_pc, &answer_pc).await;
 
