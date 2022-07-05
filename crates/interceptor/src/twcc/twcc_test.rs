@@ -501,7 +501,7 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
 
     add_run(
         &mut r,
-        &[4, 5, 6, 7],
+        &[4, 8, 9, 10],
         &[
             increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
             increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
@@ -516,10 +516,10 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
     let expected = TransportLayerCc {
         sender_ssrc: 5000,
         media_ssrc: 5000,
-        base_sequence_number: 0,
+        base_sequence_number: 4,
         reference_time: 1,
-        fb_pkt_count: 0,
-        packet_status_count: 8,
+        fb_pkt_count: 1,
+        packet_status_count: 7,
         packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
             type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
             symbol_size: SymbolSizeTypeTcc::TwoBit,
@@ -534,10 +534,6 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
             ],
         })],
         recv_deltas: vec![
-            RecvDelta {
-                type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
-                delta: 0,
-            },
             RecvDelta {
                 type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                 delta: TYPE_TCC_DELTA_SCALE_FACTOR,
