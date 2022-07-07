@@ -321,3 +321,43 @@ async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> 
 
     Ok(())
 }
+
+#[ignore]
+#[tokio::test]
+async fn test_rtp_transceiver_stopping() -> Result<()> {
+    let (offer_pc, answer_pc, _) = create_vnet_pair().await?;
+
+    let offer_transceiver = offer_pc
+        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .await?;
+
+    let _ = answer_pc
+        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .await?;
+
+    let offer = offer_pc.create_offer(None).await?;
+
+    offer_pc.set_local_description(offer.clone()).await?;
+    answer_pc.set_remote_description(offer).await?;
+
+    let answer = answer_pc.create_answer(None).await?;
+    assert!(answer.sdp.contains("a=sendrecv"),);
+    answer_pc.set_local_description(answer.clone()).await?;
+    offer_pc.set_remote_description(answer).await?;
+
+    // Stop the transceiver
+    offer_transceiver.stop().await?;
+
+    let offer = offer_pc.create_offer(None).await?;
+    assert!(offer.sdp.contains("a=inactive"),);
+    let parsed = offer.parsed.unwrap();
+    let m = &parsed.media_descriptions[0];
+    assert_eq!(
+        m.media_name.port.value, 0,
+        "After stopping a transceiver it should be rejected in offers"
+    );
+
+    close_pair_now(&offer_pc, &answer_pc).await;
+
+    Ok(())
+}
