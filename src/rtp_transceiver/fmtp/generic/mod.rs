@@ -38,7 +38,7 @@ impl Fmtp for GenericFmtp {
     /// The generic implementation is used for MimeTypes that are not defined
     fn match_fmtp(&self, f: &(dyn Fmtp)) -> bool {
         if let Some(c) = f.as_any().downcast_ref::<GenericFmtp>() {
-            if self.mime_type != c.mime_type() {
+            if self.mime_type.to_lowercase() != c.mime_type().to_lowercase() {
                 return false;
             }
 

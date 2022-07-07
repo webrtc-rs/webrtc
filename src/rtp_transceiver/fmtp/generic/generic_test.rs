@@ -147,3 +147,14 @@ fn test_generic_fmtp_compare() {
         check(a, b);
     }
 }
+
+#[test]
+fn test_generic_fmtp_compare_mime_type_case_mismatch() {
+    let a = parse("video/vp8", "");
+    let b = parse("video/VP8", "");
+
+    assert!(
+        b.match_fmtp(&*a),
+        "fmtp lines should match even if they use different casing"
+    );
+}
