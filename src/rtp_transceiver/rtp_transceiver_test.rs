@@ -345,6 +345,10 @@ async fn test_rtp_transceiver_stopping() -> Result<()> {
     answer_pc.set_local_description(answer.clone()).await?;
     offer_pc.set_remote_description(answer).await?;
 
+    assert!(
+        !offer_transceiver.mid().await.is_empty(),
+        "A mid should have been associated with the transceiver when applying the answer"
+    );
     // Stop the transceiver
     offer_transceiver.stop().await?;
 
