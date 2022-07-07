@@ -447,7 +447,8 @@ impl RTCPeerConnection {
                 // if t.stopping && !t.stopped {
                 // 	return true
                 // }
-                let m = get_by_mid(t.mid().await.as_str(), local_desc);
+                let mid = t.mid().await;
+                let m = get_by_mid(&mid, local_desc);
                 // Step 5.2
                 if !t.stopped.load(Ordering::SeqCst) && m.is_none() {
                     return true;
@@ -455,19 +456,39 @@ impl RTCPeerConnection {
                 if !t.stopped.load(Ordering::SeqCst) {
                     if let Some(m) = m {
                         // Step 5.3.1
-                        if t.direction() == RTCRtpTransceiverDirection::Sendrecv
-                            || t.direction() == RTCRtpTransceiverDirection::Sendonly
-                        {
-                            if let (Some(desc_msid), Some(sender)) =
-                                (m.attribute(ATTR_KEY_MSID).and_then(|o| o), t.sender().await)
-                            {
-                                if let Some(track) = &sender.track().await {
-                                    if desc_msid != track.stream_id().to_owned() + " " + track.id()
-                                    {
-                                        return true;
-                                    }
+                        if t.direction().has_send() {
+                            let dmsid = match m.attribute(ATTR_KEY_MSID).and_then(|o| o) {
+                                Some(m) => m,
+                                None => return true, // doesn't contain a single a=msid line
+                            };
+
+                            let sender = match t.sender().await {
+                                Some(s) => s.clone(),
+                                None => {
+                                    log::warn!(
+                                        "RtpSender missing for transeceiver with sending direction {} for mid {}",
+                                        t.direction(),
+                                        mid
+                                    );
+                                    continue;
                                 }
-                            } else {
+                            };
+                            // (...)or the number of MSIDs from the a=msid lines in this m= section,
+                            // or the MSID values themselves, differ from what is in
+                            // transceiver.sender.[[AssociatedMediaStreamIds]], return true.
+
+                            // TODO: This check should be robuster by storing all streams in the
+                            // local description so we can compare all of them. For no we only
+                            // consider the first one.
+
+                            let stream_ids = sender.associated_media_stream_ids();
+                            // Different number of lines, 1 vs 0
+                            if stream_ids.is_empty() {
+                                return true;
+                            }
+
+                            // different stream id
+                            if dmsid.split_whitespace().next() != Some(&stream_ids[0]) {
                                 return true;
                             }
                         }
@@ -1747,6 +1768,10 @@ impl RTCPeerConnection {
 
         if let Some(t) = transceiver {
             if sender.stop().await.is_ok() && t.set_sending_track(None).await.is_ok() {
+                t.set_direction_internal(RTCRtpTransceiverDirection::from_send_recv(
+                    false,
+                    t.direction().has_recv(),
+                ));
                 self.internal.trigger_negotiation_needed().await;
             }
             Ok(())
