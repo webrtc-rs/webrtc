@@ -170,7 +170,7 @@ impl Packet {
 
         let hasher = Crc::<u32>::new(&CRC_32_ISCSI);
         let mut digest = hasher.digest();
-        digest.update(&writer.to_vec());
+        digest.update(writer);
         digest.update(&FOUR_ZEROES);
         digest.update(&raw[..]);
         let checksum = digest.finalize();

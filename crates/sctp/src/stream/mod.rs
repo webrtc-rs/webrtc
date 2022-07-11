@@ -20,7 +20,7 @@ use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::{mpsc, Mutex, Notify};
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub enum ReliabilityType {
     /// ReliabilityTypeReliable is used for reliable transmission
@@ -795,6 +795,6 @@ impl fmt::Debug for PollStream {
 
 impl AsRef<Stream> for PollStream {
     fn as_ref(&self) -> &Stream {
-        &*self.stream
+        &self.stream
     }
 }

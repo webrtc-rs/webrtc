@@ -1,13 +1,9 @@
 use async_trait::async_trait;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
-use std::time::SystemTime;
-
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
-use crate::error::Result;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 ///////////////////////////////////////////////////////////////////
 //ack_timer_test
@@ -165,6 +161,10 @@ mod test_rto_manager {
 mod test_rtx_timer {
     use super::*;
     use crate::association::RtxTimerId;
+    use crate::error::Result;
+
+    use std::time::SystemTime;
+    use tokio::sync::mpsc;
 
     struct TestTimerObserver {
         ncbs: Arc<AtomicU32>,

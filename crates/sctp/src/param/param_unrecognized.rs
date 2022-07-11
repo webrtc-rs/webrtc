@@ -35,7 +35,7 @@ impl Param for ParamUnrecognized {
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
-        &*self
+        self
     }
 
     fn unmarshal(raw: &Bytes) -> crate::error::Result<Self>

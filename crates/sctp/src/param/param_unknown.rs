@@ -10,7 +10,7 @@ use std::fmt::{Debug, Display, Formatter};
 /// This means we do not really understand the semantics of the param but can represent it.
 ///
 /// This is useful for usage in e.g.`ParamUnrecognized` where we want to report some unrecognized params back to the sender.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParamUnknown {
     typ: u16,
     value: Bytes,
@@ -33,7 +33,7 @@ impl Param for ParamUnknown {
     }
 
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
-        &*self
+        self
     }
 
     fn unmarshal(raw: &Bytes) -> crate::error::Result<Self>

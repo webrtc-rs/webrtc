@@ -169,7 +169,7 @@ impl AssociationInternal {
 
     /// caller must hold self.lock
     pub(crate) fn send_init(&mut self) -> Result<()> {
-        if let Some(stored_init) = self.stored_init.take() {
+        if let Some(stored_init) = self.stored_init.clone() {
             log::debug!("[{}] sending INIT", self.name);
 
             self.source_port = 5000; // Spec??

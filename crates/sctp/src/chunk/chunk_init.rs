@@ -74,6 +74,20 @@ pub(crate) struct ChunkInit {
     pub(crate) params: Vec<Box<dyn Param + Send + Sync>>,
 }
 
+impl Clone for ChunkInit {
+    fn clone(&self) -> Self {
+        ChunkInit {
+            is_ack: self.is_ack,
+            initiate_tag: self.initiate_tag,
+            advertised_receiver_window_credit: self.advertised_receiver_window_credit,
+            num_outbound_streams: self.num_outbound_streams,
+            num_inbound_streams: self.num_inbound_streams,
+            initial_tsn: self.initial_tsn,
+            params: self.params.to_vec(),
+        }
+    }
+}
+
 pub(crate) const INIT_CHUNK_MIN_LENGTH: usize = 16;
 pub(crate) const INIT_OPTIONAL_VAR_HEADER_LENGTH: usize = 4;
 
