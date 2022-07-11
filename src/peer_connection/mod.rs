@@ -1767,11 +1767,11 @@ impl RTCPeerConnection {
         }
 
         if let Some(t) = transceiver {
-            if sender.stop().await.is_ok() && t.set_sending_track(None).await.is_ok() {
-                t.set_direction_internal(RTCRtpTransceiverDirection::from_send_recv(
-                    false,
-                    t.direction().has_recv(),
-                ));
+            let sender_result = sender.stop().await;
+            // This also updates direction
+            let sending_track_result = t.set_sending_track(None).await;
+
+            if sender_result.is_ok() && sending_track_result.is_ok() {
                 self.internal.trigger_negotiation_needed().await;
             }
             Ok(())
