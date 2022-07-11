@@ -92,11 +92,16 @@ impl Packet {
         let source_port = reader.get_u16();
         let destination_port = reader.get_u16();
         let verification_tag = reader.get_u32();
-        let their_checksum = reader.get_u32_le();
-        let our_checksum = generate_packet_checksum(raw);
 
-        if their_checksum != our_checksum {
-            return Err(Error::ErrChecksumMismatch);
+        #[cfg(not(fuzzing))]
+        // only check for checksums when we are not fuzzing. This lets the fuzzer test the code much easier without guessing correct checksums.
+        {
+            let their_checksum = reader.get_u32_le();
+            let our_checksum = generate_packet_checksum(raw);
+
+            if their_checksum != our_checksum {
+                return Err(Error::ErrChecksumMismatch);
+            }
         }
 
         let mut chunks = vec![];

@@ -13,3 +13,6 @@ pub(crate) mod timer;
 pub(crate) mod util;
 
 pub use error::Error;
+
+#[cfg(test)]
+mod fuzz_artifact_test;

@@ -90,7 +90,8 @@ impl Chunk for ChunkSelectiveAck {
             return Err(Error::ErrChunkTypeNotSack);
         }
 
-        if raw.len() < CHUNK_HEADER_SIZE + SELECTIVE_ACK_HEADER_SIZE {
+        // validity of value_length is checked in ChunkHeader::unmarshal
+        if header.value_length() < SELECTIVE_ACK_HEADER_SIZE {
             return Err(Error::ErrSackSizeNotLargeEnoughInfo);
         }
 
@@ -104,10 +105,10 @@ impl Chunk for ChunkSelectiveAck {
         // Here we must account for case where the buffer contains another chunk
         // right after this one. Testing for equality would incorrectly fail the
         // parsing of this chunk and incorrectly close the transport.
-        if raw.len()
-            < CHUNK_HEADER_SIZE
-                + SELECTIVE_ACK_HEADER_SIZE
-                + (4 * gap_ack_blocks_len + 4 * duplicate_tsn_len)
+
+        // validity of value_length is checked in ChunkHeader::unmarshal
+        if header.value_length()
+            < SELECTIVE_ACK_HEADER_SIZE + (4 * gap_ack_blocks_len + 4 * duplicate_tsn_len)
         {
             return Err(Error::ErrSackSizeNotLargeEnoughInfo);
         }
