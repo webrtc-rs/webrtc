@@ -1437,7 +1437,7 @@ impl RTCPeerConnection {
 
             if we_offer {
                 // WebRTC Spec 1.0 https://www.w3.org/TR/webrtc/
-                // Section 4.4.1.5
+                // 4.5.9.2
                 // This is an answer from the remote.
                 if let Some(parsed) = remote_description.as_ref().and_then(|r| r.parsed.as_ref()) {
                     for media in &parsed.media_descriptions {
@@ -1466,17 +1466,19 @@ impl RTCPeerConnection {
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
                             let previous_direction = t.direction();
 
-                            // 4.9.2.9
+                            // 4.5.9.2.9
                             // Let direction be an RTCRtpTransceiverDirection value representing the direction
                             // from the media description, but with the send and receive directions reversed to
                             // represent this peer's point of view. If the media description is rejected,
                             // set direction to "inactive".
                             let reversed_direction = direction.reverse();
 
-                            // 4.9.2.13.2
+                            // 4.5.9.2.13.2
                             // Set transceiver.[[CurrentDirection]] and transceiver.[[Direction]]s to direction.
-                            t.set_direction_internal(reversed_direction);
                             t.set_current_direction(reversed_direction);
+                            // TODO: According to the specification we should set
+                            // transceiver.[[Direction]] here, however libWebrtc doesn't do this.
+                            // t.set_direction_internal(reversed_direction);
                             t.process_new_current_direction(previous_direction).await?;
                         }
                     }
@@ -1766,18 +1768,24 @@ impl RTCPeerConnection {
             }
         }
 
-        if let Some(t) = transceiver {
-            let sender_result = sender.stop().await;
-            // This also updates direction
-            let sending_track_result = t.set_sending_track(None).await;
+        let t = transceiver.ok_or(Error::ErrSenderNotCreatedByConnection)?;
 
-            if sender_result.is_ok() && sending_track_result.is_ok() {
-                self.internal.trigger_negotiation_needed().await;
-            }
-            Ok(())
-        } else {
-            Err(Error::ErrSenderNotCreatedByConnection)
+        // This also happens in `set_sending_track` but we need to make sure we do this
+        // before we call sender.stop to avoid a race condition when removing tracks and
+        // generating offers.
+        t.set_direction_internal(RTCRtpTransceiverDirection::from_send_recv(
+            false,
+            t.direction().has_recv(),
+        ));
+        // Stop the sender
+        let sender_result = sender.stop().await;
+        // This also updates direction
+        let sending_track_result = t.set_sending_track(None).await;
+
+        if sender_result.is_ok() && sending_track_result.is_ok() {
+            self.internal.trigger_negotiation_needed().await;
         }
+        Ok(())
     }
 
     /// add_transceiver_from_kind Create a new RtpTransceiver and adds it to the set of transceivers.

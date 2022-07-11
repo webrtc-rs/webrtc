@@ -394,8 +394,10 @@ impl RTCRtpTransceiver {
 
         let current_direction = self.current_direction();
         if previous_direction != current_direction {
+            let mid = self.mid().await;
             trace!(
-                "Processing transceiver direction change from {} to {}",
+                "Processing transceiver({}) direction change from {} to {}",
+                mid,
                 previous_direction,
                 current_direction
             );
