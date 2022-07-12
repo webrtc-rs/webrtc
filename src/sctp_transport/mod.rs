@@ -227,7 +227,7 @@ impl RTCSctpTransport {
                 result = DataChannel::accept(
                     &param.sctp_association,
                     data::data_channel::Config::default(),
-                    existing_data_channels,
+                    existing_data_channels.to_owned(),
                 ) => {
                     match result {
                         Ok(dc) => dc,
