@@ -370,11 +370,14 @@ impl RTCRtpTransceiver {
             .current_direction
             .swap(d as u8, Ordering::SeqCst)
             .into();
-        trace!(
-            "Changing current direction of transceiver from {} to {}",
-            previous,
-            d,
-        );
+
+        if d != previous {
+            trace!(
+                "Changing current direction of transceiver from {} to {}",
+                previous,
+                d,
+            );
+        }
     }
 
     /// Perform any subsequent actions after altering the transceiver's direction.
@@ -390,11 +393,15 @@ impl RTCRtpTransceiver {
         }
 
         let current_direction = self.current_direction();
-        trace!(
-            "Processing transceiver direction change from {} to {}",
-            previous_direction,
-            current_direction
-        );
+        if previous_direction != current_direction {
+            let mid = self.mid().await;
+            trace!(
+                "Processing transceiver({}) direction change from {} to {}",
+                mid,
+                previous_direction,
+                current_direction
+            );
+        }
 
         match (previous_direction, current_direction) {
             (a, b) if a == b => {
@@ -462,26 +469,13 @@ impl RTCRtpTransceiver {
         }
 
         let direction = self.direction();
-        if !track_is_none && direction == RTCRtpTransceiverDirection::Recvonly {
-            self.set_direction_internal(RTCRtpTransceiverDirection::Sendrecv);
-        } else if !track_is_none && direction == RTCRtpTransceiverDirection::Inactive {
-            self.set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
-        } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendrecv {
-            self.set_direction_internal(RTCRtpTransceiverDirection::Recvonly);
-        } else if !track_is_none
-            && (direction == RTCRtpTransceiverDirection::Sendonly
-                || direction == RTCRtpTransceiverDirection::Sendrecv)
-        {
-            // Handle the case where a sendonly transceiver was added by a negotiation
-            // initiated by remote peer. For example a remote peer added a transceiver
-            // with direction recvonly.
-            //} else if !track_is_none && self.direction == RTPTransceiverDirection::Sendrecv {
-            // Similar to above, but for sendrecv transceiver.
-        } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendonly {
-            self.set_direction_internal(RTCRtpTransceiverDirection::Inactive);
-        } else {
-            return Err(Error::ErrRTPTransceiverSetSendingInvalidState);
-        }
+        let should_send = !track_is_none;
+        let should_recv = direction.has_recv();
+        self.set_direction_internal(RTCRtpTransceiverDirection::from_send_recv(
+            should_send,
+            should_recv,
+        ));
+
         Ok(())
     }
 }

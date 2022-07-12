@@ -132,6 +132,11 @@ pub enum Error {
     #[error("RtpSender not created by this PeerConnection")]
     ErrSenderNotCreatedByConnection,
 
+    /// ErrSenderInitialTrackIdAlreadySet indicates a second call to
+    /// [`RtpSender::set_initial_track_id`] which is not allowed.
+    #[error("RtpSender's initial_track_id has already been set")]
+    ErrSenderInitialTrackIdAlreadySet,
+
     /// ErrSessionDescriptionNoFingerprint indicates set_remote_description was called with a SessionDescription that has no
     /// fingerprint
     #[error("set_remote_description called with no fingerprint")]

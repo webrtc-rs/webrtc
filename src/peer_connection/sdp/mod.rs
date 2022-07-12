@@ -550,10 +550,42 @@ pub(crate) async fn add_transceiver_sdp(
                     track.stream_id().to_owned(), /* streamLabel */
                     track.id().to_owned(),
                 );
-                if !is_plan_b {
-                    media = media.with_property_attribute(
-                        "msid:".to_owned() + track.stream_id() + " " + track.id(),
-                    );
+
+                // Send msid based on the configured track if we haven't already
+                // sent on this sender. If we have sent we must keep the msid line consistent, this
+                // is handled below.
+                if !is_plan_b && sender.initial_track_id().is_none() {
+                    for stream_id in sender.associated_media_stream_ids() {
+                        media = media.with_property_attribute(format!(
+                            "msid:{} {}",
+                            stream_id,
+                            track.id()
+                        ));
+                    }
+
+                    sender.set_initial_track_id(track.id().to_string())?;
+                    break;
+                }
+            }
+
+            if !is_plan_b {
+                if let Some(track_id) = sender.initial_track_id() {
+                    // After we have include an msid attribute in an offer it must stay the same for
+                    // all subsequent offer even if the track or transceiver direction changes.
+                    //
+                    // [RFC 8829 Section 5.2.2](https://datatracker.ietf.org/doc/html/rfc8829#section-5.2.2)
+                    //
+                    // For RtpTransceivers that are not stopped, the "a=msid" line or
+                    // lines MUST stay the same if they are present in the current
+                    // description, regardless of changes to the transceiver's direction
+                    // or track.  If no "a=msid" line is present in the current
+                    // description, "a=msid" line(s) MUST be generated according to the
+                    // same rules as for an initial offer.
+                    for stream_id in sender.associated_media_stream_ids() {
+                        media = media
+                            .with_property_attribute(format!("msid:{} {}", stream_id, track_id));
+                    }
+
                     break;
                 }
             }

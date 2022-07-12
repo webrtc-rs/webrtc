@@ -97,11 +97,11 @@ impl RTCRtpTransceiverDirection {
         }
     }
 
-    fn has_send(&self) -> bool {
+    pub fn has_send(&self) -> bool {
         matches!(self, Self::Sendrecv | Self::Sendonly)
     }
 
-    fn has_recv(&self) -> bool {
+    pub fn has_recv(&self) -> bool {
         matches!(self, Self::Sendrecv | Self::Recvonly)
     }
 }
