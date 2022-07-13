@@ -10,6 +10,9 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.137", features = ["derive"], optional = true }
 
+[dev-dependencies]
+serde_json = { version = "1.0", features = ["preserve_order"] }
+
 [features]
 default = []
 serde = ["dep:serde"]
