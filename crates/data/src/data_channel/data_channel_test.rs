@@ -188,7 +188,7 @@ async fn pr_ordered_unordered_test(channel_type: ChannelType, is_ordered: bool) 
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default(), Vec::new()).await?;
     bridge_process_at_least_one(&br).await;
 
     assert_eq!(dc0.config, cfg, "local config should match");
@@ -274,7 +274,7 @@ async fn test_data_channel_channel_type_reliable_ordered() -> Result<()> {
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default(), Vec::new()).await?;
     bridge_process_at_least_one(&br).await;
 
     assert_eq!(dc0.config, cfg, "local config should match");
@@ -336,7 +336,7 @@ async fn test_data_channel_channel_type_reliable_unordered() -> Result<()> {
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default(), Vec::new()).await?;
     bridge_process_at_least_one(&br).await;
 
     assert_eq!(dc0.config, cfg, "local config should match");
@@ -434,7 +434,7 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     );
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = Arc::new(DataChannel::accept(&a1, Config::default()).await?);
+    let dc1 = Arc::new(DataChannel::accept(&a1, Config::default(), Vec::new()).await?);
     bridge_process_at_least_one(&br).await;
 
     while dc0.buffered_amount() > 0 {
@@ -535,7 +535,7 @@ async fn test_stats() -> Result<()> {
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default(), Vec::new()).await?;
     bridge_process_at_least_one(&br).await;
 
     let mut bytes_sent = 0;
@@ -628,7 +628,7 @@ async fn test_poll_data_channel() -> Result<()> {
     let dc0 = Arc::new(DataChannel::dial(&a0, 100, cfg.clone()).await?);
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = Arc::new(DataChannel::accept(&a1, Config::default()).await?);
+    let dc1 = Arc::new(DataChannel::accept(&a1, Config::default(), Vec::new()).await?);
     bridge_process_at_least_one(&br).await;
 
     let mut poll_dc0 = PollDataChannel::new(dc0);

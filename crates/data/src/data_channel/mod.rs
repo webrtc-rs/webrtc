@@ -78,11 +78,24 @@ impl DataChannel {
     }
 
     /// Accept is used to accept incoming data channels over SCTP
-    pub async fn accept(association: &Arc<Association>, config: Config) -> Result<Self> {
+    pub async fn accept(
+        association: &Arc<Association>,
+        config: Config,
+        existing_channels: Vec<DataChannel>,
+    ) -> Result<Self> {
         let stream = association
             .accept_stream()
             .await
             .ok_or(Error::ErrStreamClosed)?;
+
+        for channel in existing_channels.iter() {
+            if channel.stream_identifier() == stream.stream_identifier() {
+                channel
+                    .stream
+                    .set_default_payload_type(PayloadProtocolIdentifier::Binary);
+                return Ok(channel.to_owned());
+            }
+        }
 
         stream.set_default_payload_type(PayloadProtocolIdentifier::Binary);
 
