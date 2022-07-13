@@ -2082,67 +2082,6 @@ impl RTCPeerConnection {
             .await
             .into()
     }
-    // GetStats return data providing statistics about the overall connection
-    /*TODO: func (pc *PeerConnection) GetStats() StatsReport {
-        var (
-            dataChannelsAccepted  uint32
-            dataChannelsClosed    uint32
-            dataChannelsOpened    uint32
-            dataChannelsRequested uint32
-        )
-        statsCollector := newStatsReportCollector()
-        statsCollector.Collecting()
-
-        self.mu.Lock()
-        if self.iceGatherer != nil {
-            self.iceGatherer.collectStats(statsCollector)
-        }
-        if self.iceTransport != nil {
-            self.iceTransport.collectStats(statsCollector)
-        }
-
-        self.sctpTransport.lock.Lock()
-        dataChannels := append([]*DataChannel{}, self.sctpTransport.dataChannels...)
-        dataChannelsAccepted = self.sctpTransport.dataChannelsAccepted
-        dataChannelsOpened = self.sctpTransport.dataChannelsOpened
-        dataChannelsRequested = self.sctpTransport.dataChannelsRequested
-        self.sctpTransport.lock.Unlock()
-
-        for _, d := range dataChannels {
-            state := d.ReadyState()
-            if state != DataChannelStateConnecting && state != DataChannelStateOpen {
-                dataChannelsClosed++
-            }
-
-            d.collectStats(statsCollector)
-        }
-        self.sctpTransport.collectStats(statsCollector)
-
-        stats := PeerConnectionStats{
-            Timestamp:             statsTimestampNow(),
-            Type:                  StatsTypePeerConnection,
-            ID:                    self.stats_id,
-            DataChannelsAccepted:  dataChannelsAccepted,
-            DataChannelsClosed:    dataChannelsClosed,
-            DataChannelsOpened:    dataChannelsOpened,
-            DataChannelsRequested: dataChannelsRequested,
-        }
-
-        statsCollector.Collect(stats.ID, stats)
-
-        certificates := self.configuration.Certificates
-        for _, certificate := range certificates {
-            if err := certificate.collectStats(statsCollector); err != nil {
-                continue
-            }
-        }
-        self.mu.Unlock()
-
-        self.api.mediaEngine.collectStats(statsCollector)
-
-        return statsCollector.Ready()
-    }
-    */
 
     /// sctp returns the SCTPTransport for this PeerConnection
     ///

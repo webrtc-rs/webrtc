@@ -6,7 +6,6 @@ pub mod sctp_transport_state;
 
 use sctp_transport_state::RTCSctpTransportState;
 use std::collections::HashSet;
-use waitgroup::Worker;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data_channel::data_channel_state::RTCDataChannelState;
@@ -25,6 +24,7 @@ use sctp::association::Association;
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
 
 use data::data_channel::DataChannel;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
@@ -351,16 +351,13 @@ impl RTCSctpTransport {
 
     pub(crate) async fn collect_stats(
         &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
+        collector: &StatsCollector,
         peer_connection_id: String,
     ) {
         let dtls_transport = self.transport();
 
         // TODO: should this be collected?
-        dtls_transport
-            .collect_stats(collector, worker.clone())
-            .await;
+        dtls_transport.collect_stats(collector).await;
 
         // data channels
         let mut data_channels_closed = 0;
@@ -371,46 +368,22 @@ impl RTCSctpTransport {
                 RTCDataChannelState::Open => (),
                 _ => data_channels_closed += 1,
             }
-            data_channel.collect_stats(collector, worker.clone()).await;
+            data_channel.collect_stats(collector).await;
         }
 
-        let mut reports = vec![];
-        reports.push(PeerConnection(PeerConnectionStats::new(
-            self,
-            peer_connection_id,
-            data_channels_closed,
-        )));
+        let mut reports = HashMap::new();
+        let peer_connection_stats =
+            PeerConnectionStats::new(self, peer_connection_id.clone(), data_channels_closed);
+        reports.insert(peer_connection_id, PeerConnection(peer_connection_stats));
 
         // conn
-        if let Some(_net_conn) = dtls_transport.conn().await {
-            let stats = ICETransportStats::new("sctp_transport".to_owned());
-            // TODO: get bytes out of Conn.
-            // bytes_received: conn.bytes_received,
-            // bytes_sent: conn.bytes_sent,
-            reports.push(SCTPTransport(stats));
+        if let Some(agent) = dtls_transport.ice_transport.gatherer.get_agent().await {
+            let stats = ICETransportStats::new("sctp_transport".to_owned(), agent).await;
+            reports.insert(stats.id.clone(), SCTPTransport(stats));
         }
 
-        let collector = collector.clone();
-        let mut lock = collector.try_lock().unwrap();
-        lock.append(&mut reports);
+        collector.merge(reports);
     }
-    /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
-        collector.Collecting()
-
-        stats := TransportStats{
-            Timestamp: statsTimestampFrom(time.Now()),
-            Type:      StatsTypeTransport,
-            ID:        "sctpTransport",
-        }
-
-        association := r.association()
-        if association != nil {
-            stats.BytesSent = association.BytesSent()
-            stats.BytesReceived = association.BytesReceived()
-        }
-
-        collector.Collect(stats.ID, stats)
-    }*/
 
     pub(crate) async fn generate_and_set_data_channel_id(
         &self,

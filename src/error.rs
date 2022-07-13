@@ -284,6 +284,8 @@ pub enum Error {
     ErrPeerConnSimulcastStreamIDRTPExtensionRequired,
     #[error("incoming SSRC failed Simulcast probing")]
     ErrPeerConnSimulcastIncomingSSRCFailed,
+    #[error("failed collecting stats")]
+    ErrPeerConnStatsCollectionFailed,
     #[error("add_transceiver_from_kind only accepts one RTPTransceiverInit")]
     ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne,
     #[error("add_transceiver_from_track only accepts one RTPTransceiverInit")]

@@ -9,10 +9,7 @@ use rcgen::{CertificateParams, KeyPair, RcgenError};
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
 use std::ops::Add;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
-use waitgroup::Worker;
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
 #[derive(Clone)]
@@ -206,45 +203,16 @@ impl RTCCertificate {
     }
     */
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
         let fingerprints = self.get_fingerprints().unwrap();
-        if let Some(fingerprint) = fingerprints.into_iter().nth(0) {
+        if let Some(fingerprint) = fingerprints.into_iter().next() {
             let stats = CertificateStats::new(self, fingerprint);
-            let mut lock = collector.try_lock().unwrap();
-            lock.push(StatsReportType::CertificateStats(stats));
-
-            drop(worker);
+            collector.insert(
+                self.stats_id.clone(),
+                StatsReportType::CertificateStats(stats),
+            );
         }
     }
-
-    /*
-    func (c Certificate) collectStats(report *statsReportCollector) error {
-        report.Collecting()
-
-        fingerPrintAlgo, err := c.get_fingerprints()
-        if err != nil {
-            return err
-        }
-
-        base64Certificate := base64.RawURLEncoding.EncodeToString(c.x509Cert.Raw)
-
-        stats := CertificateStats{
-            Timestamp:            statsTimestampFrom(time.Now()),
-            Type:                 StatsTypeCertificate,
-            ID:                   c.statsID,
-            Fingerprint:          fingerPrintAlgo[0].Value,
-            FingerprintAlgorithm: fingerPrintAlgo[0].Algorithm,
-            Base64Certificate:    base64Certificate,
-            IssuerCertificateID:  c.x509Cert.Issuer.String(),
-        }
-
-        report.Collect(stats.ID, stats)
-        return nil
-    }*/
 
     /// from_pem creates a fresh certificate based on a string containing
     /// pem blocks fort the private key and x509 certificate

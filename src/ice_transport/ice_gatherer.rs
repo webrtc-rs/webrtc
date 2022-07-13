@@ -8,18 +8,18 @@ use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::SourceStatsType::*;
-use crate::stats::StatsReportType;
+use crate::stats::{ICECandidatePairStats, StatsReportType};
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
 use ice::url::Url;
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use waitgroup::Worker;
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
@@ -306,151 +306,32 @@ impl RTCIceGatherer {
         agent.clone()
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
         if let Some(agent) = self.get_agent().await {
-            let collector = collector.clone();
-            tokio::spawn(async move {
-                let mut reports = vec![];
+            let mut reports = HashMap::new();
 
-                for stats in agent.get_candidate_pairs_stats().await {
-                    reports.push(StatsReportType::from(CandidatePair(stats)));
-                }
+            for stats in agent.get_candidate_pairs_stats().await {
+                let stats: ICECandidatePairStats = stats.into();
+                reports.insert(stats.id.clone(), StatsReportType::CandidatePair(stats));
+            }
 
-                for stats in agent.get_local_candidates_stats().await {
-                    reports.push(StatsReportType::from(LocalCandidate(stats)));
-                }
+            for stats in agent.get_local_candidates_stats().await {
+                reports.insert(
+                    stats.id.clone(),
+                    StatsReportType::from(LocalCandidate(stats)),
+                );
+            }
 
-                for stats in agent.get_remote_candidates_stats().await {
-                    reports.push(StatsReportType::from(RemoteCandidate(stats)));
-                }
+            for stats in agent.get_remote_candidates_stats().await {
+                reports.insert(
+                    stats.id.clone(),
+                    StatsReportType::from(RemoteCandidate(stats)),
+                );
+            }
 
-                let mut lock = collector.try_lock().unwrap();
-                lock.append(&mut reports);
-
-                drop(worker);
-            });
+            collector.merge(reports);
         }
     }
-    /*TODO:func (g *ICEGatherer) collectStats(collector *statsReportCollector) {
-
-        agent := g.getAgent()
-        if agent == nil {
-            return
-        }
-
-        collector.Collecting()
-        go func(collector *statsReportCollector, agent *ice.Agent) {
-            for _, candidatePairStats := range agent.GetCandidatePairsStats() {
-                collector.Collecting()
-
-                state, err := toStatsICECandidatePairState(candidatePairStats.State)
-                if err != nil {
-                    g.log.Error(err.Error())
-                }
-
-                pairID := newICECandidatePairStatsID(candidatePairStats.LocalCandidateID,
-                    candidatePairStats.RemoteCandidateID)
-
-                stats := ICECandidatePairStats{
-                    Timestamp: statsTimestampFrom(candidatePairStats.Timestamp),
-                    Type:      StatsTypeCandidatePair,
-                    ID:        pairID,
-                    // TransportID:
-                    LocalCandidateID:            candidatePairStats.LocalCandidateID,
-                    RemoteCandidateID:           candidatePairStats.RemoteCandidateID,
-                    State:                       state,
-                    Nominated:                   candidatePairStats.Nominated,
-                    PacketsSent:                 candidatePairStats.PacketsSent,
-                    PacketsReceived:             candidatePairStats.PacketsReceived,
-                    BytesSent:                   candidatePairStats.BytesSent,
-                    BytesReceived:               candidatePairStats.BytesReceived,
-                    LastPacketSentTimestamp:     statsTimestampFrom(candidatePairStats.LastPacketSentTimestamp),
-                    LastPacketReceivedTimestamp: statsTimestampFrom(candidatePairStats.LastPacketReceivedTimestamp),
-                    FirstRequestTimestamp:       statsTimestampFrom(candidatePairStats.FirstRequestTimestamp),
-                    LastRequestTimestamp:        statsTimestampFrom(candidatePairStats.LastRequestTimestamp),
-                    LastResponseTimestamp:       statsTimestampFrom(candidatePairStats.LastResponseTimestamp),
-                    TotalRoundTripTime:          candidatePairStats.TotalRoundTripTime,
-                    CurrentRoundTripTime:        candidatePairStats.CurrentRoundTripTime,
-                    AvailableOutgoingBitrate:    candidatePairStats.AvailableOutgoingBitrate,
-                    AvailableIncomingBitrate:    candidatePairStats.AvailableIncomingBitrate,
-                    CircuitBreakerTriggerCount:  candidatePairStats.CircuitBreakerTriggerCount,
-                    RequestsReceived:            candidatePairStats.RequestsReceived,
-                    RequestsSent:                candidatePairStats.RequestsSent,
-                    ResponsesReceived:           candidatePairStats.ResponsesReceived,
-                    ResponsesSent:               candidatePairStats.ResponsesSent,
-                    RetransmissionsReceived:     candidatePairStats.RetransmissionsReceived,
-                    RetransmissionsSent:         candidatePairStats.RetransmissionsSent,
-                    ConsentRequestsSent:         candidatePairStats.ConsentRequestsSent,
-                    ConsentExpiredTimestamp:     statsTimestampFrom(candidatePairStats.ConsentExpiredTimestamp),
-                }
-                collector.Collect(stats.ID, stats)
-            }
-
-            for _, candidateStats := range agent.GetLocalCandidatesStats() {
-                collector.Collecting()
-
-                networkType, err := getNetworkType(candidateStats.NetworkType)
-                if err != nil {
-                    g.log.Error(err.Error())
-                }
-
-                candidateType, err := get_candidate_type(candidateStats.CandidateType)
-                if err != nil {
-                    g.log.Error(err.Error())
-                }
-
-                stats := ICECandidateStats{
-                    Timestamp:     statsTimestampFrom(candidateStats.Timestamp),
-                    ID:            candidateStats.ID,
-                    Type:          StatsTypeLocalCandidate,
-                    NetworkType:   networkType,
-                    IP:            candidateStats.IP,
-                    Port:          int32(candidateStats.Port),
-                    Protocol:      networkType.Protocol(),
-                    CandidateType: candidateType,
-                    priority:      int32(candidateStats.priority),
-                    URL:           candidateStats.URL,
-                    RelayProtocol: candidateStats.RelayProtocol,
-                    Deleted:       candidateStats.Deleted,
-                }
-                collector.Collect(stats.ID, stats)
-            }
-
-            for _, candidateStats := range agent.GetRemoteCandidatesStats() {
-                collector.Collecting()
-                networkType, err := getNetworkType(candidateStats.NetworkType)
-                if err != nil {
-                    g.log.Error(err.Error())
-                }
-
-                candidateType, err := get_candidate_type(candidateStats.CandidateType)
-                if err != nil {
-                    g.log.Error(err.Error())
-                }
-
-                stats := ICECandidateStats{
-                    Timestamp:     statsTimestampFrom(candidateStats.Timestamp),
-                    ID:            candidateStats.ID,
-                    Type:          StatsTypeRemoteCandidate,
-                    NetworkType:   networkType,
-                    IP:            candidateStats.IP,
-                    Port:          int32(candidateStats.Port),
-                    Protocol:      networkType.Protocol(),
-                    CandidateType: candidateType,
-                    priority:      int32(candidateStats.priority),
-                    URL:           candidateStats.URL,
-                    RelayProtocol: candidateStats.RelayProtocol,
-                }
-                collector.Collect(stats.ID, stats)
-            }
-            collector.Done()
-        }(collector, agent)
-    }
-    */
 }
 
 #[cfg(test)]

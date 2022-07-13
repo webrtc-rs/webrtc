@@ -12,7 +12,6 @@ use ice_candidate::RTCIceCandidate;
 use ice_candidate_pair::RTCIceCandidatePair;
 use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
-use waitgroup::Worker;
 
 use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
@@ -65,7 +64,7 @@ struct ICETransportInternal {
 /// transport over which packets are sent and received.
 #[derive(Default)]
 pub struct RTCIceTransport {
-    gatherer: Arc<RTCIceGatherer>,
+    pub(crate) gatherer: Arc<RTCIceGatherer>,
     on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
     on_selected_candidate_pair_change_handler:
         Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
@@ -326,46 +325,13 @@ impl RTCIceTransport {
         }
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
-        let mut internal = self.internal.lock().await;
-        if let Some(_conn) = internal.conn.take() {
-            let collector = collector.clone();
-            let stats = ICETransportStats::new("ice_transport".to_owned());
-            // TODO: get bytes out of Conn.
-            // bytes_received: conn.bytes_received,
-            // bytes_sent: conn.bytes_sent,
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
+        if let Some(agent) = self.gatherer.get_agent().await {
+            let stats = ICETransportStats::new("ice_transport".to_string(), agent).await;
 
-            let mut lock = collector.try_lock().unwrap();
-            lock.push(Transport(stats));
-
-            drop(worker);
+            collector.insert("ice_transport".to_string(), Transport(stats));
         }
     }
-    /*TODO: func (t *ICETransport) collectStats(collector *statsReportCollector) {
-        t.lock.Lock()
-        conn := t.conn
-        t.lock.Unlock()
-
-        collector.Collecting()
-
-        stats := TransportStats{
-            Timestamp: statsTimestampFrom(time.Now()),
-            Type:      StatsTypeTransport,
-            ID:        "ice_transport",
-        }
-
-        if conn != nil {
-            stats.BytesSent = conn.BytesSent()
-            stats.BytesReceived = conn.BytesReceived()
-        }
-
-        collector.Collect(stats.ID, stats)
-    }
-    */
 
     pub(crate) async fn have_remote_credentials_change(
         &self,

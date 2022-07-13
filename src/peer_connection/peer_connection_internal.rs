@@ -5,7 +5,6 @@ use crate::track::TrackStream;
 use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
 use std::sync::atomic::AtomicIsize;
 use std::sync::Weak;
-use waitgroup::WaitGroup;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -1345,20 +1344,17 @@ impl PeerConnectionInternal {
         false
     }
 
-    pub(super) async fn get_stats(&self, stats_id: String) -> Arc<Mutex<StatsCollector>> {
-        let collector = Arc::new(Mutex::new(StatsCollector::new()));
-        let wg = WaitGroup::new();
+    pub(super) async fn get_stats(&self, stats_id: String) -> StatsCollector {
+        let collector = StatsCollector::new();
 
         tokio::join!(
-            self.ice_gatherer.collect_stats(&collector, wg.worker()),
-            self.ice_transport.collect_stats(&collector, wg.worker()),
-            self.sctp_transport
-                .collect_stats(&collector, wg.worker(), stats_id),
-            self.dtls_transport.collect_stats(&collector, wg.worker()),
-            self.media_engine.collect_stats(&collector, wg.worker()),
+            self.ice_gatherer.collect_stats(&collector),
+            self.ice_transport.collect_stats(&collector),
+            self.sctp_transport.collect_stats(&collector, stats_id),
+            self.dtls_transport.collect_stats(&collector),
+            self.media_engine.collect_stats(&collector),
         );
 
-        wg.wait().await;
         collector
     }
 }
