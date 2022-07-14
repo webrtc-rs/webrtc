@@ -43,7 +43,7 @@ impl Depacketizer for FakeDepacketizer {
     /// should return false if the result could not be determined, in
     /// which case the caller will detect timestamp discontinuities.
     fn is_partition_head(&self, payload: &Bytes) -> bool {
-        if self.head_checker == false {
+        if !self.head_checker {
             // from .go: simulates a bug in 3.0 version, the tests should not assume the bug
             return true;
         }
@@ -53,13 +53,13 @@ impl Depacketizer for FakeDepacketizer {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     /// Checks if the packet is at the end of a partition.  This should
     /// return false if the result could not be determined.
     fn is_partition_tail(&self, marker: bool, _payload: &Bytes) -> bool {
-        return marker;
+        marker
     }
 }
 
@@ -1017,7 +1017,7 @@ fn test_seqnum_distance() {
 
 #[test]
 fn test_sample_builder_clean_reference() {
-    for seq_start in [0 as u16, 0xfff8, 0xfffe] {
+    for seq_start in [0_u16, 0xfff8, 0xfffe] {
         let mut s = SampleBuilder::new(10, FakeDepacketizer::new(), 1);
         s.push(Packet {
             header: Header {
@@ -1106,7 +1106,7 @@ fn test_pop_with_timestamp() {
 fn test_sample_builder_data() {
     let mut s = SampleBuilder::new(10, FakeDepacketizer::new(), 1);
     let mut j: usize = 0;
-    for i in 0..0x20000 as usize {
+    for i in 0..0x20000_usize {
         let p = Packet {
             header: Header {
                 sequence_number: i as u16,

@@ -42,10 +42,8 @@ impl SampleSequenceLocation {
             if self.head <= pos && pos < self.tail {
                 return Comparison::Inside;
             }
-        } else {
-            if self.head <= pos || pos < self.tail {
-                return Comparison::Inside;
-            }
+        } else if self.head <= pos || pos < self.tail {
+            return Comparison::Inside;
         }
         if self.head.wrapping_sub(pos) <= pos.wrapping_sub(self.tail) {
             return Comparison::Before;

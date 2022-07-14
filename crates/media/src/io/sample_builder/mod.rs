@@ -104,7 +104,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             return false;
         }
 
-        return found_tail.unwrap() - found_head.unwrap() > self.max_late_timestamp;
+        found_tail.unwrap() - found_head.unwrap() > self.max_late_timestamp
     }
 
     /// Returns the timestamp associated with a given sample location
@@ -326,7 +326,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             None,
         );
         self.prepared.head = self.prepared.head.wrapping_add(1);
-        return result;
+        result
     }
 
     /// Compiles pushed RTP packets into media samples and then
