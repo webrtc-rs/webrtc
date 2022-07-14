@@ -2131,6 +2131,6 @@ impl RTCPeerConnection {
     ///
     /// See [`RTCDtlsTransport::get_remote_certificate`].
     pub async fn get_remote_dtls_certificate(&self) -> Bytes {
-        return self.internal.dtls_transport.get_remote_certificate().await
+        return self.internal.dtls_transport.get_remote_certificate().await;
     }
 }
