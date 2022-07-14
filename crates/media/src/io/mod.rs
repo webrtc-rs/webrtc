@@ -6,6 +6,7 @@ pub mod ivf_reader;
 pub mod ivf_writer;
 pub mod ogg_reader;
 pub mod ogg_writer;
+pub mod sample_builder;
 
 pub type ResetFn<R> = Box<dyn FnMut(usize) -> R>;
 
