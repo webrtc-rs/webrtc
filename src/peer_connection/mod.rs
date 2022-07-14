@@ -74,6 +74,7 @@ use ::ice::candidate::Candidate;
 use ::sdp::description::session::*;
 use ::sdp::util::ConnectionRole;
 use async_trait::async_trait;
+use bytes::Bytes;
 use interceptor::{Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use rand::{thread_rng, Rng};
@@ -2122,5 +2123,14 @@ impl RTCPeerConnection {
         }
 
         gathering_complete_rx
+    }
+
+    /// Returns the remote DTLS certificate bytes.
+    ///
+    /// If DTLS has not been established yet, it returns empty bytes.
+    ///
+    /// See [`RTCDtlsTransport::get_remote_certificate`].
+    pub async fn get_remote_dtls_certificate(&self) -> Bytes {
+        return self.internal.dtls_transport.get_remote_certificate().await
     }
 }
