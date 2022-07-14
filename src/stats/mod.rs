@@ -104,7 +104,7 @@ impl Serialize for StatsReportType {
 
 #[derive(Debug)]
 pub struct StatsReport {
-    pub(crate) reports: HashMap<String, StatsReportType>,
+    pub reports: HashMap<String, StatsReportType>,
 }
 
 impl From<StatsCollector> for StatsReport {
@@ -127,40 +127,48 @@ impl Serialize for StatsReport {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ICECandidatePairStats {
-    pub(crate) id: String,
-    available_incoming_bitrate: f64,
-    available_outgoing_bitrate: f64,
-    bytes_received: u64,
-    bytes_sent: u64,
-    circuit_breaker_trigger_count: u32,
+    // RTCStats
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    consent_expired_timestamp: Instant,
-    consent_requests_sent: u64,
-    current_round_trip_time: f64,
-    #[serde(with = "serialize::instant_to_epoch_seconds")]
-    first_request_timestamp: Instant,
-    #[serde(with = "serialize::instant_to_epoch_seconds")]
-    last_packet_received_timestamp: Instant,
-    #[serde(with = "serialize::instant_to_epoch_seconds")]
-    last_packet_sent_timestamp: Instant,
-    #[serde(with = "serialize::instant_to_epoch_seconds")]
-    last_request_timestamp: Instant,
-    local_candidate_id: String,
-    nominated: bool,
-    packets_received: u32,
-    packets_sent: u32,
-    remote_candidate_id: String,
-    requests_received: u64,
-    requests_sent: u64,
-    responses_received: u64,
-    responses_sent: u64,
-    retransmissions_sent: u64,
-    state: CandidatePairState,
+    pub timestamp: Instant,
     #[serde(rename = "type")]
-    stats_type: RTCStatsType,
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCIceCandidatePairStats
+    // TODO: Add `transportId`
+    pub local_candidate_id: String,
+    pub remote_candidate_id: String,
+    pub state: CandidatePairState,
+    pub nominated: bool,
+    pub packets_sent: u32,
+    pub packets_received: u32,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    timestamp: Instant,
-    total_round_trip_time: f64,
+    pub last_packet_sent_timestamp: Instant,
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub last_packet_received_timestamp: Instant,
+    pub total_round_trip_time: f64,
+    pub current_round_trip_time: f64,
+    pub available_outgoing_bitrate: f64,
+    pub available_incoming_bitrate: f64,
+    pub requests_received: u64,
+    pub requests_sent: u64,
+    pub responses_received: u64,
+    pub responses_sent: u64,
+    pub consent_requests_sent: u64,
+    // TODO: Add `packetsDiscardedOnSend`
+    // TODO: Add `bytesDiscardedOnSend`
+
+    // Non-canon
+    pub circuit_breaker_trigger_count: u32,
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub consent_expired_timestamp: Instant,
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub first_request_timestamp: Instant,
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub last_request_timestamp: Instant,
+    pub retransmissions_sent: u64,
 }
 
 impl From<CandidatePairStats> for ICECandidatePairStats {
@@ -200,19 +208,22 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ICECandidateStats {
-    candidate_type: CandidateType,
-    deleted: bool,
-    id: String,
-    ip: String,
-    network_type: NetworkType,
-    port: u16,
-    priority: u32,
-    relay_protocol: String,
-    #[serde(rename = "type")]
-    stats_type: RTCStatsType,
+    // RTCStats
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    timestamp: Instant,
-    url: String,
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCIceCandidateStats
+    pub candidate_type: CandidateType,
+    pub deleted: bool,
+    pub ip: String,
+    pub network_type: NetworkType,
+    pub port: u16,
+    pub priority: u32,
+    pub relay_protocol: String,
+    pub url: String,
 }
 
 impl ICECandidateStats {
@@ -236,13 +247,16 @@ impl ICECandidateStats {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ICETransportStats {
-    pub(crate) id: String,
-    pub(crate) bytes_received: usize,
-    pub(crate) bytes_sent: usize,
-    #[serde(rename = "type")]
-    stats_type: RTCStatsType,
+    // RTCStats
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    timestamp: Instant,
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // Non-canon
+    pub bytes_received: usize,
+    pub bytes_sent: usize,
 }
 
 impl ICETransportStats {
@@ -260,15 +274,17 @@ impl ICETransportStats {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CertificateStats {
-    // base64_certificate: String,
-    fingerprint: String,
-    fingerprint_algorithm: String,
-    id: String,
-    // issuer_certificate_id: String,
-    #[serde(rename = "type")]
-    stats_type: RTCStatsType,
+    // RTCStats
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    timestamp: Instant,
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCCertificateStats
+    pub fingerprint: String,
+    pub fingerprint_algorithm: String,
+    // TODO: Add `base64Certificate` and `issuerCertificateId`.
 }
 
 impl CertificateStats {
@@ -288,16 +304,20 @@ impl CertificateStats {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodecStats {
-    channels: u16,
-    clock_rate: u32,
-    id: String,
-    mime_type: String,
-    payload_type: PayloadType,
-    sdp_fmtp_line: String,
-    #[serde(rename = "type")]
-    stats_type: RTCStatsType,
+    // RTCStats
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    timestamp: Instant,
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCCodecStats
+    pub payload_type: PayloadType,
+    pub mime_type: String,
+    pub channels: u16,
+    pub clock_rate: u32,
+    pub sdp_fmtp_line: String,
+    // TODO: Add `transportId`
 }
 
 impl From<&RTCRtpCodecParameters> for CodecStats {
@@ -318,19 +338,22 @@ impl From<&RTCRtpCodecParameters> for CodecStats {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataChannelStats {
-    bytes_received: usize,
-    bytes_sent: usize,
-    data_channel_identifier: u16,
-    id: String,
-    label: String,
-    messages_received: usize,
-    messages_sent: usize,
-    protocol: String,
-    state: RTCDataChannelState,
-    #[serde(rename = "type")]
-    stats_type: RTCStatsType,
+    // RTCStats
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    timestamp: Instant,
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCDataChannelStats
+    pub bytes_received: usize,
+    pub bytes_sent: usize,
+    pub data_channel_identifier: u16,
+    pub label: String,
+    pub messages_received: usize,
+    pub messages_sent: usize,
+    pub protocol: String,
+    pub state: RTCDataChannelState,
 }
 
 impl From<&RTCDataChannel> for DataChannelStats {
@@ -370,15 +393,20 @@ impl From<&RTCDataChannel> for DataChannelStats {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerConnectionStats {
-    data_channels_accepted: u32,
-    data_channels_closed: u32,
-    data_channels_opened: u32,
-    data_channels_requested: u32,
-    id: String,
-    #[serde(rename = "type")]
-    stats_type: RTCStatsType,
+    // RTCStats
     #[serde(with = "serialize::instant_to_epoch_seconds")]
-    timestamp: Instant,
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCPeerConnectionStats
+    pub data_channels_closed: u32,
+    pub data_channels_opened: u32,
+
+    // Non-canon
+    pub data_channels_accepted: u32,
+    pub data_channels_requested: u32,
 }
 
 impl PeerConnectionStats {
