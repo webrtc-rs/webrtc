@@ -23,6 +23,7 @@ use sdp::description::session::SessionDescription;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
@@ -79,6 +80,17 @@ pub struct MediaEngine {
     header_extensions: Vec<MediaEngineHeaderExtension>,
     proposed_header_extensions: Mutex<HashMap<isize, MediaEngineHeaderExtension>>,
     pub(crate) negotiated_header_extensions: Mutex<HashMap<isize, MediaEngineHeaderExtension>>,
+
+    pub(crate) codec_selector:
+        Option<Arc<dyn Fn(MatchedCodecs<'_>) -> Option<Vec<RTCRtpCodecParameters>> + Send + Sync>>,
+}
+
+/// Codecs from a negotiation that the `MediaEngine` supports. This is used in `set_code_selector` to
+/// override the codecs selected.
+pub struct MatchedCodecs<'a> {
+    pub typ: RTPCodecType,
+    pub exact: &'a [RTCRtpCodecParameters],
+    pub partial: &'a [RTCRtpCodecParameters],
 }
 
 impl MediaEngine {
@@ -496,6 +508,16 @@ impl MediaEngine {
         }
     }
 
+    /// Provide a codec selector that will pick the codec to use given a list of incoming
+    /// codecs from the remote peer. The selector can return `None` to fall back on default
+    /// codec selection behavior. Returning an empty vector means no codec was acceptable.
+    pub fn set_codec_selector<F>(&mut self, codec_selector: F)
+    where
+        F: Fn(MatchedCodecs<'_>) -> Option<Vec<RTCRtpCodecParameters>> + Send + Sync + 'static,
+    {
+        self.codec_selector = Some(Arc::new(codec_selector));
+    }
+
     /// get_header_extension_id returns the negotiated ID for a header extension.
     /// If the Header Extension isn't enabled ok will be false
     pub(crate) async fn get_header_extension_id(
@@ -739,14 +761,24 @@ impl MediaEngine {
             }
         }
 
+        let matches = MatchedCodecs {
+            typ,
+            exact: &exact_matches,
+            partial: &partial_matches,
+        };
+
         // use exact matches when they exist, otherwise fall back to partial
-        Ok(if !exact_matches.is_empty() {
-            Some(exact_matches)
-        } else if !partial_matches.is_empty() {
-            Some(partial_matches)
-        } else {
-            None
-        })
+        Ok(
+            if let Some(selected) = self.codec_selector.clone().and_then(|c| (c)(matches)) {
+                Some(selected)
+            } else if !exact_matches.is_empty() {
+                Some(exact_matches)
+            } else if !partial_matches.is_empty() {
+                Some(partial_matches)
+            } else {
+                None
+            },
+        )
     }
 
     pub(crate) async fn get_codecs_by_kind(&self, typ: RTPCodecType) -> Vec<RTCRtpCodecParameters> {
