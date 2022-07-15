@@ -704,30 +704,12 @@ impl MediaEngine {
 
             let codecs = codecs_from_media_description(media)?;
 
-            let mut exact_matches = vec![]; //make([]RTPCodecParameters, 0, len(codecs))
-            let mut partial_matches = vec![]; //make([]RTPCodecParameters, 0, len(codecs))
-
-            for codec in codecs {
-                let match_type =
-                    self.match_remote_codec(&codec, typ, &exact_matches, &partial_matches)?;
-
-                if match_type == CodecMatch::Exact {
-                    exact_matches.push(codec);
-                } else if match_type == CodecMatch::Partial {
-                    partial_matches.push(codec);
-                }
-            }
-
-            // use exact matches when they exist, otherwise fall back to partial
-            if !exact_matches.is_empty() {
-                self.push_codecs(exact_matches, typ).await;
-            } else if !partial_matches.is_empty() {
-                self.push_codecs(partial_matches, typ).await;
+            if let Some(matches) = self.select_codecs(codecs, typ).await? {
+                self.push_codecs(matches, typ).await;
             } else {
-                // no match, not negotiated
+                // no match
                 continue;
             }
-
             let extensions = rtp_extensions_from_media_description(media)?;
 
             for (extension, id) in extensions {
@@ -736,6 +718,35 @@ impl MediaEngine {
         }
 
         Ok(())
+    }
+
+    async fn select_codecs(
+        &self,
+        codecs: Vec<RTCRtpCodecParameters>,
+        typ: RTPCodecType,
+    ) -> Result<Option<Vec<RTCRtpCodecParameters>>> {
+        let mut exact_matches = vec![]; //make([]RTPCodecParameters, 0, len(codecs))
+        let mut partial_matches = vec![]; //make([]RTPCodecParameters, 0, len(codecs))
+
+        for codec in codecs {
+            let match_type =
+                self.match_remote_codec(&codec, typ, &exact_matches, &partial_matches)?;
+
+            if match_type == CodecMatch::Exact {
+                exact_matches.push(codec);
+            } else if match_type == CodecMatch::Partial {
+                partial_matches.push(codec);
+            }
+        }
+
+        // use exact matches when they exist, otherwise fall back to partial
+        Ok(if !exact_matches.is_empty() {
+            Some(exact_matches)
+        } else if !partial_matches.is_empty() {
+            Some(partial_matches)
+        } else {
+            None
+        })
     }
 
     pub(crate) async fn get_codecs_by_kind(&self, typ: RTPCodecType) -> Vec<RTCRtpCodecParameters> {
