@@ -22,8 +22,8 @@ dtls = { package = "webrtc-dtls", version = "0.5.2" }
 rtp = "0.6.5"
 rtcp = "0.6.5"
 srtp = { package = "webrtc-srtp", version = "0.8.9" }
-sctp = { package = "webrtc-sctp", version = "0.4.3" }
-data = { package = "webrtc-data", version = "0.3.3" }
+sctp = { package = "webrtc-sctp", version = "0.5.0" }
+data = { package = "webrtc-data", version = "0.3.3", git = "https://github.com/webrtc-rs/data.git", rev = "f630dcd2b90ed8faf57d1b36c18ec5aa715325c0" }
 media = { package = "webrtc-media", version = "0.4.5" }
 interceptor = "0.7.6"
 tokio = { version = "1.15.0", features = ["full"] }
@@ -38,7 +38,7 @@ waitgroup = "0.1.2"
 regex = "1.5.4"
 url = "2.2.2"
 rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
-rcgen = { version = "0.8.14", features = ["pem", "x509-parser"]}
+rcgen = { version = "0.9.2", features = ["pem", "x509-parser"]}
 ring = "0.16.20"
 sha2 = "0.10.1"
 lazy_static = "1.4.0"
