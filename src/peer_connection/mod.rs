@@ -2127,10 +2127,15 @@ impl RTCPeerConnection {
 
     /// Returns the remote DTLS certificate bytes.
     ///
-    /// If DTLS has not been established yet, it returns empty bytes.
+    /// If DTLS has not been established yet, it returns `None`.
     ///
     /// See [`RTCDtlsTransport::get_remote_certificate`].
-    pub async fn get_remote_dtls_certificate(&self) -> Bytes {
-        return self.internal.dtls_transport.get_remote_certificate().await;
+    pub async fn get_remote_dtls_certificate(&self) -> Option<Bytes> {
+        let bytes = self.internal.dtls_transport.get_remote_certificate().await;
+        if bytes.len() == 0 {
+            None
+        } else {
+            Some(bytes)
+        }
     }
 }
