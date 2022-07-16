@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackConstraint;
+use crate::BareOrMediaTrackConstraint;
 
 /// The set of constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -18,29 +18,29 @@ use crate::MediaTrackConstraint;
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
-pub struct MediaTrackConstraintSet(IndexMap<String, MediaTrackConstraint>);
+pub struct MediaTrackConstraintSet(IndexMap<String, BareOrMediaTrackConstraint>);
 
 impl MediaTrackConstraintSet {
-    pub fn new(constraint_set: IndexMap<String, MediaTrackConstraint>) -> Self {
+    pub fn new(constraint_set: IndexMap<String, BareOrMediaTrackConstraint>) -> Self {
         Self(constraint_set)
     }
 }
 
-impl<T> FromIterator<(T, MediaTrackConstraint)> for MediaTrackConstraintSet
+impl<T> FromIterator<(T, BareOrMediaTrackConstraint)> for MediaTrackConstraintSet
 where
     T: Into<String>,
 {
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = (T, MediaTrackConstraint)>,
+        I: IntoIterator<Item = (T, BareOrMediaTrackConstraint)>,
     {
         Self::new(iter.into_iter().map(|(k, v)| (k.into(), v)).collect())
     }
 }
 
 impl IntoIterator for MediaTrackConstraintSet {
-    type Item = (String, MediaTrackConstraint);
-    type IntoIter = indexmap::map::IntoIter<String, MediaTrackConstraint>;
+    type Item = (String, BareOrMediaTrackConstraint);
+    type IntoIter = indexmap::map::IntoIter<String, BareOrMediaTrackConstraint>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -48,8 +48,8 @@ impl IntoIterator for MediaTrackConstraintSet {
 }
 
 impl<'a> IntoIterator for &'a MediaTrackConstraintSet {
-    type Item = (&'a String, &'a MediaTrackConstraint);
-    type IntoIter = indexmap::map::Iter<'a, String, MediaTrackConstraint>;
+    type Item = (&'a String, &'a BareOrMediaTrackConstraint);
+    type IntoIter = indexmap::map::Iter<'a, String, BareOrMediaTrackConstraint>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -57,8 +57,8 @@ impl<'a> IntoIterator for &'a MediaTrackConstraintSet {
 }
 
 impl<'a> IntoIterator for &'a mut MediaTrackConstraintSet {
-    type Item = (&'a String, &'a mut MediaTrackConstraint);
-    type IntoIter = indexmap::map::IterMut<'a, String, MediaTrackConstraint>;
+    type Item = (&'a String, &'a mut BareOrMediaTrackConstraint);
+    type IntoIter = indexmap::map::IterMut<'a, String, BareOrMediaTrackConstraint>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
@@ -66,11 +66,11 @@ impl<'a> IntoIterator for &'a mut MediaTrackConstraintSet {
 }
 
 impl MediaTrackConstraintSet {
-    pub fn iter(&self) -> indexmap::map::Iter<'_, String, MediaTrackConstraint> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, BareOrMediaTrackConstraint> {
         self.0.iter()
     }
 
-    pub fn iter_mut(&mut self) -> indexmap::map::IterMut<'_, String, MediaTrackConstraint> {
+    pub fn iter_mut(&mut self) -> indexmap::map::IterMut<'_, String, BareOrMediaTrackConstraint> {
         self.0.iter_mut()
     }
 
@@ -82,7 +82,7 @@ impl MediaTrackConstraintSet {
         self.0.len()
     }
 
-    pub fn get<T>(&self, property: T) -> Option<&MediaTrackConstraint>
+    pub fn get<T>(&self, property: T) -> Option<&BareOrMediaTrackConstraint>
     where
         T: AsRef<str>,
     {
@@ -92,8 +92,8 @@ impl MediaTrackConstraintSet {
     pub fn insert<T>(
         &mut self,
         property: T,
-        setting: MediaTrackConstraint,
-    ) -> Option<MediaTrackConstraint>
+        setting: BareOrMediaTrackConstraint,
+    ) -> Option<BareOrMediaTrackConstraint>
     where
         T: Into<String>,
     {
@@ -101,7 +101,7 @@ impl MediaTrackConstraintSet {
     }
 
     /// Computes in **O(n)** time (average).
-    pub fn remove<T>(&mut self, property: T) -> Option<MediaTrackConstraint>
+    pub fn remove<T>(&mut self, property: T) -> Option<BareOrMediaTrackConstraint>
     where
         T: AsRef<str>,
     {

@@ -41,7 +41,7 @@ pub struct EmptyConstraint {}
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum MediaTrackConstraint {
+pub enum BareOrMediaTrackConstraint {
     Empty(EmptyConstraint),
     // `IntegerRange` must be ordered before `FloatRange(…)` in order for
     // `serde` to decode the correct variant.
@@ -56,21 +56,27 @@ pub enum MediaTrackConstraint {
     String(BareOrValueConstraint<String>),
 }
 
+impl Default for BareOrMediaTrackConstraint {
+    fn default() -> Self {
+        Self::Empty(EmptyConstraint {})
+    }
+}
+
 // Bool constraint:
 
-impl From<bool> for MediaTrackConstraint {
+impl From<bool> for BareOrMediaTrackConstraint {
     fn from(bare: bool) -> Self {
         Self::Bool(bare.into())
     }
 }
 
-impl From<ValueConstraint<bool>> for MediaTrackConstraint {
+impl From<ValueConstraint<bool>> for BareOrMediaTrackConstraint {
     fn from(constraint: ValueConstraint<bool>) -> Self {
         Self::Bool(constraint.into())
     }
 }
 
-impl From<BareOrValueConstraint<bool>> for MediaTrackConstraint {
+impl From<BareOrValueConstraint<bool>> for BareOrMediaTrackConstraint {
     fn from(constraint: BareOrValueConstraint<bool>) -> Self {
         Self::Bool(constraint)
     }
@@ -78,19 +84,19 @@ impl From<BareOrValueConstraint<bool>> for MediaTrackConstraint {
 
 // Unsigned integer range constraint:
 
-impl From<u64> for MediaTrackConstraint {
+impl From<u64> for BareOrMediaTrackConstraint {
     fn from(bare: u64) -> Self {
         Self::IntegerRange(bare.into())
     }
 }
 
-impl From<ValueRangeConstraint<u64>> for MediaTrackConstraint {
+impl From<ValueRangeConstraint<u64>> for BareOrMediaTrackConstraint {
     fn from(constraint: ValueRangeConstraint<u64>) -> Self {
         Self::IntegerRange(constraint.into())
     }
 }
 
-impl From<BareOrValueRangeConstraint<u64>> for MediaTrackConstraint {
+impl From<BareOrValueRangeConstraint<u64>> for BareOrMediaTrackConstraint {
     fn from(constraint: BareOrValueRangeConstraint<u64>) -> Self {
         Self::IntegerRange(constraint)
     }
@@ -98,19 +104,19 @@ impl From<BareOrValueRangeConstraint<u64>> for MediaTrackConstraint {
 
 // Floating-point range constraint:
 
-impl From<f64> for MediaTrackConstraint {
+impl From<f64> for BareOrMediaTrackConstraint {
     fn from(bare: f64) -> Self {
         Self::FloatRange(bare.into())
     }
 }
 
-impl From<ValueRangeConstraint<f64>> for MediaTrackConstraint {
+impl From<ValueRangeConstraint<f64>> for BareOrMediaTrackConstraint {
     fn from(constraint: ValueRangeConstraint<f64>) -> Self {
         Self::FloatRange(constraint.into())
     }
 }
 
-impl From<BareOrValueRangeConstraint<f64>> for MediaTrackConstraint {
+impl From<BareOrValueRangeConstraint<f64>> for BareOrMediaTrackConstraint {
     fn from(constraint: BareOrValueRangeConstraint<f64>) -> Self {
         Self::FloatRange(constraint)
     }
@@ -118,26 +124,26 @@ impl From<BareOrValueRangeConstraint<f64>> for MediaTrackConstraint {
 
 // String sequence constraint:
 
-impl From<Vec<String>> for MediaTrackConstraint {
+impl From<Vec<String>> for BareOrMediaTrackConstraint {
     fn from(bare: Vec<String>) -> Self {
         Self::StringSequence(bare.into())
     }
 }
 
-impl From<Vec<&str>> for MediaTrackConstraint {
+impl From<Vec<&str>> for BareOrMediaTrackConstraint {
     fn from(bare: Vec<&str>) -> Self {
         let bare: Vec<String> = bare.into_iter().map(|c| c.to_owned()).collect();
         Self::from(bare)
     }
 }
 
-impl From<ValueSequenceConstraint<String>> for MediaTrackConstraint {
+impl From<ValueSequenceConstraint<String>> for BareOrMediaTrackConstraint {
     fn from(constraint: ValueSequenceConstraint<String>) -> Self {
         Self::StringSequence(constraint.into())
     }
 }
 
-impl From<BareOrValueSequenceConstraint<String>> for MediaTrackConstraint {
+impl From<BareOrValueSequenceConstraint<String>> for BareOrMediaTrackConstraint {
     fn from(constraint: BareOrValueSequenceConstraint<String>) -> Self {
         Self::StringSequence(constraint)
     }
@@ -145,28 +151,69 @@ impl From<BareOrValueSequenceConstraint<String>> for MediaTrackConstraint {
 
 // String constraint:
 
-impl From<String> for MediaTrackConstraint {
+impl From<String> for BareOrMediaTrackConstraint {
     fn from(bare: String) -> Self {
         Self::String(bare.into())
     }
 }
 
-impl<'a> From<&'a str> for MediaTrackConstraint {
+impl<'a> From<&'a str> for BareOrMediaTrackConstraint {
     fn from(bare: &'a str) -> Self {
         let bare: String = bare.to_owned();
         Self::from(bare)
     }
 }
 
-impl From<ValueConstraint<String>> for MediaTrackConstraint {
+impl From<ValueConstraint<String>> for BareOrMediaTrackConstraint {
     fn from(constraint: ValueConstraint<String>) -> Self {
         Self::String(constraint.into())
     }
 }
 
-impl From<BareOrValueConstraint<String>> for MediaTrackConstraint {
+impl From<BareOrValueConstraint<String>> for BareOrMediaTrackConstraint {
     fn from(constraint: BareOrValueConstraint<String>) -> Self {
         Self::String(constraint)
+    }
+}
+
+/// A single [constraint][media_track_constraints] value for a [`MediaStreamTrack`][media_stream_track] object
+/// with its potential bare value either resolved to an `exact` or `ideal` constraint.
+///
+/// # W3C Spec Compliance
+///
+/// There exists no corresponding type in the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
+///
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
+/// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
+/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
+pub enum MediaTrackConstraint {
+    Empty(EmptyConstraint),
+    IntegerRange(ValueRangeConstraint<u64>),
+    FloatRange(ValueRangeConstraint<f64>),
+    Bool(ValueConstraint<bool>),
+    StringSequence(ValueSequenceConstraint<String>),
+    String(ValueConstraint<String>),
+}
+
+impl Default for MediaTrackConstraint {
+    fn default() -> Self {
+        Self::Empty(EmptyConstraint {})
+    }
+}
+
+impl MediaTrackConstraint {
+    pub fn is_required(&self) -> bool {
+        match self {
+            Self::Empty(_constraint) => false,
+            Self::IntegerRange(constraint) => constraint.is_required(),
+            Self::FloatRange(constraint) => constraint.is_required(),
+            Self::Bool(constraint) => constraint.is_required(),
+            Self::StringSequence(constraint) => constraint.is_required(),
+            Self::String(constraint) => constraint.is_required(),
+        }
     }
 }
 
@@ -177,7 +224,7 @@ mod serde_tests {
 
     use super::*;
 
-    type Subject = MediaTrackConstraint;
+    type Subject = BareOrMediaTrackConstraint;
 
     #[test]
     fn empty() {
