@@ -73,6 +73,15 @@ where
     }
 }
 
+impl<T> BareOrValueConstraint<T> {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Bare(_) => false,
+            Self::Constraint(constraint) => constraint.is_empty(),
+        }
+    }
+}
+
 /// A constraint specifying a single accepted value.
 ///
 /// # W3C Spec Compliance
@@ -121,6 +130,10 @@ impl<T> ValueConstraint<T> {
 
     pub fn is_required(&self) -> bool {
         self.exact.is_some()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.exact.is_none() && self.ideal.is_none()
     }
 }
 

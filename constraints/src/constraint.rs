@@ -188,6 +188,17 @@ impl From<BareOrValueConstraint<String>> for BareOrMediaTrackConstraint {
 }
 
 impl BareOrMediaTrackConstraint {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Empty(_) => true,
+            Self::IntegerRange(constraint) => constraint.is_empty(),
+            Self::FloatRange(constraint) => constraint.is_empty(),
+            Self::Bool(constraint) => constraint.is_empty(),
+            Self::StringSequence(constraint) => constraint.is_empty(),
+            Self::String(constraint) => constraint.is_empty(),
+        }
+    }
+
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -257,6 +268,17 @@ impl MediaTrackConstraint {
             Self::Bool(constraint) => constraint.is_required(),
             Self::StringSequence(constraint) => constraint.is_required(),
             Self::String(constraint) => constraint.is_required(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Empty(_constraint) => true,
+            Self::IntegerRange(constraint) => constraint.is_empty(),
+            Self::FloatRange(constraint) => constraint.is_empty(),
+            Self::Bool(constraint) => constraint.is_empty(),
+            Self::StringSequence(constraint) => constraint.is_empty(),
+            Self::String(constraint) => constraint.is_empty(),
         }
     }
 }

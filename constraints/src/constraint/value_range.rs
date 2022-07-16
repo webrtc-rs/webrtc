@@ -75,6 +75,15 @@ where
     }
 }
 
+impl<T> BareOrValueRangeConstraint<T> {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Bare(_) => false,
+            Self::Constraint(constraint) => constraint.is_empty(),
+        }
+    }
+}
+
 /// A constraint specifying a range of accepted values.
 ///
 /// Corresponding W3C spec types as per ["Media Capture and Streams"][spec]:
@@ -129,6 +138,10 @@ impl<T> ValueRangeConstraint<T> {
 
     pub fn is_required(&self) -> bool {
         self.min.is_some() || self.max.is_some() || self.exact.is_some()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.min.is_none() && self.max.is_none() && self.exact.is_none() && self.ideal.is_none()
     }
 }
 
