@@ -196,6 +196,34 @@ impl<T> GenericMediaTrackConstraints<T> {
     }
 }
 
+impl GenericMediaTrackConstraints<MediaTrackConstraint> {
+    pub fn basic(&self) -> GenericMediaTrackConstraintSet<MediaTrackConstraint> {
+        self.basic_or_required(false)
+    }
+
+    pub fn required(&self) -> GenericMediaTrackConstraintSet<MediaTrackConstraint> {
+        self.basic_or_required(true)
+    }
+
+    fn basic_or_required(
+        &self,
+        required: bool,
+    ) -> GenericMediaTrackConstraintSet<MediaTrackConstraint> {
+        GenericMediaTrackConstraintSet::new(
+            self.basic_or_required
+                .iter()
+                .filter_map(|(property, constraint)| {
+                    if constraint.is_required() == required {
+                        Some((property.clone(), constraint.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        )
+    }
+}
+
 impl<T> Default for GenericMediaTrackConstraints<T> {
     fn default() -> Self {
         Self {
