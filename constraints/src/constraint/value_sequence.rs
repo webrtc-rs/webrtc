@@ -79,6 +79,15 @@ where
     }
 }
 
+impl<T> BareOrValueSequenceConstraint<T> {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Bare(bare) => bare.is_empty(),
+            Self::Constraint(constraint) => constraint.is_empty(),
+        }
+    }
+}
+
 /// A constraint specifying a sequence of accepted values.
 ///
 /// # W3C Spec Compliance
@@ -128,6 +137,12 @@ impl<T> ValueSequenceConstraint<T> {
 
     pub fn is_required(&self) -> bool {
         self.exact.is_some()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        let exact_is_empty = self.exact.as_ref().map_or(true, Vec::is_empty);
+        let ideal_is_empty = self.ideal.as_ref().map_or(true, Vec::is_empty);
+        exact_is_empty && ideal_is_empty
     }
 }
 
