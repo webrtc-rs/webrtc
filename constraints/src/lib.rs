@@ -5,7 +5,15 @@
 pub mod property;
 
 mod macros;
+mod setting;
+mod settings;
 mod supported_constraints;
 
 #[allow(unused_imports)]
-pub use self::supported_constraints::MediaTrackSupportedConstraints;
+pub use self::{
+    setting::MediaTrackSetting, settings::MediaTrackSettings,
+    supported_constraints::MediaTrackSupportedConstraints,
+};
+
+#[allow(unused_imports)]
+pub(crate) use self::settings::MediaStreamSettings;
