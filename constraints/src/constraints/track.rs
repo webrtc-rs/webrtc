@@ -1,7 +1,9 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintKind};
+use crate::{
+    BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
+};
 
 use super::{
     advanced::GenericAdvancedMediaTrackConstraints, constraint_set::GenericMediaTrackConstraintSet,
@@ -115,15 +117,15 @@ impl<T> From<GenericMediaTrackConstraints<T>> for GenericBoolOrMediaTrackConstra
 }
 
 impl BareOrBoolOrMediaTrackConstraints {
-    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> BoolOrMediaTrackConstraints {
-        self.clone().into_resolved(kind)
+    pub fn to_resolved(&self) -> BoolOrMediaTrackConstraints {
+        self.clone().into_resolved()
     }
 
-    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> BoolOrMediaTrackConstraints {
+    pub fn into_resolved(self) -> BoolOrMediaTrackConstraints {
         match self {
             Self::Bool(flag) => BoolOrMediaTrackConstraints::Bool(flag),
             Self::Constraints(constraints) => {
-                BoolOrMediaTrackConstraints::Constraints(constraints.into_resolved(kind))
+                BoolOrMediaTrackConstraints::Constraints(constraints.into_resolved())
             }
         }
     }
@@ -201,15 +203,15 @@ impl<T> Default for GenericMediaTrackConstraints<T> {
 }
 
 impl BareOrMediaTrackConstraints {
-    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> MediaTrackConstraints {
-        self.clone().into_resolved(kind)
+    pub fn to_resolved(&self) -> MediaTrackConstraints {
+        self.clone().into_resolved()
     }
 
-    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> MediaTrackConstraints {
+    pub fn into_resolved(self) -> MediaTrackConstraints {
         let Self { basic, advanced } = self;
         MediaTrackConstraints {
-            basic: basic.into_resolved(kind),
-            advanced: advanced.into_resolved(kind),
+            basic: basic.into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal),
+            advanced: advanced.into_resolved(),
         }
     }
 }

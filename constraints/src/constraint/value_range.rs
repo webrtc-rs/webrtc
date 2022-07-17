@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackConstraintKind;
+use crate::MediaTrackConstraintResolutionStrategy;
 
 /// A bare value or constraint specifying a range of accepted values.
 ///
@@ -50,15 +50,25 @@ impl<T> BareOrValueRangeConstraint<T>
 where
     T: Clone,
 {
-    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> ValueRangeConstraint<T> {
-        self.clone().into_resolved(kind)
+    pub fn to_resolved(
+        &self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> ValueRangeConstraint<T> {
+        self.clone().into_resolved(strategy)
     }
 
-    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> ValueRangeConstraint<T> {
+    pub fn into_resolved(
+        self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> ValueRangeConstraint<T> {
         match self {
-            Self::Bare(bare) => match kind {
-                MediaTrackConstraintKind::Basic => ValueRangeConstraint::ideal_only(bare),
-                MediaTrackConstraintKind::Advanced => ValueRangeConstraint::exact_only(bare),
+            Self::Bare(bare) => match strategy {
+                MediaTrackConstraintResolutionStrategy::BareToIdeal => {
+                    ValueRangeConstraint::ideal_only(bare)
+                }
+                MediaTrackConstraintResolutionStrategy::BareToExact => {
+                    ValueRangeConstraint::exact_only(bare)
+                }
             },
             Self::Constraint(constraint) => constraint,
         }
@@ -140,8 +150,8 @@ mod tests {
     #[test]
     fn resolve_to_advanced() {
         let constraint = BareOrValueRangeConstraint::Bare(42);
-        let kind = MediaTrackConstraintKind::Advanced;
-        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(kind);
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
+        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(strategy);
         let expected = ValueRangeConstraint::exact_only(42);
 
         assert_eq!(actual, expected);
@@ -150,8 +160,8 @@ mod tests {
     #[test]
     fn resolve_to_basic() {
         let constraint = BareOrValueRangeConstraint::Bare(42);
-        let kind = MediaTrackConstraintKind::Basic;
-        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(kind);
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
+        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(strategy);
         let expected = ValueRangeConstraint::ideal_only(42);
 
         assert_eq!(actual, expected);

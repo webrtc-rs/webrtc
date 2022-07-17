@@ -29,15 +29,15 @@ pub use self::{
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct EmptyConstraint {}
 
-/// The kind of a track [constraint][constraint].
+/// The strategy of a track [constraint][constraint].
 ///
 /// [constraint]: https://www.w3.org/TR/mediacapture-streams/#dfn-constraint
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum MediaTrackConstraintKind {
-    /// Basic constraint.
-    Basic,
-    /// Advanced constraint.
-    Advanced,
+pub enum MediaTrackConstraintResolutionStrategy {
+    /// Resolve bare values to `ideal` constraints.
+    BareToIdeal,
+    /// Resolve bare values to `exact` constraints.
+    BareToExact,
 }
 
 /// A single [constraint][media_track_constraints] value for a [`MediaStreamTrack`][media_stream_track] object.
@@ -188,25 +188,33 @@ impl From<BareOrValueConstraint<String>> for BareOrMediaTrackConstraint {
 }
 
 impl BareOrMediaTrackConstraint {
-    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> MediaTrackConstraint {
-        self.clone().into_resolved(kind)
+    pub fn to_resolved(
+        &self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> MediaTrackConstraint {
+        self.clone().into_resolved(strategy)
     }
 
-    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> MediaTrackConstraint {
+    pub fn into_resolved(
+        self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> MediaTrackConstraint {
         match self {
             Self::Empty(constraint) => MediaTrackConstraint::Empty(constraint.clone()),
             Self::IntegerRange(constraint) => {
-                MediaTrackConstraint::IntegerRange(constraint.into_resolved(kind))
+                MediaTrackConstraint::IntegerRange(constraint.into_resolved(strategy))
             }
             Self::FloatRange(constraint) => {
-                MediaTrackConstraint::FloatRange(constraint.into_resolved(kind))
+                MediaTrackConstraint::FloatRange(constraint.into_resolved(strategy))
             }
-            Self::Bool(constraint) => MediaTrackConstraint::Bool(constraint.into_resolved(kind)),
+            Self::Bool(constraint) => {
+                MediaTrackConstraint::Bool(constraint.into_resolved(strategy))
+            }
             Self::StringSequence(constraint) => {
-                MediaTrackConstraint::StringSequence(constraint.into_resolved(kind))
+                MediaTrackConstraint::StringSequence(constraint.into_resolved(strategy))
             }
             Self::String(constraint) => {
-                MediaTrackConstraint::String(constraint.into_resolved(kind))
+                MediaTrackConstraint::String(constraint.into_resolved(strategy))
             }
         }
     }

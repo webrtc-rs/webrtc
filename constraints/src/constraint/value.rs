@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackConstraintKind;
+use crate::MediaTrackConstraintResolutionStrategy;
 
 /// A bare value or constraint specifying a single accepted value.
 ///
@@ -48,15 +48,25 @@ impl<T> BareOrValueConstraint<T>
 where
     T: Clone,
 {
-    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> ValueConstraint<T> {
-        self.clone().into_resolved(kind)
+    pub fn to_resolved(
+        &self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> ValueConstraint<T> {
+        self.clone().into_resolved(strategy)
     }
 
-    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> ValueConstraint<T> {
+    pub fn into_resolved(
+        self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> ValueConstraint<T> {
         match self {
-            Self::Bare(bare) => match kind {
-                MediaTrackConstraintKind::Basic => ValueConstraint::ideal_only(bare),
-                MediaTrackConstraintKind::Advanced => ValueConstraint::exact_only(bare),
+            Self::Bare(bare) => match strategy {
+                MediaTrackConstraintResolutionStrategy::BareToIdeal => {
+                    ValueConstraint::ideal_only(bare)
+                }
+                MediaTrackConstraintResolutionStrategy::BareToExact => {
+                    ValueConstraint::exact_only(bare)
+                }
             },
             Self::Constraint(constraint) => constraint,
         }
@@ -130,8 +140,8 @@ mod tests {
     #[test]
     fn resolve_to_advanced() {
         let constraint = BareOrValueConstraint::Bare(true);
-        let kind = MediaTrackConstraintKind::Advanced;
-        let actual: ValueConstraint<bool> = constraint.into_resolved(kind);
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
+        let actual: ValueConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ValueConstraint::exact_only(true);
 
         assert_eq!(actual, expected);
@@ -140,8 +150,8 @@ mod tests {
     #[test]
     fn resolve_to_basic() {
         let constraint = BareOrValueConstraint::Bare(true);
-        let kind = MediaTrackConstraintKind::Basic;
-        let actual: ValueConstraint<bool> = constraint.into_resolved(kind);
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
+        let actual: ValueConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ValueConstraint::ideal_only(true);
 
         assert_eq!(actual, expected);

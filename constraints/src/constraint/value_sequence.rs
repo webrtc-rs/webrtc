@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackConstraintKind;
+use crate::MediaTrackConstraintResolutionStrategy;
 
 /// A bare value or constraint specifying a sequence of accepted values.
 ///
@@ -54,15 +54,25 @@ impl<T> BareOrValueSequenceConstraint<T>
 where
     T: Clone,
 {
-    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> ValueSequenceConstraint<T> {
-        self.clone().into_resolved(kind)
+    pub fn to_resolved(
+        &self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> ValueSequenceConstraint<T> {
+        self.clone().into_resolved(strategy)
     }
 
-    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> ValueSequenceConstraint<T> {
+    pub fn into_resolved(
+        self,
+        strategy: MediaTrackConstraintResolutionStrategy,
+    ) -> ValueSequenceConstraint<T> {
         match self {
-            Self::Bare(bare) => match kind {
-                MediaTrackConstraintKind::Basic => ValueSequenceConstraint::ideal_only(bare),
-                MediaTrackConstraintKind::Advanced => ValueSequenceConstraint::exact_only(bare),
+            Self::Bare(bare) => match strategy {
+                MediaTrackConstraintResolutionStrategy::BareToIdeal => {
+                    ValueSequenceConstraint::ideal_only(bare)
+                }
+                MediaTrackConstraintResolutionStrategy::BareToExact => {
+                    ValueSequenceConstraint::exact_only(bare)
+                }
             },
             Self::Constraint(constraint) => constraint,
         }
@@ -137,8 +147,8 @@ mod tests {
     #[test]
     fn resolve_to_advanced() {
         let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
-        let kind = MediaTrackConstraintKind::Advanced;
-        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(kind);
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
+        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ValueSequenceConstraint::exact_only(vec![true]);
 
         assert_eq!(actual, expected);
@@ -147,8 +157,8 @@ mod tests {
     #[test]
     fn resolve_to_basic() {
         let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
-        let kind = MediaTrackConstraintKind::Basic;
-        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(kind);
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
+        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ValueSequenceConstraint::ideal_only(vec![true]);
 
         assert_eq!(actual, expected);
