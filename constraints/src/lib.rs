@@ -7,6 +7,7 @@ pub mod property;
 mod capabilities;
 mod capability;
 mod constraint;
+mod constraints;
 mod macros;
 mod setting;
 mod settings;
@@ -19,6 +20,10 @@ pub use self::{
     constraint::{
         BareOrValueConstraint, BareOrValueRangeConstraint, BareOrValueSequenceConstraint,
         MediaTrackConstraint, ValueConstraint, ValueRangeConstraint, ValueSequenceConstraint,
+    },
+    constraints::{
+        AdvancedMediaTrackConstraints, BoolOrMediaTrackConstraints, MediaTrackConstraintSet,
+        MediaTrackConstraints,
     },
     setting::MediaTrackSetting,
     settings::MediaTrackSettings,
