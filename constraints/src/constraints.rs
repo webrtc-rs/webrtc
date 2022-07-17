@@ -7,5 +7,5 @@ pub use self::{
     advanced::{AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints},
     constraint_set::{BareOrMediaTrackConstraintSet, MediaTrackConstraintSet},
     stream::MediaStreamConstraints,
-    track::{BoolOrMediaTrackConstraints, MediaTrackConstraints},
+    track::{BareOrMediaTrackConstraints, BoolOrMediaTrackConstraints, MediaTrackConstraints},
 };

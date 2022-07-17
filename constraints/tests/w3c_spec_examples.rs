@@ -1,7 +1,7 @@
 use webrtc_constraints::{
     property::name::*, BareOrAdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
-    BareOrValueRangeConstraint, BoolOrMediaTrackConstraints, MediaStreamConstraints,
-    MediaTrackConstraints, ValueRangeConstraint,
+    BareOrMediaTrackConstraints, BareOrValueRangeConstraint, BoolOrMediaTrackConstraints,
+    MediaStreamConstraints, ValueRangeConstraint,
 };
 
 // https://www.w3.org/TR/mediacapture-streams/#example-1
@@ -20,7 +20,7 @@ fn w3c_spec_example_1() {
     };
     let expected = MediaStreamConstraints {
         audio: BoolOrMediaTrackConstraints::Bool(false),
-        video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
+        video: BoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
             basic: BareOrMediaTrackConstraintSet::from_iter([
                 (WIDTH, 1280.into()),
                 (HEIGHT, 720.into()),
@@ -51,7 +51,7 @@ fn w3c_spec_example_2() {
 
     let expected = MediaStreamConstraints {
         audio: BoolOrMediaTrackConstraints::Bool(false),
-        video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
+        video: BoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
             basic: BareOrMediaTrackConstraintSet::from_iter([
                 (
                     WIDTH,
@@ -115,7 +115,7 @@ fn w3c_spec_example_3() {
 
     let expected = MediaStreamConstraints {
         audio: BoolOrMediaTrackConstraints::Bool(false),
-        video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
+        video: BoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
             basic: BareOrMediaTrackConstraintSet::from_iter([
                 (
                     HEIGHT,
