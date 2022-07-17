@@ -169,7 +169,7 @@ pub type MediaTrackConstraints = GenericMediaTrackConstraints<MediaTrackConstrai
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GenericMediaTrackConstraints<T> {
     #[cfg_attr(feature = "serde", serde(flatten))]
-    pub basic: GenericMediaTrackConstraintSet<T>,
+    pub basic_or_required: GenericMediaTrackConstraintSet<T>,
 
     #[cfg_attr(
         feature = "serde",
@@ -186,17 +186,20 @@ fn should_skip_advanced<T>(advanced: &GenericAdvancedMediaTrackConstraints<T>) -
 
 impl<T> GenericMediaTrackConstraints<T> {
     pub fn new(
-        basic: GenericMediaTrackConstraintSet<T>,
+        basic_or_required: GenericMediaTrackConstraintSet<T>,
         advanced: GenericAdvancedMediaTrackConstraints<T>,
     ) -> Self {
-        Self { basic, advanced }
+        Self {
+            basic_or_required,
+            advanced,
+        }
     }
 }
 
 impl<T> Default for GenericMediaTrackConstraints<T> {
     fn default() -> Self {
         Self {
-            basic: Default::default(),
+            basic_or_required: Default::default(),
             advanced: Default::default(),
         }
     }
@@ -208,9 +211,13 @@ impl BareOrMediaTrackConstraints {
     }
 
     pub fn into_resolved(self) -> MediaTrackConstraints {
-        let Self { basic, advanced } = self;
+        let Self {
+            basic_or_required,
+            advanced,
+        } = self;
         MediaTrackConstraints {
-            basic: basic.into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal),
+            basic_or_required: basic_or_required
+                .into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal),
             advanced: advanced.into_resolved(),
         }
     }
@@ -239,7 +246,10 @@ mod serde_tests {
     #[test]
     fn customized() {
         let subject = Subject {
-            basic: BareOrMediaTrackConstraintSet::from_iter([(DEVICE_ID, "microphone".into())]),
+            basic_or_required: BareOrMediaTrackConstraintSet::from_iter([(
+                DEVICE_ID,
+                "microphone".into(),
+            )]),
             advanced: BareOrAdvancedMediaTrackConstraints::new(vec![
                 BareOrMediaTrackConstraintSet::from_iter([
                     (AUTO_GAIN_CONTROL, true.into()),

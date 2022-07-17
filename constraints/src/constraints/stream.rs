@@ -100,7 +100,7 @@ mod tests {
     fn customized() {
         let subject = Subject {
             audio: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-                basic: BareOrMediaTrackConstraintSet::from_iter([
+                basic_or_required: BareOrMediaTrackConstraintSet::from_iter([
                     (DEVICE_ID, "microphone".into()),
                     (CHANNEL_COUNT, 2.into()),
                 ]),
