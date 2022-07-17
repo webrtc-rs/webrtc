@@ -25,6 +25,7 @@ pub use self::{
     },
     constraints::{
         AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints,
+        BareOrBoolOrMediaTrackConstraints, BareOrMediaStreamConstraints,
         BareOrMediaTrackConstraintSet, BareOrMediaTrackConstraints, BoolOrMediaTrackConstraints,
         MediaStreamConstraints, MediaTrackConstraintSet, MediaTrackConstraints,
     },
