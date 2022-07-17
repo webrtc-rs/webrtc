@@ -153,3 +153,6 @@ impl_numeric_value_sequence_constraint!(setting: f64, constraint: f64);
 impl_numeric_value_sequence_constraint!(setting: i64, constraint: u64);
 impl_numeric_value_sequence_constraint!(setting: i64, constraint: f64);
 impl_numeric_value_sequence_constraint!(setting: f64, constraint: u64);
+
+#[cfg(test)]
+mod tests;
