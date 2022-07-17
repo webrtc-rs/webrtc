@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackConstraintSet;
+use crate::BareOrMediaTrackConstraintSet;
 
 use super::AdvancedMediaTrackConstraints;
 
@@ -77,7 +77,7 @@ impl From<MediaTrackConstraints> for BoolOrMediaTrackConstraints {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MediaTrackConstraints {
     #[cfg_attr(feature = "serde", serde(flatten))]
-    pub basic: MediaTrackConstraintSet,
+    pub basic: BareOrMediaTrackConstraintSet,
 
     #[cfg_attr(
         feature = "serde",
@@ -93,7 +93,10 @@ fn should_skip_advanced(advanced: &AdvancedMediaTrackConstraints) -> bool {
 }
 
 impl MediaTrackConstraints {
-    pub fn new(basic: MediaTrackConstraintSet, advanced: AdvancedMediaTrackConstraints) -> Self {
+    pub fn new(
+        basic: BareOrMediaTrackConstraintSet,
+        advanced: AdvancedMediaTrackConstraints,
+    ) -> Self {
         Self { basic, advanced }
     }
 }
@@ -118,13 +121,13 @@ mod serde_tests {
     #[test]
     fn customized() {
         let subject = Subject {
-            basic: MediaTrackConstraintSet::from_iter([(DEVICE_ID, "microphone".into())]),
+            basic: BareOrMediaTrackConstraintSet::from_iter([(DEVICE_ID, "microphone".into())]),
             advanced: AdvancedMediaTrackConstraints::new(vec![
-                MediaTrackConstraintSet::from_iter([
+                BareOrMediaTrackConstraintSet::from_iter([
                     (AUTO_GAIN_CONTROL, true.into()),
                     (CHANNEL_COUNT, 2.into()),
                 ]),
-                MediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
+                BareOrMediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
             ]),
         };
         let json = serde_json::json!({

@@ -1,6 +1,6 @@
 use webrtc_constraints::{
-    property::name::*, AdvancedMediaTrackConstraints, BareOrValueRangeConstraint,
-    BoolOrMediaTrackConstraints, MediaStreamConstraints, MediaTrackConstraintSet,
+    property::name::*, AdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
+    BareOrValueRangeConstraint, BoolOrMediaTrackConstraints, MediaStreamConstraints,
     MediaTrackConstraints, ValueRangeConstraint,
 };
 
@@ -21,12 +21,12 @@ fn w3c_spec_example_1() {
     let expected = MediaStreamConstraints {
         audio: BoolOrMediaTrackConstraints::Bool(false),
         video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
-            basic: MediaTrackConstraintSet::from_iter([
+            basic: BareOrMediaTrackConstraintSet::from_iter([
                 (WIDTH, 1280.into()),
                 (HEIGHT, 720.into()),
                 (ASPECT_RATIO, 1.5.into()),
             ]),
-            advanced: None,
+            advanced: AdvancedMediaTrackConstraints::default(),
         }),
     };
 
@@ -52,7 +52,7 @@ fn w3c_spec_example_2() {
     let expected = MediaStreamConstraints {
         audio: BoolOrMediaTrackConstraints::Bool(false),
         video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
-            basic: MediaTrackConstraintSet::from_iter([
+            basic: BareOrMediaTrackConstraintSet::from_iter([
                 (
                     WIDTH,
                     BareOrValueRangeConstraint::Constraint(ValueRangeConstraint {
@@ -85,7 +85,7 @@ fn w3c_spec_example_2() {
                     .into(),
                 ),
             ]),
-            advanced: None,
+            advanced: AdvancedMediaTrackConstraints::default(),
         }),
     };
 
@@ -116,7 +116,7 @@ fn w3c_spec_example_3() {
     let expected = MediaStreamConstraints {
         audio: BoolOrMediaTrackConstraints::Bool(false),
         video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
-            basic: MediaTrackConstraintSet::from_iter([
+            basic: BareOrMediaTrackConstraintSet::from_iter([
                 (
                     HEIGHT,
                     ValueRangeConstraint {
@@ -148,10 +148,13 @@ fn w3c_spec_example_3() {
                     .into(),
                 ),
             ]),
-            advanced: Some(AdvancedMediaTrackConstraints::new(vec![
-                MediaTrackConstraintSet::from_iter([(WIDTH, 1920.into()), (HEIGHT, 1280.into())]),
-                MediaTrackConstraintSet::from_iter([(ASPECT_RATIO, 1.333.into())]),
-                MediaTrackConstraintSet::from_iter([(
+            advanced: AdvancedMediaTrackConstraints::new(vec![
+                BareOrMediaTrackConstraintSet::from_iter([
+                    (WIDTH, 1920.into()),
+                    (HEIGHT, 1280.into()),
+                ]),
+                BareOrMediaTrackConstraintSet::from_iter([(ASPECT_RATIO, 1.333.into())]),
+                BareOrMediaTrackConstraintSet::from_iter([(
                     FRAME_RATE,
                     ValueRangeConstraint {
                         min: Some(50.0),
@@ -161,7 +164,7 @@ fn w3c_spec_example_3() {
                     }
                     .into(),
                 )]),
-                MediaTrackConstraintSet::from_iter([(
+                BareOrMediaTrackConstraintSet::from_iter([(
                     FRAME_RATE,
                     ValueRangeConstraint {
                         min: Some(40.0),
@@ -171,7 +174,7 @@ fn w3c_spec_example_3() {
                     }
                     .into(),
                 )]),
-            ])),
+            ]),
         }),
     };
 
@@ -182,7 +185,7 @@ fn w3c_spec_example_3() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_4() {
-    let actual: MediaTrackConstraintSet = {
+    let actual: BareOrMediaTrackConstraintSet = {
         let json = serde_json::json!({
             "width": 1920,
             "height": 1080,
@@ -191,7 +194,7 @@ fn w3c_spec_example_4() {
         serde_json::from_value(json).unwrap()
     };
 
-    let expected = MediaTrackConstraintSet::from_iter([
+    let expected = BareOrMediaTrackConstraintSet::from_iter([
         (WIDTH, BareOrValueRangeConstraint::Bare(1920).into()),
         (HEIGHT, BareOrValueRangeConstraint::Bare(1080).into()),
         (FRAME_RATE, BareOrValueRangeConstraint::Bare(30).into()),

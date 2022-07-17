@@ -3,7 +3,10 @@ use indexmap::IndexMap;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::BareOrMediaTrackConstraint;
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
+
+pub type BareOrMediaTrackConstraintSet = GenericMediaTrackConstraintSet<BareOrMediaTrackConstraint>;
+pub type MediaTrackConstraintSet = GenericMediaTrackConstraintSet<MediaTrackConstraint>;
 
 /// The set of constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -18,59 +21,59 @@ use crate::BareOrMediaTrackConstraint;
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
-pub struct MediaTrackConstraintSet(IndexMap<String, BareOrMediaTrackConstraint>);
+pub struct GenericMediaTrackConstraintSet<T>(IndexMap<String, T>);
 
-impl MediaTrackConstraintSet {
-    pub fn new(constraint_set: IndexMap<String, BareOrMediaTrackConstraint>) -> Self {
+impl<T> GenericMediaTrackConstraintSet<T> {
+    pub fn new(constraint_set: IndexMap<String, T>) -> Self {
         Self(constraint_set)
     }
 }
 
-impl<T> FromIterator<(T, BareOrMediaTrackConstraint)> for MediaTrackConstraintSet
+impl<T, U> FromIterator<(U, T)> for GenericMediaTrackConstraintSet<T>
 where
-    T: Into<String>,
+    U: Into<String>,
 {
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = (T, BareOrMediaTrackConstraint)>,
+        I: IntoIterator<Item = (U, T)>,
     {
         Self::new(iter.into_iter().map(|(k, v)| (k.into(), v)).collect())
     }
 }
 
-impl IntoIterator for MediaTrackConstraintSet {
-    type Item = (String, BareOrMediaTrackConstraint);
-    type IntoIter = indexmap::map::IntoIter<String, BareOrMediaTrackConstraint>;
+impl<T> IntoIterator for GenericMediaTrackConstraintSet<T> {
+    type Item = (String, T);
+    type IntoIter = indexmap::map::IntoIter<String, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl<'a> IntoIterator for &'a MediaTrackConstraintSet {
-    type Item = (&'a String, &'a BareOrMediaTrackConstraint);
-    type IntoIter = indexmap::map::Iter<'a, String, BareOrMediaTrackConstraint>;
+impl<'a, T> IntoIterator for &'a GenericMediaTrackConstraintSet<T> {
+    type Item = (&'a String, &'a T);
+    type IntoIter = indexmap::map::Iter<'a, String, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'a> IntoIterator for &'a mut MediaTrackConstraintSet {
-    type Item = (&'a String, &'a mut BareOrMediaTrackConstraint);
-    type IntoIter = indexmap::map::IterMut<'a, String, BareOrMediaTrackConstraint>;
+impl<'a, T> IntoIterator for &'a mut GenericMediaTrackConstraintSet<T> {
+    type Item = (&'a String, &'a mut T);
+    type IntoIter = indexmap::map::IterMut<'a, String, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
 
-impl MediaTrackConstraintSet {
-    pub fn iter(&self) -> indexmap::map::Iter<'_, String, BareOrMediaTrackConstraint> {
+impl<T> GenericMediaTrackConstraintSet<T> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, T> {
         self.0.iter()
     }
 
-    pub fn iter_mut(&mut self) -> indexmap::map::IterMut<'_, String, BareOrMediaTrackConstraint> {
+    pub fn iter_mut(&mut self) -> indexmap::map::IterMut<'_, String, T> {
         self.0.iter_mut()
     }
 
@@ -82,35 +85,31 @@ impl MediaTrackConstraintSet {
         self.0.len()
     }
 
-    pub fn get<T>(&self, property: T) -> Option<&BareOrMediaTrackConstraint>
+    pub fn get<Q>(&self, property: Q) -> Option<&T>
     where
-        T: AsRef<str>,
+        Q: AsRef<str>,
     {
         self.0.get(property.as_ref())
     }
 
-    pub fn insert<T>(
-        &mut self,
-        property: T,
-        setting: BareOrMediaTrackConstraint,
-    ) -> Option<BareOrMediaTrackConstraint>
+    pub fn insert<Q>(&mut self, property: Q, setting: T) -> Option<T>
     where
-        T: Into<String>,
+        Q: Into<String>,
     {
         self.0.insert(property.into(), setting)
     }
 
     /// Computes in **O(n)** time (average).
-    pub fn remove<T>(&mut self, property: T) -> Option<BareOrMediaTrackConstraint>
+    pub fn remove<Q>(&mut self, property: Q) -> Option<T>
     where
-        T: AsRef<str>,
+        Q: AsRef<str>,
     {
         self.0.shift_remove(property.as_ref())
     }
 
-    pub fn contains_key<T>(&mut self, property: T) -> bool
+    pub fn contains_key<Q>(&mut self, property: Q) -> bool
     where
-        T: AsRef<str>,
+        Q: AsRef<str>,
     {
         self.0.contains_key(property.as_ref())
     }
@@ -125,7 +124,7 @@ mod serde_tests {
 
     #[test]
     fn serialize_default() {
-        let constraint_set = MediaTrackConstraintSet::default();
+        let constraint_set = BareOrMediaTrackConstraintSet::default();
         let actual = serde_json::to_value(constraint_set).unwrap();
         let expected = serde_json::json!({});
 
@@ -135,15 +134,15 @@ mod serde_tests {
     #[test]
     fn deserialize_default() {
         let json = serde_json::json!({});
-        let actual: MediaTrackConstraintSet = serde_json::from_value(json).unwrap();
-        let expected = MediaTrackConstraintSet::default();
+        let actual: BareOrMediaTrackConstraintSet = serde_json::from_value(json).unwrap();
+        let expected = BareOrMediaTrackConstraintSet::default();
 
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn serialize() {
-        let constraint_set = MediaTrackConstraintSet::from_iter([
+        let constraint_set = BareOrMediaTrackConstraintSet::from_iter([
             (DEVICE_ID, "device-id".into()),
             (AUTO_GAIN_CONTROL, true.into()),
             (CHANNEL_COUNT, 2.into()),
@@ -168,8 +167,8 @@ mod serde_tests {
             "channelCount": 2,
             "latency": 0.123,
         });
-        let actual: MediaTrackConstraintSet = serde_json::from_value(json).unwrap();
-        let expected = MediaTrackConstraintSet::from_iter([
+        let actual: BareOrMediaTrackConstraintSet = serde_json::from_value(json).unwrap();
+        let expected = BareOrMediaTrackConstraintSet::from_iter([
             (DEVICE_ID, "device-id".into()),
             (AUTO_GAIN_CONTROL, true.into()),
             (CHANNEL_COUNT, 2.into()),
