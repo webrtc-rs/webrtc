@@ -5,3 +5,7 @@
 pub mod property;
 
 mod macros;
+mod supported_constraints;
+
+#[allow(unused_imports)]
+pub use self::supported_constraints::MediaTrackSupportedConstraints;
