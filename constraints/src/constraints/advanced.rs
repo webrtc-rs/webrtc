@@ -1,7 +1,13 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::BareOrMediaTrackConstraintSet;
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
+
+use super::constraint_set::GenericMediaTrackConstraintSet;
+
+pub type BareOrAdvancedMediaTrackConstraints =
+    GenericAdvancedMediaTrackConstraints<BareOrMediaTrackConstraint>;
+pub type AdvancedMediaTrackConstraints = GenericAdvancedMediaTrackConstraints<MediaTrackConstraint>;
 
 /// The list of advanced constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -16,56 +22,58 @@ use crate::BareOrMediaTrackConstraintSet;
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
-pub struct AdvancedMediaTrackConstraints(Vec<BareOrMediaTrackConstraintSet>);
+pub struct GenericAdvancedMediaTrackConstraints<T>(Vec<GenericMediaTrackConstraintSet<T>>);
 
-impl AdvancedMediaTrackConstraints {
-    pub fn new(constraints: Vec<BareOrMediaTrackConstraintSet>) -> Self {
+impl<T> GenericAdvancedMediaTrackConstraints<T> {
+    pub fn new(constraints: Vec<GenericMediaTrackConstraintSet<T>>) -> Self {
         Self(constraints)
     }
 }
 
-impl FromIterator<BareOrMediaTrackConstraintSet> for AdvancedMediaTrackConstraints {
+impl<T> FromIterator<GenericMediaTrackConstraintSet<T>>
+    for GenericAdvancedMediaTrackConstraints<T>
+{
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = BareOrMediaTrackConstraintSet>,
+        I: IntoIterator<Item = GenericMediaTrackConstraintSet<T>>,
     {
         Self::new(iter.into_iter().collect())
     }
 }
 
-impl IntoIterator for AdvancedMediaTrackConstraints {
-    type Item = BareOrMediaTrackConstraintSet;
-    type IntoIter = std::vec::IntoIter<BareOrMediaTrackConstraintSet>;
+impl<T> IntoIterator for GenericAdvancedMediaTrackConstraints<T> {
+    type Item = GenericMediaTrackConstraintSet<T>;
+    type IntoIter = std::vec::IntoIter<GenericMediaTrackConstraintSet<T>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl<'a> IntoIterator for &'a AdvancedMediaTrackConstraints {
-    type Item = &'a BareOrMediaTrackConstraintSet;
-    type IntoIter = std::slice::Iter<'a, BareOrMediaTrackConstraintSet>;
+impl<'a, T> IntoIterator for &'a GenericAdvancedMediaTrackConstraints<T> {
+    type Item = &'a GenericMediaTrackConstraintSet<T>;
+    type IntoIter = std::slice::Iter<'a, GenericMediaTrackConstraintSet<T>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'a> IntoIterator for &'a mut AdvancedMediaTrackConstraints {
-    type Item = &'a mut BareOrMediaTrackConstraintSet;
-    type IntoIter = std::slice::IterMut<'a, BareOrMediaTrackConstraintSet>;
+impl<'a, T> IntoIterator for &'a mut GenericAdvancedMediaTrackConstraints<T> {
+    type Item = &'a mut GenericMediaTrackConstraintSet<T>;
+    type IntoIter = std::slice::IterMut<'a, GenericMediaTrackConstraintSet<T>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
 
-impl AdvancedMediaTrackConstraints {
-    pub fn iter(&self) -> std::slice::Iter<'_, BareOrMediaTrackConstraintSet> {
+impl<T> GenericAdvancedMediaTrackConstraints<T> {
+    pub fn iter(&self) -> std::slice::Iter<'_, GenericMediaTrackConstraintSet<T>> {
         self.0.iter()
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, BareOrMediaTrackConstraintSet> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, GenericMediaTrackConstraintSet<T>> {
         self.0.iter_mut()
     }
 
@@ -77,11 +85,11 @@ impl AdvancedMediaTrackConstraints {
         self.0.len()
     }
 
-    pub fn push<T>(&mut self, constraint_set: BareOrMediaTrackConstraintSet) {
-        self.0.push(constraint_set);
+    pub fn push(&mut self, constraint_set: GenericMediaTrackConstraintSet<T>) {
+        self.0.push(constraint_set)
     }
 
-    pub fn remove(&mut self, index: usize) -> BareOrMediaTrackConstraintSet {
+    pub fn remove(&mut self, index: usize) -> GenericMediaTrackConstraintSet<T> {
         self.0.remove(index)
     }
 }
@@ -89,13 +97,13 @@ impl AdvancedMediaTrackConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::property::name::*;
+    use crate::{property::name::*, BareOrMediaTrackConstraintSet};
 
     use super::*;
 
     #[test]
     fn serialize_default() {
-        let advanced = AdvancedMediaTrackConstraints::default();
+        let advanced = BareOrAdvancedMediaTrackConstraints::default();
         let actual = serde_json::to_value(advanced).unwrap();
         let expected = serde_json::json!([]);
 
@@ -105,21 +113,22 @@ mod serde_tests {
     #[test]
     fn deserialize_default() {
         let json = serde_json::json!([]);
-        let actual: AdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
-        let expected = AdvancedMediaTrackConstraints::default();
+        let actual: BareOrAdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
+        let expected = BareOrAdvancedMediaTrackConstraints::default();
 
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn serialize() {
-        let advanced =
-            AdvancedMediaTrackConstraints(vec![BareOrMediaTrackConstraintSet::from_iter([
+        let advanced = BareOrAdvancedMediaTrackConstraints::new(vec![
+            BareOrMediaTrackConstraintSet::from_iter([
                 (DEVICE_ID, "device-id".into()),
                 (AUTO_GAIN_CONTROL, true.into()),
                 (CHANNEL_COUNT, 2.into()),
                 (LATENCY, 0.123.into()),
-            ])]);
+            ]),
+        ]);
         let actual = serde_json::to_value(advanced).unwrap();
         let expected = serde_json::json!([
             {
@@ -143,14 +152,15 @@ mod serde_tests {
                 "latency": 0.123,
             }
         ]);
-        let actual: AdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
-        let expected =
-            AdvancedMediaTrackConstraints(vec![BareOrMediaTrackConstraintSet::from_iter([
+        let actual: BareOrAdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
+        let expected = BareOrAdvancedMediaTrackConstraints::new(vec![
+            BareOrMediaTrackConstraintSet::from_iter([
                 (DEVICE_ID, "device-id".into()),
                 (AUTO_GAIN_CONTROL, true.into()),
                 (CHANNEL_COUNT, 2.into()),
                 (LATENCY, 0.123.into()),
-            ])]);
+            ]),
+        ]);
 
         assert_eq!(actual, expected);
     }

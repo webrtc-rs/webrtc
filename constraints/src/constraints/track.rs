@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::BareOrMediaTrackConstraintSet;
 
-use super::AdvancedMediaTrackConstraints;
+use super::advanced::BareOrAdvancedMediaTrackConstraints;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -84,18 +84,18 @@ pub struct MediaTrackConstraints {
         serde(default),
         serde(skip_serializing_if = "should_skip_advanced")
     )]
-    pub advanced: AdvancedMediaTrackConstraints,
+    pub advanced: BareOrAdvancedMediaTrackConstraints,
 }
 
 #[cfg(feature = "serde")]
-fn should_skip_advanced(advanced: &AdvancedMediaTrackConstraints) -> bool {
+fn should_skip_advanced(advanced: &BareOrAdvancedMediaTrackConstraints) -> bool {
     advanced.is_empty()
 }
 
 impl MediaTrackConstraints {
     pub fn new(
         basic: BareOrMediaTrackConstraintSet,
-        advanced: AdvancedMediaTrackConstraints,
+        advanced: BareOrAdvancedMediaTrackConstraints,
     ) -> Self {
         Self { basic, advanced }
     }
@@ -122,7 +122,7 @@ mod serde_tests {
     fn customized() {
         let subject = Subject {
             basic: BareOrMediaTrackConstraintSet::from_iter([(DEVICE_ID, "microphone".into())]),
-            advanced: AdvancedMediaTrackConstraints::new(vec![
+            advanced: BareOrAdvancedMediaTrackConstraints::new(vec![
                 BareOrMediaTrackConstraintSet::from_iter([
                     (AUTO_GAIN_CONTROL, true.into()),
                     (CHANNEL_COUNT, 2.into()),

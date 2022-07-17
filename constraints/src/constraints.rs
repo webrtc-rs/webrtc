@@ -4,7 +4,7 @@ mod stream;
 mod track;
 
 pub use self::{
-    advanced::AdvancedMediaTrackConstraints,
+    advanced::{AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints},
     constraint_set::{BareOrMediaTrackConstraintSet, MediaTrackConstraintSet},
     stream::MediaStreamConstraints,
     track::{BoolOrMediaTrackConstraints, MediaTrackConstraints},

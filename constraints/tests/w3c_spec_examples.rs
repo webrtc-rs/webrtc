@@ -1,5 +1,5 @@
 use webrtc_constraints::{
-    property::name::*, AdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
+    property::name::*, BareOrAdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
     BareOrValueRangeConstraint, BoolOrMediaTrackConstraints, MediaStreamConstraints,
     MediaTrackConstraints, ValueRangeConstraint,
 };
@@ -26,7 +26,7 @@ fn w3c_spec_example_1() {
                 (HEIGHT, 720.into()),
                 (ASPECT_RATIO, 1.5.into()),
             ]),
-            advanced: AdvancedMediaTrackConstraints::default(),
+            advanced: BareOrAdvancedMediaTrackConstraints::default(),
         }),
     };
 
@@ -85,7 +85,7 @@ fn w3c_spec_example_2() {
                     .into(),
                 ),
             ]),
-            advanced: AdvancedMediaTrackConstraints::default(),
+            advanced: BareOrAdvancedMediaTrackConstraints::default(),
         }),
     };
 
@@ -148,7 +148,7 @@ fn w3c_spec_example_3() {
                     .into(),
                 ),
             ]),
-            advanced: AdvancedMediaTrackConstraints::new(vec![
+            advanced: BareOrAdvancedMediaTrackConstraints::new(vec![
                 BareOrMediaTrackConstraintSet::from_iter([
                     (WIDTH, 1920.into()),
                     (HEIGHT, 1280.into()),
