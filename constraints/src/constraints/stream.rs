@@ -27,8 +27,8 @@ pub struct MediaStreamConstraints {
 #[cfg(test)]
 mod tests {
     use crate::{
-        constraints::AdvancedMediaTrackConstraints, macros::test_serde_symmetry, property::name::*,
-        BareOrMediaTrackConstraintSet, MediaTrackConstraints,
+        constraints::advanced::BareOrAdvancedMediaTrackConstraints, macros::test_serde_symmetry,
+        property::name::*, BareOrMediaTrackConstraintSet, MediaTrackConstraints,
     };
 
     use super::*;
@@ -53,7 +53,7 @@ mod tests {
                     (DEVICE_ID, "microphone".into()),
                     (CHANNEL_COUNT, 2.into()),
                 ]),
-                advanced: AdvancedMediaTrackConstraints::new(vec![
+                advanced: BareOrAdvancedMediaTrackConstraints::new(vec![
                     BareOrMediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
                 ]),
             }),
