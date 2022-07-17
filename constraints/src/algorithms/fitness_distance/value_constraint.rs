@@ -195,3 +195,6 @@ macro_rules! impl_exists_value_constraint {
 }
 
 impl_exists_value_constraint!(settings: [String, i64, f64], constraint: bool);
+
+#[cfg(test)]
+mod tests;
