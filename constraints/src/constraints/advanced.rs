@@ -19,7 +19,7 @@ pub type AdvancedMediaTrackConstraints = GenericAdvancedMediaTrackConstraints<Me
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints_advanced]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-advanced
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct GenericAdvancedMediaTrackConstraints<T>(Vec<GenericMediaTrackConstraintSet<T>>);
@@ -27,6 +27,12 @@ pub struct GenericAdvancedMediaTrackConstraints<T>(Vec<GenericMediaTrackConstrai
 impl<T> GenericAdvancedMediaTrackConstraints<T> {
     pub fn new(constraints: Vec<GenericMediaTrackConstraintSet<T>>) -> Self {
         Self(constraints)
+    }
+}
+
+impl<T> Default for GenericAdvancedMediaTrackConstraints<T> {
+    fn default() -> Self {
+        Self(Default::default())
     }
 }
 

@@ -20,6 +20,52 @@ use super::{
 /// | ----------------------------- | -------------------------------------------------------------------------------------------------- |
 /// | `BoolOrMediaTrackConstraints` | [`MediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
 ///
+/// Unlike `BoolOrMediaTrackConstraints` this type does not contain constraints
+/// with bare values, but has them resolved to full constraints instead.
+///
+/// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
+/// [video]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
+/// [audio]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-audio
+/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
+pub type BareOrBoolOrMediaTrackConstraints =
+    GenericBoolOrMediaTrackConstraints<BareOrMediaTrackConstraint>;
+
+/// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
+///
+/// # W3C Spec Compliance
+///
+/// There exists no direct corresponding type in the
+/// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
+/// since the `BoolOrMediaTrackConstraints<T>` type aims to be a
+/// generalization over multiple types in the W3C spec:
+///
+/// | Rust                          | W3C                                                                                                |
+/// | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+/// | `BoolOrMediaTrackConstraints` | [`MediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
+///
+/// Unlike `BareOrBoolOrMediaTrackConstraints` this type may contain constraints with bare values.
+///
+/// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
+/// [video]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
+/// [audio]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-audio
+/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
+pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaTrackConstraint>;
+
+/// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
+///
+/// # W3C Spec Compliance
+///
+/// There exists no direct corresponding type in the
+/// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
+/// since the `BoolOrMediaTrackConstraints<T>` type aims to be a
+/// generalization over multiple types in the W3C spec:
+///
+/// | Rust                          | W3C                                                                                                |
+/// | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+/// | `BoolOrMediaTrackConstraints` | [`MediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
+///
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [video]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
@@ -28,39 +74,42 @@ use super::{
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum BoolOrMediaTrackConstraints {
+pub enum GenericBoolOrMediaTrackConstraints<T> {
     Bool(bool),
-    Constraints(BareOrMediaTrackConstraints),
+    Constraints(GenericMediaTrackConstraints<T>),
 }
 
-impl BoolOrMediaTrackConstraints {
-    pub fn to_constraints(&self) -> Option<BareOrMediaTrackConstraints> {
+impl<T> GenericBoolOrMediaTrackConstraints<T>
+where
+    T: Clone,
+{
+    pub fn to_constraints(&self) -> Option<GenericMediaTrackConstraints<T>> {
         self.clone().into_constraints()
     }
 
-    pub fn into_constraints(self) -> Option<BareOrMediaTrackConstraints> {
+    pub fn into_constraints(self) -> Option<GenericMediaTrackConstraints<T>> {
         match self {
             Self::Bool(false) => None,
-            Self::Bool(true) => Some(BareOrMediaTrackConstraints::default()),
+            Self::Bool(true) => Some(GenericMediaTrackConstraints::default()),
             Self::Constraints(constraints) => Some(constraints),
         }
     }
 }
 
-impl Default for BoolOrMediaTrackConstraints {
+impl<T> Default for GenericBoolOrMediaTrackConstraints<T> {
     fn default() -> Self {
         Self::Bool(false)
     }
 }
 
-impl From<bool> for BoolOrMediaTrackConstraints {
+impl<T> From<bool> for GenericBoolOrMediaTrackConstraints<T> {
     fn from(flag: bool) -> Self {
         Self::Bool(flag)
     }
 }
 
-impl From<BareOrMediaTrackConstraints> for BoolOrMediaTrackConstraints {
-    fn from(constraints: BareOrMediaTrackConstraints) -> Self {
+impl<T> From<GenericMediaTrackConstraints<T>> for GenericBoolOrMediaTrackConstraints<T> {
+    fn from(constraints: GenericMediaTrackConstraints<T>) -> Self {
         Self::Constraints(constraints)
     }
 }
@@ -99,7 +148,7 @@ pub type MediaTrackConstraints = GenericMediaTrackConstraints<MediaTrackConstrai
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GenericMediaTrackConstraints<T> {
     #[cfg_attr(feature = "serde", serde(flatten))]
@@ -107,7 +156,7 @@ pub struct GenericMediaTrackConstraints<T> {
 
     #[cfg_attr(
         feature = "serde",
-        serde(default),
+        serde(default = "Default::default"),
         serde(skip_serializing_if = "should_skip_advanced")
     )]
     pub advanced: GenericAdvancedMediaTrackConstraints<T>,
@@ -124,6 +173,15 @@ impl<T> GenericMediaTrackConstraints<T> {
         advanced: GenericAdvancedMediaTrackConstraints<T>,
     ) -> Self {
         Self { basic, advanced }
+    }
+}
+
+impl<T> Default for GenericMediaTrackConstraints<T> {
+    fn default() -> Self {
+        Self {
+            basic: Default::default(),
+            advanced: Default::default(),
+        }
     }
 }
 

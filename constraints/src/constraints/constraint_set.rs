@@ -18,7 +18,7 @@ pub type MediaTrackConstraintSet = GenericMediaTrackConstraintSet<MediaTrackCons
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraint_set]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraintset
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct GenericMediaTrackConstraintSet<T>(IndexMap<String, T>);
@@ -26,6 +26,12 @@ pub struct GenericMediaTrackConstraintSet<T>(IndexMap<String, T>);
 impl<T> GenericMediaTrackConstraintSet<T> {
     pub fn new(constraint_set: IndexMap<String, T>) -> Self {
         Self(constraint_set)
+    }
+}
+
+impl<T> Default for GenericMediaTrackConstraintSet<T> {
+    fn default() -> Self {
+        Self(IndexMap::new())
     }
 }
 
