@@ -1,9 +1,11 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::BareOrMediaTrackConstraintSet;
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
 
-use super::advanced::BareOrAdvancedMediaTrackConstraints;
+use super::{
+    advanced::GenericAdvancedMediaTrackConstraints, constraint_set::GenericMediaTrackConstraintSet,
+};
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -28,18 +30,18 @@ use super::advanced::BareOrAdvancedMediaTrackConstraints;
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum BoolOrMediaTrackConstraints {
     Bool(bool),
-    Constraints(MediaTrackConstraints),
+    Constraints(BareOrMediaTrackConstraints),
 }
 
 impl BoolOrMediaTrackConstraints {
-    pub fn to_constraints(&self) -> Option<MediaTrackConstraints> {
+    pub fn to_constraints(&self) -> Option<BareOrMediaTrackConstraints> {
         self.clone().into_constraints()
     }
 
-    pub fn into_constraints(self) -> Option<MediaTrackConstraints> {
+    pub fn into_constraints(self) -> Option<BareOrMediaTrackConstraints> {
         match self {
             Self::Bool(false) => None,
-            Self::Bool(true) => Some(MediaTrackConstraints::default()),
+            Self::Bool(true) => Some(BareOrMediaTrackConstraints::default()),
             Self::Constraints(constraints) => Some(constraints),
         }
     }
@@ -57,8 +59,8 @@ impl From<bool> for BoolOrMediaTrackConstraints {
     }
 }
 
-impl From<MediaTrackConstraints> for BoolOrMediaTrackConstraints {
-    fn from(constraints: MediaTrackConstraints) -> Self {
+impl From<BareOrMediaTrackConstraints> for BoolOrMediaTrackConstraints {
+    fn from(constraints: BareOrMediaTrackConstraints) -> Self {
         Self::Constraints(constraints)
     }
 }
@@ -73,29 +75,53 @@ impl From<MediaTrackConstraints> for BoolOrMediaTrackConstraints {
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
+pub type BareOrMediaTrackConstraints = GenericMediaTrackConstraints<BareOrMediaTrackConstraint>;
+
+/// The constraints for a [`MediaStreamTrack`][media_stream_track] object.
+///
+/// # W3C Spec Compliance
+///
+/// Corresponds to [`MediaTrackConstraints`][media_track_constraints]
+/// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
+///
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
+/// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
+/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
+pub type MediaTrackConstraints = GenericMediaTrackConstraints<MediaTrackConstraint>;
+
+/// The constraints for a [`MediaStreamTrack`][media_stream_track] object.
+///
+/// # W3C Spec Compliance
+///
+/// Corresponds to [`MediaTrackConstraints`][media_track_constraints]
+/// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
+///
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
+/// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
+/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct MediaTrackConstraints {
+pub struct GenericMediaTrackConstraints<T> {
     #[cfg_attr(feature = "serde", serde(flatten))]
-    pub basic: BareOrMediaTrackConstraintSet,
+    pub basic: GenericMediaTrackConstraintSet<T>,
 
     #[cfg_attr(
         feature = "serde",
         serde(default),
         serde(skip_serializing_if = "should_skip_advanced")
     )]
-    pub advanced: BareOrAdvancedMediaTrackConstraints,
+    pub advanced: GenericAdvancedMediaTrackConstraints<T>,
 }
 
 #[cfg(feature = "serde")]
-fn should_skip_advanced(advanced: &BareOrAdvancedMediaTrackConstraints) -> bool {
+fn should_skip_advanced<T>(advanced: &GenericAdvancedMediaTrackConstraints<T>) -> bool {
     advanced.is_empty()
 }
 
-impl MediaTrackConstraints {
+impl<T> GenericMediaTrackConstraints<T> {
     pub fn new(
-        basic: BareOrMediaTrackConstraintSet,
-        advanced: BareOrAdvancedMediaTrackConstraints,
+        basic: GenericMediaTrackConstraintSet<T>,
+        advanced: GenericAdvancedMediaTrackConstraints<T>,
     ) -> Self {
         Self { basic, advanced }
     }
@@ -104,11 +130,14 @@ impl MediaTrackConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{macros::test_serde_symmetry, property::name::*};
+    use crate::{
+        macros::test_serde_symmetry, property::name::*, BareOrAdvancedMediaTrackConstraints,
+        BareOrMediaTrackConstraintSet,
+    };
 
     use super::*;
 
-    type Subject = MediaTrackConstraints;
+    type Subject = BareOrMediaTrackConstraints;
 
     #[test]
     fn default() {
