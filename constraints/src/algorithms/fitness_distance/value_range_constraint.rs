@@ -129,3 +129,6 @@ macro_rules! impl_ignored_value_range_constraint {
 
 impl_ignored_value_range_constraint!(settings: [bool, String], constraint: u64);
 impl_ignored_value_range_constraint!(settings: [bool, String], constraint: f64);
+
+#[cfg(test)]
+mod tests;
