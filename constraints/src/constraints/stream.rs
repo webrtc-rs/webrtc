@@ -28,7 +28,7 @@ pub struct MediaStreamConstraints {
 mod tests {
     use crate::{
         constraints::AdvancedMediaTrackConstraints, macros::test_serde_symmetry, property::name::*,
-        MediaTrackConstraintSet, MediaTrackConstraints,
+        BareOrMediaTrackConstraintSet, MediaTrackConstraints,
     };
 
     use super::*;
@@ -49,13 +49,13 @@ mod tests {
     fn customized() {
         let subject = Subject {
             audio: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
-                basic: MediaTrackConstraintSet::from_iter([
+                basic: BareOrMediaTrackConstraintSet::from_iter([
                     (DEVICE_ID, "microphone".into()),
                     (CHANNEL_COUNT, 2.into()),
                 ]),
-                advanced: Some(AdvancedMediaTrackConstraints::new(vec![
-                    MediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
-                ])),
+                advanced: AdvancedMediaTrackConstraints::new(vec![
+                    BareOrMediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
+                ]),
             }),
             video: BoolOrMediaTrackConstraints::Bool(true),
         };

@@ -24,8 +24,8 @@ pub use self::{
         ValueSequenceConstraint,
     },
     constraints::{
-        AdvancedMediaTrackConstraints, BoolOrMediaTrackConstraints, MediaStreamConstraints,
-        MediaTrackConstraintSet, MediaTrackConstraints,
+        AdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet, BoolOrMediaTrackConstraints,
+        MediaStreamConstraints, MediaTrackConstraintSet, MediaTrackConstraints,
     },
     setting::MediaTrackSetting,
     settings::MediaTrackSettings,
