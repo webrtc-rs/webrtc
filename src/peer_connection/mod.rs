@@ -1478,6 +1478,9 @@ impl RTCPeerConnection {
                             t.set_current_direction(reversed_direction);
                             // TODO: According to the specification we should set
                             // transceiver.[[Direction]] here, however libWebrtc doesn't do this.
+                            // NOTE: After raising this it seems like the specification might
+                            // change to remove the setting of transceiver.[[Direction]].
+                            // See https://github.com/w3c/webrtc-pc/issues/2751#issuecomment-1185901962
                             // t.set_direction_internal(reversed_direction);
                             t.process_new_current_direction(previous_direction).await?;
                         }
