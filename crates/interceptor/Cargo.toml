@@ -10,7 +10,7 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/interceptor"
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = ["marshal"] }
+util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = ["marshal", "sync"] }
 rtp = "0.6.5"
 rtcp = "0.6.5"
 srtp = { package = "webrtc-srtp", version = "0.8.9" }

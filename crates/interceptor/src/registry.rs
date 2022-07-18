@@ -21,18 +21,24 @@ impl Registry {
         self.builders.push(builder);
     }
 
-    /// build constructs a single Interceptor from a InterceptorRegistry
+    /// build constructs a single Interceptor from an InterceptorRegistry
     pub fn build(&self, id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>> {
         if self.builders.is_empty() {
             return Ok(Arc::new(NoOp {}));
         }
 
-        let mut interceptors = vec![];
-        for f in &self.builders {
-            let icpr = f.build(id)?;
-            interceptors.push(icpr);
+        self.build_chain(id)
+            .map(|c| Arc::new(c) as Arc<dyn Interceptor + Send + Sync>)
+    }
+
+    /// build_chain constructs a non-type erased Chain from an Interceptor registry.
+    pub fn build_chain(&self, id: &str) -> Result<Chain> {
+        if self.builders.is_empty() {
+            return Ok(Chain::new(vec![Arc::new(NoOp {})]));
         }
 
-        Ok(Arc::new(Chain::new(interceptors)))
+        let interceptors: Result<Vec<_>> = self.builders.iter().map(|b| b.build(id)).collect();
+
+        Ok(Chain::new(interceptors?))
     }
 }
