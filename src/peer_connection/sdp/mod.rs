@@ -139,13 +139,12 @@ pub(crate) fn track_details_from_sdp(
                     if let Some(value) = &attr.value {
                         let mut split = value.split(' ');
 
-                        match (split.next(), split.next(), split.next()) {
-                            (Some(sid), Some(tid), None) => {
-                                stream_id = sid;
-                                track_id = tid;
-                            }
-                            _ => {}
-                        };
+                        if let (Some(sid), Some(tid), None) =
+                            (split.next(), split.next(), split.next())
+                        {
+                            stream_id = sid;
+                            track_id = tid;
+                        }
                     }
                 }
 

@@ -286,7 +286,7 @@ async fn test_get_stats() -> Result<()> {
     let _ = ice_complete_rx.recv().await;
 
     let stats = pc_offer.get_stats().await;
-    assert!(stats.reports.len() > 0);
+    assert!(!stats.reports.is_empty());
 
     match stats.reports.get("ice_transport") {
         Some(StatsReportType::Transport(ice_transport_stats)) => {

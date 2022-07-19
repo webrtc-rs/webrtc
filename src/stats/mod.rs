@@ -110,7 +110,7 @@ pub struct StatsReport {
 impl From<StatsCollector> for StatsReport {
     fn from(collector: StatsCollector) -> Self {
         StatsReport {
-            reports: collector.to_reports(),
+            reports: collector.into_reports(),
         }
     }
 }

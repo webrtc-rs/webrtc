@@ -166,6 +166,9 @@ pub(crate) fn create_stream_info(
     }
 }
 
+pub type TriggerNegotiationNeededFnOption =
+    Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>>;
+
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
     mid: Mutex<String>,                           //atomic.Value
@@ -182,9 +185,7 @@ pub struct RTCRtpTransceiver {
 
     media_engine: Arc<MediaEngine>,
 
-    trigger_negotiation_needed: Mutex<
-        Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>>,
-    >,
+    trigger_negotiation_needed: Mutex<TriggerNegotiationNeededFnOption>,
 }
 
 impl RTCRtpTransceiver {
@@ -195,9 +196,7 @@ impl RTCRtpTransceiver {
         kind: RTPCodecType,
         codecs: Vec<RTCRtpCodecParameters>,
         media_engine: Arc<MediaEngine>,
-        trigger_negotiation_needed: Option<
-            Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>,
-        >,
+        trigger_negotiation_needed: TriggerNegotiationNeededFnOption,
     ) -> Arc<Self> {
         let t = Arc::new(RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
@@ -256,7 +255,7 @@ impl RTCRtpTransceiver {
         sender: Option<Arc<RTCRtpSender>>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
-        let _ = self.set_sender(sender).await;
+        self.set_sender(sender).await;
         self.set_sending_track(track).await
     }
 

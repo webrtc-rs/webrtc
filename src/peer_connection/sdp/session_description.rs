@@ -199,7 +199,7 @@ mod test {
 
         let answer = answer_pc.create_answer(None).await?;
 
-        let desc = RTCSessionDescription::pranswer(answer.sdp.clone())?;
+        let desc = RTCSessionDescription::pranswer(answer.sdp)?;
 
         assert!(desc.sdp_type == RTCSdpType::Pranswer);
         assert!(desc.parsed.is_some());

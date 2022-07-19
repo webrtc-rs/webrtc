@@ -25,7 +25,7 @@ impl StatsCollector {
         reports.extend(stats)
     }
 
-    pub(crate) fn to_reports(self) -> HashMap<String, StatsReportType> {
+    pub(crate) fn into_reports(self) -> HashMap<String, StatsReportType> {
         self.reports.into_inner().unwrap()
     }
 }

@@ -630,7 +630,7 @@ impl MediaEngine {
         let mut propsed_header_extensions = self.proposed_header_extensions.lock().await;
 
         for local_extension in &self.header_extensions {
-            if !(local_extension.uri == extension) {
+            if local_extension.uri != extension {
                 continue;
             }
 
@@ -826,12 +826,10 @@ impl MediaEngine {
                 }
 
                 // Figure out which (unused id) to propose.
-                let id = VALID_EXT_IDS
-                    .filter(|id| {
-                        !negotiated_header_extensions.keys().any(|nid| nid == id)
-                            && !proposed_header_extensions.keys().any(|pid| pid == id)
-                    })
-                    .next();
+                let id = VALID_EXT_IDS.clone().find(|id| {
+                    !negotiated_header_extensions.keys().any(|nid| nid == id)
+                        && !proposed_header_extensions.keys().any(|pid| pid == id)
+                });
 
                 if let Some(id) = id {
                     proposed_header_extensions.insert(
