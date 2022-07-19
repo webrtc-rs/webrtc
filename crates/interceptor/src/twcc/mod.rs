@@ -57,7 +57,9 @@ impl Recorder {
     /// build_feedback_packet creates a new RTCP packet containing a TWCC feedback report.
     pub fn build_feedback_packet(&mut self) -> Vec<Box<dyn rtcp::packet::Packet + Send + Sync>> {
         let mut feedback = Feedback::new(self.sender_ssrc, self.media_ssrc, self.fb_pkt_cnt);
+        self.fb_pkt_cnt = self.fb_pkt_cnt.wrapping_add(1);
         if self.received_packets.len() < 2 {
+            self.received_packets.clear();
             return vec![Box::new(feedback.get_rtcp())];
         }
 
@@ -77,17 +79,14 @@ impl Recorder {
             if !built {
                 let p: Box<dyn rtcp::packet::Packet + Send + Sync> = Box::new(feedback.get_rtcp());
                 pkts.push(p);
-                self.fb_pkt_cnt = self.fb_pkt_cnt.wrapping_add(1);
                 feedback = Feedback::new(self.sender_ssrc, self.media_ssrc, self.fb_pkt_cnt);
+                self.fb_pkt_cnt = self.fb_pkt_cnt.wrapping_add(1);
                 feedback.add_received((pkt.sequence_number & 0xffff) as u16, pkt.arrival_time);
             }
         }
         self.received_packets.clear();
         let p: Box<dyn rtcp::packet::Packet + Send + Sync> = Box::new(feedback.get_rtcp());
         pkts.push(p);
-
-        self.fb_pkt_cnt = self.fb_pkt_cnt.wrapping_add(1);
-
         pkts
     }
 }
@@ -130,10 +129,10 @@ impl Feedback {
         self.rtcp.packet_status_count = self.sequence_number_count;
         self.rtcp.reference_time = self.ref_timestamp64ms as u32;
         self.rtcp.base_sequence_number = self.base_sequence_number;
-        if !self.last_chunk.deltas.is_empty() {
+        while !self.last_chunk.deltas.is_empty() {
             self.chunks.push(self.last_chunk.encode());
-            self.rtcp.packet_chunks.extend_from_slice(&self.chunks);
         }
+        self.rtcp.packet_chunks.extend_from_slice(&self.chunks);
         self.rtcp.recv_deltas = self.deltas.clone();
 
         self.rtcp.clone()
