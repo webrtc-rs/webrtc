@@ -15,7 +15,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::SystemTime;
-use waitgroup::Worker;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
@@ -305,18 +304,33 @@ impl RTCDataChannel {
                 _ = notify_rx.notified() => break,
                 result = data_channel.read_data_channel(&mut buffer) => {
                     match result{
+                        // EOF (`data_channel` was either closed or the underlying stream got
+                        // reset by the remote) => close and run `on_close` handler.
+                        Ok((0, _)) =>
+                        {
+                            ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
+
+                            let on_close_handler2 = Arc::clone(&on_close_handler);
+                            tokio::spawn(async move {
+                                let mut handler = on_close_handler2.lock().await;
+                                if let Some(f) = &mut *handler {
+                                    f().await;
+                                }
+                            });
+
+                            break;
+                        }
                         Ok((n, is_string)) => (n, is_string),
                         Err(err) => {
                             ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
-                            if err != sctp::Error::ErrStreamClosed {
-                                let on_error_handler2 = Arc::clone(&on_error_handler);
-                                tokio::spawn(async move {
-                                    let mut handler = on_error_handler2.lock().await;
-                                    if let Some(f) = &mut *handler {
-                                        f(err.into()).await;
-                                    }
-                                });
-                            }
+
+                            let on_error_handler2 = Arc::clone(&on_error_handler);
+                            tokio::spawn(async move {
+                                let mut handler = on_error_handler2.lock().await;
+                                if let Some(f) = &mut *handler {
+                                    f(err.into()).await;
+                                }
+                            });
 
                             let on_close_handler2 = Arc::clone(&on_close_handler);
                             tokio::spawn(async move {
@@ -532,46 +546,12 @@ impl RTCDataChannel {
         self.stats_id.as_str()
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
-        let mut lock = collector.try_lock().unwrap();
-        lock.push(StatsReportType::DataChannel(DataChannelStats::from(self)));
-        drop(worker);
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
+        collector.insert(
+            self.stats_id.clone(),
+            StatsReportType::DataChannel(DataChannelStats::from(self)),
+        );
     }
-    /*TODO: func (d *DataChannel) collectStats(collector *statsReportCollector) {
-        collector.Collecting()
-
-        d.mu.Lock()
-        defer d.mu.Unlock()
-
-        stats := DataChannelStats{
-            Timestamp: statsTimestampNow(),
-            Type:      StatsTypeDataChannel,
-            ID:        d.stats_id,
-            Label:     d.label,
-            Protocol:  d.protocol,
-            // TransportID string `json:"transportId"`
-            State: d.ready_state(),
-        }
-
-        if d.id != nil {
-            stats.DataChannelIdentifier = int32(*d.id)
-        }
-
-        if d.dataChannel != nil {
-            stats.MessagesSent = d.dataChannel.MessagesSent()
-            stats.BytesSent = d.dataChannel.BytesSent()
-            stats.MessagesReceived = d.dataChannel.MessagesReceived()
-            stats.BytesReceived = d.dataChannel.BytesReceived()
-        }
-
-        collector.Collect(stats.ID, stats)
-    }
-
-    */
 
     pub(crate) fn set_ready_state(&self, r: RTCDataChannelState) {
         self.ready_state.store(r as u8, Ordering::SeqCst);

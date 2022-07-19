@@ -2,6 +2,7 @@ use super::*;
 
 use crate::api::APIBuilder;
 use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
+use crate::stats::StatsReportType;
 use bytes::Bytes;
 use media::Sample;
 use std::sync::atomic::AtomicU32;
@@ -286,6 +287,15 @@ async fn test_get_stats() -> Result<()> {
 
     let stats = pc_offer.get_stats().await;
     assert!(stats.reports.len() > 0);
+
+    match stats.reports.get("ice_transport") {
+        Some(StatsReportType::Transport(ice_transport_stats)) => {
+            assert!(ice_transport_stats.bytes_received > 0);
+            assert!(ice_transport_stats.bytes_sent > 0);
+        }
+        Some(_other) => panic!("found the wrong type"),
+        None => panic!("missed it"),
+    }
 
     close_pair_now(&pc_offer, &pc_answer).await;
 

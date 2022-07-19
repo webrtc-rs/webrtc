@@ -378,7 +378,7 @@ fn test_track_details_from_sdp() -> Result<()> {
             ..Default::default()
         };
 
-        let tracks = track_details_from_sdp(&s);
+        let tracks = track_details_from_sdp(&s, true);
         assert_eq!(3, tracks.len());
         if track_details_for_ssrc(&tracks, 1000).is_some() {
             assert!(
@@ -416,7 +416,6 @@ fn test_track_details_from_sdp() -> Result<()> {
         }
     }
 
-    //"inactive and recvonly tracks ignored"
     {
         let s = SessionDescription {
             media_descriptions: vec![
@@ -426,6 +425,10 @@ fn test_track_details_from_sdp() -> Result<()> {
                         ..Default::default()
                     },
                     attributes: vec![
+                        Attribute {
+                            key: "mid".to_owned(),
+                            value: Some("1".to_owned()),
+                        },
                         Attribute {
                             key: "inactive".to_owned(),
                             value: None,
@@ -444,6 +447,10 @@ fn test_track_details_from_sdp() -> Result<()> {
                     },
                     attributes: vec![
                         Attribute {
+                            key: "mid".to_owned(),
+                            value: Some("1".to_owned()),
+                        },
+                        Attribute {
                             key: "recvonly".to_owned(),
                             value: None,
                         },
@@ -457,7 +464,16 @@ fn test_track_details_from_sdp() -> Result<()> {
             ],
             ..Default::default()
         };
-        assert_eq!(0, track_details_from_sdp(&s).len());
+        assert_eq!(
+            0,
+            track_details_from_sdp(&s, true).len(),
+            "inactive and recvonly tracks should be ignored when passing exclude_inactive: true"
+        );
+        assert_eq!(
+            1,
+            track_details_from_sdp(&s, false).len(),
+            "Inactive tracks should not be ignored when passing exclude_inactive: false"
+        );
     }
 
     Ok(())
@@ -573,6 +589,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                         .get_codecs_by_kind(RTPCodecType::Video)
                         .await,
                     Arc::clone(&api.media_engine),
+                    None,
                 )
                 .await,
             ],
@@ -590,6 +607,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                         .get_codecs_by_kind(RTPCodecType::Audio)
                         .await,
                     Arc::clone(&api.media_engine),
+                    None,
                 )
                 .await,
             ],
@@ -623,7 +641,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                 .await,
             )))
             .await;
-        media[i].transceivers[0].set_direction(RTCRtpTransceiverDirection::Sendonly);
+        media[i].transceivers[0].set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
     }
 
     //"Per-Media Description Fingerprints",
@@ -651,6 +669,7 @@ async fn test_populate_sdp() -> Result<()> {
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
+            None,
         )
         .await;
 
@@ -661,6 +680,7 @@ async fn test_populate_sdp() -> Result<()> {
             transceivers: vec![tr],
             data: false,
             rid_map,
+            ..Default::default()
         }];
 
         let d = SessionDescription::default();
@@ -721,6 +741,7 @@ async fn test_populate_sdp() -> Result<()> {
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
+            None,
         )
         .await;
         tr.set_codec_preferences(vec![RTCRtpCodecParameters {
@@ -741,6 +762,7 @@ async fn test_populate_sdp() -> Result<()> {
             transceivers: vec![tr],
             data: false,
             rid_map: HashMap::new(),
+            ..Default::default()
         }];
 
         let d = SessionDescription::default();
@@ -815,6 +837,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
         RTPCodecType::Video,
         me.video_codecs.clone(),
         Arc::clone(&me),
+        None,
     )
     .await;
 
@@ -825,6 +848,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
         RTPCodecType::Audio,
         me.audio_codecs.clone(),
         Arc::clone(&me),
+        None,
     )
     .await;
 
@@ -834,12 +858,14 @@ async fn test_populate_sdp_reject() -> Result<()> {
             transceivers: vec![trv],
             data: false,
             rid_map: HashMap::new(),
+            ..Default::default()
         },
         MediaSection {
             id: "audio".to_owned(),
             transceivers: vec![tra],
             data: false,
             rid_map: HashMap::new(),
+            ..Default::default()
         },
     ];
 

@@ -9,6 +9,8 @@ use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
 use crate::track::RTP_PAYLOAD_TYPE_BITMASK;
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
@@ -16,6 +18,15 @@ use util::Unmarshal;
 
 lazy_static! {
     static ref TRACK_REMOTE_UNIQUE_ID: AtomicUsize = AtomicUsize::new(0);
+}
+pub type OnMuteHdlrFn = Box<
+    dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync + 'static,
+>;
+
+#[derive(Default)]
+struct Handlers {
+    on_mute: Option<OnMuteHdlrFn>,
+    on_unmute: Option<OnMuteHdlrFn>,
 }
 
 #[derive(Default)]
@@ -41,6 +52,8 @@ pub struct TrackRemote {
 
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
+
+    handlers: Mutex<Handlers>,
 
     receiver: Option<Weak<RTPReceiverInternal>>,
     internal: Mutex<TrackRemoteInternal>,
@@ -85,6 +98,7 @@ impl TrackRemote {
             receiver: Some(receiver),
             media_engine,
             interceptor,
+            handlers: Default::default(),
 
             internal: Default::default(),
         }
@@ -176,6 +190,22 @@ impl TrackRemote {
     pub async fn set_params(&self, params: RTCRtpParameters) {
         let mut p = self.params.lock().await;
         *p = params;
+    }
+
+    pub async fn onmute<F>(&self, handler: F)
+    where
+        F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
+    {
+        let mut handlers = self.handlers.lock().await;
+        handlers.on_mute = Some(Box::new(handler));
+    }
+
+    pub async fn onunmute<F>(&self, handler: F)
+    where
+        F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
+    {
+        let mut handlers = self.handlers.lock().await;
+        handlers.on_unmute = Some(Box::new(handler));
     }
 
     /// Read reads data from the track.
@@ -285,5 +315,23 @@ impl TrackRemote {
             internal.peeked_attributes = Some(a.clone());
         }
         Ok((n, a))
+    }
+
+    pub(crate) async fn fire_onmute(&self) {
+        let mut handlers = self.handlers.lock().await;
+
+        match &mut handlers.on_mute {
+            Some(f) => f().await,
+            None => {}
+        };
+    }
+
+    pub(crate) async fn fire_onunmute(&self) {
+        let mut handlers = self.handlers.lock().await;
+
+        match &mut handlers.on_unmute {
+            Some(f) => f().await,
+            None => {}
+        };
     }
 }

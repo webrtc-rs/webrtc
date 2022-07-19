@@ -6,6 +6,10 @@ use std::string::FromUtf8Error;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 
+use crate::peer_connection::sdp::sdp_type::RTCSdpType;
+use crate::peer_connection::signaling_state::RTCSignalingState;
+use crate::rtp_transceiver::rtp_receiver;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug, PartialEq)]
@@ -127,6 +131,11 @@ pub enum Error {
     /// by this PeerConnection
     #[error("RtpSender not created by this PeerConnection")]
     ErrSenderNotCreatedByConnection,
+
+    /// ErrSenderInitialTrackIdAlreadySet indicates a second call to
+    /// [`RtpSender::set_initial_track_id`] which is not allowed.
+    #[error("RtpSender's initial_track_id has already been set")]
+    ErrSenderInitialTrackIdAlreadySet,
 
     /// ErrSessionDescriptionNoFingerprint indicates set_remote_description was called with a SessionDescription that has no
     /// fingerprint
@@ -275,6 +284,8 @@ pub enum Error {
     ErrPeerConnSimulcastStreamIDRTPExtensionRequired,
     #[error("incoming SSRC failed Simulcast probing")]
     ErrPeerConnSimulcastIncomingSSRCFailed,
+    #[error("failed collecting stats")]
+    ErrPeerConnStatsCollectionFailed,
     #[error("add_transceiver_from_kind only accepts one RTPTransceiverInit")]
     ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne,
     #[error("add_transceiver_from_track only accepts one RTPTransceiverInit")]
@@ -299,6 +310,11 @@ pub enum Error {
     ErrRTPReceiverForSSRCTrackStreamNotFound,
     #[error("no trackStreams found for RID")]
     ErrRTPReceiverForRIDTrackStreamNotFound,
+    #[error("invalid RTP Receiver transition from {from} to {to}")]
+    ErrRTPReceiverStateChangeInvalid {
+        from: rtp_receiver::State,
+        to: rtp_receiver::State,
+    },
     #[error("Track must not be nil")]
     ErrRTPSenderTrackNil,
     #[error("RTPSender must not be nil")]
@@ -329,8 +345,17 @@ pub enum Error {
     ErrSettingEngineSetAnsweringDTLSRole,
     #[error("can't rollback from stable state")]
     ErrSignalingStateCannotRollback,
-    #[error("invalid proposed signaling state transition")]
-    ErrSignalingStateProposedTransitionInvalid,
+    #[error(
+        "invalid proposed signaling state transition from {} applying {} {}", 
+        from,
+        if *is_local { "local" } else {  "remote" },
+        applying
+    )]
+    ErrSignalingStateProposedTransitionInvalid {
+        from: RTCSignalingState,
+        applying: RTCSdpType,
+        is_local: bool,
+    },
     #[error("cannot convert to StatsICECandidatePairStateSucceeded invalid ice candidate state")]
     ErrStatsICECandidateStateInvalid,
     #[error("ICETransport can only be called in ICETransportStateNew")]

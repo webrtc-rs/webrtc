@@ -14,7 +14,10 @@ use interceptor::{
     Attributes,
 };
 
+use log::trace;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -168,7 +171,9 @@ pub struct RTCRtpTransceiver {
     mid: Mutex<String>,                           //atomic.Value
     sender: Mutex<Option<Arc<RTCRtpSender>>>,     //atomic.Value
     receiver: Mutex<Option<Arc<RTCRtpReceiver>>>, //atomic.Value
-    direction: AtomicU8,                          //RTPTransceiverDirection, //atomic.Value
+
+    direction: AtomicU8,         //RTPTransceiverDirection
+    current_direction: AtomicU8, //RTPTransceiverDirection
 
     codecs: Arc<Mutex<Vec<RTCRtpCodecParameters>>>, // User provided codecs via set_codec_preferences
 
@@ -176,6 +181,10 @@ pub struct RTCRtpTransceiver {
     pub(crate) kind: RTPCodecType,
 
     media_engine: Arc<MediaEngine>,
+
+    trigger_negotiation_needed: Mutex<
+        Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>>,
+    >,
 }
 
 impl RTCRtpTransceiver {
@@ -186,16 +195,23 @@ impl RTCRtpTransceiver {
         kind: RTPCodecType,
         codecs: Vec<RTCRtpCodecParameters>,
         media_engine: Arc<MediaEngine>,
+        trigger_negotiation_needed: Option<
+            Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>,
+        >,
     ) -> Arc<Self> {
         let t = Arc::new(RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
             sender: Mutex::new(None),
             receiver: Mutex::new(None),
+
             direction: AtomicU8::new(direction as u8),
+            current_direction: AtomicU8::new(RTCRtpTransceiverDirection::Unspecified as u8),
+
             codecs: Arc::new(Mutex::new(codecs)),
             stopped: AtomicBool::new(false),
             kind,
             media_engine,
+            trigger_negotiation_needed: Mutex::new(trigger_negotiation_needed),
         });
 
         t.set_receiver(receiver).await;
@@ -304,13 +320,111 @@ impl RTCRtpTransceiver {
         self.kind
     }
 
-    /// direction returns the RTPTransceiver's current direction
+    /// direction returns the RTPTransceiver's desired direction.
     pub fn direction(&self) -> RTCRtpTransceiverDirection {
         self.direction.load(Ordering::SeqCst).into()
     }
 
-    pub(crate) fn set_direction(&self, d: RTCRtpTransceiverDirection) {
-        self.direction.store(d as u8, Ordering::SeqCst);
+    /// Set the direction of this transceiver. This might trigger a renegotiation.
+    pub async fn set_direction(&self, d: RTCRtpTransceiverDirection) {
+        let changed = self.set_direction_internal(d);
+
+        if changed {
+            let lock = self.trigger_negotiation_needed.lock().await;
+            if let Some(trigger) = &*lock {
+                (trigger)().await;
+            }
+        }
+    }
+
+    pub(crate) fn set_direction_internal(&self, d: RTCRtpTransceiverDirection) -> bool {
+        let previous: RTCRtpTransceiverDirection =
+            self.direction.swap(d as u8, Ordering::SeqCst).into();
+
+        let changed = d != previous;
+
+        if changed {
+            trace!(
+                "Changing direction of transceiver from {} to {}",
+                previous,
+                d
+            );
+        }
+
+        changed
+    }
+
+    /// current_direction returns the RTPTransceiver's current direction as negotiated.
+    ///
+    /// If this transceiver has never been negotiated or if it's stopped this returns [`RTCRtpTransceiverDirection::Unspecified`].
+    pub fn current_direction(&self) -> RTCRtpTransceiverDirection {
+        if self.stopped.load(Ordering::SeqCst) {
+            return RTCRtpTransceiverDirection::Unspecified;
+        }
+
+        self.current_direction.load(Ordering::SeqCst).into()
+    }
+
+    pub(crate) fn set_current_direction(&self, d: RTCRtpTransceiverDirection) {
+        let previous: RTCRtpTransceiverDirection = self
+            .current_direction
+            .swap(d as u8, Ordering::SeqCst)
+            .into();
+
+        if d != previous {
+            trace!(
+                "Changing current direction of transceiver from {} to {}",
+                previous,
+                d,
+            );
+        }
+    }
+
+    /// Perform any subsequent actions after altering the transceiver's direction.
+    ///
+    /// After changing the transceiver's direction this method should be called to perform any
+    /// side-effects that results from the new direction, such as pausing/resuming the RTP receiver.
+    pub(crate) async fn process_new_current_direction(
+        &self,
+        previous_direction: RTCRtpTransceiverDirection,
+    ) -> Result<()> {
+        if self.stopped.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        let current_direction = self.current_direction();
+        if previous_direction != current_direction {
+            let mid = self.mid().await;
+            trace!(
+                "Processing transceiver({}) direction change from {} to {}",
+                mid,
+                previous_direction,
+                current_direction
+            );
+        }
+
+        match (previous_direction, current_direction) {
+            (a, b) if a == b => {
+                // No change, do nothing
+            }
+            // All others imply a change
+            (_, RTCRtpTransceiverDirection::Inactive | RTCRtpTransceiverDirection::Sendonly) => {
+                if let Some(receiver) = &*self.receiver.lock().await {
+                    trace!("Pausing receiver {:?}", receiver);
+                    receiver.pause().await?;
+                }
+            }
+            (_, RTCRtpTransceiverDirection::Recvonly | RTCRtpTransceiverDirection::Sendrecv) => {
+                if let Some(receiver) = &*self.receiver.lock().await {
+                    trace!("Unpausing receiver {:?}", receiver);
+                    receiver.resume().await?;
+                }
+            }
+            // TODO: Senders
+            (_, _) => {}
+        }
+
+        Ok(())
     }
 
     /// stop irreversibly stops the RTPTransceiver
@@ -334,7 +448,7 @@ impl RTCRtpTransceiver {
             }
         }
 
-        self.set_direction(RTCRtpTransceiverDirection::Inactive);
+        self.set_direction_internal(RTCRtpTransceiverDirection::Inactive);
 
         Ok(())
     }
@@ -355,26 +469,13 @@ impl RTCRtpTransceiver {
         }
 
         let direction = self.direction();
-        if !track_is_none && direction == RTCRtpTransceiverDirection::Recvonly {
-            self.set_direction(RTCRtpTransceiverDirection::Sendrecv);
-        } else if !track_is_none && direction == RTCRtpTransceiverDirection::Inactive {
-            self.set_direction(RTCRtpTransceiverDirection::Sendonly);
-        } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendrecv {
-            self.set_direction(RTCRtpTransceiverDirection::Recvonly);
-        } else if !track_is_none
-            && (direction == RTCRtpTransceiverDirection::Sendonly
-                || direction == RTCRtpTransceiverDirection::Sendrecv)
-        {
-            // Handle the case where a sendonly transceiver was added by a negotiation
-            // initiated by remote peer. For example a remote peer added a transceiver
-            // with direction recvonly.
-            //} else if !track_is_none && self.direction == RTPTransceiverDirection::Sendrecv {
-            // Similar to above, but for sendrecv transceiver.
-        } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendonly {
-            self.set_direction(RTCRtpTransceiverDirection::Inactive);
-        } else {
-            return Err(Error::ErrRTPTransceiverSetSendingInvalidState);
-        }
+        let should_send = !track_is_none;
+        let should_recv = direction.has_recv();
+        self.set_direction_internal(RTCRtpTransceiverDirection::from_send_recv(
+            should_send,
+            should_recv,
+        ));
+
         Ok(())
     }
 }

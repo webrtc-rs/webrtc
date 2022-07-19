@@ -9,17 +9,16 @@ use rcgen::{CertificateParams, KeyPair, RcgenError};
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
 use std::ops::Add;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
-use waitgroup::Worker;
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
+#[derive(Clone)]
 pub struct RTCCertificate {
     pub(crate) certificate: dtls::crypto::Certificate,
     pub(crate) stats_id: String,
-    pub(crate) x509_cert: rcgen::Certificate,
-    pub(crate) expires: SystemTime,
+
+    pem: String,
+    expires: SystemTime,
 }
 
 /// Equals determines if two certificates are identical by comparing only certificate
@@ -100,14 +99,43 @@ impl RTCCertificate {
                     .unwrap()
                     .as_nanos() as u64
             ),
-            x509_cert,
+            pem: x509_cert.serialize_pem()?,
             expires,
         })
+    }
+
+    /// Constructs a `RTCCertificate` from an existing certificate.
+    ///
+    /// Use this method when you have a persistent certificate (i.e. you don't want to generate a
+    /// new one for each DTLS connection).
+    pub fn from_existing(
+        certificate: dtls::crypto::Certificate,
+        pem: &str,
+        expires: SystemTime,
+    ) -> Self {
+        Self {
+            certificate,
+            stats_id: format!(
+                "certificate-{}",
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as u64
+            ),
+            pem: pem.to_owned(),
+            expires,
+        }
     }
 
     /// expires returns the timestamp after which this certificate is no longer valid.
     pub fn expires(&self) -> SystemTime {
         self.expires
+    }
+
+    /// pem returns the certificate encoded as two PEM blocks: one for the X509 certificate and the
+    /// other for the private key.
+    pub fn pem(&self) -> &str {
+        &self.pem
     }
 
     /// get_fingerprints returns certificate fingerprints, one of which
@@ -175,45 +203,16 @@ impl RTCCertificate {
     }
     */
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
         let fingerprints = self.get_fingerprints().unwrap();
-        if let Some(fingerprint) = fingerprints.into_iter().nth(0) {
+        if let Some(fingerprint) = fingerprints.into_iter().next() {
             let stats = CertificateStats::new(self, fingerprint);
-            let mut lock = collector.try_lock().unwrap();
-            lock.push(StatsReportType::CertificateStats(stats));
-
-            drop(worker);
+            collector.insert(
+                self.stats_id.clone(),
+                StatsReportType::CertificateStats(stats),
+            );
         }
     }
-
-    /*
-    func (c Certificate) collectStats(report *statsReportCollector) error {
-        report.Collecting()
-
-        fingerPrintAlgo, err := c.get_fingerprints()
-        if err != nil {
-            return err
-        }
-
-        base64Certificate := base64.RawURLEncoding.EncodeToString(c.x509Cert.Raw)
-
-        stats := CertificateStats{
-            Timestamp:            statsTimestampFrom(time.Now()),
-            Type:                 StatsTypeCertificate,
-            ID:                   c.statsID,
-            Fingerprint:          fingerPrintAlgo[0].Value,
-            FingerprintAlgorithm: fingerPrintAlgo[0].Algorithm,
-            Base64Certificate:    base64Certificate,
-            IssuerCertificateID:  c.x509Cert.Issuer.String(),
-        }
-
-        report.Collect(stats.ID, stats)
-        return nil
-    }*/
 
     /// from_pem creates a fresh certificate based on a string containing
     /// pem blocks fort the private key and x509 certificate
@@ -239,12 +238,6 @@ impl RTCCertificate {
 
         RTCCertificate::from_params(params)
     }
-
-    /// PEM returns the certificate encoded as two pem block: once for the X509
-    /// certificate and the other for the private key
-    pub fn pem(&self) -> Result<String> {
-        Ok(self.x509_cert.serialize_pem()?)
-    }
 }
 
 #[cfg(test)]
@@ -259,9 +252,8 @@ mod test {
         let kp_pem = kp.serialize_pem();
 
         let cert = Certificate::generate_certificate(kp)?;
-        let cert_pem = cert.x509_cert.serialize_pem()?;
 
-        //_, err = tls.X509KeyPair(certPEM, skPEM)
+        //_, err = tls.X509KeyPair(cert.pem(), skPEM)
         */
         Ok(())
     }
@@ -273,8 +265,7 @@ mod test {
         assert!(kp_pem.contains("PRIVATE KEY"));
 
         let cert = RTCCertificate::from_key_pair(kp)?;
-        let cert_pem = cert.x509_cert.serialize_pem()?;
-        assert!(cert_pem.contains("CERTIFICATE"));
+        assert!(cert.pem().contains("CERTIFICATE"));
 
         //_, err = tls.X509KeyPair(certPEM, skPEM)
 
@@ -304,14 +295,14 @@ mod test {
         let kp1 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let kp1_pem = kp1.serialize_pem();
         let cert1 = RTCCertificate::from_key_pair(kp1)?;
-        let cert1_pem = cert1.pem()?;
+        let cert1_pem = cert1.pem();
 
         let kp2 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let _cert2 = RTCCertificate::from_key_pair(kp2)?;
 
         let kp3 = KeyPair::from_pem(kp1_pem.as_str())?;
         let kp3_pem = kp3.serialize_pem();
-        let _cert3 = RTCCertificate::from_pem(cert1_pem.as_str(), kp3)?;
+        let _cert3 = RTCCertificate::from_pem(cert1_pem, kp3)?;
 
         assert_eq!(kp1_pem, kp3_pem);
         //assert!(cert1 != cert2);
@@ -355,17 +346,35 @@ mod test {
         let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let kp_pem = kp.serialize_pem();
         let cert = RTCCertificate::from_key_pair(kp)?;
-        let pem = cert.pem()?;
+        let pem = cert.pem();
         log::info!("{}", pem);
 
         let kp2 = KeyPair::from_pem(kp_pem.as_str())?;
         let kp2_pem = kp2.serialize_pem();
-        let cert2 = RTCCertificate::from_pem(pem.as_str(), kp2)?;
-        let pem2 = cert2.pem()?;
+        let cert2 = RTCCertificate::from_pem(pem, kp2)?;
+        let pem2 = cert2.pem();
         log::info!("{}", pem2);
 
         assert_eq!(kp_pem, kp2_pem);
         //TODO: assert_eq!(pem, pem2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_from_existing() -> Result<()> {
+        // NOTE `dtls_cert` key pair and `key_pair` are different, but it's fine here.
+        let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let dtls_cert = dtls::crypto::Certificate::generate_self_signed(["localhost".to_owned()])?;
+
+        let expires = SystemTime::now();
+        let pem = key_pair.serialize_pem();
+
+        let cert = RTCCertificate::from_existing(dtls_cert, &pem, expires);
+
+        assert_ne!("", cert.stats_id);
+        assert_eq!(expires, cert.expires());
+        assert_eq!(pem, cert.pem());
 
         Ok(())
     }

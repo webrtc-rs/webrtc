@@ -1,25 +1,31 @@
+use serde::Serialize;
 use std::fmt;
 
 /// DataChannelState indicates the state of a data channel.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize)]
 pub enum RTCDataChannelState {
+    #[serde(rename = "unspecified")]
     Unspecified = 0,
 
     /// DataChannelStateConnecting indicates that the data channel is being
     /// established. This is the initial state of DataChannel, whether created
     /// with create_data_channel, or dispatched as a part of an DataChannelEvent.
+    #[serde(rename = "connecting")]
     Connecting,
 
     /// DataChannelStateOpen indicates that the underlying data transport is
     /// established and communication is possible.
+    #[serde(rename = "open")]
     Open,
 
     /// DataChannelStateClosing indicates that the procedure to close down the
     /// underlying data transport has started.
+    #[serde(rename = "closing")]
     Closing,
 
     /// DataChannelStateClosed indicates that the underlying data transport
     /// has been closed or could not be established.
+    #[serde(rename = "closed")]
     Closed,
 }
 

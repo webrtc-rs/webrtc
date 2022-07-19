@@ -10,7 +10,7 @@ use crate::peer_connection::policy::sdp_semantics::RTCSdpSemantics;
 /// Configurations may be set up once and reused across multiple connections.
 /// Configurations are treated as readonly. As long as they are unmodified,
 /// they are safe for concurrent use.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct RTCConfiguration {
     /// iceservers defines a slice describing servers available to be used by
     /// ICE, such as STUN and TURN servers.

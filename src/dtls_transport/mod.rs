@@ -18,7 +18,6 @@ use tokio::sync::{mpsc, Mutex};
 use util::Conn;
 
 use dtls_role::*;
-use waitgroup::Worker;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::dtls_transport::dtls_parameters::DTLSParameters;
@@ -307,13 +306,9 @@ impl RTCDtlsTransport {
         DEFAULT_DTLS_ROLE_ANSWER
     }
 
-    pub(crate) async fn collect_stats(
-        &self,
-        collector: &Arc<Mutex<StatsCollector>>,
-        worker: Worker,
-    ) {
+    pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
         for cert in &self.certificates {
-            cert.collect_stats(&collector, worker.clone()).await;
+            cert.collect_stats(collector).await;
         }
     }
 

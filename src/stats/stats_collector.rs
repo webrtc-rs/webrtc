@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use super::StatsReportType;
 
 #[derive(Debug, Default)]
 pub struct StatsCollector {
-    pub(crate) reports: Vec<StatsReportType>,
+    pub(crate) reports: Mutex<HashMap<String, StatsReportType>>,
 }
 
 impl StatsCollector {
@@ -12,11 +15,17 @@ impl StatsCollector {
         }
     }
 
-    pub(crate) fn append(&mut self, stats: &mut Vec<StatsReportType>) {
-        self.reports.append(stats);
+    pub(crate) fn insert(&self, id: String, stats: StatsReportType) {
+        let mut reports = self.reports.lock().unwrap();
+        reports.insert(id, stats);
     }
 
-    pub(crate) fn push(&mut self, stats: StatsReportType) {
-        self.reports.push(stats);
+    pub(crate) fn merge(&self, stats: HashMap<String, StatsReportType>) {
+        let mut reports = self.reports.lock().unwrap();
+        reports.extend(stats)
+    }
+
+    pub(crate) fn to_reports(self) -> HashMap<String, StatsReportType> {
+        self.reports.into_inner().unwrap()
     }
 }

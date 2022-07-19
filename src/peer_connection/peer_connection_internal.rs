@@ -5,7 +5,6 @@ use crate::track::TrackStream;
 use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
 use std::sync::atomic::AtomicIsize;
 use std::sync::Weak;
-use waitgroup::WaitGroup;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -23,7 +22,7 @@ pub(crate) struct PeerConnectionInternal {
     /// ops is an operations queue which will ensure the enqueued actions are
     /// executed in order. It is used for asynchronously, but serially processing
     /// remote and local descriptions
-    pub(super) ops: Arc<Operations>,
+    pub(crate) ops: Arc<Operations>,
     pub(super) negotiation_needed_state: Arc<AtomicU8>,
     pub(super) is_negotiation_needed: Arc<AtomicBool>,
     pub(super) signaling_state: Arc<AtomicU8>,
@@ -142,7 +141,7 @@ impl PeerConnectionInternal {
         sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
-            track_details_from_sdp(parsed)
+            track_details_from_sdp(parsed, false)
         } else {
             vec![]
         };
@@ -189,6 +188,7 @@ impl PeerConnectionInternal {
                         continue;
                     }
 
+                    log::info!("Stopping receiver {:?}", receiver);
                     if let Err(err) = receiver.stop().await {
                         log::warn!("Failed to stop RtpReceiver: {}", err);
                         continue;
@@ -504,6 +504,7 @@ impl PeerConnectionInternal {
                     kind,
                     vec![],
                     Arc::clone(&self.media_engine),
+                    Some(Box::new(self.make_negotiation_needed_trigger())),
                 )
                 .await
             }
@@ -569,6 +570,7 @@ impl PeerConnectionInternal {
             track.kind(),
             vec![],
             Arc::clone(&self.media_engine),
+            Some(Box::new(self.make_negotiation_needed_trigger())),
         )
         .await)
     }
@@ -581,7 +583,17 @@ impl PeerConnectionInternal {
             let mut rtp_transceivers = self.rtp_transceivers.lock().await;
             rtp_transceivers.push(t);
         }
-        RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
+        self.trigger_negotiation_needed().await;
+    }
+
+    /// Helper to trigger a negotiation needed.
+    pub(crate) async fn trigger_negotiation_needed(&self) {
+        RTCPeerConnection::do_negotiation_needed(self.create_negotiation_needed_params()).await;
+    }
+
+    /// Creates the parameters needed to trigger a negotiation needed.
+    fn create_negotiation_needed_params(&self) -> NegotiationNeededParams {
+        NegotiationNeededParams {
             on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.is_closed),
             ops: Arc::clone(&self.ops),
@@ -594,11 +606,23 @@ impl PeerConnectionInternal {
                 current_local_description: Arc::clone(&self.current_local_description),
                 current_remote_description: Arc::clone(&self.current_remote_description),
             },
-        })
-        .await;
+        }
     }
 
-    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<RTCSessionDescription> {
+    pub(crate) fn make_negotiation_needed_trigger(
+        &self,
+    ) -> impl Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync {
+        let params = self.create_negotiation_needed_params();
+        move || {
+            let params = params.clone();
+            Box::pin(async move {
+                let params = params.clone();
+                RTCPeerConnection::do_negotiation_needed(params).await;
+            })
+        }
+    }
+
+    pub(super) async fn remote_description(&self) -> Option<RTCSessionDescription> {
         let pending_remote_description = self.pending_remote_description.lock().await;
         if pending_remote_description.is_some() {
             pending_remote_description.clone()
@@ -726,7 +750,15 @@ impl PeerConnectionInternal {
         } else {
             {
                 for t in &local_transceivers {
+                    if t.stopped.load(Ordering::SeqCst) {
+                        // An "m=" section is generated for each
+                        // RtpTransceiver that has been added to the PeerConnection, excluding
+                        // any stopped RtpTransceivers;
+                        continue;
+                    }
+
                     if let Some(sender) = t.sender().await {
+                        // TODO: This is dubious because of rollbacks.
                         sender.set_negotiated();
                     }
                     media_sections.push(MediaSection {
@@ -791,16 +823,7 @@ impl PeerConnectionInternal {
         let ice_params = self.ice_gatherer.get_local_parameters().await?;
         let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        let remote_description = {
-            let pending_remote_description = self.pending_remote_description.lock().await;
-            if pending_remote_description.is_some() {
-                pending_remote_description.clone()
-            } else {
-                let current_remote_description = self.current_remote_description.lock().await;
-                current_remote_description.clone()
-            }
-        };
-
+        let remote_description = self.remote_description().await;
         let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
         let mut media_sections = vec![];
         let mut already_have_application_media_section = false;
@@ -862,6 +885,7 @@ impl PeerConnectionInternal {
                                             kind,
                                             vec![],
                                             Arc::clone(&self.media_engine),
+                                            Some(Box::new(self.make_negotiation_needed_trigger())),
                                         )
                                         .await;
                                         media_transceivers.push(t);
@@ -889,6 +913,7 @@ impl PeerConnectionInternal {
                                     id: mid_value.to_owned(),
                                     transceivers: media_transceivers,
                                     rid_map: get_rids(media),
+                                    offered_direction: (!include_unmatched).then(|| direction),
                                     ..Default::default()
                                 });
                             } else {
@@ -1319,20 +1344,17 @@ impl PeerConnectionInternal {
         false
     }
 
-    pub(super) async fn get_stats(&self, stats_id: String) -> Arc<Mutex<StatsCollector>> {
-        let collector = Arc::new(Mutex::new(StatsCollector::new()));
-        let wg = WaitGroup::new();
+    pub(super) async fn get_stats(&self, stats_id: String) -> StatsCollector {
+        let collector = StatsCollector::new();
 
         tokio::join!(
-            self.ice_gatherer.collect_stats(&collector, wg.worker()),
-            self.ice_transport.collect_stats(&collector, wg.worker()),
-            self.sctp_transport
-                .collect_stats(&collector, wg.worker(), stats_id),
-            self.dtls_transport.collect_stats(&collector, wg.worker()),
-            self.media_engine.collect_stats(&collector, wg.worker()),
+            self.ice_gatherer.collect_stats(&collector),
+            self.ice_transport.collect_stats(&collector),
+            self.sctp_transport.collect_stats(&collector, stats_id),
+            self.dtls_transport.collect_stats(&collector),
+            self.media_engine.collect_stats(&collector),
         );
 
-        wg.wait().await;
         collector
     }
 }

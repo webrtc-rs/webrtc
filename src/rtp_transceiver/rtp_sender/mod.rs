@@ -99,6 +99,12 @@ pub struct RTCRtpSender {
 
     pub(crate) id: String,
 
+    /// The id of the initial track, even if we later change to a different
+    /// track id should be use when negotiating.
+    pub(crate) initial_track_id: std::sync::Mutex<Option<String>>,
+    /// AssociatedMediaStreamIds from the WebRTC specifcations
+    pub(crate) associated_media_stream_ids: std::sync::Mutex<Vec<String>>,
+
     rtp_transceiver: Mutex<Option<Weak<RTCRtpTransceiver>>>,
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -157,6 +163,7 @@ impl RTCRtpSender {
             *internal_rtcp_interceptor = Some(rtcp_interceptor);
         }
 
+        let stream_ids = vec![track.stream_id().to_string()];
         RTCRtpSender {
             track: Mutex::new(Some(track)),
 
@@ -176,6 +183,8 @@ impl RTCRtpSender {
             interceptor,
 
             id,
+            initial_track_id: std::sync::Mutex::new(None),
+            associated_media_stream_ids: std::sync::Mutex::new(stream_ids),
 
             rtp_transceiver: Mutex::new(None),
 
@@ -462,5 +471,41 @@ impl RTCRtpSender {
     /// has_stopped tells if stop has been called
     pub(crate) async fn has_stopped(&self) -> bool {
         self.stop_called_signal.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn initial_track_id(&self) -> Option<String> {
+        let lock = self.initial_track_id.lock().unwrap();
+
+        lock.clone()
+    }
+
+    pub(crate) fn set_initial_track_id(&self, id: String) -> Result<()> {
+        let mut lock = self.initial_track_id.lock().unwrap();
+
+        if lock.is_some() {
+            return Err(Error::ErrSenderInitialTrackIdAlreadySet);
+        }
+
+        *lock = Some(id);
+
+        Ok(())
+    }
+
+    pub(crate) fn associate_media_stream_id(&self, id: String) -> bool {
+        let mut lock = self.associated_media_stream_ids.lock().unwrap();
+
+        if lock.contains(&id) {
+            return false;
+        }
+
+        lock.push(id);
+
+        true
+    }
+
+    pub(crate) fn associated_media_stream_ids(&self) -> Vec<String> {
+        let lock = self.associated_media_stream_ids.lock().unwrap();
+
+        lock.clone()
     }
 }
