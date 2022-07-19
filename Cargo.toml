@@ -48,5 +48,8 @@ hex = "0.4.3"
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 env_logger = "0.9.0"
 
+# fixes "the trait bound `time::Month: From<u8>` is not satisfied"
+time = "~0.3.1"
+
 [profile.dev]
 opt-level = 0
