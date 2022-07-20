@@ -212,12 +212,22 @@ impl RTCSctpTransport {
     }
 
     async fn accept_data_channels(param: AcceptDataChannelParams) {
+        let dcs = param.data_channels.lock().await;
+        let mut existing_data_channels = Vec::new();
+        for dc in dcs.iter() {
+            if let Some(dc) = dc.data_channel.lock().await.clone() {
+                existing_data_channels.push(dc);
+            }
+        }
+        drop(dcs);
+
         loop {
             let dc = tokio::select! {
                 _ = param.notify_rx.notified() => break,
                 result = DataChannel::accept(
                     &param.sctp_association,
                     data::data_channel::Config::default(),
+                    &existing_data_channels,
                 ) => {
                     match result {
                         Ok(dc) => dc,
