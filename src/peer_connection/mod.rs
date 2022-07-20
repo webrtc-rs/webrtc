@@ -1727,7 +1727,7 @@ impl RTCPeerConnection {
                         .await
                     {
                         let _ = sender.stop().await;
-                        let _ = t.set_sender(None).await;
+                        t.set_sender(None).await;
                         return Err(err);
                     }
 

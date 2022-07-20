@@ -78,7 +78,7 @@ impl Operations {
         length: &Arc<AtomicUsize>,
     ) -> Result<()> {
         length.fetch_add(1, Ordering::SeqCst);
-        let _ = ops_tx.send(op)?;
+        ops_tx.send(op)?;
 
         Ok(())
     }
@@ -131,7 +131,7 @@ impl Operations {
 
     pub(crate) async fn close(&self) -> Result<()> {
         if let Some(close_tx) = &self.close_tx {
-            let _ = close_tx.send(()).await?;
+            close_tx.send(()).await?;
         }
         Ok(())
     }
