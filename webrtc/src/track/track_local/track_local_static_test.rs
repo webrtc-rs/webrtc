@@ -278,7 +278,13 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
-    send_video_until_done(on_track_fired_rx, vec![track], Bytes::from_static(&[0x00])).await;
+    send_video_until_done(
+        on_track_fired_rx,
+        vec![track],
+        Bytes::from_static(&[0x00]),
+        None,
+    )
+    .await;
 
     close_pair_now(&offerer, &answerer).await;
 

@@ -3,7 +3,7 @@ use crate::data_channel::RTCDataChannel;
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::peer_connection::certificate::RTCCertificate;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
-use crate::rtp_transceiver::PayloadType;
+use crate::rtp_transceiver::{PayloadType, SSRC};
 use crate::sctp_transport::RTCSctpTransport;
 
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
@@ -15,6 +15,7 @@ use stats_collector::StatsCollector;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::time::Instant;
 
 mod serialize;
@@ -46,6 +47,8 @@ pub enum RTCStatsType {
     RemoteCandidate,
     #[serde(rename = "remote-inbound-rtp")]
     RemoteInboundRTP,
+    #[serde(rename = "remote-outbound-rtp")]
+    RemoteOutboundRTP,
     #[serde(rename = "sender")]
     Sender,
     #[serde(rename = "transport")]
@@ -68,6 +71,10 @@ pub enum StatsReportType {
     RemoteCandidate(ICECandidateStats),
     SCTPTransport(ICETransportStats),
     Transport(ICETransportStats),
+    InboundRTP(InboundRTPStats),
+    OutboundRTP(OutboundRTPStats),
+    RemoteInboundRTP(RemoteInboundRTPStats),
+    RemoteOutboundRTP(RemoteOutboundRTPStats),
 }
 
 impl From<SourceStatsType> for StatsReportType {
@@ -98,6 +105,10 @@ impl Serialize for StatsReportType {
             StatsReportType::RemoteCandidate(stats) => stats.serialize(serializer),
             StatsReportType::SCTPTransport(stats) => stats.serialize(serializer),
             StatsReportType::Transport(stats) => stats.serialize(serializer),
+            StatsReportType::InboundRTP(stats) => stats.serialize(serializer),
+            StatsReportType::OutboundRTP(stats) => stats.serialize(serializer),
+            StatsReportType::RemoteInboundRTP(stats) => stats.serialize(serializer),
+            StatsReportType::RemoteOutboundRTP(stats) => stats.serialize(serializer),
         }
     }
 }
@@ -421,4 +432,153 @@ impl PeerConnectionStats {
             timestamp: Instant::now(),
         }
     }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboundRTPStats {
+    // RTCStats
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCRtpStreamStats
+    pub ssrc: SSRC,
+    pub kind: &'static str, // Either "video" or "audio"
+    // TODO: Add tranportId
+    // TODO: Add codecId
+
+    // RTCReceivedRtpStreamStats
+    pub packets_received: u64,
+    // TODO: packetsLost
+    // TOOD: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
+    // NB: `framesDropped` can't be produced since we aren't decoding, might be worth introducing a
+    // way for consumers to control this in the future.
+
+    // RTCInboundRtpStreamStats
+    pub track_identifier: String,
+    pub mid: String,
+    // TODO: `remoteId`
+    // NB: `framesDecoded`, `frameWidth`, frameHeight`, `framesPerSecond`, `qpSum`,
+    // `totalDecodeTime`, `totalInterFrameDelay`, and `totalSquaredInterFrameDelay` are all decoder
+    // specific values and can't be produced since we aren't decoding.
+    pub last_packet_received_timestamp: Option<SystemTime>,
+    pub header_bytes_received: u64,
+    // TODO: `packetsDiscarded`. This value only makes sense if we have jitter buffer, which we
+    // cannot assume.
+    // TODO: `fecPacketsReceived`, `fecPacketsDiscarded`
+    pub bytes_received: u64,
+    pub nack_count: u64,
+    pub fir_count: Option<u64>,
+    pub pli_count: Option<u64>,
+    // NB: `totalProcessingDelay`, `estimatedPlayoutTimestamp`, `jitterBufferDelay`,
+    // `jitterBufferTargetDelay`, `jitterBufferEmittedCount`, `jitterBufferMinimumDelay`,
+    // `totalSamplesReceived`, `concealedSamples`, `silentConcealedSamples`, `concealmentEvents`,
+    // `insertedSamplesForDeceleration`, `removedSamplesForAcceleration`, `audioLevel`,
+    // `totalAudioEneregy`, `totalSampleDuration`, `framesReceived, and `decoderImplementation` are
+    // all decoder specific and can't be produced since we aren't decoding.
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutboundRTPStats {
+    // RTCStats
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCRtpStreamStats
+    pub ssrc: SSRC,
+    pub kind: &'static str, // Either "video" or "audio"
+    // TODO: Add tranportId
+    // TODO: Add codecId
+
+    // RTCSentRtpStreamStats
+    pub packets_sent: u64,
+    pub bytes_sent: u64,
+
+    // RTCOutboundRtpStreamStats
+    // NB: non-canon in browsers this is available via `RTCMediaSourceStats` which we are unlikely to implement
+    pub track_identifier: String,
+    pub mid: String,
+    // TODO: `mediaSourceId` and `remoteId`
+    pub rid: Option<String>,
+    pub header_bytes_sent: u64,
+    // TODO: `retransmittedPacketsSent` and `retransmittedPacketsSent`
+    // NB: `targetBitrate`, `totalEncodedBytesTarget`, `frameWidth` `frameHeight`, `framesPerSecond`, `framesSent`,
+    // `hugeFramesSent`, `framesEncoded`, `keyFramesEncoded`, `qpSum`, and `totalEncodeTime` are
+    // all encoder specific and can't be produced snce we aren't encoding.
+    // TODO: `totalPacketSendDelay` time from `TrackLocalWriter::write_rtp` to being written to
+    // socket.
+
+    // NB: `qualityLimitationReason`, `qualityLimitationDurations`, and `qualityLimitationResolutionChanges` are all
+    // encoder specific and can't be produced since we aren't encoding.
+    pub nack_count: u64,
+    pub fir_count: Option<u64>,
+    pub pli_count: Option<u64>,
+    // NB: `encoderImplementation` is encoder specific and can't be produced since we aren't
+    // encoding.
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteInboundRTPStats {
+    // RTCStats
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCRtpStreamStats
+    pub ssrc: SSRC,
+    pub kind: &'static str, // Either "video" or "audio"
+    // TODO: Add tranportId
+    // TODO: Add codecId
+
+    // RTCReceivedRtpStreamStats
+    pub packets_received: u64,
+    // TODO: packetsLost
+    // TOOD: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
+    // NB: `framesDropped` can't be produced since we aren't decoding, might be worth introducing a
+    // way for consumers to control this in the future.
+
+    // RTCRemoteInboundRtpStreamStats
+    pub local_id: String,
+    pub round_trip_time: Option<f64>,
+    pub total_round_trip_time: f64,
+    pub fraction_lost: f64,
+    pub round_trip_time_measurements: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteOutboundRTPStats {
+    // RTCStats
+    #[serde(with = "serialize::instant_to_epoch_seconds")]
+    pub timestamp: Instant,
+    #[serde(rename = "type")]
+    pub stats_type: RTCStatsType,
+    pub id: String,
+
+    // RTCRtpStreamStats
+    pub ssrc: SSRC,
+    pub kind: &'static str, // Either "video" or "audio"
+    // TODO: Add tranportId
+    // TODO: Add codecId
+
+    // RTCSentRtpStreamStats
+    pub packets_sent: u64,
+    pub bytes_sent: u64,
+
+    // RTCRemoteOutboundRtpStreamStats
+    pub local_id: String,
+    // TODO: `remote_timestamp`
+    pub reports_sent: u64,
+    pub round_trip_time: Option<f64>,
+    pub total_round_trip_time: f64,
 }

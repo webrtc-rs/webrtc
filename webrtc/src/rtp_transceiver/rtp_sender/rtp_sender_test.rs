@@ -97,7 +97,13 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
 
     // Block Until packet with 0xAA has been seen
     tokio::spawn(async move {
-        send_video_until_done(seen_packet_a_rx, vec![track_a], Bytes::from_static(&[0xAA])).await;
+        send_video_until_done(
+            seen_packet_a_rx,
+            vec![track_a],
+            Bytes::from_static(&[0xAA]),
+            None,
+        )
+        .await;
     });
 
     rtp_sender
@@ -108,7 +114,13 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
 
     // Block Until packet with 0xBB has been seen
     tokio::spawn(async move {
-        send_video_until_done(seen_packet_b_rx, vec![track_b], Bytes::from_static(&[0xBB])).await;
+        send_video_until_done(
+            seen_packet_b_rx,
+            vec![track_b],
+            Bytes::from_static(&[0xBB]),
+            None,
+        )
+        .await;
     });
 
     close_pair_now(&sender, &receiver).await;
@@ -235,7 +247,13 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
         .await;
 
     tokio::spawn(async move {
-        send_video_until_done(seen_packet_rx, vec![track_a], Bytes::from_static(&[0xAA])).await;
+        send_video_until_done(
+            seen_packet_rx,
+            vec![track_a],
+            Bytes::from_static(&[0xAA]),
+            None,
+        )
+        .await;
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
@@ -315,7 +333,13 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
         .await;
 
     tokio::spawn(async move {
-        send_video_until_done(seen_packet_rx, vec![track_a], Bytes::from_static(&[0xAA])).await;
+        send_video_until_done(
+            seen_packet_rx,
+            vec![track_a],
+            Bytes::from_static(&[0xAA]),
+            None,
+        )
+        .await;
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
