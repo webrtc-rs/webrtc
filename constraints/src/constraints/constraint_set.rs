@@ -6,8 +6,9 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    constraint::SanitizedMediaTrackConstraint, BareOrMediaTrackConstraint, MediaTrackConstraint,
-    MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
+    constraint::SanitizedMediaTrackConstraint, property::name::*, BareOrMediaTrackConstraint,
+    MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
+    ValueConstraint, ValueRangeConstraint,
 };
 
 /// Media track constraint set that contains either bare values or constraints.
@@ -131,6 +132,98 @@ impl MediaTrackConstraintSet {
             })
             .collect();
         SanitizedMediaTrackConstraintSet::new(index_map)
+    }
+}
+
+impl SanitizedMediaTrackConstraintSet {
+    pub fn device_id(&self) -> Option<&ValueConstraint<String>> {
+        self.0
+            .get(DEVICE_ID)
+            .and_then(SanitizedMediaTrackConstraint::string)
+    }
+
+    pub fn group_id(&self) -> Option<&ValueConstraint<String>> {
+        self.0
+            .get(GROUP_ID)
+            .and_then(SanitizedMediaTrackConstraint::string)
+    }
+
+    pub fn auto_gain_control(&self) -> Option<&ValueConstraint<bool>> {
+        self.0
+            .get(AUTO_GAIN_CONTROL)
+            .and_then(SanitizedMediaTrackConstraint::bool)
+    }
+
+    pub fn channel_count(&self) -> Option<&ValueRangeConstraint<u64>> {
+        self.0
+            .get(CHANNEL_COUNT)
+            .and_then(SanitizedMediaTrackConstraint::integer_range)
+    }
+
+    pub fn echo_cancellation(&self) -> Option<&ValueConstraint<bool>> {
+        self.0
+            .get(ECHO_CANCELLATION)
+            .and_then(SanitizedMediaTrackConstraint::bool)
+    }
+
+    pub fn latency(&self) -> Option<&ValueRangeConstraint<f64>> {
+        self.0
+            .get(LATENCY)
+            .and_then(SanitizedMediaTrackConstraint::float_range)
+    }
+
+    pub fn noise_suppression(&self) -> Option<&ValueConstraint<bool>> {
+        self.0
+            .get(NOISE_SUPPRESSION)
+            .and_then(SanitizedMediaTrackConstraint::bool)
+    }
+
+    pub fn sample_rate(&self) -> Option<&ValueRangeConstraint<f64>> {
+        self.0
+            .get(SAMPLE_RATE)
+            .and_then(SanitizedMediaTrackConstraint::float_range)
+    }
+
+    pub fn sample_size(&self) -> Option<&ValueRangeConstraint<u64>> {
+        self.0
+            .get(SAMPLE_SIZE)
+            .and_then(SanitizedMediaTrackConstraint::integer_range)
+    }
+
+    pub fn aspect_ratio(&self) -> Option<&ValueRangeConstraint<f64>> {
+        self.0
+            .get(ASPECT_RATIO)
+            .and_then(SanitizedMediaTrackConstraint::float_range)
+    }
+
+    pub fn facing_mode(&self) -> Option<&ValueConstraint<String>> {
+        self.0
+            .get(FACING_MODE)
+            .and_then(SanitizedMediaTrackConstraint::string)
+    }
+
+    pub fn frame_rate(&self) -> Option<&ValueRangeConstraint<f64>> {
+        self.0
+            .get(FRAME_RATE)
+            .and_then(SanitizedMediaTrackConstraint::float_range)
+    }
+
+    pub fn height(&self) -> Option<&ValueRangeConstraint<u64>> {
+        self.0
+            .get(HEIGHT)
+            .and_then(SanitizedMediaTrackConstraint::integer_range)
+    }
+
+    pub fn width(&self) -> Option<&ValueRangeConstraint<u64>> {
+        self.0
+            .get(WIDTH)
+            .and_then(SanitizedMediaTrackConstraint::integer_range)
+    }
+
+    pub fn resize_mode(&self) -> Option<&ValueConstraint<String>> {
+        self.0
+            .get(RESIZE_MODE)
+            .and_then(SanitizedMediaTrackConstraint::string)
     }
 }
 
