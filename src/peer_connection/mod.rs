@@ -1849,6 +1849,7 @@ impl RTCPeerConnection {
         if let Some(options) = options {
             if let Some(id) = options.id {
                 params.id = id;
+                params.id_finalized = true;
             }
 
             // Ordered indicates if data is allowed to be delivered out of order. The
