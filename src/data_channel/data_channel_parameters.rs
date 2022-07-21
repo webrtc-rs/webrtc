@@ -10,5 +10,4 @@ pub struct DataChannelParameters {
     pub max_packet_life_time: u16,
     pub max_retransmits: u16,
     pub negotiated: bool,
-    pub(crate) id_finalized: bool,
 }

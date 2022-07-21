@@ -275,7 +275,6 @@ impl RTCSctpTransport {
                     ordered,
                     max_packet_life_time: max_packet_lifetime,
                     max_retransmits,
-                    id_finalized: true,
                 },
                 Arc::clone(&param.setting_engine),
             ));

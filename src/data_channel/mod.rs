@@ -59,7 +59,6 @@ pub struct RTCDataChannel {
     pub(crate) ready_state: Arc<AtomicU8>, // DataChannelState
     pub(crate) buffered_amount_low_threshold: AtomicUsize,
     pub(crate) detach_called: Arc<AtomicBool>,
-    pub(crate) id_finalized: bool,
 
     // The binaryType represents attribute MUST, on getting, return the value to
     // which it was last set. On setting, if the new value is either the string
@@ -107,7 +106,6 @@ impl RTCDataChannel {
             notify_tx: Arc::new(Notify::new()),
 
             setting_engine,
-            id_finalized: params.id_finalized,
             ..Default::default()
         }
     }
@@ -159,7 +157,7 @@ impl RTCDataChannel {
                 negotiated: self.negotiated,
             };
 
-            if !self.id_finalized {
+            if !self.negotiated {
                 self.id.store(
                     sctp_transport
                         .generate_and_set_data_channel_id(
