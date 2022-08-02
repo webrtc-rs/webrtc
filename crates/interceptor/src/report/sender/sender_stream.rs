@@ -3,6 +3,7 @@ use crate::{Attributes, RTPWriter};
 
 use async_trait::async_trait;
 use rtp::extension::abs_send_time_extension::unix2ntp;
+use std::convert::TryInto;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
@@ -14,8 +15,7 @@ struct SenderStreamInternal {
     /// data from rtp packets
     last_rtp_time_rtp: u32,
     last_rtp_time_time: SystemTime,
-    packet_count: u32,
-    octet_count: u32,
+    counters: Counters,
 }
 
 impl SenderStreamInternal {
@@ -24,22 +24,22 @@ impl SenderStreamInternal {
         self.last_rtp_time_rtp = pkt.header.timestamp;
         self.last_rtp_time_time = now;
 
-        self.packet_count += 1;
-        self.octet_count += pkt.payload.len() as u32;
+        self.counters.increment_packets();
+        self.counters.count_octets(pkt.payload.len());
     }
 
     fn generate_report(&mut self, now: SystemTime) -> rtcp::sender_report::SenderReport {
         rtcp::sender_report::SenderReport {
             ssrc: self.ssrc,
             ntp_time: unix2ntp(now),
-            rtp_time: self.last_rtp_time_rtp
-                + (now
-                    .duration_since(self.last_rtp_time_time)
+            rtp_time: self.last_rtp_time_rtp.wrapping_add(
+                (now.duration_since(self.last_rtp_time_time)
                     .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_secs_f64()
                     * self.clock_rate) as u32,
-            packet_count: self.packet_count,
-            octet_count: self.octet_count,
+            ),
+            packet_count: self.counters.packet_count(),
+            octet_count: self.counters.octet_count(),
             ..Default::default()
         }
     }
@@ -68,8 +68,7 @@ impl SenderStream {
                 clock_rate: clock_rate as f64,
                 last_rtp_time_rtp: 0,
                 last_rtp_time_time: SystemTime::UNIX_EPOCH,
-                packet_count: 0,
-                octet_count: 0,
+                counters: Default::default(),
             }),
         }
     }
@@ -101,5 +100,50 @@ impl RTPWriter for SenderStream {
         self.process_rtp(now, pkt).await;
 
         self.next_rtp_writer.write(pkt, a).await
+    }
+}
+
+pub(crate) struct Counters {
+    packets: u32,
+    octets: u32,
+}
+
+impl Default for Counters {
+    fn default() -> Self {
+        Self {
+            packets: 0,
+            octets: 0,
+        }
+    }
+}
+
+/// Wrapping counters used for generating [`rtcp::sender_report::SenderReport`]
+impl Counters {
+    pub fn increment_packets(&mut self) {
+        self.packets = self.packets.wrapping_add(1);
+    }
+
+    pub fn count_octets(&mut self, octets: usize) {
+        // account for a payload size of at most `u32::MAX`
+        // and log a message if larger
+        self.octets = self
+            .octets
+            .wrapping_add(octets.try_into().unwrap_or_else(|_| {
+                log::warn!("packet payload larger than 32 bits");
+                u32::MAX
+            }));
+    }
+
+    pub fn packet_count(&self) -> u32 {
+        self.packets
+    }
+
+    pub fn octet_count(&self) -> u32 {
+        self.octets
+    }
+
+    #[cfg(test)]
+    pub fn mock(packets: u32, octets: u32) -> Self {
+        Self { packets, octets }
     }
 }
