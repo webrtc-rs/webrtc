@@ -224,3 +224,38 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_stream_counters_initially_zero() -> Result<()> {
+    let counters = sender_stream::Counters::default();
+    assert_eq!(0, counters.octet_count());
+    assert_eq!(0, counters.packet_count());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_stream_packet_counter_wraps_on_overflow() -> Result<()> {
+    let mut counters = sender_stream::Counters::mock(u32::MAX, 0);
+    for _ in 0..3 {
+        counters.increment_packets();
+    }
+    assert_eq!(2, counters.packet_count());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_stream_octet_counter_wraps_on_overflow() -> Result<()> {
+    let mut counters = sender_stream::Counters::default();
+    counters.count_octets(u32::MAX as usize);
+    counters.count_octets(3);
+    assert_eq!(2, counters.octet_count());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_stream_octet_counter_saturates_u32_from_usize() -> Result<()> {
+    let mut counters = sender_stream::Counters::default();
+    counters.count_octets(0xabcdef01234567_usize);
+    assert_eq!(0xffffffff_u32, counters.octet_count());
+    Ok(())
+}
