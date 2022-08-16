@@ -194,6 +194,22 @@ impl MockStream {
         rtcp_out_modified_rx.recv().await
     }
 
+    /// Returns the last rtcp packet bacth that was written, modified by the interceptor.
+    ///
+    /// NB: This method discards all other previously recoreded packet batches.
+    pub async fn last_written_rtcp(
+        &self,
+    ) -> Option<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
+        let mut last = None;
+        let mut rtcp_out_modified_rx = self.rtcp_out_modified_rx.lock().await;
+
+        while let Ok(v) = rtcp_out_modified_rx.try_recv() {
+            last = Some(v);
+        }
+
+        last
+    }
+
     /// written_rtp returns a channel containing rtp packets written, modified by the interceptor
     pub async fn written_rtp(&self) -> Option<rtp::packet::Packet> {
         let mut rtp_out_modified_rx = self.rtp_out_modified_rx.lock().await;

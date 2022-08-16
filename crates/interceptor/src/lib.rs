@@ -17,6 +17,7 @@ pub mod nack;
 pub mod noop;
 pub mod registry;
 pub mod report;
+pub mod stats;
 pub mod stream_info;
 pub mod stream_reader;
 pub mod twcc;

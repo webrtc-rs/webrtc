@@ -15,6 +15,10 @@ impl Chain {
     pub fn new(interceptors: Vec<Arc<dyn Interceptor + Send + Sync>>) -> Self {
         Chain { interceptors }
     }
+
+    pub fn add(&mut self, icpr: Arc<dyn Interceptor + Send + Sync>) {
+        self.interceptors.push(icpr);
+    }
 }
 
 #[async_trait]
