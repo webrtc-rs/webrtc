@@ -630,7 +630,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
     };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
-        .with_interval(Duration::from_millis(50))
+        .with_interval(Duration::from_millis(25))
         .with_now_fn(time_gen)
         .build("")?;
 
@@ -669,7 +669,10 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         })
         .await;
 
-    let pkts = stream.written_rtcp().await.unwrap();
+    // Wait at least 50 ms to ensure a report is generated
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let pkts = stream.last_written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
     if let Some(rr) = pkts[0]
         .as_any()
