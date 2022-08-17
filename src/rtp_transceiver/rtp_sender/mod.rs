@@ -296,7 +296,7 @@ impl RTCRtpSender {
             };
             if let Some(t) = t {
                 let context = self.context.lock().await;
-                t.unbind(&*context).await?;
+                t.unbind(&context).await?;
             }
         }
 
@@ -444,7 +444,7 @@ impl RTCRtpSender {
 
         {
             let stream_info = self.stream_info.lock().await;
-            self.interceptor.unbind_local_stream(&*stream_info).await;
+            self.interceptor.unbind_local_stream(&stream_info).await;
         }
 
         self.srtp_stream.close().await

@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// DTLSTransportState indicates the DTLS transport establishment state.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCDtlsTransportState {
     Unspecified = 0,
 

@@ -3,7 +3,7 @@ use crate::ice_transport::ice_candidate::*;
 use std::fmt;
 
 /// ICECandidatePair represents an ICE Candidate pair
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCIceCandidatePair {
     stats_id: String,
     local: RTCIceCandidate,

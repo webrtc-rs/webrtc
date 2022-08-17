@@ -3,7 +3,7 @@ use std::fmt;
 
 /// SDPSemantics determines which style of SDP offers and answers
 /// can be used
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCSdpSemantics {
     Unspecified = 0,
 

@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::fmt;
 
 /// DataChannelState indicates the state of a data channel.
-#[derive(Debug, Copy, Clone, PartialEq, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize)]
 pub enum RTCDataChannelState {
     #[serde(rename = "unspecified")]
     Unspecified = 0,

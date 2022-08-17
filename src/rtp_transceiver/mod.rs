@@ -61,7 +61,7 @@ pub const TYPE_RTCP_FB_NACK: &str = "nack";
 
 /// rtcpfeedback signals the connection to use additional RTCP packet types.
 /// <https://draft.ortc.org/#dom-rtcrtcpfeedback>
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCPFeedback {
     /// Type is the type of feedback.
     /// see: <https://draft.ortc.org/#dom-rtcrtcpfeedback>
@@ -240,7 +240,7 @@ impl RTCRtpTransceiver {
     /// Codecs returns list of supported codecs
     pub(crate) async fn get_codecs(&self) -> Vec<RTCRtpCodecParameters> {
         let mut codecs = self.codecs.lock().await;
-        RTPReceiverInternal::get_codecs(&mut *codecs, self.kind, &self.media_engine).await
+        RTPReceiverInternal::get_codecs(&mut codecs, self.kind, &self.media_engine).await
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one

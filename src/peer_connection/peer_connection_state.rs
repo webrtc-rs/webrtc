@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// PeerConnectionState indicates the state of the PeerConnection.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCPeerConnectionState {
     Unspecified,
 

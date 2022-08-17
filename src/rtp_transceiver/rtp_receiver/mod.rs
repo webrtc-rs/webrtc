@@ -173,9 +173,7 @@ impl RTPReceiverInternal {
                 loop {
                     tokio::select! {
                         res = State::error_on_close(&mut state_watch_rx) => {
-                            if let Err(e) = res {
-                                return Err(e);
-                            }
+                            res?
                         }
                         result = rtcp_interceptor.read(b, &a) => {
                             return Ok(result?)
@@ -207,9 +205,7 @@ impl RTPReceiverInternal {
                     loop {
                         tokio::select! {
                             res = State::error_on_close(&mut state_watch_rx) => {
-                                if let Err(e) = res {
-                                    return Err(e);
-                                }
+                                res?
                             }
                             result = rtcp_interceptor.read(b, &a) => {
                                 return Ok(result?);
@@ -323,7 +319,7 @@ impl RTPReceiverInternal {
         if let Some(codecs) = &*transceiver_codecs {
             let mut c = codecs.lock().await;
             parameters.codecs =
-                RTPReceiverInternal::get_codecs(&mut *c, self.kind, &self.media_engine).await;
+                RTPReceiverInternal::get_codecs(&mut c, self.kind, &self.media_engine).await;
         }
 
         parameters

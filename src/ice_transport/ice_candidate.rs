@@ -14,7 +14,7 @@ use crate::ice_transport::ice_candidate_type::RTCIceCandidateType;
 use crate::ice_transport::ice_protocol::RTCIceProtocol;
 
 /// ICECandidate represents a ice candidate
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RTCIceCandidate {
     pub stats_id: String,
     pub foundation: String,
@@ -166,7 +166,7 @@ impl fmt::Display for RTCIceCandidate {
 }
 
 /// ICECandidateInit is used to serialize ice candidates
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RTCIceCandidateInit {
     pub candidate: String,
