@@ -226,10 +226,13 @@ pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
 
     let mut pairs = vec![];
 
-    for seq in seq_nos.iter().skip(1) {
-        if seq - nack_pair.packet_id > 16 {
+    for &seq in seq_nos.iter().skip(1) {
+        if seq == nack_pair.packet_id {
+            continue;
+        }
+        if seq <= nack_pair.packet_id || seq - nack_pair.packet_id > 16 {
             pairs.push(nack_pair.clone());
-            nack_pair.packet_id = *seq;
+            nack_pair.packet_id = seq;
             continue;
         }
 
