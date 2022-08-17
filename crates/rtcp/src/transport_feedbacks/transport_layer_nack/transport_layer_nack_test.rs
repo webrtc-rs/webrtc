@@ -305,7 +305,7 @@ fn test_transport_layer_nack_pair_generation() {
         ),
         (
             "Multiple Ranges, Multiple NACKPair (with rollover)",
-            vec![100, 117, 65535, 0, 1, 99],
+            vec![100, 117, 65534, 65535, 0, 1, 99],
             vec![
                 NackPair {
                     packet_id: 100,
@@ -316,8 +316,8 @@ fn test_transport_layer_nack_pair_generation() {
                     lost_packets: 0,
                 },
                 NackPair {
-                    packet_id: 65535,
-                    lost_packets: 0,
+                    packet_id: 65534,
+                    lost_packets: 1,
                 },
                 NackPair {
                     packet_id: 0,

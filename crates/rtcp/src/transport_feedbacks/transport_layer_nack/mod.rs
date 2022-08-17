@@ -230,12 +230,13 @@ pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
         if seq == nack_pair.packet_id {
             continue;
         }
-        if seq <= nack_pair.packet_id || seq - nack_pair.packet_id > 16 {
+        if seq <= nack_pair.packet_id || seq > nack_pair.packet_id.saturating_add(16) {
             pairs.push(nack_pair.clone());
             nack_pair.packet_id = seq;
             continue;
         }
 
+        // Subtraction here is safe because the above checks that seqnum > nack_pair.packet_id.
         nack_pair.lost_packets |= 1 << (seq - nack_pair.packet_id - 1);
     }
 
