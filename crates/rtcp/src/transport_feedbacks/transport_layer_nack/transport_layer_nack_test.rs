@@ -250,6 +250,15 @@ fn test_transport_layer_nack_pair_generation() {
                 lost_packets: 0x0,
             }],
         ),
+        // Make sure it doesn't crash.
+        (
+            "Single Sequence Number (duplicates)",
+            vec![100u16, 100],
+            vec![NackPair {
+                packet_id: 100,
+                lost_packets: 0x0,
+            }],
+        ),
         (
             "Multiple in range, Single NACKPair",
             vec![100, 101, 105, 115],
@@ -273,6 +282,50 @@ fn test_transport_layer_nack_pair_generation() {
                 NackPair {
                     packet_id: 500,
                     lost_packets: 0x3,
+                },
+            ],
+        ),
+        (
+            "Multiple Ranges, Multiple NACKPair",
+            vec![100, 117, 500, 501, 502],
+            vec![
+                NackPair {
+                    packet_id: 100,
+                    lost_packets: 0,
+                },
+                NackPair {
+                    packet_id: 117,
+                    lost_packets: 0,
+                },
+                NackPair {
+                    packet_id: 500,
+                    lost_packets: 0x3,
+                },
+            ],
+        ),
+        (
+            "Multiple Ranges, Multiple NACKPair (with rollover)",
+            vec![100, 117, 65534, 65535, 0, 1, 99],
+            vec![
+                NackPair {
+                    packet_id: 100,
+                    lost_packets: 0,
+                },
+                NackPair {
+                    packet_id: 117,
+                    lost_packets: 0,
+                },
+                NackPair {
+                    packet_id: 65534,
+                    lost_packets: 1,
+                },
+                NackPair {
+                    packet_id: 0,
+                    lost_packets: 1,
+                },
+                NackPair {
+                    packet_id: 99,
+                    lost_packets: 1,
                 },
             ],
         ),
