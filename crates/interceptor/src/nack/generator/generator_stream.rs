@@ -115,12 +115,12 @@ impl GeneratorStreamInternal {
     }
 
     fn fix_last_consecutive(&mut self) {
-        let mut i = self.last_consecutive + 1;
-        while i != self.end + 1 && self.get_received(i) {
+        let mut i = self.last_consecutive.wrapping_add(1);
+        while i != self.end.wrapping_add(1) && self.get_received(i) {
             // find all consecutive packets
-            i += 1;
+            i = i.wrapping_add(1);
         }
-        self.last_consecutive = i - 1;
+        self.last_consecutive = i.wrapping_sub(1);
     }
 }
 
@@ -296,5 +296,20 @@ mod test {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_generator_stream_rollover() {
+        let mut rl = GeneratorStreamInternal::new(1);
+        // Make sure it doesn't panic.
+        rl.add(65533);
+        rl.add(65535);
+        rl.add(65534);
+
+        let mut rl = GeneratorStreamInternal::new(1);
+        // Make sure it doesn't panic.
+        rl.add(65534);
+        rl.add(0);
+        rl.add(65535);
     }
 }
