@@ -160,7 +160,6 @@ async fn main() -> Result<()> {
         )
         .arg(
             Arg::new("offer-address")
-                .required_unless_present("FULLHELP")
                 .takes_value(true)
                 .default_value("0.0.0.0:50000")
                 .long("offer-address")
@@ -168,7 +167,6 @@ async fn main() -> Result<()> {
         )
         .arg(
             Arg::new("answer-address")
-                .required_unless_present("FULLHELP")
                 .takes_value(true)
                 .default_value("localhost:60000")
                 .long("answer-address")

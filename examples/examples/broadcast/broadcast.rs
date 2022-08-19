@@ -40,7 +40,6 @@ async fn main() -> Result<()> {
         )
         .arg(
             Arg::new("port")
-                .required_unless_present("FULLHELP")
                 .takes_value(true)
                 .default_value("8080")
                 .long("port")

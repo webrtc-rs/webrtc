@@ -38,7 +38,6 @@ async fn main() -> Result<()> {
         )
         .arg(
             Arg::new("close-after")
-                .required_unless_present("FULLHELP")
                 .takes_value(true)
                 .default_value("5")
                 .long("close-after")
