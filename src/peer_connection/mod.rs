@@ -1718,6 +1718,7 @@ impl RTCPeerConnection {
                             Arc::clone(&self.internal.dtls_transport),
                             Arc::clone(&self.internal.media_engine),
                             Arc::clone(&self.interceptor),
+                            false, // adding a track sets a send direction.
                         )
                         .await,
                     );
