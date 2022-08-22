@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// ICEGathererState represents the current state of the ICE gatherer.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceGathererState {
     Unspecified,
 

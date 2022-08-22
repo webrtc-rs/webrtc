@@ -3,7 +3,7 @@ use std::fmt;
 
 /// ICEProtocol indicates the transport protocol type that is used in the
 /// ice.URL structure.
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCIceProtocol {
     Unspecified,
 

@@ -5,7 +5,7 @@ use std::fmt;
 /// endpoint is not bundle-aware, and what ICE candidates are gathered. If the
 /// remote endpoint is bundle-aware, all media tracks and data channels are
 /// bundled onto the same transport.
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCBundlePolicy {
     Unspecified = 0,
 

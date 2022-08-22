@@ -2,7 +2,7 @@ use std::fmt;
 
 /// ICERole describes the role ice.Agent is playing in selecting the
 /// preferred the candidate pair.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceRole {
     Unspecified,
 

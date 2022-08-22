@@ -61,7 +61,7 @@ pub const TYPE_RTCP_FB_NACK: &str = "nack";
 
 /// rtcpfeedback signals the connection to use additional RTCP packet types.
 /// <https://draft.ortc.org/#dom-rtcrtcpfeedback>
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCPFeedback {
     /// Type is the type of feedback.
     /// see: <https://draft.ortc.org/#dom-rtcrtcpfeedback>
@@ -240,7 +240,7 @@ impl RTCRtpTransceiver {
     /// Codecs returns list of supported codecs
     pub(crate) async fn get_codecs(&self) -> Vec<RTCRtpCodecParameters> {
         let mut codecs = self.codecs.lock().await;
-        RTPReceiverInternal::get_codecs(&mut *codecs, self.kind, &self.media_engine).await
+        RTPReceiverInternal::get_codecs(&mut codecs, self.kind, &self.media_engine).await
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one
@@ -400,27 +400,25 @@ impl RTCRtpTransceiver {
                 previous_direction,
                 current_direction
             );
+        } else {
+            // no change.
+            return Ok(());
         }
 
-        match (previous_direction, current_direction) {
-            (a, b) if a == b => {
-                // No change, do nothing
+        if let Some(receiver) = &*self.receiver.lock().await {
+            let pause_receiver = !current_direction.has_recv();
+
+            if pause_receiver {
+                receiver.pause().await?;
+            } else {
+                receiver.resume().await?;
             }
-            // All others imply a change
-            (_, RTCRtpTransceiverDirection::Inactive | RTCRtpTransceiverDirection::Sendonly) => {
-                if let Some(receiver) = &*self.receiver.lock().await {
-                    trace!("Pausing receiver {:?}", receiver);
-                    receiver.pause().await?;
-                }
-            }
-            (_, RTCRtpTransceiverDirection::Recvonly | RTCRtpTransceiverDirection::Sendrecv) => {
-                if let Some(receiver) = &*self.receiver.lock().await {
-                    trace!("Unpausing receiver {:?}", receiver);
-                    receiver.resume().await?;
-                }
-            }
-            // TODO: Senders
-            (_, _) => {}
+        }
+
+        if let Some(sender) = &*self.sender.lock().await {
+            let pause_sender = !current_direction.has_send();
+
+            sender.set_paused(pause_sender);
         }
 
         Ok(())
