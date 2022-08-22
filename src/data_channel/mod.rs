@@ -157,7 +157,7 @@ impl RTCDataChannel {
                 negotiated: self.negotiated,
             };
 
-            if !self.negotiated {
+            if self.id.load(Ordering::SeqCst) == 0 {
                 self.id.store(
                     sctp_transport
                         .generate_and_set_data_channel_id(
