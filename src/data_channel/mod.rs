@@ -157,6 +157,9 @@ impl RTCDataChannel {
                 negotiated: self.negotiated,
             };
 
+            // TODO(stuqdog): update this logic so that we can reliably track whether the
+            // id value was provided or not during datachannel creation, rather than using
+            // 0 as a null stand-in.
             if self.id.load(Ordering::SeqCst) == 0 && !self.negotiated {
                 self.id.store(
                     sctp_transport
