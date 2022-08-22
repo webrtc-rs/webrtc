@@ -1,0 +1,58 @@
+[package]
+name = "webrtc"
+version = "0.4.0"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "A pure Rust implementation of WebRTC API"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/webrtc"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/webrtc"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+data = { path = "../data", package = "webrtc-data" }
+dtls = { path = "../dtls", package = "webrtc-dtls" }
+ice = { path = "../ice", package = "webrtc-ice" }
+interceptor = { path = "../interceptor" }
+mdns = { path = "../mdns", package = "webrtc-mdns" }
+media = { path = "../media", package = "webrtc-media" }
+rtcp = { path = "../rtcp" }
+rtp = { path = "../rtp" }
+sctp = { path = "../sctp", package = "webrtc-sctp" }
+sdp = { path = "../sdp" }
+srtp = { path = "../srtp", package = "webrtc-srtp" }
+stun = { path = "../stun" }
+turn = { path = "../turn" }
+util = { path = "../util", package = "webrtc-util" }
+
+tokio = { version = "1.19", features = ["full"] }
+log = "0.4"
+async-trait = "0.1.56"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.8.5"
+bytes = "1"
+thiserror = "1.0"
+waitgroup = "0.1.2"
+regex = "1.5"
+url = "2.2"
+rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
+rcgen = { version = "0.9.2", features = ["pem", "x509-parser"]}
+ring = "0.16.20"
+sha2 = "0.10.2"
+lazy_static = "1.4"
+hex = "0.4.3"
+
+# [minimal-versions]
+# fixes "the trait bound `time::Month: From<u8>` is not satisfied"
+# https://github.com/est31/rcgen/pull/88
+time = "~0.3.1"
+
+[dev-dependencies]
+tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
+env_logger = "0.9.0"
+
+[profile.dev]
+opt-level = 0

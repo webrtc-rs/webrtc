@@ -1,0 +1,27 @@
+[package]
+name = "webrtc-data"
+version = "0.4.0"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "A pure Rust implementation of WebRTC DataChannel API"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/webrtc-data"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/data"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+util = { path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "marshal"]  }
+sctp = { path = "../sctp", package = "webrtc-sctp" }
+
+tokio = { version = "1.19", features = ["full"] }
+bytes = "1"
+derive_builder = "0.11.2"
+log = "0.4"
+thiserror = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
+env_logger = "0.9.0"
+chrono = "0.4.19"

@@ -1,0 +1,38 @@
+use super::*;
+use std::iter::Iterator;
+
+#[test]
+fn test_new_direction() {
+    let passingtests = vec![
+        ("sendrecv", Direction::SendRecv),
+        ("sendonly", Direction::SendOnly),
+        ("recvonly", Direction::RecvOnly),
+        ("inactive", Direction::Inactive),
+    ];
+
+    let failingtests = vec!["", "notadirection"];
+
+    for (i, u) in passingtests.iter().enumerate() {
+        let dir = Direction::new(u.0);
+        assert!(u.1 == dir, "{}: {}", i, u.0);
+    }
+    for (_, &u) in failingtests.iter().enumerate() {
+        let dir = Direction::new(u);
+        assert!(dir == Direction::Unspecified);
+    }
+}
+
+#[test]
+fn test_direction_string() {
+    let tests = vec![
+        (Direction::Unspecified, DIRECTION_UNSPECIFIED_STR),
+        (Direction::SendRecv, "sendrecv"),
+        (Direction::SendOnly, "sendonly"),
+        (Direction::RecvOnly, "recvonly"),
+        (Direction::Inactive, "inactive"),
+    ];
+
+    for (i, u) in tests.iter().enumerate() {
+        assert!(u.1 == u.0.to_string(), "{}: {}", i, u.1);
+    }
+}

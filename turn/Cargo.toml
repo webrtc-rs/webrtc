@@ -1,0 +1,47 @@
+[package]
+name = "turn"
+version = "0.5.4"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "A pure Rust implementation of TURN"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/turn"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/turn"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+util = { path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
+stun = { path = "../stun" }
+
+tokio = { version = "1.15.0", features = ["full"] }
+async-trait = "0.1.52"
+log = "0.4.14"
+base64 = "0.13.0"
+rand = "0.8.4"
+ring = "0.16.20"
+md-5 = "0.10.0"
+thiserror = "1.0.30"
+
+[dev-dependencies]
+tokio-test = "0.4.2"
+env_logger = "0.9.0"
+chrono = "0.4.19"
+hex = "0.4.3"
+clap = "2.34.0"
+criterion = "0.3.5"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "turn_client_udp"
+path = "examples/turn_client_udp.rs"
+bench = false
+
+[[example]]
+name = "turn_server_udp"
+path = "examples/turn_server_udp.rs"
+bench = false

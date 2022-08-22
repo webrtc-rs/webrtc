@@ -1,0 +1,59 @@
+[package]
+name = "webrtc-util"
+version = "0.5.4"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "Utilities for WebRTC.rs stack"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/webrtc-util"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/util"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["buffer", "conn", "ifaces", "vnet", "marshal", "sync"]
+buffer = []
+conn = ["buffer"]
+ifaces = []
+vnet = ["ifaces"]
+marshal = []
+sync = []
+
+[dependencies]
+tokio = { version = "1.19", features = ["full"] }
+lazy_static = "1.4"
+async-trait = "0.1.56"
+ipnet = "2.5"
+log = "0.4"
+rand = "0.8.5"
+bytes = "1"
+thiserror = "~1.0.2"
+parking_lot = "0.12.1"
+
+[target.'cfg(not(windows))'.dependencies]
+nix = "0.24.1"
+libc = "0.2.126"
+
+[target.'cfg(windows)'.dependencies]
+bitflags = "1.3"
+winapi = { version = "0.3.9", features = [
+    "basetsd",
+    "guiddef",
+    "ws2def",
+    "winerror",
+    "ws2ipdef",
+] }
+
+[build-dependencies]
+cc = "1.0.73"
+
+[dev-dependencies]
+tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
+env_logger = "0.9.0"
+chrono = "0.4.19"
+criterion = { version = "0.3.5", features = ["stable"]}
+
+[[bench]]
+name = "bench"
+harness = false
