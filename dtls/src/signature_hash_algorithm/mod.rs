@@ -9,7 +9,7 @@ use crate::error::*;
 // HashAlgorithm is used to indicate the hash algorithm used
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-18
 // Supported hash hash algorithms
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HashAlgorithm {
     Md2 = 0,  // Blacklisted
     Md5 = 1,  // Blacklisted
@@ -68,7 +68,7 @@ impl HashAlgorithm {
 }
 
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-16
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SignatureAlgorithm {
     Rsa = 1,
     Ecdsa = 3,
@@ -153,7 +153,7 @@ pub(crate) fn select_signature_scheme(
 
 // SignatureScheme identifies a signature algorithm supported by TLS. See
 // RFC 8446, Section 4.2.3.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SignatureScheme {
     // RSASSA-PKCS1-v1_5 algorithms.
     Pkcs1WithSha256 = 0x0401,

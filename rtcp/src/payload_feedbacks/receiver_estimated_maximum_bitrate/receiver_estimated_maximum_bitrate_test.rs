@@ -103,7 +103,7 @@ fn test_receiver_estimated_maximum_bitrate_overflow() {
     // exp = 63
     // bitrate = 0xFFFFC00000000000
 
-    let mut buf = output.clone();
+    let mut buf = output;
     let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut buf).unwrap();
     assert_eq!(f32::from_bits(0x67FFFFC0), packet.bitrate);
 

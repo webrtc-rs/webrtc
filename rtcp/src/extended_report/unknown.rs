@@ -2,7 +2,7 @@ use super::*;
 
 /// UnknownReportBlock is used to store bytes for any report block
 /// that has an unknown Report Block Type.
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct UnknownReportBlock {
     pub bytes: Bytes,
 }

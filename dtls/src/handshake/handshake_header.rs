@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 // sequence, Fragment and version information
 pub(crate) const HANDSHAKE_HEADER_LENGTH: usize = 12;
 
-#[derive(Copy, Clone, PartialEq, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct HandshakeHeader {
     pub(crate) handshake_type: HandshakeType,
     pub(crate) length: u32, // uint24 in spec

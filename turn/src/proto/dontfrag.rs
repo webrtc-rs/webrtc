@@ -5,7 +5,7 @@ use stun::attributes::*;
 use stun::message::*;
 
 // DontFragmentAttr represents DONT-FRAGMENT attribute.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct DontFragmentAttr;
 
 impl Setter for DontFragmentAttr {

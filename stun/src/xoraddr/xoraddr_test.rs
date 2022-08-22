@@ -241,7 +241,7 @@ fn test_xormapped_address_string() -> Result<()> {
             addr.to_string(),
             ip,
             " XORMappesAddres.String() {} (got) != {} (expected)",
-            addr.to_string(),
+            addr,
             ip,
         );
     }

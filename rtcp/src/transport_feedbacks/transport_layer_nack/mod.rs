@@ -16,7 +16,7 @@ type PacketBitmap = u16;
 
 /// NackPair is a wire-representation of a collection of
 /// Lost RTP packets
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct NackPair {
     /// ID of lost packets
     pub packet_id: u16,
@@ -71,7 +71,7 @@ const NACK_OFFSET: usize = 8;
 // The TransportLayerNack packet informs the encoder about the loss of a transport packet
 // IETF RFC 4585, Section 6.2.1
 // https://tools.ietf.org/html/rfc4585#section-6.2.1
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct TransportLayerNack {
     /// SSRC of sender
     pub sender_ssrc: u32,

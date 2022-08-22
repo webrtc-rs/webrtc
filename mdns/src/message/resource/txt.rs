@@ -3,7 +3,7 @@ use crate::error::*;
 use crate::message::packer::*;
 
 // A TXTResource is a txt Resource record.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TxtResource {
     pub txt: Vec<String>,
 }

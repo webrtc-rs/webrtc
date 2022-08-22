@@ -32,7 +32,7 @@ const XR_HEADER_LENGTH: usize = 4;
 
 /// BlockType specifies the type of report in a report block
 /// Extended Report block types from RFC 3611.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BlockType {
     Unknown = 0,
     LossRLE = 1,               // RFC 3611, section 4.1
@@ -93,7 +93,7 @@ pub type TypeSpecificField = u8;
 /// shouldn't need to access this. For locally-constructed report
 /// blocks, these values will not be accurate until the corresponding
 /// packet is marshaled.
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct XRHeader {
     pub block_type: BlockType,
     pub type_specific: TypeSpecificField,

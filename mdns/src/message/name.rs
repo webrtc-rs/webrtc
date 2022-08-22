@@ -7,7 +7,7 @@ const NAME_LEN: usize = 255;
 
 // A Name is a non-encoded domain name. It is used instead of strings to avoid
 // allocations.
-#[derive(Default, PartialEq, Debug, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct Name {
     pub data: String,
 }

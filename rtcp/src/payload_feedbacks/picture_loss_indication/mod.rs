@@ -13,7 +13,7 @@ type Result<T> = std::result::Result<T, util::Error>;
 const PLI_LENGTH: usize = 2;
 
 /// The PictureLossIndication packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct PictureLossIndication {
     /// SSRC of sender
     pub sender_ssrc: u32,

@@ -633,7 +633,7 @@ async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr> {
     let eth0 = n
         .get_interface("eth0")
         .await
-        .ok_or_else(|| Error::ErrNoInterface)?;
+        .ok_or(Error::ErrNoInterface)?;
     let addrs = eth0.addrs();
     if addrs.is_empty() {
         Err(Error::ErrNoAddressAssigned)

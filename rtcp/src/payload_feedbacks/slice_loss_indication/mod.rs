@@ -15,7 +15,7 @@ const SLI_OFFSET: usize = 8;
 
 /// SLIEntry represents a single entry to the SLI packet's
 /// list of lost slices.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct SliEntry {
     /// ID of first lost slice
     pub first: u16,
@@ -26,7 +26,7 @@ pub struct SliEntry {
 }
 
 /// The SliceLossIndication packet informs the encoder about the loss of a picture slice
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct SliceLossIndication {
     /// SSRC of sender
     pub sender_ssrc: u32,

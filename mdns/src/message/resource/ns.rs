@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::message::name::*;
 
 // An NSResource is an NS Resource record.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct NsResource {
     pub ns: Name,
 }

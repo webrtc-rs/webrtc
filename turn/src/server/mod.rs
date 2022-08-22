@@ -59,7 +59,7 @@ impl Server {
                     relay_addr_generator: p.relay_addr_generator,
                 }));
 
-                let _ = Server::read_loop(
+                Server::read_loop(
                     p.conn,
                     allocation_manager,
                     nonces,
@@ -135,7 +135,7 @@ impl Server {
             // errors if there are no receivers, but that's irrelevant.
             let _ = tx.send(true);
             // wait for all receivers to drop/close.
-            let _ = tx.closed().await;
+            tx.closed().await;
         }
 
         Ok(())

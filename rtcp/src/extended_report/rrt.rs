@@ -14,7 +14,7 @@ const RRT_REPORT_BLOCK_LENGTH: u16 = 8;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |             NTP timestamp, least significant word             |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct ReceiverReferenceTimeReportBlock {
     pub ntp_timestamp: u64,
 }

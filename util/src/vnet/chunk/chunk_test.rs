@@ -47,7 +47,7 @@ fn test_chunk_udp() -> Result<()> {
     assert_eq!("2.3.4.5:4000", c.source_addr().to_string());
 
     // Test Tag()
-    assert!(c.tag().len() > 0, "should not be empty");
+    assert!(!c.tag().is_empty(), "should not be empty");
 
     // Verify cloned chunk was not affected by the changes to original chunk
     c.user_data[0] = b'!'; // oroginal: "Hello" -> "Hell!"

@@ -2,7 +2,7 @@ use super::*;
 use crate::message::name::*;
 
 // A cnameresource is a cname Resource record.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct CnameResource {
     pub cname: Name,
 }

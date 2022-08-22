@@ -6,7 +6,7 @@ use super::*;
 // SRTPProtectionProfile defines the parameters and options that are in effect for the SRTP processing
 // https://tools.ietf.org/html/rfc5764#section-4.1.2
 #[allow(non_camel_case_types)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SrtpProtectionProfile {
     Srtp_Aes128_Cm_Hmac_Sha1_80 = 0x0001,
     Srtp_Aes128_Cm_Hmac_Sha1_32 = 0x0002,

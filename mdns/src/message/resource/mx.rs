@@ -4,7 +4,7 @@ use crate::message::name::*;
 use crate::message::packer::*;
 
 // An MXResource is an mx Resource record.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct MxResource {
     pub pref: u16,
     pub mx: Name,

@@ -3,7 +3,7 @@ use rand_core::OsRng; // requires 'getrandom' feature
 use crate::error::*;
 
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-8
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum NamedCurve {
     P256 = 0x0017,
     P384 = 0x0018,

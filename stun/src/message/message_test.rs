@@ -560,12 +560,12 @@ fn test_message_grow_smaller() -> Result<()> {
     let mut m = Message::new();
     m.grow(2, false);
     assert!(
-        !(m.raw.capacity() < 20),
+        m.raw.capacity() >= 20,
         "Bad capacity {}",
         m.raw.capacity()
     );
 
-    assert!(!(m.raw.len() < 20), "Bad length {}", m.raw.len());
+    assert!(m.raw.len() >= 20, "Bad length {}", m.raw.len());
 
     Ok(())
 }

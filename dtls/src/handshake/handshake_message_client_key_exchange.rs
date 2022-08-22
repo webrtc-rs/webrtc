@@ -6,7 +6,7 @@ use super::*;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Read, Write};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageClientKeyExchange {
     pub(crate) identity_hint: Vec<u8>,
     pub(crate) public_key: Vec<u8>,

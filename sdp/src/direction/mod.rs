@@ -4,7 +4,7 @@ use std::fmt;
 mod direction_test;
 
 /// Direction is a marker for transmission direction of an endpoint
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Direction {
     Unspecified = 0,
     /// Direction::SendRecv is for bidirectional communication

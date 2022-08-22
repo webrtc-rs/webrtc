@@ -130,7 +130,7 @@ pub(crate) type PskCallback = Arc<dyn (Fn(&[u8]) -> Result<Vec<u8>>) + Send + Sy
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ClientAuthType {
     NoClientCert = 0,
     RequestClientCert = 1,
@@ -147,7 +147,7 @@ impl Default for ClientAuthType {
 
 // ExtendedMasterSecretType declares the policy the client and server
 // will follow for the Extended Master Secret extension
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum ExtendedMasterSecretType {
     Request = 0,
     Require = 1,

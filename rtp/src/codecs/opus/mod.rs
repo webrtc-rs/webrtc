@@ -26,7 +26,7 @@ impl Payloader for OpusPayloader {
 }
 
 /// OpusPacket represents the Opus header that is stored in the payload of an RTP Packet
-#[derive(PartialEq, Debug, Default, Clone)]
+#[derive(PartialEq, Eq, Debug, Default, Clone)]
 pub struct OpusPacket;
 
 impl Depacketizer for OpusPacket {

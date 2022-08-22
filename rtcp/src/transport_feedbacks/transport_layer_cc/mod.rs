@@ -39,7 +39,7 @@ type Result<T> = std::result::Result<T, util::Error>;
 
 // for packet status chunk
 /// type of packet status chunk
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u16)]
 pub enum StatusChunkTypeTcc {
     RunLengthChunk = 0,
@@ -47,7 +47,7 @@ pub enum StatusChunkTypeTcc {
 }
 
 /// type of packet status symbol and recv delta
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(u16)]
 pub enum SymbolTypeTcc {
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
@@ -62,7 +62,7 @@ pub enum SymbolTypeTcc {
 }
 
 /// for status vector chunk
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(u16)]
 pub enum SymbolSizeTypeTcc {
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
@@ -150,7 +150,7 @@ impl Marshal for PacketStatusChunk {
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |T| S |       Run Length        |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RunLengthChunk {
     /// T = TypeTCCRunLengthChunk
     pub type_tcc: StatusChunkTypeTcc,
@@ -223,7 +223,7 @@ impl Unmarshal for RunLengthChunk {
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |T|S|       symbol list         |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct StatusVectorChunk {
     /// T = TypeTCCRunLengthChunk
     pub type_tcc: StatusChunkTypeTcc,
@@ -320,7 +320,7 @@ impl Unmarshal for StatusVectorChunk {
 /// small delta is 1 byte: [0，63.75]ms = [0, 63750]us = [0, 255]*250us
 /// big delta is 2 bytes: [-8192.0, 8191.75]ms = [-8192000, 8191750]us = [-32768, 32767]*250us
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RecvDelta {
     pub type_tcc_packet: SymbolTypeTcc,
     /// us

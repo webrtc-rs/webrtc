@@ -22,7 +22,7 @@ use std::fmt;
 // Message formats
 
 // A Type is a type of DNS request and response.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DnsType {
     // ResourceHeader.Type and question.Type
     A = 1,
@@ -167,7 +167,7 @@ impl DnsClass {
 pub type OpCode = u16;
 
 // An RCode is a DNS response status code.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RCode {
     // Message.Rcode
     Success = 0,

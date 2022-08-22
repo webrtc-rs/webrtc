@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 
 const EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME: u8 = 0;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtensionServerName {
     pub(crate) server_name: String,
 }

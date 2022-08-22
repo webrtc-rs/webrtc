@@ -4,7 +4,7 @@ use crate::message::name::*;
 use crate::message::packer::*;
 
 // An SRVResource is an SRV Resource record.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct SrvResource {
     pub priority: u16,
     pub weight: u16,

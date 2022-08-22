@@ -250,7 +250,7 @@ fn test_replay_detector() {
     ];
 
     for (name, windows_size, max_seq, input, valid, expected, mut expected_wrap) in tests {
-        if expected_wrap.len() == 0 {
+        if expected_wrap.is_empty() {
             expected_wrap.extend_from_slice(&expected);
         }
 
@@ -265,11 +265,9 @@ fn test_replay_detector() {
             let mut out = vec![];
             for (i, seq) in input.iter().enumerate() {
                 let ok = det.check(*seq);
-                if ok {
-                    if valid[i] {
-                        out.push(*seq);
-                        det.accept();
-                    }
+                if ok && valid[i] {
+                    out.push(*seq);
+                    det.accept();
                 }
             }
 

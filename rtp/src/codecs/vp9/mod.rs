@@ -142,7 +142,7 @@ impl Payloader for Vp9Payloader {
 }
 
 /// Vp9Packet represents the VP9 header that is stored in the payload of an RTP Packet
-#[derive(PartialEq, Debug, Default, Clone)]
+#[derive(PartialEq, Eq, Debug, Default, Clone)]
 pub struct Vp9Packet {
     /// picture ID is present
     pub i: bool,

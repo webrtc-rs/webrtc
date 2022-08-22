@@ -24,7 +24,7 @@ const H265NALU_PACI_PACKET_TYPE: u8 = 50;
 ///  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///  |F|   Type    |  layer_id  | tid |
 ///  +-------------+-----------------+
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265NALUHeader(pub u16);
 
 impl H265NALUHeader {
@@ -97,7 +97,7 @@ impl H265NALUHeader {
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265SingleNALUnitPacket {
     /// payload_header is the header of the H265 packet.
     payload_header: H265NALUHeader,
@@ -186,7 +186,7 @@ impl H265SingleNALUnitPacket {
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnitFirst {
     donl: Option<u16>,
     nal_unit_size: u16,
@@ -226,7 +226,7 @@ impl H265AggregationUnitFirst {
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnit {
     dond: Option<u8>,
     nal_unit_size: u16,
@@ -266,7 +266,7 @@ impl H265AggregationUnit {
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationPacket {
     first_unit: Option<H265AggregationUnitFirst>,
     other_units: Vec<H265AggregationUnit>,
@@ -388,7 +388,7 @@ const H265FRAGMENTATION_UNIT_HEADER_SIZE: usize = 1;
 /// +-+-+-+-+-+-+-+-+
 /// |S|E|  fu_type   |
 /// +---------------+
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265FragmentationUnitHeader(pub u8);
 
 impl H265FragmentationUnitHeader {
@@ -427,7 +427,7 @@ impl H265FragmentationUnitHeader {
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265FragmentationUnitPacket {
     /// payload_header is the header of the H265 packet.
     payload_header: H265NALUHeader,
@@ -526,7 +526,7 @@ impl H265FragmentationUnitPacket {
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265PACIPacket {
     /// payload_header is the header of the H265 packet.
     payload_header: H265NALUHeader,
@@ -655,7 +655,7 @@ impl H265PACIPacket {
 
 /// H265TSCI is a Temporal Scalability Control Information header extension.
 /// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.5
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265TSCI(pub u32);
 
 impl H265TSCI {
@@ -698,7 +698,7 @@ impl H265TSCI {
 ///
 /// H265 Payload Enum
 ///
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum H265Payload {
     H265SingleNALUnitPacket(H265SingleNALUnitPacket),
     H265FragmentationUnitPacket(H265FragmentationUnitPacket),
@@ -717,7 +717,7 @@ impl Default for H265Payload {
 ///
 
 /// H265Packet represents a H265 packet, stored in the payload of an RTP packet.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265Packet {
     payload: H265Payload,
     might_need_donl: bool,

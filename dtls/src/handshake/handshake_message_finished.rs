@@ -5,7 +5,7 @@ use super::*;
 
 use std::io::{Read, Write};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageFinished {
     pub(crate) verify_data: Vec<u8>,
 }

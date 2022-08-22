@@ -164,7 +164,7 @@ impl Session {
                     if is_rtp { "rtp" } else { "rtcp" },
                     ssrc
                 );
-                let _ = new_stream_tx.send(Arc::clone(&stream)).await?;
+                new_stream_tx.send(Arc::clone(&stream)).await?;
             }
 
             match stream.buffer.write(&decrypted).await {
