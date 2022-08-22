@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// RTPTransceiverDirection indicates the direction of the RTPTransceiver.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCRtpTransceiverDirection {
     Unspecified,
 

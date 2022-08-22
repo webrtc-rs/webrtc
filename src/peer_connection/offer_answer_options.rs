@@ -1,6 +1,6 @@
 /// AnswerOptions structure describes the options used to control the answer
 /// creation process.
-#[derive(Default, Debug, PartialEq, Copy, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
 pub struct RTCAnswerOptions {
     /// voice_activity_detection allows the application to provide information
     /// about whether it wishes voice detection feature to be enabled or disabled.
@@ -9,7 +9,7 @@ pub struct RTCAnswerOptions {
 
 /// OfferOptions structure describes the options used to control the offer
 /// creation process
-#[derive(Default, Debug, PartialEq, Copy, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
 pub struct RTCOfferOptions {
     /// voice_activity_detection allows the application to provide information
     /// about whether it wishes voice detection feature to be enabled or disabled.

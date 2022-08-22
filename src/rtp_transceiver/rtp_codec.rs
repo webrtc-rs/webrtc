@@ -6,7 +6,7 @@ use crate::rtp_transceiver::fmtp;
 use std::fmt;
 
 /// RTPCodecType determines the type of a codec
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTPCodecType {
     Unspecified = 0,
 
@@ -56,7 +56,7 @@ impl fmt::Display for RTPCodecType {
 
 /// RTPCodecCapability provides information about codec capabilities.
 /// <https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpcodeccapability-members>
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCRtpCodecCapability {
     pub mime_type: String,
     pub clock_rate: u32,
@@ -100,7 +100,7 @@ pub struct RTCRtpHeaderExtensionCapability {
 
 /// RTPHeaderExtensionParameter represents a negotiated RFC5285 RTP header extension.
 /// <https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpheaderextensionparameters-members>
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCRtpHeaderExtensionParameters {
     pub uri: String,
     pub id: isize,
@@ -110,7 +110,7 @@ pub struct RTCRtpHeaderExtensionParameters {
 /// will choose from, as well as entries for RTX, RED and FEC mechanisms. This also
 /// includes the PayloadType that has been negotiated
 /// <https://w3c.github.io/webrtc-pc/#rtcrtpcodecparameters>
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCRtpCodecParameters {
     pub capability: RTCRtpCodecCapability,
     pub payload_type: PayloadType,

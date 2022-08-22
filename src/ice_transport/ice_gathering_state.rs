@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// ICEGatheringState describes the state of the candidate gathering process.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceGatheringState {
     Unspecified,
 
