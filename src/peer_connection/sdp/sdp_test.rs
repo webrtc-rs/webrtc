@@ -637,6 +637,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                     Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),
                     Arc::clone(&interceptor),
+                    false,
                 )
                 .await,
             )))

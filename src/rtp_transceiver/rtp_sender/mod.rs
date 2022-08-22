@@ -111,6 +111,8 @@ pub struct RTCRtpSender {
     stop_called_tx: Arc<Notify>,
     stop_called_signal: Arc<AtomicBool>,
 
+    pub(crate) paused: Arc<AtomicBool>,
+
     internal: Arc<RTPSenderInternal>,
 }
 
@@ -129,6 +131,7 @@ impl RTCRtpSender {
         transport: Arc<RTCDtlsTransport>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
+        start_paused: bool,
     ) -> RTCRtpSender {
         let id = generate_crypto_random_string(
             32,
@@ -192,6 +195,8 @@ impl RTCRtpSender {
             stop_called_tx,
             stop_called_signal,
 
+            paused: Arc::new(AtomicBool::new(start_paused)),
+
             internal,
         }
     }
@@ -208,8 +213,15 @@ impl RTCRtpSender {
         &self,
         rtp_transceiver: Option<Weak<RTCRtpTransceiver>>,
     ) {
+        if let Some(t) = rtp_transceiver.as_ref().and_then(|t| t.upgrade()) {
+            self.set_paused(!t.direction().has_send());
+        }
         let mut tr = self.rtp_transceiver.lock().await;
         *tr = rtp_transceiver;
+    }
+
+    pub(crate) fn set_paused(&self, paused: bool) {
+        self.paused.store(paused, Ordering::SeqCst);
     }
 
     /// transport returns the currently-configured DTLSTransport
@@ -360,7 +372,7 @@ impl RTCRtpSender {
             return Err(Error::ErrRTPSenderSendAlreadyCalled);
         }
 
-        let write_stream = Arc::new(InterceptorToTrackLocalWriter::new());
+        let write_stream = Arc::new(InterceptorToTrackLocalWriter::new(self.paused.clone()));
         let (context, stream_info) = {
             let track = self.track.lock().await;
             let mut context = TrackLocalContext {

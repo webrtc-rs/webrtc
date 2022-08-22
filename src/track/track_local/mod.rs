@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use interceptor::{Attributes, RTPWriter};
 use std::any::Any;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::Unmarshal;
@@ -107,12 +108,14 @@ pub(crate) struct TrackBinding {
 
 pub(crate) struct InterceptorToTrackLocalWriter {
     pub(crate) interceptor_rtp_writer: Mutex<Option<Arc<dyn RTPWriter + Send + Sync>>>,
+    paused: Arc<AtomicBool>,
 }
 
 impl InterceptorToTrackLocalWriter {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(paused: Arc<AtomicBool>) -> Self {
         InterceptorToTrackLocalWriter {
             interceptor_rtp_writer: Mutex::new(None),
+            paused,
         }
     }
 }
@@ -123,17 +126,13 @@ impl std::fmt::Debug for InterceptorToTrackLocalWriter {
     }
 }
 
-impl Default for InterceptorToTrackLocalWriter {
-    fn default() -> Self {
-        InterceptorToTrackLocalWriter {
-            interceptor_rtp_writer: Mutex::new(None),
-        }
-    }
-}
-
 #[async_trait]
 impl TrackLocalWriter for InterceptorToTrackLocalWriter {
     async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+        if self.paused.load(Ordering::SeqCst) {
+            return Ok(0);
+        }
+
         let interceptor_rtp_writer = self.interceptor_rtp_writer.lock().await;
         if let Some(writer) = &*interceptor_rtp_writer {
             let a = Attributes::new();
