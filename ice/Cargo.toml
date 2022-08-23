@@ -21,7 +21,7 @@ async-trait = "0.1.56"
 crc = "3.0"
 log = "0.4.16"
 rand = "0.8.5"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.102", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.19", features = ["full"] }
@@ -31,7 +31,7 @@ waitgroup = "0.1.2"
 
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
-regex = "1.5.4"
+regex = "1.6"
 env_logger = "0.9.0"
 chrono = "0.4.19"
 ipnet = "2.5.0"
