@@ -2,6 +2,7 @@
 members = [
     "data",
     "dtls",
+    "examples",
     "ice",
     "interceptor",
     "mdns",
