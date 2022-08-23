@@ -13,6 +13,7 @@ use bytes::Bytes;
 
 #[test]
 fn param_crash_artifacts() {
+    dbg!(std::env::current_dir());
     for artifact in std::fs::read_dir("fuzz/artifacts/param").unwrap() {
         let artifact = artifact.unwrap();
         if artifact
@@ -29,6 +30,7 @@ fn param_crash_artifacts() {
 
 #[test]
 fn packet_crash_artifacts() {
+    dbg!(std::env::current_dir());
     for artifact in std::fs::read_dir("fuzz/artifacts/packet").unwrap() {
         let artifact = artifact.unwrap();
         if artifact
