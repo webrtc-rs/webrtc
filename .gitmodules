@@ -7,9 +7,6 @@
 [submodule "crates/rtp"]
 	path = crates/rtp
 	url = https://github.com/webrtc-rs/rtp
-[submodule "crates/rtcp"]
-	path = crates/rtcp
-	url = https://github.com/webrtc-rs/rtcp
 [submodule "crates/srtp"]
 	path = crates/srtp
 	url = https://github.com/webrtc-rs/srtp
