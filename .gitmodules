@@ -1,9 +1,6 @@
 [submodule "crates/util"]
 	path = crates/util
 	url = https://github.com/webrtc-rs/util
-[submodule "crates/srtp"]
-	path = crates/srtp
-	url = https://github.com/webrtc-rs/srtp
 [submodule "crates/stun"]
 	path = crates/stun
 	url = https://github.com/webrtc-rs/stun
