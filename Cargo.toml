@@ -16,3 +16,6 @@ members = [
     "util",
     "webrtc",
 ]
+
+[profile.dev]
+opt-level = 0
