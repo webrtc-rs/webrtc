@@ -4,8 +4,6 @@ use crate::mock::mock_time::MockTime;
 //use bytes::Bytes;
 use chrono::prelude::*;
 use rtp::extension::abs_send_time_extension::unix2ntp;
-use std::future::Future;
-use std::pin::Pin;
 
 #[tokio::test]
 async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
@@ -208,7 +206,7 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
 #[tokio::test]
 async fn test_receiver_interceptor_overflow() -> Result<()> {
     let mt = Arc::new(MockTime::default());
-    let mt2 = Arc::clone(&mt);
+    let _mt2 = Arc::clone(&mt);
     let time_gen = {
         let mt = Arc::clone(&mt);
         Arc::new(move || mt.now())
