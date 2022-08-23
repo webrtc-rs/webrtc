@@ -2,9 +2,9 @@ name: cargo
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,16 +21,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
-      - name: Cache cargo registry
+      - name: 📦 Cache cargo registry
         uses: actions/cache@v3
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           profile: minimal
           override: true
+      - name: 🏭 Cache dependencies
+        uses: Swatinem/rust-cache@v2
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -39,7 +43,7 @@ jobs:
           command: test
 
   rustfmt_and_clippy:
-    name: Check rustfmt style and run clippy
+    name: Check formatting style and run clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -49,17 +53,19 @@ jobs:
           profile: minimal
           components: clippy, rustfmt
           override: true
-      - name: Cache cargo registry
+      - name: 📦 Cache cargo registry
         uses: actions/cache@v3
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run clippy
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+      - name: 📎 Run clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
-      - name: Check formating
+      - name: 💬 Check formatting
         uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -67,19 +73,25 @@ jobs:
 
   minimal_versions:
     name: Compile and test with minimal versions
-    strategy:
-      matrix:
-        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install latest nightly
+      - name: 🌙 Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly
-            override: true
+          toolchain: nightly
+          override: true
+      - name: 📦 Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
       - uses: taiki-e/install-action@cargo-hack
       - uses: taiki-e/install-action@cargo-minimal-versions
+      - name: 🏭 Cache dependencies
+        uses: Swatinem/rust-cache@v2
       - run: cargo minimal-versions check --workspace --all-features --ignore-private -v
       - run: cargo minimal-versions build --workspace --all-features --ignore-private -v
       - run: cargo minimal-versions test --workspace --all-features -v
