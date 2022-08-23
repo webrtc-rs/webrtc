@@ -169,7 +169,7 @@ pub(crate) async fn close_pair(
     pc2: &RTCPeerConnection,
     mut done_rx: mpsc::Receiver<()>,
 ) {
-    let timeout = tokio::time::sleep(Duration::from_secs(1));
+    let timeout = tokio::time::sleep(Duration::from_secs(10));
     tokio::pin!(timeout);
 
     tokio::select! {
