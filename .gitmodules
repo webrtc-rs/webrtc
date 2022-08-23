@@ -34,9 +34,6 @@
 [submodule "crates/media"]
 	path = crates/media
 	url = https://github.com/webrtc-rs/media
-[submodule "crates/data"]
-	path = crates/data
-	url = https://github.com/webrtc-rs/data
 [submodule "crates/interceptor"]
 	path = crates/interceptor
 	url = https://github.com/webrtc-rs/interceptor
