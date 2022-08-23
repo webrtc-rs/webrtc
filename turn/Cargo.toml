@@ -12,8 +12,9 @@ repository = "https://github.com/webrtc-rs/turn"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = ["conn", "vnet"] }
-stun = "0.4.2"
+util = { path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
+stun = { path = "../stun" }
+
 tokio = { version = "1.19", features = ["full"] }
 async-trait = "0.1.56"
 log = "0.4"

@@ -15,13 +15,14 @@ repository = "https://github.com/webrtc-rs/examples"
 
 
 [dev-dependencies]
-webrtc = "0.4.0"
+webrtc = { path = "../webrtc" }
+
 tokio = { version = "1.15.0", features = ["full"] }
 env_logger = "0.9.0"
 clap = "3.0.8"
 hyper = { version = "0.14.16", features = ["full"] }
-signal = {path = "examples/signal" }
-tokio-util = {version="0.6.9", features = ["codec"] }
+signal = { path = "examples/signal" }
+tokio-util = { version="0.6.9", features = ["codec"] }
 anyhow = "1.0.52"
 chrono = "0.4.19"
 log = "0.4.14"

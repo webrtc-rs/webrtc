@@ -12,19 +12,20 @@ repository = "https://github.com/webrtc-rs/ice"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+util = { path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
+turn = { path = "../turn" }
+stun = { path = "../stun" }
+mdns = { path = "../mdns", package = "webrtc-mdns" }
+
 async-trait = "0.1.56"
 crc = "3.0"
 log = "0.4"
-mdns = { package = "webrtc-mdns", version = "0.4.2" }
 rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-stun = "0.4.2"
 thiserror = "1.0"
 tokio = { version = "1.19", features = ["full"] }
-turn = "0.5.4"
 url = "2.2"
-util = { package = "webrtc-util", version = "0.5.3", default-features = false, features = ["conn", "vnet", "sync"] }
 uuid = { version = "1.1", features = ["v4"] }
 waitgroup = "0.1.2"
 

@@ -12,20 +12,21 @@ repository = "https://github.com/webrtc-rs/webrtc"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.4" }
-sdp = "0.5.1"
-mdns = { package = "webrtc-mdns", version = "0.4.2" }
-stun = "0.4.2"
-turn = "0.5.4"
-ice = { package = "webrtc-ice", version = "0.7.0" }
-dtls = { package = "webrtc-dtls", version = "0.5.2" }
-rtp = "0.6.5"
-rtcp = "0.6.5"
-srtp = { package = "webrtc-srtp", version = "0.8.9" }
-sctp = { package = "webrtc-sctp", version = "0.5.0" }
-data = { package = "webrtc-data", version = "0.4.0" }
-media = { package = "webrtc-media", version = "0.4.5" }
-interceptor = "0.7.6"
+data = { path = "../data", package = "webrtc-data" }
+dtls = { path = "../dtls", package = "webrtc-dtls" }
+ice = { path = "../ice", package = "webrtc-ice" }
+interceptor = { path = "../interceptor" }
+mdns = { path = "../mdns", package = "webrtc-mdns" }
+media = { path = "../media", package = "webrtc-media" }
+rtcp = { path = "../rtcp" }
+rtp = { path = "../rtp" }
+sctp = { path = "../sctp", package = "webrtc-sctp" }
+sdp = { path = "../sdp" }
+srtp = { path = "../srtp", package = "webrtc-srtp" }
+stun = { path = "../stun" }
+turn = { path = "../turn" }
+util = { path = "../util", package = "webrtc-util" }
+
 tokio = { version = "1.19", features = ["full"] }
 log = "0.4"
 async-trait = "0.1.56"

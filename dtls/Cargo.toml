@@ -12,7 +12,8 @@ repository = "https://github.com/webrtc-rs/dtls"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = ["conn"] }
+util = { path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
+
 byteorder = "1"
 rand_core = "0.6.3"
 elliptic-curve = { version = "0.12.1", features = ["default", "ecdh"] }

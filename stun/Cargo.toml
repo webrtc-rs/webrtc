@@ -14,7 +14,8 @@ default = []
 bench = []
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = ["conn"] }
+util = { path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
+
 tokio = { version = "1.19", features = ["full"] }
 lazy_static = "1.4"
 url = "2.2"

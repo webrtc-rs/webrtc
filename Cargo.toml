@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "data",
+    "dtls",
+    "ice",
+    "interceptor",
+    "mdns",
+    "media",
+    "rtcp",
+    "rtp",
+    "sctp",
+    "sdp",
+    "srtp",
+    "stun",
+    "turn",
+    "util",
+    "webrtc",
+]

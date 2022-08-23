@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.5.4", default-features = false, features = [
+util = { path = "../../../util", package = "webrtc-util", default-features = false, features = [
     "conn"
 ] }
 dtls = { package = "webrtc-dtls", path = "../../" }
