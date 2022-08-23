@@ -1,0 +1,23 @@
+codecov:
+  require_ci_to_pass: yes
+  max_report_age: off
+  token: 14bc9fb7-bdcf-4355-8e0e-ebec14066ae5
+
+coverage:
+  precision: 2
+  round: down
+  range: 50..90
+  status:
+    project:
+      default:
+       enabled: no
+       threshold: 0.2
+       if_not_found: success
+    patch:
+      default:
+        enabled: no
+        if_not_found: success
+    changes:
+      default:
+        enabled: no
+        if_not_found: success
