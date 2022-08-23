@@ -20,7 +20,7 @@ util = { path = "../util", package = "webrtc-util", default-features = false, fe
 
 tokio = { version = "1.19", features = ["full"] }
 socket2 = { version = "0.4.4", features = ["all"] }
-log = "0.4"
+log = "0.4.16"
 thiserror = "1.0"
 
 [dev-dependencies]

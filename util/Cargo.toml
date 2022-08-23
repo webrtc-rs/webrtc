@@ -25,7 +25,7 @@ tokio = { version = "1.19", features = ["full"] }
 lazy_static = "1.4"
 async-trait = "0.1.56"
 ipnet = "2.5"
-log = "0.4"
+log = "0.4.16"
 rand = "0.8.5"
 bytes = "1"
 thiserror = "~1.0.2"

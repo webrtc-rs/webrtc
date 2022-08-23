@@ -25,7 +25,7 @@ signal = { path = "examples/signal" }
 tokio-util = { version="0.6.9", features = ["codec"] }
 anyhow = "1.0.52"
 chrono = "0.4.19"
-log = "0.4.14"
+log = "0.4.16"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.75"
 bytes = "1.1.0"

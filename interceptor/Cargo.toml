@@ -21,7 +21,7 @@ bytes = "1"
 thiserror = "1.0"
 rand = "0.8.5"
 waitgroup = "0.1.2"
-log = "0.4"
+log = "0.4.16"
 
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
