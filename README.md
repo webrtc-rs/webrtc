@@ -112,25 +112,12 @@ webrtc-rs currently requires Rust 1.57.0+ to build.
 
 ### Monorepo Setup
 
-All webrtc dependent crates and examples are added as [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) of this repository under /crates/ or /examples/.
-
-```
-git clone https://github.com/webrtc-rs/webrtc
-cd webrtc
-git submodule update --init --recursive
-```
-
-To build all webrtc dependent crates:
-
-```
-cd webrtc/crates
-cargo build [or clippy or test or fmt]
-```
+All webrtc dependent crates and examples are included in this repository at the top level in a Cargo workspace.
 
 To build all webrtc examples:
 
 ```
-cd webrtc/examples
+cd examples
 cargo test # build all examples (maybe very slow)
 #[ or just build single example (much faster)
 cargo build --example play-from-disk-vpx # build play-from-disk-vpx example only
@@ -142,16 +129,8 @@ cargo build --example play-from-disk-h264 # build play-from-disk-h264 example on
 To build webrtc crate:
 
 ```
-cd webrtc
 cargo build [or clippy or test or fmt]
 ```
-
-
-### Testing with Local Dependencies
-Follows this instruction about how to replace dependencies with patch for local testing:
-
-https://doc.rust-lang.org/edition-guide/rust-2018/cargo-and-crates-io/replacing-dependencies-with-patch.html
-
 
 ## Open Source License
 Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has been used for both the compiler and many public libraries since (see https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license). In order to match the community standards, webrtc-rs is using the dual MIT+Apache-2.0 license.
