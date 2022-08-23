@@ -12,8 +12,8 @@ repository = "https://github.com/webrtc-rs/data"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "marshal"]  }
-sctp = { path = "../sctp", package = "webrtc-sctp" }
+util = { version = "0.5.4", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "marshal"]  }
+sctp = { version = "0.6.0", path = "../sctp", package = "webrtc-sctp" }
 
 tokio = { version = "1.19", features = ["full"] }
 bytes = "1"
