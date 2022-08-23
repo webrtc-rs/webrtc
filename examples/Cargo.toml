@@ -1,0 +1,150 @@
+[package]
+name = "examples"
+version = "0.4.0"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "Examples of WebRTC.rs stack"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/examples"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/examples"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+
+[dev-dependencies]
+webrtc = "0.4.0"
+tokio = { version = "1.15.0", features = ["full"] }
+env_logger = "0.9.0"
+clap = "3.0.8"
+hyper = { version = "0.14.16", features = ["full"] }
+signal = {path = "examples/signal" }
+tokio-util = {version="0.6.9", features = ["codec"] }
+anyhow = "1.0.52"
+chrono = "0.4.19"
+log = "0.4.14"
+serde = { version = "1.0.133", features = ["derive"] }
+serde_json = "1.0.75"
+bytes = "1.1.0"
+lazy_static = "1.4.0"
+rand = "0.8.4"
+
+[profile.dev]
+opt-level = 0
+
+[[example]]
+name = "rc-cycle"
+path = "examples/rc-cycle/rc-cycle.rs"
+bench = false
+
+[[example]]
+name = "broadcast"
+path = "examples/broadcast/broadcast.rs"
+bench = false
+
+[[example]]
+name = "data-channels"
+path = "examples/data-channels/data-channels.rs"
+bench = false
+
+[[example]]
+name = "data-channels-close"
+path = "examples/data-channels-close/data-channels-close.rs"
+bench = false
+
+[[example]]
+name = "data-channels-create"
+path = "examples/data-channels-create/data-channels-create.rs"
+bench = false
+
+[[example]]
+name = "data-channels-detach"
+path = "examples/data-channels-detach/data-channels-detach.rs"
+bench = false
+
+[[example]]
+name = "data-channels-detach-create"
+path = "examples/data-channels-detach-create/data-channels-detach-create.rs"
+bench = false
+
+[[example]]
+name = "data-channels-flow-control"
+path = "examples/data-channels-flow-control/data-channels-flow-control.rs"
+bench = false
+
+[[example]]
+name = "insertable-streams"
+path = "examples/insertable-streams/insertable-streams.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-vpx"
+path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-h264"
+path = "examples/play-from-disk-h264/play-from-disk-h264.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-renegotiation"
+path = "examples/play-from-disk-renegotiation/play-from-disk-renegotiation.rs"
+bench = false
+
+[[example]]
+name = "reflect"
+path = "examples/reflect/reflect.rs"
+bench = false
+
+[[example]]
+name = "rtp-forwarder"
+path = "examples/rtp-forwarder/rtp-forwarder.rs"
+bench = false
+
+[[example]]
+name = "rtp-to-webrtc"
+path = "examples/rtp-to-webrtc/rtp-to-webrtc.rs"
+bench = false
+
+[[example]]
+name = "save-to-disk-vpx"
+path = "examples/save-to-disk-vpx/save-to-disk-vpx.rs"
+bench = false
+
+[[example]]
+name = "save-to-disk-h264"
+path = "examples/save-to-disk-h264/save-to-disk-h264.rs"
+bench = false
+
+[[example]]
+name = "simulcast"
+path = "examples/simulcast/simulcast.rs"
+bench = false
+
+[[example]]
+name = "swap-tracks"
+path = "examples/swap-tracks/swap-tracks.rs"
+bench = false
+
+[[example]]
+name = "ortc"
+path = "examples/ortc/ortc.rs"
+bench = false
+
+[[example]]
+name = "offer"
+path = "examples/offer-answer/offer.rs"
+bench = false
+
+[[example]]
+name = "answer"
+path = "examples/offer-answer/answer.rs"
+bench = false
+
+[[example]]
+name = "ice-restart"
+path = "examples/ice-restart/ice-restart.rs"
+bench = false
