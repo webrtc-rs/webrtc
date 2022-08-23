@@ -32,9 +32,6 @@ bytes = "1.1.0"
 lazy_static = "1.4.0"
 rand = "0.8.4"
 
-[profile.dev]
-opt-level = 0
-
 [[example]]
 name = "rc-cycle"
 path = "examples/rc-cycle/rc-cycle.rs"
