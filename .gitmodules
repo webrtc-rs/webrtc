@@ -16,9 +16,6 @@
 [submodule "crates/sctp"]
 	path = crates/sctp
 	url = https://github.com/webrtc-rs/sctp
-[submodule "crates/ice"]
-	path = crates/ice
-	url = https://github.com/webrtc-rs/ice
 [submodule "crates/stun"]
 	path = crates/stun
 	url = https://github.com/webrtc-rs/stun
