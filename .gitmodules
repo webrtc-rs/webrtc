@@ -28,9 +28,6 @@
 [submodule "crates/media"]
 	path = crates/media
 	url = https://github.com/webrtc-rs/media
-[submodule "crates/interceptor"]
-	path = crates/interceptor
-	url = https://github.com/webrtc-rs/interceptor
 [submodule "examples"]
 	path = examples
 	url = https://github.com/webrtc-rs/examples
