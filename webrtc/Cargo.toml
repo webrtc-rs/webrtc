@@ -30,7 +30,7 @@ util = { version = "0.5.4", path = "../util", package = "webrtc-util" }
 tokio = { version = "1.19", features = ["full"] }
 log = "0.4.16"
 async-trait = "0.1.56"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.110", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8.5"
 bytes = "1"
