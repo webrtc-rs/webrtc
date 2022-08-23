@@ -1,0 +1,31 @@
+[package]
+name = "webrtc-media"
+version = "0.4.6"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "A pure Rust implementation of WebRTC Media API"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/webrtc-media"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/media"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+util = { path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
+rtp = { path = "../rtp" }
+
+byteorder = "1"
+bytes = "1"
+displaydoc = "0.2.3"
+thiserror = "1.0"
+rand = "0.8.5"
+derive_builder = "0.11.2"
+
+[dev-dependencies]
+criterion = { version = "0.3.5", features = ["html_reports"] }
+nearly_eq = "0.2.4"
+
+[[bench]]
+name = "audio_buffer"
+harness = false
