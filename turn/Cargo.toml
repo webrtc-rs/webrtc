@@ -17,7 +17,7 @@ stun = { path = "../stun" }
 
 tokio = { version = "1.19", features = ["full"] }
 async-trait = "0.1.56"
-log = "0.4"
+log = "0.4.16"
 base64 = "0.13.0"
 rand = "0.8.5"
 ring = "0.16.20"
