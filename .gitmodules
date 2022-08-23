@@ -22,9 +22,6 @@
 [submodule "crates/turn"]
 	path = crates/turn
 	url = https://github.com/webrtc-rs/turn
-[submodule "crates/media"]
-	path = crates/media
-	url = https://github.com/webrtc-rs/media
 [submodule "examples"]
 	path = examples
 	url = https://github.com/webrtc-rs/examples
