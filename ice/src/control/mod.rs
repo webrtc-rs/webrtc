@@ -8,7 +8,7 @@ use stun::message::*;
 use std::fmt;
 
 /// Common helper for ICE-{CONTROLLED,CONTROLLING} and represents the so-called Tiebreaker number.
-#[derive(Default, PartialEq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct TieBreaker(pub u64);
 
 pub(crate) const TIE_BREAKER_SIZE: usize = 8; // 64 bit
@@ -31,7 +31,7 @@ impl TieBreaker {
     }
 }
 /// Represents ICE-CONTROLLED attribute.
-#[derive(Default, PartialEq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct AttrControlled(pub u64);
 
 impl Setter for AttrControlled {
@@ -52,7 +52,7 @@ impl Getter for AttrControlled {
 }
 
 /// Represents ICE-CONTROLLING attribute.
-#[derive(Default, PartialEq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct AttrControlling(pub u64);
 
 impl Setter for AttrControlling {
@@ -73,7 +73,7 @@ impl Getter for AttrControlling {
 }
 
 /// Helper that wraps ICE-{CONTROLLED,CONTROLLING}.
-#[derive(Default, PartialEq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct AttrControl {
     role: Role,
     tie_breaker: TieBreaker,
@@ -108,7 +108,7 @@ impl Getter for AttrControl {
 
 /// Represents ICE agent role, which can be controlling or controlled.
 /// Possible ICE agent roles.
-#[derive(PartialEq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Role {
     Controlling,
     Controlled,

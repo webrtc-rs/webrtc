@@ -6,7 +6,7 @@ use stun::checks::*;
 use stun::message::*;
 
 /// Represents PRIORITY attribute.
-#[derive(Default, PartialEq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct PriorityAttr(pub u32);
 
 const PRIORITY_SIZE: usize = 4; // 32 bit

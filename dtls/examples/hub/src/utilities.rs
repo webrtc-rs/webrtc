@@ -8,7 +8,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum Error {
     #[error("block is not a private key, unable to load key")]
     ErrBlockIsNotPrivateKey,

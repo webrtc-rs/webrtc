@@ -512,7 +512,7 @@ impl fmt::Display for Method {
 }
 
 // MessageType is STUN Message Type Field.
-#[derive(Default, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct MessageType {
     pub method: Method,      // e.g. binding
     pub class: MessageClass, // e.g. request

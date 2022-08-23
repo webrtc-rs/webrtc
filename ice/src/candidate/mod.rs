@@ -87,7 +87,7 @@ pub trait Candidate: fmt::Display {
 }
 
 /// Represents the type of candidate `CandidateType` enum.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum CandidateType {
     #[serde(rename = "unspecified")]
     Unspecified,
@@ -155,7 +155,7 @@ pub(crate) fn contains_candidate_type(
 }
 
 /// Convey transport addresses related to the candidate, useful for diagnostics and other purposes.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CandidateRelatedAddress {
     pub address: String,
     pub port: u16,
@@ -169,7 +169,7 @@ impl fmt::Display for CandidateRelatedAddress {
 }
 
 /// Represent the ICE candidate pair state.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum CandidatePairState {
     #[serde(rename = "unspecified")]
     Unspecified = 0,

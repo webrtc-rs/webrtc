@@ -630,10 +630,7 @@ async fn test_net_virtual_loopback2() -> Result<()> {
 
 async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr> {
     let n = nic.lock().await;
-    let eth0 = n
-        .get_interface("eth0")
-        .await
-        .ok_or_else(|| Error::ErrNoInterface)?;
+    let eth0 = n.get_interface("eth0").await.ok_or(Error::ErrNoInterface)?;
     let addrs = eth0.addrs();
     if addrs.is_empty() {
         Err(Error::ErrNoAddressAssigned)

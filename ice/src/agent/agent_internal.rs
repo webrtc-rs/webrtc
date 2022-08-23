@@ -613,7 +613,7 @@ impl AgentInternal {
     }
 
     pub(crate) async fn close(&self) -> Result<()> {
-        let _d = {
+        {
             let mut done_tx = self.done_tx.lock().await;
             if done_tx.is_none() {
                 return Err(Error::ErrClosed);

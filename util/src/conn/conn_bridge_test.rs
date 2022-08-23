@@ -206,7 +206,7 @@ async fn test_bridge_reorder_packets_from_conn1() -> Result<()> {
 #[tokio::test]
 async fn test_bridge_inverse_error() -> Result<()> {
     let mut q = VecDeque::new();
-    q.push_back(MSG1.clone());
+    q.push_back(MSG1);
     assert_eq!(inverse(&mut q), false);
     Ok(())
 }

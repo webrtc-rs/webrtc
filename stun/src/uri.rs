@@ -11,7 +11,7 @@ pub const SCHEME: &str = "stun";
 pub const SCHEME_SECURE: &str = "stuns";
 
 // URI as defined in RFC 7064.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Uri {
     pub scheme: String,
     pub host: String,

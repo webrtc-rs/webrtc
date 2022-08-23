@@ -8,7 +8,7 @@ use std::convert::From;
 use std::fmt;
 
 /// The type of server used in the ice.URL structure.
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum SchemeType {
     /// The URL represents a STUN server.
     Stun,
@@ -60,7 +60,7 @@ impl fmt::Display for SchemeType {
 }
 
 /// The transport protocol type that is used in the `ice::url::Url` structure.
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum ProtoType {
     /// The URL uses a UDP transport.
     Udp,

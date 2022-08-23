@@ -12,7 +12,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Represents the different Multicast modes that ICE can run.
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum MulticastDnsMode {
     Unspecified,
 

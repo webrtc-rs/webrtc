@@ -41,7 +41,10 @@ async fn pipe() -> Result<(
 
     let result = String::from_utf8(buf[..n].to_vec())?;
     if handshake != result {
-        Err(Error::Other(format!("errHandshakeFailed: {} != {}", handshake, result)).into())
+        Err(Error::Other(format!(
+            "errHandshakeFailed: {} != {}",
+            handshake, result
+        )))
     } else {
         Ok((listener, l_conn, d_conn))
     }

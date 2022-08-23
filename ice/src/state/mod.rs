@@ -4,7 +4,7 @@ mod state_test;
 use std::fmt;
 
 /// An enum showing the state of a ICE Connection List of supported States.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ConnectionState {
     Unspecified,
 
@@ -68,7 +68,7 @@ impl From<u8> for ConnectionState {
 }
 
 /// Describes the state of the candidate gathering process.
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum GatheringState {
     Unspecified,
 

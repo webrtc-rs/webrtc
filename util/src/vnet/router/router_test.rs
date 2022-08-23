@@ -104,10 +104,7 @@ impl Nic for DummyNic {
 
 async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr> {
     let n = nic.lock().await;
-    let eth0 = n
-        .get_interface("eth0")
-        .await
-        .ok_or_else(|| Error::ErrNoInterface)?;
+    let eth0 = n.get_interface("eth0").await.ok_or(Error::ErrNoInterface)?;
     let addrs = eth0.addrs();
     if addrs.is_empty() {
         Err(Error::ErrNoAddressAssigned)
@@ -146,9 +143,9 @@ async fn test_router_standalone_assign_ip_address() -> Result<()> {
             IpAddr::V4(ip) => ip.octets().to_vec(),
             IpAddr::V6(ip) => ip.octets().to_vec(),
         };
-        assert_eq!(1 as u8, ip[0], "should match");
-        assert_eq!(2 as u8, ip[1], "should match");
-        assert_eq!(3 as u8, ip[2], "should match");
+        assert_eq!(1_u8, ip[0], "should match");
+        assert_eq!(2_u8, ip[1], "should match");
+        assert_eq!(3_u8, ip[2], "should match");
         assert_eq!(i as u8, ip[3], "should match");
     }
 
@@ -319,7 +316,7 @@ async fn test_router_standalone_add_chunk_filter() -> Result<()> {
     // this creates a filter that block the first chunk
     let make_filter_fn = |name: String| {
         let n = AtomicUsize::new(0);
-        return Box::new(move |c: &(dyn Chunk + Send + Sync)| -> bool {
+        Box::new(move |c: &(dyn Chunk + Send + Sync)| -> bool {
             let m = n.fetch_add(1, Ordering::SeqCst);
             let pass = m > 0;
             if pass {
@@ -328,7 +325,7 @@ async fn test_router_standalone_add_chunk_filter() -> Result<()> {
                 log::debug!("{}: {} blocked {}", m, name, c);
             }
             pass
-        });
+        })
     };
 
     {
