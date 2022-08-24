@@ -619,7 +619,7 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn test_receiver_interceptor_jitter() -> Result<()> {
     let mt = Arc::new(MockTime::default());
     let time_gen = {
@@ -628,7 +628,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
     };
 
     let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
-        .with_interval(Duration::from_millis(25))
+        .with_interval(Duration::from_millis(50))
         .with_now_fn(time_gen)
         .build("")?;
 
@@ -667,8 +667,10 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         })
         .await;
 
-    // Wait at least 50 ms to ensure a report is generated
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Advance the time to generate a report
+    tokio::time::advance(Duration::from_millis(60)).await;
+    // Yield to let the reporting task run
+    tokio::task::yield_now().await;
 
     let pkts = stream.last_written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
