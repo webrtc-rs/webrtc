@@ -21,7 +21,7 @@ use stun::message::*;
 // proto implements RFC 5766 Traversal Using Relays around NAT.
 
 // protocol is IANA assigned protocol number.
-#[derive(PartialEq, Eq, Default, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, Default, Debug, Clone, Copy, Hash)]
 pub struct Protocol(pub u8);
 
 // PROTO_UDP is IANA assigned protocol number for UDP.

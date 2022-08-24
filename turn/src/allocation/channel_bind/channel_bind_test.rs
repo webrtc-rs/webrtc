@@ -1,16 +1,23 @@
 use super::*;
-use crate::allocation::*;
-use crate::error::Result;
+
+use crate::{allocation::*, error::Result};
 
 use tokio::net::UdpSocket;
 
 use std::net::Ipv4Addr;
+use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
 
 async fn create_channel_bind(lifetime: Duration) -> Result<Allocation> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
-    let a = Allocation::new(turn_socket, relay_socket, relay_addr, FiveTuple::default());
+    let a = Allocation::new(
+        turn_socket,
+        relay_socket,
+        relay_addr,
+        FiveTuple::default(),
+        TextAttribute::new(ATTR_USERNAME, "user".into()),
+    );
 
     let addr = SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0);
     let c = ChannelBind::new(ChannelNumber(MIN_CHANNEL_NUMBER), addr);
