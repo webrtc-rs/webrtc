@@ -35,12 +35,15 @@ jobs:
           override: true
       - name: 🏭 Cache dependencies
         uses: Swatinem/rust-cache@v2
+      - name: Install Nextest
+        uses: taiki-e/install-action@nextest 
       - uses: actions-rs/cargo@v1
         with:
           command: check
       - uses: actions-rs/cargo@v1
         with:
-          command: test
+          command: nextest
+          args: run --tests
 
   rustfmt_and_clippy:
     name: Check formatting style and run clippy
