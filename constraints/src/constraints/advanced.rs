@@ -125,7 +125,7 @@ impl AdvancedMediaTrackConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{property::name::*, BareOrMediaTrackConstraintSet};
+    use crate::{property::all::name::*, BareOrMediaTrackConstraintSet};
 
     use super::*;
 

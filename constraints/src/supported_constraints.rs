@@ -57,7 +57,7 @@ impl Default for MediaTrackSupportedConstraints {
     ///
     /// [default_values]: https://www.w3.org/TR/mediacapture-streams/#dictionary-mediatracksupportedconstraints-members
     fn default() -> Self {
-        use crate::property::names as property_names;
+        use crate::property::all::names as property_names;
 
         Self::from_iter(property_names())
     }
@@ -136,7 +136,7 @@ impl<'de> Visitor<'de> for SerdeVisitor {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{macros::test_serde_symmetry, property::name::*};
+    use crate::{macros::test_serde_symmetry, property::all::name::*};
 
     use super::*;
 

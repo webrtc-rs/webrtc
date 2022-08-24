@@ -147,18 +147,22 @@ pub mod video_only {
     }
 }
 
-/// Names of all properties.
-pub mod name {
-    pub use super::audio_only::name::*;
-    pub use super::common::name::*;
-    pub use super::video_only::name::*;
-}
+pub mod all {
+    use super::*;
 
-/// Names of all properties.
-pub fn names() -> Vec<&'static str> {
-    let mut all = vec![];
-    all.append(&mut self::common::names());
-    all.append(&mut self::audio_only::names());
-    all.append(&mut self::video_only::names());
-    all
+    /// Names of all properties.
+    pub mod name {
+        pub use super::audio_only::name::*;
+        pub use super::common::name::*;
+        pub use super::video_only::name::*;
+    }
+
+    /// Names of all properties.
+    pub fn names() -> Vec<&'static str> {
+        let mut all = vec![];
+        all.append(&mut self::common::names());
+        all.append(&mut self::audio_only::names());
+        all.append(&mut self::video_only::names());
+        all
+    }
 }

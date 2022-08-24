@@ -1,5 +1,5 @@
 use webrtc_constraints::{
-    property::name::*, BareOrAdvancedMediaTrackConstraints, BareOrBoolOrMediaTrackConstraints,
+    property::all::name::*, BareOrAdvancedMediaTrackConstraints, BareOrBoolOrMediaTrackConstraints,
     BareOrMediaTrackConstraintSet, BareOrMediaTrackConstraints, BareOrValueRangeConstraint,
     ValueRangeConstraint,
 };
