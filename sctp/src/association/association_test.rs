@@ -13,6 +13,28 @@ use util::conn::conn_bridge::*;
 use util::conn::conn_pipe::pipe;
 use util::conn::*;
 
+#[cfg(target_os = "windows")]
+#[ctor::ctor]
+fn increase_timer_resolution() {
+    // by default windows timer resolution is 20ms to 
+    // increase resolution we need to set it to minimum available.
+    // https://docs.microsoft.com/en-us/windows/win32/multimedia/multimedia-timers
+    use windows::Win32::Media::timeGetDevCaps;
+    use windows::Win32::Media::timeBeginPeriod;
+    use windows::Win32::Media::TIMECAPS;
+    use std::mem;
+
+    let mut time_caps = TIMECAPS {
+        wPeriodMin: 0,
+        wPeriodMax: 0,
+    };
+    let time_caps_size = mem::size_of::<TIMECAPS>() as u32;
+    unsafe {
+        timeGetDevCaps(&mut time_caps as *mut TIMECAPS, time_caps_size);
+        timeBeginPeriod(time_caps.wPeriodMin);
+    }
+}
+
 async fn create_new_association_pair(
     br: &Arc<Bridge>,
     ca: Arc<dyn Conn + Send + Sync>,

@@ -26,3 +26,7 @@ log = "0.4.16"
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 chrono = "0.4.19"
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+windows = {version = "0.39", features = ["Win32_Media"]}
+ctor = "0.1"

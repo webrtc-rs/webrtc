@@ -55,6 +55,10 @@ chrono = "0.4.19"
 clap = "3.2.6"
 hub = {path = "examples/hub"}
 
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+windows = {version = "0.39", features = ["Win32_Media"]}
+ctor = "0.1"
+
 [[example]]
 name = "dial_psk"
 path = "examples/dial/psk/dial_psk.rs"

@@ -24,6 +24,28 @@ use std::time::SystemTime;
 use util::conn::conn_pipe::*;
 use util::KeyingMaterialExporter;
 
+#[cfg(target_os = "windows")]
+#[ctor::ctor]
+fn increase_timer_resolution() {
+    // by default windows timer resolution is 20ms to 
+    // increase resolution we need to set it to minimum available.
+    // https://docs.microsoft.com/en-us/windows/win32/multimedia/multimedia-timers
+    use windows::Win32::Media::timeGetDevCaps;
+    use windows::Win32::Media::timeBeginPeriod;
+    use windows::Win32::Media::TIMECAPS;
+    use std::mem;
+
+    let mut time_caps = TIMECAPS {
+        wPeriodMin: 0,
+        wPeriodMax: 0,
+    };
+    let time_caps_size = mem::size_of::<TIMECAPS>() as u32;
+    unsafe {
+        timeGetDevCaps(&mut time_caps as *mut TIMECAPS, time_caps_size);
+        timeBeginPeriod(time_caps.wPeriodMin);
+    }
+}
+
 const ERR_TEST_PSK_INVALID_IDENTITY: &str = "TestPSK: Server got invalid identity";
 const ERR_PSK_REJECTED: &str = "PSK Rejected";
 const ERR_NOT_EXPECTED_CHAIN: &str = "not expected chain";
@@ -2446,6 +2468,7 @@ async fn send_client_hello(
 // Assert that a DTLS Server always responds with RenegotiationInfo if
 // a ClientHello contained that extension or not
 #[tokio::test]
+#[cfg(not(target_os = "windows"))]
 async fn test_renegotation_info() -> Result<()> {
     let mut resp = vec![0u8; 1024];
 

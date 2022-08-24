@@ -10,6 +10,28 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::Duration;
 
+#[cfg(target_os = "windows")]
+#[ctor::ctor]
+fn increase_timer_resolution() {
+    // by default windows timer resolution is 20ms to 
+    // increase resolution we need to set it to minimum available.
+    // https://docs.microsoft.com/en-us/windows/win32/multimedia/multimedia-timers
+    use windows::Win32::Media::timeGetDevCaps;
+    use windows::Win32::Media::timeBeginPeriod;
+    use windows::Win32::Media::TIMECAPS;
+    use std::mem;
+
+    let mut time_caps = TIMECAPS {
+        wPeriodMin: 0,
+        wPeriodMax: 0,
+    };
+    let time_caps_size = mem::size_of::<TIMECAPS>() as u32;
+    unsafe {
+        timeGetDevCaps(&mut time_caps as *mut TIMECAPS, time_caps_size);
+        timeBeginPeriod(time_caps.wPeriodMin);
+    }
+}
+
 async fn bridge_process_at_least_one(br: &Arc<Bridge>) {
     let mut n_sum = 0;
     loop {
