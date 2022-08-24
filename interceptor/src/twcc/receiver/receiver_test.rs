@@ -102,7 +102,7 @@ async fn test_twcc_receiver_interceptor_after_rtp_packets() -> Result<()> {
 }
 
 //TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 #[tokio::test]
 async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -> Result<()> {
     let builder = Receiver::builder().with_interval(Duration::from_millis(500));
