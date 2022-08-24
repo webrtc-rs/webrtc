@@ -76,6 +76,7 @@ pub(crate) fn prf_pre_master_secret(
 ) -> Result<Vec<u8>> {
     match curve {
         NamedCurve::P256 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
+        NamedCurve::P384 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         NamedCurve::X25519 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         _ => Err(Error::ErrInvalidNamedCurve),
     }
@@ -88,10 +89,16 @@ fn elliptic_curve_pre_master_secret(
 ) -> Result<Vec<u8>> {
     match curve {
         NamedCurve::P256 => {
-            let pub_key =
-                p256::EncodedPoint::from_bytes(public_key).map_err(elliptic_curve::Error::from)?;
+            let pub_key = p256::EncodedPoint::from_bytes(public_key)?;
             let public = p256::PublicKey::from_sec1_bytes(pub_key.as_ref())?;
             if let NamedCurvePrivateKey::EphemeralSecretP256(secret) = private_key {
+                return Ok(secret.diffie_hellman(&public).raw_secret_bytes().to_vec());
+            }
+        }
+        NamedCurve::P384 => {
+            let pub_key = p384::EncodedPoint::from_bytes(public_key)?;
+            let public = p384::PublicKey::from_sec1_bytes(pub_key.as_ref())?;
+            if let NamedCurvePrivateKey::EphemeralSecretP384(secret) = private_key {
                 return Ok(secret.diffie_hellman(&public).raw_secret_bytes().to_vec());
             }
         }

@@ -156,6 +156,8 @@ pub enum Error {
     #[error("utf8: {0}")]
     Utf8(#[from] FromUtf8Error),
     #[error("{0}")]
+    Sec1(#[source] sec1::Error),
+    #[error("{0}")]
     P256(#[source] P256Error),
     #[error("{0}")]
     RcGen(#[from] RcgenError),
@@ -183,6 +185,12 @@ impl PartialEq for IoError {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Error::Io(IoError(e))
+    }
+}
+
+impl From<sec1::Error> for Error {
+    fn from(e: sec1::Error) -> Self {
+        Error::Sec1(e)
     }
 }
 
