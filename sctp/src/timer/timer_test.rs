@@ -157,7 +157,7 @@ mod test_rto_manager {
 }
 
 //TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod test_rtx_timer {
     use super::*;
     use crate::association::RtxTimerId;
