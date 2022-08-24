@@ -19,8 +19,27 @@ pub trait SelectSettingsPolicy {
     /// > If more than one settings dictionary have the smallest fitness distance,
     /// > the User Agent chooses one of them based on system default property values
     /// > and User Agent default property values.
-    ///
-    /// The default implementation picks the first.
+    fn select_candidate<'a, I>(&self, candidates: I) -> &'a MediaTrackSettings
+    where
+        I: Iterator<Item = &'a MediaTrackSettings>;
+}
+
+/// A naïve settings selection policy that just picks the first item of the iterator.
+pub struct SelectFirstSettingsPolicy;
+
+impl SelectFirstSettingsPolicy {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for SelectFirstSettingsPolicy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SelectSettingsPolicy for SelectFirstSettingsPolicy {
     fn select_candidate<'a, I>(&self, mut candidates: I) -> &'a MediaTrackSettings
     where
         I: Iterator<Item = &'a MediaTrackSettings>,
@@ -28,7 +47,7 @@ pub trait SelectSettingsPolicy {
         // Safety: We know that `candidates is non-empty:
         candidates
             .next()
-            .expect("The `candidates` iterator must produce at least one item.")
+            .expect("The `candidates` iterator should have produced at least one item.")
     }
 }
 
