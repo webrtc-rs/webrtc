@@ -7,4 +7,6 @@ mod select_settings;
 
 pub use self::fitness_distance::FitnessDistance;
 
-pub use self::select_settings::{select_settings, SelectSettingsError, SelectSettingsPolicy};
+pub use self::select_settings::{
+    select_settings, SelectFirstSettingsPolicy, SelectSettingsError, SelectSettingsPolicy,
+};
