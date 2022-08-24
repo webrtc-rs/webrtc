@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    constraint::SanitizedMediaTrackConstraint, property::name::*, BareOrMediaTrackConstraint,
+    constraint::SanitizedMediaTrackConstraint, property::all::name::*, BareOrMediaTrackConstraint,
     MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
     ValueConstraint, ValueRangeConstraint,
 };
@@ -230,7 +230,7 @@ impl SanitizedMediaTrackConstraintSet {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::property::name::*;
+    use crate::property::all::name::*;
 
     use super::*;
 

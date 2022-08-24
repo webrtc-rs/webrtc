@@ -77,7 +77,7 @@ impl IntoIterator for MediaTrackCapabilities {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{macros::test_serde_symmetry, property::name::*};
+    use crate::{macros::test_serde_symmetry, property::all::name::*};
 
     use super::*;
 

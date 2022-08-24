@@ -78,7 +78,7 @@ mod tests {
             track::{BareOrBoolOrMediaTrackConstraints, BareOrMediaTrackConstraints},
         },
         macros::test_serde_symmetry,
-        property::name::*,
+        property::all::name::*,
         BareOrMediaTrackConstraintSet,
     };
 

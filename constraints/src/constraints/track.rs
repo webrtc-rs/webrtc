@@ -239,7 +239,7 @@ impl MediaTrackConstraints {
 mod serde_tests {
     use crate::{
         constraints::mandatory::BareOrMandatoryMediaTrackConstraints, macros::test_serde_symmetry,
-        property::name::*, BareOrAdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
+        property::all::name::*, BareOrAdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
     };
 
     use super::*;
