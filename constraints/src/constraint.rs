@@ -3,6 +3,8 @@ use std::ops::Deref;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::MediaTrackSetting;
+
 pub use self::{
     value::{BareOrValueConstraint, ValueConstraint},
     value_range::{BareOrValueRangeConstraint, ValueRangeConstraint},
@@ -186,6 +188,21 @@ impl From<ValueConstraint<String>> for BareOrMediaTrackConstraint {
 impl From<BareOrValueConstraint<String>> for BareOrMediaTrackConstraint {
     fn from(constraint: BareOrValueConstraint<String>) -> Self {
         Self::String(constraint)
+    }
+}
+
+// Conversion from settings:
+
+impl From<MediaTrackSetting> for BareOrMediaTrackConstraint {
+    fn from(settings: MediaTrackSetting) -> Self {
+        match settings {
+            MediaTrackSetting::Bool(value) => Self::Bool(value.into()),
+            MediaTrackSetting::Integer(value) => {
+                Self::IntegerRange((value.clamp(0, i64::MAX) as u64).into())
+            }
+            MediaTrackSetting::Float(value) => Self::FloatRange(value.into()),
+            MediaTrackSetting::String(value) => Self::String(value.into()),
+        }
     }
 }
 
