@@ -3,5 +3,8 @@
 //! [mediacapture_streams]: https://www.w3.org/TR/mediacapture-streams/
 
 mod fitness_distance;
+mod select_settings;
 
 pub use self::fitness_distance::FitnessDistance;
+
+pub use self::select_settings::{select_settings, SelectSettingsError, SelectSettingsPolicy};
