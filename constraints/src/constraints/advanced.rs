@@ -31,7 +31,7 @@ pub type SanitizedAdvancedMediaTrackConstraints =
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints_advanced]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-advanced
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct GenericAdvancedMediaTrackConstraints<T>(Vec<GenericMediaTrackConstraintSet<T>>);

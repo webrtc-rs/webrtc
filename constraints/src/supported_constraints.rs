@@ -29,7 +29,7 @@ use serde::{
 /// [media_track_supported_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatracksupportedconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams
 /// [webidl_spec]: https://webidl.spec.whatwg.org/#idl-dictionaries
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MediaTrackSupportedConstraints(HashSet<String>);
 
 impl MediaTrackSupportedConstraints {

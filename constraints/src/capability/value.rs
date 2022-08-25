@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// [dom_string]: https://webidl.spec.whatwg.org/#idl-DOMString
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct MediaTrackValueCapability<T> {

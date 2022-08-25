@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 /// [double_range]: https://www.w3.org/TR/mediacapture-streams/#dom-doublerange
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 /// [ulong_range]: https://www.w3.org/TR/mediacapture-streams/#dom-ulongrange
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct MediaTrackValueRangeCapability<T> {

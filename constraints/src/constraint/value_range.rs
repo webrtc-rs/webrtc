@@ -20,7 +20,7 @@ use crate::MediaTrackConstraintResolutionStrategy;
 /// [constrain_double]: https://www.w3.org/TR/mediacapture-streams/#dom-constraindouble
 /// [constrain_ulong]: https://www.w3.org/TR/mediacapture-streams/#dom-constrainulong
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum BareOrValueRangeConstraint<T> {
@@ -91,7 +91,7 @@ impl<T> BareOrValueRangeConstraint<T> {
 /// - `ConstrainULong` => `ValueRangeConstraint<u64>`
 ///
 /// [spec]: https://www.w3.org/TR/mediacapture-streams
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ValueRangeConstraint<T> {
