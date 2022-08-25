@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::hash::Hash;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -14,7 +13,7 @@ use rtp::extension::abs_send_time_extension::unix2ntp;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Duration;
 
-use util::sync::{Mutex, RwLock};
+use util::sync::Mutex;
 use util::{MarshalSize, Unmarshal};
 
 use crate::error::Result;
@@ -136,66 +135,10 @@ async fn run_stats_reducer(mut rx: mpsc::Receiver<Message>) {
                     Some(m) => m,
                     None => break,
                 };
+
                 match msg {
                     Message::StatUpdate { ssrc, update } => {
-                        let stats = ssrc_stats.get_or_create_stream_stats(ssrc);
-
-                        match update {
-                            StatsUpdate::RecvRTP {
-                                packets,
-                                header_bytes,
-                                payload_bytes,
-                                last_packet_timestamp,
-                            }
-                            | StatsUpdate::WriteRTP {
-                                packets,
-                                header_bytes,
-                                payload_bytes,
-                                last_packet_timestamp,
-                            } => {
-                                if matches!(update, StatsUpdate::RecvRTP { .. }) {
-                                    stats.rtp_recv_stats.update(
-                                        header_bytes,
-                                        payload_bytes,
-                                        packets,
-                                        last_packet_timestamp,
-                                    );
-                                } else {
-                                    stats.rtp_write_stats.update(
-                                        header_bytes,
-                                        payload_bytes,
-                                        packets,
-                                        last_packet_timestamp,
-                                    );
-                                }
-                            }
-                            StatsUpdate::RecvRTCP {
-                                rtt_ms,
-                                loss,
-                                fir_count,
-                                pli_count,
-                                nack_count,
-                            }
-                            | StatsUpdate::WriteRTCP {
-                                rtt_ms,
-                                loss,
-                                fir_count,
-                                pli_count,
-                                nack_count,
-                            } => {
-                                if matches!(update, StatsUpdate::RecvRTCP { .. }) {
-                                    stats
-                                        .rtcp_recv_stats
-                                        .update(rtt_ms, loss, fir_count, pli_count, nack_count);
-                                } else {
-                                    stats
-                                        .rtcp_write_stats
-                                        .update(rtt_ms, loss, fir_count, pli_count, nack_count);
-                                }
-                            }
-                        }
-
-                        stats.mark_updated();
+                        handle_stats_update(&mut ssrc_stats, ssrc, update);
                     }
                     Message::RequestSnapshot { ssrcs, chan } => {
                         let result = ssrcs
@@ -213,6 +156,63 @@ async fn run_stats_reducer(mut rx: mpsc::Receiver<Message>) {
             }
         }
     }
+}
+
+fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: StatsUpdate) {
+    let stats = ssrc_stats.get_or_create_stream_stats(ssrc);
+
+    match update {
+        StatsUpdate::RecvRTP {
+            packets,
+            header_bytes,
+            payload_bytes,
+            last_packet_timestamp,
+        } => {
+            stats.rtp_recv_stats.update(
+                header_bytes,
+                payload_bytes,
+                packets,
+                last_packet_timestamp,
+            );
+        }
+        StatsUpdate::WriteRTP {
+            packets,
+            header_bytes,
+            payload_bytes,
+            last_packet_timestamp,
+        } => {
+            stats.rtp_write_stats.update(
+                header_bytes,
+                payload_bytes,
+                packets,
+                last_packet_timestamp,
+            );
+        }
+        StatsUpdate::RecvRTCP {
+            rtt_ms,
+            loss,
+            fir_count,
+            pli_count,
+            nack_count,
+        } => {
+            stats
+                .rtcp_recv_stats
+                .update(rtt_ms, loss, fir_count, pli_count, nack_count);
+        }
+        StatsUpdate::WriteRTCP {
+            rtt_ms,
+            loss,
+            fir_count,
+            pli_count,
+            nack_count,
+        } => {
+            stats
+                .rtcp_write_stats
+                .update(rtt_ms, loss, fir_count, pli_count, nack_count);
+        }
+    }
+
+    stats.mark_updated();
 }
 
 #[async_trait]
@@ -556,30 +556,6 @@ impl RTPWriter for RTPWriteRecorder {
             .await;
 
         Ok(n)
-    }
-}
-
-trait GetOrCreateAtomic<T, U> {
-    fn get_or_create(&self, key: T) -> U;
-}
-
-impl<T, U> GetOrCreateAtomic<T, U> for RwLock<HashMap<T, U>>
-where
-    T: Hash + Eq,
-    U: Default + Clone,
-{
-    fn get_or_create(&self, key: T) -> U {
-        let lock = self.read();
-
-        if let Some(v) = lock.get(&key) {
-            v.clone()
-        } else {
-            // Upgrade lock to write
-            drop(lock);
-            let mut lock = self.write();
-
-            lock.entry(key).or_default().clone()
-        }
     }
 }
 
