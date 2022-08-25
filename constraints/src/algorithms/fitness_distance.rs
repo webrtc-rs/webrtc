@@ -34,6 +34,28 @@ fn relative_fitness_distance(actual: f64, ideal: f64) -> f64 {
     } else {
         let numerator = (actual - ideal).abs();
         let denominator = actual.abs().max(ideal.abs());
-        numerator / denominator
+        if denominator == 0.0 {
+            // Avoid division by zero crashes:
+            0.0
+        } else {
+            numerator / denominator
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relative_fitness_distance() {
+        assert_eq!(super::relative_fitness_distance(0.0, 1.0), 1.0);
+        assert_eq!(super::relative_fitness_distance(1.0, 0.0), 1.0);
+
+        assert_eq!(super::relative_fitness_distance(0.0, 0.1), 1.0);
+        assert_eq!(super::relative_fitness_distance(0.1, 0.0), 1.0);
+
+        // Make sure we're not dividing by zero:
+        assert_eq!(super::relative_fitness_distance(0.0, 0.0), 0.0);
     }
 }
