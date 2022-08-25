@@ -21,6 +21,17 @@ pub enum MediaTrackSetting {
     String(String),
 }
 
+impl std::fmt::Display for MediaTrackSetting {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bool(setting) => f.write_fmt(format_args!("{:?}", setting)),
+            Self::Integer(setting) => f.write_fmt(format_args!("{:?}", setting)),
+            Self::Float(setting) => f.write_fmt(format_args!("{:?}", setting)),
+            Self::String(setting) => f.write_fmt(format_args!("{:?}", setting)),
+        }
+    }
+}
+
 impl From<bool> for MediaTrackSetting {
     fn from(setting: bool) -> Self {
         Self::Bool(setting)
