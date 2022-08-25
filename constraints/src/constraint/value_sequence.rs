@@ -148,6 +148,20 @@ impl<T> ValueSequenceConstraint<T> {
         let ideal_is_empty = self.ideal.as_ref().map_or(true, Vec::is_empty);
         exact_is_empty && ideal_is_empty
     }
+
+    pub fn to_required_only(&self) -> Self
+    where
+        T: Clone,
+    {
+        self.clone().into_required_only()
+    }
+
+    pub fn into_required_only(self) -> Self {
+        Self {
+            exact: self.exact,
+            ideal: None,
+        }
+    }
 }
 
 impl<T> Default for ValueSequenceConstraint<T> {
