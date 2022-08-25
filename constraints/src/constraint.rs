@@ -338,6 +338,16 @@ impl From<ValueConstraint<String>> for MediaTrackConstraint {
 }
 
 impl MediaTrackConstraint {
+    pub fn exact_from(setting: MediaTrackSetting) -> Self {
+        BareOrMediaTrackConstraint::from(setting)
+            .into_resolved(MediaTrackConstraintResolutionStrategy::BareToExact)
+    }
+
+    pub fn ideal_from(setting: MediaTrackSetting) -> Self {
+        BareOrMediaTrackConstraint::from(setting)
+            .into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal)
+    }
+
     pub fn is_required(&self) -> bool {
         match self {
             Self::Empty(_constraint) => false,
