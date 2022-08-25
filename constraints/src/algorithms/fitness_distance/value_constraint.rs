@@ -1,6 +1,8 @@
 use crate::constraint::ValueConstraint;
 
-use super::{setting::SettingFitnessDistanceError, FitnessDistance};
+use super::{
+    setting::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind,
+};
 
 // Standard implementation for value constraints of arbitrary `Setting` and `Constraint`
 // types where `Setting: PartialEq<Constraint>`:
@@ -23,8 +25,20 @@ macro_rules! impl_non_numeric_value_constraint {
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
                         Some(actual) if actual == exact => {}
-                        Some(_) => return Err(SettingFitnessDistanceError::Mismatch),
-                        None => return Err(SettingFitnessDistanceError::Missing),
+                        Some(setting) => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Mismatch,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: Some(format!("{:?}", setting)),
+                            })
+                        }
+                        None => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Missing,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: None,
+                            })
+                        }
                     };
                 }
 
@@ -86,8 +100,20 @@ macro_rules! impl_numeric_value_constraint {
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
                         Some(&actual) if (actual as f64) == (exact as f64) => {}
-                        Some(_) => return Err(SettingFitnessDistanceError::Mismatch),
-                        None => return Err(SettingFitnessDistanceError::Missing),
+                        Some(setting) => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Mismatch,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: Some(format!("{:?}", setting)),
+                            })
+                        }
+                        None => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Missing,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: None,
+                            })
+                        }
                     };
                 }
 
