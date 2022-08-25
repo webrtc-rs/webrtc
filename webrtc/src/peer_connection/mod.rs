@@ -1464,7 +1464,7 @@ impl RTCPeerConnection {
                         }
 
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
-                            let previous_direction = t.direction();
+                            let previous_direction = t.current_direction();
 
                             // 4.5.9.2.9
                             // Let direction be an RTCRtpTransceiverDirection value representing the direction

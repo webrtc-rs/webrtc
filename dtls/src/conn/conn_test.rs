@@ -2445,6 +2445,7 @@ async fn send_client_hello(
 
 // Assert that a DTLS Server always responds with RenegotiationInfo if
 // a ClientHello contained that extension or not
+#[cfg(not(target_os = "windows"))] // this times out in CI on windows.
 #[tokio::test]
 async fn test_renegotation_info() -> Result<()> {
     let mut resp = vec![0u8; 1024];

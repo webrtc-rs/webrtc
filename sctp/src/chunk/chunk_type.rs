@@ -18,6 +18,7 @@ pub(crate) const CT_SHUTDOWN_ACK: ChunkType = ChunkType(8);
 pub(crate) const CT_ERROR: ChunkType = ChunkType(9);
 pub(crate) const CT_COOKIE_ECHO: ChunkType = ChunkType(10);
 pub(crate) const CT_COOKIE_ACK: ChunkType = ChunkType(11);
+pub(crate) const CT_ECNE: ChunkType = ChunkType(12);
 pub(crate) const CT_CWR: ChunkType = ChunkType(13);
 pub(crate) const CT_SHUTDOWN_COMPLETE: ChunkType = ChunkType(14);
 pub(crate) const CT_RECONFIG: ChunkType = ChunkType(130);
@@ -39,7 +40,8 @@ impl fmt::Display for ChunkType {
             CT_ERROR => "ERROR",
             CT_COOKIE_ECHO => "COOKIE-ECHO",
             CT_COOKIE_ACK => "COOKIE-ACK",
-            CT_CWR => "ECNE", // Explicit Congestion Notification Echo
+            CT_ECNE => "ECNE", // Explicit Congestion Notification Echo
+            CT_CWR => "CWR",   // Reserved for Congestion Window Reduced (CWR)
             CT_SHUTDOWN_COMPLETE => "SHUTDOWN-COMPLETE",
             CT_RECONFIG => "RECONFIG", // Re-configuration
             CT_FORWARD_TSN => "FORWARD-TSN",
@@ -68,7 +70,8 @@ mod test {
             (CT_ERROR, "ERROR"),
             (CT_COOKIE_ECHO, "COOKIE-ECHO"),
             (CT_COOKIE_ACK, "COOKIE-ACK"),
-            (CT_CWR, "ECNE"),
+            (CT_ECNE, "ECNE"),
+            (CT_CWR, "CWR"),
             (CT_SHUTDOWN_COMPLETE, "SHUTDOWN-COMPLETE"),
             (CT_RECONFIG, "RECONFIG"),
             (CT_FORWARD_TSN, "FORWARD-TSN"),
