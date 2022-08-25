@@ -1,6 +1,8 @@
 use crate::ValueRangeConstraint;
 
-use super::{setting::SettingFitnessDistanceError, FitnessDistance};
+use super::{
+    setting::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind,
+};
 
 macro_rules! impl_value_range_constraint {
     (setting: $s:ty, constraint: $c:ty) => {
@@ -18,8 +20,20 @@ macro_rules! impl_value_range_constraint {
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
                         Some(&actual) if (actual as f64) == (exact as f64) => {}
-                        Some(_) => return Err(SettingFitnessDistanceError::Mismatch),
-                        None => return Err(SettingFitnessDistanceError::Missing),
+                        Some(setting) => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Mismatch,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: Some(format!("{:?}", setting)),
+                            })
+                        }
+                        None => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Missing,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: None,
+                            })
+                        }
                     };
                 }
 
@@ -33,8 +47,20 @@ macro_rules! impl_value_range_constraint {
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
                         Some(&actual) if (actual as f64) >= (min as f64) => {}
-                        Some(_) => return Err(SettingFitnessDistanceError::TooSmall),
-                        None => return Err(SettingFitnessDistanceError::Missing),
+                        Some(setting) => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::TooSmall,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: Some(format!("{:?}", setting)),
+                            })
+                        }
+                        None => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Missing,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: None,
+                            })
+                        }
                     };
                 }
 
@@ -48,8 +74,20 @@ macro_rules! impl_value_range_constraint {
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
                         Some(&actual) if (actual as f64) <= (max as f64) => {}
-                        Some(_) => return Err(SettingFitnessDistanceError::TooLarge),
-                        None => return Err(SettingFitnessDistanceError::Missing),
+                        Some(setting) => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::TooLarge,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: Some(format!("{:?}", setting)),
+                            })
+                        }
+                        None => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Missing,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: None,
+                            })
+                        }
                     };
                 }
 

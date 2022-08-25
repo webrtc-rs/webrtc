@@ -1,6 +1,8 @@
 use crate::ValueSequenceConstraint;
 
-use super::{setting::SettingFitnessDistanceError, FitnessDistance};
+use super::{
+    setting::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind,
+};
 
 macro_rules! impl_non_numeric_value_sequence_constraint {
     (setting: $s:ty, constraint: $c:ty) => {
@@ -21,8 +23,20 @@ macro_rules! impl_non_numeric_value_sequence_constraint {
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
                         Some(actual) if exact.contains(actual) => {}
-                        Some(_) => return Err(SettingFitnessDistanceError::Mismatch),
-                        None => return Err(SettingFitnessDistanceError::Missing),
+                        Some(setting) => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Mismatch,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: Some(format!("{:?}", setting)),
+                            })
+                        }
+                        None => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Missing,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: None,
+                            })
+                        }
                     };
                 }
 
@@ -80,8 +94,20 @@ macro_rules! impl_numeric_value_sequence_constraint {
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
                         Some(&actual) if exact.contains(&(actual as $c)) => {}
-                        Some(_) => return Err(SettingFitnessDistanceError::Mismatch),
-                        None => return Err(SettingFitnessDistanceError::Missing),
+                        Some(setting) => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Mismatch,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: Some(format!("{:?}", setting)),
+                            })
+                        }
+                        None => {
+                            return Err(SettingFitnessDistanceError {
+                                kind: SettingFitnessDistanceErrorKind::Missing,
+                                constraint: format!("{}", self.to_required_only()),
+                                setting: None,
+                            })
+                        }
                     };
                 }
 
