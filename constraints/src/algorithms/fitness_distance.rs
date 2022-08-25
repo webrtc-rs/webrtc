@@ -47,15 +47,39 @@ fn relative_fitness_distance(actual: f64, ideal: f64) -> f64 {
 mod tests {
     use super::*;
 
-    #[test]
-    fn relative_fitness_distance() {
-        assert_eq!(super::relative_fitness_distance(0.0, 1.0), 1.0);
-        assert_eq!(super::relative_fitness_distance(1.0, 0.0), 1.0);
+    mod relative_fitness_distance {
+        #[test]
+        fn zero_distance() {
+            // Make sure we're not dividing by zero:
+            assert_eq!(super::relative_fitness_distance(0.0, 0.0), 0.0);
 
-        assert_eq!(super::relative_fitness_distance(0.0, 0.1), 1.0);
-        assert_eq!(super::relative_fitness_distance(0.1, 0.0), 1.0);
+            assert_eq!(super::relative_fitness_distance(0.5, 0.5), 0.0);
+            assert_eq!(super::relative_fitness_distance(1.0, 1.0), 0.0);
+            assert_eq!(super::relative_fitness_distance(2.0, 2.0), 0.0);
+        }
 
-        // Make sure we're not dividing by zero:
-        assert_eq!(super::relative_fitness_distance(0.0, 0.0), 0.0);
+        #[test]
+        fn fract_distance() {
+            assert_eq!(super::relative_fitness_distance(1.0, 2.0), 0.5);
+            assert_eq!(super::relative_fitness_distance(2.0, 1.0), 0.5);
+
+            assert_eq!(super::relative_fitness_distance(0.5, 1.0), 0.5);
+            assert_eq!(super::relative_fitness_distance(1.0, 0.5), 0.5);
+
+            assert_eq!(super::relative_fitness_distance(0.25, 0.5), 0.5);
+            assert_eq!(super::relative_fitness_distance(0.5, 0.25), 0.5);
+        }
+
+        #[test]
+        fn one_distance() {
+            assert_eq!(super::relative_fitness_distance(0.0, 0.5), 1.0);
+            assert_eq!(super::relative_fitness_distance(0.5, 0.0), 1.0);
+
+            assert_eq!(super::relative_fitness_distance(0.0, 1.0), 1.0);
+            assert_eq!(super::relative_fitness_distance(1.0, 0.0), 1.0);
+
+            assert_eq!(super::relative_fitness_distance(0.0, 2.0), 1.0);
+            assert_eq!(super::relative_fitness_distance(2.0, 0.0), 1.0);
+        }
     }
 }
