@@ -43,9 +43,7 @@ impl Iterator for NackIterator {
 
                 Some(self.packet_id)
             }
-            Some(id) if self.bitfield != 0 => {
-                let mut i = id;
-
+            Some(mut i) if self.bitfield != 0 => {
                 while self.bitfield != 0 {
                     if (self.bitfield & (1 << i)) != 0 {
                         self.bitfield &= !(1 << i);

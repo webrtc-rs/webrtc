@@ -199,6 +199,15 @@ fn test_nack_pair() {
             lost_packets: 0b0000_0111,
         },
     );
+
+    // Gap
+    test_nack(
+        vec![123, 125, 127, 129],
+        NackPair {
+            packet_id: 123,
+            lost_packets: 0b0010_1010,
+        },
+    );
 }
 
 #[tokio::test]
