@@ -36,7 +36,7 @@ pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaT
 /// [video]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
 /// [audio]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-audio
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum GenericBoolOrMediaTrackConstraints<T> {
@@ -116,7 +116,7 @@ pub type SanitizedMediaTrackConstraints =
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GenericMediaTrackConstraints<T> {
     /// Mandatory (i.e required or optional basic) constraints, as defined in the [spec][spec].

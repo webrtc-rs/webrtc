@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// [sequence]: https://webidl.spec.whatwg.org/#idl-sequence
 /// [webidl_spec]: https://webidl.spec.whatwg.org/
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct MediaTrackValueSequenceCapability<T> {

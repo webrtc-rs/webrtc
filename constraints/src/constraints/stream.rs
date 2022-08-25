@@ -44,7 +44,7 @@ pub type MediaStreamConstraints = GenericMediaStreamConstraints<MediaTrackConstr
 /// [media_stream]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastream
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default,Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct GenericMediaStreamConstraints<T> {
