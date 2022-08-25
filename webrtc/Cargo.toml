@@ -48,7 +48,8 @@ hex = "0.4.3"
 # [minimal-versions]
 # fixes "the trait bound `time::Month: From<u8>` is not satisfied"
 # https://github.com/est31/rcgen/pull/88
-time = "~0.3.1"
+# Version 0.3.14 requires Rust 1.59.0 which we don't currently support
+time = ">=0.3.1,<=0.3.13"
 
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
