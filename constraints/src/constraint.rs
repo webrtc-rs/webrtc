@@ -278,6 +278,46 @@ impl Default for MediaTrackConstraint {
     }
 }
 
+// Bool constraint:
+
+impl From<ValueConstraint<bool>> for MediaTrackConstraint {
+    fn from(constraint: ValueConstraint<bool>) -> Self {
+        Self::Bool(constraint)
+    }
+}
+
+// Unsigned integer range constraint:
+
+impl From<ValueRangeConstraint<u64>> for MediaTrackConstraint {
+    fn from(constraint: ValueRangeConstraint<u64>) -> Self {
+        Self::IntegerRange(constraint)
+    }
+}
+
+// Floating-point range constraint:
+
+impl From<ValueRangeConstraint<f64>> for MediaTrackConstraint {
+    fn from(constraint: ValueRangeConstraint<f64>) -> Self {
+        Self::FloatRange(constraint)
+    }
+}
+
+// String sequence constraint:
+
+impl From<ValueSequenceConstraint<String>> for MediaTrackConstraint {
+    fn from(constraint: ValueSequenceConstraint<String>) -> Self {
+        Self::StringSequence(constraint)
+    }
+}
+
+// String constraint:
+
+impl From<ValueConstraint<String>> for MediaTrackConstraint {
+    fn from(constraint: ValueConstraint<String>) -> Self {
+        Self::String(constraint)
+    }
+}
+
 impl MediaTrackConstraint {
     pub fn is_required(&self) -> bool {
         match self {
