@@ -70,7 +70,7 @@ pub struct StatsInterceptor {
     tx: mpsc::Sender<Message>,
 
     id: String,
-    now_gen: Option<Arc<dyn Fn() -> SystemTime + Send + Sync>>,
+    now_gen: Arc<dyn Fn() -> SystemTime + Send + Sync>,
 }
 
 impl StatsInterceptor {
@@ -84,7 +84,7 @@ impl StatsInterceptor {
             recv_streams: Default::default(),
             send_streams: Default::default(),
             tx,
-            now_gen: None,
+            now_gen: Arc::new(SystemTime::now),
         }
     }
 
@@ -100,7 +100,7 @@ impl StatsInterceptor {
             recv_streams: Default::default(),
             send_streams: Default::default(),
             tx,
-            now_gen: Some(Arc::new(now_gen)),
+            now_gen: Arc::new(now_gen),
         }
     }
 
@@ -273,10 +273,7 @@ impl Interceptor for StatsInterceptor {
         &self,
         writer: Arc<dyn RTCPWriter + Send + Sync>,
     ) -> Arc<dyn RTCPWriter + Send + Sync> {
-        let now = self
-            .now_gen
-            .clone()
-            .unwrap_or_else(|| Arc::new(SystemTime::now));
+        let now = self.now_gen.clone();
 
         Arc::new(RTCPWriteInterceptor {
             rtcp_writer: writer,
@@ -291,10 +288,7 @@ impl Interceptor for StatsInterceptor {
         &self,
         reader: Arc<dyn RTCPReader + Send + Sync>,
     ) -> Arc<dyn RTCPReader + Send + Sync> {
-        let now = self
-            .now_gen
-            .clone()
-            .unwrap_or_else(|| Arc::new(SystemTime::now));
+        let now = self.now_gen.clone();
 
         Arc::new(RTCPReadInterceptor {
             rtcp_reader: reader,
