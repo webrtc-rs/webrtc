@@ -1,3 +1,5 @@
+use crate::algorithms::SettingFitnessDistanceErrorKind;
+
 use super::*;
 
 mod basic {
@@ -85,15 +87,19 @@ mod required {
                 ],
                 constraints: String => &[
                     ValueSequenceConstraint {
-                        exact: Some(vec!["foo".to_owned()]),
+                        exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: None,
                     },
                     ValueSequenceConstraint {
-                        exact: Some(vec!["foo".to_owned()]),
+                        exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: Some(vec!["foo".to_owned()]),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Missing)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Missing,
+                    constraint: "(x == [\"foo\", \"bar\", \"baz\"])".to_owned(),
+                    setting: None,
+                })
             );
         }
 
@@ -104,20 +110,24 @@ mod required {
                 tests: [
                     {
                         name: string_setting,
-                        settings: String => &[Some("bar".to_owned())],
+                        settings: String => &[Some("blee".to_owned())],
                     },
                 ],
                 constraints: String => &[
                     ValueSequenceConstraint {
-                        exact: Some(vec!["foo".to_owned()]),
+                        exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: None,
                     },
                     ValueSequenceConstraint {
-                        exact: Some(vec!["foo".to_owned()]),
+                        exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: Some(vec!["foo".to_owned()]),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Mismatch)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Mismatch,
+                    constraint: "(x == [\"foo\", \"bar\", \"baz\"])".to_owned(),
+                    setting: Some("\"blee\"".to_owned()),
+                })
             );
         }
     }

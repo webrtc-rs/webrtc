@@ -93,7 +93,11 @@ mod required {
                         ideal: Some("foo".to_owned()),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Missing)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Missing,
+                    constraint: "(x == \"foo\")".to_owned(),
+                    setting: None,
+                })
             );
         }
 
@@ -117,7 +121,11 @@ mod required {
                         ideal: Some("foo".to_owned()),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Mismatch)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Mismatch,
+                    constraint: "(x == \"foo\")".to_owned(),
+                    setting: Some("\"bar\"".to_owned()),
+                })
             );
         }
     }
