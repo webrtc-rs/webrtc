@@ -130,12 +130,9 @@ macro_rules! impl_numeric_value_sequence_constraint {
                     match setting {
                         Some(&actual) => {
                             let actual: f64 = actual as f64;
-
                             let mut min_fitness_distance = 1.0;
-
                             for ideal in ideal.into_iter() {
                                 let ideal: f64 = (*ideal) as f64;
-
                                 // As specified in step 7 of the `fitness distance` algorithm:
                                 // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
                                 //
@@ -145,18 +142,12 @@ macro_rules! impl_numeric_value_sequence_constraint {
                                 // > ```
                                 // > (actual == ideal) ? 0 : |actual - ideal| / max(|actual|, |ideal|)
                                 // > ```
-                                if actual == ideal {
-                                    min_fitness_distance = 0.0;
-                                } else {
-                                    let numerator = (actual - ideal).abs();
-                                    let denominator = actual.abs().max(ideal.abs());
-                                    let fitness_distance = numerator / denominator;
-                                    if fitness_distance < min_fitness_distance {
-                                        min_fitness_distance = fitness_distance;
-                                    }
+                                let fitness_distance =
+                                    super::relative_fitness_distance(actual, ideal);
+                                if fitness_distance < min_fitness_distance {
+                                    min_fitness_distance = fitness_distance;
                                 }
                             }
-
                             Ok(min_fitness_distance)
                         }
                         None => Ok(1.0),
