@@ -1,3 +1,5 @@
+use crate::algorithms::SettingFitnessDistanceErrorKind;
+
 use super::*;
 
 mod basic {
@@ -240,7 +242,11 @@ mod required {
                         ideal: Some(42.0),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Missing)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Missing,
+                    constraint: "(x == 42.0)".to_owned(),
+                    setting: None,
+                })
             );
         }
 
@@ -253,6 +259,30 @@ mod required {
                         name: i64_setting,
                         settings: i64 => &[Some(0)],
                     },
+                ],
+                constraints: f64 => &[
+                    ValueRangeConstraint {
+                        min: None,
+                        max: None,
+                        exact: Some(42.0),
+                        ideal: None,
+                    },
+                    ValueRangeConstraint {
+                        min: None,
+                        max: None,
+                        exact: Some(42.0),
+                        ideal: Some(42.0),
+                    },
+                ],
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Mismatch,
+                    constraint: "(x == 42.0)".to_owned(),
+                    setting: Some("0".to_owned()),
+                })
+            );
+
+            generate_value_range_constraint_tests!(
+                tests: [
                     {
                         name: f64_setting,
                         settings: f64 => &[Some(0.0)],
@@ -272,7 +302,11 @@ mod required {
                         ideal: Some(42.0),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Mismatch)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Mismatch,
+                    constraint: "(x == 42.0)".to_owned(),
+                    setting: Some("0.0".to_owned()),
+                })
             );
         }
     }

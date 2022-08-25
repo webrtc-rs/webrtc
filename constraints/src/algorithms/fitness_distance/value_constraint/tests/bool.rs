@@ -116,7 +116,11 @@ mod required {
                         ideal: Some(true),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Missing)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Missing,
+                    constraint: "(x == true)".to_owned(),
+                    setting: None,
+                })
             );
         }
 
@@ -140,7 +144,11 @@ mod required {
                         ideal: Some(true),
                     },
                 ],
-                expected: Err(SettingFitnessDistanceError::Mismatch)
+                expected: Err(SettingFitnessDistanceError {
+                    kind: SettingFitnessDistanceErrorKind::Mismatch,
+                    constraint: "(x == true)".to_owned(),
+                    setting: Some("false".to_owned()),
+                })
             );
         }
     }
