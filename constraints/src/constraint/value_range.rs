@@ -161,6 +161,22 @@ impl<T> ValueRangeConstraint<T> {
     pub fn is_empty(&self) -> bool {
         self.min.is_none() && self.max.is_none() && self.exact.is_none() && self.ideal.is_none()
     }
+
+    pub fn to_required_only(&self) -> Self
+    where
+        T: Clone,
+    {
+        self.clone().into_required_only()
+    }
+
+    pub fn into_required_only(self) -> Self {
+        Self {
+            min: self.min,
+            max: self.max,
+            exact: self.exact,
+            ideal: None,
+        }
+    }
 }
 
 impl<T> Default for ValueRangeConstraint<T> {

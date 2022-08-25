@@ -139,6 +139,20 @@ impl<T> ValueConstraint<T> {
     pub fn is_empty(&self) -> bool {
         self.exact.is_none() && self.ideal.is_none()
     }
+
+    pub fn to_required_only(&self) -> Self
+    where
+        T: Clone,
+    {
+        self.clone().into_required_only()
+    }
+
+    pub fn into_required_only(self) -> Self {
+        Self {
+            exact: self.exact,
+            ideal: None,
+        }
+    }
 }
 
 impl<T> Default for ValueConstraint<T> {

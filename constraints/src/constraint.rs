@@ -360,6 +360,23 @@ impl MediaTrackConstraint {
         }
     }
 
+    pub fn to_required_only(&self) -> Self {
+        self.clone().into_required_only()
+    }
+
+    pub fn into_required_only(self) -> Self {
+        match self {
+            Self::Empty(constraint) => Self::Empty(constraint),
+            Self::IntegerRange(constraint) => Self::IntegerRange(constraint.into_required_only()),
+            Self::FloatRange(constraint) => Self::FloatRange(constraint.into_required_only()),
+            Self::Bool(constraint) => Self::Bool(constraint.into_required_only()),
+            Self::StringSequence(constraint) => {
+                Self::StringSequence(constraint.into_required_only())
+            }
+            Self::String(constraint) => Self::String(constraint.into_required_only()),
+        }
+    }
+
     pub fn to_sanitized(&self) -> Option<SanitizedMediaTrackConstraint> {
         self.clone().into_sanitized()
     }
