@@ -116,7 +116,7 @@ impl Server {
                     match v {
                         Ok(v) => v,
                         Err(err) => {
-                            log::debug!("exit read loop on error: {err}");
+                            log::debug!("exit read loop on error: {}", err);
                             break;
                         }
                     }
@@ -131,7 +131,7 @@ impl Server {
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => break,
                         Err(RecvError::Lagged(n)) => {
-                            log::error!("Turn server has lagged by {n} messages");
+                            log::error!("Turn server has lagged by {} messages", n);
                             continue
                         },
                     }
