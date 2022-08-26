@@ -30,34 +30,31 @@ pub type RangeFn =
 pub struct NackIterator {
     packet_id: u16,
     bitfield: PacketBitmap,
-    index: Option<u16>,
+    has_yielded_packet_id: bool,
 }
 
 impl Iterator for NackIterator {
     type Item = u16;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.index {
-            None => {
-                self.index = Some(0);
+        if !self.has_yielded_packet_id {
+            self.has_yielded_packet_id = true;
 
-                Some(self.packet_id)
-            }
-            Some(mut i) if self.bitfield != 0 => {
-                while self.bitfield != 0 {
-                    if (self.bitfield & (1 << i)) != 0 {
-                        self.bitfield &= !(1 << i);
-                        self.index = Some(i + 1);
+            Some(self.packet_id)
+        } else {
+            let mut i = 0;
 
-                        return Some(self.packet_id.wrapping_add(i + 1));
-                    }
+            while self.bitfield != 0 {
+                if (self.bitfield & (1 << i)) != 0 {
+                    self.bitfield &= !(1 << i);
 
-                    i += 1;
+                    return Some(self.packet_id.wrapping_add(i + 1));
                 }
 
-                None
+                i += 1;
             }
-            _ => None,
+
+            None
         }
     }
 }
@@ -87,7 +84,7 @@ impl IntoIterator for NackPair {
         NackIterator {
             packet_id: self.packet_id,
             bitfield: self.lost_packets,
-            index: None,
+            has_yielded_packet_id: false,
         }
     }
 }
