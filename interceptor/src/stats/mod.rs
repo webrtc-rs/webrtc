@@ -1,6 +1,8 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
+
+use tokio::time::{Duration, Instant};
 
 mod interceptor;
 
@@ -10,83 +12,180 @@ pub fn make_stats_interceptor(id: &str) -> Arc<StatsInterceptor> {
     Arc::new(StatsInterceptor::new(id.to_owned()))
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
+pub struct StreamStats {
+    rtp_recv_stats: RTPStats,
+    rtp_write_stats: RTPStats,
+    rtcp_recv_stats: RTCPStats,
+    rtcp_write_stats: RTCPStats,
+
+    last_update: Instant,
+}
+
+impl Default for StreamStats {
+    fn default() -> Self {
+        Self {
+            rtp_recv_stats: Default::default(),
+            rtp_write_stats: Default::default(),
+            rtcp_recv_stats: Default::default(),
+            rtcp_write_stats: Default::default(),
+            last_update: Instant::now(),
+        }
+    }
+}
+
+impl StreamStats {
+    pub fn snapshot(&self) -> StatsSnapshot {
+        self.into()
+    }
+
+    fn mark_updated(&mut self) {
+        self.last_update = Instant::now();
+    }
+
+    fn duration_since_last_update(&self) -> Duration {
+        self.last_update.elapsed()
+    }
+}
+
+#[derive(Debug)]
+pub struct StatsSnapshot {
+    pub rtp_recv_stats: RTPStats,
+    pub rtp_write_stats: RTPStats,
+    pub rtcp_recv_stats: RTCPStats,
+    pub rtcp_write_stats: RTCPStats,
+}
+
+impl From<&StreamStats> for StatsSnapshot {
+    fn from(stats: &StreamStats) -> Self {
+        Self {
+            rtp_recv_stats: stats.rtp_recv_stats.clone(),
+            rtp_write_stats: stats.rtp_write_stats.clone(),
+            rtcp_recv_stats: stats.rtcp_recv_stats.clone(),
+            rtcp_write_stats: stats.rtcp_write_stats.clone(),
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+struct StatsContainer {
+    stream_stats: HashMap<u32, StreamStats>,
+}
+
+impl StatsContainer {
+    fn get_or_create_stream_stats(&mut self, ssrc: u32) -> &mut StreamStats {
+        self.stream_stats.entry(ssrc).or_default()
+    }
+
+    fn get(&self, ssrc: u32) -> Option<&StreamStats> {
+        self.stream_stats.get(&ssrc)
+    }
+
+    fn remove_stale_entries(&mut self) {
+        self.stream_stats
+            .retain(|_, s| s.duration_since_last_update() < Duration::from_secs(60))
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 /// Records stats about a given RTP stream.
 pub struct RTPStats {
     /// Packets sent or received
-    packets: Arc<AtomicU64>,
+    packets: u64,
 
     /// Payload bytes sent or received
-    payload_bytes: Arc<AtomicU64>,
+    payload_bytes: u64,
 
     /// Header bytes sent or received
-    header_bytes: Arc<AtomicU64>,
+    header_bytes: u64,
 
     /// A wall clock timestamp for when the last packet was sent or recieved encoded as milliseconds since
     /// [`SystemTime::UNIX_EPOCH`].
-    last_packet_timestamp: Arc<AtomicU64>,
+    last_packet_timestamp: Option<SystemTime>,
 }
 
 impl RTPStats {
-    pub fn update(&self, header_bytes: u64, payload_bytes: u64, packets: u64) {
-        let now = SystemTime::now();
-
-        self.header_bytes.fetch_add(header_bytes, Ordering::SeqCst);
-        self.payload_bytes
-            .fetch_add(payload_bytes, Ordering::SeqCst);
-        self.packets.fetch_add(packets, Ordering::SeqCst);
-
-        if let Ok(duration) = now.duration_since(SystemTime::UNIX_EPOCH) {
-            let millis = duration.as_millis();
-            // NB: We truncate 128bits to 64 bits here, but even at 64 bits we have ~500k years
-            // before this becomes a problem, then it can be someone else's problem.
-            self.last_packet_timestamp
-                .store(millis as u64, Ordering::SeqCst);
-        } else {
-            log::warn!("SystemTime::now was before SystemTime::UNIX_EPOCH");
-        }
+    fn update(&mut self, header_bytes: u64, payload_bytes: u64, packets: u64, now: SystemTime) {
+        self.header_bytes += header_bytes;
+        self.payload_bytes += payload_bytes;
+        self.packets += packets;
+        self.last_packet_timestamp = Some(now);
     }
 
-    pub fn reader(&self) -> RTPStatsReader {
-        RTPStatsReader {
-            packets: self.packets.clone(),
-            payload_bytes: self.payload_bytes.clone(),
-            header_bytes: self.header_bytes.clone(),
-            last_packet_timestamp: self.last_packet_timestamp.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-/// Reader half of RTPStats.
-pub struct RTPStatsReader {
-    packets: Arc<AtomicU64>,
-    payload_bytes: Arc<AtomicU64>,
-    header_bytes: Arc<AtomicU64>,
-
-    last_packet_timestamp: Arc<AtomicU64>,
-}
-
-impl RTPStatsReader {
-    /// Get packets sent or received.
-    pub fn packets(&self) -> u64 {
-        self.packets.load(Ordering::SeqCst)
-    }
-
-    /// Get payload bytes sent or received.
     pub fn header_bytes(&self) -> u64 {
-        self.header_bytes.load(Ordering::SeqCst)
+        self.header_bytes
     }
 
-    /// Get header bytes sent or received.
     pub fn payload_bytes(&self) -> u64 {
-        self.payload_bytes.load(Ordering::SeqCst)
+        self.payload_bytes
     }
 
-    pub fn last_packet_timestamp(&self) -> SystemTime {
-        let millis = self.last_packet_timestamp.load(Ordering::SeqCst);
+    pub fn packets(&self) -> u64 {
+        self.packets
+    }
 
-        SystemTime::UNIX_EPOCH + Duration::from_millis(millis)
+    pub fn last_packet_timestamp(&self) -> Option<SystemTime> {
+        self.last_packet_timestamp
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct RTCPStats {
+    rtt_ms: f64,
+    loss: u8,
+    fir_count: u64,
+    pli_count: u64,
+    nack_count: u64,
+}
+
+impl RTCPStats {
+    fn update(
+        &mut self,
+        rtt_ms: Option<f64>,
+        loss: Option<u8>,
+        fir_count: Option<u64>,
+        pli_count: Option<u64>,
+        nack_count: Option<u64>,
+    ) {
+        if let Some(rtt_ms) = rtt_ms {
+            self.rtt_ms = rtt_ms;
+        }
+
+        if let Some(loss) = loss {
+            self.loss = loss;
+        }
+
+        if let Some(fir_count) = fir_count {
+            self.fir_count += fir_count;
+        }
+
+        if let Some(pli_count) = pli_count {
+            self.pli_count += pli_count;
+        }
+
+        if let Some(nack_count) = nack_count {
+            self.nack_count += nack_count;
+        }
+    }
+
+    pub fn rtt_ms(&self) -> f64 {
+        self.rtt_ms
+    }
+
+    pub fn loss(&self) -> u8 {
+        self.loss
+    }
+
+    pub fn fir_count(&self) -> u64 {
+        self.fir_count
+    }
+
+    pub fn pli_count(&self) -> u64 {
+        self.pli_count
+    }
+
+    pub fn nack_count(&self) -> u64 {
+        self.nack_count
     }
 }
 
@@ -96,25 +195,16 @@ mod test {
 
     #[test]
     fn test_rtp_stats() {
-        let stats: RTPStats = Default::default();
-        let reader = stats.reader();
+        let mut stats: RTPStats = Default::default();
         assert_eq!(
-            (
-                reader.header_bytes(),
-                reader.payload_bytes(),
-                reader.packets()
-            ),
+            (stats.header_bytes(), stats.payload_bytes(), stats.packets()),
             (0, 0, 0),
         );
 
-        stats.update(24, 960, 1);
+        stats.update(24, 960, 1, SystemTime::now());
 
         assert_eq!(
-            (
-                reader.header_bytes(),
-                reader.payload_bytes(),
-                reader.packets()
-            ),
+            (stats.header_bytes(), stats.payload_bytes(), stats.packets()),
             (24, 960, 1),
         );
     }
@@ -123,5 +213,11 @@ mod test {
     fn test_rtp_stats_send_sync() {
         fn test_send_sync<T: Send + Sync>() {}
         test_send_sync::<RTPStats>();
+    }
+
+    #[test]
+    fn test_rtcp_stats_send_sync() {
+        fn test_send_sync<T: Send + Sync>() {}
+        test_send_sync::<RTCPStats>();
     }
 }
