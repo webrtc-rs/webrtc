@@ -86,6 +86,9 @@ pub struct RTCDataChannel {
 impl RTCDataChannel {
     // create the DataChannel object before the networking is set up.
     pub(crate) fn new(params: DataChannelParameters, setting_engine: Arc<SettingEngine>) -> Self {
+        // the id value if non-negotiated doesn't matter, since it will be overwritten
+        // on opening
+        let id = params.negotiated.unwrap_or(0);
         RTCDataChannel {
             stats_id: format!(
                 "DataChannel-{}",
@@ -95,8 +98,8 @@ impl RTCDataChannel {
             ),
             label: params.label,
             protocol: params.protocol,
-            negotiated: params.negotiated,
-            id: AtomicU16::new(params.id),
+            negotiated: params.negotiated.is_some(),
+            id: AtomicU16::new(id),
             ordered: params.ordered,
             max_packet_lifetime: params.max_packet_life_time,
             max_retransmits: params.max_retransmits,
@@ -157,10 +160,7 @@ impl RTCDataChannel {
                 negotiated: self.negotiated,
             };
 
-            // TODO(stuqdog): update this logic so that we can reliably track whether the
-            // id value was provided or not during datachannel creation, rather than using
-            // 0 as a null stand-in.
-            if self.id.load(Ordering::SeqCst) == 0 && !self.negotiated {
+            if !self.negotiated {
                 self.id.store(
                     sctp_transport
                         .generate_and_set_data_channel_id(
