@@ -297,6 +297,7 @@ async fn run(
     dst_addr: SocketAddr,
     queries: &Arc<Mutex<Vec<Query>>>,
 ) {
+    let mut interface_addr = None;
     for _ in 0..=MAX_MESSAGE_RECORDS {
         let q = match p.question() {
             Ok(q) => q,
@@ -313,17 +314,21 @@ async fn run(
 
         for local_name in local_names {
             if *local_name == q.name.data {
-                let interface_addr = match get_interface_addr_for_ip(src).await {
-                    Ok(e) => e,
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to get local interface to communicate with {}: {:?}",
-                            &src,
-                            e
-                        );
-                        continue;
-                    }
+                if interface_addr.is_none() {
+                    let addr = match get_interface_addr_for_ip(src).await {
+                        Ok(addr) => addr,
+                        Err(e) => {
+                            log::warn!(
+                                "Failed to get local interface to communicate with {}: {:?}",
+                                &src,
+                                e
+                            );
+                            continue;
+                        }
+                    };
+                    interface_addr.replace(addr);
                 };
+                let interface_addr = interface_addr.as_ref().unwrap();
 
                 log::trace!(
                     "Found local name: {} to send answer, IP {}, interface addr {}",
@@ -374,7 +379,7 @@ async fn run(
 
 async fn send_answer(
     socket: &Arc<UdpSocket>,
-    interface_addr: SocketAddr,
+    interface_addr: &SocketAddr,
     name: &str,
     dst: IpAddr,
     dst_addr: SocketAddr,
