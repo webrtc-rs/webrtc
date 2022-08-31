@@ -572,13 +572,14 @@ pub struct RemoteOutboundRTPStats {
     // TODO: Add codecId
 
     // RTCSentRtpStreamStats
-    pub packets_sent: u64,
-    pub bytes_sent: u64,
+    // pub packets_sent: u64,
+    // pub bytes_sent: u64,
 
     // RTCRemoteOutboundRtpStreamStats
     pub local_id: String,
     // TODO: `remote_timestamp`
-    pub reports_sent: u64,
-    pub round_trip_time: Option<f64>,
-    pub total_round_trip_time: f64,
+    // TODO: Below
+    // pub reports_sent: u64,
+    // pub round_trip_time: Option<f64>,
+    // pub total_round_trip_time: f64,
 }
