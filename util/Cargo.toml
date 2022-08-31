@@ -53,6 +53,7 @@ tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 env_logger = "0.9.0"
 chrono = "0.4.19"
 criterion = { version = "0.3.5", features = ["stable"]}
+async-global-executor = ">=2.0.0,<=2.2.0" # Transitive dependency due to Criterion, fixed to 2.2.0 because 2.3.0 requires Rust 1.59.0
 
 [[bench]]
 name = "bench"
