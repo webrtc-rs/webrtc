@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use tokio::time::{Duration, Instant};
+use tokio::time::Duration;
 
 mod interceptor;
 
@@ -12,78 +12,382 @@ pub fn make_stats_interceptor(id: &str) -> Arc<StatsInterceptor> {
     Arc::new(StatsInterceptor::new(id.to_owned()))
 }
 
-#[derive(Debug, Clone)]
-pub struct StreamStats {
-    rtp_recv_stats: RTPStats,
-    rtp_write_stats: RTPStats,
-    rtcp_recv_stats: RTCPStats,
-    rtcp_write_stats: RTCPStats,
+/// Types related to inbound RTP streams.
+mod inbound {
+    use std::time::SystemTime;
 
-    last_update: Instant,
-}
+    use tokio::time::{Duration, Instant};
 
-impl Default for StreamStats {
-    fn default() -> Self {
-        Self {
-            rtp_recv_stats: Default::default(),
-            rtp_write_stats: Default::default(),
-            rtcp_recv_stats: Default::default(),
-            rtcp_write_stats: Default::default(),
-            last_update: Instant::now(),
+    use super::{RTCPStats, RTPStats};
+
+    #[derive(Debug, Clone)]
+    /// Stats collected for an inbound RTP stream.
+    /// Contains both stats relating to the inbound stream and remote stats for the corresponding
+    /// outbound stream at the remote end.
+    pub(super) struct StreamStats {
+        /// Received RTP stats.
+        pub(super) rtp_stats: RTPStats,
+        /// Common RTCP stats derived from inbound and outbound RTCP packets.
+        pub(super) rtcp_stats: RTCPStats,
+
+        /// The last time any stats where update, used for garbage collection to remove obsolete stats.
+        last_update: Instant,
+    }
+
+    impl Default for StreamStats {
+        fn default() -> Self {
+            Self {
+                rtp_stats: RTPStats::default(),
+                rtcp_stats: RTCPStats::default(),
+                last_update: Instant::now(),
+            }
+        }
+    }
+
+    impl StreamStats {
+        pub(super) fn snapshot(&self) -> StatsSnapshot {
+            self.into()
+        }
+
+        pub(super) fn mark_updated(&mut self) {
+            self.last_update = Instant::now();
+        }
+
+        pub(super) fn duration_since_last_update(&self) -> Duration {
+            self.last_update.elapsed()
+        }
+    }
+
+    /// A point in time snapshot of the stream stats for an inbound RTP stream.
+    ///
+    /// Created by [`StreamStats::snapshot`].
+    #[derive(Debug)]
+    pub struct StatsSnapshot {
+        /// Received RTP stats.
+        rtp_stats: RTPStats,
+        /// Common RTCP stats derived from inbound and outbound RTCP packets.
+        rtcp_stats: RTCPStats,
+    }
+
+    impl StatsSnapshot {
+        pub fn packets_received(&self) -> u64 {
+            self.rtp_stats.packets
+        }
+
+        pub fn payload_bytes_received(&self) -> u64 {
+            self.rtp_stats.payload_bytes
+        }
+
+        pub fn header_bytes_received(&self) -> u64 {
+            self.rtp_stats.header_bytes
+        }
+
+        pub fn last_packet_received_timestamp(&self) -> Option<SystemTime> {
+            self.rtp_stats.last_packet_timestamp
+        }
+
+        pub fn nacks_sent(&self) -> u64 {
+            self.rtcp_stats.nack_count
+        }
+
+        pub fn firs_sent(&self) -> u64 {
+            self.rtcp_stats.fir_count
+        }
+
+        pub fn plis_sent(&self) -> u64 {
+            self.rtcp_stats.pli_count
+        }
+    }
+
+    impl From<&StreamStats> for StatsSnapshot {
+        fn from(stream_stats: &StreamStats) -> Self {
+            Self {
+                rtp_stats: stream_stats.rtp_stats.clone(),
+                rtcp_stats: stream_stats.rtcp_stats.clone(),
+            }
         }
     }
 }
 
-impl StreamStats {
-    pub fn snapshot(&self) -> StatsSnapshot {
-        self.into()
+/// Types related to outbound RTP streams.
+mod outbound {
+    use std::time::SystemTime;
+
+    use tokio::time::{Duration, Instant};
+
+    use super::{RTCPStats, RTPStats};
+
+    #[derive(Debug, Clone)]
+    /// Stats collected for an outbound RTP stream.
+    /// Contains both stats relating to the outbound stream and remote stats for the corresponding
+    /// inbound stream.
+    pub(super) struct StreamStats {
+        /// Sent RTP stats.
+        pub(super) rtp_stats: RTPStats,
+        /// Common RTCP stats derived from inbound and outbound RTCP packets.
+        pub(super) rtcp_stats: RTCPStats,
+
+        /// The last time any stats where update, used for garbage collection to remove obsolete stats.
+        last_update: Instant,
+
+        /// The first value of extended seq num that was sent in an SR for this SSRC. [`None`] before
+        /// the first SR is sent.
+        ///
+        /// Used to calculate packet statistic for remote stats.
+        initial_outbound_ext_seq_num: Option<u32>,
+
+        /// The number of inbound packets received by the remote side for this stream.
+        remote_packets_received: u64,
+
+        /// The number of lost packets reported by the remote for this tream.
+        remote_total_lost: u32,
+
+        /// The estimated remote jitter for this stream in timestamp units.
+        remote_jitter: u32,
+
+        /// The last valid remote round trip time measurement in ms.
+        remote_round_trip_time: Option<f64>,
+
+        /// The cummulative total round trip times reported in ms.
+        remote_total_round_trip_time: f64,
+
+        /// The total number of measurements of the remote round trip time.
+        remote_round_trip_time_measurements: u64,
+
+        /// The latest fraction lost value from RR.
+        remote_fraction_lost: Option<u8>,
     }
 
-    fn mark_updated(&mut self) {
-        self.last_update = Instant::now();
+    impl Default for StreamStats {
+        fn default() -> Self {
+            Self {
+                rtp_stats: RTPStats::default(),
+                rtcp_stats: RTCPStats::default(),
+                last_update: Instant::now(),
+                initial_outbound_ext_seq_num: None,
+                remote_packets_received: 0,
+                remote_total_lost: 0,
+                remote_jitter: 0,
+                remote_round_trip_time: None,
+                remote_total_round_trip_time: 0.0,
+                remote_round_trip_time_measurements: 0,
+                remote_fraction_lost: None,
+            }
+        }
     }
 
-    fn duration_since_last_update(&self) -> Duration {
-        self.last_update.elapsed()
+    impl StreamStats {
+        pub(super) fn snapshot(&self) -> StatsSnapshot {
+            self.into()
+        }
+
+        pub(super) fn mark_updated(&mut self) {
+            self.last_update = Instant::now();
+        }
+
+        pub(super) fn duration_since_last_update(&self) -> Duration {
+            self.last_update.elapsed()
+        }
+
+        pub(super) fn update_remote_inbound_packets_received(
+            &mut self,
+            rr_ext_seq_num: Option<u32>,
+            rr_total_lost: Option<u32>,
+        ) {
+            if let (Some(initial_ext_seq_num), Some(rr_ext_seq_num), Some(rr_total_lost)) = (
+                self.initial_outbound_ext_seq_num,
+                rr_ext_seq_num,
+                rr_total_lost,
+            ) {
+                // Total number of RTP packets received for this SSRC.
+                // At the receiving endpoint, this is calculated as defined in [RFC3550] section 6.4.1.
+                // At the sending endpoint the packetsReceived is estimated by subtracting the
+                // Cumulative Number of Packets Lost from the Extended Highest Sequence Number Received,
+                // both reported in the RTCP Receiver Report, and then subtracting the
+                // initial Extended Sequence Number that was sent to this SSRC in a RTCP Sender Report and then adding one,
+                // to mirror what is discussed in Appendix A.3 in [RFC3550], but for the sender side.
+                // If no RTCP Receiver Report has been received yet, then return 0.
+                self.remote_packets_received =
+                    (rr_ext_seq_num as u64) - (rr_total_lost as u64) - (initial_ext_seq_num as u64)
+                        + 1;
+            }
+        }
+
+        #[inline(always)]
+        pub(super) fn record_sr_ext_seq_num(&mut self, seq_num: u32) {
+            // Only record the initial value
+            if self.initial_outbound_ext_seq_num.is_none() {
+                self.initial_outbound_ext_seq_num = Some(seq_num);
+            }
+        }
+
+        pub(super) fn record_remote_round_trip_time(&mut self, round_trip_time: f64) {
+            self.remote_round_trip_time = Some(round_trip_time);
+            self.remote_total_round_trip_time += round_trip_time;
+            self.remote_round_trip_time_measurements += 1;
+        }
+
+        pub(super) fn update_remote_fraction_lost(&mut self, fraction_lost: u8) {
+            self.remote_fraction_lost = Some(fraction_lost);
+        }
+
+        pub(super) fn update_remote_jitter(&mut self, jitter: u32) {
+            self.remote_jitter = jitter;
+        }
+
+        pub(super) fn update_remote_total_lost(&mut self, lost: u32) {
+            self.remote_total_lost = lost;
+        }
     }
-}
 
-#[derive(Debug)]
-pub struct StatsSnapshot {
-    pub rtp_recv_stats: RTPStats,
-    pub rtp_write_stats: RTPStats,
-    pub rtcp_recv_stats: RTCPStats,
-    pub rtcp_write_stats: RTCPStats,
-}
+    /// A point in time snapshot of the stream stats for an outbound RTP stream.
+    ///
+    /// Created by [`StreamStats::snapshot`].
+    #[derive(Debug)]
+    pub struct StatsSnapshot {
+        /// Sent RTP stats.
+        rtp_stats: RTPStats,
+        /// Common RTCP stats derived from inbound and outbound RTCP packets.
+        rtcp_stats: RTCPStats,
 
-impl From<&StreamStats> for StatsSnapshot {
-    fn from(stats: &StreamStats) -> Self {
-        Self {
-            rtp_recv_stats: stats.rtp_recv_stats.clone(),
-            rtp_write_stats: stats.rtp_write_stats.clone(),
-            rtcp_recv_stats: stats.rtcp_recv_stats.clone(),
-            rtcp_write_stats: stats.rtcp_write_stats.clone(),
+        /// The number of inbound packets received by the remote side for this stream.
+        remote_packets_received: u64,
+
+        /// The number of lost packets reported by the remote for this tream.
+        remote_total_lost: u32,
+
+        /// The estimated remote jitter for this stream in timestamp units.
+        remote_jitter: u32,
+
+        /// The most recent remote round trip time in milliseconds.
+        remote_round_trip_time: Option<f64>,
+
+        /// The cummulative total round trip times reported in ms.
+        remote_total_round_trip_time: f64,
+
+        /// The total number of measurements of the remote round trip time.
+        remote_round_trip_time_measurements: u64,
+
+        /// The fraction of packets lost reported for this stream.
+        /// Calculated as defined in [RFC3550](https://www.rfc-editor.org/rfc/rfc3550) section 6.4.1 and Appendix A.3.
+        remote_fraction_lost: Option<f64>,
+    }
+
+    impl StatsSnapshot {
+        pub fn packets_sent(&self) -> u64 {
+            self.rtp_stats.packets
+        }
+
+        pub fn payload_bytes_sent(&self) -> u64 {
+            self.rtp_stats.payload_bytes
+        }
+
+        pub fn header_bytes_sent(&self) -> u64 {
+            self.rtp_stats.header_bytes
+        }
+
+        pub fn last_packet_sent_timestamp(&self) -> Option<SystemTime> {
+            self.rtp_stats.last_packet_timestamp
+        }
+
+        pub fn nacks_received(&self) -> u64 {
+            self.rtcp_stats.nack_count
+        }
+
+        pub fn firs_received(&self) -> u64 {
+            self.rtcp_stats.fir_count
+        }
+
+        pub fn plis_received(&self) -> u64 {
+            self.rtcp_stats.pli_count
+        }
+
+        /// Packets received on the remote side.
+        pub fn remote_packets_received(&self) -> u64 {
+            self.remote_packets_received
+        }
+
+        /// The number of lost packets reported by the remote for this tream.
+        pub fn remote_total_lost(&self) -> u32 {
+            self.remote_total_lost
+        }
+
+        /// The estimated remote jitter for this stream in timestamp units.
+        pub fn remote_jitter(&self) -> u32 {
+            self.remote_jitter
+        }
+
+        /// The latest RTT in ms if enough data is available to measure it.
+        pub fn remote_round_trip_time(&self) -> Option<f64> {
+            self.remote_round_trip_time
+        }
+
+        /// Total RTT in ms.
+        pub fn remote_total_round_trip_time(&self) -> f64 {
+            self.remote_total_round_trip_time
+        }
+
+        /// The number of RTT measurements so far.
+        pub fn remote_round_trip_time_measurements(&self) -> u64 {
+            self.remote_round_trip_time_measurements
+        }
+
+        /// The latest fraction lost value from the remote or None if it hasn't been reported yet.
+        pub fn remote_fraction_lost(&self) -> Option<f64> {
+            self.remote_fraction_lost
+        }
+    }
+
+    impl From<&StreamStats> for StatsSnapshot {
+        fn from(stream_stats: &StreamStats) -> Self {
+            Self {
+                rtp_stats: stream_stats.rtp_stats.clone(),
+                rtcp_stats: stream_stats.rtcp_stats.clone(),
+                remote_packets_received: stream_stats.remote_packets_received,
+                remote_total_lost: stream_stats.remote_total_lost,
+                remote_jitter: stream_stats.remote_jitter,
+                remote_round_trip_time: stream_stats.remote_round_trip_time,
+                remote_total_round_trip_time: stream_stats.remote_total_round_trip_time,
+                remote_round_trip_time_measurements: stream_stats
+                    .remote_round_trip_time_measurements,
+                remote_fraction_lost: stream_stats
+                    .remote_fraction_lost
+                    .map(|fraction| (fraction as f64) / (u8::MAX as f64)),
+            }
         }
     }
 }
 
 #[derive(Default, Debug)]
 struct StatsContainer {
-    stream_stats: HashMap<u32, StreamStats>,
+    inbound_stats: HashMap<u32, inbound::StreamStats>,
+    outbound_stats: HashMap<u32, outbound::StreamStats>,
 }
 
 impl StatsContainer {
-    fn get_or_create_stream_stats(&mut self, ssrc: u32) -> &mut StreamStats {
-        self.stream_stats.entry(ssrc).or_default()
+    fn get_or_create_inbound_stream_stats(&mut self, ssrc: u32) -> &mut inbound::StreamStats {
+        self.inbound_stats.entry(ssrc).or_default()
     }
 
-    fn get(&self, ssrc: u32) -> Option<&StreamStats> {
-        self.stream_stats.get(&ssrc)
+    fn get_or_create_outbound_stream_stats(&mut self, ssrc: u32) -> &mut outbound::StreamStats {
+        self.outbound_stats.entry(ssrc).or_default()
+    }
+
+    fn get_inbound_stats(&self, ssrc: u32) -> Option<&inbound::StreamStats> {
+        self.inbound_stats.get(&ssrc)
+    }
+
+    fn get_outbound_stats(&self, ssrc: u32) -> Option<&outbound::StreamStats> {
+        self.outbound_stats.get(&ssrc)
     }
 
     fn remove_stale_entries(&mut self) {
-        self.stream_stats
-            .retain(|_, s| s.duration_since_last_update() < Duration::from_secs(60))
+        const MAX_AGE: Duration = Duration::from_secs(60);
+
+        self.inbound_stats
+            .retain(|_, s| s.duration_since_last_update() < MAX_AGE);
+        self.outbound_stats
+            .retain(|_, s| s.duration_since_last_update() < MAX_AGE);
     }
 }
 
@@ -131,14 +435,30 @@ impl RTPStats {
 
 #[derive(Debug, Default, Clone)]
 pub struct RTCPStats {
+    /// The most recently estimated Round Trip Time
     rtt_ms: f64,
+
+    /// Fractional loss
     loss: u8,
+
+    /// The number of FIRs sent or recevied
     fir_count: u64,
+
+    /// The number of PLIs sent or recevied
     pli_count: u64,
+
+    /// The number of NACKs sent or recevied
     nack_count: u64,
+
+    /// The number of packets sent or received by the remote.
+    remote_packet_count: u64,
+
+    /// The number of payload bytes sent or received by the remote.
+    remote_bytes: u64,
 }
 
 impl RTCPStats {
+    #[allow(clippy::too_many_arguments)]
     fn update(
         &mut self,
         rtt_ms: Option<f64>,
@@ -146,6 +466,8 @@ impl RTCPStats {
         fir_count: Option<u64>,
         pli_count: Option<u64>,
         nack_count: Option<u64>,
+        remote_packet_count: Option<u32>,
+        remote_bytes: Option<u32>,
     ) {
         if let Some(rtt_ms) = rtt_ms {
             self.rtt_ms = rtt_ms;
@@ -165,6 +487,14 @@ impl RTCPStats {
 
         if let Some(nack_count) = nack_count {
             self.nack_count += nack_count;
+        }
+
+        if let Some(remote_packet_count) = remote_packet_count {
+            self.remote_packet_count += remote_packet_count as u64;
+        }
+
+        if let Some(remote_bytes) = remote_bytes {
+            self.remote_bytes += remote_bytes as u64;
         }
     }
 
@@ -186,6 +516,14 @@ impl RTCPStats {
 
     pub fn nack_count(&self) -> u64 {
         self.nack_count
+    }
+
+    pub fn remote_packet_count(&self) -> u64 {
+        self.remote_packet_count
+    }
+
+    pub fn remote_bytes(&self) -> u64 {
+        self.remote_bytes
     }
 }
 
