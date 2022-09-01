@@ -314,9 +314,13 @@ async fn run(
 
         for local_name in local_names {
             if *local_name == q.name.data {
-                if interface_addr.is_none() {
-                    let addr = match get_interface_addr_for_ip(src).await {
-                        Ok(addr) => addr,
+                let interface_addr = match interface_addr {
+                    Some(addr) => addr,
+                    None => match get_interface_addr_for_ip(src).await {
+                        Ok(addr) => {
+                            interface_addr.replace(addr);
+                            addr
+                        }
                         Err(e) => {
                             log::warn!(
                                 "Failed to get local interface to communicate with {}: {:?}",
@@ -325,10 +329,8 @@ async fn run(
                             );
                             continue;
                         }
-                    };
-                    interface_addr.replace(addr);
+                    },
                 };
-                let interface_addr = interface_addr.as_ref().unwrap();
 
                 log::trace!(
                     "Found local name: {} to send answer, IP {}, interface addr {}",
@@ -337,7 +339,7 @@ async fn run(
                     interface_addr
                 );
                 if let Err(e) =
-                    send_answer(socket, interface_addr, &q.name.data, src.ip(), dst_addr).await
+                    send_answer(socket, &interface_addr, &q.name.data, src.ip(), dst_addr).await
                 {
                     log::error!("Error sending answer to client: {:?}", e);
                     continue;
