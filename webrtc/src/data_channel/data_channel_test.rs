@@ -1521,10 +1521,9 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
 
     signal_ortc_pair(Arc::clone(&stack_a), Arc::clone(&stack_b)).await?;
 
-    let id = 100u16;
     let dc_params = DataChannelParameters {
         label: "Foo".to_owned(),
-        negotiated: Some(id),
+        negotiated: None,
         ..Default::default()
     };
 
