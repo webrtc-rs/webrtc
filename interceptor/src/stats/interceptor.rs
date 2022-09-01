@@ -3,11 +3,12 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use super::{StatsContainer, StatsSnapshot, StreamStats};
+use super::{inbound, outbound, StatsContainer};
 use async_trait::async_trait;
 use rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use rtcp::receiver_report::ReceiverReport;
+use rtcp::sender_report::SenderReport;
 use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
 use rtp::extension::abs_send_time_extension::unix2ntp;
 use tokio::sync::{mpsc, oneshot};
@@ -26,9 +27,13 @@ enum Message {
         ssrc: u32,
         update: StatsUpdate,
     },
-    RequestSnapshot {
+    RequestInboundSnapshot {
         ssrcs: Vec<u32>,
-        chan: oneshot::Sender<Vec<Option<StatsSnapshot>>>,
+        chan: oneshot::Sender<Vec<Option<inbound::StatsSnapshot>>>,
+    },
+    RequestOutboundSnapshot {
+        ssrcs: Vec<u32>,
+        chan: oneshot::Sender<Vec<Option<outbound::StatsSnapshot>>>,
     },
 }
 
@@ -48,10 +53,15 @@ enum StatsUpdate {
     },
     RecvRTCP {
         rtt_ms: Option<f64>,
-        loss: Option<u8>,
+        fraction_lost: Option<u8>,
         fir_count: Option<u64>,
         pli_count: Option<u64>,
         nack_count: Option<u64>,
+        sr_packets_sent: Option<u32>,
+        sr_bytes_sent: Option<u32>,
+        rr_ext_seq_num: Option<u32>,
+        rr_total_lost: Option<u32>,
+        rr_jitter: Option<u32>,
     },
     WriteRTCP {
         rtt_ms: Option<f64>,
@@ -59,6 +69,9 @@ enum StatsUpdate {
         fir_count: Option<u64>,
         pli_count: Option<u64>,
         nack_count: Option<u64>,
+    },
+    OutboundSRExtSeqNum {
+        seq_num: u32,
     },
 }
 
@@ -104,16 +117,41 @@ impl StatsInterceptor {
         }
     }
 
-    pub async fn fetch_stats(&self, ssrcs: Vec<u32>) -> Vec<Option<StatsSnapshot>> {
+    pub async fn fetch_inbound_stats(
+        &self,
+        ssrcs: Vec<u32>,
+    ) -> Vec<Option<inbound::StatsSnapshot>> {
         let (tx, rx) = oneshot::channel();
 
         if let Err(e) = self
             .tx
-            .send(Message::RequestSnapshot { ssrcs, chan: tx })
+            .send(Message::RequestInboundSnapshot { ssrcs, chan: tx })
             .await
         {
             log::debug!(
-                "Failed to fetch RTP stream stats from stats task with error: {}",
+                "Failed to fetch inbound RTP stream stats from stats task with error: {}",
+                e
+            );
+
+            return vec![];
+        }
+
+        rx.await.unwrap_or_default()
+    }
+
+    pub async fn fetch_outbound_stats(
+        &self,
+        ssrcs: Vec<u32>,
+    ) -> Vec<Option<outbound::StatsSnapshot>> {
+        let (tx, rx) = oneshot::channel();
+
+        if let Err(e) = self
+            .tx
+            .send(Message::RequestOutboundSnapshot { ssrcs, chan: tx })
+            .await
+        {
+            log::debug!(
+                "Failed to fetch outbound RTP stream stats from stats task with error: {}",
                 e
             );
 
@@ -140,13 +178,22 @@ async fn run_stats_reducer(mut rx: mpsc::Receiver<Message>) {
                     Message::StatUpdate { ssrc, update } => {
                         handle_stats_update(&mut ssrc_stats, ssrc, update);
                     }
-                    Message::RequestSnapshot { ssrcs, chan } => {
+                    Message::RequestInboundSnapshot { ssrcs, chan} => {
                         let result = ssrcs
                             .into_iter()
-                            .map(|ssrc| ssrc_stats.get(ssrc).map(StreamStats::snapshot))
+                            .map(|ssrc| ssrc_stats.get_inbound_stats(ssrc).map(inbound::StreamStats::snapshot))
                             .collect();
 
                         let _ = chan.send(result);
+                    }
+                    Message::RequestOutboundSnapshot { ssrcs, chan} => {
+                        let result = ssrcs
+                            .into_iter()
+                            .map(|ssrc| ssrc_stats.get_outbound_stats(ssrc).map(outbound::StreamStats::snapshot))
+                            .collect();
+
+                        let _ = chan.send(result);
+
                     }
                 }
 
@@ -159,8 +206,6 @@ async fn run_stats_reducer(mut rx: mpsc::Receiver<Message>) {
 }
 
 fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: StatsUpdate) {
-    let stats = ssrc_stats.get_or_create_stream_stats(ssrc);
-
     match update {
         StatsUpdate::RecvRTP {
             packets,
@@ -168,12 +213,12 @@ fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: Stats
             payload_bytes,
             last_packet_timestamp,
         } => {
-            stats.rtp_recv_stats.update(
-                header_bytes,
-                payload_bytes,
-                packets,
-                last_packet_timestamp,
-            );
+            let stats = ssrc_stats.get_or_create_inbound_stream_stats(ssrc);
+
+            stats
+                .rtp_stats
+                .update(header_bytes, payload_bytes, packets, last_packet_timestamp);
+            stats.mark_updated();
         }
         StatsUpdate::WriteRTP {
             packets,
@@ -181,23 +226,54 @@ fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: Stats
             payload_bytes,
             last_packet_timestamp,
         } => {
-            stats.rtp_write_stats.update(
-                header_bytes,
-                payload_bytes,
-                packets,
-                last_packet_timestamp,
-            );
+            let stats = ssrc_stats.get_or_create_outbound_stream_stats(ssrc);
+
+            stats
+                .rtp_stats
+                .update(header_bytes, payload_bytes, packets, last_packet_timestamp);
+            stats.mark_updated();
         }
         StatsUpdate::RecvRTCP {
             rtt_ms,
-            loss,
+            fraction_lost,
             fir_count,
             pli_count,
             nack_count,
+            sr_packets_sent,
+            sr_bytes_sent,
+            rr_ext_seq_num,
+            rr_total_lost,
+            rr_jitter,
         } => {
-            stats
-                .rtcp_recv_stats
-                .update(rtt_ms, loss, fir_count, pli_count, nack_count);
+            let stats = ssrc_stats.get_or_create_outbound_stream_stats(ssrc);
+
+            stats.rtcp_stats.update(
+                rtt_ms,
+                fraction_lost,
+                fir_count,
+                pli_count,
+                nack_count,
+                sr_packets_sent,
+                sr_bytes_sent,
+            );
+            if let Some(rtt_ms) = rtt_ms {
+                stats.record_remote_round_trip_time(rtt_ms);
+            }
+
+            if let Some(fraction_lost) = fraction_lost {
+                stats.update_remote_fraction_lost(fraction_lost);
+            }
+
+            if let Some(total_lost) = rr_total_lost {
+                stats.update_remote_total_lost(total_lost);
+            }
+
+            if let Some(jitter) = rr_jitter {
+                stats.update_remote_jitter(jitter);
+            }
+
+            stats.update_remote_inbound_packets_received(rr_ext_seq_num, rr_total_lost);
+            stats.mark_updated();
         }
         StatsUpdate::WriteRTCP {
             rtt_ms,
@@ -206,13 +282,21 @@ fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: Stats
             pli_count,
             nack_count,
         } => {
+            let stats = ssrc_stats.get_or_create_inbound_stream_stats(ssrc);
+
             stats
-                .rtcp_write_stats
-                .update(rtt_ms, loss, fir_count, pli_count, nack_count);
+                .rtcp_stats
+                .update(rtt_ms, loss, fir_count, pli_count, nack_count, None, None);
+
+            stats.mark_updated();
+        }
+        StatsUpdate::OutboundSRExtSeqNum { seq_num } => {
+            let stats = ssrc_stats.get_or_create_outbound_stream_stats(ssrc);
+            stats.record_sr_ext_seq_num(seq_num);
+
+            stats.mark_updated();
         }
     }
-
-    stats.mark_updated();
 }
 
 #[async_trait]
@@ -321,21 +405,49 @@ where
         #[derive(Default, Debug)]
         struct Entry {
             rtt_ms: Option<f64>,
-            loss: Option<u8>,
+            fraction_lost: Option<u8>,
             fir_count: Option<u64>,
             pli_count: Option<u64>,
             nack_count: Option<u64>,
+            /// Packets Sent(from Sender Report)
+            sr_packets_sent: Option<u32>,
+            /// Bytes Sent(from Sender Report)
+            sr_bytes_sent: Option<u32>,
+
+            /// Extended sequence number value from Receiver Report, used to calculate remote
+            /// stats.
+            rr_ext_seq_num: Option<u32>,
+            /// Total loss value from Receiver Report, used to calculate remote
+            /// stats.
+            rr_total_lost: Option<u32>,
+            /// Jitter from Receiver Report.
+            rr_jitter: Option<u32>,
         }
         let updates = pkts
             .iter()
             .fold(HashMap::<u32, Entry>::new(), |mut acc, p| {
                 if let Some(rr) = p.as_any().downcast_ref::<ReceiverReport>() {
                     for recp in &rr.reports {
-                        let rtt_ms = calculate_rtt_ms(now, recp.delay, recp.last_sender_report);
-
                         let e = acc.entry(recp.ssrc).or_default();
-                        e.rtt_ms = Some(rtt_ms);
-                        e.loss = Some(recp.fraction_lost);
+                        e.rtt_ms = (recp.delay != 0)
+                            .then(|| calculate_rtt_ms(now, recp.delay, recp.last_sender_report));
+                        e.fraction_lost = Some(recp.fraction_lost);
+                        e.rr_jitter = Some(recp.jitter);
+
+                        match e.rr_ext_seq_num {
+                            // Because of batching we could encounter more than one ReceiverReport
+                            // in a given batch, make sure to use the values from the latest one if
+                            // so.
+                            Some(seq) if seq < recp.last_sequence_number => {
+                                e.rr_ext_seq_num = Some(recp.last_sequence_number);
+                                e.rr_total_lost = Some(recp.total_lost);
+                            }
+                            None => {
+                                e.rr_ext_seq_num = Some(recp.last_sequence_number);
+                                e.rr_total_lost = Some(recp.total_lost);
+                            }
+                            _ => {}
+                        }
                     }
                 } else if let Some(fir) = p.as_any().downcast_ref::<FullIntraRequest>() {
                     for fir_entry in &fir.fir {
@@ -350,6 +462,10 @@ where
 
                     let e = acc.entry(nack.media_ssrc).or_default();
                     e.nack_count = e.nack_count.map(|v| v + count).or(Some(count));
+                } else if let Some(sr) = p.as_any().downcast_ref::<SenderReport>() {
+                    let e = acc.entry(sr.ssrc).or_default();
+                    e.sr_packets_sent = Some(sr.packet_count);
+                    e.sr_bytes_sent = Some(sr.octet_count);
                 }
 
                 acc
@@ -359,10 +475,16 @@ where
             ssrc,
             Entry {
                 rtt_ms,
-                loss,
+                fraction_lost,
                 fir_count,
                 pli_count,
                 nack_count,
+                sr_packets_sent,
+                sr_bytes_sent,
+
+                rr_ext_seq_num,
+                rr_total_lost,
+                rr_jitter,
             },
         ) in updates.into_iter()
         {
@@ -372,10 +494,15 @@ where
                     ssrc,
                     update: StatsUpdate::RecvRTCP {
                         rtt_ms,
-                        loss,
+                        fraction_lost,
                         fir_count,
                         pli_count,
                         nack_count,
+                        sr_packets_sent,
+                        sr_bytes_sent,
+                        rr_ext_seq_num,
+                        rr_total_lost,
+                        rr_jitter,
                     },
                 })
                 .await;
@@ -410,6 +537,7 @@ where
             fir_count: Option<u64>,
             pli_count: Option<u64>,
             nack_count: Option<u64>,
+            sr_ext_seq_num: Option<u32>,
         }
         let updates = pkts
             .iter()
@@ -435,6 +563,21 @@ where
 
                     let e = acc.entry(nack.media_ssrc).or_default();
                     e.nack_count = e.nack_count.map(|v| v + count).or(Some(count));
+                } else if let Some(sr) = p.as_any().downcast_ref::<SenderReport>() {
+                    for rep in &sr.reports {
+                        let e = acc.entry(rep.ssrc).or_default();
+
+                        match e.sr_ext_seq_num {
+                            // We want the initial value for `last_sequence_number` from the first
+                            // SR. It's possible that an RTCP batch contains more than one SR, in
+                            // which case we should use the lowest value.
+                            Some(seq_num) if seq_num > rep.last_sequence_number => {
+                                e.sr_ext_seq_num = Some(rep.last_sequence_number)
+                            }
+                            None => e.sr_ext_seq_num = Some(rep.last_sequence_number),
+                            _ => {}
+                        }
+                    }
                 }
 
                 acc
@@ -448,6 +591,7 @@ where
                 fir_count,
                 pli_count,
                 nack_count,
+                sr_ext_seq_num,
             },
         ) in updates.into_iter()
         {
@@ -464,6 +608,16 @@ where
                     },
                 })
                 .await;
+
+            if let Some(seq_num) = sr_ext_seq_num {
+                let _ = self
+                    .tx
+                    .send(Message::StatUpdate {
+                        ssrc,
+                        update: StatsUpdate::OutboundSRExtSeqNum { seq_num },
+                    })
+                    .await;
+            }
         }
 
         self.rtcp_writer.write(pkts, attributes).await
@@ -589,11 +743,27 @@ fn calculate_rtt_ms(now: u32, delay: u32, last_sender_report: u32) -> f64 {
 
 #[cfg(test)]
 mod test {
+    macro_rules! assert_feq {
+        ($left: expr, $right: expr) => {
+            assert_feq!($left, $right, 0.01);
+        };
+        ($left: expr, $right: expr, $eps: expr) => {
+            if ($left - $right).abs() >= $eps {
+                assert!(
+                    false,
+                    "{:?} was not within {:?} of {:?}",
+                    $left, $eps, $right
+                );
+            }
+        };
+    }
+
     use bytes::Bytes;
     use rtcp::payload_feedbacks::full_intra_request::{FirEntry, FullIntraRequest};
     use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
     use rtcp::receiver_report::ReceiverReport;
     use rtcp::reception_report::ReceptionReport;
+    use rtcp::sender_report::SenderReport;
     use rtcp::transport_feedbacks::transport_layer_nack::{NackPair, TransportLayerNack};
 
     use std::sync::Arc;
@@ -662,21 +832,21 @@ mod test {
             })
             .await;
 
-        let snapshots = icpr.fetch_stats(vec![123456]).await;
+        let snapshots = icpr.fetch_inbound_stats(vec![123456]).await;
         let recv_snapshot = snapshots[0]
             .as_ref()
             .expect("Stats should exist for ssrc: 123456");
-        assert_eq!(recv_snapshot.rtp_recv_stats.packets(), 1);
-        assert_eq!(recv_snapshot.rtp_recv_stats.header_bytes(), 12);
-        assert_eq!(recv_snapshot.rtp_recv_stats.payload_bytes(), 4);
+        assert_eq!(recv_snapshot.packets_received(), 1);
+        assert_eq!(recv_snapshot.header_bytes_received(), 12);
+        assert_eq!(recv_snapshot.payload_bytes_received(), 4);
 
-        let snapshots = icpr.fetch_stats(vec![234567]).await;
+        let snapshots = icpr.fetch_outbound_stats(vec![234567]).await;
         let send_snapshot = snapshots[0]
             .as_ref()
             .expect("Stats should exist for ssrc: 234567");
-        assert_eq!(send_snapshot.rtp_write_stats.packets(), 2);
-        assert_eq!(send_snapshot.rtp_write_stats.header_bytes(), 24);
-        assert_eq!(send_snapshot.rtp_write_stats.payload_bytes(), 10);
+        assert_eq!(send_snapshot.packets_sent(), 2);
+        assert_eq!(send_snapshot.header_bytes_sent(), 24);
+        assert_eq!(send_snapshot.payload_bytes_sent(), 10);
 
         Ok(())
     }
@@ -707,14 +877,46 @@ mod test {
         .await;
 
         send_stream
+            .write_rtcp(&[Box::new(SenderReport {
+                ssrc: 234567,
+                reports: vec![
+                    ReceptionReport {
+                        ssrc: 234567,
+                        last_sequence_number: (5 << 16) | 10,
+                        ..Default::default()
+                    },
+                    ReceptionReport {
+                        ssrc: 234567,
+                        last_sequence_number: (5 << 16) | 85,
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            })])
+            .await
+            .expect("Failed to write RTCP packets");
+
+        send_stream
             .receive_rtcp(vec![
                 Box::new(ReceiverReport {
-                    reports: vec![ReceptionReport {
-                        ssrc: 234567,
-                        last_sender_report: 0xb705_2000,
-                        delay: 0x0005_4000,
-                        ..Default::default()
-                    }],
+                    reports: vec![
+                        ReceptionReport {
+                            ssrc: 234567,
+                            last_sequence_number: (5 << 16) | 64,
+                            total_lost: 5,
+                            ..Default::default()
+                        },
+                        ReceptionReport {
+                            ssrc: 234567,
+                            last_sender_report: 0xb705_2000,
+                            delay: 0x0005_4000,
+                            last_sequence_number: (5 << 16) | 70,
+                            total_lost: 8,
+                            fraction_lost: 32,
+                            jitter: 2250,
+                            ..Default::default()
+                        },
+                    ],
                     ..Default::default()
                 }),
                 Box::new(TransportLayerNack {
@@ -758,7 +960,16 @@ mod test {
                 }),
             ])
             .await;
+        let snapshots = icpr.fetch_outbound_stats(vec![234567]).await;
+        let send_snapshot = snapshots[0]
+            .as_ref()
+            .expect("Outbound Stats should exist for ssrc: 234567");
 
+        assert!(
+            send_snapshot.remote_round_trip_time().is_none()
+                && send_snapshot.remote_round_trip_time_measurements() == 0,
+            "Before receiving the first RR we should not have a remote round trip time"
+        );
         let _ = send_stream
             .read_rtcp()
             .await
@@ -806,29 +1017,43 @@ mod test {
             ])
             .await
             .expect("Failed to write RTCP packets for recv_stream");
-        let snapshots = icpr.fetch_stats(vec![234567]).await;
 
+        let snapshots = icpr.fetch_outbound_stats(vec![234567]).await;
         let send_snapshot = snapshots[0]
             .as_ref()
-            .expect("Stats should exist for ssrc: 234567");
-        let rtt_ms = send_snapshot.rtcp_recv_stats.rtt_ms;
+            .expect("Outbound Stats should exist for ssrc: 234567");
+        let rtt_ms = send_snapshot.remote_round_trip_time().expect(
+            "After receiving an RR with a DSLR block we should have a remote round trip time",
+        );
         assert!(
             rtt_ms > 6124.99 && rtt_ms < 6125.01,
             "Expected rtt_ms to be about ~6125.0 it was {}",
             rtt_ms
         );
+        assert_feq!(rtt_ms, 6125.0);
 
-        assert_eq!(send_snapshot.rtcp_recv_stats.nack_count(), 5);
-        assert_eq!(send_snapshot.rtcp_recv_stats.pli_count(), 2);
-        assert_eq!(send_snapshot.rtcp_recv_stats.fir_count(), 2);
+        assert_eq!(send_snapshot.nacks_received(), 5);
+        assert_eq!(send_snapshot.plis_received(), 2);
+        assert_eq!(send_snapshot.firs_received(), 2);
+        // Last Seq Num(RR)  - total lost(RR) - Initial Seq Num(SR) + 1
+        // 70 - 8 - 10 + 1 = 53
+        assert_eq!(send_snapshot.remote_packets_received(), 53);
+        assert_feq!(
+            send_snapshot
+                .remote_fraction_lost()
+                .expect("Should have a fraction lost values after receiving RR"),
+            32.0 / 256.0
+        );
+        assert_eq!(send_snapshot.remote_total_lost(), 8);
+        assert_eq!(send_snapshot.remote_jitter(), 2250);
 
-        let snapshots = icpr.fetch_stats(vec![123456]).await;
+        let snapshots = icpr.fetch_inbound_stats(vec![123456]).await;
         let recv_snapshot = snapshots[0]
             .as_ref()
             .expect("Stats should exist for ssrc: 123456");
-        assert_eq!(recv_snapshot.rtcp_write_stats.fir_count(), 1);
-        assert_eq!(recv_snapshot.rtcp_write_stats.nack_count(), 6);
-        assert_eq!(recv_snapshot.rtcp_write_stats.pli_count(), 3);
+        assert_eq!(recv_snapshot.nacks_sent(), 6);
+        assert_eq!(recv_snapshot.plis_sent(), 3);
+        assert_eq!(recv_snapshot.firs_sent(), 1);
 
         Ok(())
     }
