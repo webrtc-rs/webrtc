@@ -1857,10 +1857,6 @@ impl RTCPeerConnection {
 
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #19)
         if let Some(options) = options {
-            if let Some(id) = options.id {
-                params.id = id;
-            }
-
             // Ordered indicates if data is allowed to be delivered out of order. The
             // default value of true, guarantees that data will be delivered in order.
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #9)
@@ -1889,9 +1885,7 @@ impl RTCPeerConnection {
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #12)
-            if let Some(negotiated) = options.negotiated {
-                params.negotiated = negotiated;
-            }
+            params.negotiated = options.negotiated;
         }
 
         let d = Arc::new(RTCDataChannel::new(

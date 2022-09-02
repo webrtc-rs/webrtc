@@ -275,13 +275,16 @@ impl RTCSctpTransport {
                 }
             };
 
-            let id = dc.stream_identifier();
+            let negotiated = if dc.config.negotiated {
+                Some(dc.stream_identifier())
+            } else {
+                None
+            };
             let rtc_dc = Arc::new(RTCDataChannel::new(
                 DataChannelParameters {
-                    id,
                     label: dc.config.label.clone(),
                     protocol: dc.config.protocol.clone(),
-                    negotiated: dc.config.negotiated,
+                    negotiated,
                     ordered,
                     max_packet_life_time: max_packet_lifetime,
                     max_retransmits,

@@ -201,7 +201,7 @@ async fn main() -> Result<()> {
 
         let dc_params = DataChannelParameters {
             label: "Foo".to_owned(),
-            id,
+            negotiated: Some(id),
             ..Default::default()
         };
 
