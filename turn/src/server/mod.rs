@@ -58,25 +58,19 @@ impl Server {
             let channel_bind_timeout = s.channel_bind_timeout;
             let handle_rx = handle.subscribe();
             let conn = p.conn;
+            let allocation_manager = Arc::new(Manager::new(ManagerConfig {
+                relay_addr_generator: p.relay_addr_generator,
+            }));
 
-            tokio::spawn({
-                let allocation_manager = Arc::new(Manager::new(ManagerConfig {
-                    relay_addr_generator: p.relay_addr_generator,
-                }));
-
-                async move {
-                    Server::read_loop(
-                        conn,
-                        allocation_manager,
-                        nonces,
-                        auth_handler,
-                        realm,
-                        channel_bind_timeout,
-                        handle_rx,
-                    )
-                    .await;
-                }
-            });
+            tokio::spawn(Server::read_loop(
+                conn,
+                allocation_manager,
+                nonces,
+                auth_handler,
+                realm,
+                channel_bind_timeout,
+                handle_rx,
+            ));
         }
 
         Ok(s)
