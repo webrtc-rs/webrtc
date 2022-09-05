@@ -172,6 +172,17 @@ impl Unmarshal for ReceptionReport {
         let t0 = raw_packet.get_u8();
         let t1 = raw_packet.get_u8();
         let t2 = raw_packet.get_u8();
+        // TODO: The type of `total_lost` should be `i32`, per the RFC:
+        // The total number of RTP data packets from source SSRC_n that have
+        // been lost since the beginning of reception.  This number is
+        // defined to be the number of packets expected less the number of
+        // packets actually received, where the number of packets received
+        // includes any which are late or duplicates.  Thus, packets that
+        // arrive late are not counted as lost, and the loss may be negative
+        // if there are duplicates.  The number of packets expected is
+        // defined to be the extended last sequence number received, as
+        // defined next, less the initial sequence number received.  This may
+        // be calculated as shown in Appendix A.3.
         let total_lost = (t2 as u32) | (t1 as u32) << 8 | (t0 as u32) << 16;
 
         let last_sequence_number = raw_packet.get_u32();

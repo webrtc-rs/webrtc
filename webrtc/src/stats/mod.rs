@@ -542,7 +542,7 @@ pub struct RemoteInboundRTPStats {
 
     // RTCReceivedRtpStreamStats
     pub packets_received: u64,
-    // TODO: packetsLost
+    pub packets_lost: i64,
     // TOOD: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
     // NB: `framesDropped` can't be produced since we aren't decoding, might be worth introducing a
     // way for consumers to control this in the future.
@@ -572,14 +572,14 @@ pub struct RemoteOutboundRTPStats {
     // TODO: Add codecId
 
     // RTCSentRtpStreamStats
-    // pub packets_sent: u64,
-    // pub bytes_sent: u64,
+    pub packets_sent: u64,
+    pub bytes_sent: u64,
 
     // RTCRemoteOutboundRtpStreamStats
     pub local_id: String,
     // TODO: `remote_timestamp`
-    // TODO: Below
-    // pub reports_sent: u64,
-    // pub round_trip_time: Option<f64>,
-    // pub total_round_trip_time: f64,
+    pub round_trip_time: Option<f64>,
+    pub reports_sent: u64,
+    pub total_round_trip_time: f64,
+    pub round_trip_time_measurements: u64,
 }

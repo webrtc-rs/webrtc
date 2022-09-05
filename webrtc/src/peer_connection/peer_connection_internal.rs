@@ -1432,12 +1432,24 @@ impl PeerConnectionInternal {
                 bytes_received,
                 last_packet_received_timestamp,
                 nack_count,
+                remote_packets_sent,
+                remote_bytes_sent,
+                remote_reports_sent,
+                remote_round_trip_time,
+                remote_total_round_trip_time,
+                remote_round_trip_time_measurements,
             ) = (
                 stats.packets_received(),
                 stats.header_bytes_received(),
                 stats.payload_bytes_received(),
                 stats.last_packet_received_timestamp(),
                 stats.nacks_sent(),
+                stats.remote_packets_sent(),
+                stats.remote_bytes_sent(),
+                stats.remote_reports_sent(),
+                stats.remote_round_trip_time(),
+                stats.remote_total_round_trip_time(),
+                stats.remote_round_trip_time_measurements(),
             );
 
             collector.insert(
@@ -1477,13 +1489,13 @@ impl PeerConnectionInternal {
                     ssrc,
                     kind,
 
-                    // packets_sent: remote_packet_sent,
-                    // bytes_sent: remote_bytes_sent,
+                    packets_sent: remote_packets_sent as u64,
+                    bytes_sent: remote_bytes_sent as u64,
                     local_id,
-                    // TODO: Below
-                    // reports_sent: 0,
-                    // round_trip_time: todo!(),
-                    // total_round_trip_time: todo!(),
+                    reports_sent: remote_reports_sent,
+                    round_trip_time: remote_round_trip_time,
+                    total_round_trip_time: remote_total_round_trip_time,
+                    round_trip_time_measurements: remote_round_trip_time_measurements,
                 }),
             );
         }
@@ -1556,16 +1568,18 @@ impl PeerConnectionInternal {
                 header_bytes_sent,
                 nack_count,
                 remote_inbound_packets_received,
+                remote_inbound_packets_lost,
                 remote_rtt_ms,
                 remote_total_rtt_ms,
                 remote_rtt_measurements,
-                fraction_lost,
+                remote_fraction_lost,
             ) = (
                 stats.packets_sent(),
                 stats.payload_bytes_sent(),
                 stats.header_bytes_sent(),
                 stats.nacks_received(),
                 stats.remote_packets_received(),
+                stats.remote_total_lost(),
                 stats.remote_round_trip_time(),
                 stats.remote_total_round_trip_time(),
                 stats.remote_round_trip_time_measurements(),
@@ -1618,12 +1632,13 @@ impl PeerConnectionInternal {
                     kind,
 
                     packets_received: remote_inbound_packets_received as u64,
+                    packets_lost: remote_inbound_packets_lost as i64,
 
                     local_id,
 
                     round_trip_time: remote_rtt_ms,
                     total_round_trip_time: remote_total_rtt_ms,
-                    fraction_lost: fraction_lost.unwrap_or(0.0),
+                    fraction_lost: remote_fraction_lost.unwrap_or(0.0),
                     round_trip_time_measurements: remote_rtt_measurements,
                 }),
             );
