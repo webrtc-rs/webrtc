@@ -11,8 +11,8 @@ use crate::{
 use config::*;
 use request::*;
 
-use futures::FutureExt as _;
 use std::{collections::HashMap, sync::Arc};
+
 use tokio::{
     sync::{
         broadcast::{self, error::RecvError},
@@ -103,9 +103,36 @@ impl Server {
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
 
+        let (close_tx, mut close_rx) = broadcast::channel(1);
+
+        tokio::spawn({
+            let allocation_manager = Arc::clone(&allocation_manager);
+
+            async move {
+                loop {
+                    match handle_rx.recv().await {
+                        Ok(Command::DeleteAllocations(name, _)) => {
+                            allocation_manager
+                                .delete_allocations_by_username(name.as_str())
+                                .await;
+                            continue;
+                        }
+                        Err(RecvError::Closed) | Ok(Command::Close(_)) => {
+                            let _ = close_tx.send(());
+                            break;
+                        }
+                        Err(RecvError::Lagged(n)) => {
+                            log::error!("Turn server has lagged by {} messages", n);
+                            continue;
+                        }
+                    }
+                }
+            }
+        });
+
         loop {
-            let (n, addr) = futures::select! {
-                v = conn.recv_from(&mut buf).fuse() => {
+            let (n, addr) = tokio::select! {
+                v = conn.recv_from(&mut buf) => {
                     match v {
                         Ok(v) => v,
                         Err(err) => {
@@ -114,21 +141,7 @@ impl Server {
                         }
                     }
                 },
-                cmd = handle_rx.recv().fuse() => {
-                    match cmd {
-                        Ok(Command::DeleteAllocations(name, _)) => {
-                            allocation_manager
-                                .delete_allocations_by_username(name.as_str())
-                                .await;
-                            continue;
-                        }
-                        Err(RecvError::Closed) | Ok(Command::Close(_)) => break,
-                        Err(RecvError::Lagged(n)) => {
-                            log::error!("Turn server has lagged by {} messages", n);
-                            continue
-                        },
-                    }
-                }
+                _ = close_rx.recv() => break
             };
 
             let mut r = Request {
