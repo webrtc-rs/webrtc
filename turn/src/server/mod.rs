@@ -103,7 +103,7 @@ impl Server {
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
 
-        let (close_tx, mut close_rx) = broadcast::channel(1);
+        let (close_tx, mut close_rx) = mpsc::channel(1);
 
         tokio::spawn({
             let allocation_manager = Arc::clone(&allocation_manager);
@@ -118,7 +118,7 @@ impl Server {
                             continue;
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => {
-                            let _ = close_tx.send(());
+                            let _ = close_tx.send(()).await;
                             break;
                         }
                         Err(RecvError::Lagged(n)) => {
