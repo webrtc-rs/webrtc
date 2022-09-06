@@ -3,7 +3,14 @@ use crate::{MediaTrackConstraint, MediaTrackSetting};
 use super::FitnessDistance;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum SettingFitnessDistanceError {
+pub struct SettingFitnessDistanceError {
+    pub kind: SettingFitnessDistanceErrorKind,
+    pub constraint: String,
+    pub setting: Option<String>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum SettingFitnessDistanceErrorKind {
     Missing,
     Mismatch,
     TooSmall,
@@ -22,7 +29,11 @@ impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for MediaTrackConstraint
             Some(setting) => setting,
             None => {
                 return if self.is_required() {
-                    Err(Self::Error::Missing)
+                    Err(Self::Error {
+                        kind: SettingFitnessDistanceErrorKind::Missing,
+                        constraint: format!("{}", self.to_required_only()),
+                        setting: None,
+                    })
                 } else {
                     Ok(1.0)
                 }
@@ -87,7 +98,11 @@ impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for MediaTrackConstraint
                 if fitness_distance.is_finite() {
                     Ok(fitness_distance)
                 } else {
-                    Err(Self::Error::Invalid)
+                    Err(Self::Error {
+                        kind: SettingFitnessDistanceErrorKind::Invalid,
+                        constraint: format!("{}", self.to_required_only()),
+                        setting: Some(format!("{:?}", setting)),
+                    })
                 }
             }
             Err(error) => Err(error),
