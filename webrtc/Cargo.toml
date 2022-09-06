@@ -44,6 +44,7 @@ ring = "0.16.20"
 sha2 = "0.10.2"
 lazy_static = "1.4"
 hex = "0.4.3"
+pin-project-lite = "0.2.9"
 
 # [minimal-versions]
 # fixes "the trait bound `time::Month: From<u8>` is not satisfied"

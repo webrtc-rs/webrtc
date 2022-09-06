@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod operation_test;
 
+use pin_project_lite::pin_project;
+use std::borrow::Cow;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
@@ -10,6 +12,41 @@ use tokio::sync::mpsc;
 use waitgroup::WaitGroup;
 
 use crate::error::Result;
+
+pin_project! {
+    struct PrintingFuture<Fut> {
+        name: Cow<'static, str>,
+        #[pin]
+        fut: Fut,
+    }
+}
+
+impl<Fut> PrintingFuture<Fut> {
+    fn new(fut: Fut, name: Cow<'static, str>) -> Self {
+        Self { fut, name }
+    }
+}
+
+impl<Fut> Future for PrintingFuture<Fut>
+where
+    Fut: Future,
+{
+    type Output = Fut::Output;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        log::info!("Polled future {}", self.name);
+        let this = self.project();
+
+        this.fut.poll(cx)
+    }
+}
+
+fn trace_future<Fut>(fut: Fut, name: impl Into<Cow<'static, str>>) -> PrintingFuture<Fut> {
+    PrintingFuture::new(fut, name.into())
+}
 
 /// Operation is a function
 pub struct Operation(
@@ -51,9 +88,10 @@ impl Operations {
         let l = Arc::clone(&length);
         let ops_tx = Arc::new(ops_tx);
         let ops_tx2 = Arc::clone(&ops_tx);
-        tokio::spawn(async move {
-            Operations::start(l, ops_tx, ops_rx, close_rx).await;
-        });
+        tokio::spawn(trace_future(
+            Operations::start(l, ops_tx, ops_rx, close_rx),
+            "Operations::start",
+        ));
 
         Operations {
             length,
@@ -113,14 +151,14 @@ impl Operations {
     ) {
         loop {
             tokio::select! {
-                _ = close_rx.recv() => {
+                _ = trace_future(close_rx.recv(), "close_rx.recv()") => {
                     break;
                 }
-                Some(mut f) = ops_rx.recv() => {
+                Some(mut f) = trace_future(ops_rx.recv(), "ops_rx.recv()") => {
                     length.fetch_sub(1, Ordering::SeqCst);
                     let op = format!("{:?}", f);
                     log::info!("Started operation {}", op);
-                    if f.0().await {
+                    if trace_future(f.0(), op.clone()).await {
                         // Requeue this operation
                         log::info!("Re-queued operation {}", op);
                         let _ = Operations::enqueue_inner(f, &ops_tx, &length);

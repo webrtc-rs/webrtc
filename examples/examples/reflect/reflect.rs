@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
                     record.args()
                 )
             })
-            .filter(None, log::LevelFilter::Trace)
+            .filter(None, log::LevelFilter::Info)
             .init();
     }
     console_subscriber::init();
