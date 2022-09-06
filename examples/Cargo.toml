@@ -16,8 +16,8 @@ repository = "https://github.com/webrtc-rs/examples"
 
 [dev-dependencies]
 webrtc = { path = "../webrtc" }
-
-tokio = { version = "1.15", features = ["full"] }
+console-subscriber = { version = "<=0.1.7" }
+tokio = { version = "1.15", features = ["full", "tracing"] }
 env_logger = "0.9"
 clap = "3.0"
 hyper = { version = "0.14", features = ["full"] }

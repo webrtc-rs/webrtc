@@ -116,16 +116,19 @@ impl Operations {
                 _ = close_rx.recv() => {
                     break;
                 }
-                result = ops_rx.recv() => {
-                    if let Some(mut f) = result {
-                        length.fetch_sub(1, Ordering::SeqCst);
-                        if f.0().await {
-                            // Requeue this operation
-                            let _ = Operations::enqueue_inner(f, &ops_tx, &length);
-                        }
+                Some(mut f) = ops_rx.recv() => {
+                    length.fetch_sub(1, Ordering::SeqCst);
+                    let op = format!("{:?}", f);
+                    log::info!("Started operation {}", op);
+                    if f.0().await {
+                        // Requeue this operation
+                        log::info!("Re-queued operation {}", op);
+                        let _ = Operations::enqueue_inner(f, &ops_tx, &length);
                     }
+                    log::info!("Done with operation {}", op);
                 }
             }
+            log::info!("Operation loop spun");
         }
     }
 

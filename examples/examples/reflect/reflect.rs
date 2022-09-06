@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
             .filter(None, log::LevelFilter::Trace)
             .init();
     }
-
+    console_subscriber::init();
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
     // Create a MediaEngine object to configure the supported codec
