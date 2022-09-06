@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use ordered_float::NotNan;
 
 use crate::{
-    algorithms::{fitness_distance::SettingFitnessDistanceError, FitnessDistance},
+    algorithms::{fitness_distance::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind},
     constraints::SanitizedAdvancedMediaTrackConstraints,
     errors::OverconstrainedError,
     BareOrMandatoryMediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints,
@@ -315,19 +315,52 @@ fn generate_overconstrained_error(
     constraint: String,
     errors: HashSet<SettingFitnessDistanceError>,
 ) -> OverconstrainedError {
-    let formatted_reasons: Vec<_> = errors
+    struct Violation {
+        constraint: String,
+        settings: Vec<String>,
+    }
+    let mut violators_by_kind: HashMap<SettingFitnessDistanceErrorKind, Violation> =
+        HashMap::default();
+
+    for error in errors {
+        let violation = violators_by_kind.entry(error.kind).or_insert(Violation {
+            constraint: error.constraint.clone(),
+            settings: vec![],
+        });
+        assert_eq!(violation.constraint, error.constraint);
+        if let Some(setting) = error.setting {
+            violation.settings.push(setting.clone());
+        }
+    }
+
+    let formatted_reasons: Vec<_> = violators_by_kind
         .into_iter()
-        .map(|error| {
-            match error {
-                SettingFitnessDistanceError::Missing => "missing",
-                SettingFitnessDistanceError::Mismatch => "a mismatch",
-                SettingFitnessDistanceError::TooSmall => "too small",
-                SettingFitnessDistanceError::TooLarge => "too large",
-                SettingFitnessDistanceError::Invalid => "invalid",
+        .map(|(kind, violation)| {
+            let kind_str = match kind {
+                SettingFitnessDistanceErrorKind::Missing => "missing",
+                SettingFitnessDistanceErrorKind::Mismatch => "a mismatch",
+                SettingFitnessDistanceErrorKind::TooSmall => "too small",
+                SettingFitnessDistanceErrorKind::TooLarge => "too large",
+                SettingFitnessDistanceErrorKind::Invalid => "invalid",
+            };
+
+            let mut settings = violation.settings;
+
+            if settings.is_empty() {
+                return format!("{} (does not satisfy {})", kind_str, violation.constraint);
             }
-            .to_owned()
+
+            settings.sort();
+
+            format!(
+                "{} ([{}] do not satisfy {})",
+                kind_str,
+                settings.join(", "),
+                violation.constraint
+            )
         })
         .collect();
+
     let formatted_reason = match &formatted_reasons[..] {
         [] => unreachable!(),
         [reason] => reason.clone(),
@@ -336,7 +369,7 @@ fn generate_overconstrained_error(
             format!("either {}, or {}", reasons, reason)
         }
     };
-    let message = Some(format!("The provided settings were {}.", formatted_reason));
+    let message = Some(format!("Setting was {}.", formatted_reason));
     OverconstrainedError {
         constraint,
         message,
