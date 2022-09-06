@@ -11,4 +11,7 @@ mod value_constraint;
 mod value_range_constraint;
 mod value_sequence_constraint;
 
-pub use self::{setting::SettingFitnessDistanceError, settings::SettingsFitnessDistanceError};
+pub use self::{
+    setting::{SettingFitnessDistanceError, SettingFitnessDistanceErrorKind},
+    settings::SettingsFitnessDistanceError,
+};
