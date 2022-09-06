@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -62,12 +64,22 @@ impl<T> GenericMandatoryMediaTrackConstraints<T> {
         Self(constraints)
     }
 
-    pub fn inner(&self) -> &GenericMediaTrackConstraintSet<T> {
-        &self.0
-    }
-
     pub fn into_inner(self) -> GenericMediaTrackConstraintSet<T> {
         self.0
+    }
+}
+
+impl<T> Deref for GenericMandatoryMediaTrackConstraints<T> {
+    type Target = GenericMediaTrackConstraintSet<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for GenericMandatoryMediaTrackConstraints<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -95,71 +107,6 @@ impl<T> IntoIterator for GenericMandatoryMediaTrackConstraints<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a GenericMandatoryMediaTrackConstraints<T> {
-    type Item = (&'a String, &'a T);
-    type IntoIter = indexmap::map::Iter<'a, String, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a mut GenericMandatoryMediaTrackConstraints<T> {
-    type Item = (&'a String, &'a mut T);
-    type IntoIter = indexmap::map::IterMut<'a, String, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_mut()
-    }
-}
-
-impl<T> GenericMandatoryMediaTrackConstraints<T> {
-    pub fn iter(&self) -> indexmap::map::Iter<'_, String, T> {
-        self.0.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> indexmap::map::IterMut<'_, String, T> {
-        self.0.iter_mut()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn get<Q>(&self, property: Q) -> Option<&T>
-    where
-        Q: AsRef<str>,
-    {
-        self.0.get(property.as_ref())
-    }
-
-    pub fn insert<Q>(&mut self, property: Q, setting: T) -> Option<T>
-    where
-        Q: Into<String>,
-    {
-        self.0.insert(property.into(), setting)
-    }
-
-    /// Computes in **O(n)** time (average).
-    pub fn remove<Q>(&mut self, property: Q) -> Option<T>
-    where
-        Q: AsRef<str>,
-    {
-        self.0.remove(property.as_ref())
-    }
-
-    pub fn contains_key<Q>(&mut self, property: Q) -> bool
-    where
-        Q: AsRef<str>,
-    {
-        self.0.contains_key(property.as_ref())
     }
 }
 
