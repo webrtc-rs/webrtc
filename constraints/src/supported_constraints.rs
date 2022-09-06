@@ -1,4 +1,7 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    ops::{Deref, DerefMut},
+};
 
 #[cfg(feature = "serde")]
 use serde::{
@@ -29,6 +32,26 @@ use serde::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct MediaTrackSupportedConstraints(HashSet<String>);
 
+impl MediaTrackSupportedConstraints {
+    pub fn into_inner(self) -> HashSet<String> {
+        self.0
+    }
+}
+
+impl Deref for MediaTrackSupportedConstraints {
+    type Target = HashSet<String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for MediaTrackSupportedConstraints {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl Default for MediaTrackSupportedConstraints {
     /// [Default values][default_values] as defined by the W3C specification.
     ///
@@ -58,33 +81,6 @@ impl IntoIterator for MediaTrackSupportedConstraints {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a MediaTrackSupportedConstraints {
-    type Item = &'a String;
-    type IntoIter = std::collections::hash_set::Iter<'a, String>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl MediaTrackSupportedConstraints {
-    pub fn iter(&self) -> std::collections::hash_set::Iter<'_, String> {
-        self.0.iter()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn contains(&self, property: &str) -> bool {
-        self.0.contains(property)
     }
 }
 

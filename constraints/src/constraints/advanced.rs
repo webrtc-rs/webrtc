@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +40,24 @@ impl<T> GenericAdvancedMediaTrackConstraints<T> {
     pub fn new(constraints: Vec<GenericMediaTrackConstraintSet<T>>) -> Self {
         Self(constraints)
     }
+
+    pub fn into_inner(self) -> Vec<GenericMediaTrackConstraintSet<T>> {
+        self.0
+    }
+}
+
+impl<T> Deref for GenericAdvancedMediaTrackConstraints<T> {
+    type Target = Vec<GenericMediaTrackConstraintSet<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for GenericAdvancedMediaTrackConstraints<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 impl<T> Default for GenericAdvancedMediaTrackConstraints<T> {
@@ -63,50 +83,6 @@ impl<T> IntoIterator for GenericAdvancedMediaTrackConstraints<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a GenericAdvancedMediaTrackConstraints<T> {
-    type Item = &'a GenericMediaTrackConstraintSet<T>;
-    type IntoIter = std::slice::Iter<'a, GenericMediaTrackConstraintSet<T>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a mut GenericAdvancedMediaTrackConstraints<T> {
-    type Item = &'a mut GenericMediaTrackConstraintSet<T>;
-    type IntoIter = std::slice::IterMut<'a, GenericMediaTrackConstraintSet<T>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_mut()
-    }
-}
-
-impl<T> GenericAdvancedMediaTrackConstraints<T> {
-    pub fn iter(&self) -> std::slice::Iter<'_, GenericMediaTrackConstraintSet<T>> {
-        self.0.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, GenericMediaTrackConstraintSet<T>> {
-        self.0.iter_mut()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn push(&mut self, constraint_set: GenericMediaTrackConstraintSet<T>) {
-        self.0.push(constraint_set)
-    }
-
-    pub fn remove(&mut self, index: usize) -> GenericMediaTrackConstraintSet<T> {
-        self.0.remove(index)
     }
 }
 

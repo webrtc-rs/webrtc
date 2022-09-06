@@ -213,7 +213,7 @@ impl BareOrMediaTrackConstraint {
         strategy: MediaTrackConstraintResolutionStrategy,
     ) -> MediaTrackConstraint {
         match self {
-            Self::Empty(constraint) => MediaTrackConstraint::Empty(constraint.clone()),
+            Self::Empty(constraint) => MediaTrackConstraint::Empty(constraint),
             Self::IntegerRange(constraint) => {
                 MediaTrackConstraint::IntegerRange(constraint.into_resolved(strategy))
             }

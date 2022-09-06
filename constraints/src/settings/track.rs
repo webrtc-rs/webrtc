@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -32,6 +35,24 @@ impl MediaTrackSettings {
     pub fn new(settings: HashMap<String, MediaTrackSetting>) -> Self {
         Self(settings)
     }
+
+    pub fn into_inner(self) -> HashMap<String, MediaTrackSetting> {
+        self.0
+    }
+}
+
+impl Deref for MediaTrackSettings {
+    type Target = HashMap<String, MediaTrackSetting>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for MediaTrackSettings {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 impl<T> FromIterator<(T, MediaTrackSetting)> for MediaTrackSettings
@@ -52,76 +73,6 @@ impl IntoIterator for MediaTrackSettings {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a MediaTrackSettings {
-    type Item = (&'a String, &'a MediaTrackSetting);
-    type IntoIter = std::collections::hash_map::Iter<'a, String, MediaTrackSetting>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a mut MediaTrackSettings {
-    type Item = (&'a String, &'a mut MediaTrackSetting);
-    type IntoIter = std::collections::hash_map::IterMut<'a, String, MediaTrackSetting>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_mut()
-    }
-}
-
-impl MediaTrackSettings {
-    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, MediaTrackSetting> {
-        self.0.iter()
-    }
-
-    pub fn iter_mut(
-        &mut self,
-    ) -> std::collections::hash_map::IterMut<'_, String, MediaTrackSetting> {
-        self.0.iter_mut()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn get<T>(&self, property: T) -> Option<&MediaTrackSetting>
-    where
-        T: AsRef<str>,
-    {
-        self.0.get(property.as_ref())
-    }
-
-    pub fn insert<T>(
-        &mut self,
-        property: T,
-        setting: MediaTrackSetting,
-    ) -> Option<MediaTrackSetting>
-    where
-        T: Into<String>,
-    {
-        self.0.insert(property.into(), setting)
-    }
-
-    pub fn remove<T>(&mut self, property: T) -> Option<MediaTrackSetting>
-    where
-        T: AsRef<str>,
-    {
-        self.0.remove(property.as_ref())
-    }
-
-    pub fn contains_key<T>(&mut self, property: T) -> bool
-    where
-        T: AsRef<str>,
-    {
-        self.0.contains_key(property.as_ref())
     }
 }
 
