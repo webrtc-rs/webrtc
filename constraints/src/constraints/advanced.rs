@@ -93,10 +93,9 @@ impl BareOrAdvancedMediaTrackConstraints {
 
     pub fn into_resolved(self) -> AdvancedMediaTrackConstraints {
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        AdvancedMediaTrackConstraints::new(
+        AdvancedMediaTrackConstraints::from_iter(
             self.into_iter()
-                .map(|constraint_set| constraint_set.into_resolved(strategy))
-                .collect(),
+                .map(|constraint_set| constraint_set.into_resolved(strategy)),
         )
     }
 }
@@ -113,11 +112,10 @@ impl AdvancedMediaTrackConstraints {
         self,
         supported_constraints: &MediaTrackSupportedConstraints,
     ) -> SanitizedAdvancedMediaTrackConstraints {
-        SanitizedAdvancedMediaTrackConstraints::new(
+        SanitizedAdvancedMediaTrackConstraints::from_iter(
             self.into_iter()
                 .map(|constraint_set| constraint_set.into_sanitized(supported_constraints))
-                .filter(|constraint_set| !constraint_set.is_empty())
-                .collect(),
+                .filter(|constraint_set| !constraint_set.is_empty()),
         )
     }
 }
