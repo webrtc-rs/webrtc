@@ -159,6 +159,32 @@ impl<T> Default for ValueSequenceConstraint<T> {
     }
 }
 
+impl<T> std::fmt::Display for ValueSequenceConstraint<T>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut is_first = true;
+        f.write_str("(")?;
+        if let Some(ref exact) = &self.exact {
+            f.write_fmt(format_args!("x == {:?}", exact))?;
+            is_first = false;
+        }
+        if let Some(ref ideal) = &self.ideal {
+            if !is_first {
+                f.write_str(" && ")?;
+            }
+            f.write_fmt(format_args!("x ~= {:?}", ideal))?;
+            is_first = false;
+        }
+        if is_first {
+            f.write_str("<empty>")?;
+        }
+        f.write_str(")")?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

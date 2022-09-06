@@ -33,6 +33,12 @@ mod value_sequence;
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct EmptyConstraint {}
 
+impl std::fmt::Display for EmptyConstraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<empty>")
+    }
+}
+
 /// The strategy of a track [constraint][constraint].
 ///
 /// [constraint]: https://www.w3.org/TR/mediacapture-streams/#dfn-constraint
@@ -275,6 +281,19 @@ pub enum MediaTrackConstraint {
 impl Default for MediaTrackConstraint {
     fn default() -> Self {
         Self::Empty(EmptyConstraint {})
+    }
+}
+
+impl std::fmt::Display for MediaTrackConstraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty(constraint) => constraint.fmt(f),
+            Self::IntegerRange(constraint) => constraint.fmt(f),
+            Self::FloatRange(constraint) => constraint.fmt(f),
+            Self::Bool(constraint) => constraint.fmt(f),
+            Self::StringSequence(constraint) => constraint.fmt(f),
+            Self::String(constraint) => constraint.fmt(f),
+        }
     }
 }
 

@@ -175,6 +175,41 @@ impl<T> Default for ValueRangeConstraint<T> {
     }
 }
 
+impl<T> std::fmt::Display for ValueRangeConstraint<T>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut is_first = true;
+        f.write_str("(")?;
+        if let Some(exact) = &self.exact {
+            f.write_fmt(format_args!("x == {:?}", exact))?;
+            is_first = false;
+        } else if let (Some(min), Some(max)) = (&self.min, &self.max) {
+            f.write_fmt(format_args!("{:?} <= x <= {:?}", min, max))?;
+            is_first = false;
+        } else if let Some(min) = &self.min {
+            f.write_fmt(format_args!("{:?} <= x", min))?;
+            is_first = false;
+        } else if let Some(max) = &self.max {
+            f.write_fmt(format_args!("x <= {:?}", max))?;
+            is_first = false;
+        }
+        if let Some(ideal) = &self.ideal {
+            if !is_first {
+                f.write_str(" && ")?;
+            }
+            f.write_fmt(format_args!("x~={:?}", ideal))?;
+            is_first = false;
+        }
+        if is_first {
+            f.write_str("<empty>")?;
+        }
+        f.write_str(")")?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
