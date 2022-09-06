@@ -5,7 +5,9 @@ pub mod config;
 pub mod request;
 
 use crate::{
-    allocation::allocation_manager::*, auth::AuthHandler, error::*,
+    allocation::{allocation_manager::*, five_tuple::FiveTuple, AllocationMap},
+    auth::AuthHandler,
+    error::*,
     proto::lifetime::DEFAULT_LIFETIME,
 };
 use config::*;
@@ -60,6 +62,7 @@ impl Server {
             let conn = p.conn;
             let allocation_manager = Arc::new(Manager::new(ManagerConfig {
                 relay_addr_generator: p.relay_addr_generator,
+                gather_metrics: p.gather_metrics,
             }));
 
             tokio::spawn(Server::read_loop(
@@ -92,6 +95,32 @@ impl Server {
         }
     }
 
+    pub async fn get_allocations(&self) -> Result<AllocationMap> {
+        let tx = self.handle.lock().await.clone();
+        if let Some(tx) = tx {
+            let (allocation_tx, mut allocation_rx) = mpsc::channel(1);
+            tx.send(Command::GetAllocations(Arc::new(allocation_tx)))
+                .map_err(|_| Error::ErrClosed)?;
+
+            Ok(allocation_rx.recv().await.ok_or_else(|| Error::ErrClosed)?)
+        } else {
+            Err(Error::ErrClosed)
+        }
+    }
+
+    pub async fn get_metrics(&self, five_tuple: FiveTuple) -> Result<usize> {
+        let tx = self.handle.lock().await.clone();
+        if let Some(tx) = tx {
+            let (metrics_tx, mut metrics_rx) = mpsc::channel(1);
+            tx.send(Command::GetMetrics(five_tuple, Arc::new(metrics_tx)))
+                .map_err(|_| Error::ErrClosed)?;
+
+            metrics_rx.recv().await.ok_or_else(|| Error::ErrClosed)?
+        } else {
+            Err(Error::ErrClosed)
+        }
+    }
+
     async fn read_loop(
         conn: Arc<dyn Conn + Send + Sync>,
         allocation_manager: Arc<Manager>,
@@ -115,6 +144,24 @@ impl Server {
                             allocation_manager
                                 .delete_allocations_by_username(name.as_str())
                                 .await;
+                            continue;
+                        }
+                        Ok(Command::GetAllocations(sender)) => {
+                            drop(
+                                sender
+                                    .send(allocation_manager.get_allocations().await)
+                                    .await,
+                            );
+
+                            continue;
+                        }
+                        Ok(Command::GetMetrics(five_tuple, sender)) => {
+                            drop(
+                                sender
+                                    .send(allocation_manager.get_metrics(five_tuple).await)
+                                    .await,
+                            );
+
                             continue;
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => {
@@ -188,6 +235,10 @@ enum Command {
     /// Command to delete [`crate::allocation::Allocation`] by provided
     /// `username`.
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
+
+    GetAllocations(Arc<mpsc::Sender<AllocationMap>>),
+
+    GetMetrics(FiveTuple, Arc<mpsc::Sender<Result<usize>>>),
 
     /// Command to close the [`Server`].
     Close(Arc<mpsc::Receiver<()>>),

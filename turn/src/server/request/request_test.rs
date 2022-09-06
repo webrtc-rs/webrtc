@@ -69,6 +69,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
             address: "0.0.0.0".to_owned(),
             net: Arc::new(Net::new(None)),
         }),
+        gather_metrics: false,
     }));
 
     let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1")?, 5000);

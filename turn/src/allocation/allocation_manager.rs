@@ -13,6 +13,7 @@ use util::Conn;
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {
     pub relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
+    pub gather_metrics: bool,
 }
 
 // Manager is used to hold active allocations
@@ -20,6 +21,7 @@ pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
     relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
+    pub gather_metrics: bool,
 }
 
 impl Manager {
@@ -29,6 +31,7 @@ impl Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
             reservations: Arc::new(Mutex::new(HashMap::new())),
             relay_addr_generator: config.relay_addr_generator,
+            gather_metrics: config.gather_metrics,
         }
     }
 
@@ -39,6 +42,23 @@ impl Manager {
             a.close().await?;
         }
         Ok(())
+    }
+
+    pub async fn get_allocations(&self) -> AllocationMap {
+        Arc::clone(&self.allocations)
+    }
+
+    pub async fn get_metrics(&self, five_tuple: FiveTuple) -> Result<usize> {
+        if !self.gather_metrics {
+            return Err(Error::ErrNoMetrics);
+        }
+
+        let guarded = self.allocations.lock().await;
+
+        match guarded.get(&five_tuple) {
+            Some(location) => Ok(location.transmitted_bytes.load(Ordering::Relaxed)),
+            None => Err(Error::ErrNoAllocationFound),
+        }
     }
 
     // get_allocation fetches the allocation matching the passed FiveTuple

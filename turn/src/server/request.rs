@@ -782,6 +782,15 @@ impl Request {
                 if l != c.data.len() {
                     Err(Error::ErrShortWrite)
                 } else {
+                    if self.allocation_manager.gather_metrics {
+                        a.transmitted_bytes.store(
+                            a.transmitted_bytes
+                                .load(std::sync::atomic::Ordering::Relaxed)
+                                + c.raw.len(),
+                            std::sync::atomic::Ordering::Relaxed,
+                        );
+                    }
+
                     Ok(())
                 }
             } else {

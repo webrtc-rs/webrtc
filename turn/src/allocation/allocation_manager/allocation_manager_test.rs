@@ -13,6 +13,7 @@ fn new_test_manager() -> Manager {
             address: "0.0.0.0".to_owned(),
             net: Arc::new(Net::new(None)),
         }),
+        gather_metrics: false,
     };
     Manager::new(config)
 }

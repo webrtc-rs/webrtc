@@ -16,6 +16,7 @@ use stun::{agent::*, message::*, textattrs::Username};
 
 use util::Conn;
 
+use std::sync::atomic::AtomicUsize;
 use std::{
     collections::HashMap,
     marker::{Send, Sync},
@@ -46,6 +47,7 @@ pub struct Allocation {
     reset_tx: StdMutex<Option<mpsc::Sender<Duration>>>,
     timer_expired: Arc<AtomicBool>,
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
+    pub transmitted_bytes: AtomicUsize,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -74,6 +76,7 @@ impl Allocation {
             reset_tx: StdMutex::new(None),
             timer_expired: Arc::new(AtomicBool::new(false)),
             closed: AtomicBool::new(false),
+            transmitted_bytes: Default::default(),
         }
     }
 

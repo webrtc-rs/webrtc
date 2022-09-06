@@ -38,6 +38,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
                 address: "127.0.0.1".to_owned(),
                 net: Arc::new(util::vnet::net::Net::new(None)),
             }),
+            gather_metrics: false,
         }],
         channel_bind_timeout: Duration::from_secs(0),
     })

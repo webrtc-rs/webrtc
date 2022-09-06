@@ -146,6 +146,7 @@ async fn test_client_nonce_expiration() -> Result<()> {
                 address: "0.0.0.0".to_owned(),
                 net: Arc::new(Net::new(None)),
             }),
+            gather_metrics: false,
         }],
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler {}),
