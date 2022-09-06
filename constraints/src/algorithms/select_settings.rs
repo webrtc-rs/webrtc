@@ -341,7 +341,6 @@ fn generate_overconstrained_error(
                 SettingFitnessDistanceErrorKind::Mismatch => "a mismatch",
                 SettingFitnessDistanceErrorKind::TooSmall => "too small",
                 SettingFitnessDistanceErrorKind::TooLarge => "too large",
-                SettingFitnessDistanceErrorKind::Invalid => "invalid",
             };
 
             let mut settings = violation.settings;
