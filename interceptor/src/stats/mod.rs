@@ -588,6 +588,22 @@ mod test {
     }
 
     #[test]
+    fn test_rtcp_stats() {
+        let mut stats: RTCPStats = Default::default();
+        assert_eq!(
+            (stats.fir_count(), stats.pli_count(), stats.nack_count()),
+            (0, 0, 0),
+        );
+
+        stats.update(Some(1), Some(2), Some(3));
+
+        assert_eq!(
+            (stats.fir_count(), stats.pli_count(), stats.nack_count()),
+            (1, 2, 3),
+        );
+    }
+
+    #[test]
     fn test_rtp_stats_send_sync() {
         fn test_send_sync<T: Send + Sync>() {}
         test_send_sync::<RTPStats>();
