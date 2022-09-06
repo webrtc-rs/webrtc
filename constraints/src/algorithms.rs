@@ -1,0 +1,7 @@
+//! Algorithms as defined in the ["Media Capture and Streams"][mediacapture_streams] spec.
+//!
+//! [mediacapture_streams]: https://www.w3.org/TR/mediacapture-streams/
+
+mod fitness_distance;
+
+pub use self::fitness_distance::FitnessDistance;

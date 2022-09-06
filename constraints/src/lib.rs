@@ -2,6 +2,7 @@
 //!
 //! [mediacapture_streams]: https://www.w3.org/TR/mediacapture-streams/
 
+pub mod algorithms;
 pub mod errors;
 pub mod property;
 
