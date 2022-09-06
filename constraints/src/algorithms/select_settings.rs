@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     algorithms::{fitness_distance::SettingFitnessDistanceError, FitnessDistance},
+    constraints::SanitizedAdvancedMediaTrackConstraints,
     errors::OverconstrainedError,
-    MediaTrackSettings, SanitizedMandatoryMediaTrackConstraints, SanitizedMediaTrackConstraintSet,
-    SanitizedMediaTrackConstraints,
+    MediaTrackSettings, SanitizedMediaTrackConstraintSet, SanitizedMediaTrackConstraints,
 };
 
 pub trait SelectSettingsPolicy {
@@ -21,9 +21,9 @@ pub trait SelectSettingsPolicy {
     /// > and User Agent default property values.
     ///
     /// The default implementation picks the first.
-    fn select_candidate<I>(&self, mut candidates: I) -> MediaTrackSettings
+    fn select_candidate<'a, I>(&self, mut candidates: I) -> &'a MediaTrackSettings
     where
-        I: Iterator<Item = MediaTrackSettings>,
+        I: Iterator<Item = &'a MediaTrackSettings>,
     {
         // Safety: We know that `candidates is non-empty:
         candidates
@@ -32,6 +32,7 @@ pub trait SelectSettingsPolicy {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum SelectSettingsError {
     Overconstrained(OverconstrainedError),
 }
@@ -42,13 +43,13 @@ impl From<OverconstrainedError> for SelectSettingsError {
     }
 }
 
-pub fn select_settings<I, P>(
+pub fn select_settings<'a, I, P>(
     possible_settings: I,
     constraints: &SanitizedMediaTrackConstraints,
     policy: &P,
-) -> Result<MediaTrackSettings, SelectSettingsError>
+) -> Result<&'a MediaTrackSettings, SelectSettingsError>
 where
-    I: Iterator<Item = MediaTrackSettings>,
+    I: Iterator<Item = &'a MediaTrackSettings>,
     P: SelectSettingsPolicy,
 {
     // As specified in step 1 of the `SelectSettings` algorithm:
@@ -65,12 +66,18 @@ where
     // > To avoid this being a surprise, application authors are expected to first use
     // > the `getSupportedConstraints()` method […].
 
+    // We can expect "sanitized" constraints to not contain empty constraints:
+    debug_assert!(constraints
+        .mandatory
+        .iter()
+        .all(|(_, constraint)| !constraint.is_empty()));
+
     // Obtain candidates by filtering possible settings, dropping those with infinite fitness distances:
     //
     // This function call corresponds to steps 3 & 4 of the `SelectSettings` algorithm:
     // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
 
-    let mut candidates = evaluate_candidates(possible_settings, &constraints.mandatory)?;
+    let mut candidates = select_feasible_candidates(possible_settings, &constraints.mandatory)?;
 
     // As specified in step 5 of the `SelectSettings` algorithm:
     // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
@@ -87,38 +94,7 @@ where
     // >
     // >    If the fitness distance is infinite for all settings dictionaries in candidates,
     // >    ignore this ConstraintSet.
-    for advanced_constraint in &*constraints.advanced {
-        let results: Vec<bool> = candidates
-            .iter()
-            .map(
-                |(candidate, _)| match advanced_constraint.fitness_distance(candidate) {
-                    Ok(fitness_distance) => {
-                        debug_assert!(fitness_distance.is_finite());
-                        true
-                    }
-                    Err(_) => false,
-                },
-            )
-            .collect();
-
-        if !results.iter().any(|is_finite| *is_finite) {
-            continue;
-        }
-
-        candidates = candidates
-            .into_iter()
-            .zip(results)
-            .filter_map(
-                |(candidate, is_finite)| {
-                    if is_finite {
-                        Some(candidate)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect();
-    }
+    sieve_by_advanced_constraints(&mut candidates, &constraints.advanced);
 
     // Sort candidates by their fitness distance, as obtained in an earlier step:
     candidates.sort_by(|lhs, rhs| {
@@ -150,89 +126,19 @@ where
     Ok(best_candidate)
 }
 
-fn evaluate_candidates<I>(
-    possible_settings: I,
-    constraints: &SanitizedMandatoryMediaTrackConstraints,
-) -> Result<Vec<(MediaTrackSettings, f64)>, OverconstrainedError>
-where
-    I: Iterator<Item = MediaTrackSettings>,
-{
-    #[derive(Default)]
-    struct FailureInfo {
-        failures: usize,
-        errors: HashSet<SettingFitnessDistanceError>,
-    }
-
-    let mut possible_settings_len = 0;
-    let mut candidates: Vec<(MediaTrackSettings, f64)> = vec![];
-    let mut failed_constraints: HashMap<String, FailureInfo> = Default::default();
-
-    // As specified in step 3 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
-    //
-    // > For every possible settings dictionary of copy compute its fitness distance,
-    // > treating bare values of properties as ideal values. Let candidates be the
-    // > set of settings dictionaries for which the fitness distance is finite.
-
-    for settings in possible_settings {
-        possible_settings_len += 1;
-        match constraints.fitness_distance(&settings) {
-            Ok(fitness_distance) => {
-                candidates.push((settings, fitness_distance));
-            }
-            Err(error) => {
-                for (property, setting_error) in error.setting_errors {
-                    let entry = failed_constraints
-                        .entry(property)
-                        .or_insert_with(Default::default);
-                    entry.failures += 1;
-                    entry.errors.insert(setting_error);
-                }
-            }
-        }
-    }
-
-    if candidates.is_empty() {
-        // As specified in step 3 of the `SelectSettings` algorithm:
-        // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
-        //
-        // > If `candidates` is empty, return `undefined` as the result of the `SelectSettings` algorithm.
-
-        let failed_constraint = failed_constraints
-            .into_iter()
-            .max_by_key(|(_, failure_info)| failure_info.failures);
-
-        let (constraint, failure_info) =
-            failed_constraint.expect("Empty candidates implies non-empty failed constraints");
-
-        if failure_info.failures == possible_settings_len {
-            return Err(generate_overconstrained_error(
-                constraint,
-                failure_info.errors,
-            ));
-        }
-    }
-
-    Ok(candidates)
-}
-
 #[derive(Default)]
 struct ConstraintFailureInfo {
     failures: usize,
     errors: HashSet<SettingFitnessDistanceError>,
 }
 
-fn select_feasible_candidates<I>(
+fn select_feasible_candidates<'a, I>(
     possible_settings: I,
     basic_or_required_constraints: &SanitizedMediaTrackConstraintSet,
-) -> Result<Vec<(MediaTrackSettings, f64)>, OverconstrainedError>
+) -> Result<Vec<(&'a MediaTrackSettings, f64)>, OverconstrainedError>
 where
-    I: Iterator<Item = MediaTrackSettings>,
+    I: Iterator<Item = &'a MediaTrackSettings>,
 {
-    let mut settings_len = 0;
-    let mut candidates: Vec<(MediaTrackSettings, f64)> = vec![];
-    let mut failed_constraints: HashMap<String, ConstraintFailureInfo> = Default::default();
-
     // As specified in step 3 of the `SelectSettings` algorithm:
     // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
     //
@@ -240,9 +146,13 @@ where
     // > treating bare values of properties as ideal values. Let candidates be the
     // > set of settings dictionaries for which the fitness distance is finite.
 
+    let mut settings_len = 0;
+    let mut candidates: Vec<(&'a MediaTrackSettings, f64)> = vec![];
+    let mut failed_constraints: HashMap<String, ConstraintFailureInfo> = Default::default();
+
     for settings in possible_settings {
         settings_len += 1;
-        match basic_or_required_constraints.fitness_distance(&settings) {
+        match basic_or_required_constraints.fitness_distance(settings) {
             Ok(fitness_distance) => {
                 candidates.push((settings, fitness_distance));
             }
@@ -264,6 +174,59 @@ where
     }
 
     Ok(candidates)
+}
+
+/// Implements step 5 of the `SelectSettings` algorithm:
+/// https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+///
+/// # Note:
+/// This may change the order of items in `feasible_candidates`.
+/// In practice however this is not a problem as we have to sort
+/// it by fitness-distance eventually anyway.
+fn sieve_by_advanced_constraints<'a>(
+    feasible_candidates: &mut Vec<(&'a MediaTrackSettings, f64)>,
+    advanced_constraints: &SanitizedAdvancedMediaTrackConstraints,
+) {
+    // As specified in step 5 of the `SelectSettings` algorithm:
+    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    //
+    // > Iterate over the 'advanced' ConstraintSets in newConstraints in the order in which they were specified.
+    // >
+    // > For each ConstraintSet:
+    // >
+    // > 1. compute the fitness distance between it and each settings dictionary in candidates,
+    // >    treating bare values of properties as exact.
+    // >
+    // > 2. If the fitness distance is finite for one or more settings dictionaries in candidates,
+    // >    keep those settings dictionaries in candidates, discarding others.
+    // >
+    // >    If the fitness distance is infinite for all settings dictionaries in candidates,
+    // >    ignore this ConstraintSet.
+
+    for advanced_constraint_set in advanced_constraints.iter() {
+        let results: Vec<bool> = feasible_candidates
+            .iter()
+            .map(
+                |(candidate, _)| match advanced_constraint_set.fitness_distance(candidate) {
+                    Ok(fitness_distance) => {
+                        debug_assert!(fitness_distance.is_finite());
+                        true
+                    }
+                    Err(_) => false,
+                },
+            )
+            .collect();
+
+        if !results.iter().any(|is_finite| *is_finite) {
+            continue;
+        }
+
+        for (index, is_match) in results.iter().enumerate() {
+            if !is_match {
+                feasible_candidates.swap_remove(index);
+            }
+        }
+    }
 }
 
 fn select_failed_constraint(
