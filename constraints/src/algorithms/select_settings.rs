@@ -1,10 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
+use ordered_float::NotNan;
+
 use crate::{
     algorithms::{fitness_distance::SettingFitnessDistanceError, FitnessDistance},
     constraints::SanitizedAdvancedMediaTrackConstraints,
     errors::OverconstrainedError,
-    MediaTrackSettings, SanitizedMediaTrackConstraintSet, SanitizedMediaTrackConstraints,
+    BareOrMandatoryMediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints,
+    SanitizedMandatoryMediaTrackConstraints, SanitizedMediaTrackConstraintSet,
+    SanitizedMediaTrackConstraints,
 };
 
 pub trait SelectSettingsPolicy {
@@ -47,6 +51,47 @@ impl SelectSettingsPolicy for SelectFirstSettingsPolicy {
         // Safety: We know that `candidates is non-empty:
         candidates
             .next()
+            .expect("The `candidates` iterator should have produced at least one item.")
+    }
+}
+
+/// A settings selection policy that picks the item that's closest to the ideal.
+pub struct SelectIdealSettingsPolicy {
+    sanitized_constraints: SanitizedMandatoryMediaTrackConstraints,
+}
+
+impl SelectIdealSettingsPolicy {
+    pub fn new(
+        ideal_settings: MediaTrackSettings,
+        supported_constraints: &MediaTrackSupportedConstraints,
+    ) -> Self {
+        let sanitized_constraints = BareOrMandatoryMediaTrackConstraints::from_iter(
+            ideal_settings
+                .into_iter()
+                .map(|(property, setting)| (property, setting.into())),
+        )
+        .into_resolved()
+        .into_sanitized(supported_constraints);
+
+        Self {
+            sanitized_constraints,
+        }
+    }
+}
+
+impl SelectSettingsPolicy for SelectIdealSettingsPolicy {
+    fn select_candidate<'b, I>(&self, candidates: I) -> &'b MediaTrackSettings
+    where
+        I: Iterator<Item = &'b MediaTrackSettings>,
+    {
+        candidates
+            .min_by_key(|settings| {
+                let fitness_distance = self
+                    .sanitized_constraints
+                    .fitness_distance(settings)
+                    .expect("Fitness distance should be positive.");
+                NotNan::new(fitness_distance).expect("Expected non-NaN fitness distance.")
+            })
             .expect("The `candidates` iterator should have produced at least one item.")
     }
 }
