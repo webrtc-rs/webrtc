@@ -15,7 +15,6 @@ pub enum SettingFitnessDistanceErrorKind {
     Mismatch,
     TooSmall,
     TooLarge,
-    Invalid,
 }
 
 impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for MediaTrackConstraint {
@@ -93,19 +92,11 @@ impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for MediaTrackConstraint
             }
         };
 
-        match result {
-            Ok(fitness_distance) => {
-                if fitness_distance.is_finite() {
-                    Ok(fitness_distance)
-                } else {
-                    Err(Self::Error {
-                        kind: SettingFitnessDistanceErrorKind::Invalid,
-                        constraint: format!("{}", self.to_required_only()),
-                        setting: Some(format!("{:?}", setting)),
-                    })
-                }
-            }
-            Err(error) => Err(error),
+        #[cfg(debug_assertions)]
+        if let Ok(fitness_distance) = result {
+            debug_assert!({ fitness_distance.is_finite() });
         }
+
+        result
     }
 }
