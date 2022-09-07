@@ -96,7 +96,7 @@ impl Request {
     }
 
     async fn handle_data_packet(&mut self) -> Result<()> {
-        log::debug!("received DataPacket from {}", self.src_addr);
+        // log::debug!("received DataPacket from {}", self.src_addr);
         let mut c = ChannelData {
             raw: self.buff.clone(),
             ..Default::default()
@@ -764,7 +764,7 @@ impl Request {
     }
 
     pub(crate) async fn handle_channel_data(&mut self, c: &ChannelData) -> Result<()> {
-        log::debug!("received ChannelData from {}", self.src_addr);
+        // log::debug!("received ChannelData from {}", self.src_addr);
 
         let a = self
             .allocation_manager
