@@ -405,8 +405,4 @@ impl Allocation {
             }
         });
     }
-
-    pub fn username(&self) -> String {
-        self.username.to_string()
-    }
 }
