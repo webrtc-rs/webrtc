@@ -44,8 +44,15 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn get_allocations(&self) -> AllocationMap {
-        Arc::clone(&self.allocations)
+    pub async fn get_allocations(&self) -> HashMap<FiveTuple, Username> {
+        self.allocations
+            .lock()
+            .await
+            .iter()
+            .map(|(five_tuple, allocation)| -> (FiveTuple, Username) {
+                (five_tuple.clone(), allocation.username.clone())
+            })
+            .collect()
     }
 
     pub async fn get_metrics(&self, five_tuple: FiveTuple) -> Result<usize> {

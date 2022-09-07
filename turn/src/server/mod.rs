@@ -5,13 +5,14 @@ pub mod config;
 pub mod request;
 
 use crate::{
-    allocation::{allocation_manager::*, five_tuple::FiveTuple, AllocationMap},
+    allocation::{allocation_manager::*, five_tuple::FiveTuple},
     auth::AuthHandler,
     error::*,
     proto::lifetime::DEFAULT_LIFETIME,
 };
 use config::*;
 use request::*;
+use stun::textattrs::Username;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -95,7 +96,7 @@ impl Server {
         }
     }
 
-    pub async fn get_allocations(&self) -> Result<AllocationMap> {
+    pub async fn get_allocations(&self) -> Result<HashMap<FiveTuple, Username>> {
         let tx = self.handle.lock().await.clone();
         if let Some(tx) = tx {
             let (allocation_tx, mut allocation_rx) = mpsc::channel(1);
@@ -236,7 +237,7 @@ enum Command {
     /// `username`.
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
 
-    GetAllocations(Arc<mpsc::Sender<AllocationMap>>),
+    GetAllocations(Arc<mpsc::Sender<HashMap<FiveTuple, Username>>>),
 
     GetMetrics(FiveTuple, Arc<mpsc::Sender<Result<usize>>>),
 
