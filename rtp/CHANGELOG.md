@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-## Prior to 0.6.5
+## v0.6.7
 
-Before 0.6.5 there was no changelog, previous changes are sometimes, but not always, available in the [GitHub Releases](https://github.com/webrtc-rs/rtp/releases).
+* Bumped util dependecy to `0.6.0`.
+
+## Prior to 0.6.7
+
+Before 0.6.7 there was no changelog, previous changes are sometimes, but not always, available in the [GitHub Releases](https://github.com/webrtc-rs/rtp/releases).
 
