@@ -1,6 +1,6 @@
 [package]
 name = "turn"
-version = "0.5.4"
+version = "0.6.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of TURN"
@@ -12,8 +12,8 @@ repository = "https://github.com/webrtc-rs/turn"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { version = "0.5.4", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
-stun = { version = "0.4.2", path = "../stun" }
+util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
+stun = { version = "0.4.3", path = "../stun" }
 
 tokio = { version = "1.19", features = ["full"] }
 async-trait = "0.1.56"

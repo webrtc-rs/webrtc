@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.2.0
+## v0.6.0
 
 * [#15 update deps + loosen some requirements](https://github.com/webrtc-rs/turn/pull/15) by [@melekes](https://github.com/melekes).
 * [#11 Fixed spelling of convenience](https://github.com/webrtc-rs/turn/pull/11) by [@Charles-Schleich ](https://github.com/Charles-Schleich).
@@ -10,7 +10,7 @@
 * [#246 Fix warnings on windows](https://github.com/webrtc-rs/webrtc/pull/246) by [@https://github.com/xnorpx](https://github.com/xnorpx).
 
 
-## Prior to 0.1.3
+## Prior to 0.6.0
 
-Before 0.1.3 there was no changelog, previous changes are sometimes, but not always, available in the [GitHub Releases](https://github.com/webrtc-rs/turn/releases).
+Before 0.6.0 there was no changelog, previous changes are sometimes, but not always, available in the [GitHub Releases](https://github.com/webrtc-rs/turn/releases).
 
