@@ -309,12 +309,12 @@ impl Allocation {
                     }
                 };
 
-                // log::debug!(
-                //     "relay socket {:?} received {} bytes from {}",
-                //     relay_socket.local_addr().await,
-                //     n,
-                //     src_addr
-                // );
+                log::debug!(
+                    "relay socket {:?} received {} bytes from {}",
+                    relay_socket.local_addr().await,
+                    n,
+                    src_addr
+                );
 
                 let cb_number = {
                     let mut cb_number = None;
