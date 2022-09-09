@@ -98,10 +98,10 @@ impl Server {
     pub async fn get_allocations_info(
         &self,
         five_tuples: Option<Vec<FiveTuple>>,
-    ) -> Result<Vec<AllocationInfo>> {
+    ) -> Result<HashMap<FiveTuple, AllocationInfo>> {
         if let Some(five_tuples) = &five_tuples {
             if five_tuples.is_empty() {
-                return Ok(Vec::new());
+                return Ok(HashMap::new());
             }
         }
 
@@ -114,7 +114,7 @@ impl Server {
             ))
             .map_err(|_| Error::ErrClosed)?;
 
-            let mut info: Vec<AllocationInfo> = Vec::new();
+            let mut info: HashMap<FiveTuple, AllocationInfo> = HashMap::new();
 
             for _ in 0..tx.receiver_count() {
                 info.extend(
@@ -239,7 +239,10 @@ enum Command {
     /// `username`.
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
 
-    GetAllocationsInfo(Option<Vec<FiveTuple>>, mpsc::Sender<Vec<AllocationInfo>>),
+    GetAllocationsInfo(
+        Option<Vec<FiveTuple>>,
+        mpsc::Sender<HashMap<FiveTuple, AllocationInfo>>,
+    ),
 
     /// Command to close the [`Server`].
     Close(Arc<mpsc::Receiver<()>>),

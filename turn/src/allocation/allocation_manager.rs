@@ -47,8 +47,8 @@ impl Manager {
     pub async fn get_allocation_infos(
         &self,
         five_tuples: Option<Vec<FiveTuple>>,
-    ) -> Vec<AllocationInfo> {
-        let mut infos = Vec::new();
+    ) -> HashMap<FiveTuple, AllocationInfo> {
+        let mut infos = HashMap::new();
 
         self.allocations
             .lock()
@@ -56,14 +56,17 @@ impl Manager {
             .iter()
             .for_each(|(five_tuple, allocation)| {
                 if five_tuples.is_none() || five_tuples.as_ref().unwrap().contains(five_tuple) {
-                    infos.push(AllocationInfo::new(
+                    drop(infos.insert(
                         five_tuple.clone(),
-                        allocation.username.text.to_string(),
-                        if self.gather_metrics {
-                            Some(allocation.transmitted_bytes.load(Ordering::SeqCst))
-                        } else {
-                            None
-                        },
+                        AllocationInfo::new(
+                            five_tuple.clone(),
+                            allocation.username.text.to_string(),
+                            if self.gather_metrics {
+                                Some(allocation.transmitted_bytes.load(Ordering::SeqCst))
+                            } else {
+                                None
+                            },
+                        ),
                     ));
                 }
             });
