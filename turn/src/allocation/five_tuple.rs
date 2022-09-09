@@ -34,3 +34,13 @@ impl fmt::Display for FiveTuple {
         write!(f, "{}_{}_{}", self.protocol, self.src_addr, self.dst_addr)
     }
 }
+
+impl fmt::Debug for FiveTuple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FiveTuple")
+            .field("protocol", &self.protocol)
+            .field("src_addr", &self.src_addr)
+            .field("dst_addr", &self.dst_addr)
+            .finish()
+    }
+}

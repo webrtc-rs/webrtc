@@ -32,6 +32,22 @@ const RTP_MTU: usize = 1500;
 
 pub type AllocationMap = Arc<Mutex<HashMap<FiveTuple, Arc<Allocation>>>>;
 
+pub struct AllocationInfo {
+    pub five_tuple: FiveTuple,
+    pub username: String,
+    pub transmitted_bytes: Option<usize>,
+}
+
+impl AllocationInfo {
+    pub fn new(five_tuple: FiveTuple, username: String, transmitted_bytes: Option<usize>) -> Self {
+        Self {
+            five_tuple,
+            username,
+            transmitted_bytes,
+        }
+    }
+}
+
 // Allocation is tied to a FiveTuple and relays traffic
 // use create_allocation and get_allocation to operate
 pub struct Allocation {

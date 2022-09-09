@@ -5,14 +5,13 @@ pub mod config;
 pub mod request;
 
 use crate::{
-    allocation::{allocation_manager::*, five_tuple::FiveTuple},
+    allocation::{allocation_manager::*, five_tuple::FiveTuple, AllocationInfo},
     auth::AuthHandler,
     error::*,
     proto::lifetime::DEFAULT_LIFETIME,
 };
 use config::*;
 use request::*;
-use stun::textattrs::Username;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -96,27 +95,37 @@ impl Server {
         }
     }
 
-    pub async fn get_allocations(&self) -> Result<HashMap<FiveTuple, Username>> {
-        let tx = self.handle.lock().await.clone();
-        if let Some(tx) = tx {
-            let (allocation_tx, mut allocation_rx) = mpsc::channel(1);
-            tx.send(Command::GetAllocations(Arc::new(allocation_tx)))
-                .map_err(|_| Error::ErrClosed)?;
-
-            Ok(allocation_rx.recv().await.ok_or_else(|| Error::ErrClosed)?)
-        } else {
-            Err(Error::ErrClosed)
+    pub async fn get_allocations_info(
+        &self,
+        five_tuples: Option<Vec<FiveTuple>>,
+    ) -> Result<Vec<AllocationInfo>> {
+        if let Some(five_tuples) = &five_tuples {
+            if five_tuples.is_empty() {
+                return Ok(Vec::new());
+            }
         }
-    }
 
-    pub async fn get_metrics(&self, five_tuple: FiveTuple) -> Result<usize> {
         let tx = self.handle.lock().await.clone();
         if let Some(tx) = tx {
-            let (metrics_tx, mut metrics_rx) = mpsc::channel(1);
-            tx.send(Command::GetMetrics(five_tuple, Arc::new(metrics_tx)))
-                .map_err(|_| Error::ErrClosed)?;
+            let (allocation_infos_tx, mut allocation_infos_rx) = mpsc::channel(1);
+            tx.send(Command::GetAllocationsInfo(
+                five_tuples,
+                allocation_infos_tx,
+            ))
+            .map_err(|_| Error::ErrClosed)?;
 
-            metrics_rx.recv().await.ok_or_else(|| Error::ErrClosed)?
+            let mut info: Vec<AllocationInfo> = Vec::new();
+
+            for _ in 0..tx.receiver_count() {
+                info.extend(
+                    allocation_infos_rx
+                        .recv()
+                        .await
+                        .ok_or_else(|| Error::ErrClosed)?,
+                );
+            }
+
+            Ok(info)
         } else {
             Err(Error::ErrClosed)
         }
@@ -147,19 +156,12 @@ impl Server {
                                 .await;
                             continue;
                         }
-                        Ok(Command::GetAllocations(sender)) => {
+                        Ok(Command::GetAllocationsInfo(five_tuples, sender)) => {
                             drop(
                                 sender
-                                    .send(allocation_manager.get_allocations().await)
-                                    .await,
-                            );
-
-                            continue;
-                        }
-                        Ok(Command::GetMetrics(five_tuple, sender)) => {
-                            drop(
-                                sender
-                                    .send(allocation_manager.get_metrics(five_tuple).await)
+                                    .send(
+                                        allocation_manager.get_allocation_infos(five_tuples).await,
+                                    )
                                     .await,
                             );
 
@@ -237,9 +239,7 @@ enum Command {
     /// `username`.
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
 
-    GetAllocations(Arc<mpsc::Sender<HashMap<FiveTuple, Username>>>),
-
-    GetMetrics(FiveTuple, Arc<mpsc::Sender<Result<usize>>>),
+    GetAllocationsInfo(Option<Vec<FiveTuple>>, mpsc::Sender<Vec<AllocationInfo>>),
 
     /// Command to close the [`Server`].
     Close(Arc<mpsc::Receiver<()>>),

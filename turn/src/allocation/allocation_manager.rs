@@ -44,28 +44,31 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn get_allocations(&self) -> HashMap<FiveTuple, Username> {
+    pub async fn get_allocation_infos(
+        &self,
+        five_tuples: Option<Vec<FiveTuple>>,
+    ) -> Vec<AllocationInfo> {
+        let mut infos = Vec::new();
+
         self.allocations
             .lock()
             .await
             .iter()
-            .map(|(five_tuple, allocation)| -> (FiveTuple, Username) {
-                (five_tuple.clone(), allocation.username.clone())
-            })
-            .collect()
-    }
+            .for_each(|(five_tuple, allocation)| {
+                if five_tuples.is_none() || five_tuples.as_ref().unwrap().contains(five_tuple) {
+                    infos.push(AllocationInfo::new(
+                        five_tuple.clone(),
+                        allocation.username.text.to_string(),
+                        if self.gather_metrics {
+                            Some(allocation.transmitted_bytes.load(Ordering::SeqCst))
+                        } else {
+                            None
+                        },
+                    ));
+                }
+            });
 
-    pub async fn get_metrics(&self, five_tuple: FiveTuple) -> Result<usize> {
-        if !self.gather_metrics {
-            return Err(Error::ErrNoMetrics);
-        }
-
-        let guarded = self.allocations.lock().await;
-
-        match guarded.get(&five_tuple) {
-            Some(location) => Ok(location.transmitted_bytes.load(Ordering::Relaxed)),
-            None => Err(Error::ErrNoAllocationFound),
-        }
+        infos
     }
 
     // get_allocation fetches the allocation matching the passed FiveTuple
