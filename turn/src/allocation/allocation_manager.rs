@@ -50,26 +50,30 @@ impl Manager {
     ) -> HashMap<FiveTuple, AllocationInfo> {
         let mut infos = HashMap::new();
 
-        self.allocations
-            .lock()
-            .await
-            .iter()
-            .for_each(|(five_tuple, allocation)| {
-                if five_tuples.is_none() || five_tuples.as_ref().unwrap().contains(five_tuple) {
-                    drop(infos.insert(
+        log::error!("alloc lock");
+
+        let guarded = self.allocations.lock().await;
+
+        guarded.iter().for_each(|(five_tuple, allocation)| {
+            if five_tuples.is_none() || five_tuples.as_ref().unwrap().contains(five_tuple) {
+                drop(infos.insert(
+                    five_tuple.clone(),
+                    AllocationInfo::new(
                         five_tuple.clone(),
-                        AllocationInfo::new(
-                            five_tuple.clone(),
-                            allocation.username.text.to_string(),
-                            if self.gather_metrics {
-                                Some(allocation.transmitted_bytes.load(Ordering::SeqCst))
-                            } else {
-                                None
-                            },
-                        ),
-                    ));
-                }
-            });
+                        allocation.username.text.to_string(),
+                        if self.gather_metrics {
+                            Some(allocation.transmitted_bytes.load(Ordering::SeqCst))
+                        } else {
+                            None
+                        },
+                    ),
+                ));
+            }
+        });
+
+        drop(guarded);
+
+        log::error!("drop lock");
 
         infos
     }
