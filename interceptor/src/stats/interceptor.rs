@@ -40,7 +40,7 @@ enum Message {
 
 #[derive(Debug)]
 enum StatsUpdate {
-    /// Stats collected on the reciving end(inbound) of an RTP stream.
+    /// Stats collected on the receiving end(inbound) of an RTP stream.
     InboundRTP {
         packets: u64,
         header_bytes: u64,
