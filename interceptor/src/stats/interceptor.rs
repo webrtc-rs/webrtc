@@ -283,7 +283,7 @@ fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: Stats
             rtt_ms,
             packets_and_bytes_sent,
         } => {
-            // This is a sender report we recived, as such it concerns an RTP stream that's
+            // This is a sender report we received, as such it concerns an RTP stream that's
             // outbound at the remote.
             let stats = ssrc_stats.get_or_create_inbound_stream_stats(ssrc);
 
