@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Further extended stats interceptors to collect stats for `RemoteOutoundRTPStats` and improve `RemoteInboundRTPStats` collection. [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).
+
 ## v0.8.0
 
 * [#14 Don't panic on seqnum rollover](https://github.com/webrtc-rs/interceptor/pull/14) contributed by by [@pthatcher](https://github.com/pthatcher).
