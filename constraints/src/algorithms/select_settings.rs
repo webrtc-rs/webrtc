@@ -28,7 +28,7 @@ pub trait TieBreakingPolicy {
     /// > and User Agent default property values.
     fn select_candidate<'a, I>(&self, candidates: I) -> &'a MediaTrackSettings
     where
-        I: Iterator<Item = &'a MediaTrackSettings>;
+        I: IntoIterator<Item = &'a MediaTrackSettings>;
 }
 
 /// A naïve settings selection policy that just picks the first item of the iterator.
@@ -47,12 +47,13 @@ impl Default for SelectFirstSettingsPolicy {
 }
 
 impl TieBreakingPolicy for SelectFirstSettingsPolicy {
-    fn select_candidate<'a, I>(&self, mut candidates: I) -> &'a MediaTrackSettings
+    fn select_candidate<'a, I>(&self, candidates: I) -> &'a MediaTrackSettings
     where
-        I: Iterator<Item = &'a MediaTrackSettings>,
+        I: IntoIterator<Item = &'a MediaTrackSettings>,
     {
         // Safety: We know that `candidates is non-empty:
         candidates
+            .into_iter()
             .next()
             .expect("The `candidates` iterator should have produced at least one item.")
     }
@@ -85,9 +86,10 @@ impl SelectIdealSettingsPolicy {
 impl TieBreakingPolicy for SelectIdealSettingsPolicy {
     fn select_candidate<'b, I>(&self, candidates: I) -> &'b MediaTrackSettings
     where
-        I: Iterator<Item = &'b MediaTrackSettings>,
+        I: IntoIterator<Item = &'b MediaTrackSettings>,
     {
         candidates
+            .into_iter()
             .min_by_key(|settings| {
                 let fitness_distance = self
                     .sanitized_constraints
