@@ -305,3 +305,6 @@ fn generate_overconstrained_error(
         message,
     }
 }
+
+#[cfg(test)]
+mod tests;

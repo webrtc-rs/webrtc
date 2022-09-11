@@ -107,12 +107,11 @@ fn first_settings_policy() -> SelectFirstSettingsPolicy {
 fn test_overconstrained<T>(
     possible_settings: &[MediaTrackSettings],
     mandatory_constraints: MandatoryMediaTrackConstraints,
-    select_settings_policy: T,
+    tie_breaking_policy: T,
 ) -> OverconstrainedError
 where
     T: TieBreakingPolicy,
 {
-    let tie_breaking_policy = first_settings_policy();
     let constraints = MediaTrackConstraints {
         mandatory: mandatory_constraints,
         advanced: AdvancedMediaTrackConstraints::default(),
@@ -126,26 +125,6 @@ where
     let SelectSettingsError::Overconstrained(overconstrained_error) = actual;
 
     overconstrained_error
-}
-
-fn test_constrained_mandatory<T>(
-    possible_settings: &[MediaTrackSettings],
-    mandatory_constraints: MandatoryMediaTrackConstraints,
-    tie_breaking_policy: T,
-) -> &MediaTrackSettings
-where
-    T: TieBreakingPolicy,
-{
-    let tie_breaking_policy = first_settings_policy();
-    let constraints = MediaTrackConstraints {
-        mandatory: mandatory_constraints,
-        advanced: AdvancedMediaTrackConstraints::default(),
-    }
-    .to_sanitized(&default_supported_constraints());
-
-    let result = select_settings(possible_settings.iter(), &constraints, &tie_breaking_policy);
-
-    result.unwrap()
 }
 
 fn test_constrained<T>(
@@ -324,12 +303,13 @@ mod constrained {
                 None => continue,
             };
 
-            let actual = test_constrained_mandatory(
+            let actual = test_constrained(
                 &possible_settings,
                 MandatoryMediaTrackConstraints::from_iter([(
                     DEVICE_ID,
                     MediaTrackConstraint::exact_from(setting.clone()),
                 )]),
+                AdvancedMediaTrackConstraints::default(),
                 first_settings_policy(),
             );
 
@@ -359,7 +339,7 @@ mod constrained {
                 ]),
             ];
 
-            let actual = test_constrained_mandatory(
+            let actual = test_constrained(
                 &possible_settings,
                 MandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
@@ -367,6 +347,7 @@ mod constrained {
                         .exact("group-1".to_owned())
                         .into(),
                 )]),
+                AdvancedMediaTrackConstraints::default(),
                 first_settings_policy(),
             );
 
@@ -383,12 +364,13 @@ mod constrained {
                 MediaTrackSettings::from_iter([(DEVICE_ID, "c".into()), (FRAME_RATE, 60.into())]),
             ];
 
-            let actual = test_constrained_mandatory(
+            let actual = test_constrained(
                 &possible_settings,
                 MandatoryMediaTrackConstraints::from_iter([(
                     FRAME_RATE,
                     ValueRangeConstraint::default().exact(30).into(),
                 )]),
+                AdvancedMediaTrackConstraints::default(),
                 first_settings_policy(),
             );
 
@@ -414,7 +396,7 @@ mod constrained {
                 ]),
             ];
 
-            let actual = test_constrained_mandatory(
+            let actual = test_constrained(
                 &possible_settings,
                 MandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
@@ -422,6 +404,7 @@ mod constrained {
                         .exact(vec!["group-1".to_owned(), "group-3".to_owned()])
                         .into(),
                 )]),
+                AdvancedMediaTrackConstraints::default(),
                 first_settings_policy(),
             );
 
@@ -451,7 +434,7 @@ mod constrained {
                 ]),
             ];
 
-            let actual = test_constrained_mandatory(
+            let actual = test_constrained(
                 &possible_settings,
                 MandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
@@ -459,6 +442,7 @@ mod constrained {
                         .ideal("group-1".to_owned())
                         .into(),
                 )]),
+                AdvancedMediaTrackConstraints::default(),
                 first_settings_policy(),
             );
 
@@ -475,12 +459,13 @@ mod constrained {
                 MediaTrackSettings::from_iter([(DEVICE_ID, "c".into()), (FRAME_RATE, 60.into())]),
             ];
 
-            let actual = test_constrained_mandatory(
+            let actual = test_constrained(
                 &possible_settings,
                 MandatoryMediaTrackConstraints::from_iter([(
                     FRAME_RATE,
                     ValueRangeConstraint::default().ideal(32).into(),
                 )]),
+                AdvancedMediaTrackConstraints::default(),
                 first_settings_policy(),
             );
 
@@ -506,7 +491,7 @@ mod constrained {
                 ]),
             ];
 
-            let actual = test_constrained_mandatory(
+            let actual = test_constrained(
                 &possible_settings,
                 MandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
@@ -514,6 +499,7 @@ mod constrained {
                         .ideal(vec!["group-1".to_owned(), "group-3".to_owned()])
                         .into(),
                 )]),
+                AdvancedMediaTrackConstraints::default(),
                 first_settings_policy(),
             );
 
