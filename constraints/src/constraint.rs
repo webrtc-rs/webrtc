@@ -29,6 +29,17 @@ pub use self::{
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct EmptyConstraint {}
 
+/// The kind of a track [constraint][constraint].
+///
+/// [constraint]: https://www.w3.org/TR/mediacapture-streams/#dfn-constraint
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum MediaTrackConstraintKind {
+    /// Basic constraint.
+    Basic,
+    /// Advanced constraint.
+    Advanced,
+}
+
 /// A single [constraint][media_track_constraints] value for a [`MediaStreamTrack`][media_stream_track] object.
 ///
 /// # W3C Spec Compliance
@@ -173,6 +184,31 @@ impl From<ValueConstraint<String>> for BareOrMediaTrackConstraint {
 impl From<BareOrValueConstraint<String>> for BareOrMediaTrackConstraint {
     fn from(constraint: BareOrValueConstraint<String>) -> Self {
         Self::String(constraint)
+    }
+}
+
+impl BareOrMediaTrackConstraint {
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> MediaTrackConstraint {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> MediaTrackConstraint {
+        match self {
+            Self::Empty(constraint) => MediaTrackConstraint::Empty(constraint.clone()),
+            Self::IntegerRange(constraint) => {
+                MediaTrackConstraint::IntegerRange(constraint.into_resolved(kind))
+            }
+            Self::FloatRange(constraint) => {
+                MediaTrackConstraint::FloatRange(constraint.into_resolved(kind))
+            }
+            Self::Bool(constraint) => MediaTrackConstraint::Bool(constraint.into_resolved(kind)),
+            Self::StringSequence(constraint) => {
+                MediaTrackConstraint::StringSequence(constraint.into_resolved(kind))
+            }
+            Self::String(constraint) => {
+                MediaTrackConstraint::String(constraint.into_resolved(kind))
+            }
+        }
     }
 }
 

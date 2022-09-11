@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintKind};
 
 use super::track::GenericBoolOrMediaTrackConstraints;
 
@@ -52,6 +52,20 @@ pub struct GenericMediaStreamConstraints<T> {
     pub audio: GenericBoolOrMediaTrackConstraints<T>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub video: GenericBoolOrMediaTrackConstraints<T>,
+}
+
+impl BareOrMediaStreamConstraints {
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> MediaStreamConstraints {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> MediaStreamConstraints {
+        let Self { audio, video } = self;
+        MediaStreamConstraints {
+            audio: audio.into_resolved(kind),
+            video: video.into_resolved(kind),
+        }
+    }
 }
 
 #[cfg(feature = "serde")]

@@ -1,6 +1,8 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::MediaTrackConstraintKind;
+
 /// A bare value or constraint specifying a sequence of accepted values.
 ///
 /// # W3C Spec Compliance
@@ -45,6 +47,25 @@ impl<T> From<Vec<T>> for BareOrValueSequenceConstraint<T> {
 impl<T> From<ValueSequenceConstraint<T>> for BareOrValueSequenceConstraint<T> {
     fn from(constraint: ValueSequenceConstraint<T>) -> Self {
         Self::Constraint(constraint)
+    }
+}
+
+impl<T> BareOrValueSequenceConstraint<T>
+where
+    T: Clone,
+{
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> ValueSequenceConstraint<T> {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> ValueSequenceConstraint<T> {
+        match self {
+            Self::Bare(bare) => match kind {
+                MediaTrackConstraintKind::Basic => ValueSequenceConstraint::ideal_only(bare),
+                MediaTrackConstraintKind::Advanced => ValueSequenceConstraint::exact_only(bare),
+            },
+            Self::Constraint(constraint) => constraint,
+        }
     }
 }
 
@@ -106,6 +127,31 @@ impl<T> Default for ValueSequenceConstraint<T> {
             exact: None,
             ideal: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_to_advanced() {
+        let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
+        let kind = MediaTrackConstraintKind::Advanced;
+        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(kind);
+        let expected = ValueSequenceConstraint::exact_only(vec![true]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn resolve_to_basic() {
+        let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
+        let kind = MediaTrackConstraintKind::Basic;
+        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(kind);
+        let expected = ValueSequenceConstraint::ideal_only(vec![true]);
+
+        assert_eq!(actual, expected);
     }
 }
 
