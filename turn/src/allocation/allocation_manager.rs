@@ -50,8 +50,6 @@ impl Manager {
     ) -> HashMap<FiveTuple, AllocationInfo> {
         let mut infos = HashMap::new();
 
-        log::error!("alloc lock");
-
         let guarded = self.allocations.lock().await;
 
         guarded.iter().for_each(|(five_tuple, allocation)| {
@@ -72,8 +70,6 @@ impl Manager {
         });
 
         drop(guarded);
-
-        log::error!("drop lock");
 
         infos
     }
