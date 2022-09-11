@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintKind};
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
 
@@ -97,6 +97,20 @@ impl<T> GenericAdvancedMediaTrackConstraints<T> {
 
     pub fn remove(&mut self, index: usize) -> GenericMediaTrackConstraintSet<T> {
         self.0.remove(index)
+    }
+}
+
+impl BareOrAdvancedMediaTrackConstraints {
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> AdvancedMediaTrackConstraints {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> AdvancedMediaTrackConstraints {
+        AdvancedMediaTrackConstraints::new(
+            self.into_iter()
+                .map(|constraint_set| constraint_set.into_resolved(kind))
+                .collect(),
+        )
     }
 }
 

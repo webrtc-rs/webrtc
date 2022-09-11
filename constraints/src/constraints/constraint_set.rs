@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintKind};
 
 pub type BareOrMediaTrackConstraintSet = GenericMediaTrackConstraintSet<BareOrMediaTrackConstraint>;
 pub type MediaTrackConstraintSet = GenericMediaTrackConstraintSet<MediaTrackConstraint>;
@@ -118,6 +118,20 @@ impl<T> GenericMediaTrackConstraintSet<T> {
         Q: AsRef<str>,
     {
         self.0.contains_key(property.as_ref())
+    }
+}
+
+impl BareOrMediaTrackConstraintSet {
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> MediaTrackConstraintSet {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> MediaTrackConstraintSet {
+        MediaTrackConstraintSet::new(
+            self.into_iter()
+                .map(|(property, constraint)| (property, constraint.into_resolved(kind)))
+                .collect(),
+        )
     }
 }
 

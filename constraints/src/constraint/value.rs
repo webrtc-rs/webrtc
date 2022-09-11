@@ -1,6 +1,8 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::MediaTrackConstraintKind;
+
 /// A bare value or constraint specifying a single accepted value.
 ///
 /// # W3C Spec Compliance
@@ -39,6 +41,25 @@ impl<T> From<T> for BareOrValueConstraint<T> {
 impl<T> From<ValueConstraint<T>> for BareOrValueConstraint<T> {
     fn from(constraint: ValueConstraint<T>) -> Self {
         Self::Constraint(constraint)
+    }
+}
+
+impl<T> BareOrValueConstraint<T>
+where
+    T: Clone,
+{
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> ValueConstraint<T> {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> ValueConstraint<T> {
+        match self {
+            Self::Bare(bare) => match kind {
+                MediaTrackConstraintKind::Basic => ValueConstraint::ideal_only(bare),
+                MediaTrackConstraintKind::Advanced => ValueConstraint::exact_only(bare),
+            },
+            Self::Constraint(constraint) => constraint,
+        }
     }
 }
 
@@ -99,6 +120,31 @@ impl<T> Default for ValueConstraint<T> {
             exact: None,
             ideal: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_to_advanced() {
+        let constraint = BareOrValueConstraint::Bare(true);
+        let kind = MediaTrackConstraintKind::Advanced;
+        let actual: ValueConstraint<bool> = constraint.into_resolved(kind);
+        let expected = ValueConstraint::exact_only(true);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn resolve_to_basic() {
+        let constraint = BareOrValueConstraint::Bare(true);
+        let kind = MediaTrackConstraintKind::Basic;
+        let actual: ValueConstraint<bool> = constraint.into_resolved(kind);
+        let expected = ValueConstraint::ideal_only(true);
+
+        assert_eq!(actual, expected);
     }
 }
 

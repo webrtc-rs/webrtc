@@ -1,6 +1,8 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::MediaTrackConstraintKind;
+
 /// A bare value or constraint specifying a range of accepted values.
 ///
 /// # W3C Spec Compliance
@@ -41,6 +43,25 @@ impl<T> From<T> for BareOrValueRangeConstraint<T> {
 impl<T> From<ValueRangeConstraint<T>> for BareOrValueRangeConstraint<T> {
     fn from(constraint: ValueRangeConstraint<T>) -> Self {
         Self::Constraint(constraint)
+    }
+}
+
+impl<T> BareOrValueRangeConstraint<T>
+where
+    T: Clone,
+{
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> ValueRangeConstraint<T> {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> ValueRangeConstraint<T> {
+        match self {
+            Self::Bare(bare) => match kind {
+                MediaTrackConstraintKind::Basic => ValueRangeConstraint::ideal_only(bare),
+                MediaTrackConstraintKind::Advanced => ValueRangeConstraint::exact_only(bare),
+            },
+            Self::Constraint(constraint) => constraint,
+        }
     }
 }
 
@@ -109,6 +130,31 @@ impl<T> Default for ValueRangeConstraint<T> {
             exact: None,
             ideal: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_to_advanced() {
+        let constraint = BareOrValueRangeConstraint::Bare(42);
+        let kind = MediaTrackConstraintKind::Advanced;
+        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(kind);
+        let expected = ValueRangeConstraint::exact_only(42);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn resolve_to_basic() {
+        let constraint = BareOrValueRangeConstraint::Bare(42);
+        let kind = MediaTrackConstraintKind::Basic;
+        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(kind);
+        let expected = ValueRangeConstraint::ideal_only(42);
+
+        assert_eq!(actual, expected);
     }
 }
 

@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintKind};
 
 use super::{
     advanced::GenericAdvancedMediaTrackConstraints, constraint_set::GenericMediaTrackConstraintSet,
@@ -114,6 +114,21 @@ impl<T> From<GenericMediaTrackConstraints<T>> for GenericBoolOrMediaTrackConstra
     }
 }
 
+impl BareOrBoolOrMediaTrackConstraints {
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> BoolOrMediaTrackConstraints {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> BoolOrMediaTrackConstraints {
+        match self {
+            Self::Bool(flag) => BoolOrMediaTrackConstraints::Bool(flag),
+            Self::Constraints(constraints) => {
+                BoolOrMediaTrackConstraints::Constraints(constraints.into_resolved(kind))
+            }
+        }
+    }
+}
+
 /// The constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
 /// # W3C Spec Compliance
@@ -181,6 +196,20 @@ impl<T> Default for GenericMediaTrackConstraints<T> {
         Self {
             basic: Default::default(),
             advanced: Default::default(),
+        }
+    }
+}
+
+impl BareOrMediaTrackConstraints {
+    pub fn to_resolved(&self, kind: MediaTrackConstraintKind) -> MediaTrackConstraints {
+        self.clone().into_resolved(kind)
+    }
+
+    pub fn into_resolved(self, kind: MediaTrackConstraintKind) -> MediaTrackConstraints {
+        let Self { basic, advanced } = self;
+        MediaTrackConstraints {
+            basic: basic.into_resolved(kind),
+            advanced: advanced.into_resolved(kind),
         }
     }
 }

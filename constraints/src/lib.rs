@@ -20,8 +20,8 @@ pub use self::{
     capability::MediaTrackCapability,
     constraint::{
         BareOrMediaTrackConstraint, BareOrValueConstraint, BareOrValueRangeConstraint,
-        BareOrValueSequenceConstraint, MediaTrackConstraint, ValueConstraint, ValueRangeConstraint,
-        ValueSequenceConstraint,
+        BareOrValueSequenceConstraint, MediaTrackConstraint, MediaTrackConstraintKind,
+        ValueConstraint, ValueRangeConstraint, ValueSequenceConstraint,
     },
     constraints::{
         AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints,
