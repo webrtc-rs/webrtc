@@ -62,10 +62,10 @@ where
         match self {
             Self::Bare(bare) => match strategy {
                 MediaTrackConstraintResolutionStrategy::BareToIdeal => {
-                    ValueConstraint::ideal_only(bare)
+                    ValueConstraint::default().ideal(bare)
                 }
                 MediaTrackConstraintResolutionStrategy::BareToExact => {
-                    ValueConstraint::exact_only(bare)
+                    ValueConstraint::default().exact(bare)
                 }
             },
             Self::Constraint(constraint) => constraint,
@@ -114,18 +114,22 @@ pub struct ValueConstraint<T> {
 }
 
 impl<T> ValueConstraint<T> {
-    pub fn exact_only(exact: T) -> Self {
-        Self {
-            exact: Some(exact),
-            ideal: None,
-        }
+    #[inline]
+    pub fn exact<U>(mut self, exact: U) -> Self
+    where
+        Option<T>: From<U>,
+    {
+        self.exact = exact.into();
+        self
     }
 
-    pub fn ideal_only(ideal: T) -> Self {
-        Self {
-            exact: None,
-            ideal: Some(ideal),
-        }
+    #[inline]
+    pub fn ideal<U>(mut self, ideal: U) -> Self
+    where
+        Option<T>: From<U>,
+    {
+        self.ideal = ideal.into();
+        self
     }
 
     pub fn is_required(&self) -> bool {
@@ -138,6 +142,7 @@ impl<T> ValueConstraint<T> {
 }
 
 impl<T> Default for ValueConstraint<T> {
+    #[inline]
     fn default() -> Self {
         Self {
             exact: None,
@@ -155,7 +160,7 @@ mod tests {
         let constraint = BareOrValueConstraint::Bare(true);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
         let actual: ValueConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueConstraint::exact_only(true);
+        let expected = ValueConstraint::default().exact(true);
 
         assert_eq!(actual, expected);
     }
@@ -165,7 +170,7 @@ mod tests {
         let constraint = BareOrValueConstraint::Bare(true);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
         let actual: ValueConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueConstraint::ideal_only(true);
+        let expected = ValueConstraint::default().ideal(true);
 
         assert_eq!(actual, expected);
     }
@@ -201,8 +206,8 @@ mod serde_tests {
             }
 
             #[test]
-            fn exact() {
-                let subject = Subject::Constraint(ValueConstraint::exact_only($value.to_owned()));
+            fn exact_constraint() {
+                let subject = Subject::Constraint(ValueConstraint::default().exact($value.to_owned()));
                 let json = serde_json::json!({
                     "exact": $value,
                 });
@@ -211,9 +216,20 @@ mod serde_tests {
             }
 
             #[test]
-            fn ideal() {
-                let subject = Subject::Constraint(ValueConstraint::ideal_only($value.to_owned()));
+            fn ideal_constraint() {
+                let subject = Subject::Constraint(ValueConstraint::default().ideal($value.to_owned()));
                 let json = serde_json::json!({
+                    "ideal": $value,
+                });
+
+                test_serde_symmetry!(subject: subject, json: json);
+            }
+
+            #[test]
+            fn full_constraint() {
+                let subject = Subject::Constraint(ValueConstraint::default().exact($value.to_owned()).ideal($value.to_owned()));
+                let json = serde_json::json!({
+                    "exact": $value,
                     "ideal": $value,
                 });
 
