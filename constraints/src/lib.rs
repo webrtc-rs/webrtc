@@ -6,6 +6,7 @@ pub mod property;
 
 mod capabilities;
 mod capability;
+mod constraint;
 mod macros;
 mod setting;
 mod settings;
@@ -13,8 +14,14 @@ mod supported_constraints;
 
 #[allow(unused_imports)]
 pub use self::{
-    capabilities::MediaTrackCapabilities, capability::MediaTrackCapability,
-    setting::MediaTrackSetting, settings::MediaTrackSettings,
+    capabilities::MediaTrackCapabilities,
+    capability::MediaTrackCapability,
+    constraint::{
+        BareOrValueConstraint, BareOrValueRangeConstraint, BareOrValueSequenceConstraint,
+        MediaTrackConstraint, ValueConstraint, ValueRangeConstraint, ValueSequenceConstraint,
+    },
+    setting::MediaTrackSetting,
+    settings::MediaTrackSettings,
     supported_constraints::MediaTrackSupportedConstraints,
 };
 
