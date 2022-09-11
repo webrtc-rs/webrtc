@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
+    MediaTrackSupportedConstraints, SanitizedMediaTrackConstraint,
 };
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
@@ -13,6 +14,10 @@ pub type BareOrAdvancedMediaTrackConstraints =
 
 /// Advanced media track constraints that contain sets of constraints (both, empty and non-empty).
 pub type AdvancedMediaTrackConstraints = GenericAdvancedMediaTrackConstraints<MediaTrackConstraint>;
+
+/// Advanced media track constraints that contain sets of only non-empty constraints.
+pub type SanitizedAdvancedMediaTrackConstraints =
+    GenericAdvancedMediaTrackConstraints<SanitizedMediaTrackConstraint>;
 
 /// The list of advanced constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -115,6 +120,27 @@ impl BareOrAdvancedMediaTrackConstraints {
         AdvancedMediaTrackConstraints::new(
             self.into_iter()
                 .map(|constraint_set| constraint_set.into_resolved(strategy))
+                .collect(),
+        )
+    }
+}
+
+impl AdvancedMediaTrackConstraints {
+    pub fn to_sanitized(
+        &self,
+        supported_constraints: &MediaTrackSupportedConstraints,
+    ) -> SanitizedAdvancedMediaTrackConstraints {
+        self.clone().into_sanitized(supported_constraints)
+    }
+
+    pub fn into_sanitized(
+        self,
+        supported_constraints: &MediaTrackSupportedConstraints,
+    ) -> SanitizedAdvancedMediaTrackConstraints {
+        SanitizedAdvancedMediaTrackConstraints::new(
+            self.into_iter()
+                .map(|constraint_set| constraint_set.into_sanitized(supported_constraints))
+                .filter(|constraint_set| !constraint_set.is_empty())
                 .collect(),
         )
     }

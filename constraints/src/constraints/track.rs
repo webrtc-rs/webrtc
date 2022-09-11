@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     constraint::SanitizedMediaTrackConstraint, BareOrMediaTrackConstraint, MediaTrackConstraint,
-    MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
+    MediaTrackSupportedConstraints,
 };
 
 use super::{
     advanced::GenericAdvancedMediaTrackConstraints, constraint_set::GenericMediaTrackConstraintSet,
+    mandatory::GenericMandatoryMediaTrackConstraints,
 };
 
 /// A boolean on/off flag or bare value or constraints for a [`MediaStreamTrack`][media_stream_track] object.
@@ -39,7 +40,9 @@ pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaT
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum GenericBoolOrMediaTrackConstraints<T> {
+    /// Boolean track selector.
     Bool(bool),
+    /// Constraints-based track selector.
     Constraints(GenericMediaTrackConstraints<T>),
 }
 
@@ -116,9 +119,15 @@ pub type SanitizedMediaTrackConstraints =
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GenericMediaTrackConstraints<T> {
+    /// Mandatory (i.e required or optional basic) constraints, as defined in the [spec][spec].
+    ///
+    /// [spec]: https://www.w3.org/TR/mediacapture-streams/#dfn-constraint
     #[cfg_attr(feature = "serde", serde(flatten))]
-    pub basic_or_required: GenericMediaTrackConstraintSet<T>,
+    pub mandatory: GenericMandatoryMediaTrackConstraints<T>,
 
+    /// Advanced constraints, as defined in the [spec][spec].
+    ///
+    /// [spec]: https://www.w3.org/TR/mediacapture-streams/#dfn-constraint
     #[cfg_attr(
         feature = "serde",
         serde(default = "Default::default"),
@@ -134,11 +143,11 @@ fn should_skip_advanced<T>(advanced: &GenericAdvancedMediaTrackConstraints<T>) -
 
 impl<T> GenericMediaTrackConstraints<T> {
     pub fn new(
-        basic_or_required: GenericMediaTrackConstraintSet<T>,
+        mandatory: GenericMandatoryMediaTrackConstraints<T>,
         advanced: GenericAdvancedMediaTrackConstraints<T>,
     ) -> Self {
         Self {
-            basic_or_required,
+            mandatory,
             advanced,
         }
     }
@@ -158,7 +167,7 @@ impl GenericMediaTrackConstraints<MediaTrackConstraint> {
         required: bool,
     ) -> GenericMediaTrackConstraintSet<MediaTrackConstraint> {
         GenericMediaTrackConstraintSet::new(
-            self.basic_or_required
+            self.mandatory
                 .iter()
                 .filter_map(|(property, constraint)| {
                     if constraint.is_required() == required {
@@ -175,7 +184,7 @@ impl GenericMediaTrackConstraints<MediaTrackConstraint> {
 impl<T> Default for GenericMediaTrackConstraints<T> {
     fn default() -> Self {
         Self {
-            basic_or_required: Default::default(),
+            mandatory: Default::default(),
             advanced: Default::default(),
         }
     }
@@ -194,12 +203,11 @@ impl BareOrMediaTrackConstraints {
 
     pub fn into_resolved(self) -> MediaTrackConstraints {
         let Self {
-            basic_or_required,
+            mandatory,
             advanced,
         } = self;
         MediaTrackConstraints {
-            basic_or_required: basic_or_required
-                .into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal),
+            mandatory: mandatory.into_resolved(),
             advanced: advanced.into_resolved(),
         }
     }
@@ -217,16 +225,10 @@ impl MediaTrackConstraints {
         self,
         supported_constraints: &MediaTrackSupportedConstraints,
     ) -> SanitizedMediaTrackConstraints {
-        let basic_or_required = self.basic_or_required.into_sanitized(supported_constraints);
-        let advanced: GenericAdvancedMediaTrackConstraints<_> = self
-            .advanced
-            .into_iter()
-            .map(|constraint_set| constraint_set.into_sanitized(supported_constraints))
-            .filter(|constraint_set| !constraint_set.is_empty())
-            .collect();
-
+        let mandatory = self.mandatory.into_sanitized(supported_constraints);
+        let advanced = self.advanced.into_sanitized(supported_constraints);
         SanitizedMediaTrackConstraints {
-            basic_or_required,
+            mandatory,
             advanced,
         }
     }
@@ -236,8 +238,8 @@ impl MediaTrackConstraints {
 #[cfg(test)]
 mod serde_tests {
     use crate::{
-        macros::test_serde_symmetry, property::name::*, BareOrAdvancedMediaTrackConstraints,
-        BareOrMediaTrackConstraintSet,
+        constraints::mandatory::BareOrMandatoryMediaTrackConstraints, macros::test_serde_symmetry,
+        property::name::*, BareOrAdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
     };
 
     use super::*;
@@ -255,7 +257,7 @@ mod serde_tests {
     #[test]
     fn customized() {
         let subject = Subject {
-            basic_or_required: BareOrMediaTrackConstraintSet::from_iter([(
+            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([(
                 DEVICE_ID,
                 "microphone".into(),
             )]),

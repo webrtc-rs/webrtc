@@ -1,9 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    BareOrMediaTrackConstraint, MediaTrackConstraint,
-};
+use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
 
 use super::track::GenericBoolOrMediaTrackConstraints;
 
@@ -75,11 +73,13 @@ impl BareOrMediaStreamConstraints {
 mod tests {
     use crate::{
         constraints::{
-            advanced::BareOrAdvancedMediaTrackConstraints, track::BareOrMediaTrackConstraints,
+            advanced::BareOrAdvancedMediaTrackConstraints,
+            mandatory::BareOrMandatoryMediaTrackConstraints,
+            track::{BareOrBoolOrMediaTrackConstraints, BareOrMediaTrackConstraints},
         },
         macros::test_serde_symmetry,
         property::name::*,
-        BareOrBoolOrMediaTrackConstraints, BareOrMediaTrackConstraintSet,
+        BareOrMediaTrackConstraintSet,
     };
 
     use super::*;
@@ -100,7 +100,7 @@ mod tests {
     fn customized() {
         let subject = Subject {
             audio: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-                basic_or_required: BareOrMediaTrackConstraintSet::from_iter([
+                mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
                     (DEVICE_ID, "microphone".into()),
                     (CHANNEL_COUNT, 2.into()),
                 ]),
