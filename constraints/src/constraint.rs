@@ -297,6 +297,8 @@ impl MediaTrackConstraint {
     }
 }
 
+/// A single non-empty [constraint][media_track_constraints] value for a [`MediaStreamTrack`][media_stream_track] object.
+///
 /// # Invariant
 ///
 /// The wrapped `MediaTrackConstraint` MUST not be empty.

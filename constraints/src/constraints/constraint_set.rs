@@ -8,9 +8,13 @@ use crate::{
     MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
 };
 
+/// Media track constraint set that contains either bare values or constraints.
 pub type BareOrMediaTrackConstraintSet = GenericMediaTrackConstraintSet<BareOrMediaTrackConstraint>;
+
+/// Media track constraint set that contains only constraints (both, empty and non-empty).
 pub type MediaTrackConstraintSet = GenericMediaTrackConstraintSet<MediaTrackConstraint>;
 
+/// Media track constraint set that contains only non-empty constraints.
 pub type SanitizedMediaTrackConstraintSet =
     GenericMediaTrackConstraintSet<SanitizedMediaTrackConstraint>;
 
