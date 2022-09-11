@@ -64,10 +64,10 @@ where
         match self {
             Self::Bare(bare) => match strategy {
                 MediaTrackConstraintResolutionStrategy::BareToIdeal => {
-                    ValueRangeConstraint::ideal_only(bare)
+                    ValueRangeConstraint::default().ideal(bare)
                 }
                 MediaTrackConstraintResolutionStrategy::BareToExact => {
-                    ValueRangeConstraint::exact_only(bare)
+                    ValueRangeConstraint::default().exact(bare)
                 }
             },
             Self::Constraint(constraint) => constraint,
@@ -118,22 +118,40 @@ pub struct ValueRangeConstraint<T> {
 }
 
 impl<T> ValueRangeConstraint<T> {
-    pub fn exact_only(exact: T) -> Self {
-        Self {
-            min: None,
-            max: None,
-            exact: Some(exact),
-            ideal: None,
-        }
+    #[inline]
+    pub fn exact<U>(mut self, exact: U) -> Self
+    where
+        Option<T>: From<U>,
+    {
+        self.exact = exact.into();
+        self
     }
 
-    pub fn ideal_only(ideal: T) -> Self {
-        Self {
-            min: None,
-            max: None,
-            exact: None,
-            ideal: Some(ideal),
-        }
+    #[inline]
+    pub fn ideal<U>(mut self, ideal: U) -> Self
+    where
+        Option<T>: From<U>,
+    {
+        self.ideal = ideal.into();
+        self
+    }
+
+    #[inline]
+    pub fn min<U>(mut self, min: U) -> Self
+    where
+        Option<T>: From<U>,
+    {
+        self.min = min.into();
+        self
+    }
+
+    #[inline]
+    pub fn max<U>(mut self, max: U) -> Self
+    where
+        Option<T>: From<U>,
+    {
+        self.max = max.into();
+        self
     }
 
     pub fn is_required(&self) -> bool {
@@ -146,6 +164,7 @@ impl<T> ValueRangeConstraint<T> {
 }
 
 impl<T> Default for ValueRangeConstraint<T> {
+    #[inline]
     fn default() -> Self {
         Self {
             min: None,
@@ -165,7 +184,7 @@ mod tests {
         let constraint = BareOrValueRangeConstraint::Bare(42);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
         let actual: ValueRangeConstraint<u64> = constraint.into_resolved(strategy);
-        let expected = ValueRangeConstraint::exact_only(42);
+        let expected = ValueRangeConstraint::default().exact(42);
 
         assert_eq!(actual, expected);
     }
@@ -175,7 +194,7 @@ mod tests {
         let constraint = BareOrValueRangeConstraint::Bare(42);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
         let actual: ValueRangeConstraint<u64> = constraint.into_resolved(strategy);
-        let expected = ValueRangeConstraint::ideal_only(42);
+        let expected = ValueRangeConstraint::default().ideal(42);
 
         assert_eq!(actual, expected);
     }
@@ -211,8 +230,28 @@ mod serde_tests {
             }
 
             #[test]
-            fn exact() {
-                let subject = Subject::Constraint(ValueRangeConstraint::exact_only($value.to_owned()));
+            fn min_constraint() {
+                let subject = Subject::Constraint(ValueRangeConstraint::default().min($value.to_owned()));
+                let json = serde_json::json!({
+                    "min": $value,
+                });
+
+                test_serde_symmetry!(subject: subject, json: json);
+            }
+
+            #[test]
+            fn max_constraint() {
+                let subject = Subject::Constraint(ValueRangeConstraint::default().max($value.to_owned()));
+                let json = serde_json::json!({
+                    "max": $value,
+                });
+
+                test_serde_symmetry!(subject: subject, json: json);
+            }
+
+            #[test]
+            fn exact_constraint() {
+                let subject = Subject::Constraint(ValueRangeConstraint::default().exact($value.to_owned()));
                 let json = serde_json::json!({
                     "exact": $value,
                 });
@@ -221,9 +260,22 @@ mod serde_tests {
             }
 
             #[test]
-            fn ideal() {
-                let subject = Subject::Constraint(ValueRangeConstraint::ideal_only($value.to_owned()));
+            fn ideal_constraint() {
+                let subject = Subject::Constraint(ValueRangeConstraint::default().ideal($value.to_owned()));
                 let json = serde_json::json!({
+                    "ideal": $value,
+                });
+
+                test_serde_symmetry!(subject: subject, json: json);
+            }
+
+            #[test]
+            fn full_constraint() {
+                let subject = Subject::Constraint(ValueRangeConstraint::default().min($value.to_owned()).max($value.to_owned()).exact($value.to_owned()).ideal($value.to_owned()));
+                let json = serde_json::json!({
+                    "min": $value,
+                    "max": $value,
+                    "exact": $value,
                     "ideal": $value,
                 });
 

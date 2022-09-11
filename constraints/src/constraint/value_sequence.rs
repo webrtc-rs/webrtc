@@ -68,10 +68,10 @@ where
         match self {
             Self::Bare(bare) => match strategy {
                 MediaTrackConstraintResolutionStrategy::BareToIdeal => {
-                    ValueSequenceConstraint::ideal_only(bare)
+                    ValueSequenceConstraint::default().ideal(bare)
                 }
                 MediaTrackConstraintResolutionStrategy::BareToExact => {
-                    ValueSequenceConstraint::exact_only(bare)
+                    ValueSequenceConstraint::default().exact(bare)
                 }
             },
             Self::Constraint(constraint) => constraint,
@@ -121,18 +121,22 @@ pub struct ValueSequenceConstraint<T> {
 }
 
 impl<T> ValueSequenceConstraint<T> {
-    pub fn exact_only(exact: Vec<T>) -> Self {
-        Self {
-            exact: Some(exact),
-            ideal: None,
-        }
+    #[inline]
+    pub fn exact<U>(mut self, exact: U) -> Self
+    where
+        Option<Vec<T>>: From<U>,
+    {
+        self.exact = exact.into();
+        self
     }
 
-    pub fn ideal_only(ideal: Vec<T>) -> Self {
-        Self {
-            exact: None,
-            ideal: Some(ideal),
-        }
+    #[inline]
+    pub fn ideal<U>(mut self, ideal: U) -> Self
+    where
+        Option<Vec<T>>: From<U>,
+    {
+        self.ideal = ideal.into();
+        self
     }
 
     pub fn is_required(&self) -> bool {
@@ -164,7 +168,7 @@ mod tests {
         let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
         let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueSequenceConstraint::exact_only(vec![true]);
+        let expected = ValueSequenceConstraint::default().exact(vec![true]);
 
         assert_eq!(actual, expected);
     }
@@ -174,7 +178,7 @@ mod tests {
         let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
         let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueSequenceConstraint::ideal_only(vec![true]);
+        let expected = ValueSequenceConstraint::default().ideal(vec![true]);
 
         assert_eq!(actual, expected);
     }
@@ -210,13 +214,31 @@ mod serde_tests {
             }
 
             #[test]
-            fn constraint() {
-                let subject = Subject::Constraint(ValueSequenceConstraint::<String> {
-                    exact: Some(vec![$($values.to_owned()),*].into()),
-                    ideal: None,
-                });
+            fn exact_constraint() {
+                let subject = Subject::Constraint(ValueSequenceConstraint::default().exact(vec![$($values.to_owned()),*]));
                 let json = serde_json::json!({
                     "exact": [$($values),*],
+                });
+
+                test_serde_symmetry!(subject: subject, json: json);
+            }
+
+            #[test]
+            fn ideal_constraint() {
+                let subject = Subject::Constraint(ValueSequenceConstraint::default().ideal(vec![$($values.to_owned()),*]));
+                let json = serde_json::json!({
+                    "ideal": [$($values),*],
+                });
+
+                test_serde_symmetry!(subject: subject, json: json);
+            }
+
+            #[test]
+            fn full_constraint() {
+                let subject = Subject::Constraint(ValueSequenceConstraint::default().exact(vec![$($values.to_owned()),*]).ideal(vec![$($values.to_owned()),*]));
+                let json = serde_json::json!({
+                    "exact": [$($values),*],
+                    "ideal": [$($values),*],
                 });
 
                 test_serde_symmetry!(subject: subject, json: json);

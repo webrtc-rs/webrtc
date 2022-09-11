@@ -410,7 +410,7 @@ mod serde_tests {
 
     #[test]
     fn bool_constraint() {
-        let subject = Subject::Bool(ValueConstraint::exact_only(true).into());
+        let subject = Subject::Bool(ValueConstraint::default().exact(true).into());
         let json = serde_json::json!({ "exact": true });
 
         test_serde_symmetry!(subject: subject, json: json);
@@ -426,7 +426,7 @@ mod serde_tests {
 
     #[test]
     fn integer_range_constraint() {
-        let subject = Subject::IntegerRange(ValueRangeConstraint::exact_only(42).into());
+        let subject = Subject::IntegerRange(ValueRangeConstraint::default().exact(42).into());
         let json = serde_json::json!({ "exact": 42 });
 
         test_serde_symmetry!(subject: subject, json: json);
@@ -442,7 +442,7 @@ mod serde_tests {
 
     #[test]
     fn float_range_constraint() {
-        let subject = Subject::FloatRange(ValueRangeConstraint::exact_only(42.0).into());
+        let subject = Subject::FloatRange(ValueRangeConstraint::default().exact(42.0).into());
         let json = serde_json::json!({ "exact": 42.0 });
 
         test_serde_symmetry!(subject: subject, json: json);
@@ -459,7 +459,8 @@ mod serde_tests {
     #[test]
     fn string_sequence_constraint() {
         let subject = Subject::StringSequence(
-            ValueSequenceConstraint::exact_only(vec!["foo".to_owned(), "bar".to_owned()].into())
+            ValueSequenceConstraint::default()
+                .exact(vec!["foo".to_owned(), "bar".to_owned()])
                 .into(),
         );
         let json = serde_json::json!({ "exact": ["foo", "bar"] });
@@ -477,7 +478,7 @@ mod serde_tests {
 
     #[test]
     fn string_constraint() {
-        let subject = Subject::String(ValueConstraint::exact_only("foo".to_owned()).into());
+        let subject = Subject::String(ValueConstraint::default().exact("foo".to_owned()).into());
         let json = serde_json::json!({ "exact": "foo" });
 
         test_serde_symmetry!(subject: subject, json: json);
