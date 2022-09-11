@@ -115,11 +115,27 @@ impl From<OverconstrainedError> for SelectSettingsError {
 pub fn select_settings<'a, I, P>(
     possible_settings: I,
     constraints: &SanitizedMediaTrackConstraints,
-    policy: &P,
+    tie_breaking_policy: &P,
 ) -> Result<&'a MediaTrackSettings, SelectSettingsError>
 where
     I: IntoIterator<Item = &'a MediaTrackSettings>,
     P: TieBreakingPolicy,
+{
+    let candidates = select_settings_candidates(possible_settings, constraints)?;
+
+    // Select one settings value from candidates:
+    //
+    // This function call corresponds to step 5 of the `SelectSettings` algorithm:
+    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    Ok(tie_breaking_policy.select_candidate(candidates))
+}
+
+pub fn select_settings_candidates<'a, I>(
+    possible_settings: I,
+    constraints: &SanitizedMediaTrackConstraints,
+) -> Result<Vec<&'a MediaTrackSettings>, SelectSettingsError>
+where
+    I: IntoIterator<Item = &'a MediaTrackSettings>,
 {
     let possible_settings = possible_settings.into_iter();
 
@@ -183,18 +199,13 @@ where
 
     let best_fitness_distance = candidates[0].1;
 
-    let best_candidates = candidates
+    let selected_candidates = candidates
         .into_iter()
         .take_while(|(_, fitness_distance)| *fitness_distance == best_fitness_distance)
-        .map(|(candidate, _)| candidate);
+        .map(|(candidate, _)| candidate)
+        .collect();
 
-    // Select one settings value from candidates:
-    //
-    // This function call corresponds to step 5 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
-    let best_candidate = policy.select_candidate(best_candidates);
-
-    Ok(best_candidate)
+    Ok(selected_candidates)
 }
 
 #[derive(Default)]
