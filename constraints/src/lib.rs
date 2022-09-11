@@ -2,11 +2,4 @@
 //!
 //! [mediacapture_streams]: https://www.w3.org/TR/mediacapture-streams/
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
-}
+pub mod property;
