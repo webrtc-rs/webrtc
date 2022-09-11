@@ -10,50 +10,11 @@ use super::{
     advanced::GenericAdvancedMediaTrackConstraints, constraint_set::GenericMediaTrackConstraintSet,
 };
 
-/// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
-///
-/// # W3C Spec Compliance
-///
-/// There exists no direct corresponding type in the
-/// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
-/// since the `BoolOrMediaTrackConstraints<T>` type aims to be a
-/// generalization over multiple types in the W3C spec:
-///
-/// | Rust                          | W3C                                                                                                |
-/// | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-/// | `BoolOrMediaTrackConstraints` | [`MediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
-///
-/// Unlike `BoolOrMediaTrackConstraints` this type does not contain constraints
-/// with bare values, but has them resolved to full constraints instead.
-///
-/// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
-/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
-/// [video]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
-/// [audio]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-audio
-/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
+/// A boolean on/off flag or bare value or constraints for a [`MediaStreamTrack`][media_stream_track] object.
 pub type BareOrBoolOrMediaTrackConstraints =
     GenericBoolOrMediaTrackConstraints<BareOrMediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
-///
-/// # W3C Spec Compliance
-///
-/// There exists no direct corresponding type in the
-/// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
-/// since the `BoolOrMediaTrackConstraints<T>` type aims to be a
-/// generalization over multiple types in the W3C spec:
-///
-/// | Rust                          | W3C                                                                                                |
-/// | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-/// | `BoolOrMediaTrackConstraints` | [`MediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
-///
-/// Unlike `BareOrBoolOrMediaTrackConstraints` this type may contain constraints with bare values.
-///
-/// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
-/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
-/// [video]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
-/// [audio]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-audio
-/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
@@ -132,30 +93,13 @@ impl BareOrBoolOrMediaTrackConstraints {
     }
 }
 
-/// The constraints for a [`MediaStreamTrack`][media_stream_track] object.
-///
-/// # W3C Spec Compliance
-///
-/// Corresponds to [`MediaTrackConstraints`][media_track_constraints]
-/// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
-///
-/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
-/// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
-/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
+/// Media track constraints that contains either bare values or constraints.
 pub type BareOrMediaTrackConstraints = GenericMediaTrackConstraints<BareOrMediaTrackConstraint>;
 
-/// The constraints for a [`MediaStreamTrack`][media_stream_track] object.
-///
-/// # W3C Spec Compliance
-///
-/// Corresponds to [`MediaTrackConstraints`][media_track_constraints]
-/// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
-///
-/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
-/// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
-/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
+/// Media track constraints that contains only constraints (both, empty and non-empty).
 pub type MediaTrackConstraints = GenericMediaTrackConstraints<MediaTrackConstraint>;
 
+/// Media track constraints that contains only non-empty constraints.
 pub type SanitizedMediaTrackConstraints =
     GenericMediaTrackConstraints<SanitizedMediaTrackConstraint>;
 

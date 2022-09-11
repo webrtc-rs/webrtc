@@ -7,8 +7,11 @@ use crate::{
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
 
+/// Advanced media track constraints that contain sets of either bare values or constraints.
 pub type BareOrAdvancedMediaTrackConstraints =
     GenericAdvancedMediaTrackConstraints<BareOrMediaTrackConstraint>;
+
+/// Advanced media track constraints that contain sets of constraints (both, empty and non-empty).
 pub type AdvancedMediaTrackConstraints = GenericAdvancedMediaTrackConstraints<MediaTrackConstraint>;
 
 /// The list of advanced constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
