@@ -10,6 +10,7 @@ mod capabilities;
 mod capability;
 mod constraint;
 mod constraints;
+mod enumerations;
 mod macros;
 mod setting;
 mod settings;
@@ -33,6 +34,7 @@ pub use self::{
         MediaTrackConstraintSet, MediaTrackConstraints, SanitizedMandatoryMediaTrackConstraints,
         SanitizedMediaTrackConstraintSet, SanitizedMediaTrackConstraints,
     },
+    enumerations::{FacingMode, ResizeMode},
     setting::MediaTrackSetting,
     settings::MediaTrackSettings,
     supported_constraints::MediaTrackSupportedConstraints,
