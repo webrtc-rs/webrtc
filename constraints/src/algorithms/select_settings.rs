@@ -14,7 +14,7 @@ use crate::{
     SanitizedMediaTrackConstraints,
 };
 
-pub trait SelectSettingsPolicy {
+pub trait TieBreakingPolicy {
     /// Selects a preferred candidate from a non-empty selection of optimal candidates.
     ///
     /// As specified in step 5 of the `SelectSettings` algorithm:
@@ -46,7 +46,7 @@ impl Default for SelectFirstSettingsPolicy {
     }
 }
 
-impl SelectSettingsPolicy for SelectFirstSettingsPolicy {
+impl TieBreakingPolicy for SelectFirstSettingsPolicy {
     fn select_candidate<'a, I>(&self, mut candidates: I) -> &'a MediaTrackSettings
     where
         I: Iterator<Item = &'a MediaTrackSettings>,
@@ -82,7 +82,7 @@ impl SelectIdealSettingsPolicy {
     }
 }
 
-impl SelectSettingsPolicy for SelectIdealSettingsPolicy {
+impl TieBreakingPolicy for SelectIdealSettingsPolicy {
     fn select_candidate<'b, I>(&self, candidates: I) -> &'b MediaTrackSettings
     where
         I: Iterator<Item = &'b MediaTrackSettings>,
@@ -117,7 +117,7 @@ pub fn select_settings<'a, I, P>(
 ) -> Result<&'a MediaTrackSettings, SelectSettingsError>
 where
     I: IntoIterator<Item = &'a MediaTrackSettings>,
-    P: SelectSettingsPolicy,
+    P: TieBreakingPolicy,
 {
     let possible_settings = possible_settings.into_iter();
 
