@@ -8,7 +8,7 @@ use crate::{
 pub trait TieBreakingPolicy {
     /// Selects a preferred candidate from a non-empty selection of optimal candidates.
     ///
-    /// As specified in step 5 of the `SelectSettings` algorithm:
+    /// As specified in step 6 of the `SelectSettings` algorithm:
     /// https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
     ///
     /// > Select one settings dictionary from candidates, and return it as the result
@@ -22,22 +22,22 @@ pub trait TieBreakingPolicy {
         I: IntoIterator<Item = &'a MediaTrackSettings>;
 }
 
-/// A naïve settings selection policy that just picks the first item of the iterator.
-pub struct SelectFirstSettingsPolicy;
+/// A naïve tie-breaking policy that just picks the first settings item it encounters.
+pub struct FirstPolicy;
 
-impl SelectFirstSettingsPolicy {
+impl FirstPolicy {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for SelectFirstSettingsPolicy {
+impl Default for FirstPolicy {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TieBreakingPolicy for SelectFirstSettingsPolicy {
+impl TieBreakingPolicy for FirstPolicy {
     fn select_candidate<'a, I>(&self, candidates: I) -> &'a MediaTrackSettings
     where
         I: IntoIterator<Item = &'a MediaTrackSettings>,
@@ -50,12 +50,12 @@ impl TieBreakingPolicy for SelectFirstSettingsPolicy {
     }
 }
 
-/// A settings selection policy that picks the item that's closest to the ideal.
-pub struct SelectIdealSettingsPolicy {
+/// A tie-breaking policy that picks the settings item that's closest to the specified ideal settings.
+pub struct ClosestToIdealPolicy {
     sanitized_constraints: SanitizedMandatoryMediaTrackConstraints,
 }
 
-impl SelectIdealSettingsPolicy {
+impl ClosestToIdealPolicy {
     pub fn new(
         ideal_settings: MediaTrackSettings,
         supported_constraints: &MediaTrackSupportedConstraints,
@@ -74,7 +74,7 @@ impl SelectIdealSettingsPolicy {
     }
 }
 
-impl TieBreakingPolicy for SelectIdealSettingsPolicy {
+impl TieBreakingPolicy for ClosestToIdealPolicy {
     fn select_candidate<'b, I>(&self, candidates: I) -> &'b MediaTrackSettings
     where
         I: IntoIterator<Item = &'b MediaTrackSettings>,

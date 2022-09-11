@@ -1,10 +1,7 @@
 use lazy_static::lazy_static;
 
 use crate::{
-    algorithms::{
-        select_settings, SelectFirstSettingsPolicy, SelectIdealSettingsPolicy, SelectSettingsError,
-        TieBreakingPolicy,
-    },
+    algorithms::{select_settings_candidates, SelectSettingsError},
     errors::OverconstrainedError,
     property::all::{name::*, names as all_properties},
     AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints,
@@ -13,6 +10,8 @@ use crate::{
     MediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
     SanitizedMediaTrackConstraints, ValueConstraint, ValueRangeConstraint, ValueSequenceConstraint,
 };
+
+use super::DeviceInformationExposureMode;
 
 lazy_static! {
     static ref VIDEO_IDEAL: MediaTrackSettings = MediaTrackSettings::from_iter([
@@ -75,10 +74,6 @@ lazy_static! {
     ]);
 }
 
-fn default_ideal_settings() -> MediaTrackSettings {
-    VIDEO_IDEAL.clone()
-}
-
 fn default_possible_settings() -> Vec<MediaTrackSettings> {
     vec![
         VIDEO_480P.clone(),
@@ -93,32 +88,18 @@ fn default_supported_constraints() -> MediaTrackSupportedConstraints {
     MediaTrackSupportedConstraints::from_iter(all_properties())
 }
 
-fn ideal_settings_policy(
-    ideal_settings: MediaTrackSettings,
-    supported_constraints: &MediaTrackSupportedConstraints,
-) -> SelectIdealSettingsPolicy {
-    SelectIdealSettingsPolicy::new(ideal_settings, supported_constraints)
-}
-
-fn first_settings_policy() -> SelectFirstSettingsPolicy {
-    SelectFirstSettingsPolicy
-}
-
-fn test_overconstrained<T>(
+fn test_overconstrained(
     possible_settings: &[MediaTrackSettings],
     mandatory_constraints: MandatoryMediaTrackConstraints,
-    tie_breaking_policy: T,
-) -> OverconstrainedError
-where
-    T: TieBreakingPolicy,
-{
+    exposure_mode: DeviceInformationExposureMode,
+) -> OverconstrainedError {
     let constraints = MediaTrackConstraints {
         mandatory: mandatory_constraints,
         advanced: AdvancedMediaTrackConstraints::default(),
     }
     .to_sanitized(&default_supported_constraints());
 
-    let result = select_settings(possible_settings.iter(), &constraints, &tie_breaking_policy);
+    let result = select_settings_candidates(possible_settings.iter(), &constraints, exposure_mode);
 
     let actual = result.err().unwrap();
 
@@ -127,22 +108,22 @@ where
     overconstrained_error
 }
 
-fn test_constrained<T>(
+fn test_constrained(
     possible_settings: &[MediaTrackSettings],
     mandatory_constraints: MandatoryMediaTrackConstraints,
     advanced_constraints: AdvancedMediaTrackConstraints,
-    tie_breaking_policy: T,
-) -> &MediaTrackSettings
-where
-    T: TieBreakingPolicy,
-{
+) -> Vec<&MediaTrackSettings> {
     let constraints = MediaTrackConstraints {
         mandatory: mandatory_constraints,
         advanced: advanced_constraints,
     }
     .to_sanitized(&default_supported_constraints());
 
-    let result = select_settings(possible_settings.iter(), &constraints, &tie_breaking_policy);
+    let result = select_settings_candidates(
+        possible_settings.iter(),
+        &constraints,
+        DeviceInformationExposureMode::Exposed,
+    );
 
     result.unwrap()
 }
@@ -163,36 +144,18 @@ mod unconstrained {
             .to_sanitized(&default_supported_constraints())
     }
 
-    // Unconstrained selection with first-selection should return first candidate.
     #[test]
-    fn first() {
-        let tie_breaking_policy = first_settings_policy();
+    fn pass_through() {
         let possible_settings = default_possible_settings();
         let constraints = constraints();
 
-        let result = select_settings(possible_settings.iter(), &constraints, &tie_breaking_policy);
-
-        let actual = result.unwrap();
-        let expected = &possible_settings[0];
-
-        assert_eq!(actual, expected);
-    }
-
-    // Unconstrained selection with ideal-selection should return candidate closest to ideal.
-    #[test]
-    fn ideal() {
-        let tie_breaking_policy = {
-            let ideal_settings = default_ideal_settings();
-            let supported_constraints = default_supported_constraints();
-            ideal_settings_policy(ideal_settings, &supported_constraints)
-        };
-        let possible_settings = default_possible_settings();
-        let constraints = constraints();
-
-        let result = select_settings(possible_settings.iter(), &constraints, &tie_breaking_policy);
-
-        let actual = result.unwrap();
-        let expected = &*VIDEO_1080P;
+        let actual = select_settings_candidates(
+            &possible_settings[..],
+            &constraints,
+            DeviceInformationExposureMode::Exposed,
+        )
+        .unwrap();
+        let expected: Vec<_> = possible_settings.iter().collect();
 
         assert_eq!(actual, expected);
     }
@@ -202,7 +165,7 @@ mod overconstrained {
     use super::*;
 
     #[test]
-    fn missing() {
+    fn protected() {
         let error = test_overconstrained(
             &default_possible_settings(),
             MandatoryMediaTrackConstraints::from_iter([(
@@ -211,82 +174,103 @@ mod overconstrained {
                     .exact("missing-group".to_owned())
                     .into(),
             )]),
-            first_settings_policy(),
+            DeviceInformationExposureMode::Protected,
         );
 
-        let constraint = &error.constraint;
-        let err_message = error.message.as_ref().expect("Error message.");
-
-        assert_eq!(constraint, GROUP_ID);
-        assert_eq!(
-            err_message,
-            "Setting was a mismatch ([\"builtin\"] do not satisfy (x == \"missing-group\"))."
-        );
+        assert_eq!(error.constraint, "");
+        assert_eq!(error.message, None);
     }
 
-    #[test]
-    fn mismatch() {
-        let error = test_overconstrained(
-            &default_possible_settings(),
-            MandatoryMediaTrackConstraints::from_iter([(
-                DEVICE_ID,
-                ValueConstraint::default()
-                    .exact("mismatched-device".to_owned())
-                    .into(),
-            )]),
-            first_settings_policy(),
-        );
+    mod exposed {
+        use super::*;
 
-        let constraint = &error.constraint;
-        let err_message = error.message.as_ref().expect("Error message.");
+        #[test]
+        fn missing() {
+            let error = test_overconstrained(
+                &default_possible_settings(),
+                MandatoryMediaTrackConstraints::from_iter([(
+                    GROUP_ID,
+                    ValueConstraint::default()
+                        .exact("missing-group".to_owned())
+                        .into(),
+                )]),
+                DeviceInformationExposureMode::Exposed,
+            );
 
-        assert_eq!(constraint, DEVICE_ID);
-        assert_eq!(
+            let constraint = &error.constraint;
+            let err_message = error.message.as_ref().expect("Error message.");
+
+            assert_eq!(constraint, GROUP_ID);
+            assert_eq!(
+                err_message,
+                "Setting was a mismatch ([\"builtin\"] do not satisfy (x == \"missing-group\"))."
+            );
+        }
+
+        #[test]
+        fn mismatch() {
+            let error = test_overconstrained(
+                &default_possible_settings(),
+                MandatoryMediaTrackConstraints::from_iter([(
+                    DEVICE_ID,
+                    ValueConstraint::default()
+                        .exact("mismatched-device".to_owned())
+                        .into(),
+                )]),
+                DeviceInformationExposureMode::Exposed,
+            );
+
+            let constraint = &error.constraint;
+            let err_message = error.message.as_ref().expect("Error message.");
+
+            assert_eq!(constraint, DEVICE_ID);
+            assert_eq!(
             err_message,
             "Setting was a mismatch ([\"1080p\", \"1440p\", \"2160p\", \"480p\", \"720p\"] do not satisfy (x == \"mismatched-device\"))."
         );
-    }
+        }
 
-    #[test]
-    fn too_small() {
-        let error = test_overconstrained(
-            &default_possible_settings(),
-            MandatoryMediaTrackConstraints::from_iter([(
-                FRAME_RATE,
-                ValueRangeConstraint::default().min(1000).into(),
-            )]),
-            first_settings_policy(),
-        );
+        #[test]
+        fn too_small() {
+            let error = test_overconstrained(
+                &default_possible_settings(),
+                MandatoryMediaTrackConstraints::from_iter([(
+                    FRAME_RATE,
+                    ValueRangeConstraint::default().min(1000).into(),
+                )]),
+                DeviceInformationExposureMode::Exposed,
+            );
 
-        let constraint = &error.constraint;
-        let err_message = error.message.as_ref().expect("Error message.");
+            let constraint = &error.constraint;
+            let err_message = error.message.as_ref().expect("Error message.");
 
-        assert_eq!(constraint, FRAME_RATE);
-        assert_eq!(
-            err_message,
-            "Setting was too small ([120, 15, 240, 30, 60] do not satisfy (1000 <= x))."
-        );
-    }
+            assert_eq!(constraint, FRAME_RATE);
+            assert_eq!(
+                err_message,
+                "Setting was too small ([120, 15, 240, 30, 60] do not satisfy (1000 <= x))."
+            );
+        }
 
-    #[test]
-    fn too_large() {
-        let error = test_overconstrained(
-            &default_possible_settings(),
-            MandatoryMediaTrackConstraints::from_iter([(
-                FRAME_RATE,
-                ValueRangeConstraint::default().max(10).into(),
-            )]),
-            first_settings_policy(),
-        );
+        #[test]
+        fn too_large() {
+            let error = test_overconstrained(
+                &default_possible_settings(),
+                MandatoryMediaTrackConstraints::from_iter([(
+                    FRAME_RATE,
+                    ValueRangeConstraint::default().max(10).into(),
+                )]),
+                DeviceInformationExposureMode::Exposed,
+            );
 
-        let constraint = &error.constraint;
-        let err_message = error.message.as_ref().expect("Error message.");
+            let constraint = &error.constraint;
+            let err_message = error.message.as_ref().expect("Error message.");
 
-        assert_eq!(constraint, FRAME_RATE);
-        assert_eq!(
-            err_message,
-            "Setting was too large ([120, 15, 240, 30, 60] do not satisfy (x <= 10))."
-        );
+            assert_eq!(constraint, FRAME_RATE);
+            assert_eq!(
+                err_message,
+                "Setting was too large ([120, 15, 240, 30, 60] do not satisfy (x <= 10))."
+            );
+        }
     }
 }
 
@@ -310,10 +294,9 @@ mod constrained {
                     MediaTrackConstraint::exact_from(setting.clone()),
                 )]),
                 AdvancedMediaTrackConstraints::default(),
-                first_settings_policy(),
             );
 
-            let expected = target_settings;
+            let expected = vec![target_settings];
 
             assert_eq!(actual, expected);
         }
@@ -348,10 +331,9 @@ mod constrained {
                         .into(),
                 )]),
                 AdvancedMediaTrackConstraints::default(),
-                first_settings_policy(),
             );
 
-            let expected = &possible_settings[1];
+            let expected = vec![&possible_settings[1]];
 
             assert_eq!(actual, expected);
         }
@@ -371,10 +353,9 @@ mod constrained {
                     ValueRangeConstraint::default().exact(30).into(),
                 )]),
                 AdvancedMediaTrackConstraints::default(),
-                first_settings_policy(),
             );
 
-            let expected = &possible_settings[1];
+            let expected = vec![&possible_settings[1]];
 
             assert_eq!(actual, expected);
         }
@@ -405,10 +386,9 @@ mod constrained {
                         .into(),
                 )]),
                 AdvancedMediaTrackConstraints::default(),
-                first_settings_policy(),
             );
 
-            let expected = &possible_settings[1];
+            let expected = vec![&possible_settings[1]];
 
             assert_eq!(actual, expected);
         }
@@ -443,10 +423,9 @@ mod constrained {
                         .into(),
                 )]),
                 AdvancedMediaTrackConstraints::default(),
-                first_settings_policy(),
             );
 
-            let expected = &possible_settings[1];
+            let expected = vec![&possible_settings[1]];
 
             assert_eq!(actual, expected);
         }
@@ -466,10 +445,9 @@ mod constrained {
                     ValueRangeConstraint::default().ideal(32).into(),
                 )]),
                 AdvancedMediaTrackConstraints::default(),
-                first_settings_policy(),
             );
 
-            let expected = &possible_settings[1];
+            let expected = vec![&possible_settings[1]];
 
             assert_eq!(actual, expected);
         }
@@ -500,10 +478,9 @@ mod constrained {
                         .into(),
                 )]),
                 AdvancedMediaTrackConstraints::default(),
-                first_settings_policy(),
             );
 
-            let expected = &possible_settings[1];
+            let expected = vec![&possible_settings[1]];
 
             assert_eq!(actual, expected);
         }
@@ -520,10 +497,8 @@ mod constrained {
 //                        ┌
 //     possible settings: ┤   ●─────────────●──────────────●──────────────●─────────────●
 //                        └  480p          720p          1080p          1440p         2160p
-//                                          ▲              ▲
-//   tie-breaker's ideal: ──────────────────┘              │
-//                                                         │
-//     selected settings: ─────────────────────────────────┘
+//                                                         └───────┬──────┘
+//     selected settings: ─────────────────────────────────────────┘
 // ```
 mod smoke {
     use super::*;
@@ -566,18 +541,15 @@ mod smoke {
             ]),
         ];
 
-        // Make tie-breaking prefer 720p (which lies outside of mandatory constraints):
-        let tie_breaking_policy = {
-            let ideal_settings = possible_settings[1].clone();
-            ideal_settings_policy(ideal_settings, &supported_constraints)
-        };
-
         let constraints: MediaTrackConstraints = MediaTrackConstraints {
             mandatory: MandatoryMediaTrackConstraints::from_iter([
                 (WIDTH, ValueRangeConstraint::default().max(2560).into()),
                 (HEIGHT, ValueRangeConstraint::default().max(1440).into()),
                 // Unsupported constraint, which should thus get ignored:
-                (FRAME_RATE, ValueRangeConstraint::default().max(30.0).into()),
+                (
+                    FRAME_RATE,
+                    ValueRangeConstraint::default().exact(30.0).into(),
+                ),
             ]),
             advanced: AdvancedMediaTrackConstraints::from_iter([
                 // The first advanced constraint set of "exact 800p" does not match
@@ -597,14 +569,14 @@ mod smoke {
 
         let sanitized_constraints = constraints.to_sanitized(&supported_constraints);
 
-        let actual = select_settings(
+        let actual = select_settings_candidates(
             &possible_settings,
             &sanitized_constraints,
-            &tie_breaking_policy,
+            DeviceInformationExposureMode::Exposed,
         )
         .unwrap();
 
-        let expected = &possible_settings[2];
+        let expected = vec![&possible_settings[2], &possible_settings[3]];
 
         assert_eq!(actual, expected);
     }
@@ -627,12 +599,6 @@ mod smoke {
             serde_json::from_value(json).unwrap()
         };
 
-        // Make tie-breaking prefer 720p (which lies outside of mandatory constraints):
-        let tie_breaking_policy = {
-            let ideal_settings = possible_settings[1].clone();
-            ideal_settings_policy(ideal_settings, &supported_constraints)
-        };
-
         // Deserialize constraints from JSON:
         let bare_or_constraints: BareOrMediaTrackConstraints = {
             let json = serde_json::json!({
@@ -643,7 +609,9 @@ mod smoke {
                     "max": 1440,
                 },
                 // Unsupported constraint, which should thus get ignored:
-                "frameRate": 30.0,
+                "frameRate": {
+                    "exact": 30.0
+                },
                 "advanced": [
                     // The first advanced constraint set of "exact 800p" does not match
                     // any candidate and should thus get ignored by the algorithm:
@@ -662,14 +630,14 @@ mod smoke {
         // Sanitize constraints, removing empty and unsupported constraints:
         let sanitized_constraints = constraints.to_sanitized(&supported_constraints);
 
-        let actual = select_settings(
+        let actual = select_settings_candidates(
             &possible_settings,
             &sanitized_constraints,
-            &tie_breaking_policy,
+            DeviceInformationExposureMode::Exposed,
         )
         .unwrap();
 
-        let expected = &possible_settings[2];
+        let expected = vec![&possible_settings[2], &possible_settings[3]];
 
         assert_eq!(actual, expected);
     }
