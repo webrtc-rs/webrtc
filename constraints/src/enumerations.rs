@@ -1,0 +1,90 @@
+/// The directions that the camera can face, as seen from the user's perspective.
+///
+/// # Note
+/// The enumeration is not exhaustive and merely provides a list of known values.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum FacingMode {
+    /// The source is facing toward the user (a self-view camera).
+    User,
+
+    /// The source is facing away from the user (viewing the environment).
+    Environment,
+
+    /// The source is facing to the left of the user.
+    Left,
+
+    /// The source is facing to the right of the user.
+    Right,
+}
+
+impl FacingMode {
+    pub fn user() -> String {
+        Self::User.to_string()
+    }
+
+    pub fn environment() -> String {
+        Self::Environment.to_string()
+    }
+
+    pub fn left() -> String {
+        Self::Left.to_string()
+    }
+
+    pub fn right() -> String {
+        Self::Right.to_string()
+    }
+}
+
+impl std::fmt::Display for FacingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::User => f.write_str("user"),
+            Self::Environment => f.write_str("environment"),
+            Self::Left => f.write_str("left"),
+            Self::Right => f.write_str("right"),
+        }
+    }
+}
+
+/// The means by which the resolution can be derived by the client.
+///
+/// # Note
+/// The enumeration is not exhaustive and merely provides a list of known values.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum ResizeMode {
+    /// This resolution and frame rate is offered by the camera, its driver, or the OS.
+    ///
+    /// # Note
+    /// The user agent MAY report this value to disguise concurrent use,
+    /// but only when the camera is in use in another browsing context.
+    ///
+    /// # Important
+    /// This value is a possible finger-printing surface.
+    None,
+
+    /// This resolution is downscaled and/or cropped from a higher camera resolution by the user agent,
+    /// or its frame rate is decimated by the User Agent.
+    ///
+    /// # Important
+    /// The media MUST NOT be upscaled, stretched or have fake data created that did not occur in the input source.
+    CropAndScale,
+}
+
+impl ResizeMode {
+    pub fn none() -> String {
+        Self::None.to_string()
+    }
+
+    pub fn crop_and_scale() -> String {
+        Self::CropAndScale.to_string()
+    }
+}
+
+impl std::fmt::Display for ResizeMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => f.write_str("none"),
+            Self::CropAndScale => f.write_str("crop-and-scale"),
+        }
+    }
+}
