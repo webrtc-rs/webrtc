@@ -8,7 +8,7 @@ use webrtc_constraints::{
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_1() {
-    use webrtc_constraints::BareOrMediaStreamConstraints;
+    use webrtc_constraints::{BareOrMandatoryMediaTrackConstraints, BareOrMediaStreamConstraints};
 
     let actual: BareOrMediaStreamConstraints = {
         let json = serde_json::json!({
@@ -23,7 +23,7 @@ fn w3c_spec_example_1() {
     let expected = BareOrMediaStreamConstraints {
         audio: BareOrBoolOrMediaTrackConstraints::Bool(false),
         video: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-            basic_or_required: BareOrMediaTrackConstraintSet::from_iter([
+            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
                 (WIDTH, 1280.into()),
                 (HEIGHT, 720.into()),
                 (ASPECT_RATIO, 1.5.into()),
@@ -39,7 +39,7 @@ fn w3c_spec_example_1() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_2() {
-    use webrtc_constraints::BareOrMediaStreamConstraints;
+    use webrtc_constraints::{BareOrMandatoryMediaTrackConstraints, BareOrMediaStreamConstraints};
 
     let actual: BareOrMediaStreamConstraints = {
         let json = serde_json::json!({
@@ -56,7 +56,7 @@ fn w3c_spec_example_2() {
     let expected = BareOrMediaStreamConstraints {
         audio: BareOrBoolOrMediaTrackConstraints::Bool(false),
         video: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-            basic_or_required: BareOrMediaTrackConstraintSet::from_iter([
+            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
                 (
                     WIDTH,
                     BareOrValueRangeConstraint::Constraint(ValueRangeConstraint {
@@ -100,7 +100,7 @@ fn w3c_spec_example_2() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_3() {
-    use webrtc_constraints::BareOrMediaStreamConstraints;
+    use webrtc_constraints::{BareOrMandatoryMediaTrackConstraints, BareOrMediaStreamConstraints};
 
     let actual: BareOrMediaStreamConstraints = {
         let json = serde_json::json!({
@@ -122,7 +122,7 @@ fn w3c_spec_example_3() {
     let expected = BareOrMediaStreamConstraints {
         audio: BareOrBoolOrMediaTrackConstraints::Bool(false),
         video: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-            basic_or_required: BareOrMediaTrackConstraintSet::from_iter([
+            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
                 (
                     HEIGHT,
                     ValueRangeConstraint {
