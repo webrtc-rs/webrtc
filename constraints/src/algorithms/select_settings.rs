@@ -3,7 +3,10 @@ use std::collections::{HashMap, HashSet};
 use ordered_float::NotNan;
 
 use crate::{
-    algorithms::{fitness_distance::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind},
+    algorithms::{
+        fitness_distance::SettingFitnessDistanceError, FitnessDistance,
+        SettingFitnessDistanceErrorKind,
+    },
     constraints::SanitizedAdvancedMediaTrackConstraints,
     errors::OverconstrainedError,
     BareOrMandatoryMediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints,
@@ -113,9 +116,11 @@ pub fn select_settings<'a, I, P>(
     policy: &P,
 ) -> Result<&'a MediaTrackSettings, SelectSettingsError>
 where
-    I: Iterator<Item = &'a MediaTrackSettings>,
+    I: IntoIterator<Item = &'a MediaTrackSettings>,
     P: SelectSettingsPolicy,
 {
+    let possible_settings = possible_settings.into_iter();
+
     // As specified in step 1 of the `SelectSettings` algorithm:
     // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
     //
