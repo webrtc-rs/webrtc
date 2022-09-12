@@ -6,21 +6,18 @@ use cpal::traits::HostTrait;
 use cpal::traits::StreamTrait;
 use cpal::Device;
 use cpal::DevicesError;
-use cpal::SampleFormat;
 use cpal::SampleRate;
-use flume::Sender;
 use std::io::Write;
 use std::sync::Arc;
 use std::thread;
 use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
-use webrtc::media::audio::buffer::Buffer;
 use webrtc::media::Sample;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
@@ -28,9 +25,6 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
-use webrtc::Error;
-
-const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -115,7 +109,6 @@ async fn main() -> Result<()> {
     let notify_audio = notify_tx.clone();
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
-    let audio_done_tx = done_tx.clone();
 
     // Create a audio track
     let audio_track = Arc::new(TrackLocalStaticSample::new(
@@ -308,6 +301,8 @@ async fn main() -> Result<()> {
     };
 
     peer_connection.close().await?;
+
+    drop(stream);
 
     Ok(())
 }
