@@ -79,11 +79,14 @@ impl RTCIceGatherer {
     }
 
     pub(crate) async fn create_agent(&self) -> Result<()> {
-        {
-            let agent = self.agent.lock().await;
-            if agent.is_some() || self.state() != RTCIceGathererState::New {
-                return Ok(());
-            }
+        // NOTE: A lock is held for the duration of this function in order to
+        // avoid potential double-agent creations. Care should be taken to
+        // ensure we do not do anything expensive other than the actual agent
+        // creation in this function.
+
+        let mut agent = self.agent.lock().await;
+        if agent.is_some() || self.state() != RTCIceGathererState::New {
+            return Ok(());
         }
 
         let mut candidate_types = vec![];
@@ -145,10 +148,7 @@ impl RTCIceGatherer {
 
         config.network_types.extend(requested_network_types);
 
-        {
-            let mut agent = self.agent.lock().await;
-            *agent = Some(Arc::new(ice::agent::Agent::new(config).await?));
-        }
+        *agent = Some(Arc::new(ice::agent::Agent::new(config).await?));
 
         Ok(())
     }
