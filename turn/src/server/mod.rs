@@ -95,6 +95,9 @@ impl Server {
         }
     }
 
+    /// Get information of [`Allocation`]s by provided [`FiveTuple`]s.
+    ///
+    /// [`Allocation`]: crate::allocation::Allocation
     pub async fn get_allocations_info(
         &self,
         five_tuples: Option<Vec<FiveTuple>>,
@@ -239,6 +242,9 @@ enum Command {
     /// `username`.
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
 
+    /// Command to get information of [`Allocation`]s by provided [`FiveTuple`]s.
+    ///
+    /// [`Allocation`]: [`crate::allocation::Allocation`]
     GetAllocationsInfo(
         Option<Vec<FiveTuple>>,
         mpsc::Sender<HashMap<FiveTuple, AllocationInfo>>,
