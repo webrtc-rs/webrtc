@@ -74,7 +74,7 @@ use ::ice::candidate::Candidate;
 use ::sdp::description::session::*;
 use ::sdp::util::ConnectionRole;
 use async_trait::async_trait;
-use interceptor::{Attributes, Interceptor, RTCPWriter};
+use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use rand::{thread_rng, Rng};
 use rcgen::KeyPair;
@@ -221,9 +221,18 @@ impl RTCPeerConnection {
     pub(crate) async fn new(api: &API, mut configuration: RTCConfiguration) -> Result<Self> {
         RTCPeerConnection::init_configuration(&mut configuration)?;
 
-        let interceptor = api.interceptor_registry.build("")?;
+        let (interceptor, stats_interceptor): (Arc<dyn Interceptor + Send + Sync>, _) = {
+            let mut chain = api.interceptor_registry.build_chain("")?;
+            let stats_interceptor = stats::make_stats_interceptor("");
+            chain.add(stats_interceptor.clone());
+
+            (Arc::new(chain), stats_interceptor)
+        };
+
+        let weak_interceptor = Arc::downgrade(&interceptor);
         let (internal, configuration) =
-            PeerConnectionInternal::new(api, Arc::downgrade(&interceptor), configuration).await?;
+            PeerConnectionInternal::new(api, weak_interceptor, stats_interceptor, configuration)
+                .await?;
         let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
         let interceptor_rtcp_writer = interceptor.bind_rtcp_writer(internal_rtcp_writer).await;
 
@@ -1848,10 +1857,6 @@ impl RTCPeerConnection {
 
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #19)
         if let Some(options) = options {
-            if let Some(id) = options.id {
-                params.id = id;
-            }
-
             // Ordered indicates if data is allowed to be delivered out of order. The
             // default value of true, guarantees that data will be delivered in order.
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #9)
@@ -1880,9 +1885,7 @@ impl RTCPeerConnection {
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #12)
-            if let Some(negotiated) = options.negotiated {
-                params.negotiated = negotiated;
-            }
+            params.negotiated = options.negotiated;
         }
 
         let d = Arc::new(RTCDataChannel::new(
