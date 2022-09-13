@@ -7,15 +7,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     constraint::SanitizedMediaTrackConstraint, property::all::name::*, BareOrMediaTrackConstraint,
-    MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
-    ValueConstraint, ValueRangeConstraint,
+    MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
+    ResolvedMediaTrackConstraint, ResolvedValueConstraint, ResolvedValueRangeConstraint,
 };
 
 /// Media track constraint set that contains either bare values or constraints.
 pub type BareOrMediaTrackConstraintSet = GenericMediaTrackConstraintSet<BareOrMediaTrackConstraint>;
 
 /// Media track constraint set that contains only constraints (both, empty and non-empty).
-pub type MediaTrackConstraintSet = GenericMediaTrackConstraintSet<MediaTrackConstraint>;
+pub type ResolvedMediaTrackConstraintSet =
+    GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint>;
 
 /// Media track constraint set that contains only non-empty constraints.
 pub type SanitizedMediaTrackConstraintSet =
@@ -25,7 +26,7 @@ pub type SanitizedMediaTrackConstraintSet =
 ///
 /// # W3C Spec Compliance
 ///
-/// Corresponds to [`MediaTrackConstraintSet`][media_track_constraint_set]
+/// Corresponds to [`ResolvedMediaTrackConstraintSet`][media_track_constraint_set]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
@@ -91,15 +92,15 @@ impl BareOrMediaTrackConstraintSet {
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> MediaTrackConstraintSet {
+    ) -> ResolvedMediaTrackConstraintSet {
         self.clone().into_resolved(strategy)
     }
 
     pub fn into_resolved(
         self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> MediaTrackConstraintSet {
-        MediaTrackConstraintSet::new(
+    ) -> ResolvedMediaTrackConstraintSet {
+        ResolvedMediaTrackConstraintSet::new(
             self.into_iter()
                 .map(|(property, constraint)| (property, constraint.into_resolved(strategy)))
                 .collect(),
@@ -107,7 +108,7 @@ impl BareOrMediaTrackConstraintSet {
     }
 }
 
-impl MediaTrackConstraintSet {
+impl ResolvedMediaTrackConstraintSet {
     pub fn to_sanitized(
         &self,
         supported_constraints: &MediaTrackSupportedConstraints,
@@ -136,91 +137,91 @@ impl MediaTrackConstraintSet {
 }
 
 impl SanitizedMediaTrackConstraintSet {
-    pub fn device_id(&self) -> Option<&ValueConstraint<String>> {
+    pub fn device_id(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
             .get(DEVICE_ID)
             .and_then(SanitizedMediaTrackConstraint::string)
     }
 
-    pub fn group_id(&self) -> Option<&ValueConstraint<String>> {
+    pub fn group_id(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
             .get(GROUP_ID)
             .and_then(SanitizedMediaTrackConstraint::string)
     }
 
-    pub fn auto_gain_control(&self) -> Option<&ValueConstraint<bool>> {
+    pub fn auto_gain_control(&self) -> Option<&ResolvedValueConstraint<bool>> {
         self.0
             .get(AUTO_GAIN_CONTROL)
             .and_then(SanitizedMediaTrackConstraint::bool)
     }
 
-    pub fn channel_count(&self) -> Option<&ValueRangeConstraint<u64>> {
+    pub fn channel_count(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
             .get(CHANNEL_COUNT)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
-    pub fn echo_cancellation(&self) -> Option<&ValueConstraint<bool>> {
+    pub fn echo_cancellation(&self) -> Option<&ResolvedValueConstraint<bool>> {
         self.0
             .get(ECHO_CANCELLATION)
             .and_then(SanitizedMediaTrackConstraint::bool)
     }
 
-    pub fn latency(&self) -> Option<&ValueRangeConstraint<f64>> {
+    pub fn latency(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
             .get(LATENCY)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
-    pub fn noise_suppression(&self) -> Option<&ValueConstraint<bool>> {
+    pub fn noise_suppression(&self) -> Option<&ResolvedValueConstraint<bool>> {
         self.0
             .get(NOISE_SUPPRESSION)
             .and_then(SanitizedMediaTrackConstraint::bool)
     }
 
-    pub fn sample_rate(&self) -> Option<&ValueRangeConstraint<f64>> {
+    pub fn sample_rate(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
             .get(SAMPLE_RATE)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
-    pub fn sample_size(&self) -> Option<&ValueRangeConstraint<u64>> {
+    pub fn sample_size(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
             .get(SAMPLE_SIZE)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
-    pub fn aspect_ratio(&self) -> Option<&ValueRangeConstraint<f64>> {
+    pub fn aspect_ratio(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
             .get(ASPECT_RATIO)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
-    pub fn facing_mode(&self) -> Option<&ValueConstraint<String>> {
+    pub fn facing_mode(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
             .get(FACING_MODE)
             .and_then(SanitizedMediaTrackConstraint::string)
     }
 
-    pub fn frame_rate(&self) -> Option<&ValueRangeConstraint<f64>> {
+    pub fn frame_rate(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
             .get(FRAME_RATE)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
-    pub fn height(&self) -> Option<&ValueRangeConstraint<u64>> {
+    pub fn height(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
             .get(HEIGHT)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
-    pub fn width(&self) -> Option<&ValueRangeConstraint<u64>> {
+    pub fn width(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
             .get(WIDTH)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
-    pub fn resize_mode(&self) -> Option<&ValueConstraint<String>> {
+    pub fn resize_mode(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
             .get(RESIZE_MODE)
             .and_then(SanitizedMediaTrackConstraint::string)

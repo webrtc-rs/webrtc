@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
-    MediaTrackSupportedConstraints, SanitizedMediaTrackConstraint,
+    BareOrMediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
+    MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
 };
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
@@ -15,7 +15,8 @@ pub type BareOrAdvancedMediaTrackConstraints =
     GenericAdvancedMediaTrackConstraints<BareOrMediaTrackConstraint>;
 
 /// Advanced media track constraints that contain sets of constraints (both, empty and non-empty).
-pub type AdvancedMediaTrackConstraints = GenericAdvancedMediaTrackConstraints<MediaTrackConstraint>;
+pub type ResolvedAdvancedMediaTrackConstraints =
+    GenericAdvancedMediaTrackConstraints<ResolvedMediaTrackConstraint>;
 
 /// Advanced media track constraints that contain sets of only non-empty constraints.
 pub type SanitizedAdvancedMediaTrackConstraints =
@@ -25,7 +26,7 @@ pub type SanitizedAdvancedMediaTrackConstraints =
 ///
 /// # W3C Spec Compliance
 ///
-/// Corresponds to [`MediaTrackConstraints.advanced`][media_track_constraints_advanced]
+/// Corresponds to [`ResolvedMediaTrackConstraints.advanced`][media_track_constraints_advanced]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
@@ -87,20 +88,20 @@ impl<T> IntoIterator for GenericAdvancedMediaTrackConstraints<T> {
 }
 
 impl BareOrAdvancedMediaTrackConstraints {
-    pub fn to_resolved(&self) -> AdvancedMediaTrackConstraints {
+    pub fn to_resolved(&self) -> ResolvedAdvancedMediaTrackConstraints {
         self.clone().into_resolved()
     }
 
-    pub fn into_resolved(self) -> AdvancedMediaTrackConstraints {
+    pub fn into_resolved(self) -> ResolvedAdvancedMediaTrackConstraints {
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        AdvancedMediaTrackConstraints::from_iter(
+        ResolvedAdvancedMediaTrackConstraints::from_iter(
             self.into_iter()
                 .map(|constraint_set| constraint_set.into_resolved(strategy)),
         )
     }
 }
 
-impl AdvancedMediaTrackConstraints {
+impl ResolvedAdvancedMediaTrackConstraints {
     pub fn to_sanitized(
         &self,
         supported_constraints: &MediaTrackSupportedConstraints,

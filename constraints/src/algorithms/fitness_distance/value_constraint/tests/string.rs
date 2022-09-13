@@ -14,11 +14,11 @@ mod basic {
                 },
             ],
             constraints: String => &[
-                ValueConstraint {
+                ResolvedValueConstraint {
                     exact: None,
                     ideal: None,
                 },
-                ValueConstraint {
+                ResolvedValueConstraint {
                     exact: None,
                     ideal: Some("foo".to_owned()),
                 },
@@ -37,7 +37,7 @@ mod basic {
                     settings: String => &[None, Some("bar".to_owned())],
                 },
             ],
-            constraints: String => &[ValueConstraint {
+            constraints: String => &[ResolvedValueConstraint {
                 exact: None,
                 ideal: Some("foo".to_owned()),
             }],
@@ -62,7 +62,7 @@ mod required {
                     settings: String => &[Some("foo".to_owned())],
                 },
             ],
-            constraints: String => &[ValueConstraint {
+            constraints: String => &[ResolvedValueConstraint {
                 exact: Some("foo".to_owned()),
                 ideal: None,
             }],
@@ -84,11 +84,11 @@ mod required {
                     },
                 ],
                 constraints: String => &[
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some("foo".to_owned()),
                         ideal: None,
                     },
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some("foo".to_owned()),
                         ideal: Some("foo".to_owned()),
                     },
@@ -112,11 +112,11 @@ mod required {
                     },
                 ],
                 constraints: String => &[
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some("foo".to_owned()),
                         ideal: None,
                     },
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some("foo".to_owned()),
                         ideal: Some("foo".to_owned()),
                     },

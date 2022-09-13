@@ -16,11 +16,11 @@ mod basic {
                 },
             ],
             constraints: bool => &[
-                ValueSequenceConstraint {
+                ResolvedValueSequenceConstraint {
                     exact: None,
                     ideal: None,
                 },
-                ValueSequenceConstraint {
+                ResolvedValueSequenceConstraint {
                     exact: None,
                     ideal: Some(vec![true]),
                 },
@@ -39,7 +39,7 @@ mod basic {
                     settings: bool => &[None, Some(false)],
                 },
             ],
-            constraints: bool => &[ValueSequenceConstraint {
+            constraints: bool => &[ResolvedValueSequenceConstraint {
                 exact: None,
                 ideal: Some(vec![true]),
             }],
@@ -63,7 +63,7 @@ mod required {
                     settings: bool => &[Some(true)],
                 },
             ],
-            constraints: bool => &[ValueSequenceConstraint {
+            constraints: bool => &[ResolvedValueSequenceConstraint {
                 exact: Some(vec![true]),
                 ideal: None,
             }],
@@ -85,11 +85,11 @@ mod required {
                     },
                 ],
                 constraints: bool => &[
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![true]),
                         ideal: None,
                     },
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![true]),
                         ideal: Some(vec![true]),
                     },
@@ -113,11 +113,11 @@ mod required {
                     },
                 ],
                 constraints: bool => &[
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![true]),
                         ideal: None,
                     },
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![true]),
                         ideal: Some(vec![true]),
                     },

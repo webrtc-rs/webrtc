@@ -1,4 +1,4 @@
-use crate::{MediaTrackConstraint, MediaTrackSetting};
+use crate::{MediaTrackSetting, ResolvedMediaTrackConstraint};
 
 use super::FitnessDistance;
 
@@ -17,12 +17,12 @@ pub enum SettingFitnessDistanceErrorKind {
     TooLarge,
 }
 
-impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for MediaTrackConstraint {
+impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for ResolvedMediaTrackConstraint {
     type Error = SettingFitnessDistanceError;
 
     fn fitness_distance(&self, setting: Option<&'a MediaTrackSetting>) -> Result<f64, Self::Error> {
         type Setting = MediaTrackSetting;
-        type Constraint = MediaTrackConstraint;
+        type Constraint = ResolvedMediaTrackConstraint;
 
         let setting = match setting {
             Some(setting) => setting,
@@ -41,7 +41,7 @@ impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for MediaTrackConstraint
 
         let result = match (setting, self) {
             // Empty constraint:
-            (_, MediaTrackConstraint::Empty(_)) => Ok(0.0),
+            (_, ResolvedMediaTrackConstraint::Empty(_)) => Ok(0.0),
 
             // Boolean setting:
             (Setting::Bool(_setting), Constraint::IntegerRange(_constraint)) => Ok(0.0),

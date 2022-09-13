@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
-    MediaTrackSupportedConstraints, SanitizedMediaTrackConstraint,
+    BareOrMediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
+    MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
 };
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
@@ -14,10 +14,10 @@ use super::constraint_set::GenericMediaTrackConstraintSet;
 ///
 /// # W3C Spec Compliance
 ///
-/// Corresponds to [`MediaTrackConstraints.advanced`][media_track_constraints_advanced]
+/// Corresponds to [`ResolvedMediaTrackConstraints.advanced`][media_track_constraints_advanced]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
-/// Unlike `MandatoryMediaTrackConstraints` this type may contain constraints with bare values.
+/// Unlike `ResolvedMandatoryMediaTrackConstraints` this type may contain constraints with bare values.
 ///
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints_advanced]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-advanced
@@ -29,7 +29,7 @@ pub type BareOrMandatoryMediaTrackConstraints =
 ///
 /// # W3C Spec Compliance
 ///
-/// Corresponds to [`MediaTrackConstraintSet`][media_track_constraints_advanced]
+/// Corresponds to [`ResolvedMediaTrackConstraintSet`][media_track_constraints_advanced]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
 /// Unlike `BareOrMandatoryMediaTrackConstraints` this type does not contain constraints
@@ -38,8 +38,8 @@ pub type BareOrMandatoryMediaTrackConstraints =
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints_advanced]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-advanced
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-pub type MandatoryMediaTrackConstraints =
-    GenericMandatoryMediaTrackConstraints<MediaTrackConstraint>;
+pub type ResolvedMandatoryMediaTrackConstraints =
+    GenericMandatoryMediaTrackConstraints<ResolvedMediaTrackConstraint>;
 
 pub type SanitizedMandatoryMediaTrackConstraints =
     GenericMandatoryMediaTrackConstraints<SanitizedMediaTrackConstraint>;
@@ -48,7 +48,7 @@ pub type SanitizedMandatoryMediaTrackConstraints =
 ///
 /// # W3C Spec Compliance
 ///
-/// Corresponds to [`MediaTrackConstraintSet`][media_track_constraint_set]
+/// Corresponds to [`ResolvedMediaTrackConstraintSet`][media_track_constraint_set]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
@@ -111,17 +111,17 @@ impl<T> IntoIterator for GenericMandatoryMediaTrackConstraints<T> {
 }
 
 impl BareOrMandatoryMediaTrackConstraints {
-    pub fn to_resolved(&self) -> MandatoryMediaTrackConstraints {
+    pub fn to_resolved(&self) -> ResolvedMandatoryMediaTrackConstraints {
         self.clone().into_resolved()
     }
 
-    pub fn into_resolved(self) -> MandatoryMediaTrackConstraints {
+    pub fn into_resolved(self) -> ResolvedMandatoryMediaTrackConstraints {
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
-        MandatoryMediaTrackConstraints::new(self.0.into_resolved(strategy))
+        ResolvedMandatoryMediaTrackConstraints::new(self.0.into_resolved(strategy))
     }
 }
 
-impl MandatoryMediaTrackConstraints {
+impl ResolvedMandatoryMediaTrackConstraints {
     pub fn to_sanitized(
         &self,
         supported_constraints: &MediaTrackSupportedConstraints,

@@ -19,7 +19,7 @@ mod basic {
                     settings: f64 => &[Some(42.0)],
                 },
             ],
-            constraints: u64 => &[ValueRangeConstraint {
+            constraints: u64 => &[ResolvedValueRangeConstraint {
                 min: None,
                 max: None,
                 exact: None,
@@ -40,7 +40,7 @@ mod basic {
                 },
             ],
             constraints: u64 => &[
-                ValueRangeConstraint {
+                ResolvedValueRangeConstraint {
                     min: None,
                     max: None,
                     exact: None,
@@ -60,7 +60,7 @@ mod basic {
                 checks: [
                     {
                         setting: i64 => Some(1),
-                        constraint: u64 => ValueRangeConstraint {
+                        constraint: u64 => ResolvedValueRangeConstraint {
                             min: None,
                             max: None,
                             exact: None,
@@ -70,7 +70,7 @@ mod basic {
                     },
                     {
                         setting: i64 => Some(2),
-                        constraint: u64 => ValueRangeConstraint {
+                        constraint: u64 => ResolvedValueRangeConstraint {
                             min: None,
                             max: None,
                             exact: None,
@@ -80,7 +80,7 @@ mod basic {
                     },
                     {
                         setting: i64 => Some(3),
-                        constraint: u64 => ValueRangeConstraint {
+                        constraint: u64 => ResolvedValueRangeConstraint {
                             min: None,
                             max: None,
                             exact: None,
@@ -101,7 +101,7 @@ mod basic {
                 checks: [
                     {
                         setting: f64 => Some(1.0),
-                        constraint: u64 => ValueRangeConstraint {
+                        constraint: u64 => ResolvedValueRangeConstraint {
                             min: None,
                             max: None,
                             exact: None,
@@ -111,7 +111,7 @@ mod basic {
                     },
                     {
                         setting: f64 => Some(2.0),
-                        constraint: u64 => ValueRangeConstraint {
+                        constraint: u64 => ResolvedValueRangeConstraint {
                             min: None,
                             max: None,
                             exact: None,
@@ -121,7 +121,7 @@ mod basic {
                     },
                     {
                         setting: f64 => Some(3.0),
-                        constraint: u64 => ValueRangeConstraint {
+                        constraint: u64 => ResolvedValueRangeConstraint {
                             min: None,
                             max: None,
                             exact: None,
@@ -151,7 +151,7 @@ mod basic {
                     settings: f64 => &[None, Some(0.0)],
                 },
             ],
-            constraints: u64 => &[ValueRangeConstraint {
+            constraints: u64 => &[ResolvedValueRangeConstraint {
                 min: None,
                 max: None,
                 exact: None,
@@ -179,7 +179,7 @@ mod required {
                     settings: f64 => &[Some(42.0)],
                 },
             ],
-            constraints: u64 => &[ValueRangeConstraint {
+            constraints: u64 => &[ResolvedValueRangeConstraint {
                 min: None,
                 max: None,
                 exact: Some(42),
@@ -200,7 +200,7 @@ mod required {
                 },
             ],
             constraints: u64 => &[
-                ValueRangeConstraint {
+                ResolvedValueRangeConstraint {
                     min: None,
                     max: None,
                     exact: Some(42),
@@ -229,13 +229,13 @@ mod required {
                     },
                 ],
                 constraints: u64 => &[
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: None,
                         max: None,
                         exact: Some(42),
                         ideal: None,
                     },
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: None,
                         max: None,
                         exact: Some(42),
@@ -261,13 +261,13 @@ mod required {
                     },
                 ],
                 constraints: u64 => &[
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: None,
                         max: None,
                         exact: Some(42),
                         ideal: None,
                     },
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: None,
                         max: None,
                         exact: Some(42),
@@ -289,13 +289,13 @@ mod required {
                     },
                 ],
                 constraints: u64 => &[
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: None,
                         max: None,
                         exact: Some(42),
                         ideal: None,
                     },
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: None,
                         max: None,
                         exact: Some(42),

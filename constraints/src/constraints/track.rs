@@ -2,8 +2,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    constraint::SanitizedMediaTrackConstraint, BareOrMediaTrackConstraint, MediaTrackConstraint,
-    MediaTrackSupportedConstraints,
+    constraint::SanitizedMediaTrackConstraint, BareOrMediaTrackConstraint,
+    MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint,
 };
 
 use super::{
@@ -16,7 +16,8 @@ pub type BareOrBoolOrMediaTrackConstraints =
     GenericBoolOrMediaTrackConstraints<BareOrMediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
-pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaTrackConstraint>;
+pub type BoolOrMediaTrackConstraints =
+    GenericBoolOrMediaTrackConstraints<ResolvedMediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -29,7 +30,7 @@ pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaT
 ///
 /// | Rust                          | W3C                                                                                                |
 /// | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-/// | `BoolOrMediaTrackConstraints` | [`MediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
+/// | `BoolOrMediaTrackConstraints` | [`ResolvedMediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
 ///
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
@@ -100,7 +101,7 @@ impl BareOrBoolOrMediaTrackConstraints {
 pub type BareOrMediaTrackConstraints = GenericMediaTrackConstraints<BareOrMediaTrackConstraint>;
 
 /// Media track constraints that contains only constraints (both, empty and non-empty).
-pub type MediaTrackConstraints = GenericMediaTrackConstraints<MediaTrackConstraint>;
+pub type ResolvedMediaTrackConstraints = GenericMediaTrackConstraints<ResolvedMediaTrackConstraint>;
 
 /// Media track constraints that contains only non-empty constraints.
 pub type SanitizedMediaTrackConstraints =
@@ -153,19 +154,19 @@ impl<T> GenericMediaTrackConstraints<T> {
     }
 }
 
-impl GenericMediaTrackConstraints<MediaTrackConstraint> {
-    pub fn basic(&self) -> GenericMediaTrackConstraintSet<MediaTrackConstraint> {
+impl GenericMediaTrackConstraints<ResolvedMediaTrackConstraint> {
+    pub fn basic(&self) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
         self.basic_or_required(false)
     }
 
-    pub fn required(&self) -> GenericMediaTrackConstraintSet<MediaTrackConstraint> {
+    pub fn required(&self) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
         self.basic_or_required(true)
     }
 
     fn basic_or_required(
         &self,
         required: bool,
-    ) -> GenericMediaTrackConstraintSet<MediaTrackConstraint> {
+    ) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
         GenericMediaTrackConstraintSet::new(
             self.mandatory
                 .iter()
@@ -190,30 +191,30 @@ impl<T> Default for GenericMediaTrackConstraints<T> {
     }
 }
 
-impl From<BareOrMediaTrackConstraints> for MediaTrackConstraints {
+impl From<BareOrMediaTrackConstraints> for ResolvedMediaTrackConstraints {
     fn from(bare_or_constraints: BareOrMediaTrackConstraints) -> Self {
         bare_or_constraints.into_resolved()
     }
 }
 
 impl BareOrMediaTrackConstraints {
-    pub fn to_resolved(&self) -> MediaTrackConstraints {
+    pub fn to_resolved(&self) -> ResolvedMediaTrackConstraints {
         self.clone().into_resolved()
     }
 
-    pub fn into_resolved(self) -> MediaTrackConstraints {
+    pub fn into_resolved(self) -> ResolvedMediaTrackConstraints {
         let Self {
             mandatory,
             advanced,
         } = self;
-        MediaTrackConstraints {
+        ResolvedMediaTrackConstraints {
             mandatory: mandatory.into_resolved(),
             advanced: advanced.into_resolved(),
         }
     }
 }
 
-impl MediaTrackConstraints {
+impl ResolvedMediaTrackConstraints {
     pub fn to_sanitized(
         &self,
         supported_constraints: &MediaTrackSupportedConstraints,

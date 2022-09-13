@@ -66,8 +66,9 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        property::all::name::*, MandatoryMediaTrackConstraints, MediaTrackSupportedConstraints,
-        ResizeMode, ValueConstraint, ValueRangeConstraint,
+        property::all::name::*, MediaTrackSupportedConstraints, ResizeMode,
+        ResolvedMandatoryMediaTrackConstraints, ResolvedValueConstraint,
+        ResolvedValueRangeConstraint,
     };
 
     use super::*;
@@ -85,9 +86,9 @@ mod tests {
 
         let candidates: Vec<_> = settings.iter().collect();
 
-        let constraints = MandatoryMediaTrackConstraints::from_iter([(
+        let constraints = ResolvedMandatoryMediaTrackConstraints::from_iter([(
             DEVICE_ID,
-            ValueConstraint::default()
+            ResolvedValueConstraint::default()
                 .exact("mismatched-device".to_owned())
                 .into(),
         )]);
@@ -151,13 +152,21 @@ mod tests {
 
         let candidates: Vec<_> = settings.iter().collect();
 
-        let constraints = MandatoryMediaTrackConstraints::from_iter([
+        let constraints = ResolvedMandatoryMediaTrackConstraints::from_iter([
             (
                 RESIZE_MODE,
-                ValueConstraint::default().exact(ResizeMode::none()).into(),
+                ResolvedValueConstraint::default()
+                    .exact(ResizeMode::none())
+                    .into(),
             ),
-            (HEIGHT, ValueRangeConstraint::default().min(1000).into()),
-            (WIDTH, ValueRangeConstraint::default().max(2000).into()),
+            (
+                HEIGHT,
+                ResolvedValueRangeConstraint::default().min(1000).into(),
+            ),
+            (
+                WIDTH,
+                ResolvedValueRangeConstraint::default().max(2000).into(),
+            ),
         ]);
 
         let sanitized_constraints = constraints.to_sanitized(&supported_constraints);

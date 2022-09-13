@@ -16,11 +16,11 @@ mod basic {
                 },
             ],
             constraints: String => &[
-                ValueSequenceConstraint {
+                ResolvedValueSequenceConstraint {
                     exact: None,
                     ideal: None,
                 },
-                ValueSequenceConstraint {
+                ResolvedValueSequenceConstraint {
                     exact: None,
                     ideal: Some(vec!["foo".to_owned()]),
                 },
@@ -39,7 +39,7 @@ mod basic {
                     settings: String => &[None, Some("bar".to_owned())],
                 },
             ],
-            constraints: String => &[ValueSequenceConstraint {
+            constraints: String => &[ResolvedValueSequenceConstraint {
                 exact: None,
                 ideal: Some(vec!["foo".to_owned()]),
             }],
@@ -64,7 +64,7 @@ mod required {
                     settings: String => &[Some("foo".to_owned())],
                 },
             ],
-            constraints: String => &[ValueSequenceConstraint {
+            constraints: String => &[ResolvedValueSequenceConstraint {
                 exact: Some(vec!["foo".to_owned()]),
                 ideal: None,
             }],
@@ -86,11 +86,11 @@ mod required {
                     },
                 ],
                 constraints: String => &[
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: None,
                     },
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: Some(vec!["foo".to_owned()]),
                     },
@@ -114,11 +114,11 @@ mod required {
                     },
                 ],
                 constraints: String => &[
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: None,
                     },
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec!["foo".to_owned(), "bar".to_owned(), "baz".to_owned()]),
                         ideal: Some(vec!["foo".to_owned()]),
                     },

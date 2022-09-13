@@ -4,11 +4,12 @@ use crate::{
     algorithms::{select_settings_candidates, SelectSettingsError},
     errors::OverconstrainedError,
     property::all::{name::*, names as all_properties},
-    AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints,
-    BareOrMandatoryMediaTrackConstraints, BareOrMediaTrackConstraints, FacingMode,
-    MandatoryMediaTrackConstraints, MediaTrackConstraint, MediaTrackConstraintSet,
-    MediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
-    SanitizedMediaTrackConstraints, ValueConstraint, ValueRangeConstraint, ValueSequenceConstraint,
+    BareOrAdvancedMediaTrackConstraints, BareOrMandatoryMediaTrackConstraints,
+    BareOrMediaTrackConstraints, FacingMode, MediaTrackSettings, MediaTrackSupportedConstraints,
+    ResizeMode, ResolvedAdvancedMediaTrackConstraints, ResolvedMandatoryMediaTrackConstraints,
+    ResolvedMediaTrackConstraint, ResolvedMediaTrackConstraintSet, ResolvedMediaTrackConstraints,
+    ResolvedValueConstraint, ResolvedValueRangeConstraint, ResolvedValueSequenceConstraint,
+    SanitizedMediaTrackConstraints,
 };
 
 use super::DeviceInformationExposureMode;
@@ -90,12 +91,12 @@ fn default_supported_constraints() -> MediaTrackSupportedConstraints {
 
 fn test_overconstrained(
     possible_settings: &[MediaTrackSettings],
-    mandatory_constraints: MandatoryMediaTrackConstraints,
+    mandatory_constraints: ResolvedMandatoryMediaTrackConstraints,
     exposure_mode: DeviceInformationExposureMode,
 ) -> OverconstrainedError {
-    let constraints = MediaTrackConstraints {
+    let constraints = ResolvedMediaTrackConstraints {
         mandatory: mandatory_constraints,
-        advanced: AdvancedMediaTrackConstraints::default(),
+        advanced: ResolvedAdvancedMediaTrackConstraints::default(),
     }
     .to_sanitized(&default_supported_constraints());
 
@@ -110,10 +111,10 @@ fn test_overconstrained(
 
 fn test_constrained(
     possible_settings: &[MediaTrackSettings],
-    mandatory_constraints: MandatoryMediaTrackConstraints,
-    advanced_constraints: AdvancedMediaTrackConstraints,
+    mandatory_constraints: ResolvedMandatoryMediaTrackConstraints,
+    advanced_constraints: ResolvedAdvancedMediaTrackConstraints,
 ) -> Vec<&MediaTrackSettings> {
-    let constraints = MediaTrackConstraints {
+    let constraints = ResolvedMediaTrackConstraints {
         mandatory: mandatory_constraints,
         advanced: advanced_constraints,
     }
@@ -131,27 +132,29 @@ fn test_constrained(
 mod unconstrained {
     use super::*;
 
-    fn bare_or_constraints() -> BareOrMediaTrackConstraints {
+    fn default_constraints() -> BareOrMediaTrackConstraints {
         BareOrMediaTrackConstraints {
             mandatory: BareOrMandatoryMediaTrackConstraints::default(),
             advanced: BareOrAdvancedMediaTrackConstraints::default(),
         }
     }
 
-    fn constraints() -> SanitizedMediaTrackConstraints {
-        bare_or_constraints()
-            .to_resolved()
-            .to_sanitized(&default_supported_constraints())
+    fn default_resolved_constraints() -> ResolvedMediaTrackConstraints {
+        default_constraints().into_resolved()
+    }
+
+    fn default_sanitized_constraints() -> SanitizedMediaTrackConstraints {
+        default_resolved_constraints().into_sanitized(&default_supported_constraints())
     }
 
     #[test]
     fn pass_through() {
         let possible_settings = default_possible_settings();
-        let constraints = constraints();
+        let sanitized_constraints = default_sanitized_constraints();
 
         let actual = select_settings_candidates(
             &possible_settings[..],
-            &constraints,
+            &sanitized_constraints,
             DeviceInformationExposureMode::Exposed,
         )
         .unwrap();
@@ -168,9 +171,9 @@ mod overconstrained {
     fn protected() {
         let error = test_overconstrained(
             &default_possible_settings(),
-            MandatoryMediaTrackConstraints::from_iter([(
+            ResolvedMandatoryMediaTrackConstraints::from_iter([(
                 GROUP_ID,
-                ValueConstraint::default()
+                ResolvedValueConstraint::default()
                     .exact("missing-group".to_owned())
                     .into(),
             )]),
@@ -188,9 +191,9 @@ mod overconstrained {
         fn missing() {
             let error = test_overconstrained(
                 &default_possible_settings(),
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
-                    ValueConstraint::default()
+                    ResolvedValueConstraint::default()
                         .exact("missing-group".to_owned())
                         .into(),
                 )]),
@@ -211,9 +214,9 @@ mod overconstrained {
         fn mismatch() {
             let error = test_overconstrained(
                 &default_possible_settings(),
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     DEVICE_ID,
-                    ValueConstraint::default()
+                    ResolvedValueConstraint::default()
                         .exact("mismatched-device".to_owned())
                         .into(),
                 )]),
@@ -234,9 +237,9 @@ mod overconstrained {
         fn too_small() {
             let error = test_overconstrained(
                 &default_possible_settings(),
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     FRAME_RATE,
-                    ValueRangeConstraint::default().min(1000).into(),
+                    ResolvedValueRangeConstraint::default().min(1000).into(),
                 )]),
                 DeviceInformationExposureMode::Exposed,
             );
@@ -255,9 +258,9 @@ mod overconstrained {
         fn too_large() {
             let error = test_overconstrained(
                 &default_possible_settings(),
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     FRAME_RATE,
-                    ValueRangeConstraint::default().max(10).into(),
+                    ResolvedValueRangeConstraint::default().max(10).into(),
                 )]),
                 DeviceInformationExposureMode::Exposed,
             );
@@ -289,11 +292,11 @@ mod constrained {
 
             let actual = test_constrained(
                 &possible_settings,
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     DEVICE_ID,
-                    MediaTrackConstraint::exact_from(setting.clone()),
+                    ResolvedMediaTrackConstraint::exact_from(setting.clone()),
                 )]),
-                AdvancedMediaTrackConstraints::default(),
+                ResolvedAdvancedMediaTrackConstraints::default(),
             );
 
             let expected = vec![target_settings];
@@ -324,13 +327,13 @@ mod constrained {
 
             let actual = test_constrained(
                 &possible_settings,
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
-                    ValueConstraint::default()
+                    ResolvedValueConstraint::default()
                         .exact("group-1".to_owned())
                         .into(),
                 )]),
-                AdvancedMediaTrackConstraints::default(),
+                ResolvedAdvancedMediaTrackConstraints::default(),
             );
 
             let expected = vec![&possible_settings[1]];
@@ -348,11 +351,11 @@ mod constrained {
 
             let actual = test_constrained(
                 &possible_settings,
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     FRAME_RATE,
-                    ValueRangeConstraint::default().exact(30).into(),
+                    ResolvedValueRangeConstraint::default().exact(30).into(),
                 )]),
-                AdvancedMediaTrackConstraints::default(),
+                ResolvedAdvancedMediaTrackConstraints::default(),
             );
 
             let expected = vec![&possible_settings[1]];
@@ -379,13 +382,13 @@ mod constrained {
 
             let actual = test_constrained(
                 &possible_settings,
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
-                    ValueSequenceConstraint::default()
+                    ResolvedValueSequenceConstraint::default()
                         .exact(vec!["group-1".to_owned(), "group-3".to_owned()])
                         .into(),
                 )]),
-                AdvancedMediaTrackConstraints::default(),
+                ResolvedAdvancedMediaTrackConstraints::default(),
             );
 
             let expected = vec![&possible_settings[1]];
@@ -416,13 +419,13 @@ mod constrained {
 
             let actual = test_constrained(
                 &possible_settings,
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
-                    ValueConstraint::default()
+                    ResolvedValueConstraint::default()
                         .ideal("group-1".to_owned())
                         .into(),
                 )]),
-                AdvancedMediaTrackConstraints::default(),
+                ResolvedAdvancedMediaTrackConstraints::default(),
             );
 
             let expected = vec![&possible_settings[1]];
@@ -440,11 +443,11 @@ mod constrained {
 
             let actual = test_constrained(
                 &possible_settings,
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     FRAME_RATE,
-                    ValueRangeConstraint::default().ideal(32).into(),
+                    ResolvedValueRangeConstraint::default().ideal(32).into(),
                 )]),
-                AdvancedMediaTrackConstraints::default(),
+                ResolvedAdvancedMediaTrackConstraints::default(),
             );
 
             let expected = vec![&possible_settings[1]];
@@ -471,13 +474,13 @@ mod constrained {
 
             let actual = test_constrained(
                 &possible_settings,
-                MandatoryMediaTrackConstraints::from_iter([(
+                ResolvedMandatoryMediaTrackConstraints::from_iter([(
                     GROUP_ID,
-                    ValueSequenceConstraint::default()
+                    ResolvedValueSequenceConstraint::default()
                         .ideal(vec!["group-1".to_owned(), "group-3".to_owned()])
                         .into(),
                 )]),
-                AdvancedMediaTrackConstraints::default(),
+                ResolvedAdvancedMediaTrackConstraints::default(),
             );
 
             let expected = vec![&possible_settings[1]];
@@ -541,28 +544,36 @@ mod smoke {
             ]),
         ];
 
-        let constraints: MediaTrackConstraints = MediaTrackConstraints {
-            mandatory: MandatoryMediaTrackConstraints::from_iter([
-                (WIDTH, ValueRangeConstraint::default().max(2560).into()),
-                (HEIGHT, ValueRangeConstraint::default().max(1440).into()),
+        let constraints: ResolvedMediaTrackConstraints = ResolvedMediaTrackConstraints {
+            mandatory: ResolvedMandatoryMediaTrackConstraints::from_iter([
+                (
+                    WIDTH,
+                    ResolvedValueRangeConstraint::default().max(2560).into(),
+                ),
+                (
+                    HEIGHT,
+                    ResolvedValueRangeConstraint::default().max(1440).into(),
+                ),
                 // Unsupported constraint, which should thus get ignored:
                 (
                     FRAME_RATE,
-                    ValueRangeConstraint::default().exact(30.0).into(),
+                    ResolvedValueRangeConstraint::default().exact(30.0).into(),
                 ),
             ]),
-            advanced: AdvancedMediaTrackConstraints::from_iter([
+            advanced: ResolvedAdvancedMediaTrackConstraints::from_iter([
                 // The first advanced constraint set of "exact 800p" does not match
                 // any candidate and should thus get ignored by the algorithm:
-                MediaTrackConstraintSet::from_iter([(
+                ResolvedMediaTrackConstraintSet::from_iter([(
                     HEIGHT,
-                    ValueRangeConstraint::default().exact(800).into(),
+                    ResolvedValueRangeConstraint::default().exact(800).into(),
                 )]),
                 // The second advanced constraint set of "no resizing" does match
                 // candidates and should thus be applied by the algorithm:
-                MediaTrackConstraintSet::from_iter([(
+                ResolvedMediaTrackConstraintSet::from_iter([(
                     RESIZE_MODE,
-                    ValueConstraint::default().exact(ResizeMode::none()).into(),
+                    ResolvedValueConstraint::default()
+                        .exact(ResizeMode::none())
+                        .into(),
                 )]),
             ]),
         };

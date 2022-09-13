@@ -14,11 +14,11 @@ mod basic {
                 },
             ],
             constraints: bool => &[
-                ValueConstraint {
+                ResolvedValueConstraint {
                     exact: None,
                     ideal: None,
                 },
-                ValueConstraint {
+                ResolvedValueConstraint {
                     exact: None,
                     ideal: Some(true),
                 },
@@ -42,7 +42,7 @@ mod basic {
                 },
             ],
             constraints: bool => &[
-                ValueConstraint {
+                ResolvedValueConstraint {
                     exact: None,
                     ideal: Some(false),
                 },
@@ -61,7 +61,7 @@ mod basic {
                     settings: bool => &[None, Some(false)],
                 },
             ],
-            constraints: bool => &[ValueConstraint {
+            constraints: bool => &[ResolvedValueConstraint {
                 exact: None,
                 ideal: Some(true),
             }],
@@ -85,7 +85,7 @@ mod required {
                     settings: bool => &[Some(true)],
                 },
             ],
-            constraints: bool => &[ValueConstraint {
+            constraints: bool => &[ResolvedValueConstraint {
                 exact: Some(true),
                 ideal: None,
             }],
@@ -107,11 +107,11 @@ mod required {
                     },
                 ],
                 constraints: bool => &[
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(true),
                         ideal: None,
                     },
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(true),
                         ideal: Some(true),
                     },
@@ -135,11 +135,11 @@ mod required {
                     },
                 ],
                 constraints: bool => &[
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(true),
                         ideal: None,
                     },
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(true),
                         ideal: Some(true),
                     },
@@ -182,7 +182,7 @@ mod required {
                         },
                     ],
                     constraints: bool => &[
-                        ValueConstraint {
+                        ResolvedValueConstraint {
                             exact: Some(true),
                             ideal: None,
                         },
@@ -210,7 +210,7 @@ mod required {
                         },
                     ],
                     constraints: bool => &[
-                        ValueConstraint {
+                        ResolvedValueConstraint {
                             exact: Some(true),
                             ideal: None,
                         },
@@ -242,7 +242,7 @@ mod required {
                         },
                     ],
                     constraints: bool => &[
-                        ValueConstraint {
+                        ResolvedValueConstraint {
                             exact: Some(false),
                             ideal: None,
                         },
@@ -270,7 +270,7 @@ mod required {
                         },
                     ],
                     constraints: bool => &[
-                        ValueConstraint {
+                        ResolvedValueConstraint {
                             exact: Some(false),
                             ideal: None,
                         },

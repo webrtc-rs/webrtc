@@ -55,8 +55,9 @@ pub(super) fn apply_advanced_constraints<'a>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        property::all::name::*, AdvancedMediaTrackConstraints, MediaTrackConstraintSet,
-        MediaTrackSupportedConstraints, ResizeMode, ValueConstraint, ValueRangeConstraint,
+        property::all::name::*, MediaTrackSupportedConstraints, ResizeMode,
+        ResolvedAdvancedMediaTrackConstraints, ResolvedMediaTrackConstraintSet,
+        ResolvedValueConstraint, ResolvedValueRangeConstraint,
     };
 
     use super::*;
@@ -79,13 +80,14 @@ mod tests {
             .map(|settings| (settings, 42.0))
             .collect();
 
-        let constraints =
-            AdvancedMediaTrackConstraints::from_iter([MediaTrackConstraintSet::from_iter([(
+        let constraints = ResolvedAdvancedMediaTrackConstraints::from_iter([
+            ResolvedMediaTrackConstraintSet::from_iter([(
                 DEVICE_ID,
-                ValueConstraint::default()
+                ResolvedValueConstraint::default()
                     .exact("bazblee".to_owned())
                     .into(),
-            )])]);
+            )]),
+        ]);
 
         let sanitized_constraints = constraints.to_sanitized(&supported_constraints);
 
@@ -140,24 +142,26 @@ mod tests {
 
         let candidates: Vec<_> = settings.iter().map(|settings| (settings, 42.0)).collect();
 
-        let constraints = AdvancedMediaTrackConstraints::from_iter([
+        let constraints = ResolvedAdvancedMediaTrackConstraints::from_iter([
             // The first advanced constraint set of "exact 800p" does not match
             // any candidate and should thus get ignored by the algorithm:
-            MediaTrackConstraintSet::from_iter([(
+            ResolvedMediaTrackConstraintSet::from_iter([(
                 HEIGHT,
-                ValueRangeConstraint::default().exact(800).into(),
+                ResolvedValueRangeConstraint::default().exact(800).into(),
             )]),
             // The second advanced constraint set of "no resizing" does match
             // candidates and should thus be applied by the algorithm:
-            MediaTrackConstraintSet::from_iter([(
+            ResolvedMediaTrackConstraintSet::from_iter([(
                 RESIZE_MODE,
-                ValueConstraint::default().exact(ResizeMode::none()).into(),
+                ResolvedValueConstraint::default()
+                    .exact(ResizeMode::none())
+                    .into(),
             )]),
             // The second advanced constraint set of "max 1440p" does match
             // candidates and should thus be applied by the algorithm:
-            MediaTrackConstraintSet::from_iter([(
+            ResolvedMediaTrackConstraintSet::from_iter([(
                 HEIGHT,
-                ValueRangeConstraint::default().max(1440).into(),
+                ResolvedValueRangeConstraint::default().max(1440).into(),
             )]),
         ]);
 

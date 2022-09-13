@@ -25,7 +25,7 @@ use crate::MediaTrackConstraintResolutionStrategy;
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum BareOrValueRangeConstraint<T> {
     Bare(T),
-    Constraint(ValueRangeConstraint<T>),
+    Constraint(ResolvedValueRangeConstraint<T>),
 }
 
 impl<T> Default for BareOrValueRangeConstraint<T> {
@@ -40,8 +40,8 @@ impl<T> From<T> for BareOrValueRangeConstraint<T> {
     }
 }
 
-impl<T> From<ValueRangeConstraint<T>> for BareOrValueRangeConstraint<T> {
-    fn from(constraint: ValueRangeConstraint<T>) -> Self {
+impl<T> From<ResolvedValueRangeConstraint<T>> for BareOrValueRangeConstraint<T> {
+    fn from(constraint: ResolvedValueRangeConstraint<T>) -> Self {
         Self::Constraint(constraint)
     }
 }
@@ -53,21 +53,21 @@ where
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> ValueRangeConstraint<T> {
+    ) -> ResolvedValueRangeConstraint<T> {
         self.clone().into_resolved(strategy)
     }
 
     pub fn into_resolved(
         self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> ValueRangeConstraint<T> {
+    ) -> ResolvedValueRangeConstraint<T> {
         match self {
             Self::Bare(bare) => match strategy {
                 MediaTrackConstraintResolutionStrategy::BareToIdeal => {
-                    ValueRangeConstraint::default().ideal(bare)
+                    ResolvedValueRangeConstraint::default().ideal(bare)
                 }
                 MediaTrackConstraintResolutionStrategy::BareToExact => {
-                    ValueRangeConstraint::default().exact(bare)
+                    ResolvedValueRangeConstraint::default().exact(bare)
                 }
             },
             Self::Constraint(constraint) => constraint,
@@ -87,14 +87,14 @@ impl<T> BareOrValueRangeConstraint<T> {
 /// A constraint specifying a range of accepted values.
 ///
 /// Corresponding W3C spec types as per ["Media Capture and Streams"][spec]:
-/// - `ConstrainDouble` => `ValueRangeConstraint<f64>`
-/// - `ConstrainULong` => `ValueRangeConstraint<u64>`
+/// - `ConstrainDouble` => `ResolvedValueRangeConstraint<f64>`
+/// - `ConstrainULong` => `ResolvedValueRangeConstraint<u64>`
 ///
 /// [spec]: https://www.w3.org/TR/mediacapture-streams
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-pub struct ValueRangeConstraint<T> {
+pub struct ResolvedValueRangeConstraint<T> {
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
@@ -117,7 +117,7 @@ pub struct ValueRangeConstraint<T> {
     pub ideal: Option<T>,
 }
 
-impl<T> ValueRangeConstraint<T> {
+impl<T> ResolvedValueRangeConstraint<T> {
     #[inline]
     pub fn exact<U>(mut self, exact: U) -> Self
     where
@@ -179,7 +179,7 @@ impl<T> ValueRangeConstraint<T> {
     }
 }
 
-impl<T> Default for ValueRangeConstraint<T> {
+impl<T> Default for ResolvedValueRangeConstraint<T> {
     #[inline]
     fn default() -> Self {
         Self {
@@ -191,7 +191,7 @@ impl<T> Default for ValueRangeConstraint<T> {
     }
 }
 
-impl<T> std::fmt::Display for ValueRangeConstraint<T>
+impl<T> std::fmt::Display for ResolvedValueRangeConstraint<T>
 where
     T: std::fmt::Debug,
 {
@@ -234,8 +234,8 @@ mod tests {
     fn resolve_to_advanced() {
         let constraint = BareOrValueRangeConstraint::Bare(42);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(strategy);
-        let expected = ValueRangeConstraint::default().exact(42);
+        let actual: ResolvedValueRangeConstraint<u64> = constraint.into_resolved(strategy);
+        let expected = ResolvedValueRangeConstraint::default().exact(42);
 
         assert_eq!(actual, expected);
     }
@@ -244,8 +244,8 @@ mod tests {
     fn resolve_to_basic() {
         let constraint = BareOrValueRangeConstraint::Bare(42);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
-        let actual: ValueRangeConstraint<u64> = constraint.into_resolved(strategy);
-        let expected = ValueRangeConstraint::default().ideal(42);
+        let actual: ResolvedValueRangeConstraint<u64> = constraint.into_resolved(strategy);
+        let expected = ResolvedValueRangeConstraint::default().ideal(42);
 
         assert_eq!(actual, expected);
     }
@@ -282,7 +282,7 @@ mod serde_tests {
 
             #[test]
             fn min_constraint() {
-                let subject = Subject::Constraint(ValueRangeConstraint::default().min($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueRangeConstraint::default().min($value.to_owned()));
                 let json = serde_json::json!({
                     "min": $value,
                 });
@@ -292,7 +292,7 @@ mod serde_tests {
 
             #[test]
             fn max_constraint() {
-                let subject = Subject::Constraint(ValueRangeConstraint::default().max($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueRangeConstraint::default().max($value.to_owned()));
                 let json = serde_json::json!({
                     "max": $value,
                 });
@@ -302,7 +302,7 @@ mod serde_tests {
 
             #[test]
             fn exact_constraint() {
-                let subject = Subject::Constraint(ValueRangeConstraint::default().exact($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueRangeConstraint::default().exact($value.to_owned()));
                 let json = serde_json::json!({
                     "exact": $value,
                 });
@@ -312,7 +312,7 @@ mod serde_tests {
 
             #[test]
             fn ideal_constraint() {
-                let subject = Subject::Constraint(ValueRangeConstraint::default().ideal($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueRangeConstraint::default().ideal($value.to_owned()));
                 let json = serde_json::json!({
                     "ideal": $value,
                 });
@@ -322,7 +322,7 @@ mod serde_tests {
 
             #[test]
             fn full_constraint() {
-                let subject = Subject::Constraint(ValueRangeConstraint::default().min($value.to_owned()).max($value.to_owned()).exact($value.to_owned()).ideal($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueRangeConstraint::default().min($value.to_owned()).max($value.to_owned()).exact($value.to_owned()).ideal($value.to_owned()));
                 let json = serde_json::json!({
                     "min": $value,
                     "max": $value,

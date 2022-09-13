@@ -18,7 +18,7 @@ macro_rules! generate_empty_value_range_constraint_tests {
                 }),+
             ],
             constraints: $ct => &[
-                ValueRangeConstraint::<$ct> {
+                ResolvedValueRangeConstraint::<$ct> {
                     min: None,
                     max: None,
                     exact: None,
