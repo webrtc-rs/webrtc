@@ -4,6 +4,7 @@
 
 pub mod algorithms;
 pub mod errors;
+pub mod macros;
 pub mod property;
 
 mod capabilities;
@@ -11,7 +12,6 @@ mod capability;
 mod constraint;
 mod constraints;
 mod enumerations;
-mod macros;
 mod setting;
 mod settings;
 mod supported_constraints;
