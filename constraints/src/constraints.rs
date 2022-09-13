@@ -5,10 +5,12 @@ mod track;
 
 pub use self::{
     advanced::{AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints},
-    constraint_set::{BareOrMediaTrackConstraintSet, MediaTrackConstraintSet},
+    constraint_set::{
+        BareOrMediaTrackConstraintSet, MediaTrackConstraintSet, SanitizedMediaTrackConstraintSet,
+    },
     stream::{BareOrMediaStreamConstraints, MediaStreamConstraints},
     track::{
         BareOrBoolOrMediaTrackConstraints, BareOrMediaTrackConstraints,
-        BoolOrMediaTrackConstraints, MediaTrackConstraints,
+        BoolOrMediaTrackConstraints, MediaTrackConstraints, SanitizedMediaTrackConstraints,
     },
 };
