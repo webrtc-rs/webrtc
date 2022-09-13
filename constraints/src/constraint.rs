@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::MediaTrackSetting;
 
 pub use self::{
-    value::{BareOrValueConstraint, ResolvedValueConstraint},
-    value_range::{BareOrValueRangeConstraint, ResolvedValueRangeConstraint},
-    value_sequence::{BareOrValueSequenceConstraint, ResolvedValueSequenceConstraint},
+    value::{ResolvedValueConstraint, ValueConstraint},
+    value_range::{ResolvedValueRangeConstraint, ValueRangeConstraint},
+    value_sequence::{ResolvedValueSequenceConstraint, ValueSequenceConstraint},
 };
 
 mod value;
@@ -62,22 +62,22 @@ pub enum MediaTrackConstraintResolutionStrategy {
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum BareOrMediaTrackConstraint {
+pub enum MediaTrackConstraint {
     Empty(EmptyConstraint),
     // `IntegerRange` must be ordered before `FloatRange(…)` in order for
     // `serde` to decode the correct variant.
-    IntegerRange(BareOrValueRangeConstraint<u64>),
-    FloatRange(BareOrValueRangeConstraint<f64>),
+    IntegerRange(ValueRangeConstraint<u64>),
+    FloatRange(ValueRangeConstraint<f64>),
     // `Bool` must be ordered after `IntegerRange(…)`/`FloatRange(…)` in order for
     // `serde` to decode the correct variant.
-    Bool(BareOrValueConstraint<bool>),
+    Bool(ValueConstraint<bool>),
     // `StringSequence` must be ordered before `String(…)` in order for
     // `serde` to decode the correct variant.
-    StringSequence(BareOrValueSequenceConstraint<String>),
-    String(BareOrValueConstraint<String>),
+    StringSequence(ValueSequenceConstraint<String>),
+    String(ValueConstraint<String>),
 }
 
-impl Default for BareOrMediaTrackConstraint {
+impl Default for MediaTrackConstraint {
     fn default() -> Self {
         Self::Empty(EmptyConstraint {})
     }
@@ -85,121 +85,121 @@ impl Default for BareOrMediaTrackConstraint {
 
 // Bool constraint:
 
-impl From<bool> for BareOrMediaTrackConstraint {
+impl From<bool> for MediaTrackConstraint {
     fn from(bare: bool) -> Self {
         Self::Bool(bare.into())
     }
 }
 
-impl From<ResolvedValueConstraint<bool>> for BareOrMediaTrackConstraint {
+impl From<ResolvedValueConstraint<bool>> for MediaTrackConstraint {
     fn from(constraint: ResolvedValueConstraint<bool>) -> Self {
         Self::Bool(constraint.into())
     }
 }
 
-impl From<BareOrValueConstraint<bool>> for BareOrMediaTrackConstraint {
-    fn from(constraint: BareOrValueConstraint<bool>) -> Self {
+impl From<ValueConstraint<bool>> for MediaTrackConstraint {
+    fn from(constraint: ValueConstraint<bool>) -> Self {
         Self::Bool(constraint)
     }
 }
 
 // Unsigned integer range constraint:
 
-impl From<u64> for BareOrMediaTrackConstraint {
+impl From<u64> for MediaTrackConstraint {
     fn from(bare: u64) -> Self {
         Self::IntegerRange(bare.into())
     }
 }
 
-impl From<ResolvedValueRangeConstraint<u64>> for BareOrMediaTrackConstraint {
+impl From<ResolvedValueRangeConstraint<u64>> for MediaTrackConstraint {
     fn from(constraint: ResolvedValueRangeConstraint<u64>) -> Self {
         Self::IntegerRange(constraint.into())
     }
 }
 
-impl From<BareOrValueRangeConstraint<u64>> for BareOrMediaTrackConstraint {
-    fn from(constraint: BareOrValueRangeConstraint<u64>) -> Self {
+impl From<ValueRangeConstraint<u64>> for MediaTrackConstraint {
+    fn from(constraint: ValueRangeConstraint<u64>) -> Self {
         Self::IntegerRange(constraint)
     }
 }
 
 // Floating-point range constraint:
 
-impl From<f64> for BareOrMediaTrackConstraint {
+impl From<f64> for MediaTrackConstraint {
     fn from(bare: f64) -> Self {
         Self::FloatRange(bare.into())
     }
 }
 
-impl From<ResolvedValueRangeConstraint<f64>> for BareOrMediaTrackConstraint {
+impl From<ResolvedValueRangeConstraint<f64>> for MediaTrackConstraint {
     fn from(constraint: ResolvedValueRangeConstraint<f64>) -> Self {
         Self::FloatRange(constraint.into())
     }
 }
 
-impl From<BareOrValueRangeConstraint<f64>> for BareOrMediaTrackConstraint {
-    fn from(constraint: BareOrValueRangeConstraint<f64>) -> Self {
+impl From<ValueRangeConstraint<f64>> for MediaTrackConstraint {
+    fn from(constraint: ValueRangeConstraint<f64>) -> Self {
         Self::FloatRange(constraint)
     }
 }
 
 // String sequence constraint:
 
-impl From<Vec<String>> for BareOrMediaTrackConstraint {
+impl From<Vec<String>> for MediaTrackConstraint {
     fn from(bare: Vec<String>) -> Self {
         Self::StringSequence(bare.into())
     }
 }
 
-impl From<Vec<&str>> for BareOrMediaTrackConstraint {
+impl From<Vec<&str>> for MediaTrackConstraint {
     fn from(bare: Vec<&str>) -> Self {
         let bare: Vec<String> = bare.into_iter().map(|c| c.to_owned()).collect();
         Self::from(bare)
     }
 }
 
-impl From<ResolvedValueSequenceConstraint<String>> for BareOrMediaTrackConstraint {
+impl From<ResolvedValueSequenceConstraint<String>> for MediaTrackConstraint {
     fn from(constraint: ResolvedValueSequenceConstraint<String>) -> Self {
         Self::StringSequence(constraint.into())
     }
 }
 
-impl From<BareOrValueSequenceConstraint<String>> for BareOrMediaTrackConstraint {
-    fn from(constraint: BareOrValueSequenceConstraint<String>) -> Self {
+impl From<ValueSequenceConstraint<String>> for MediaTrackConstraint {
+    fn from(constraint: ValueSequenceConstraint<String>) -> Self {
         Self::StringSequence(constraint)
     }
 }
 
 // String constraint:
 
-impl From<String> for BareOrMediaTrackConstraint {
+impl From<String> for MediaTrackConstraint {
     fn from(bare: String) -> Self {
         Self::String(bare.into())
     }
 }
 
-impl<'a> From<&'a str> for BareOrMediaTrackConstraint {
+impl<'a> From<&'a str> for MediaTrackConstraint {
     fn from(bare: &'a str) -> Self {
         let bare: String = bare.to_owned();
         Self::from(bare)
     }
 }
 
-impl From<ResolvedValueConstraint<String>> for BareOrMediaTrackConstraint {
+impl From<ResolvedValueConstraint<String>> for MediaTrackConstraint {
     fn from(constraint: ResolvedValueConstraint<String>) -> Self {
         Self::String(constraint.into())
     }
 }
 
-impl From<BareOrValueConstraint<String>> for BareOrMediaTrackConstraint {
-    fn from(constraint: BareOrValueConstraint<String>) -> Self {
+impl From<ValueConstraint<String>> for MediaTrackConstraint {
+    fn from(constraint: ValueConstraint<String>) -> Self {
         Self::String(constraint)
     }
 }
 
 // Conversion from settings:
 
-impl From<MediaTrackSetting> for BareOrMediaTrackConstraint {
+impl From<MediaTrackSetting> for MediaTrackConstraint {
     fn from(settings: MediaTrackSetting) -> Self {
         match settings {
             MediaTrackSetting::Bool(value) => Self::Bool(value.into()),
@@ -212,7 +212,7 @@ impl From<MediaTrackSetting> for BareOrMediaTrackConstraint {
     }
 }
 
-impl BareOrMediaTrackConstraint {
+impl MediaTrackConstraint {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Empty(_) => true,
@@ -339,12 +339,12 @@ impl From<ResolvedValueConstraint<String>> for ResolvedMediaTrackConstraint {
 
 impl ResolvedMediaTrackConstraint {
     pub fn exact_from(setting: MediaTrackSetting) -> Self {
-        BareOrMediaTrackConstraint::from(setting)
+        MediaTrackConstraint::from(setting)
             .into_resolved(MediaTrackConstraintResolutionStrategy::BareToExact)
     }
 
     pub fn ideal_from(setting: MediaTrackSetting) -> Self {
-        BareOrMediaTrackConstraint::from(setting)
+        MediaTrackConstraint::from(setting)
             .into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal)
     }
 
@@ -476,7 +476,7 @@ mod serde_tests {
 
     use super::*;
 
-    type Subject = BareOrMediaTrackConstraint;
+    type Subject = MediaTrackConstraint;
 
     #[test]
     fn empty() {

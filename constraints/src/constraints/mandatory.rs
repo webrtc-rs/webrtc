@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BareOrMediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
-    MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
+    MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
+    ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
 };
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
@@ -22,8 +22,8 @@ use super::constraint_set::GenericMediaTrackConstraintSet;
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 /// [media_track_constraints_advanced]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-advanced
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-pub type BareOrMandatoryMediaTrackConstraints =
-    GenericMandatoryMediaTrackConstraints<BareOrMediaTrackConstraint>;
+pub type MandatoryMediaTrackConstraints =
+    GenericMandatoryMediaTrackConstraints<MediaTrackConstraint>;
 
 /// The list of advanced constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -32,7 +32,7 @@ pub type BareOrMandatoryMediaTrackConstraints =
 /// Corresponds to [`ResolvedMediaTrackConstraintSet`][media_track_constraints_advanced]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
-/// Unlike `BareOrMandatoryMediaTrackConstraints` this type does not contain constraints
+/// Unlike `MandatoryMediaTrackConstraints` this type does not contain constraints
 /// with bare values, but has them resolved to full constraints instead.
 ///
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
@@ -110,7 +110,7 @@ impl<T> IntoIterator for GenericMandatoryMediaTrackConstraints<T> {
     }
 }
 
-impl BareOrMandatoryMediaTrackConstraints {
+impl MandatoryMediaTrackConstraints {
     pub fn to_resolved(&self) -> ResolvedMandatoryMediaTrackConstraints {
         self.clone().into_resolved()
     }
@@ -140,13 +140,13 @@ impl ResolvedMandatoryMediaTrackConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{property::all::name::*, BareOrMediaTrackConstraintSet};
+    use crate::{property::all::name::*, MediaTrackConstraintSet};
 
     use super::*;
 
     #[test]
     fn serialize_default() {
-        let mandatory = BareOrMandatoryMediaTrackConstraints::default();
+        let mandatory = MandatoryMediaTrackConstraints::default();
         let actual = serde_json::to_value(mandatory).unwrap();
         let expected = serde_json::json!({});
 
@@ -156,21 +156,20 @@ mod serde_tests {
     #[test]
     fn deserialize_default() {
         let json = serde_json::json!({});
-        let actual: BareOrMandatoryMediaTrackConstraints = serde_json::from_value(json).unwrap();
-        let expected = BareOrMandatoryMediaTrackConstraints::default();
+        let actual: MandatoryMediaTrackConstraints = serde_json::from_value(json).unwrap();
+        let expected = MandatoryMediaTrackConstraints::default();
 
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn serialize() {
-        let mandatory =
-            BareOrMandatoryMediaTrackConstraints::new(BareOrMediaTrackConstraintSet::from_iter([
-                (DEVICE_ID, "device-id".into()),
-                (AUTO_GAIN_CONTROL, true.into()),
-                (CHANNEL_COUNT, 2.into()),
-                (LATENCY, 0.123.into()),
-            ]));
+        let mandatory = MandatoryMediaTrackConstraints::new(MediaTrackConstraintSet::from_iter([
+            (DEVICE_ID, "device-id".into()),
+            (AUTO_GAIN_CONTROL, true.into()),
+            (CHANNEL_COUNT, 2.into()),
+            (LATENCY, 0.123.into()),
+        ]));
         let actual = serde_json::to_value(mandatory).unwrap();
         let expected = serde_json::json!(
             {
@@ -194,14 +193,13 @@ mod serde_tests {
                 "latency": 0.123,
             }
         );
-        let actual: BareOrMandatoryMediaTrackConstraints = serde_json::from_value(json).unwrap();
-        let expected =
-            BareOrMandatoryMediaTrackConstraints::new(BareOrMediaTrackConstraintSet::from_iter([
-                (DEVICE_ID, "device-id".into()),
-                (AUTO_GAIN_CONTROL, true.into()),
-                (CHANNEL_COUNT, 2.into()),
-                (LATENCY, 0.123.into()),
-            ]));
+        let actual: MandatoryMediaTrackConstraints = serde_json::from_value(json).unwrap();
+        let expected = MandatoryMediaTrackConstraints::new(MediaTrackConstraintSet::from_iter([
+            (DEVICE_ID, "device-id".into()),
+            (AUTO_GAIN_CONTROL, true.into()),
+            (CHANNEL_COUNT, 2.into()),
+            (LATENCY, 0.123.into()),
+        ]));
 
         assert_eq!(actual, expected);
     }

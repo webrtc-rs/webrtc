@@ -9,48 +9,48 @@ use crate::MediaTrackConstraintResolutionStrategy;
 ///
 /// There exists no direct corresponding type in the
 /// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
-/// since the `BareOrValueConstraint<T>` type aims to be a generalization over
+/// since the `ValueConstraint<T>` type aims to be a generalization over
 /// multiple types in the spec.
 ///
 /// | Rust                                     | W3C                                          |
 /// | ---------------------------------------- | -------------------------------------------- |
-/// | `BareOrValueSequenceConstraint<String>` | [`ConstrainDOMString`][constrain_dom_string] |
+/// | `ValueSequenceConstraint<String>` | [`ConstrainDOMString`][constrain_dom_string] |
 ///
 /// [constrain_dom_string]: https://www.w3.org/TR/mediacapture-streams/#dom-constraindomstring
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum BareOrValueSequenceConstraint<T> {
+pub enum ValueSequenceConstraint<T> {
     Bare(Vec<T>),
     Constraint(ResolvedValueSequenceConstraint<T>),
 }
 
-impl<T> Default for BareOrValueSequenceConstraint<T> {
+impl<T> Default for ValueSequenceConstraint<T> {
     fn default() -> Self {
         Self::Constraint(Default::default())
     }
 }
 
-impl<T> From<T> for BareOrValueSequenceConstraint<T> {
+impl<T> From<T> for ValueSequenceConstraint<T> {
     fn from(bare: T) -> Self {
         Self::Bare(vec![bare])
     }
 }
 
-impl<T> From<Vec<T>> for BareOrValueSequenceConstraint<T> {
+impl<T> From<Vec<T>> for ValueSequenceConstraint<T> {
     fn from(bare: Vec<T>) -> Self {
         Self::Bare(bare)
     }
 }
 
-impl<T> From<ResolvedValueSequenceConstraint<T>> for BareOrValueSequenceConstraint<T> {
+impl<T> From<ResolvedValueSequenceConstraint<T>> for ValueSequenceConstraint<T> {
     fn from(constraint: ResolvedValueSequenceConstraint<T>) -> Self {
         Self::Constraint(constraint)
     }
 }
 
-impl<T> BareOrValueSequenceConstraint<T>
+impl<T> ValueSequenceConstraint<T>
 where
     T: Clone,
 {
@@ -79,7 +79,7 @@ where
     }
 }
 
-impl<T> BareOrValueSequenceConstraint<T> {
+impl<T> ValueSequenceConstraint<T> {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Bare(bare) => bare.is_empty(),
@@ -94,7 +94,7 @@ impl<T> BareOrValueSequenceConstraint<T> {
 ///
 /// There exists no direct corresponding type in the
 /// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
-/// since the `BareOrValueSequenceConstraint<T>` type aims to be a
+/// since the `ValueSequenceConstraint<T>` type aims to be a
 /// generalization over multiple types in the W3C spec:
 ///
 /// | Rust                              | W3C                                                               |
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn resolve_to_advanced() {
-        let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
+        let constraint = ValueSequenceConstraint::Bare(vec![true]);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
         let actual: ResolvedValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ResolvedValueSequenceConstraint::default().exact(vec![true]);
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn resolve_to_basic() {
-        let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
+        let constraint = ValueSequenceConstraint::Bare(vec![true]);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
         let actual: ResolvedValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ResolvedValueSequenceConstraint::default().ideal(vec![true]);
@@ -235,7 +235,7 @@ mod serde_tests {
         ($t:ty => {
             values: [$($values:expr),*]
         }) => {
-            type Subject = BareOrValueSequenceConstraint<$t>;
+            type Subject = ValueSequenceConstraint<$t>;
 
             #[test]
             fn default() {

@@ -4,9 +4,9 @@ use crate::{
     algorithms::{select_settings_candidates, SelectSettingsError},
     errors::OverconstrainedError,
     property::all::{name::*, names as all_properties},
-    BareOrAdvancedMediaTrackConstraints, BareOrMandatoryMediaTrackConstraints,
-    BareOrMediaTrackConstraints, FacingMode, MediaTrackSettings, MediaTrackSupportedConstraints,
-    ResizeMode, ResolvedAdvancedMediaTrackConstraints, ResolvedMandatoryMediaTrackConstraints,
+    AdvancedMediaTrackConstraints, FacingMode, MandatoryMediaTrackConstraints,
+    MediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
+    ResolvedAdvancedMediaTrackConstraints, ResolvedMandatoryMediaTrackConstraints,
     ResolvedMediaTrackConstraint, ResolvedMediaTrackConstraintSet, ResolvedMediaTrackConstraints,
     ResolvedValueConstraint, ResolvedValueRangeConstraint, ResolvedValueSequenceConstraint,
     SanitizedMediaTrackConstraints,
@@ -132,10 +132,10 @@ fn test_constrained(
 mod unconstrained {
     use super::*;
 
-    fn default_constraints() -> BareOrMediaTrackConstraints {
-        BareOrMediaTrackConstraints {
-            mandatory: BareOrMandatoryMediaTrackConstraints::default(),
-            advanced: BareOrAdvancedMediaTrackConstraints::default(),
+    fn default_constraints() -> MediaTrackConstraints {
+        MediaTrackConstraints {
+            mandatory: MandatoryMediaTrackConstraints::default(),
+            advanced: AdvancedMediaTrackConstraints::default(),
         }
     }
 
@@ -611,7 +611,7 @@ mod smoke {
         };
 
         // Deserialize constraints from JSON:
-        let bare_or_constraints: BareOrMediaTrackConstraints = {
+        let constraints: MediaTrackConstraints = {
             let json = serde_json::json!({
                 "width": {
                     "max": 2560,
@@ -636,10 +636,10 @@ mod smoke {
         };
 
         // Resolve bare values to proper constraints:
-        let constraints = bare_or_constraints.into_resolved();
+        let resolved_constraints = constraints.into_resolved();
 
         // Sanitize constraints, removing empty and unsupported constraints:
-        let sanitized_constraints = constraints.to_sanitized(&supported_constraints);
+        let sanitized_constraints = resolved_constraints.into_sanitized(&supported_constraints);
 
         let actual = select_settings_candidates(
             &possible_settings,

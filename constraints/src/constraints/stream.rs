@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{BareOrMediaTrackConstraint, ResolvedMediaTrackConstraint};
+use crate::{MediaTrackConstraint, ResolvedMediaTrackConstraint};
 
 use super::track::GenericBoolOrMediaTrackConstraints;
 
@@ -18,7 +18,7 @@ use super::track::GenericBoolOrMediaTrackConstraints;
 /// [media_stream]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastream
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-pub type BareOrMediaStreamConstraints = GenericMediaStreamConstraints<BareOrMediaTrackConstraint>;
+pub type MediaStreamConstraints = GenericMediaStreamConstraints<MediaTrackConstraint>;
 
 /// The constraints for a [`MediaStream`][media_stream] object.
 ///
@@ -27,7 +27,7 @@ pub type BareOrMediaStreamConstraints = GenericMediaStreamConstraints<BareOrMedi
 /// Corresponds to [`MediaStreamConstraints`][media_stream_constraints]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
-/// Unlike `BareOrMediaStreamConstraints` this type may contain constraints with bare values.
+/// Unlike `MediaStreamConstraints` this type may contain constraints with bare values.
 ///
 /// [media_stream]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastream
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints
@@ -55,7 +55,7 @@ pub struct GenericMediaStreamConstraints<T> {
     pub video: GenericBoolOrMediaTrackConstraints<T>,
 }
 
-impl BareOrMediaStreamConstraints {
+impl MediaStreamConstraints {
     pub fn to_resolved(&self) -> ResolvedMediaStreamConstraints {
         self.clone().into_resolved()
     }
@@ -74,18 +74,18 @@ impl BareOrMediaStreamConstraints {
 mod tests {
     use crate::{
         constraints::{
-            advanced::BareOrAdvancedMediaTrackConstraints,
-            mandatory::BareOrMandatoryMediaTrackConstraints,
-            track::{BareOrBoolOrMediaTrackConstraints, BareOrMediaTrackConstraints},
+            advanced::AdvancedMediaTrackConstraints,
+            mandatory::MandatoryMediaTrackConstraints,
+            track::{BoolOrMediaTrackConstraints, MediaTrackConstraints},
         },
         macros::test_serde_symmetry,
         property::all::name::*,
-        BareOrMediaTrackConstraintSet,
+        MediaTrackConstraintSet,
     };
 
     use super::*;
 
-    type Subject = BareOrMediaStreamConstraints;
+    type Subject = MediaStreamConstraints;
 
     #[test]
     fn default() {
@@ -100,16 +100,16 @@ mod tests {
     #[test]
     fn customized() {
         let subject = Subject {
-            audio: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-                mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
+            audio: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
+                mandatory: MandatoryMediaTrackConstraints::from_iter([
                     (DEVICE_ID, "microphone".into()),
                     (CHANNEL_COUNT, 2.into()),
                 ]),
-                advanced: BareOrAdvancedMediaTrackConstraints::new(vec![
-                    BareOrMediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
+                advanced: AdvancedMediaTrackConstraints::new(vec![
+                    MediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
                 ]),
             }),
-            video: BareOrBoolOrMediaTrackConstraints::Bool(true),
+            video: BoolOrMediaTrackConstraints::Bool(true),
         };
         let json = serde_json::json!({
             "audio": {
