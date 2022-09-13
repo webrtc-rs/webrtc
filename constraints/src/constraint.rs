@@ -1,6 +1,4 @@
-mod value;
-mod value_range;
-mod value_sequence;
+use std::ops::Deref;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -10,6 +8,10 @@ pub use self::{
     value_range::{BareOrValueRangeConstraint, ValueRangeConstraint},
     value_sequence::{BareOrValueSequenceConstraint, ValueSequenceConstraint},
 };
+
+mod value;
+mod value_range;
+mod value_sequence;
 
 /// An empty [constraint][media_track_constraints] value for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -279,6 +281,85 @@ impl MediaTrackConstraint {
             Self::Bool(constraint) => constraint.is_empty(),
             Self::StringSequence(constraint) => constraint.is_empty(),
             Self::String(constraint) => constraint.is_empty(),
+        }
+    }
+
+    pub fn to_sanitized(&self) -> Option<SanitizedMediaTrackConstraint> {
+        self.clone().into_sanitized()
+    }
+
+    pub fn into_sanitized(self) -> Option<SanitizedMediaTrackConstraint> {
+        if self.is_empty() {
+            return None;
+        }
+
+        Some(SanitizedMediaTrackConstraint(self))
+    }
+}
+
+/// # Invariant
+///
+/// The wrapped `MediaTrackConstraint` MUST not be empty.
+///
+/// To enforce this invariant the only way to create an instance of this type
+/// is by calling `constraint.to_sanitized()`/`constraint.into_sanitized()` on
+/// an instance of `MediaTrackConstraint`, which returns `None` if `self` is empty.
+///
+/// Further more `self.0` MUST NOT be exposed mutably,
+/// as otherwise it could become empty via mutation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SanitizedMediaTrackConstraint(MediaTrackConstraint);
+
+impl Deref for SanitizedMediaTrackConstraint {
+    type Target = MediaTrackConstraint;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl SanitizedMediaTrackConstraint {
+    pub fn into_inner(self) -> MediaTrackConstraint {
+        self.0
+    }
+
+    pub fn integer_range(&self) -> Option<&ValueRangeConstraint<u64>> {
+        if let MediaTrackConstraint::IntegerRange(constraint) = &self.0 {
+            Some(constraint)
+        } else {
+            None
+        }
+    }
+
+    pub fn float_range(&self) -> Option<&ValueRangeConstraint<f64>> {
+        if let MediaTrackConstraint::FloatRange(constraint) = &self.0 {
+            Some(constraint)
+        } else {
+            None
+        }
+    }
+
+    pub fn bool(&self) -> Option<&ValueConstraint<bool>> {
+        if let MediaTrackConstraint::Bool(constraint) = &self.0 {
+            Some(constraint)
+        } else {
+            None
+        }
+    }
+
+    pub fn string_sequence(&self) -> Option<&ValueSequenceConstraint<String>> {
+        if let MediaTrackConstraint::StringSequence(constraint) = &self.0 {
+            Some(constraint)
+        } else {
+            None
+        }
+    }
+
+    pub fn string(&self) -> Option<&ValueConstraint<String>> {
+        if let MediaTrackConstraint::String(constraint) = &self.0 {
+            Some(constraint)
+        } else {
+            None
         }
     }
 }

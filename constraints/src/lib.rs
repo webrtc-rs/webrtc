@@ -21,14 +21,15 @@ pub use self::{
     constraint::{
         BareOrMediaTrackConstraint, BareOrValueConstraint, BareOrValueRangeConstraint,
         BareOrValueSequenceConstraint, MediaTrackConstraint,
-        MediaTrackConstraintResolutionStrategy, ValueConstraint, ValueRangeConstraint,
-        ValueSequenceConstraint,
+        MediaTrackConstraintResolutionStrategy, SanitizedMediaTrackConstraint, ValueConstraint,
+        ValueRangeConstraint, ValueSequenceConstraint,
     },
     constraints::{
         AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints,
         BareOrBoolOrMediaTrackConstraints, BareOrMediaStreamConstraints,
         BareOrMediaTrackConstraintSet, BareOrMediaTrackConstraints, BoolOrMediaTrackConstraints,
         MediaStreamConstraints, MediaTrackConstraintSet, MediaTrackConstraints,
+        SanitizedMediaTrackConstraintSet, SanitizedMediaTrackConstraints,
     },
     setting::MediaTrackSetting,
     settings::MediaTrackSettings,

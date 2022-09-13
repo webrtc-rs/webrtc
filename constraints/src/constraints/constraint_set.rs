@@ -4,11 +4,15 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
+    constraint::SanitizedMediaTrackConstraint, BareOrMediaTrackConstraint, MediaTrackConstraint,
+    MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
 };
 
 pub type BareOrMediaTrackConstraintSet = GenericMediaTrackConstraintSet<BareOrMediaTrackConstraint>;
 pub type MediaTrackConstraintSet = GenericMediaTrackConstraintSet<MediaTrackConstraint>;
+
+pub type SanitizedMediaTrackConstraintSet =
+    GenericMediaTrackConstraintSet<SanitizedMediaTrackConstraint>;
 
 /// The set of constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -140,6 +144,34 @@ impl BareOrMediaTrackConstraintSet {
                 .map(|(property, constraint)| (property, constraint.into_resolved(strategy)))
                 .collect(),
         )
+    }
+}
+
+impl MediaTrackConstraintSet {
+    pub fn to_sanitized(
+        &self,
+        supported_constraints: &MediaTrackSupportedConstraints,
+    ) -> SanitizedMediaTrackConstraintSet {
+        self.clone().into_sanitized(supported_constraints)
+    }
+
+    pub fn into_sanitized(
+        self,
+        supported_constraints: &MediaTrackSupportedConstraints,
+    ) -> SanitizedMediaTrackConstraintSet {
+        let index_map: IndexMap<String, _> = self
+            .into_iter()
+            .filter_map(|(property, constraint)| {
+                if supported_constraints.contains(&property) {
+                    constraint
+                        .into_sanitized()
+                        .map(|constraint| (property, constraint))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        SanitizedMediaTrackConstraintSet::new(index_map)
     }
 }
 

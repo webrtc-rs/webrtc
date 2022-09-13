@@ -2,7 +2,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BareOrMediaTrackConstraint, MediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
+    constraint::SanitizedMediaTrackConstraint, BareOrMediaTrackConstraint, MediaTrackConstraint,
+    MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
 };
 
 use super::{
@@ -155,6 +156,9 @@ pub type BareOrMediaTrackConstraints = GenericMediaTrackConstraints<BareOrMediaT
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 pub type MediaTrackConstraints = GenericMediaTrackConstraints<MediaTrackConstraint>;
 
+pub type SanitizedMediaTrackConstraints =
+    GenericMediaTrackConstraints<SanitizedMediaTrackConstraint>;
+
 /// The constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
 /// # W3C Spec Compliance
@@ -233,6 +237,12 @@ impl<T> Default for GenericMediaTrackConstraints<T> {
     }
 }
 
+impl From<BareOrMediaTrackConstraints> for MediaTrackConstraints {
+    fn from(bare_or_constraints: BareOrMediaTrackConstraints) -> Self {
+        bare_or_constraints.into_resolved()
+    }
+}
+
 impl BareOrMediaTrackConstraints {
     pub fn to_resolved(&self) -> MediaTrackConstraints {
         self.clone().into_resolved()
@@ -247,6 +257,33 @@ impl BareOrMediaTrackConstraints {
             basic_or_required: basic_or_required
                 .into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal),
             advanced: advanced.into_resolved(),
+        }
+    }
+}
+
+impl MediaTrackConstraints {
+    pub fn to_sanitized(
+        &self,
+        supported_constraints: &MediaTrackSupportedConstraints,
+    ) -> SanitizedMediaTrackConstraints {
+        self.clone().into_sanitized(supported_constraints)
+    }
+
+    pub fn into_sanitized(
+        self,
+        supported_constraints: &MediaTrackSupportedConstraints,
+    ) -> SanitizedMediaTrackConstraints {
+        let basic_or_required = self.basic_or_required.into_sanitized(supported_constraints);
+        let advanced: GenericAdvancedMediaTrackConstraints<_> = self
+            .advanced
+            .into_iter()
+            .map(|constraint_set| constraint_set.into_sanitized(supported_constraints))
+            .filter(|constraint_set| !constraint_set.is_empty())
+            .collect();
+
+        SanitizedMediaTrackConstraints {
+            basic_or_required,
+            advanced,
         }
     }
 }
