@@ -6,19 +6,20 @@ mod track;
 
 pub use self::{
     advanced::{
-        AdvancedMediaTrackConstraints, BareOrAdvancedMediaTrackConstraints,
+        BareOrAdvancedMediaTrackConstraints, ResolvedAdvancedMediaTrackConstraints,
         SanitizedAdvancedMediaTrackConstraints,
     },
     constraint_set::{
-        BareOrMediaTrackConstraintSet, MediaTrackConstraintSet, SanitizedMediaTrackConstraintSet,
+        BareOrMediaTrackConstraintSet, ResolvedMediaTrackConstraintSet,
+        SanitizedMediaTrackConstraintSet,
     },
     mandatory::{
-        BareOrMandatoryMediaTrackConstraints, MandatoryMediaTrackConstraints,
+        BareOrMandatoryMediaTrackConstraints, ResolvedMandatoryMediaTrackConstraints,
         SanitizedMandatoryMediaTrackConstraints,
     },
-    stream::{BareOrMediaStreamConstraints, MediaStreamConstraints},
+    stream::{BareOrMediaStreamConstraints, ResolvedMediaStreamConstraints},
     track::{
         BareOrBoolOrMediaTrackConstraints, BareOrMediaTrackConstraints,
-        BoolOrMediaTrackConstraints, MediaTrackConstraints, SanitizedMediaTrackConstraints,
+        BoolOrMediaTrackConstraints, ResolvedMediaTrackConstraints, SanitizedMediaTrackConstraints,
     },
 };

@@ -50,25 +50,25 @@ macro_rules! bare_or_constraint {
 }
 
 #[macro_export]
-macro_rules! constraint {
+macro_rules! resolved_constraint {
     (value: {
         $($p:ident: $c:expr),* $(,)?
     }) => {
-        $crate::MediaTrackConstraint::from(value_constraint!{
+        $crate::ResolvedMediaTrackConstraint::from(value_constraint!{
             $($p: $c),*
         })
     };
     (range: {
         $($p:ident: $c:expr),* $(,)?
     }) => {
-        $crate::MediaTrackConstraint::from(value_range_constraint!{
+        $crate::ResolvedMediaTrackConstraint::from(value_range_constraint!{
             $($p: $c),*
         })
     };
     (sequence: {
         $($p:ident: $c:expr),* $(,)?
     }) => {
-        $crate::MediaTrackConstraint::from(value_sequence_constraint!{
+        $crate::ResolvedMediaTrackConstraint::from(value_sequence_constraint!{
             $($p: $c),*
         })
     };
@@ -79,21 +79,21 @@ macro_rules! sanitized_constraint {
     (value: {
         $($p:ident: $c:expr),+ $(,)?
     }) => {
-        constraint!(value: {
+        resolved_constraint!(value: {
             $($p: $c),+
         }).into_sanitized().unwrap()
     };
     (range: {
         $($p:ident: $c:expr),+ $(,)?
     }) => {
-        constraint!(range: {
+        resolved_constraint!(range: {
             $($p: $c),+
         }).into_sanitized().unwrap()
     };
     (sequence: {
         $($p:ident: $c:expr),+ $(,)?
     }) => {
-        constraint!(sequence: {
+        resolved_constraint!(sequence: {
             $($p: $c),+
         }).into_sanitized().unwrap()
     };
@@ -106,7 +106,7 @@ macro_rules! value_constraint {
     } => {
         {
             #[allow(clippy::needless_update)]
-            let constraint = $crate::ValueConstraint {
+            let constraint = $crate::ResolvedValueConstraint {
                 $($p: Some($c)),*,
                 ..Default::default()
             };
@@ -138,7 +138,7 @@ macro_rules! value_range_constraint {
     } => {
         {
             #[allow(clippy::needless_update)]
-            let constraint = $crate::ValueRangeConstraint {
+            let constraint = $crate::ResolvedValueRangeConstraint {
                 $($p: Some($c)),*,
                 ..Default::default()
             };
@@ -170,7 +170,7 @@ macro_rules! value_sequence_constraint {
     } => {
         {
             #[allow(clippy::needless_update)]
-            $crate::ValueSequenceConstraint {
+            $crate::ResolvedValueSequenceConstraint {
                 $($p: Some($c)),*,
                 ..Default::default()
             }
@@ -199,7 +199,7 @@ macro_rules! constraint_set {
     {
         $($p:expr => $c:expr),* $(,)?
     } => {
-        $crate::MediaTrackConstraintSet::from_iter([
+        $crate::ResolvedMediaTrackConstraintSet::from_iter([
             $(($p, $c.into())),*
         ])
     };
@@ -210,7 +210,7 @@ macro_rules! mandatory_constraints {
     {
         $($p:expr => $c:expr),* $(,)?
     } => {
-        $crate::MandatoryMediaTrackConstraints::new(
+        $crate::ResolvedMandatoryMediaTrackConstraints::new(
             constraint_set!{
                 $($p => $c),*
             }
@@ -225,7 +225,7 @@ macro_rules! advanced_constraints {
             $($p:expr => $c:expr),* $(,)?
         }),* $(,)?
     ] => {
-        $crate::AdvancedMediaTrackConstraints::from_iter([
+        $crate::ResolvedAdvancedMediaTrackConstraints::from_iter([
             $(constraint_set!{
                 $($p => $c),*
             }),*
@@ -241,7 +241,7 @@ macro_rules! constraints {
             {$($ap:expr => $ac:expr),* $(,)?}
         ),* $(,)?]
     ] => {
-        $crate::MediaTrackConstraints {
+        $crate::ResolvedMediaTrackConstraints {
             mandatory: mandatory_constraints!($($mp => $mc),*),
             advanced: advanced_constraints!($({ $($ap => $ac),* }),*)
         }
@@ -275,11 +275,12 @@ pub(crate) use test_serde_symmetry;
 #[cfg(test)]
 mod tests {
     use crate::{
-        property::all::name::*, AdvancedMediaTrackConstraints, BareOrMediaTrackConstraint,
-        BareOrValueConstraint, BareOrValueRangeConstraint, BareOrValueSequenceConstraint,
-        FacingMode, MandatoryMediaTrackConstraints, MediaTrackConstraint, MediaTrackConstraintSet,
-        MediaTrackConstraints, MediaTrackSettings, SanitizedMediaTrackConstraint, ValueConstraint,
-        ValueRangeConstraint, ValueSequenceConstraint,
+        property::all::name::*, BareOrMediaTrackConstraint, BareOrValueConstraint,
+        BareOrValueRangeConstraint, BareOrValueSequenceConstraint, FacingMode, MediaTrackSettings,
+        ResolvedAdvancedMediaTrackConstraints, ResolvedMandatoryMediaTrackConstraints,
+        ResolvedMediaTrackConstraint, ResolvedMediaTrackConstraintSet,
+        ResolvedMediaTrackConstraints, SanitizedMediaTrackConstraint, ResolvedValueConstraint,
+        ResolvedValueRangeConstraint, ResolvedValueSequenceConstraint,
     };
 
     #[test]
@@ -308,7 +309,7 @@ mod tests {
             ideal: "bazblee".to_owned(),
         };
 
-        let expected = ValueConstraint::default()
+        let expected = ResolvedValueConstraint::default()
             .exact("foobar".to_owned())
             .ideal("bazblee".to_owned());
 
@@ -336,7 +337,7 @@ mod tests {
             });
 
             let expected = BareOrValueConstraint::Constraint(
-                ValueConstraint::default()
+                ResolvedValueConstraint::default()
                     .exact("foobar".to_owned())
                     .ideal("bazblee".to_owned()),
             );
@@ -362,7 +363,7 @@ mod tests {
             });
 
             let expected = BareOrValueRangeConstraint::Constraint(
-                ValueRangeConstraint::default().min(30.0).max(60.0),
+                ResolvedValueRangeConstraint::default().min(30.0).max(60.0),
             );
 
             assert_eq!(actual, expected);
@@ -385,7 +386,7 @@ mod tests {
             });
 
             let expected = BareOrValueSequenceConstraint::Constraint(
-                ValueSequenceConstraint::default().ideal(vec![FacingMode::user()]),
+                ResolvedValueSequenceConstraint::default().ideal(vec![FacingMode::user()]),
             );
 
             assert_eq!(actual, expected);
@@ -397,13 +398,13 @@ mod tests {
 
         #[test]
         fn value() {
-            let actual = constraint!(value: {
+            let actual = resolved_constraint!(value: {
                 exact: "foobar".to_owned(),
                 ideal: "bazblee".to_owned(),
             });
 
-            let expected = MediaTrackConstraint::from(
-                ValueConstraint::default()
+            let expected = ResolvedMediaTrackConstraint::from(
+                ResolvedValueConstraint::default()
                     .exact("foobar".to_owned())
                     .ideal("bazblee".to_owned()),
             );
@@ -413,25 +414,26 @@ mod tests {
 
         #[test]
         fn range() {
-            let actual = constraint!(range: {
+            let actual = resolved_constraint!(range: {
                 min: 30.0,
                 max: 60.0,
             });
 
-            let expected =
-                MediaTrackConstraint::from(ValueRangeConstraint::default().min(30.0).max(60.0));
+            let expected = ResolvedMediaTrackConstraint::from(
+                ResolvedValueRangeConstraint::default().min(30.0).max(60.0),
+            );
 
             assert_eq!(actual, expected);
         }
 
         #[test]
         fn sequence() {
-            let actual = constraint!(sequence: {
+            let actual = resolved_constraint!(sequence: {
                 ideal: vec![FacingMode::user()],
             });
 
-            let expected = MediaTrackConstraint::from(
-                ValueSequenceConstraint::default().ideal(vec![FacingMode::user()]),
+            let expected = ResolvedMediaTrackConstraint::from(
+                ResolvedValueSequenceConstraint::default().ideal(vec![FacingMode::user()]),
             );
 
             assert_eq!(actual, expected);
@@ -448,8 +450,8 @@ mod tests {
                 ideal: "bazblee".to_owned(),
             });
 
-            let expected = MediaTrackConstraint::from(
-                ValueConstraint::default()
+            let expected = ResolvedMediaTrackConstraint::from(
+                ResolvedValueConstraint::default()
                     .exact("foobar".to_owned())
                     .ideal("bazblee".to_owned()),
             )
@@ -466,10 +468,11 @@ mod tests {
                 max: 60.0,
             });
 
-            let expected =
-                MediaTrackConstraint::from(ValueRangeConstraint::default().min(30.0).max(60.0))
-                    .into_sanitized()
-                    .unwrap();
+            let expected = ResolvedMediaTrackConstraint::from(
+                ResolvedValueRangeConstraint::default().min(30.0).max(60.0),
+            )
+            .into_sanitized()
+            .unwrap();
 
             assert_eq!(actual, expected);
         }
@@ -480,8 +483,8 @@ mod tests {
                 ideal: vec![FacingMode::user()],
             });
 
-            let expected = MediaTrackConstraint::from(
-                ValueSequenceConstraint::default().ideal(vec![FacingMode::user()]),
+            let expected = ResolvedMediaTrackConstraint::from(
+                ResolvedValueSequenceConstraint::default().ideal(vec![FacingMode::user()]),
             )
             .into_sanitized()
             .unwrap();
@@ -497,7 +500,7 @@ mod tests {
             max: 60.0,
         };
 
-        let expected = ValueRangeConstraint::default().min(30.0).max(60.0);
+        let expected = ResolvedValueRangeConstraint::default().min(30.0).max(60.0);
 
         assert_eq!(actual, expected);
     }
@@ -507,7 +510,7 @@ mod tests {
         let actual = value_sequence_constraint! {
             exact: vec![FacingMode::user(), FacingMode::environment()]
         };
-        let expected = ValueSequenceConstraint::default()
+        let expected = ResolvedValueSequenceConstraint::default()
             .exact(vec![FacingMode::user(), FacingMode::environment()]);
 
         assert_eq!(actual, expected);
@@ -516,34 +519,34 @@ mod tests {
     #[test]
     fn mandatory_constraints() {
         let actual = mandatory_constraints! {
-            DEVICE_ID => constraint!(value: {
+            DEVICE_ID => resolved_constraint!(value: {
                 exact: "foobar".to_owned(),
                 ideal: "bazblee".to_owned(),
             }),
-            FRAME_RATE => constraint!(range: {
+            FRAME_RATE => resolved_constraint!(range: {
                 min: 30.0,
                 max: 60.0,
             }),
-            FACING_MODE => constraint!(sequence: {
+            FACING_MODE => resolved_constraint!(sequence: {
                 exact: vec![FacingMode::user(), FacingMode::environment()]
             }),
         };
 
-        let expected = MandatoryMediaTrackConstraints::from_iter([
+        let expected = ResolvedMandatoryMediaTrackConstraints::from_iter([
             (
                 DEVICE_ID,
-                ValueConstraint::default()
+                ResolvedValueConstraint::default()
                     .exact("foobar".to_owned())
                     .ideal("bazblee".to_owned())
                     .into(),
             ),
             (
                 FRAME_RATE,
-                ValueRangeConstraint::default().min(30.0).max(60.0).into(),
+                ResolvedValueRangeConstraint::default().min(30.0).max(60.0).into(),
             ),
             (
                 FACING_MODE,
-                ValueSequenceConstraint::default()
+                ResolvedValueSequenceConstraint::default()
                     .exact(vec![FacingMode::user(), FacingMode::environment()])
                     .into(),
             ),
@@ -556,39 +559,39 @@ mod tests {
     fn advanced_constraints() {
         let actual = advanced_constraints! [
             {
-                DEVICE_ID => constraint!(value: {
+                DEVICE_ID => resolved_constraint!(value: {
                     exact: "foobar".to_owned(),
                     ideal: "bazblee".to_owned(),
                 }),
             },
             {
-                FRAME_RATE => constraint!(range: {
+                FRAME_RATE => resolved_constraint!(range: {
                     min: 30.0,
                     max: 60.0,
                 }),
             },
             {
-                FACING_MODE => constraint!(sequence: {
+                FACING_MODE => resolved_constraint!(sequence: {
                     exact: vec![FacingMode::user(), FacingMode::environment()]
                 }),
             },
         ];
 
-        let expected = AdvancedMediaTrackConstraints::from_iter([
-            MediaTrackConstraintSet::from_iter([(
+        let expected = ResolvedAdvancedMediaTrackConstraints::from_iter([
+            ResolvedMediaTrackConstraintSet::from_iter([(
                 DEVICE_ID,
-                ValueConstraint::default()
+                ResolvedValueConstraint::default()
                     .exact("foobar".to_owned())
                     .ideal("bazblee".to_owned())
                     .into(),
             )]),
-            MediaTrackConstraintSet::from_iter([(
+            ResolvedMediaTrackConstraintSet::from_iter([(
                 FRAME_RATE,
-                ValueRangeConstraint::default().min(30.0).max(60.0).into(),
+                ResolvedValueRangeConstraint::default().min(30.0).max(60.0).into(),
             )]),
-            MediaTrackConstraintSet::from_iter([(
+            ResolvedMediaTrackConstraintSet::from_iter([(
                 FACING_MODE,
-                ValueSequenceConstraint::default()
+                ResolvedValueSequenceConstraint::default()
                     .exact(vec![FacingMode::user(), FacingMode::environment()])
                     .into(),
             )]),
@@ -599,76 +602,76 @@ mod tests {
 
     #[test]
     fn constraints() {
-        let actual: MediaTrackConstraints = constraints!(
+        let actual: ResolvedMediaTrackConstraints = constraints!(
             mandatory: {
-                DEVICE_ID => constraint!(value: {
+                DEVICE_ID => resolved_constraint!(value: {
                     exact: "foobar".to_owned(),
                     ideal: "bazblee".to_owned(),
                 }),
-                FRAME_RATE => constraint!(range: {
+                FRAME_RATE => resolved_constraint!(range: {
                     min: 30.0,
                     max: 60.0,
                 }),
-                FACING_MODE => constraint!(sequence: {
+                FACING_MODE => resolved_constraint!(sequence: {
                     exact: vec![FacingMode::user(), FacingMode::environment()]
                 }),
             },
             advanced: [
                 {
-                    DEVICE_ID => constraint!(value: {
+                    DEVICE_ID => resolved_constraint!(value: {
                         exact: "foobar".to_owned(),
                         ideal: "bazblee".to_owned(),
                     }),
                 },
                 {
-                    FRAME_RATE => constraint!(range: {
+                    FRAME_RATE => resolved_constraint!(range: {
                         min: 30.0,
                         max: 60.0,
                     }),
                 },
                 {
-                    FACING_MODE => constraint!(sequence: {
+                    FACING_MODE => resolved_constraint!(sequence: {
                         exact: vec![FacingMode::user(), FacingMode::environment()]
                     }),
                 },
             ]
         );
 
-        let expected = MediaTrackConstraints {
-            mandatory: MandatoryMediaTrackConstraints::from_iter([
+        let expected = ResolvedMediaTrackConstraints {
+            mandatory: ResolvedMandatoryMediaTrackConstraints::from_iter([
                 (
                     DEVICE_ID,
-                    ValueConstraint::default()
+                    ResolvedValueConstraint::default()
                         .exact("foobar".to_owned())
                         .ideal("bazblee".to_owned())
                         .into(),
                 ),
                 (
                     FRAME_RATE,
-                    ValueRangeConstraint::default().min(30.0).max(60.0).into(),
+                    ResolvedValueRangeConstraint::default().min(30.0).max(60.0).into(),
                 ),
                 (
                     FACING_MODE,
-                    ValueSequenceConstraint::default()
+                    ResolvedValueSequenceConstraint::default()
                         .exact(vec![FacingMode::user(), FacingMode::environment()])
                         .into(),
                 ),
             ]),
-            advanced: AdvancedMediaTrackConstraints::from_iter([
-                MediaTrackConstraintSet::from_iter([(
+            advanced: ResolvedAdvancedMediaTrackConstraints::from_iter([
+                ResolvedMediaTrackConstraintSet::from_iter([(
                     DEVICE_ID,
-                    ValueConstraint::default()
+                    ResolvedValueConstraint::default()
                         .exact("foobar".to_owned())
                         .ideal("bazblee".to_owned())
                         .into(),
                 )]),
-                MediaTrackConstraintSet::from_iter([(
+                ResolvedMediaTrackConstraintSet::from_iter([(
                     FRAME_RATE,
-                    ValueRangeConstraint::default().min(30.0).max(60.0).into(),
+                    ResolvedValueRangeConstraint::default().min(30.0).max(60.0).into(),
                 )]),
-                MediaTrackConstraintSet::from_iter([(
+                ResolvedMediaTrackConstraintSet::from_iter([(
                     FACING_MODE,
-                    ValueSequenceConstraint::default()
+                    ResolvedValueSequenceConstraint::default()
                         .exact(vec![FacingMode::user(), FacingMode::environment()])
                         .into(),
                 )]),

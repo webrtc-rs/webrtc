@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{BareOrMediaTrackConstraint, MediaTrackConstraint};
+use crate::{BareOrMediaTrackConstraint, ResolvedMediaTrackConstraint};
 
 use super::track::GenericBoolOrMediaTrackConstraints;
 
@@ -12,7 +12,7 @@ use super::track::GenericBoolOrMediaTrackConstraints;
 /// Corresponds to [`MediaStreamConstraints`][media_stream_constraints]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
-/// Unlike `MediaStreamConstraints` this type does not contain constraints
+/// Unlike `ResolvedMediaStreamConstraints` this type does not contain constraints
 /// with bare values, but has them resolved to full constraints instead.
 ///
 /// [media_stream]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastream
@@ -32,7 +32,8 @@ pub type BareOrMediaStreamConstraints = GenericMediaStreamConstraints<BareOrMedi
 /// [media_stream]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastream
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-pub type MediaStreamConstraints = GenericMediaStreamConstraints<MediaTrackConstraint>;
+pub type ResolvedMediaStreamConstraints =
+    GenericMediaStreamConstraints<ResolvedMediaTrackConstraint>;
 
 /// The constraints for a [`MediaStream`][media_stream] object.
 ///
@@ -44,7 +45,7 @@ pub type MediaStreamConstraints = GenericMediaStreamConstraints<MediaTrackConstr
 /// [media_stream]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastream
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
-#[derive(Debug, Clone, Default,Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct GenericMediaStreamConstraints<T> {
@@ -55,13 +56,13 @@ pub struct GenericMediaStreamConstraints<T> {
 }
 
 impl BareOrMediaStreamConstraints {
-    pub fn to_resolved(&self) -> MediaStreamConstraints {
+    pub fn to_resolved(&self) -> ResolvedMediaStreamConstraints {
         self.clone().into_resolved()
     }
 
-    pub fn into_resolved(self) -> MediaStreamConstraints {
+    pub fn into_resolved(self) -> ResolvedMediaStreamConstraints {
         let Self { audio, video } = self;
-        MediaStreamConstraints {
+        ResolvedMediaStreamConstraints {
             audio: audio.into_resolved(),
             video: video.into_resolved(),
         }

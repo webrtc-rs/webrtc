@@ -88,7 +88,7 @@ macro_rules! test_value_constraint {
         validate: |$a:ident| $b:block
     ) => {{
         let settings: &[Option<$st>] = $se;
-        let constraints: &[ValueConstraint<$ct>] = $ce;
+        let constraints: &[ResolvedValueConstraint<$ct>] = $ce;
 
         for constraint in constraints {
             for setting in settings {

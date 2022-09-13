@@ -1,7 +1,7 @@
 use webrtc_constraints::{
     property::all::name::*, BareOrAdvancedMediaTrackConstraints, BareOrBoolOrMediaTrackConstraints,
     BareOrMediaTrackConstraintSet, BareOrMediaTrackConstraints, BareOrValueRangeConstraint,
-    ValueRangeConstraint,
+    ResolvedValueRangeConstraint,
 };
 
 // https://www.w3.org/TR/mediacapture-streams/#example-1
@@ -59,7 +59,7 @@ fn w3c_spec_example_2() {
             mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
                 (
                     WIDTH,
-                    BareOrValueRangeConstraint::Constraint(ValueRangeConstraint {
+                    BareOrValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(640),
                         max: None,
                         exact: None,
@@ -69,7 +69,7 @@ fn w3c_spec_example_2() {
                 ),
                 (
                     HEIGHT,
-                    BareOrValueRangeConstraint::Constraint(ValueRangeConstraint {
+                    BareOrValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(480),
                         max: None,
                         exact: None,
@@ -80,7 +80,7 @@ fn w3c_spec_example_2() {
                 (ASPECT_RATIO, BareOrValueRangeConstraint::Bare(1.5).into()),
                 (
                     FRAME_RATE,
-                    BareOrValueRangeConstraint::Constraint(ValueRangeConstraint {
+                    BareOrValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(20.0),
                         max: None,
                         exact: None,
@@ -125,7 +125,7 @@ fn w3c_spec_example_3() {
             mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
                 (
                     HEIGHT,
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: Some(480),
                         max: None,
                         exact: None,
@@ -135,7 +135,7 @@ fn w3c_spec_example_3() {
                 ),
                 (
                     WIDTH,
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: Some(640),
                         max: None,
                         exact: None,
@@ -145,7 +145,7 @@ fn w3c_spec_example_3() {
                 ),
                 (
                     FRAME_RATE,
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: Some(30.0),
                         max: None,
                         exact: None,
@@ -162,7 +162,7 @@ fn w3c_spec_example_3() {
                 BareOrMediaTrackConstraintSet::from_iter([(ASPECT_RATIO, 1.333.into())]),
                 BareOrMediaTrackConstraintSet::from_iter([(
                     FRAME_RATE,
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: Some(50.0),
                         max: None,
                         exact: None,
@@ -172,7 +172,7 @@ fn w3c_spec_example_3() {
                 )]),
                 BareOrMediaTrackConstraintSet::from_iter([(
                     FRAME_RATE,
-                    ValueRangeConstraint {
+                    ResolvedValueRangeConstraint {
                         min: Some(40.0),
                         max: None,
                         exact: None,

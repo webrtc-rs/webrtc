@@ -20,11 +20,11 @@ mod basic {
                 },
             ],
             constraints: u64 => &[
-                ValueSequenceConstraint {
+                ResolvedValueSequenceConstraint {
                     exact: None,
                     ideal: None,
                 },
-                ValueSequenceConstraint {
+                ResolvedValueSequenceConstraint {
                     exact: None,
                     ideal: Some(vec![42]),
                 },
@@ -42,7 +42,7 @@ mod basic {
                 checks: [
                     {
                         setting: i64 => Some(1),
-                        constraint: i64 => ValueSequenceConstraint {
+                        constraint: i64 => ResolvedValueSequenceConstraint {
                             exact: None,
                             ideal: Some(vec![4]),
                         },
@@ -50,7 +50,7 @@ mod basic {
                     },
                     {
                         setting: i64 => Some(2),
-                        constraint: i64 => ValueSequenceConstraint {
+                        constraint: i64 => ResolvedValueSequenceConstraint {
                             exact: None,
                             ideal: Some(vec![4]),
                         },
@@ -58,7 +58,7 @@ mod basic {
                     },
                     {
                         setting: i64 => Some(3),
-                        constraint: i64 => ValueSequenceConstraint {
+                        constraint: i64 => ResolvedValueSequenceConstraint {
                             exact: None,
                             ideal: Some(vec![4]),
                         },
@@ -77,7 +77,7 @@ mod basic {
                 checks: [
                     {
                         setting: f64 => Some(1.0),
-                        constraint: u64 => ValueSequenceConstraint {
+                        constraint: u64 => ResolvedValueSequenceConstraint {
                             exact: None,
                             ideal: Some(vec![4]),
                         },
@@ -85,7 +85,7 @@ mod basic {
                     },
                     {
                         setting: f64 => Some(2.0),
-                        constraint: u64 => ValueSequenceConstraint {
+                        constraint: u64 => ResolvedValueSequenceConstraint {
                             exact: None,
                             ideal: Some(vec![4]),
                         },
@@ -93,7 +93,7 @@ mod basic {
                     },
                     {
                         setting: f64 => Some(3.0),
-                        constraint: u64 => ValueSequenceConstraint {
+                        constraint: u64 => ResolvedValueSequenceConstraint {
                             exact: None,
                             ideal: Some(vec![4]),
                         },
@@ -121,7 +121,7 @@ mod basic {
                     settings: f64 => &[None, Some(0.0)],
                 },
             ],
-            constraints: u64 => &[ValueSequenceConstraint {
+            constraints: u64 => &[ResolvedValueSequenceConstraint {
                 exact: None,
                 ideal: Some(vec![42]),
             }],
@@ -147,7 +147,7 @@ mod required {
                     settings: f64 => &[Some(42.0)],
                 },
             ],
-            constraints: u64 => &[ValueSequenceConstraint {
+            constraints: u64 => &[ResolvedValueSequenceConstraint {
                 exact: Some(vec![42]),
                 ideal: None,
             }],
@@ -173,11 +173,11 @@ mod required {
                     },
                 ],
                 constraints: u64 => &[
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![42]),
                         ideal: None,
                     },
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![42]),
                         ideal: Some(vec![42]),
                     },
@@ -201,11 +201,11 @@ mod required {
                     },
                 ],
                 constraints: u64 => &[
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![42]),
                         ideal: None,
                     },
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![42]),
                         ideal: Some(vec![42]),
                     },
@@ -225,11 +225,11 @@ mod required {
                     },
                 ],
                 constraints: u64 => &[
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![42]),
                         ideal: None,
                     },
-                    ValueSequenceConstraint {
+                    ResolvedValueSequenceConstraint {
                         exact: Some(vec![42]),
                         ideal: Some(vec![42]),
                     },

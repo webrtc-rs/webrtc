@@ -18,11 +18,11 @@ mod basic {
                 },
             ],
             constraints: f64 => &[
-                ValueConstraint {
+                ResolvedValueConstraint {
                     exact: None,
                     ideal: None,
                 },
-                ValueConstraint {
+                ResolvedValueConstraint {
                     exact: None,
                     ideal: Some(42.0),
                 },
@@ -40,7 +40,7 @@ mod basic {
                 checks: [
                     {
                         setting: i64 => Some(1),
-                        constraint: f64 => ValueConstraint {
+                        constraint: f64 => ResolvedValueConstraint {
                             exact: None,
                             ideal: Some(4.0),
                         },
@@ -48,7 +48,7 @@ mod basic {
                     },
                     {
                         setting: i64 => Some(2),
-                        constraint: f64 => ValueConstraint {
+                        constraint: f64 => ResolvedValueConstraint {
                             exact: None,
                             ideal: Some(4.0),
                         },
@@ -56,7 +56,7 @@ mod basic {
                     },
                     {
                         setting: i64 => Some(3),
-                        constraint: f64 => ValueConstraint {
+                        constraint: f64 => ResolvedValueConstraint {
                             exact: None,
                             ideal: Some(4.0),
                         },
@@ -75,7 +75,7 @@ mod basic {
                 checks: [
                     {
                         setting: f64 => Some(1.0),
-                        constraint: f64 => ValueConstraint {
+                        constraint: f64 => ResolvedValueConstraint {
                             exact: None,
                             ideal: Some(4.0),
                         },
@@ -83,7 +83,7 @@ mod basic {
                     },
                     {
                         setting: f64 => Some(2.0),
-                        constraint: f64 => ValueConstraint {
+                        constraint: f64 => ResolvedValueConstraint {
                             exact: None,
                             ideal: Some(4.0),
                         },
@@ -91,7 +91,7 @@ mod basic {
                     },
                     {
                         setting: f64 => Some(3.0),
-                        constraint: f64 => ValueConstraint {
+                        constraint: f64 => ResolvedValueConstraint {
                             exact: None,
                             ideal: Some(4.0),
                         },
@@ -119,7 +119,7 @@ mod basic {
                     settings: f64 => &[Some(0.0)],
                 },
             ],
-            constraints: f64 => &[ValueConstraint {
+            constraints: f64 => &[ResolvedValueConstraint {
                 exact: None,
                 ideal: Some(42.0),
             }],
@@ -145,7 +145,7 @@ mod required {
                     settings: f64 => &[Some(42.0)],
                 },
             ],
-            constraints: f64 => &[ValueConstraint {
+            constraints: f64 => &[ResolvedValueConstraint {
                 exact: Some(42.0),
                 ideal: None,
             }],
@@ -171,11 +171,11 @@ mod required {
                     },
                 ],
                 constraints: f64 => &[
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(42.0),
                         ideal: None,
                     },
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(42.0),
                         ideal: Some(42.0),
                     },
@@ -199,11 +199,11 @@ mod required {
                     },
                 ],
                 constraints: f64 => &[
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(42.0),
                         ideal: None,
                     },
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(42.0),
                         ideal: Some(42.0),
                     },
@@ -223,11 +223,11 @@ mod required {
                     },
                 ],
                 constraints: f64 => &[
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(42.0),
                         ideal: None,
                     },
-                    ValueConstraint {
+                    ResolvedValueConstraint {
                         exact: Some(42.0),
                         ideal: Some(42.0),
                     },

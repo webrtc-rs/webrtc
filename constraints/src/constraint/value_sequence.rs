@@ -23,7 +23,7 @@ use crate::MediaTrackConstraintResolutionStrategy;
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum BareOrValueSequenceConstraint<T> {
     Bare(Vec<T>),
-    Constraint(ValueSequenceConstraint<T>),
+    Constraint(ResolvedValueSequenceConstraint<T>),
 }
 
 impl<T> Default for BareOrValueSequenceConstraint<T> {
@@ -44,8 +44,8 @@ impl<T> From<Vec<T>> for BareOrValueSequenceConstraint<T> {
     }
 }
 
-impl<T> From<ValueSequenceConstraint<T>> for BareOrValueSequenceConstraint<T> {
-    fn from(constraint: ValueSequenceConstraint<T>) -> Self {
+impl<T> From<ResolvedValueSequenceConstraint<T>> for BareOrValueSequenceConstraint<T> {
+    fn from(constraint: ResolvedValueSequenceConstraint<T>) -> Self {
         Self::Constraint(constraint)
     }
 }
@@ -57,21 +57,21 @@ where
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> ValueSequenceConstraint<T> {
+    ) -> ResolvedValueSequenceConstraint<T> {
         self.clone().into_resolved(strategy)
     }
 
     pub fn into_resolved(
         self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> ValueSequenceConstraint<T> {
+    ) -> ResolvedValueSequenceConstraint<T> {
         match self {
             Self::Bare(bare) => match strategy {
                 MediaTrackConstraintResolutionStrategy::BareToIdeal => {
-                    ValueSequenceConstraint::default().ideal(bare)
+                    ResolvedValueSequenceConstraint::default().ideal(bare)
                 }
                 MediaTrackConstraintResolutionStrategy::BareToExact => {
-                    ValueSequenceConstraint::default().exact(bare)
+                    ResolvedValueSequenceConstraint::default().exact(bare)
                 }
             },
             Self::Constraint(constraint) => constraint,
@@ -99,15 +99,15 @@ impl<T> BareOrValueSequenceConstraint<T> {
 ///
 /// | Rust                              | W3C                                                               |
 /// | --------------------------------- | ----------------------------------------------------------------- |
-/// | `ValueSequenceConstraint<String>` | [`ConstrainDOMStringParameters`][constrain_dom_string_parameters] |
+/// | `ResolvedValueSequenceConstraint<String>` | [`ConstrainDOMStringParameters`][constrain_dom_string_parameters] |
 ///
 /// [constrain_dom_string_parameters]: https://www.w3.org/TR/mediacapture-streams/#dom-constraindomstringparameters
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-pub struct ValueSequenceConstraint<T> {
-    // See https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints#constraindomstring
+pub struct ResolvedValueSequenceConstraint<T> {
+    // See https://developer.mozilla.org/en-US/docs/Web/API/ResolvedMediaTrackConstraints#constraindomstring
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
@@ -120,7 +120,7 @@ pub struct ValueSequenceConstraint<T> {
     pub ideal: Option<Vec<T>>,
 }
 
-impl<T> ValueSequenceConstraint<T> {
+impl<T> ResolvedValueSequenceConstraint<T> {
     #[inline]
     pub fn exact<U>(mut self, exact: U) -> Self
     where
@@ -164,7 +164,7 @@ impl<T> ValueSequenceConstraint<T> {
     }
 }
 
-impl<T> Default for ValueSequenceConstraint<T> {
+impl<T> Default for ResolvedValueSequenceConstraint<T> {
     fn default() -> Self {
         Self {
             exact: None,
@@ -173,7 +173,7 @@ impl<T> Default for ValueSequenceConstraint<T> {
     }
 }
 
-impl<T> std::fmt::Display for ValueSequenceConstraint<T>
+impl<T> std::fmt::Display for ResolvedValueSequenceConstraint<T>
 where
     T: std::fmt::Debug,
 {
@@ -207,8 +207,8 @@ mod tests {
     fn resolve_to_advanced() {
         let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueSequenceConstraint::default().exact(vec![true]);
+        let actual: ResolvedValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
+        let expected = ResolvedValueSequenceConstraint::default().exact(vec![true]);
 
         assert_eq!(actual, expected);
     }
@@ -217,8 +217,8 @@ mod tests {
     fn resolve_to_basic() {
         let constraint = BareOrValueSequenceConstraint::Bare(vec![true]);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
-        let actual: ValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueSequenceConstraint::default().ideal(vec![true]);
+        let actual: ResolvedValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
+        let expected = ResolvedValueSequenceConstraint::default().ideal(vec![true]);
 
         assert_eq!(actual, expected);
     }
@@ -255,7 +255,7 @@ mod serde_tests {
 
             #[test]
             fn exact_constraint() {
-                let subject = Subject::Constraint(ValueSequenceConstraint::default().exact(vec![$($values.to_owned()),*]));
+                let subject = Subject::Constraint(ResolvedValueSequenceConstraint::default().exact(vec![$($values.to_owned()),*]));
                 let json = serde_json::json!({
                     "exact": [$($values),*],
                 });
@@ -265,7 +265,7 @@ mod serde_tests {
 
             #[test]
             fn ideal_constraint() {
-                let subject = Subject::Constraint(ValueSequenceConstraint::default().ideal(vec![$($values.to_owned()),*]));
+                let subject = Subject::Constraint(ResolvedValueSequenceConstraint::default().ideal(vec![$($values.to_owned()),*]));
                 let json = serde_json::json!({
                     "ideal": [$($values),*],
                 });
@@ -275,7 +275,7 @@ mod serde_tests {
 
             #[test]
             fn full_constraint() {
-                let subject = Subject::Constraint(ValueSequenceConstraint::default().exact(vec![$($values.to_owned()),*]).ideal(vec![$($values.to_owned()),*]));
+                let subject = Subject::Constraint(ResolvedValueSequenceConstraint::default().exact(vec![$($values.to_owned()),*]).ideal(vec![$($values.to_owned()),*]));
                 let json = serde_json::json!({
                     "exact": [$($values),*],
                     "ideal": [$($values),*],

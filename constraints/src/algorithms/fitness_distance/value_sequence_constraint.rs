@@ -1,4 +1,4 @@
-use crate::ValueSequenceConstraint;
+use crate::ResolvedValueSequenceConstraint;
 
 use super::{
     setting::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind,
@@ -6,7 +6,7 @@ use super::{
 
 macro_rules! impl_non_numeric_value_sequence_constraint {
     (setting: $s:ty, constraint: $c:ty) => {
-        impl<'a> FitnessDistance<Option<&'a $s>> for ValueSequenceConstraint<$c>
+        impl<'a> FitnessDistance<Option<&'a $s>> for ResolvedValueSequenceConstraint<$c>
         where
             $s: PartialEq<$c>,
         {
@@ -80,7 +80,7 @@ impl_non_numeric_value_sequence_constraint!(setting: String, constraint: String)
 
 macro_rules! impl_numeric_value_sequence_constraint {
     (setting: $s:ty, constraint: $c:ty) => {
-        impl<'a> FitnessDistance<Option<&'a $s>> for ValueSequenceConstraint<$c> {
+        impl<'a> FitnessDistance<Option<&'a $s>> for ResolvedValueSequenceConstraint<$c> {
             type Error = SettingFitnessDistanceError;
 
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {

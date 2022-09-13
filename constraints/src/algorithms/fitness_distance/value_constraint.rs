@@ -1,4 +1,4 @@
-use crate::constraint::ValueConstraint;
+use crate::constraint::ResolvedValueConstraint;
 
 use super::{
     setting::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind,
@@ -8,7 +8,7 @@ use super::{
 // types where `Setting: PartialEq<Constraint>`:
 macro_rules! impl_non_numeric_value_constraint {
     (setting: $s:ty, constraint: $c:ty) => {
-        impl<'a> FitnessDistance<Option<&'a $s>> for ValueConstraint<$c>
+        impl<'a> FitnessDistance<Option<&'a $s>> for ResolvedValueConstraint<$c>
         where
             $s: PartialEq<$c>,
         {
@@ -86,7 +86,7 @@ impl_non_numeric_value_constraint!(setting: String, constraint: String);
 
 macro_rules! impl_numeric_value_constraint {
     (setting: $s:ty, constraint: $c:ty) => {
-        impl<'a> FitnessDistance<Option<&'a $s>> for ValueConstraint<$c> {
+        impl<'a> FitnessDistance<Option<&'a $s>> for ResolvedValueConstraint<$c> {
             type Error = SettingFitnessDistanceError;
 
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
@@ -168,14 +168,14 @@ macro_rules! impl_exists_value_constraint {
         $(impl_exists_value_constraint!(setting: $s, constraint: bool);)+
     };
     (setting: $s:ty, constraint: bool) => {
-        impl<'a> FitnessDistance<Option<&'a $s>> for ValueConstraint<bool> {
+        impl<'a> FitnessDistance<Option<&'a $s>> for ResolvedValueConstraint<bool> {
             type Error = SettingFitnessDistanceError;
 
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
                 // A bare boolean value (as described in step 4 of the
                 // `fitness distance` algorithm) gets parsed as:
                 // ```
-                // ValueConstraint::<bool> {
+                // ResolvedValueConstraint::<bool> {
                 //     exact: Some(bare),
                 //     ideal: None,
                 // }

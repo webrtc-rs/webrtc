@@ -23,7 +23,7 @@ use crate::MediaTrackConstraintResolutionStrategy;
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum BareOrValueConstraint<T> {
     Bare(T),
-    Constraint(ValueConstraint<T>),
+    Constraint(ResolvedValueConstraint<T>),
 }
 
 impl<T> Default for BareOrValueConstraint<T> {
@@ -38,8 +38,8 @@ impl<T> From<T> for BareOrValueConstraint<T> {
     }
 }
 
-impl<T> From<ValueConstraint<T>> for BareOrValueConstraint<T> {
-    fn from(constraint: ValueConstraint<T>) -> Self {
+impl<T> From<ResolvedValueConstraint<T>> for BareOrValueConstraint<T> {
+    fn from(constraint: ResolvedValueConstraint<T>) -> Self {
         Self::Constraint(constraint)
     }
 }
@@ -51,21 +51,21 @@ where
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> ValueConstraint<T> {
+    ) -> ResolvedValueConstraint<T> {
         self.clone().into_resolved(strategy)
     }
 
     pub fn into_resolved(
         self,
         strategy: MediaTrackConstraintResolutionStrategy,
-    ) -> ValueConstraint<T> {
+    ) -> ResolvedValueConstraint<T> {
         match self {
             Self::Bare(bare) => match strategy {
                 MediaTrackConstraintResolutionStrategy::BareToIdeal => {
-                    ValueConstraint::default().ideal(bare)
+                    ResolvedValueConstraint::default().ideal(bare)
                 }
                 MediaTrackConstraintResolutionStrategy::BareToExact => {
-                    ValueConstraint::default().exact(bare)
+                    ResolvedValueConstraint::default().exact(bare)
                 }
             },
             Self::Constraint(constraint) => constraint,
@@ -93,14 +93,14 @@ impl<T> BareOrValueConstraint<T> {
 ///
 /// | Rust                           | W3C                                     |
 /// | ------------------------------ | --------------------------------------- |
-/// | `ValueConstraint<bool>` | [`ConstrainBooleanParameters`][constrain_boolean_parameters] |
+/// | `ResolvedValueConstraint<bool>` | [`ConstrainBooleanParameters`][constrain_boolean_parameters] |
 ///
 /// [constrain_boolean_parameters]: https://www.w3.org/TR/mediacapture-streams/#dom-constrainbooleanparameters
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-pub struct ValueConstraint<T> {
+pub struct ResolvedValueConstraint<T> {
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
@@ -113,7 +113,7 @@ pub struct ValueConstraint<T> {
     pub ideal: Option<T>,
 }
 
-impl<T> ValueConstraint<T> {
+impl<T> ResolvedValueConstraint<T> {
     #[inline]
     pub fn exact<U>(mut self, exact: U) -> Self
     where
@@ -155,7 +155,7 @@ impl<T> ValueConstraint<T> {
     }
 }
 
-impl<T> Default for ValueConstraint<T> {
+impl<T> Default for ResolvedValueConstraint<T> {
     #[inline]
     fn default() -> Self {
         Self {
@@ -165,7 +165,7 @@ impl<T> Default for ValueConstraint<T> {
     }
 }
 
-impl<T> std::fmt::Display for ValueConstraint<T>
+impl<T> std::fmt::Display for ResolvedValueConstraint<T>
 where
     T: std::fmt::Debug,
 {
@@ -199,8 +199,8 @@ mod tests {
     fn resolve_to_advanced() {
         let constraint = BareOrValueConstraint::Bare(true);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        let actual: ValueConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueConstraint::default().exact(true);
+        let actual: ResolvedValueConstraint<bool> = constraint.into_resolved(strategy);
+        let expected = ResolvedValueConstraint::default().exact(true);
 
         assert_eq!(actual, expected);
     }
@@ -209,8 +209,8 @@ mod tests {
     fn resolve_to_basic() {
         let constraint = BareOrValueConstraint::Bare(true);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
-        let actual: ValueConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ValueConstraint::default().ideal(true);
+        let actual: ResolvedValueConstraint<bool> = constraint.into_resolved(strategy);
+        let expected = ResolvedValueConstraint::default().ideal(true);
 
         assert_eq!(actual, expected);
     }
@@ -247,7 +247,7 @@ mod serde_tests {
 
             #[test]
             fn exact_constraint() {
-                let subject = Subject::Constraint(ValueConstraint::default().exact($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueConstraint::default().exact($value.to_owned()));
                 let json = serde_json::json!({
                     "exact": $value,
                 });
@@ -257,7 +257,7 @@ mod serde_tests {
 
             #[test]
             fn ideal_constraint() {
-                let subject = Subject::Constraint(ValueConstraint::default().ideal($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueConstraint::default().ideal($value.to_owned()));
                 let json = serde_json::json!({
                     "ideal": $value,
                 });
@@ -267,7 +267,7 @@ mod serde_tests {
 
             #[test]
             fn full_constraint() {
-                let subject = Subject::Constraint(ValueConstraint::default().exact($value.to_owned()).ideal($value.to_owned()));
+                let subject = Subject::Constraint(ResolvedValueConstraint::default().exact($value.to_owned()).ideal($value.to_owned()));
                 let json = serde_json::json!({
                     "exact": $value,
                     "ideal": $value,

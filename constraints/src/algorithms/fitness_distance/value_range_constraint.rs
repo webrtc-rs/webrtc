@@ -1,4 +1,4 @@
-use crate::ValueRangeConstraint;
+use crate::ResolvedValueRangeConstraint;
 
 use super::{
     setting::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind,
@@ -6,7 +6,7 @@ use super::{
 
 macro_rules! impl_value_range_constraint {
     (setting: $s:ty, constraint: $c:ty) => {
-        impl<'a> FitnessDistance<Option<&'a $s>> for ValueRangeConstraint<$c> {
+        impl<'a> FitnessDistance<Option<&'a $s>> for ResolvedValueRangeConstraint<$c> {
             type Error = SettingFitnessDistanceError;
 
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
@@ -142,7 +142,7 @@ macro_rules! impl_ignored_value_range_constraint {
         $(impl_ignored_value_range_constraint!(setting: $s, constraint: $c);)+
     };
     (setting: $s:ty, constraint: $c:ty) => {
-        impl<'a> FitnessDistance<Option<&'a $s>> for ValueRangeConstraint<$c> {
+        impl<'a> FitnessDistance<Option<&'a $s>> for ResolvedValueRangeConstraint<$c> {
             type Error = SettingFitnessDistanceError;
 
             fn fitness_distance(&self, _setting: Option<&'a $s>) -> Result<f64, Self::Error> {
