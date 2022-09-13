@@ -9,13 +9,13 @@ use crate::MediaTrackConstraintResolutionStrategy;
 ///
 /// There exists no direct corresponding type in the
 /// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
-/// since the `BareOrValueConstraint<T>` type aims to be a generalization over
+/// since the `ValueConstraint<T>` type aims to be a generalization over
 /// multiple types in the spec.
 ///
 /// | Rust                               | W3C                                   |
 /// | ---------------------------------- | ------------------------------------- |
-/// | `BareOrValueRangeConstraint<u64>` | [`ConstrainULong`][constrain_ulong]   |
-/// | `BareOrValueRangeConstraint<f64>` | [`ConstrainDouble`][constrain_double] |
+/// | `ValueRangeConstraint<u64>` | [`ConstrainULong`][constrain_ulong]   |
+/// | `ValueRangeConstraint<f64>` | [`ConstrainDouble`][constrain_double] |
 ///
 /// [constrain_double]: https://www.w3.org/TR/mediacapture-streams/#dom-constraindouble
 /// [constrain_ulong]: https://www.w3.org/TR/mediacapture-streams/#dom-constrainulong
@@ -23,30 +23,30 @@ use crate::MediaTrackConstraintResolutionStrategy;
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum BareOrValueRangeConstraint<T> {
+pub enum ValueRangeConstraint<T> {
     Bare(T),
     Constraint(ResolvedValueRangeConstraint<T>),
 }
 
-impl<T> Default for BareOrValueRangeConstraint<T> {
+impl<T> Default for ValueRangeConstraint<T> {
     fn default() -> Self {
         Self::Constraint(Default::default())
     }
 }
 
-impl<T> From<T> for BareOrValueRangeConstraint<T> {
+impl<T> From<T> for ValueRangeConstraint<T> {
     fn from(bare: T) -> Self {
         Self::Bare(bare)
     }
 }
 
-impl<T> From<ResolvedValueRangeConstraint<T>> for BareOrValueRangeConstraint<T> {
+impl<T> From<ResolvedValueRangeConstraint<T>> for ValueRangeConstraint<T> {
     fn from(constraint: ResolvedValueRangeConstraint<T>) -> Self {
         Self::Constraint(constraint)
     }
 }
 
-impl<T> BareOrValueRangeConstraint<T>
+impl<T> ValueRangeConstraint<T>
 where
     T: Clone,
 {
@@ -75,7 +75,7 @@ where
     }
 }
 
-impl<T> BareOrValueRangeConstraint<T> {
+impl<T> ValueRangeConstraint<T> {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Bare(_) => false,
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn resolve_to_advanced() {
-        let constraint = BareOrValueRangeConstraint::Bare(42);
+        let constraint = ValueRangeConstraint::Bare(42);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
         let actual: ResolvedValueRangeConstraint<u64> = constraint.into_resolved(strategy);
         let expected = ResolvedValueRangeConstraint::default().exact(42);
@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn resolve_to_basic() {
-        let constraint = BareOrValueRangeConstraint::Bare(42);
+        let constraint = ValueRangeConstraint::Bare(42);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
         let actual: ResolvedValueRangeConstraint<u64> = constraint.into_resolved(strategy);
         let expected = ResolvedValueRangeConstraint::default().ideal(42);
@@ -262,7 +262,7 @@ mod serde_tests {
         ($t:ty => {
             value: $value:expr
         }) => {
-            type Subject = BareOrValueRangeConstraint<$t>;
+            type Subject = ValueRangeConstraint<$t>;
 
             #[test]
             fn default() {

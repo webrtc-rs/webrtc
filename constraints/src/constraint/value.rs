@@ -9,42 +9,42 @@ use crate::MediaTrackConstraintResolutionStrategy;
 ///
 /// There exists no direct corresponding type in the
 /// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
-/// since the `BareOrValueConstraint<T>` type aims to be a generalization over
+/// since the `ValueConstraint<T>` type aims to be a generalization over
 /// multiple types in the spec.
 ///
 /// | Rust                           | W3C                                     |
 /// | ------------------------------ | --------------------------------------- |
-/// | `BareOrValueConstraint<bool>` | [`ConstrainBoolean`][constrain_boolean] |
+/// | `ValueConstraint<bool>` | [`ConstrainBoolean`][constrain_boolean] |
 ///
 /// [constrain_boolean]: https://www.w3.org/TR/mediacapture-streams/#dom-constrainboolean
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum BareOrValueConstraint<T> {
+pub enum ValueConstraint<T> {
     Bare(T),
     Constraint(ResolvedValueConstraint<T>),
 }
 
-impl<T> Default for BareOrValueConstraint<T> {
+impl<T> Default for ValueConstraint<T> {
     fn default() -> Self {
         Self::Constraint(Default::default())
     }
 }
 
-impl<T> From<T> for BareOrValueConstraint<T> {
+impl<T> From<T> for ValueConstraint<T> {
     fn from(bare: T) -> Self {
         Self::Bare(bare)
     }
 }
 
-impl<T> From<ResolvedValueConstraint<T>> for BareOrValueConstraint<T> {
+impl<T> From<ResolvedValueConstraint<T>> for ValueConstraint<T> {
     fn from(constraint: ResolvedValueConstraint<T>) -> Self {
         Self::Constraint(constraint)
     }
 }
 
-impl<T> BareOrValueConstraint<T>
+impl<T> ValueConstraint<T>
 where
     T: Clone,
 {
@@ -73,7 +73,7 @@ where
     }
 }
 
-impl<T> BareOrValueConstraint<T> {
+impl<T> ValueConstraint<T> {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Bare(_) => false,
@@ -88,7 +88,7 @@ impl<T> BareOrValueConstraint<T> {
 ///
 /// There exists no direct corresponding type in the
 /// W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec,
-/// since the `BareOrValueConstraint<T>` type aims to be a
+/// since the `ValueConstraint<T>` type aims to be a
 /// generalization over multiple types in the W3C spec:
 ///
 /// | Rust                           | W3C                                     |
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn resolve_to_advanced() {
-        let constraint = BareOrValueConstraint::Bare(true);
+        let constraint = ValueConstraint::Bare(true);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
         let actual: ResolvedValueConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ResolvedValueConstraint::default().exact(true);
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn resolve_to_basic() {
-        let constraint = BareOrValueConstraint::Bare(true);
+        let constraint = ValueConstraint::Bare(true);
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
         let actual: ResolvedValueConstraint<bool> = constraint.into_resolved(strategy);
         let expected = ResolvedValueConstraint::default().ideal(true);
@@ -227,7 +227,7 @@ mod serde_tests {
         ($t:ty => {
             value: $value:expr
         }) => {
-            type Subject = BareOrValueConstraint<$t>;
+            type Subject = ValueConstraint<$t>;
 
             #[test]
             fn default() {

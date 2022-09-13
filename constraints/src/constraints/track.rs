@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    constraint::SanitizedMediaTrackConstraint, BareOrMediaTrackConstraint,
+    constraint::SanitizedMediaTrackConstraint, MediaTrackConstraint,
     MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint,
 };
 
@@ -12,11 +12,10 @@ use super::{
 };
 
 /// A boolean on/off flag or bare value or constraints for a [`MediaStreamTrack`][media_stream_track] object.
-pub type BareOrBoolOrMediaTrackConstraints =
-    GenericBoolOrMediaTrackConstraints<BareOrMediaTrackConstraint>;
+pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
-pub type BoolOrMediaTrackConstraints =
+pub type BoolOrResolvedMediaTrackConstraints =
     GenericBoolOrMediaTrackConstraints<ResolvedMediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
@@ -82,23 +81,23 @@ impl<T> From<GenericMediaTrackConstraints<T>> for GenericBoolOrMediaTrackConstra
     }
 }
 
-impl BareOrBoolOrMediaTrackConstraints {
-    pub fn to_resolved(&self) -> BoolOrMediaTrackConstraints {
+impl BoolOrMediaTrackConstraints {
+    pub fn to_resolved(&self) -> BoolOrResolvedMediaTrackConstraints {
         self.clone().into_resolved()
     }
 
-    pub fn into_resolved(self) -> BoolOrMediaTrackConstraints {
+    pub fn into_resolved(self) -> BoolOrResolvedMediaTrackConstraints {
         match self {
-            Self::Bool(flag) => BoolOrMediaTrackConstraints::Bool(flag),
+            Self::Bool(flag) => BoolOrResolvedMediaTrackConstraints::Bool(flag),
             Self::Constraints(constraints) => {
-                BoolOrMediaTrackConstraints::Constraints(constraints.into_resolved())
+                BoolOrResolvedMediaTrackConstraints::Constraints(constraints.into_resolved())
             }
         }
     }
 }
 
 /// Media track constraints that contains either bare values or constraints.
-pub type BareOrMediaTrackConstraints = GenericMediaTrackConstraints<BareOrMediaTrackConstraint>;
+pub type MediaTrackConstraints = GenericMediaTrackConstraints<MediaTrackConstraint>;
 
 /// Media track constraints that contains only constraints (both, empty and non-empty).
 pub type ResolvedMediaTrackConstraints = GenericMediaTrackConstraints<ResolvedMediaTrackConstraint>;
@@ -191,13 +190,13 @@ impl<T> Default for GenericMediaTrackConstraints<T> {
     }
 }
 
-impl From<BareOrMediaTrackConstraints> for ResolvedMediaTrackConstraints {
-    fn from(bare_or_constraints: BareOrMediaTrackConstraints) -> Self {
-        bare_or_constraints.into_resolved()
+impl From<MediaTrackConstraints> for ResolvedMediaTrackConstraints {
+    fn from(constraints: MediaTrackConstraints) -> Self {
+        constraints.into_resolved()
     }
 }
 
-impl BareOrMediaTrackConstraints {
+impl MediaTrackConstraints {
     pub fn to_resolved(&self) -> ResolvedMediaTrackConstraints {
         self.clone().into_resolved()
     }
@@ -239,13 +238,13 @@ impl ResolvedMediaTrackConstraints {
 #[cfg(test)]
 mod serde_tests {
     use crate::{
-        constraints::mandatory::BareOrMandatoryMediaTrackConstraints, macros::test_serde_symmetry,
-        property::all::name::*, BareOrAdvancedMediaTrackConstraints, BareOrMediaTrackConstraintSet,
+        constraints::mandatory::MandatoryMediaTrackConstraints, macros::test_serde_symmetry,
+        property::all::name::*, AdvancedMediaTrackConstraints, MediaTrackConstraintSet,
     };
 
     use super::*;
 
-    type Subject = BareOrMediaTrackConstraints;
+    type Subject = MediaTrackConstraints;
 
     #[test]
     fn default() {
@@ -258,16 +257,16 @@ mod serde_tests {
     #[test]
     fn customized() {
         let subject = Subject {
-            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([(
+            mandatory: MandatoryMediaTrackConstraints::from_iter([(
                 DEVICE_ID,
                 "microphone".into(),
             )]),
-            advanced: BareOrAdvancedMediaTrackConstraints::new(vec![
-                BareOrMediaTrackConstraintSet::from_iter([
+            advanced: AdvancedMediaTrackConstraints::new(vec![
+                MediaTrackConstraintSet::from_iter([
                     (AUTO_GAIN_CONTROL, true.into()),
                     (CHANNEL_COUNT, 2.into()),
                 ]),
-                BareOrMediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
+                MediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
             ]),
         };
         let json = serde_json::json!({

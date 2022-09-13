@@ -6,13 +6,13 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    constraint::SanitizedMediaTrackConstraint, property::all::name::*, BareOrMediaTrackConstraint,
+    constraint::SanitizedMediaTrackConstraint, property::all::name::*, MediaTrackConstraint,
     MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
     ResolvedMediaTrackConstraint, ResolvedValueConstraint, ResolvedValueRangeConstraint,
 };
 
 /// Media track constraint set that contains either bare values or constraints.
-pub type BareOrMediaTrackConstraintSet = GenericMediaTrackConstraintSet<BareOrMediaTrackConstraint>;
+pub type MediaTrackConstraintSet = GenericMediaTrackConstraintSet<MediaTrackConstraint>;
 
 /// Media track constraint set that contains only constraints (both, empty and non-empty).
 pub type ResolvedMediaTrackConstraintSet =
@@ -88,7 +88,7 @@ impl<T> IntoIterator for GenericMediaTrackConstraintSet<T> {
     }
 }
 
-impl BareOrMediaTrackConstraintSet {
+impl MediaTrackConstraintSet {
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -237,7 +237,7 @@ mod serde_tests {
 
     #[test]
     fn serialize_default() {
-        let constraint_set = BareOrMediaTrackConstraintSet::default();
+        let constraint_set = MediaTrackConstraintSet::default();
         let actual = serde_json::to_value(constraint_set).unwrap();
         let expected = serde_json::json!({});
 
@@ -247,15 +247,15 @@ mod serde_tests {
     #[test]
     fn deserialize_default() {
         let json = serde_json::json!({});
-        let actual: BareOrMediaTrackConstraintSet = serde_json::from_value(json).unwrap();
-        let expected = BareOrMediaTrackConstraintSet::default();
+        let actual: MediaTrackConstraintSet = serde_json::from_value(json).unwrap();
+        let expected = MediaTrackConstraintSet::default();
 
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn serialize() {
-        let constraint_set = BareOrMediaTrackConstraintSet::from_iter([
+        let constraint_set = MediaTrackConstraintSet::from_iter([
             (DEVICE_ID, "device-id".into()),
             (AUTO_GAIN_CONTROL, true.into()),
             (CHANNEL_COUNT, 2.into()),
@@ -280,8 +280,8 @@ mod serde_tests {
             "channelCount": 2,
             "latency": 0.123,
         });
-        let actual: BareOrMediaTrackConstraintSet = serde_json::from_value(json).unwrap();
-        let expected = BareOrMediaTrackConstraintSet::from_iter([
+        let actual: MediaTrackConstraintSet = serde_json::from_value(json).unwrap();
+        let expected = MediaTrackConstraintSet::from_iter([
             (DEVICE_ID, "device-id".into()),
             (AUTO_GAIN_CONTROL, true.into()),
             (CHANNEL_COUNT, 2.into()),

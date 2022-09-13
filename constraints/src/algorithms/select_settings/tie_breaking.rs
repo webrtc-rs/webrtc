@@ -1,7 +1,7 @@
 use ordered_float::NotNan;
 
 use crate::{
-    algorithms::FitnessDistance, BareOrMandatoryMediaTrackConstraints, MediaTrackSettings,
+    algorithms::FitnessDistance, MandatoryMediaTrackConstraints, MediaTrackSettings,
     MediaTrackSupportedConstraints, SanitizedMandatoryMediaTrackConstraints,
 };
 
@@ -60,7 +60,7 @@ impl ClosestToIdealPolicy {
         ideal_settings: MediaTrackSettings,
         supported_constraints: &MediaTrackSupportedConstraints,
     ) -> Self {
-        let sanitized_constraints = BareOrMandatoryMediaTrackConstraints::from_iter(
+        let sanitized_constraints = MandatoryMediaTrackConstraints::from_iter(
             ideal_settings
                 .into_iter()
                 .map(|(property, setting)| (property, setting.into())),

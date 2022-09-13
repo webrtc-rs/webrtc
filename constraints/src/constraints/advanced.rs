@@ -4,15 +4,14 @@ use std::ops::{Deref, DerefMut};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BareOrMediaTrackConstraint, MediaTrackConstraintResolutionStrategy,
-    MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
+    MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
+    ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
 };
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
 
 /// Advanced media track constraints that contain sets of either bare values or constraints.
-pub type BareOrAdvancedMediaTrackConstraints =
-    GenericAdvancedMediaTrackConstraints<BareOrMediaTrackConstraint>;
+pub type AdvancedMediaTrackConstraints = GenericAdvancedMediaTrackConstraints<MediaTrackConstraint>;
 
 /// Advanced media track constraints that contain sets of constraints (both, empty and non-empty).
 pub type ResolvedAdvancedMediaTrackConstraints =
@@ -87,7 +86,7 @@ impl<T> IntoIterator for GenericAdvancedMediaTrackConstraints<T> {
     }
 }
 
-impl BareOrAdvancedMediaTrackConstraints {
+impl AdvancedMediaTrackConstraints {
     pub fn to_resolved(&self) -> ResolvedAdvancedMediaTrackConstraints {
         self.clone().into_resolved()
     }
@@ -124,13 +123,13 @@ impl ResolvedAdvancedMediaTrackConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{property::all::name::*, BareOrMediaTrackConstraintSet};
+    use crate::{property::all::name::*, MediaTrackConstraintSet};
 
     use super::*;
 
     #[test]
     fn serialize_default() {
-        let advanced = BareOrAdvancedMediaTrackConstraints::default();
+        let advanced = AdvancedMediaTrackConstraints::default();
         let actual = serde_json::to_value(advanced).unwrap();
         let expected = serde_json::json!([]);
 
@@ -140,22 +139,21 @@ mod serde_tests {
     #[test]
     fn deserialize_default() {
         let json = serde_json::json!([]);
-        let actual: BareOrAdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
-        let expected = BareOrAdvancedMediaTrackConstraints::default();
+        let actual: AdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
+        let expected = AdvancedMediaTrackConstraints::default();
 
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn serialize() {
-        let advanced = BareOrAdvancedMediaTrackConstraints::new(vec![
-            BareOrMediaTrackConstraintSet::from_iter([
+        let advanced =
+            AdvancedMediaTrackConstraints::new(vec![MediaTrackConstraintSet::from_iter([
                 (DEVICE_ID, "device-id".into()),
                 (AUTO_GAIN_CONTROL, true.into()),
                 (CHANNEL_COUNT, 2.into()),
                 (LATENCY, 0.123.into()),
-            ]),
-        ]);
+            ])]);
         let actual = serde_json::to_value(advanced).unwrap();
         let expected = serde_json::json!([
             {
@@ -179,15 +177,14 @@ mod serde_tests {
                 "latency": 0.123,
             }
         ]);
-        let actual: BareOrAdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
-        let expected = BareOrAdvancedMediaTrackConstraints::new(vec![
-            BareOrMediaTrackConstraintSet::from_iter([
+        let actual: AdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
+        let expected =
+            AdvancedMediaTrackConstraints::new(vec![MediaTrackConstraintSet::from_iter([
                 (DEVICE_ID, "device-id".into()),
                 (AUTO_GAIN_CONTROL, true.into()),
                 (CHANNEL_COUNT, 2.into()),
                 (LATENCY, 0.123.into()),
-            ]),
-        ]);
+            ])]);
 
         assert_eq!(actual, expected);
     }

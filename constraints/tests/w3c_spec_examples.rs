@@ -1,16 +1,16 @@
 use webrtc_constraints::{
-    property::all::name::*, BareOrAdvancedMediaTrackConstraints, BareOrBoolOrMediaTrackConstraints,
-    BareOrMediaTrackConstraintSet, BareOrMediaTrackConstraints, BareOrValueRangeConstraint,
-    ResolvedValueRangeConstraint,
+    property::all::name::*, AdvancedMediaTrackConstraints, BoolOrMediaTrackConstraints,
+    MediaTrackConstraintSet, MediaTrackConstraints, ResolvedValueRangeConstraint,
+    ValueRangeConstraint,
 };
 
 // https://www.w3.org/TR/mediacapture-streams/#example-1
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_1() {
-    use webrtc_constraints::{BareOrMandatoryMediaTrackConstraints, BareOrMediaStreamConstraints};
+    use webrtc_constraints::{MandatoryMediaTrackConstraints, MediaStreamConstraints};
 
-    let actual: BareOrMediaStreamConstraints = {
+    let actual: MediaStreamConstraints = {
         let json = serde_json::json!({
             "video": {
                 "width": 1280,
@@ -20,15 +20,15 @@ fn w3c_spec_example_1() {
         });
         serde_json::from_value(json).unwrap()
     };
-    let expected = BareOrMediaStreamConstraints {
-        audio: BareOrBoolOrMediaTrackConstraints::Bool(false),
-        video: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
+    let expected = MediaStreamConstraints {
+        audio: BoolOrMediaTrackConstraints::Bool(false),
+        video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
+            mandatory: MandatoryMediaTrackConstraints::from_iter([
                 (WIDTH, 1280.into()),
                 (HEIGHT, 720.into()),
                 (ASPECT_RATIO, 1.5.into()),
             ]),
-            advanced: BareOrAdvancedMediaTrackConstraints::default(),
+            advanced: AdvancedMediaTrackConstraints::default(),
         }),
     };
 
@@ -39,9 +39,9 @@ fn w3c_spec_example_1() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_2() {
-    use webrtc_constraints::{BareOrMandatoryMediaTrackConstraints, BareOrMediaStreamConstraints};
+    use webrtc_constraints::{MandatoryMediaTrackConstraints, MediaStreamConstraints};
 
-    let actual: BareOrMediaStreamConstraints = {
+    let actual: MediaStreamConstraints = {
         let json = serde_json::json!({
             "video": {
                 "width": { "min": 640, "ideal": 1280 },
@@ -53,13 +53,13 @@ fn w3c_spec_example_2() {
         serde_json::from_value(json).unwrap()
     };
 
-    let expected = BareOrMediaStreamConstraints {
-        audio: BareOrBoolOrMediaTrackConstraints::Bool(false),
-        video: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
+    let expected = MediaStreamConstraints {
+        audio: BoolOrMediaTrackConstraints::Bool(false),
+        video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
+            mandatory: MandatoryMediaTrackConstraints::from_iter([
                 (
                     WIDTH,
-                    BareOrValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
+                    ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(640),
                         max: None,
                         exact: None,
@@ -69,7 +69,7 @@ fn w3c_spec_example_2() {
                 ),
                 (
                     HEIGHT,
-                    BareOrValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
+                    ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(480),
                         max: None,
                         exact: None,
@@ -77,10 +77,10 @@ fn w3c_spec_example_2() {
                     })
                     .into(),
                 ),
-                (ASPECT_RATIO, BareOrValueRangeConstraint::Bare(1.5).into()),
+                (ASPECT_RATIO, ValueRangeConstraint::Bare(1.5).into()),
                 (
                     FRAME_RATE,
-                    BareOrValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
+                    ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(20.0),
                         max: None,
                         exact: None,
@@ -89,7 +89,7 @@ fn w3c_spec_example_2() {
                     .into(),
                 ),
             ]),
-            advanced: BareOrAdvancedMediaTrackConstraints::default(),
+            advanced: AdvancedMediaTrackConstraints::default(),
         }),
     };
 
@@ -100,9 +100,9 @@ fn w3c_spec_example_2() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_3() {
-    use webrtc_constraints::{BareOrMandatoryMediaTrackConstraints, BareOrMediaStreamConstraints};
+    use webrtc_constraints::{MandatoryMediaTrackConstraints, MediaStreamConstraints};
 
-    let actual: BareOrMediaStreamConstraints = {
+    let actual: MediaStreamConstraints = {
         let json = serde_json::json!({
           "video": {
               "height": { "min": 480, "ideal": 720 },
@@ -119,10 +119,10 @@ fn w3c_spec_example_3() {
         serde_json::from_value(json).unwrap()
     };
 
-    let expected = BareOrMediaStreamConstraints {
-        audio: BareOrBoolOrMediaTrackConstraints::Bool(false),
-        video: BareOrBoolOrMediaTrackConstraints::Constraints(BareOrMediaTrackConstraints {
-            mandatory: BareOrMandatoryMediaTrackConstraints::from_iter([
+    let expected = MediaStreamConstraints {
+        audio: BoolOrMediaTrackConstraints::Bool(false),
+        video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
+            mandatory: MandatoryMediaTrackConstraints::from_iter([
                 (
                     HEIGHT,
                     ResolvedValueRangeConstraint {
@@ -154,13 +154,10 @@ fn w3c_spec_example_3() {
                     .into(),
                 ),
             ]),
-            advanced: BareOrAdvancedMediaTrackConstraints::new(vec![
-                BareOrMediaTrackConstraintSet::from_iter([
-                    (WIDTH, 1920.into()),
-                    (HEIGHT, 1280.into()),
-                ]),
-                BareOrMediaTrackConstraintSet::from_iter([(ASPECT_RATIO, 1.333.into())]),
-                BareOrMediaTrackConstraintSet::from_iter([(
+            advanced: AdvancedMediaTrackConstraints::new(vec![
+                MediaTrackConstraintSet::from_iter([(WIDTH, 1920.into()), (HEIGHT, 1280.into())]),
+                MediaTrackConstraintSet::from_iter([(ASPECT_RATIO, 1.333.into())]),
+                MediaTrackConstraintSet::from_iter([(
                     FRAME_RATE,
                     ResolvedValueRangeConstraint {
                         min: Some(50.0),
@@ -170,7 +167,7 @@ fn w3c_spec_example_3() {
                     }
                     .into(),
                 )]),
-                BareOrMediaTrackConstraintSet::from_iter([(
+                MediaTrackConstraintSet::from_iter([(
                     FRAME_RATE,
                     ResolvedValueRangeConstraint {
                         min: Some(40.0),
@@ -191,7 +188,7 @@ fn w3c_spec_example_3() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_4() {
-    let actual: BareOrMediaTrackConstraintSet = {
+    let actual: MediaTrackConstraintSet = {
         let json = serde_json::json!({
             "width": 1920,
             "height": 1080,
@@ -200,10 +197,10 @@ fn w3c_spec_example_4() {
         serde_json::from_value(json).unwrap()
     };
 
-    let expected = BareOrMediaTrackConstraintSet::from_iter([
-        (WIDTH, BareOrValueRangeConstraint::Bare(1920).into()),
-        (HEIGHT, BareOrValueRangeConstraint::Bare(1080).into()),
-        (FRAME_RATE, BareOrValueRangeConstraint::Bare(30).into()),
+    let expected = MediaTrackConstraintSet::from_iter([
+        (WIDTH, ValueRangeConstraint::Bare(1920).into()),
+        (HEIGHT, ValueRangeConstraint::Bare(1080).into()),
+        (FRAME_RATE, ValueRangeConstraint::Bare(30).into()),
     ]);
 
     assert_eq!(actual, expected);
