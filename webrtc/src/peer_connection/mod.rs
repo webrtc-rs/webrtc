@@ -577,7 +577,7 @@ impl RTCPeerConnection {
     /// candidate is found.
     /// Take note that the handler is gonna be called with a nil pointer when
     /// gathering is finished.
-    pub async fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
+    pub async fn on_ice_candidate(&self, f: Box<dyn OnLocalCandidateHdlrFn>) {
         self.internal.ice_gatherer.on_local_candidate(f).await
     }
 

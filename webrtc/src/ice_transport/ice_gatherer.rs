@@ -10,6 +10,7 @@ use crate::stats::stats_collector::StatsCollector;
 use crate::stats::SourceStatsType::*;
 use crate::stats::{ICECandidatePairStats, StatsReportType};
 
+use async_trait::async_trait;
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
 use ice::url::Url;
@@ -28,12 +29,27 @@ pub struct RTCIceGatherOptions {
     pub ice_gather_policy: RTCIceTransportPolicy,
 }
 
-// TODO: Rework
-pub type OnLocalCandidateHdlrFn = Box<
-    dyn (FnMut(Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnLocalCandidateHdlrFn = Box<
+//     dyn (FnMut(Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnLocalCandidateHdlrFn: Send + Sync {
+    async fn call(&mut self, c: Option<RTCIceCandidate>);
+}
+
+#[async_trait]
+impl<T, F> OnLocalCandidateHdlrFn for F
+where
+    F: FnMut(Option<RTCIceCandidate>) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, c: Option<RTCIceCandidate>) {
+        (*self)(c).await
+    }
+}
 
 // TODO: Rework
 pub type OnICEGathererStateChangeHdlrFn = Box<
@@ -59,7 +75,7 @@ pub struct RTCIceGatherer {
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
     pub(crate) agent: Mutex<Option<Arc<ice::agent::Agent>>>,
 
-    pub(crate) on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
+    pub(crate) on_local_candidate_handler: Arc<Mutex<Option<Box<dyn OnLocalCandidateHdlrFn>>>>,
     pub(crate) on_state_change_handler: Arc<Mutex<Option<OnICEGathererStateChangeHdlrFn>>>,
 
     // Used for gathering_complete_promise
@@ -184,7 +200,7 @@ impl RTCIceGatherer {
                                 let mut on_local_candidate_handler =
                                     on_local_candidate_handler_clone.lock().await;
                                 if let Some(handler) = &mut *on_local_candidate_handler {
-                                    handler(Some(c)).await;
+                                    handler.call(Some(c)).await;
                                 }
                             } else {
                                 state_clone
@@ -210,7 +226,7 @@ impl RTCIceGatherer {
                                     let mut on_local_candidate_handler =
                                         on_local_candidate_handler_clone.lock().await;
                                     if let Some(handler) = &mut *on_local_candidate_handler {
-                                        handler(None).await;
+                                        handler.call(None).await;
                                     }
                                 }
                             }
@@ -273,7 +289,7 @@ impl RTCIceGatherer {
 
     /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
     /// Take note that the handler is gonna be called with a nil pointer when gathering is finished.
-    pub async fn on_local_candidate(&self, f: OnLocalCandidateHdlrFn) {
+    pub async fn on_local_candidate(&self, f: Box<dyn OnLocalCandidateHdlrFn>) {
         let mut on_local_candidate_handler = self.on_local_candidate_handler.lock().await;
         *on_local_candidate_handler = Some(f);
     }
