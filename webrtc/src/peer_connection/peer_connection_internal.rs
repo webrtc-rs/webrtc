@@ -48,7 +48,7 @@ pub(crate) struct PeerConnectionInternal {
         Arc<Mutex<Option<Box<dyn OnSignalingStateChangeHdlrFn>>>>,
     pub(super) on_ice_connection_state_change_handler:
         Arc<Mutex<Option<Box<dyn OnICEConnectionStateChangeHdlrFn>>>>,
-    pub(super) on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
+    pub(super) on_data_channel_handler: Arc<Mutex<Option<Box<dyn OnDataChannelHdlrFn>>>>,
 
     pub(super) ice_gatherer: Arc<RTCIceGatherer>,
 
@@ -135,7 +135,7 @@ impl PeerConnectionInternal {
                 Box::pin(async move {
                     let mut handler = on_data_channel_handler2.lock().await;
                     if let Some(f) = &mut *handler {
-                        f(d).await;
+                        f.call(d).await;
                     }
                 })
             }))
