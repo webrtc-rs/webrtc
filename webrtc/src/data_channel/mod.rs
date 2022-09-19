@@ -54,7 +54,7 @@ where
     }
 }
 
-// TODO: Rework
+// TODO: Decide what to do with FnOnce
 pub type OnOpenHdlrFn =
     Box<dyn (FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 
