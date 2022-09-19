@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changes
+
+#### Breaking changes
+
+* API for passing callbacks has changed. Now you should pass just `|| async {}` as callback. [#293 Simplify OnBufferedAmountLowFn callback API](https://github.com/webrtc-rs/webrtc/pull/293) contributed by [llacqie](https://github.com/llacqie).
+
 ## 0.5.0
 
 ### Changes
