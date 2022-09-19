@@ -73,7 +73,7 @@ pub struct RTCDataChannel {
     pub(crate) on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
     pub(crate) on_open_handler: Arc<Mutex<Option<OnOpenHdlrFn>>>,
     pub(crate) on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
-    pub(crate) on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
+    pub(crate) on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
 
     pub(crate) on_buffered_amount_low: Mutex<Option<Box<dyn OnBufferedAmountLowFn>>>,
 
@@ -291,7 +291,7 @@ impl RTCDataChannel {
 
     /// on_error sets an event handler which is invoked when
     /// the underlying data transport cannot be read.
-    pub async fn on_error(&self, f: OnErrorHdlrFn) {
+    pub async fn on_error(&self, f: Box<dyn OnErrorHdlrFn>) {
         let mut handler = self.on_error_handler.lock().await;
         *handler = Some(f);
     }
@@ -302,7 +302,7 @@ impl RTCDataChannel {
         ready_state: Arc<AtomicU8>,
         on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
         on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
-        on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
+        on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
     ) {
         let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
         loop {
@@ -334,7 +334,7 @@ impl RTCDataChannel {
                             tokio::spawn(async move {
                                 let mut handler = on_error_handler2.lock().await;
                                 if let Some(f) = &mut *handler {
-                                    f(err.into()).await;
+                                    f.call(err.into()).await;
                                 }
                             });
 

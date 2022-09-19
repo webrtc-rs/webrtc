@@ -52,7 +52,7 @@ struct AcceptDataChannelParams {
     notify_rx: Arc<Notify>,
     sctp_association: Arc<Association>,
     data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
-    on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
+    on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
     data_channels_opened: Arc<AtomicU32>,
@@ -82,7 +82,7 @@ pub struct RTCSctpTransport {
 
     sctp_association: Mutex<Option<Arc<Association>>>,
 
-    on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
+    on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
 
@@ -238,7 +238,7 @@ impl RTCSctpTransport {
                                 log::error!("Failed to accept data channel: {}", err);
                                 let mut handler = param.on_error_handler.lock().await;
                                 if let Some(f) = &mut *handler {
-                                    f(err.into()).await;
+                                    f.call(err.into()).await;
                                 }
                             }
                             break;
@@ -319,7 +319,7 @@ impl RTCSctpTransport {
 
     /// on_error sets an event handler which is invoked when
     /// the SCTP connection error occurs.
-    pub async fn on_error(&self, f: OnErrorHdlrFn) {
+    pub async fn on_error(&self, f: Box<dyn OnErrorHdlrFn>) {
         let mut handler = self.on_error_handler.lock().await;
         *handler = Some(f);
     }

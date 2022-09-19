@@ -1,7 +1,7 @@
+use async_trait::async_trait;
 use rcgen::RcgenError;
 use std::future::Future;
 use std::num::ParseIntError;
-use std::pin::Pin;
 use std::string::FromUtf8Error;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
@@ -412,9 +412,24 @@ pub enum Error {
     new(String),
 }
 
-// TODO: Rework
-pub type OnErrorHdlrFn =
-    Box<dyn (FnMut(Error) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+// pub type OnErrorHdlrFn =
+//     Box<dyn (FnMut(Error) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+
+#[async_trait]
+pub trait OnErrorHdlrFn: Send + Sync {
+    async fn call(&mut self, e: Error);
+}
+
+#[async_trait]
+impl<T, F> OnErrorHdlrFn for F
+where
+    F: FnMut(Error) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, e: Error) {
+        (*self)(e).await
+    }
+}
 
 // Because Tokio SendError is parameterized, we sadly lose the backtrace.
 impl<T> From<MpscSendError<T>> for Error {
