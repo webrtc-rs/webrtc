@@ -104,17 +104,6 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
             },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_string(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=96".to_string(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 97,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_string(),
                     clock_rate: 90000,
                     channels: 0,
@@ -122,17 +111,6 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
                     rtcp_feedback: vec![],
                 },
                 payload_type: 98,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_string(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=98".to_string(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 99,
                 ..Default::default()
             },
         ],
