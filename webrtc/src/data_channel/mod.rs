@@ -58,9 +58,24 @@ where
 pub type OnOpenHdlrFn =
     Box<dyn (FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 
-// TODO: Rework
-pub type OnCloseHdlrFn =
-    Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+// pub type OnCloseHdlrFn =
+//     Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+
+#[async_trait]
+pub trait OnCloseHdlrFn: Send + Sync {
+    async fn call(&mut self);
+}
+
+#[async_trait]
+impl<T, F> OnCloseHdlrFn for F
+where
+    F: FnMut() -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self) {
+        (*self)().await
+    }
+}
 
 /// DataChannel represents a WebRTC DataChannel
 /// The DataChannel interface represents a network channel
@@ -88,7 +103,7 @@ pub struct RTCDataChannel {
     // binaryType                 string
     pub(crate) on_message_handler: Arc<Mutex<Option<Box<dyn OnMessageHdlrFn>>>>,
     pub(crate) on_open_handler: Arc<Mutex<Option<OnOpenHdlrFn>>>,
-    pub(crate) on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
+    pub(crate) on_close_handler: Arc<Mutex<Option<Box<dyn OnCloseHdlrFn>>>>,
     pub(crate) on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
 
     pub(crate) on_buffered_amount_low: Mutex<Option<Box<dyn OnBufferedAmountLowFn>>>,
@@ -253,7 +268,7 @@ impl RTCDataChannel {
 
     /// on_close sets an event handler which is invoked when
     /// the underlying data transport has been closed.
-    pub async fn on_close(&self, f: OnCloseHdlrFn) {
+    pub async fn on_close(&self, f: Box<dyn OnCloseHdlrFn>) {
         let mut handler = self.on_close_handler.lock().await;
         *handler = Some(f);
     }
@@ -317,7 +332,7 @@ impl RTCDataChannel {
         data_channel: Arc<data::data_channel::DataChannel>,
         ready_state: Arc<AtomicU8>,
         on_message_handler: Arc<Mutex<Option<Box<dyn OnMessageHdlrFn>>>>,
-        on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
+        on_close_handler: Arc<Mutex<Option<Box<dyn OnCloseHdlrFn>>>>,
         on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
     ) {
         let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
@@ -336,7 +351,7 @@ impl RTCDataChannel {
                             tokio::spawn(async move {
                                 let mut handler = on_close_handler2.lock().await;
                                 if let Some(f) = &mut *handler {
-                                    f().await;
+                                    f.call().await;
                                 }
                             });
 
@@ -358,7 +373,7 @@ impl RTCDataChannel {
                             tokio::spawn(async move {
                                 let mut handler = on_close_handler2.lock().await;
                                 if let Some(f) = &mut *handler {
-                                    f().await;
+                                    f.call().await;
                                 }
                             });
 
