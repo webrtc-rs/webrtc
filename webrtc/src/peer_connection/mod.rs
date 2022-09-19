@@ -201,7 +201,7 @@ where
     }
 }
 
-// TODO: Can't be reworked due to the dynamically inferred return type in the callback, 
+// TODO: Can't be reworked due to the dynamically inferred return type in the callback,
 //       that set in webrtc::peer_connection::peer_connection_test::test_get_stats()
 pub type OnTrackHdlrFn = Box<
     dyn (FnMut(
@@ -212,9 +212,24 @@ pub type OnTrackHdlrFn = Box<
         + Sync,
 >;
 
-// TODO: Rework
-pub type OnNegotiationNeededHdlrFn =
-    Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+// pub type OnNegotiationNeededHdlrFn =
+//     Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+
+#[async_trait]
+pub trait OnNegotiationNeededHdlrFn: Send + Sync {
+    async fn call(&mut self);
+}
+
+#[async_trait]
+impl<T, F> OnNegotiationNeededHdlrFn for F
+where
+    F: FnMut() -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self) {
+        (*self)().await
+    }
+}
 
 #[derive(Clone)]
 struct StartTransportsParams {
@@ -237,7 +252,7 @@ struct CheckNegotiationNeededParams {
 
 #[derive(Clone)]
 struct NegotiationNeededParams {
-    on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
+    on_negotiation_needed_handler: Arc<Mutex<Option<Box<dyn OnNegotiationNeededHdlrFn>>>>,
     is_closed: Arc<AtomicBool>,
     ops: Arc<Operations>,
     negotiation_needed_state: Arc<AtomicU8>,
@@ -378,7 +393,7 @@ impl RTCPeerConnection {
 
     /// on_negotiation_needed sets an event handler which is invoked when
     /// a change has occurred which requires session negotiation
-    pub async fn on_negotiation_needed(&self, f: OnNegotiationNeededHdlrFn) {
+    pub async fn on_negotiation_needed(&self, f: Box<dyn OnNegotiationNeededHdlrFn>) {
         let mut on_negotiation_needed_handler =
             self.internal.on_negotiation_needed_handler.lock().await;
         *on_negotiation_needed_handler = Some(f);
@@ -487,7 +502,7 @@ impl RTCPeerConnection {
         {
             let mut handler = params.on_negotiation_needed_handler.lock().await;
             if let Some(f) = &mut *handler {
-                f().await;
+                f.call().await;
             }
         }
 

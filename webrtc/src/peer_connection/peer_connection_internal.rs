@@ -22,7 +22,8 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) last_offer: Mutex<String>,
     pub(super) last_answer: Mutex<String>,
 
-    pub(super) on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
+    pub(super) on_negotiation_needed_handler:
+        Arc<Mutex<Option<Box<dyn OnNegotiationNeededHdlrFn>>>>,
     pub(super) is_closed: Arc<AtomicBool>,
 
     /// ops is an operations queue which will ensure the enqueued actions are
