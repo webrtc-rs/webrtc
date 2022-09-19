@@ -8,6 +8,7 @@ use crate::queue::reassembly_queue::ReassemblyQueue;
 
 use crate::queue::pending_queue::PendingQueue;
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use std::fmt;
 use std::future::Future;
@@ -58,8 +59,21 @@ impl From<u8> for ReliabilityType {
     }
 }
 
-pub type OnBufferedAmountLowFn =
-    Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+#[async_trait]
+pub trait OnBufferedAmountLowFn: Send + Sync {
+    async fn call(&mut self);
+}
+
+#[async_trait]
+impl<T, F> OnBufferedAmountLowFn for F
+where
+    F: FnMut() -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self) {
+        (*self)().await
+    }
+}
 
 // TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<StreamInternal>
 
@@ -84,7 +98,7 @@ pub struct Stream {
     pub(crate) reliability_value: AtomicU32,
     pub(crate) buffered_amount: AtomicUsize,
     pub(crate) buffered_amount_low: AtomicUsize,
-    pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
+    pub(crate) on_buffered_amount_low: Mutex<Option<Box<dyn OnBufferedAmountLowFn>>>,
     pub(crate) name: String,
 }
 
@@ -412,7 +426,7 @@ impl Stream {
 
     /// on_buffered_amount_low sets the callback handler which would be called when the number of
     /// bytes of outgoing data buffered is lower than the threshold.
-    pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+    pub async fn on_buffered_amount_low(&self, f: Box<dyn OnBufferedAmountLowFn>) {
         let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
         *on_buffered_amount_low = Some(f);
     }
@@ -454,7 +468,7 @@ impl Stream {
         if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
             let mut handler = self.on_buffered_amount_low.lock().await;
             if let Some(f) = &mut *handler {
-                f().await;
+                f.call().await;
             }
         }
     }

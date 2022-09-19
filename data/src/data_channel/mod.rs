@@ -345,7 +345,7 @@ impl DataChannel {
 
     /// OnBufferedAmountLow sets the callback handler which would be called when the
     /// number of bytes of outgoing data buffered is lower than the threshold.
-    pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+    pub async fn on_buffered_amount_low(&self, f: Box<dyn OnBufferedAmountLowFn>) {
         self.stream.on_buffered_amount_low(f).await
     }
 
