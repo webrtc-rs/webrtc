@@ -35,7 +35,7 @@ pub struct AgentInternal {
     pub(crate) on_connection_state_change_hdlr:
         Mutex<Option<Box<dyn OnConnectionStateChangeHdlrFn>>>,
     pub(crate) on_selected_candidate_pair_change_hdlr:
-        Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>,
+        Mutex<Option<Box<dyn OnSelectedCandidatePairChangeHdlrFn>>>,
     pub(crate) on_candidate_hdlr: Mutex<Option<OnCandidateHdlrFn>>,
 
     pub(crate) tie_breaker: AtomicU64,
@@ -1074,7 +1074,7 @@ impl AgentInternal {
                     if let (Some(f), Some(p)) =
                         (&mut *on_selected_candidate_pair_change_hdlr, &selected_pair)
                     {
-                        f(p.local.clone(), p.remote.clone()).await;
+                        f.call(p.local.clone(), p.remote.clone()).await;
                     }
                 }
             }

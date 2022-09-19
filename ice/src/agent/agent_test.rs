@@ -191,12 +191,12 @@ async fn test_on_selected_candidate_pair_change() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
     let (callback_called_tx, mut callback_called_rx) = mpsc::channel::<()>(1);
     let callback_called_tx = Arc::new(Mutex::new(Some(callback_called_tx)));
-    let cb: OnSelectedCandidatePairChangeHdlrFn = Box::new(move |_, _| {
+    let cb = Box::new(move |_, _| {
         let callback_called_tx_clone = Arc::clone(&callback_called_tx);
-        Box::pin(async move {
+        async move {
             let mut tx = callback_called_tx_clone.lock().await;
             tx.take();
-        })
+        }
     });
     a.on_selected_candidate_pair_change(cb).await;
 

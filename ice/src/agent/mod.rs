@@ -86,15 +86,38 @@ where
     }
 }
 
-// TODO: Rework
-pub type OnSelectedCandidatePairChangeHdlrFn = Box<
-    dyn (FnMut(
-            Arc<dyn Candidate + Send + Sync>,
-            Arc<dyn Candidate + Send + Sync>,
-        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnSelectedCandidatePairChangeHdlrFn = Box<
+//     dyn (FnMut(
+//             Arc<dyn Candidate + Send + Sync>,
+//             Arc<dyn Candidate + Send + Sync>,
+//         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnSelectedCandidatePairChangeHdlrFn: Send + Sync {
+    async fn call(
+        &mut self,
+        c1: Arc<dyn Candidate + Send + Sync>,
+        c2: Arc<dyn Candidate + Send + Sync>,
+    );
+}
+
+#[async_trait]
+impl<T, F> OnSelectedCandidatePairChangeHdlrFn for F
+where
+    F: FnMut(Arc<dyn Candidate + Send + Sync>, Arc<dyn Candidate + Send + Sync>) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(
+        &mut self,
+        c1: Arc<dyn Candidate + Send + Sync>,
+        c2: Arc<dyn Candidate + Send + Sync>,
+    ) {
+        (*self)(c1, c2).await
+    }
+}
 
 // TODO: Rework
 pub type OnCandidateHdlrFn = Box<
@@ -265,7 +288,10 @@ impl Agent {
     }
 
     /// Sets a handler that is fired when the final candidate pair is selected.
-    pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
+    pub async fn on_selected_candidate_pair_change(
+        &self,
+        f: Box<dyn OnSelectedCandidatePairChangeHdlrFn>,
+    ) {
         let mut on_selected_candidate_pair_change_hdlr = self
             .internal
             .on_selected_candidate_pair_change_hdlr
