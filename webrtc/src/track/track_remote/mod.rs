@@ -7,6 +7,7 @@ use crate::RECEIVE_MTU;
 use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
 
 use crate::track::RTP_PAYLOAD_TYPE_BITMASK;
+use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
 use std::future::Future;
@@ -20,15 +21,30 @@ lazy_static! {
     static ref TRACK_REMOTE_UNIQUE_ID: AtomicUsize = AtomicUsize::new(0);
 }
 
-// TODO: Rework
-pub type OnMuteHdlrFn = Box<
-    dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync + 'static,
->;
+// pub type OnMuteHdlrFn = Box<
+//     dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync + 'static,
+// >;
+
+#[async_trait]
+pub trait OnMuteHdlrFn: Send + Sync {
+    async fn call(&mut self);
+}
+
+#[async_trait]
+impl<T, F> OnMuteHdlrFn for F
+where
+    F: FnMut() -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self) {
+        (*self)().await
+    }
+}
 
 #[derive(Default)]
 struct Handlers {
-    on_mute: Option<OnMuteHdlrFn>,
-    on_unmute: Option<OnMuteHdlrFn>,
+    on_mute: Option<Box<dyn OnMuteHdlrFn>>,
+    on_unmute: Option<Box<dyn OnMuteHdlrFn>>,
 }
 
 #[derive(Default)]
@@ -323,7 +339,7 @@ impl TrackRemote {
         let mut handlers = self.handlers.lock().await;
 
         match &mut handlers.on_mute {
-            Some(f) => f().await,
+            Some(f) => f.call().await,
             None => {}
         };
     }
@@ -332,7 +348,7 @@ impl TrackRemote {
         let mut handlers = self.handlers.lock().await;
 
         match &mut handlers.on_unmute {
-            Some(f) => f().await,
+            Some(f) => f.call().await,
             None => {}
         };
     }
