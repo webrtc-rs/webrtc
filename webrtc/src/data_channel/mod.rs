@@ -569,16 +569,13 @@ impl RTCDataChannel {
     /// on_buffered_amount_low sets an event handler which is invoked when
     /// the number of bytes of outgoing data becomes lower than the
     /// buffered_amount_low_threshold.
-    pub async fn on_buffered_amount_low<F>(&self, f: F)
-    where
-        F: OnBufferedAmountLowFn + 'static,
-    {
+    pub async fn on_buffered_amount_low(&self, f: Box<dyn OnBufferedAmountLowFn>) {
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
-            dc.on_buffered_amount_low(Box::new(f)).await;
+            dc.on_buffered_amount_low(f).await;
         } else {
             let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
-            *on_buffered_amount_low = Some(Box::new(f));
+            *on_buffered_amount_low = Some(f);
         }
     }
 

@@ -117,12 +117,12 @@ async fn create_offerer() -> Result<Arc<RTCPeerConnection>> {
         .await;
 
     // This callback is made when the current bufferedAmount becomes lower than the threshold
-    dc.on_buffered_amount_low(move || {
+    dc.on_buffered_amount_low(Box::new(move || {
         let send_more_ch_tx2 = Arc::clone(&send_more_ch_tx);
         async move {
             let _ = send_more_ch_tx2.send(()).await;
         }
-    })
+    }))
     .await;
 
     Ok(pc)
