@@ -1073,7 +1073,7 @@ impl AgentInternal {
                     if let (Some(f), Some(p)) =
                         (&mut *on_selected_candidate_pair_change_hdlr, &selected_pair)
                     {
-                        f(&p.local, &p.remote).await;
+                        f(p.local.clone(), p.remote.clone()).await;
                     }
                 }
             }

@@ -127,12 +127,12 @@ impl RTCIceTransport {
                 Arc::clone(&self.on_selected_candidate_pair_change_handler);
             agent
                 .on_selected_candidate_pair_change(Box::new(
-                    move |local: &Arc<dyn Candidate + Send + Sync>,
-                          remote: &Arc<dyn Candidate + Send + Sync>| {
+                    move |local: Arc<dyn Candidate + Send + Sync>,
+                          remote: Arc<dyn Candidate + Send + Sync>| {
                         let on_selected_candidate_pair_change_handler_clone =
                             Arc::clone(&on_selected_candidate_pair_change_handler);
-                        let local = RTCIceCandidate::from(local);
-                        let remote = RTCIceCandidate::from(remote);
+                        let local = RTCIceCandidate::from(&local);
+                        let remote = RTCIceCandidate::from(&remote);
                         Box::pin(async move {
                             let mut handler =
                                 on_selected_candidate_pair_change_handler_clone.lock().await;

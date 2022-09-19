@@ -70,8 +70,8 @@ pub type OnConnectionStateChangeHdlrFn = Box<
 >;
 pub type OnSelectedCandidatePairChangeHdlrFn = Box<
     dyn (FnMut(
-            &Arc<dyn Candidate + Send + Sync>,
-            &Arc<dyn Candidate + Send + Sync>,
+            Arc<dyn Candidate + Send + Sync>,
+            Arc<dyn Candidate + Send + Sync>,
         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
