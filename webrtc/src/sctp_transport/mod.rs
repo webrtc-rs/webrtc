@@ -34,12 +34,14 @@ use util::Conn;
 
 const SCTP_MAX_CHANNELS: u16 = u16::MAX;
 
+// TODO: Rework
 pub type OnDataChannelHdlrFn = Box<
     dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnDataChannelOpenedHdlrFn = Box<
     dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send

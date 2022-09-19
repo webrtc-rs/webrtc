@@ -40,12 +40,14 @@ pub mod ice_role;
 pub mod ice_server;
 pub mod ice_transport_state;
 
+// TODO: Rework
 pub type OnConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(RTCIceTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnSelectedCandidatePairChangeHdlrFn = Box<
     dyn (FnMut(RTCIceCandidatePair) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send

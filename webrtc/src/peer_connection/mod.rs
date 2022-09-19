@@ -113,30 +113,35 @@ pub fn math_rand_alpha(n: usize) -> String {
     rand_string
 }
 
+// TODO: Rework
 pub type OnSignalingStateChangeHdlrFn = Box<
     dyn (FnMut(RTCSignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnICEConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(RTCIceConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnPeerConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(RTCPeerConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnDataChannelHdlrFn = Box<
     dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnTrackHdlrFn = Box<
     dyn (FnMut(
             Option<Arc<TrackRemote>>,
@@ -146,6 +151,7 @@ pub type OnTrackHdlrFn = Box<
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnNegotiationNeededHdlrFn =
     Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 

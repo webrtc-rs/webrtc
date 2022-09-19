@@ -63,11 +63,14 @@ impl Default for BindingRequest {
     }
 }
 
+// TODO: Rework
 pub type OnConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(ConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
+
+// TODO: Rework
 pub type OnSelectedCandidatePairChangeHdlrFn = Box<
     dyn (FnMut(
             Arc<dyn Candidate + Send + Sync>,
@@ -76,6 +79,8 @@ pub type OnSelectedCandidatePairChangeHdlrFn = Box<
         + Send
         + Sync,
 >;
+
+// TODO: Rework
 pub type OnCandidateHdlrFn = Box<
     dyn (FnMut(
             Option<Arc<dyn Candidate + Send + Sync>>,
@@ -83,6 +88,7 @@ pub type OnCandidateHdlrFn = Box<
         + Send
         + Sync,
 >;
+
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
 struct ChanReceivers {

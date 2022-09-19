@@ -47,6 +47,7 @@ pub(crate) fn default_srtp_protection_profiles() -> Vec<SrtpProtectionProfile> {
     ]
 }
 
+// TODO: Rework
 pub type OnDTLSTransportStateChangeHdlrFn = Box<
     dyn (FnMut(RTCDtlsTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send

@@ -28,18 +28,21 @@ pub struct RTCIceGatherOptions {
     pub ice_gather_policy: RTCIceTransportPolicy,
 }
 
+// TODO: Rework
 pub type OnLocalCandidateHdlrFn = Box<
     dyn (FnMut(Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnICEGathererStateChangeHdlrFn = Box<
     dyn (FnMut(RTCIceGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnGatheringCompleteHdlrFn =
     Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 

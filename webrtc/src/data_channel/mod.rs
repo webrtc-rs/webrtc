@@ -31,15 +31,18 @@ use crate::stats::{DataChannelStats, StatsReportType};
 /// message size limit for Chromium
 const DATA_CHANNEL_BUFFER_SIZE: u16 = u16::MAX;
 
+// TODO: Rework
 pub type OnMessageHdlrFn = Box<
     dyn (FnMut(DataChannelMessage) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
+// TODO: Rework
 pub type OnOpenHdlrFn =
     Box<dyn (FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 
+// TODO: Rework
 pub type OnCloseHdlrFn =
     Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 

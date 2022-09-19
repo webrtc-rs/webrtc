@@ -19,6 +19,8 @@ use util::Unmarshal;
 lazy_static! {
     static ref TRACK_REMOTE_UNIQUE_ID: AtomicUsize = AtomicUsize::new(0);
 }
+
+// TODO: Rework
 pub type OnMuteHdlrFn = Box<
     dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync + 'static,
 >;

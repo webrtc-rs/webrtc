@@ -412,6 +412,7 @@ pub enum Error {
     new(String),
 }
 
+// TODO: Rework
 pub type OnErrorHdlrFn =
     Box<dyn (FnMut(Error) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 
