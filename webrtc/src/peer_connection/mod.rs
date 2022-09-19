@@ -179,27 +179,12 @@ where
     }
 }
 
-// pub type OnDataChannelHdlrFn = Box<
-//     dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-//         + Send
-//         + Sync,
-// >;
-
-#[async_trait]
-pub trait OnDataChannelHdlrFn: Send + Sync {
-    async fn call(&mut self, c: Arc<RTCDataChannel>);
-}
-
-#[async_trait]
-impl<T, F> OnDataChannelHdlrFn for F
-where
-    F: FnMut(Arc<RTCDataChannel>) -> T + Send + Sync,
-    T: Future<Output = ()> + Send,
-{
-    async fn call(&mut self, c: Arc<RTCDataChannel>) {
-        (*self)(c).await
-    }
-}
+// TODO: Rework
+pub type OnDataChannelHdlrFn = Box<
+    dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
 
 // TODO: Can't be reworked due to the dynamically inferred return type in the callback,
 //       that set in webrtc::peer_connection::peer_connection_test::test_get_stats()
@@ -386,7 +371,7 @@ impl RTCPeerConnection {
 
     /// on_data_channel sets an event handler which is invoked when a data
     /// channel message arrives from a remote peer.
-    pub async fn on_data_channel(&self, f: Box<dyn OnDataChannelHdlrFn>) {
+    pub async fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
         let mut on_data_channel_handler = self.internal.on_data_channel_handler.lock().await;
         *on_data_channel_handler = Some(f);
     }
