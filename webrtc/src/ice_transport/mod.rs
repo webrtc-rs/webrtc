@@ -40,7 +40,8 @@ pub mod ice_role;
 pub mod ice_server;
 pub mod ice_transport_state;
 
-// TODO: Rework
+// TODO: Can't be reworked due to the dynamically inferred return type in the callback, 
+//       that set in webrtc::peer_connection::peer_connection_internal::PeerConnectionInternal::create_ice_transport()
 pub type OnConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(RTCIceTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
