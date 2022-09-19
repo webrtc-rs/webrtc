@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.1
+
+* Promote agent lock in ice_gather.rs create_agent() to top level of the function to avoid a race condition. [#290 Promote create_agent lock to top of function, to avoid race condition](https://github.com/webrtc-rs/webrtc/pull/290) contributed by [efer-ms](https://github.com/efer-ms)
+
 ## 0.5.0
 
 ### Changes
