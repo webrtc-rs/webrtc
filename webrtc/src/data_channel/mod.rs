@@ -6,6 +6,7 @@ pub mod data_channel_message;
 pub mod data_channel_parameters;
 pub mod data_channel_state;
 
+use async_trait::async_trait;
 use data_channel_message::*;
 use data_channel_parameters::*;
 
@@ -31,12 +32,27 @@ use crate::stats::{DataChannelStats, StatsReportType};
 /// message size limit for Chromium
 const DATA_CHANNEL_BUFFER_SIZE: u16 = u16::MAX;
 
-// TODO: Rework
-pub type OnMessageHdlrFn = Box<
-    dyn (FnMut(DataChannelMessage) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnMessageHdlrFn = Box<
+//     dyn (FnMut(DataChannelMessage) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnMessageHdlrFn: Send + Sync {
+    async fn call(&mut self, m: DataChannelMessage);
+}
+
+#[async_trait]
+impl<T, F> OnMessageHdlrFn for F
+where
+    F: FnMut(DataChannelMessage) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, m: DataChannelMessage) {
+        (*self)(m).await
+    }
+}
 
 // TODO: Rework
 pub type OnOpenHdlrFn =
@@ -70,7 +86,7 @@ pub struct RTCDataChannel {
     // is created, the binaryType attribute MUST be initialized to the string
     // "blob". This attribute controls how binary data is exposed to scripts.
     // binaryType                 string
-    pub(crate) on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
+    pub(crate) on_message_handler: Arc<Mutex<Option<Box<dyn OnMessageHdlrFn>>>>,
     pub(crate) on_open_handler: Arc<Mutex<Option<OnOpenHdlrFn>>>,
     pub(crate) on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
     pub(crate) on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
@@ -248,7 +264,7 @@ impl RTCDataChannel {
     /// in size. Check out the detach API if you want to use larger
     /// message sizes. Note that browser support for larger messages
     /// is also limited.
-    pub async fn on_message(&self, f: OnMessageHdlrFn) {
+    pub async fn on_message(&self, f: Box<dyn OnMessageHdlrFn>) {
         let mut handler = self.on_message_handler.lock().await;
         *handler = Some(f);
     }
@@ -256,7 +272,7 @@ impl RTCDataChannel {
     async fn do_message(&self, msg: DataChannelMessage) {
         let mut handler = self.on_message_handler.lock().await;
         if let Some(f) = &mut *handler {
-            f(msg).await;
+            f.call(msg).await;
         }
     }
 
@@ -300,7 +316,7 @@ impl RTCDataChannel {
         notify_rx: Arc<Notify>,
         data_channel: Arc<data::data_channel::DataChannel>,
         ready_state: Arc<AtomicU8>,
-        on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
+        on_message_handler: Arc<Mutex<Option<Box<dyn OnMessageHdlrFn>>>>,
         on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
         on_error_handler: Arc<Mutex<Option<Box<dyn OnErrorHdlrFn>>>>,
     ) {
@@ -355,7 +371,7 @@ impl RTCDataChannel {
             {
                 let mut handler = on_message_handler.lock().await;
                 if let Some(f) = &mut *handler {
-                    f(DataChannelMessage {
+                    f.call(DataChannelMessage {
                         is_string,
                         data: Bytes::from(buffer[..n].to_vec()),
                     })
