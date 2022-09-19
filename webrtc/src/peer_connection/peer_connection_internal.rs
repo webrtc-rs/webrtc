@@ -643,7 +643,7 @@ impl PeerConnectionInternal {
         }
     }
 
-    pub(super) async fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
+    pub(super) async fn set_gather_complete_handler(&self, f: Box<dyn OnGatheringCompleteHdlrFn>) {
         self.ice_gatherer.on_gathering_complete(f).await;
     }
 

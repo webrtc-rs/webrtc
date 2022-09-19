@@ -17,7 +17,6 @@ use ice::url::Url;
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -73,9 +72,24 @@ where
     }
 }
 
-// TODO: Rework
-pub type OnGatheringCompleteHdlrFn =
-    Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+// pub type OnGatheringCompleteHdlrFn =
+//     Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
+
+#[async_trait]
+pub trait OnGatheringCompleteHdlrFn: Send + Sync {
+    async fn call(&mut self);
+}
+
+#[async_trait]
+impl<T, F> OnGatheringCompleteHdlrFn for F
+where
+    F: FnMut() -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self) {
+        (*self)().await
+    }
+}
 
 /// ICEGatherer gathers local host, server reflexive and relay
 /// candidates, as well as enabling the retrieval of local Interactive
@@ -94,7 +108,8 @@ pub struct RTCIceGatherer {
     pub(crate) on_state_change_handler: Arc<Mutex<Option<Box<dyn OnICEGathererStateChangeHdlrFn>>>>,
 
     // Used for gathering_complete_promise
-    pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
+    pub(crate) on_gathering_complete_handler:
+        Arc<Mutex<Option<Box<dyn OnGatheringCompleteHdlrFn>>>>,
 }
 
 impl RTCIceGatherer {
@@ -233,7 +248,7 @@ impl RTCIceGatherer {
                                     let mut on_gathering_complete_handler =
                                         on_gathering_complete_handler_clone.lock().await;
                                     if let Some(handler) = &mut *on_gathering_complete_handler {
-                                        handler().await;
+                                        handler.call().await;
                                     }
                                 }
 
@@ -316,7 +331,7 @@ impl RTCIceGatherer {
     }
 
     /// on_gathering_complete sets an event handler which fires any time the ICEGatherer changes
-    pub async fn on_gathering_complete(&self, f: OnGatheringCompleteHdlrFn) {
+    pub async fn on_gathering_complete(&self, f: Box<dyn OnGatheringCompleteHdlrFn>) {
         let mut on_gathering_complete_handler = self.on_gathering_complete_handler.lock().await;
         *on_gathering_complete_handler = Some(f);
     }
