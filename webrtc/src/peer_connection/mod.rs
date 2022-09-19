@@ -179,7 +179,7 @@ where
     }
 }
 
-// TODO: Rework
+// TODO: Can't be reworked due to the dynamically inferred return type in callbacks
 pub type OnDataChannelHdlrFn = Box<
     dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
