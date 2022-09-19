@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
@@ -47,12 +47,27 @@ pub(crate) fn default_srtp_protection_profiles() -> Vec<SrtpProtectionProfile> {
     ]
 }
 
-// TODO: Rework
-pub type OnDTLSTransportStateChangeHdlrFn = Box<
-    dyn (FnMut(RTCDtlsTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnDTLSTransportStateChangeHdlrFn = Box<
+//     dyn (FnMut(RTCDtlsTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnDTLSTransportStateChangeHdlrFn: Send + Sync {
+    async fn call(&mut self, s: RTCDtlsTransportState);
+}
+
+#[async_trait]
+impl<T, F> OnDTLSTransportStateChangeHdlrFn for F
+where
+    F: FnMut(RTCDtlsTransportState) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, s: RTCDtlsTransportState) {
+        (*self)(s).await
+    }
+}
 
 /// DTLSTransport allows an application access to information about the DTLS
 /// transport over which RTP and RTCP packets are sent and received by
@@ -68,7 +83,8 @@ pub struct RTCDtlsTransport {
     pub(crate) remote_certificate: Mutex<Bytes>,
     pub(crate) state: AtomicU8, //DTLSTransportState,
     pub(crate) srtp_protection_profile: Mutex<ProtectionProfile>,
-    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnDTLSTransportStateChangeHdlrFn>>>,
+    pub(crate) on_state_change_handler:
+        Arc<Mutex<Option<Box<dyn OnDTLSTransportStateChangeHdlrFn>>>>,
     pub(crate) conn: Mutex<Option<Arc<DTLSConn>>>,
 
     pub(crate) srtp_session: Mutex<Option<Arc<Session>>>,
@@ -121,13 +137,13 @@ impl RTCDtlsTransport {
         self.state.store(state as u8, Ordering::SeqCst);
         let mut handler = self.on_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
-            f(state).await;
+            f.call(state).await;
         }
     }
 
     /// on_state_change sets a handler that is fired when the DTLS
     /// connection state changes.
-    pub async fn on_state_change(&self, f: OnDTLSTransportStateChangeHdlrFn) {
+    pub async fn on_state_change(&self, f: Box<dyn OnDTLSTransportStateChangeHdlrFn>) {
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
         *on_state_change_handler = Some(f);
     }
