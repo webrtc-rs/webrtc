@@ -201,7 +201,8 @@ where
     }
 }
 
-// TODO: Rework
+// TODO: Can't be reworked due to the dynamically inferred return type in the callback, 
+//       that set in webrtc::peer_connection::peer_connection_test::test_get_stats()
 pub type OnTrackHdlrFn = Box<
     dyn (FnMut(
             Option<Arc<TrackRemote>>,
