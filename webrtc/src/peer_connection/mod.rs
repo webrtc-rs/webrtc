@@ -157,12 +157,27 @@ where
     }
 }
 
-// TODO: Rework
-pub type OnPeerConnectionStateChangeHdlrFn = Box<
-    dyn (FnMut(RTCPeerConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnPeerConnectionStateChangeHdlrFn = Box<
+//     dyn (FnMut(RTCPeerConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnPeerConnectionStateChangeHdlrFn: Send + Sync {
+    async fn call(&mut self, s: RTCPeerConnectionState);
+}
+
+#[async_trait]
+impl<T, F> OnPeerConnectionStateChangeHdlrFn for F
+where
+    F: FnMut(RTCPeerConnectionState) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, s: RTCPeerConnectionState) {
+        (*self)(s).await
+    }
+}
 
 // TODO: Rework
 pub type OnDataChannelHdlrFn = Box<
@@ -189,7 +204,8 @@ pub type OnNegotiationNeededHdlrFn =
 struct StartTransportsParams {
     ice_transport: Arc<RTCIceTransport>,
     dtls_transport: Arc<RTCDtlsTransport>,
-    on_peer_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
+    on_peer_connection_state_change_handler:
+        Arc<Mutex<Option<Box<dyn OnPeerConnectionStateChangeHdlrFn>>>>,
     is_closed: Arc<AtomicBool>,
     peer_connection_state: Arc<AtomicU8>,
     ice_connection_state: Arc<AtomicU8>,
@@ -675,7 +691,10 @@ impl RTCPeerConnection {
 
     /// on_peer_connection_state_change sets an event handler which is called
     /// when the PeerConnectionState has changed
-    pub async fn on_peer_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
+    pub async fn on_peer_connection_state_change(
+        &self,
+        f: Box<dyn OnPeerConnectionStateChangeHdlrFn>,
+    ) {
         let mut on_peer_connection_state_change_handler = self
             .internal
             .on_peer_connection_state_change_handler
@@ -686,13 +705,13 @@ impl RTCPeerConnection {
 
     async fn do_peer_connection_state_change(
         on_peer_connection_state_change_handler: &Arc<
-            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
+            Mutex<Option<Box<dyn OnPeerConnectionStateChangeHdlrFn>>>,
         >,
         cs: RTCPeerConnectionState,
     ) {
         let mut handler = on_peer_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
-            f(cs).await;
+            f.call(cs).await;
         }
     }
 
@@ -938,7 +957,7 @@ impl RTCPeerConnection {
     /// <https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum>
     async fn update_connection_state(
         on_peer_connection_state_change_handler: &Arc<
-            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
+            Mutex<Option<Box<dyn OnPeerConnectionStateChangeHdlrFn>>>,
         >,
         is_closed: &Arc<AtomicBool>,
         peer_connection_state: &Arc<AtomicU8>,

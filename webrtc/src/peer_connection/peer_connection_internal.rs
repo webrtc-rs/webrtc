@@ -36,7 +36,7 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) ice_transport: Arc<RTCIceTransport>,
     pub(super) dtls_transport: Arc<RTCDtlsTransport>,
     pub(super) on_peer_connection_state_change_handler:
-        Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
+        Arc<Mutex<Option<Box<dyn OnPeerConnectionStateChangeHdlrFn>>>>,
     pub(super) peer_connection_state: Arc<AtomicU8>,
     pub(super) ice_connection_state: Arc<AtomicU8>,
 
