@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
@@ -40,7 +41,7 @@ pub mod ice_role;
 pub mod ice_server;
 pub mod ice_transport_state;
 
-// TODO: Can't be reworked due to the dynamically inferred return type in the callback, 
+// TODO: Can't be reworked due to the dynamically inferred return type in the callback,
 //       that set in webrtc::peer_connection::peer_connection_internal::PeerConnectionInternal::create_ice_transport()
 pub type OnConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(RTCIceTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
@@ -48,12 +49,27 @@ pub type OnConnectionStateChangeHdlrFn = Box<
         + Sync,
 >;
 
-// TODO: Rework
-pub type OnSelectedCandidatePairChangeHdlrFn = Box<
-    dyn (FnMut(RTCIceCandidatePair) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnSelectedCandidatePairChangeHdlrFn = Box<
+//     dyn (FnMut(RTCIceCandidatePair) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnSelectedCandidatePairChangeHdlrFn: Send + Sync {
+    async fn call(&mut self, p: RTCIceCandidatePair);
+}
+
+#[async_trait]
+impl<T, F> OnSelectedCandidatePairChangeHdlrFn for F
+where
+    F: FnMut(RTCIceCandidatePair) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, p: RTCIceCandidatePair) {
+        (*self)(p).await
+    }
+}
 
 #[derive(Default)]
 struct ICETransportInternal {
@@ -70,7 +86,7 @@ pub struct RTCIceTransport {
     pub(crate) gatherer: Arc<RTCIceGatherer>,
     on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
     on_selected_candidate_pair_change_handler:
-        Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
+        Arc<Mutex<Option<Box<dyn OnSelectedCandidatePairChangeHdlrFn>>>>,
     state: Arc<AtomicU8>, // ICETransportState
     internal: Mutex<ICETransportInternal>,
 }
@@ -140,7 +156,7 @@ impl RTCIceTransport {
                             let mut handler =
                                 on_selected_candidate_pair_change_handler_clone.lock().await;
                             if let Some(f) = &mut *handler {
-                                f(RTCIceCandidatePair::new(local, remote)).await;
+                                f.call(RTCIceCandidatePair::new(local, remote)).await;
                             }
                         })
                     },
@@ -248,7 +264,10 @@ impl RTCIceTransport {
 
     /// on_selected_candidate_pair_change sets a handler that is invoked when a new
     /// ICE candidate pair is selected
-    pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
+    pub async fn on_selected_candidate_pair_change(
+        &self,
+        f: Box<dyn OnSelectedCandidatePairChangeHdlrFn>,
+    ) {
         let mut on_selected_candidate_pair_change_handler =
             self.on_selected_candidate_pair_change_handler.lock().await;
         *on_selected_candidate_pair_change_handler = Some(f);
