@@ -27,6 +27,7 @@ use agent_config::*;
 use agent_internal::*;
 use agent_stats::*;
 
+use async_trait::async_trait;
 use mdns::conn::*;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -63,12 +64,27 @@ impl Default for BindingRequest {
     }
 }
 
-// TODO: Rework
-pub type OnConnectionStateChangeHdlrFn = Box<
-    dyn (FnMut(ConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnConnectionStateChangeHdlrFn = Box<
+//     dyn (FnMut(ConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnConnectionStateChangeHdlrFn: Send + Sync {
+    async fn call(&mut self, cs: ConnectionState);
+}
+
+#[async_trait]
+impl<T, F> OnConnectionStateChangeHdlrFn for F
+where
+    F: FnMut(ConnectionState) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, cs: ConnectionState) {
+        (*self)(cs).await
+    }
+}
 
 // TODO: Rework
 pub type OnSelectedCandidatePairChangeHdlrFn = Box<
@@ -242,7 +258,7 @@ impl Agent {
     }
 
     /// Sets a handler that is fired when the connection state changes.
-    pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
+    pub async fn on_connection_state_change(&self, f: Box<dyn OnConnectionStateChangeHdlrFn>) {
         let mut on_connection_state_change_hdlr =
             self.internal.on_connection_state_change_hdlr.lock().await;
         *on_connection_state_change_hdlr = Some(f);

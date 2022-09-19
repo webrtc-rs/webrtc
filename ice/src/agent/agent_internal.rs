@@ -32,7 +32,8 @@ pub struct AgentInternal {
     pub(crate) chan_candidate_pair_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) chan_state_tx: Mutex<Option<mpsc::Sender<ConnectionState>>>,
 
-    pub(crate) on_connection_state_change_hdlr: Mutex<Option<OnConnectionStateChangeHdlrFn>>,
+    pub(crate) on_connection_state_change_hdlr:
+        Mutex<Option<Box<dyn OnConnectionStateChangeHdlrFn>>>,
     pub(crate) on_selected_candidate_pair_change_hdlr:
         Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>,
     pub(crate) on_candidate_hdlr: Mutex<Option<OnCandidateHdlrFn>>,
@@ -1087,7 +1088,7 @@ impl AgentInternal {
                         if let Some(s) = opt_state {
                             let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
                             if let Some(f) = &mut *on_connection_state_change_hdlr{
-                                f(s).await;
+                                f.call(s).await;
                             }
                         } else {
                             while let Some(c) = chan_candidate_rx.recv().await {
@@ -1109,7 +1110,7 @@ impl AgentInternal {
                             while let Some(s) = chan_state_rx.recv().await {
                                 let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
                                 if let Some(f) = &mut *on_connection_state_change_hdlr{
-                                    f(s).await;
+                                    f.call(s).await;
                                 }
                             }
                             break;

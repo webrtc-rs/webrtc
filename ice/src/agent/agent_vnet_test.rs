@@ -338,19 +338,19 @@ pub(crate) async fn pipe_with_vnet(
     Ok((a_conn, b_conn))
 }
 
-pub(crate) fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
+pub(crate) fn on_connected() -> (Box<dyn OnConnectionStateChangeHdlrFn>, mpsc::Receiver<()>) {
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    let hdlr_fn: OnConnectionStateChangeHdlrFn = Box::new(move |state: ConnectionState| {
+    let hdlr_fn = move |state: ConnectionState| {
         let done_tx_clone = Arc::clone(&done_tx);
-        Box::pin(async move {
+        async move {
             if state == ConnectionState::Connected {
                 let mut tx = done_tx_clone.lock().await;
                 tx.take();
             }
-        })
-    });
-    (hdlr_fn, done_rx)
+        }
+    };
+    (Box::new(hdlr_fn), done_rx)
 }
 
 pub(crate) async fn gather_and_exchange_candidates(
