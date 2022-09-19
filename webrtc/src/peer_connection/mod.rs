@@ -113,12 +113,27 @@ pub fn math_rand_alpha(n: usize) -> String {
     rand_string
 }
 
-// TODO: Rework
-pub type OnSignalingStateChangeHdlrFn = Box<
-    dyn (FnMut(RTCSignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnSignalingStateChangeHdlrFn = Box<
+//     dyn (FnMut(RTCSignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnSignalingStateChangeHdlrFn: Send + Sync {
+    async fn call(&mut self, s: RTCSignalingState);
+}
+
+#[async_trait]
+impl<T, F> OnSignalingStateChangeHdlrFn for F
+where
+    F: FnMut(RTCSignalingState) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, s: RTCSignalingState) {
+        (*self)(s).await
+    }
+}
 
 // TODO: Rework
 pub type OnICEConnectionStateChangeHdlrFn = Box<
@@ -293,7 +308,7 @@ impl RTCPeerConnection {
 
     /// on_signaling_state_change sets an event handler which is invoked when the
     /// peer connection's signaling state changes
-    pub async fn on_signaling_state_change(&self, f: OnSignalingStateChangeHdlrFn) {
+    pub async fn on_signaling_state_change(&self, f: Box<dyn OnSignalingStateChangeHdlrFn>) {
         let mut on_signaling_state_change_handler =
             self.internal.on_signaling_state_change_handler.lock().await;
         *on_signaling_state_change_handler = Some(f);
@@ -303,7 +318,7 @@ impl RTCPeerConnection {
         log::info!("signaling state changed to {}", new_state);
         let mut handler = self.internal.on_signaling_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
-            f(new_state).await;
+            f.call(new_state).await;
         }
     }
 

@@ -44,7 +44,8 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
 
     pub(super) on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
-    pub(super) on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
+    pub(super) on_signaling_state_change_handler:
+        Arc<Mutex<Option<Box<dyn OnSignalingStateChangeHdlrFn>>>>,
     pub(super) on_ice_connection_state_change_handler:
         Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
     pub(super) on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
