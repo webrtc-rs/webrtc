@@ -38,7 +38,6 @@ use crate::agent::agent_gather::GatherCandidatesInternalParams;
 use crate::rand::*;
 use crate::tcp_type::TcpType;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -119,14 +118,29 @@ where
     }
 }
 
-// TODO: Rework
-pub type OnCandidateHdlrFn = Box<
-    dyn (FnMut(
-            Option<Arc<dyn Candidate + Send + Sync>>,
-        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnCandidateHdlrFn = Box<
+//     dyn (FnMut(
+//             Option<Arc<dyn Candidate + Send + Sync>>,
+//         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnCandidateHdlrFn: Send + Sync {
+    async fn call(&mut self, c: Option<Arc<dyn Candidate + Send + Sync>>);
+}
+
+#[async_trait]
+impl<T, F> OnCandidateHdlrFn for F
+where
+    F: FnMut(Option<Arc<dyn Candidate + Send + Sync>>) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, c: Option<Arc<dyn Candidate + Send + Sync>>) {
+        (*self)(c).await
+    }
+}
 
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
@@ -302,7 +316,7 @@ impl Agent {
 
     /// Sets a handler that is fired when new candidates gathered. When the gathering process
     /// complete the last candidate is nil.
-    pub async fn on_candidate(&self, f: OnCandidateHdlrFn) {
+    pub async fn on_candidate(&self, f: Box<dyn OnCandidateHdlrFn>) {
         let mut on_candidate_hdlr = self.internal.on_candidate_hdlr.lock().await;
         *on_candidate_hdlr = Some(f);
     }
