@@ -47,7 +47,7 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) on_signaling_state_change_handler:
         Arc<Mutex<Option<Box<dyn OnSignalingStateChangeHdlrFn>>>>,
     pub(super) on_ice_connection_state_change_handler:
-        Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
+        Arc<Mutex<Option<Box<dyn OnICEConnectionStateChangeHdlrFn>>>>,
     pub(super) on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
 
     pub(super) ice_gatherer: Arc<RTCIceGatherer>,

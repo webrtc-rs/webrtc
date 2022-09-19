@@ -135,12 +135,27 @@ where
     }
 }
 
-// TODO: Rework
-pub type OnICEConnectionStateChangeHdlrFn = Box<
-    dyn (FnMut(RTCIceConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnICEConnectionStateChangeHdlrFn = Box<
+//     dyn (FnMut(RTCIceConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnICEConnectionStateChangeHdlrFn: Send + Sync {
+    async fn call(&mut self, s: RTCIceConnectionState);
+}
+
+#[async_trait]
+impl<T, F> OnICEConnectionStateChangeHdlrFn for F
+where
+    F: FnMut(RTCIceConnectionState) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, s: RTCIceConnectionState) {
+        (*self)(s).await
+    }
+}
 
 // TODO: Rework
 pub type OnPeerConnectionStateChangeHdlrFn = Box<
@@ -630,7 +645,10 @@ impl RTCPeerConnection {
 
     /// on_ice_connection_state_change sets an event handler which is called
     /// when an ICE connection state is changed.
-    pub async fn on_ice_connection_state_change(&self, f: OnICEConnectionStateChangeHdlrFn) {
+    pub async fn on_ice_connection_state_change(
+        &self,
+        f: Box<dyn OnICEConnectionStateChangeHdlrFn>,
+    ) {
         let mut on_ice_connection_state_change_handler = self
             .internal
             .on_ice_connection_state_change_handler
@@ -641,7 +659,7 @@ impl RTCPeerConnection {
 
     async fn do_ice_connection_state_change(
         on_ice_connection_state_change_handler: &Arc<
-            Mutex<Option<OnICEConnectionStateChangeHdlrFn>>,
+            Mutex<Option<Box<dyn OnICEConnectionStateChangeHdlrFn>>>,
         >,
         ice_connection_state: &Arc<AtomicU8>,
         cs: RTCIceConnectionState,
@@ -651,7 +669,7 @@ impl RTCPeerConnection {
         log::info!("ICE connection state changed: {}", cs);
         let mut handler = on_ice_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
-            f(cs).await;
+            f.call(cs).await;
         }
     }
 
