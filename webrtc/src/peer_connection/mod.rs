@@ -583,7 +583,7 @@ impl RTCPeerConnection {
 
     /// on_ice_gathering_state_change sets an event handler which is invoked when the
     /// ICE candidate gathering state has changed.
-    pub async fn on_ice_gathering_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
+    pub async fn on_ice_gathering_state_change(&self, f: Box<dyn OnICEGathererStateChangeHdlrFn>) {
         self.internal.ice_gatherer.on_state_change(f).await
     }
 

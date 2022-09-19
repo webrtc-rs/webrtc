@@ -51,12 +51,27 @@ where
     }
 }
 
-// TODO: Rework
-pub type OnICEGathererStateChangeHdlrFn = Box<
-    dyn (FnMut(RTCIceGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
-        + Send
-        + Sync,
->;
+// pub type OnICEGathererStateChangeHdlrFn = Box<
+//     dyn (FnMut(RTCIceGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+//         + Send
+//         + Sync,
+// >;
+
+#[async_trait]
+pub trait OnICEGathererStateChangeHdlrFn: Send + Sync {
+    async fn call(&mut self, s: RTCIceGathererState);
+}
+
+#[async_trait]
+impl<T, F> OnICEGathererStateChangeHdlrFn for F
+where
+    F: FnMut(RTCIceGathererState) -> T + Send + Sync,
+    T: Future<Output = ()> + Send,
+{
+    async fn call(&mut self, s: RTCIceGathererState) {
+        (*self)(s).await
+    }
+}
 
 // TODO: Rework
 pub type OnGatheringCompleteHdlrFn =
@@ -76,7 +91,7 @@ pub struct RTCIceGatherer {
     pub(crate) agent: Mutex<Option<Arc<ice::agent::Agent>>>,
 
     pub(crate) on_local_candidate_handler: Arc<Mutex<Option<Box<dyn OnLocalCandidateHdlrFn>>>>,
-    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnICEGathererStateChangeHdlrFn>>>,
+    pub(crate) on_state_change_handler: Arc<Mutex<Option<Box<dyn OnICEGathererStateChangeHdlrFn>>>>,
 
     // Used for gathering_complete_promise
     pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
@@ -210,7 +225,7 @@ impl RTCIceGatherer {
                                     let mut on_state_change_handler =
                                         on_state_change_handler_clone.lock().await;
                                     if let Some(handler) = &mut *on_state_change_handler {
-                                        handler(RTCIceGathererState::Complete).await;
+                                        handler.call(RTCIceGathererState::Complete).await;
                                     }
                                 }
 
@@ -295,7 +310,7 @@ impl RTCIceGatherer {
     }
 
     /// on_state_change sets an event handler which fires any time the ICEGatherer changes
-    pub async fn on_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
+    pub async fn on_state_change(&self, f: Box<dyn OnICEGathererStateChangeHdlrFn>) {
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
         *on_state_change_handler = Some(f);
     }
@@ -316,7 +331,7 @@ impl RTCIceGatherer {
 
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
         if let Some(handler) = &mut *on_state_change_handler {
-            handler(s).await;
+            handler.call(s).await;
         }
     }
 
