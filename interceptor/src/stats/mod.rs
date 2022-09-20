@@ -32,6 +32,25 @@ mod inbound {
 
         /// The last time any stats where update, used for garbage collection to remove obsolete stats.
         last_update: Instant,
+
+        /// The number of packets sent as reported in the latest SR from the remote.
+        remote_packets_sent: u32,
+
+        /// The number of bytes sent as reported in the latest SR from the remote.
+        remote_bytes_sent: u32,
+
+        /// The total number of sender reports sent by the remote and received.
+        remote_reports_sent: u64,
+
+        /// The last remote round trip time measurement in ms. [`None`] if no round trip time has
+        /// been derived yet, or if it wasn't possible to derive it.
+        remote_round_trip_time: Option<f64>,
+
+        /// The cummulative total round trip times reported in ms.
+        remote_total_round_trip_time: f64,
+
+        /// The total number of measurements of the remote round trip time.
+        remote_round_trip_time_measurements: u64,
     }
 
     impl Default for StreamStats {
@@ -40,6 +59,12 @@ mod inbound {
                 rtp_stats: RTPStats::default(),
                 rtcp_stats: RTCPStats::default(),
                 last_update: Instant::now(),
+                remote_packets_sent: 0,
+                remote_bytes_sent: 0,
+                remote_reports_sent: 0,
+                remote_round_trip_time: None,
+                remote_total_round_trip_time: 0.0,
+                remote_round_trip_time_measurements: 0,
             }
         }
     }
@@ -56,6 +81,23 @@ mod inbound {
         pub(super) fn duration_since_last_update(&self) -> Duration {
             self.last_update.elapsed()
         }
+
+        pub(super) fn record_sender_report(&mut self, packets_sent: u32, bytes_sent: u32) {
+            self.remote_reports_sent += 1;
+            self.remote_packets_sent = packets_sent;
+            self.remote_bytes_sent = bytes_sent;
+        }
+
+        pub(super) fn record_remote_round_trip_time(&mut self, round_trip_time: Option<f64>) {
+            // Store the latest measurement, even if it's None.
+            self.remote_round_trip_time = round_trip_time;
+
+            if let Some(rtt) = round_trip_time {
+                // Only if we have a valid measurement do we update the totals
+                self.remote_total_round_trip_time += rtt;
+                self.remote_round_trip_time_measurements += 1;
+            }
+        }
     }
 
     /// A point in time snapshot of the stream stats for an inbound RTP stream.
@@ -67,6 +109,25 @@ mod inbound {
         rtp_stats: RTPStats,
         /// Common RTCP stats derived from inbound and outbound RTCP packets.
         rtcp_stats: RTCPStats,
+
+        /// The number of packets sent as reported in the latest SR from the remote.
+        remote_packets_sent: u32,
+
+        /// The number of bytes sent as reported in the latest SR from the remote.
+        remote_bytes_sent: u32,
+
+        /// The total number of sender reports sent by the remote and received.
+        remote_reports_sent: u64,
+
+        /// The last remote round trip time measurement in ms. [`None`] if no round trip time has
+        /// been derived yet, or if it wasn't possible to derive it.
+        remote_round_trip_time: Option<f64>,
+
+        /// The cummulative total round trip times reported in ms.
+        remote_total_round_trip_time: f64,
+
+        /// The total number of measurements of the remote round trip time.
+        remote_round_trip_time_measurements: u64,
     }
 
     impl StatsSnapshot {
@@ -97,6 +158,29 @@ mod inbound {
         pub fn plis_sent(&self) -> u64 {
             self.rtcp_stats.pli_count
         }
+        pub fn remote_packets_sent(&self) -> u32 {
+            self.remote_packets_sent
+        }
+
+        pub fn remote_bytes_sent(&self) -> u32 {
+            self.remote_bytes_sent
+        }
+
+        pub fn remote_reports_sent(&self) -> u64 {
+            self.remote_reports_sent
+        }
+
+        pub fn remote_round_trip_time(&self) -> Option<f64> {
+            self.remote_round_trip_time
+        }
+
+        pub fn remote_total_round_trip_time(&self) -> f64 {
+            self.remote_total_round_trip_time
+        }
+
+        pub fn remote_round_trip_time_measurements(&self) -> u64 {
+            self.remote_round_trip_time_measurements
+        }
     }
 
     impl From<&StreamStats> for StatsSnapshot {
@@ -104,6 +188,13 @@ mod inbound {
             Self {
                 rtp_stats: stream_stats.rtp_stats.clone(),
                 rtcp_stats: stream_stats.rtcp_stats.clone(),
+                remote_packets_sent: stream_stats.remote_packets_sent,
+                remote_bytes_sent: stream_stats.remote_bytes_sent,
+                remote_reports_sent: stream_stats.remote_reports_sent,
+                remote_round_trip_time: stream_stats.remote_round_trip_time,
+                remote_total_round_trip_time: stream_stats.remote_total_round_trip_time,
+                remote_round_trip_time_measurements: stream_stats
+                    .remote_round_trip_time_measurements,
             }
         }
     }
@@ -145,7 +236,8 @@ mod outbound {
         /// The estimated remote jitter for this stream in timestamp units.
         remote_jitter: u32,
 
-        /// The last valid remote round trip time measurement in ms.
+        /// The last remote round trip time measurement in ms. [`None`] if no round trip time has
+        /// been derived yet, or if it wasn't possible to derive it.
         remote_round_trip_time: Option<f64>,
 
         /// The cummulative total round trip times reported in ms.
@@ -191,14 +283,10 @@ mod outbound {
 
         pub(super) fn update_remote_inbound_packets_received(
             &mut self,
-            rr_ext_seq_num: Option<u32>,
-            rr_total_lost: Option<u32>,
+            rr_ext_seq_num: u32,
+            rr_total_lost: u32,
         ) {
-            if let (Some(initial_ext_seq_num), Some(rr_ext_seq_num), Some(rr_total_lost)) = (
-                self.initial_outbound_ext_seq_num,
-                rr_ext_seq_num,
-                rr_total_lost,
-            ) {
+            if let Some(initial_ext_seq_num) = self.initial_outbound_ext_seq_num {
                 // Total number of RTP packets received for this SSRC.
                 // At the receiving endpoint, this is calculated as defined in [RFC3550] section 6.4.1.
                 // At the sending endpoint the packetsReceived is estimated by subtracting the
@@ -221,10 +309,15 @@ mod outbound {
             }
         }
 
-        pub(super) fn record_remote_round_trip_time(&mut self, round_trip_time: f64) {
-            self.remote_round_trip_time = Some(round_trip_time);
-            self.remote_total_round_trip_time += round_trip_time;
-            self.remote_round_trip_time_measurements += 1;
+        pub(super) fn record_remote_round_trip_time(&mut self, round_trip_time: Option<f64>) {
+            // Store the latest measurement, even if it's None.
+            self.remote_round_trip_time = round_trip_time;
+
+            if let Some(rtt) = round_trip_time {
+                // Only if we have a valid measurement do we update the totals
+                self.remote_total_round_trip_time += rtt;
+                self.remote_round_trip_time_measurements += 1;
+            }
         }
 
         pub(super) fn update_remote_fraction_lost(&mut self, fraction_lost: u8) {
@@ -435,12 +528,6 @@ impl RTPStats {
 
 #[derive(Debug, Default, Clone)]
 pub struct RTCPStats {
-    /// The most recently estimated Round Trip Time
-    rtt_ms: f64,
-
-    /// Fractional loss
-    loss: u8,
-
     /// The number of FIRs sent or recevied
     fir_count: u64,
 
@@ -449,34 +536,11 @@ pub struct RTCPStats {
 
     /// The number of NACKs sent or recevied
     nack_count: u64,
-
-    /// The number of packets sent or received by the remote.
-    remote_packet_count: u64,
-
-    /// The number of payload bytes sent or received by the remote.
-    remote_bytes: u64,
 }
 
 impl RTCPStats {
     #[allow(clippy::too_many_arguments)]
-    fn update(
-        &mut self,
-        rtt_ms: Option<f64>,
-        loss: Option<u8>,
-        fir_count: Option<u64>,
-        pli_count: Option<u64>,
-        nack_count: Option<u64>,
-        remote_packet_count: Option<u32>,
-        remote_bytes: Option<u32>,
-    ) {
-        if let Some(rtt_ms) = rtt_ms {
-            self.rtt_ms = rtt_ms;
-        }
-
-        if let Some(loss) = loss {
-            self.loss = loss;
-        }
-
+    fn update(&mut self, fir_count: Option<u64>, pli_count: Option<u64>, nack_count: Option<u64>) {
         if let Some(fir_count) = fir_count {
             self.fir_count += fir_count;
         }
@@ -488,22 +552,6 @@ impl RTCPStats {
         if let Some(nack_count) = nack_count {
             self.nack_count += nack_count;
         }
-
-        if let Some(remote_packet_count) = remote_packet_count {
-            self.remote_packet_count += remote_packet_count as u64;
-        }
-
-        if let Some(remote_bytes) = remote_bytes {
-            self.remote_bytes += remote_bytes as u64;
-        }
-    }
-
-    pub fn rtt_ms(&self) -> f64 {
-        self.rtt_ms
-    }
-
-    pub fn loss(&self) -> u8 {
-        self.loss
     }
 
     pub fn fir_count(&self) -> u64 {
@@ -516,14 +564,6 @@ impl RTCPStats {
 
     pub fn nack_count(&self) -> u64 {
         self.nack_count
-    }
-
-    pub fn remote_packet_count(&self) -> u64 {
-        self.remote_packet_count
-    }
-
-    pub fn remote_bytes(&self) -> u64 {
-        self.remote_bytes
     }
 }
 
@@ -544,6 +584,22 @@ mod test {
         assert_eq!(
             (stats.header_bytes(), stats.payload_bytes(), stats.packets()),
             (24, 960, 1),
+        );
+    }
+
+    #[test]
+    fn test_rtcp_stats() {
+        let mut stats: RTCPStats = Default::default();
+        assert_eq!(
+            (stats.fir_count(), stats.pli_count(), stats.nack_count()),
+            (0, 0, 0),
+        );
+
+        stats.update(Some(1), Some(2), Some(3));
+
+        assert_eq!(
+            (stats.fir_count(), stats.pli_count(), stats.nack_count()),
+            (1, 2, 3),
         );
     }
 
