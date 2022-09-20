@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-### Improvements
-
 * Added more stats to `RemoteInboundRTPStats` and `RemoteOutboundRTPStats` [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).
+* Don't register `video/rtx` codecs in `MediaEngine::register_default_codecs`. These weren't actually support and prevented RTX in the existing RTP stream from being used. Long term we should support RTX via this method, this is tracked in [#295](https://github.com/webrtc-rs/webrtc/issues/295). [#294 Remove video/rtx codecs](https://github.com/webrtc-rs/webrtc/pull/294) contributed by [k0nserv](https://github.com/k0nserv)
+
 
 ## 0.5.1
 
