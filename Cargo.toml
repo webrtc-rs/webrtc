@@ -9,6 +9,7 @@ members = [
     "media",
     "rtcp",
     "rtp",
+    "sctp-proto",
     "sctp",
     "sdp",
     "srtp",

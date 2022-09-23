@@ -1,0 +1,30 @@
+[package]
+name = "sctp-proto"
+version = "0.1.1"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "State machine for the SCTP protocol"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/sctp-proto"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/sctp"
+keywords = ["sctp"]
+categories = [ "network-programming", "asynchronous" ]
+workspace = ".."
+
+[dependencies]
+arbitrary = { version = "1.0.1", features = ["derive"], optional = true }
+bytes = "1"
+fxhash = "0.2.1"
+rand = "0.8"
+slab = "0.4"
+thiserror = "1.0.21"
+tinyvec = { version = "1.1", features = ["alloc"] }
+log = "0.4.14"
+crc = "2.1.0"
+
+[dev-dependencies]
+assert_matches = "1.1"
+hex-literal = "0.3.0"
+tracing-subscriber = { version = "0.3.0", default-features = false, features = ["env-filter", "fmt", "ansi", "time", "local-time"] }
+lazy_static = "1"

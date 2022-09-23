@@ -6,9 +6,7 @@ use crate::{
     error::Error, message::message_channel_ack::*, message::message_channel_open::*, message::*,
 };
 
-use sctp::{
-    association::Association, chunk::chunk_payload_data::PayloadProtocolIdentifier, stream::*,
-};
+use sctp::{Association, PayloadProtocolIdentifier, ReliabilityType};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use util::marshal::*;
 

@@ -1,35 +1,33 @@
-use webrtc_sctp::association::*;
-use webrtc_sctp::stream::*;
-use webrtc_sctp::Error;
+use proto::{AssociationError, ReliabilityType, ServerConfig};
+use webrtc_sctp::{Connecting, Endpoint, NewAssociation, RecvStream, SendStream};
 
+use anyhow::Result;
 use bytes::Bytes;
 use clap::{App, AppSettings, Arg};
-use std::net::Shutdown;
-use std::sync::Arc;
+use futures_util::{StreamExt, TryFutureExt};
+use log::{error, info};
 use std::time::Duration;
-use tokio::net::UdpSocket;
-use tokio::signal;
-use tokio::sync::mpsc;
-use util::{conn::conn_disconnected_packet::DisconnectedPacketConn, Conn};
 
 // RUST_LOG=trace cargo run --color=always --package webrtc-sctp --example pong -- --host 0.0.0.0:5678
 
+use std::io::Write;
+
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    /*env_logger::Builder::new()
-    .format(|buf, record| {
-        writeln!(
-            buf,
-            "{}:{} [{}] {} - {}",
-            record.file().unwrap_or("unknown"),
-            record.line().unwrap_or(0),
-            record.level(),
-            chrono::Local::now().format("%H:%M:%S.%6f"),
-            record.args()
-        )
-    })
-    .filter(None, log::LevelFilter::Trace)
-    .init();*/
+async fn main() -> Result<()> {
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, log::LevelFilter::Trace)
+        .init();
 
     let mut app = App::new("SCTP Pong")
         .version("0.1.0")
@@ -58,52 +56,73 @@ async fn main() -> Result<(), Error> {
     }
 
     let host = matches.value_of("host").unwrap();
-    let conn = DisconnectedPacketConn::new(Arc::new(UdpSocket::bind(host).await.unwrap()));
-    println!("listening {}...", conn.local_addr().await.unwrap());
 
-    let config = Config {
-        net_conn: Arc::new(conn),
-        max_receive_buffer_size: 0,
-        max_message_size: 0,
-        name: "server".to_owned(),
-    };
-    let a = Association::server(config).await?;
-    println!("created a server");
+    let (endpoint, mut incoming) = Endpoint::server(ServerConfig::new(), host.parse().unwrap())?;
+    eprintln!("listening on {}", endpoint.local_addr()?);
 
-    let stream = a.accept_stream().await.unwrap();
-    println!("accepted a stream");
+    while let Some(conn) = incoming.next().await {
+        info!("association incoming");
+        tokio::spawn(handle_association(conn).unwrap_or_else(move |e| {
+            error!("association failed: {reason}", reason = e.to_string())
+        }));
+    }
 
-    // set unordered = true and 10ms treshold for dropping packets
-    stream.set_reliability_params(true, ReliabilityType::Timed, 10);
+    Ok(())
+}
 
-    let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
-    let stream2 = Arc::clone(&stream);
-    tokio::spawn(async move {
-        let mut buff = vec![0u8; 1024];
-        while let Ok(n) = stream2.read(&mut buff).await {
-            let ping_msg = String::from_utf8(buff[..n].to_vec()).unwrap();
-            println!("received: {}", ping_msg);
+async fn handle_association(conn: Connecting) -> Result<()> {
+    let NewAssociation {
+        mut incoming_streams,
+        ..
+    } = conn.await?;
 
-            let pong_msg = format!("pong [{}]", ping_msg);
-            println!("sent: {}", pong_msg);
-            stream2.write(&Bytes::from(pong_msg)).await?;
+    info!("established");
 
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-        println!("finished ping-pong");
-        drop(done_tx);
+    // Each stream initiated by the client constitutes a new request.
+    while let Some(stream) = incoming_streams.next().await {
+        let stream = match stream {
+            Err(AssociationError::ApplicationClosed { .. }) => {
+                info!("association closed");
+                return Ok(());
+            }
+            Err(e) => {
+                info!("association error {}", e);
+                return Err(e.into());
+            }
+            Ok(s) => s,
+        };
 
-        Result::<(), Error>::Ok(())
-    });
+        tokio::spawn(
+            handle_stream(stream)
+                .unwrap_or_else(move |e| error!("failed: {reason}", reason = e.to_string())),
+        );
+    }
 
-    println!("Waiting for Ctrl-C...");
-    signal::ctrl_c().await.expect("failed to listen for event");
-    println!("Closing stream and association...");
+    Ok(())
+}
 
-    stream.shutdown(Shutdown::Both).await?;
-    a.close().await?;
+async fn handle_stream((mut send_stream, mut recv_stream): (SendStream, RecvStream)) -> Result<()> {
+    info!("incoming stream {}", recv_stream.stream_identifier());
 
-    let _ = done_rx.recv().await;
+    // set unordered = true and 10ms threshold for dropping packets
+    send_stream.set_reliability_params(true, ReliabilityType::Timed, 10)?;
 
+    let mut buff = vec![0u8; 1024];
+    while let Ok(Some(n)) = recv_stream.read(&mut buff).await {
+        let ping_msg = String::from_utf8(buff[..n].to_vec()).unwrap();
+        println!("received: {}", ping_msg);
+
+        let pong_msg = format!("pong [{}]", ping_msg);
+        println!("sent: {}", pong_msg);
+        send_stream.write(&Bytes::from(pong_msg)).await?;
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    println!("finished ping-pong");
+
+    // Gracefully terminate the stream
+    send_stream.finish()?;
+
+    info!("complete");
     Ok(())
 }

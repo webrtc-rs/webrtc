@@ -12,15 +12,14 @@ repository = "https://github.com/webrtc-rs/sctp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
-
-tokio = { version = "1.19", features = ["full"] }
-bytes = "1"
-rand = "0.8.5"
-crc = "3.0"
-async-trait = "0.1.56"
-log = "0.4.16"
-thiserror = "1.0"
+bytes = "1.1.0"
+futures-util = { version = "0.3.11", default-features = false, features = ["io"] }
+futures-channel = "0.3.11"
+fxhash = "0.2.1"
+proto = { package = "sctp-proto", path = "../sctp-proto", version = "0.1.1" }
+thiserror = "1.0.21"
+log = "0.4.14"
+tokio = { version = "1.15.0", features = ["rt", "time", "net"] }
 
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
@@ -28,6 +27,7 @@ lazy_static = "1.4.0"
 env_logger = "0.9.0"
 chrono = "0.4.19"
 clap = "3.2.6"
+anyhow = "1.0.22"
 
 [[example]]
 name = "ping"
