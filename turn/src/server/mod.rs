@@ -16,7 +16,7 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::{
     sync::{
         broadcast::{self, error::RecvError},
-        mpsc, Mutex,
+        mpsc, oneshot, Mutex,
     },
     time::{Duration, Instant},
 };
@@ -30,7 +30,7 @@ pub struct Server {
     realm: String,
     channel_bind_timeout: Duration,
     pub(crate) nonces: Arc<Mutex<HashMap<String, Instant>>>,
-    handle: Mutex<Option<broadcast::Sender<Command>>>,
+    command_tx: Mutex<Option<broadcast::Sender<Command>>>,
 }
 
 impl Server {
@@ -38,13 +38,13 @@ impl Server {
     pub async fn new(config: ServerConfig) -> Result<Self> {
         config.validate()?;
 
-        let (handle, _) = broadcast::channel(16);
+        let (command_tx, _) = broadcast::channel(16);
         let mut s = Server {
             auth_handler: config.auth_handler,
             realm: config.realm,
             channel_bind_timeout: config.channel_bind_timeout,
             nonces: Arc::new(Mutex::new(HashMap::new())),
-            handle: Mutex::new(Some(handle.clone())),
+            command_tx: Mutex::new(Some(command_tx.clone())),
         };
 
         if s.channel_bind_timeout == Duration::from_secs(0) {
@@ -56,7 +56,7 @@ impl Server {
             let auth_handler = Arc::clone(&s.auth_handler);
             let realm = s.realm.clone();
             let channel_bind_timeout = s.channel_bind_timeout;
-            let handle_rx = handle.subscribe();
+            let handle_rx = command_tx.subscribe();
             let conn = p.conn;
             let allocation_manager = Arc::new(Manager::new(ManagerConfig {
                 relay_addr_generator: p.relay_addr_generator,
@@ -78,7 +78,7 @@ impl Server {
 
     /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
     pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
-        let tx = self.handle.lock().await.clone();
+        let tx = self.command_tx.lock().await.clone();
         if let Some(tx) = tx {
             let (closed_tx, closed_rx) = mpsc::channel(1);
             tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
@@ -103,7 +103,7 @@ impl Server {
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
 
-        let (close_tx, mut close_rx) = mpsc::channel(1);
+        let (mut close_tx, mut close_rx) = oneshot::channel::<()>();
 
         tokio::spawn({
             let allocation_manager = Arc::clone(&allocation_manager);
@@ -118,11 +118,11 @@ impl Server {
                             continue;
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => {
-                            let _ = close_tx.send(()).await;
+                            let _ = close_rx.close();
                             break;
                         }
                         Err(RecvError::Lagged(n)) => {
-                            log::error!("Turn server has lagged by {} messages", n);
+                            log::warn!("Turn server has lagged by {} messages", n);
                             continue;
                         }
                     }
@@ -141,7 +141,7 @@ impl Server {
                         }
                     }
                 },
-                _ = close_rx.recv() => break
+                _ = close_tx.closed() => break
             };
 
             let mut r = Request {
@@ -166,7 +166,7 @@ impl Server {
 
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
     pub async fn close(&self) -> Result<()> {
-        let tx = self.handle.lock().await.take();
+        let tx = self.command_tx.lock().await.take();
         if let Some(tx) = tx {
             if tx.receiver_count() == 0 {
                 return Ok(());
@@ -182,7 +182,7 @@ impl Server {
 }
 
 /// The protocol to communicate between the [`Server`]'s public methods
-/// and the threads spawned in the [`read_loop`] method.
+/// and the tasks spawned in the [`read_loop`] method.
 #[derive(Clone)]
 enum Command {
     /// Command to delete [`crate::allocation::Allocation`] by provided
