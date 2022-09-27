@@ -920,6 +920,11 @@ impl PeerConnectionInternal {
                                     sender.set_negotiated();
                                 }
                                 let media_transceivers = vec![t];
+
+                                // NB: The below could use `then_some`, but with our current MSRV
+                                // it's not possible to actually do this. The clippy version that
+                                // ships with 1.64.0 complains about this so we disable it for now.
+                                #[allow(clippy::unnecessary_lazy_evaluations)]
                                 media_sections.push(MediaSection {
                                     id: mid_value.to_owned(),
                                     transceivers: media_transceivers,

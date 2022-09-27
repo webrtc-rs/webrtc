@@ -44,12 +44,7 @@ pub(crate) struct VNetInternal {
 
 impl VNetInternal {
     fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
-        for ifc in &self.interfaces {
-            if ifc.name == ifc_name {
-                return Some(ifc);
-            }
-        }
-        None
+        self.interfaces.iter().find(|ifc| ifc.name == ifc_name)
     }
 }
 
