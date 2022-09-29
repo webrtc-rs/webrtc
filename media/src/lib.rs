@@ -51,7 +51,9 @@ pub struct Sample {
     /// ## Example adjustment
     ///
     /// ```rust
-    /// # use crate::Sample;
+    /// # use bytes::Bytes;
+    /// # use std::time::{SystemTime, Duration};
+    /// # use webrtc_media::Sample;
     /// # let sample = Sample {
     /// #   data: Bytes::new(),
     /// #   timestamp: SystemTime::now(),
@@ -62,7 +64,7 @@ pub struct Sample {
     /// # };
     /// #
     /// let adjusted_dropped =
-    /// sample.prev_dropped_packets.saturating_sub(sample.pre_padding_packets);
+    /// sample.prev_dropped_packets.saturating_sub(sample.prev_padding_packets);
     /// ```
     pub prev_padding_packets: u16,
 }
