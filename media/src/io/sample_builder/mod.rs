@@ -41,6 +41,10 @@ pub struct SampleBuilder<T: Depacketizer> {
 
     /// number of packets forced to be dropped
     dropped_packets: u16,
+
+    /// number of padding packets detected and dropped. This number will be a subset of
+    /// `droppped_packets`
+    padding_packets: u16,
 }
 
 impl<T: Depacketizer> SampleBuilder<T> {
@@ -63,6 +67,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             active: SampleSequenceLocation::new(),
             prepared: SampleSequenceLocation::new(),
             dropped_packets: 0,
+            padding_packets: 0,
         }
     }
 
@@ -278,19 +283,18 @@ impl<T: Depacketizer> SampleBuilder<T> {
             .depacketizer
             .is_partition_head(&self.buffer[consume.head as usize].as_ref()?.payload)
         {
-            // Sometimes browsers send a bunch of empty RTP packets after a sequence of RTP packets
-            // that form a Sample. These all have the same timestamp as the previous sample and
-            // empty payloads. If we detect this we throw away the packets as they aren't useful,
-            // but don't increment dropped count.
-            let ignore_for_count = consume.range(&self.buffer).all(|p| {
+            // libWebRTC will sometimes send several empty padding packets to smooth out send
+            // rate. These packets don't carry any media payloads.
+            let is_padding = consume.range(&self.buffer).all(|p| {
                 p.map(|p| {
                     self.last_sample_timestamp == Some(p.header.timestamp) && p.payload.is_empty()
                 })
                 .unwrap_or(false)
             });
 
-            if !ignore_for_count {
-                self.dropped_packets += consume.count();
+            self.dropped_packets += consume.count();
+            if is_padding {
+                self.padding_packets += consume.count();
             }
             self.purge_consumed_location(&consume, true);
             self.purge_consumed_buffers();
@@ -316,9 +320,11 @@ impl<T: Depacketizer> SampleBuilder<T> {
             duration: Duration::from_secs_f64((samples as f64) / (self.sample_rate as f64)),
             packet_timestamp: sample_timestamp,
             prev_dropped_packets: self.dropped_packets,
+            prev_padding_packets: self.padding_packets,
         };
 
         self.dropped_packets = 0;
+        self.padding_packets = 0;
         self.last_sample_timestamp = Some(sample_timestamp);
 
         self.prepared_samples[self.prepared.tail as usize] = Some(sample);
