@@ -227,14 +227,6 @@ impl<T: Depacketizer> SampleBuilder<T> {
             if self.active.compare(i) == Comparison::After {
                 break;
             }
-            if self
-                .depacketizer
-                .is_partition_tail(packet.header.marker, &packet.payload)
-            {
-                consume.head = self.active.head;
-                consume.tail = i.wrapping_add(1);
-                break;
-            }
             if let Some(head_timestamp) = self.fetch_timestamp(&self.active) {
                 if packet.header.timestamp != head_timestamp {
                     consume.head = self.active.head;
