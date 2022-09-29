@@ -228,9 +228,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                 }
             }
         }
-        if let Err(err) = result {
-            return Err(err);
-        }
+        result?;
 
         let number = {
             let (bind_st, bind_at, bind_number, bind_addr) = {

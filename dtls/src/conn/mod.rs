@@ -449,9 +449,7 @@ impl DTLSConn {
 
             tokio::select! {
                 result = self.write_packets(pkts) => {
-                    if let Err(err) = result {
-                        return Err(err);
-                    }
+                    result?;
                 }
                 _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded),
             }

@@ -850,11 +850,9 @@ pub(crate) async fn build_and_send_err(
     msg: Message,
     err: Error,
 ) -> Result<()> {
-    if let Err(send_err) = build_and_send(conn, dst, msg).await {
-        Err(send_err)
-    } else {
-        Err(err)
-    }
+    build_and_send(conn, dst, msg).await?;
+
+    Err(err)
 }
 
 pub(crate) fn build_msg(
