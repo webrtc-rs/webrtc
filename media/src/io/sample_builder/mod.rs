@@ -22,6 +22,7 @@ pub struct SampleBuilder<T: Depacketizer> {
     max_late_timestamp: u32,
     buffer: Vec<Option<Packet>>,
     prepared_samples: Vec<Option<Sample>>,
+    last_sample_timestamp: Option<u32>,
 
     /// Interface that allows us to take RTP packets to samples
     depacketizer: T,
@@ -55,6 +56,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             max_late_timestamp: 0,
             buffer: vec![None; u16::MAX as usize + 1],
             prepared_samples: (0..=u16::MAX as usize).map(|_| None).collect(),
+            last_sample_timestamp: None,
             depacketizer,
             sample_rate,
             filled: SampleSequenceLocation::new(),
@@ -276,7 +278,20 @@ impl<T: Depacketizer> SampleBuilder<T> {
             .depacketizer
             .is_partition_head(&self.buffer[consume.head as usize].as_ref()?.payload)
         {
-            self.dropped_packets += consume.count();
+            // Sometimes browsers send a bunch of empty RTP packets after a sequence of RTP packets
+            // that form a Sample. These all have the same timestamp as the previous sample and
+            // empty payloads. If we detect this we throw away the packets as they aren't useful,
+            // but don't increment dropped count.
+            let ignore_for_count = consume.range(&self.buffer).all(|p| {
+                p.map(|p| {
+                    self.last_sample_timestamp == Some(p.header.timestamp) && p.payload.is_empty()
+                })
+                .unwrap_or(false)
+            });
+
+            if !ignore_for_count {
+                self.dropped_packets += consume.count();
+            }
             self.purge_consumed_location(&consume, true);
             self.purge_consumed_buffers();
             return None;
@@ -304,6 +319,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
         };
 
         self.dropped_packets = 0;
+        self.last_sample_timestamp = Some(sample_timestamp);
 
         self.prepared_samples[self.prepared.tail as usize] = Some(sample);
         self.prepared.tail = self.prepared.tail.wrapping_add(1);
