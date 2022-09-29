@@ -22,3 +22,24 @@ fn test_sample_sequence_location_compare() {
     assert_eq!(Comparison::After, s2.compare(32));
     assert_eq!(Comparison::After, s2.compare(128));
 }
+
+#[test]
+fn test_sample_sequence_location_range() {
+    let mut data: Vec<Option<u16>> = vec![None; u16::MAX as usize + 1];
+
+    data[65533] = Some(65533);
+    data[65535] = Some(65535);
+    data[0] = Some(0);
+    data[2] = Some(2);
+
+    let s = SampleSequenceLocation {
+        head: 65533,
+        tail: 3,
+    };
+    let reconstructed: Vec<_> = s.range(&data).map(|x| x.cloned()).collect();
+
+    assert_eq!(
+        reconstructed,
+        [Some(65533), None, Some(65535), Some(0), None, Some(2)]
+    );
+}
