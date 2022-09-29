@@ -46,7 +46,7 @@ pub struct Sample {
     /// These packets don't carry media and aren't useful for building samples.
     ///
     /// This field can be combined with [`Sample::prev_dropped_packets`] to determine if any
-    /// dropped packets have are likely to have detrimental impact on the steadiness of the RTP stream.
+    /// dropped packets are likely to have detrimental impact on the steadiness of the RTP stream.
     ///
     /// ## Example adjustment
     ///
