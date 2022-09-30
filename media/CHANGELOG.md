@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking
+
+* Introduced a new field in `Sample`, `prev_padding_packets`, that reflects the number of observed padding only packets while building the Sample. This can be use to differentiate inconsequential padding packets being dropped from those carrying media. Contributed by [@k0nserv](https://github.com/k0nserv) in [#303](https://github.com/webrtc-rs/webrtc/pull/303).
+
 ## v0.4.7
 
 * Bumped util dependency to `0.6.0`.
