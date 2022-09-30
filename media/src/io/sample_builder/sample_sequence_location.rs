@@ -8,6 +8,26 @@ pub(crate) enum Comparison {
     After,
 }
 
+pub(crate) struct Iterator<'a, T> {
+    data: &'a [Option<T>],
+    sample: SampleSequenceLocation,
+    i: u16,
+}
+
+impl<'a, T> std::iter::Iterator for Iterator<'a, T> {
+    type Item = Option<&'a T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.sample.compare(self.i) == Comparison::Inside {
+            let old_i = self.i as usize;
+            self.i = self.i.wrapping_add(1);
+            return Some(self.data[old_i].as_ref());
+        }
+
+        None
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct SampleSequenceLocation {
     /// head is the first packet in a sequence
@@ -49,5 +69,13 @@ impl SampleSequenceLocation {
             return Comparison::Before;
         }
         Comparison::After
+    }
+
+    pub(crate) fn range<'s, 'a, T>(&'s self, data: &'a [Option<T>]) -> Iterator<'a, T> {
+        Iterator {
+            data,
+            sample: *self,
+            i: self.head,
+        }
     }
 }
