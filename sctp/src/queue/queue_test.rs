@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 use bytes::{Bytes, BytesMut};
 
@@ -757,7 +757,7 @@ fn test_reassembly_queue_should_fail_to_read_if_the_nex_ssn_is_not_ready() -> Re
 }
 
 #[test]
-fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
+fn test_reassembly_queue_permits_partial_reads() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -777,12 +777,11 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
     assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
 
     let mut buf = vec![0u8; 8]; // <- passing buffer too short
-    let result = rq.read(&mut buf);
-    assert!(result.is_err(), "read() should not succeed");
-    if let Err(err) = result {
-        assert_eq!(Error::ErrShortBuffer, err, "read() should not succeed");
-    }
-    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    let (n, ppi) = rq.read(&mut buf)?;
+    assert_eq!(8, n, "should received 8 bytes");
+    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(ppi, org_ppi, "should have valid ppi");
+    assert_eq!(&buf[..n], b"01234567", "data should match");
 
     Ok(())
 }

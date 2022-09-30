@@ -114,6 +114,9 @@ pub(crate) struct ReassemblyQueue {
     pub(crate) unordered: Vec<ChunkSet>,
     pub(crate) unordered_chunks: Vec<ChunkPayloadData>,
     pub(crate) n_bytes: usize,
+
+    pub(crate) unread_cset: Option<ChunkSet>,
+    pub(crate) unread_chunk_num_bytes_read: usize,
 }
 
 impl ReassemblyQueue {
@@ -126,10 +129,7 @@ impl ReassemblyQueue {
         ReassemblyQueue {
             si,
             next_ssn: 0, // From RFC 4960 Sec 6.5:
-            ordered: vec![],
-            unordered: vec![],
-            unordered_chunks: vec![],
-            n_bytes: 0,
+            ..ReassemblyQueue::default()
         }
     }
 
@@ -254,8 +254,11 @@ impl ReassemblyQueue {
     }
 
     pub(crate) fn read(&mut self, buf: &mut [u8]) -> Result<(usize, PayloadProtocolIdentifier)> {
-        // Check unordered first
-        let cset = if !self.unordered.is_empty() {
+        let cset = if self.unread_cset.is_some() {
+            // Read unread chunks from previous iteration, if any.
+            self.unread_cset.take().unwrap()
+        } else if !self.unordered.is_empty() {
+            // Then check unordered
             self.unordered.remove(0)
         } else if !self.ordered.is_empty() {
             // Now, check ordered
@@ -274,27 +277,41 @@ impl ReassemblyQueue {
             return Err(Error::ErrTryAgain);
         };
 
-        // Concat all fragments into the buffer
+        let ppi = cset.ppi;
+
+        // Concat fragments into the buffer.
         let mut n_written = 0;
-        let mut err = None;
-        for c in &cset.chunks {
-            let to_copy = c.user_data.len();
-            self.subtract_num_bytes(to_copy);
-            if err.is_none() {
-                let n = std::cmp::min(to_copy, buf.len() - n_written);
-                buf[n_written..n_written + n].copy_from_slice(&c.user_data[..n]);
-                n_written += n;
-                if n < to_copy {
-                    err = Some(Error::ErrShortBuffer);
+        for (i, c) in cset.chunks.iter().enumerate() {
+            // If the last chunk was only partially read during the previous read.
+            let user_data = if i == 0 && self.unread_chunk_num_bytes_read > 0 {
+                &c.user_data[self.unread_chunk_num_bytes_read + 1..]
+            } else {
+                c.user_data.as_ref()
+            };
+            let n = std::cmp::min(user_data.len(), buf.len() - n_written);
+            buf[n_written..n_written + n].copy_from_slice(&user_data[..n]);
+            self.subtract_num_bytes(n);
+            n_written += n;
+
+            if n_written == buf.len() {
+                if n < c.user_data.len() {
+                    // If this chunk was read only partially
+                    self.unread_chunk_num_bytes_read = n;
+                    let mut s = ChunkSet::new(cset.ssn, cset.ppi);
+                    s.chunks = cset.chunks[i..].to_vec();
+                    self.unread_cset = Some(s);
+                } else if i < cset.chunks.len() - 1 {
+                    // If there are unread chunks
+                    self.unread_chunk_num_bytes_read = 0;
+                    let mut s = ChunkSet::new(cset.ssn, cset.ppi);
+                    s.chunks = cset.chunks[i + 1..].to_vec();
+                    self.unread_cset = Some(s);
                 }
+                break;
             }
         }
 
-        if let Some(err) = err {
-            Err(err)
-        } else {
-            Ok((n_written, cset.ppi))
-        }
+        Ok((n_written, ppi))
     }
 
     /// Use last_ssn to locate a chunkSet then remove it if the set has

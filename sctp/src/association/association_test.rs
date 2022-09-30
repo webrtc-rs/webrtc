@@ -735,16 +735,12 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
 
     flush_buffers(&br, &a0, &a1).await;
 
+    // Verify partial reads are permitted.
     let mut buf = vec![0u8; 3];
-    let result = s1.read_sctp(&mut buf).await;
-    assert!(result.is_err(), "expected error to be io.ErrShortBuffer");
-    if let Err(err) = result {
-        assert_eq!(
-            Error::ErrShortBuffer,
-            err,
-            "expected error to be io.ErrShortBuffer"
-        );
-    }
+    let (n, ppi) = s1.read_sctp(&mut buf).await?;
+    assert_eq!(n, 3, "unexpected length of received data");
+    assert_eq!(&buf[..n], &MSG[..3], "unexpected length of received data");
+    assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
 
     {
         let q = s0.reassembly_queue.lock().await;
