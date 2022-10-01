@@ -123,6 +123,7 @@ impl RTCIceGatherer {
             prflx_acceptance_min_wait: self.setting_engine.timeout.ice_prflx_acceptance_min_wait,
             relay_acceptance_min_wait: self.setting_engine.timeout.ice_relay_acceptance_min_wait,
             interface_filter: self.setting_engine.candidates.interface_filter.clone(),
+            ip_filter: self.setting_engine.candidates.ip_filter.clone(),
             nat_1to1_ips: self.setting_engine.candidates.nat_1to1_ips.clone(),
             nat_1to1_ip_candidate_type: nat_1to1_cand_type,
             net: self.setting_engine.vnet.clone(),
