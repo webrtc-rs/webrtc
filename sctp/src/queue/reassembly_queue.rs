@@ -117,9 +117,8 @@ pub(crate) struct ReassemblyQueue {
 
     /// Partially read chunk set (see `read`)
     pub(crate) unread_cset: Option<ChunkSet>,
-    /// The number of bytes read during the previous call to `read` from the last chunk (note it
-    /// will be the first one in `unread_cset` because processed chunks get removed).
-    pub(crate) last_chunk_bytes_read: usize,
+    /// The number of bytes read during the previous call to `read` from the first chunk (zero if the chunk wasn't read at all).
+    pub(crate) first_chunk_bytes_read: usize,
 }
 
 impl ReassemblyQueue {
@@ -286,10 +285,10 @@ impl ReassemblyQueue {
         let mut n_written = 0;
         for (i, c) in cset.chunks.iter().enumerate() {
             // If the last chunk was only partially read during the previous read.
-            let last_chunk_bytes_read = self.last_chunk_bytes_read;
-            let user_data = if i == 0 && last_chunk_bytes_read > 0 {
-                self.last_chunk_bytes_read = 0;
-                &c.user_data[last_chunk_bytes_read..]
+            let first_chunk_bytes_read = self.first_chunk_bytes_read;
+            let user_data = if i == 0 && first_chunk_bytes_read > 0 {
+                self.first_chunk_bytes_read = 0;
+                &c.user_data[first_chunk_bytes_read..]
             } else {
                 c.user_data.as_ref()
             };
@@ -303,10 +302,10 @@ impl ReassemblyQueue {
                 if n < user_data.len() {
                     // If it's still the first chunk, increase bytes read
                     if i == 0 {
-                        self.last_chunk_bytes_read = last_chunk_bytes_read + n;
+                        self.first_chunk_bytes_read = first_chunk_bytes_read + n;
                     } else {
                         // Otherwise, set it to `n`
-                        self.last_chunk_bytes_read = n;
+                        self.first_chunk_bytes_read = n;
                     }
                     let mut s = ChunkSet::new(cset.ssn, cset.ppi);
                     s.chunks = cset.chunks[i..].to_vec();
