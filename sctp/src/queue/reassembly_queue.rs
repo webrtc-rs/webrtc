@@ -286,8 +286,10 @@ impl ReassemblyQueue {
         let mut n_written = 0;
         for (i, c) in cset.chunks.iter().enumerate() {
             // If the last chunk was only partially read during the previous read.
-            let user_data = if i == 0 && self.last_chunk_bytes_read > 0 {
-                &c.user_data[self.last_chunk_bytes_read..]
+            let last_chunk_bytes_read = self.last_chunk_bytes_read;
+            let user_data = if i == 0 && last_chunk_bytes_read > 0 {
+                self.last_chunk_bytes_read = 0;
+                &c.user_data[last_chunk_bytes_read..]
             } else {
                 c.user_data.as_ref()
             };
@@ -297,15 +299,20 @@ impl ReassemblyQueue {
             n_written += n;
 
             if n_written == buf.len() {
-                if n < c.user_data.len() {
-                    // If this chunk was read only partially
-                    self.last_chunk_bytes_read = n;
+                // If this chunk was read only partially
+                if n < user_data.len() {
+                    // If it's still the first chunk, increase bytes read
+                    if i == 0 {
+                        self.last_chunk_bytes_read = last_chunk_bytes_read + n;
+                    } else {
+                        // Otherwise, set it to `n`
+                        self.last_chunk_bytes_read = n;
+                    }
                     let mut s = ChunkSet::new(cset.ssn, cset.ppi);
                     s.chunks = cset.chunks[i..].to_vec();
                     self.unread_cset = Some(s);
                 } else if i < cset.chunks.len() - 1 {
                     // If there are unread chunks
-                    self.last_chunk_bytes_read = 0;
                     let mut s = ChunkSet::new(cset.ssn, cset.ppi);
                     s.chunks = cset.chunks[i + 1..].to_vec();
                     self.unread_cset = Some(s);
