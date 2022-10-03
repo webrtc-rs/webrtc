@@ -776,12 +776,20 @@ fn test_reassembly_queue_permits_partial_reads() -> Result<()> {
     assert!(complete, "the set should be complete");
     assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
 
+    // partial read
     let mut buf = vec![0u8; 8]; // <- passing buffer too short
     let (n, ppi) = rq.read(&mut buf)?;
     assert_eq!(8, n, "should received 8 bytes");
     assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
     assert_eq!(ppi, org_ppi, "should have valid ppi");
     assert_eq!(&buf[..n], b"01234567", "data should match");
+
+    // read the remaining bytes
+    let (n, ppi) = rq.read(&mut buf)?;
+    assert_eq!(2, n, "should received 1 bytes");
+    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(ppi, org_ppi, "should have valid ppi");
+    assert_eq!(&buf[..n], b"89", "data should match");
 
     Ok(())
 }

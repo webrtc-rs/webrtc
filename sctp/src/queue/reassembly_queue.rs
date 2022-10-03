@@ -115,8 +115,11 @@ pub(crate) struct ReassemblyQueue {
     pub(crate) unordered_chunks: Vec<ChunkPayloadData>,
     pub(crate) n_bytes: usize,
 
+    /// Partially read chunk set (see `read`)
     pub(crate) unread_cset: Option<ChunkSet>,
-    pub(crate) unread_chunk_num_bytes_read: usize,
+    /// The number of bytes read during the previous call to `read` from the last chunk (note it
+    /// will be the first one in `unread_cset` because processed chunks get removed).
+    pub(crate) last_chunk_bytes_read: usize,
 }
 
 impl ReassemblyQueue {
@@ -283,8 +286,8 @@ impl ReassemblyQueue {
         let mut n_written = 0;
         for (i, c) in cset.chunks.iter().enumerate() {
             // If the last chunk was only partially read during the previous read.
-            let user_data = if i == 0 && self.unread_chunk_num_bytes_read > 0 {
-                &c.user_data[self.unread_chunk_num_bytes_read + 1..]
+            let user_data = if i == 0 && self.last_chunk_bytes_read > 0 {
+                &c.user_data[self.last_chunk_bytes_read..]
             } else {
                 c.user_data.as_ref()
             };
@@ -296,13 +299,13 @@ impl ReassemblyQueue {
             if n_written == buf.len() {
                 if n < c.user_data.len() {
                     // If this chunk was read only partially
-                    self.unread_chunk_num_bytes_read = n;
+                    self.last_chunk_bytes_read = n;
                     let mut s = ChunkSet::new(cset.ssn, cset.ppi);
                     s.chunks = cset.chunks[i..].to_vec();
                     self.unread_cset = Some(s);
                 } else if i < cset.chunks.len() - 1 {
                     // If there are unread chunks
-                    self.unread_chunk_num_bytes_read = 0;
+                    self.last_chunk_bytes_read = 0;
                     let mut s = ChunkSet::new(cset.ssn, cset.ppi);
                     s.chunks = cset.chunks[i + 1..].to_vec();
                     self.unread_cset = Some(s);
