@@ -162,7 +162,7 @@ impl SettingEngine {
     }
 
     /// set_ip_filter sets the filtering functions when gathering ICE candidates
-    /// This can be used to exclude certain ip  from ICE. Which may be
+    /// This can be used to exclude certain ip from ICE. Which may be
     /// useful if you know a certain ip will never succeed, or if you wish to reduce
     /// the amount of information you wish to expose to the remote peer
     pub fn set_ip_filter(&mut self, filter: IpFilterFn) {
