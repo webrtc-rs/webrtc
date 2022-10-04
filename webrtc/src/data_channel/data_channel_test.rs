@@ -536,11 +536,9 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
 
     const EXPECTED_MESSAGE: &str = "Hello World";
 
-    let negotiated = true;
     let id = 500u16;
     let options = RTCDataChannelInit {
-        negotiated: Some(negotiated),
-        id: Some(id),
+        negotiated: Some(id),
         ..Default::default()
     };
 
@@ -1523,10 +1521,9 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
 
     signal_ortc_pair(Arc::clone(&stack_a), Arc::clone(&stack_b)).await?;
 
-    let id = 1u16;
     let dc_params = DataChannelParameters {
         label: "Foo".to_owned(),
-        id,
+        negotiated: None,
         ..Default::default()
     };
 

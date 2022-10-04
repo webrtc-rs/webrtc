@@ -1,7 +1,9 @@
 use super::*;
 
+use crate::api::media_engine::MIME_TYPE_VP8;
 use crate::api::APIBuilder;
 use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
+use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use crate::stats::StatsReportType;
 use bytes::Bytes;
 use media::Sample;
@@ -202,13 +204,27 @@ pub(crate) async fn send_video_until_done(
     mut done_rx: mpsc::Receiver<()>,
     tracks: Vec<Arc<TrackLocalStaticSample>>,
     data: Bytes,
-) {
+    max_sends: Option<usize>,
+) -> bool {
+    let mut sends = 0;
+
     loop {
         let timeout = tokio::time::sleep(Duration::from_millis(20));
         tokio::pin!(timeout);
 
         tokio::select! {
+            biased;
+
+            _ = done_rx.recv() =>{
+                log::debug!("sendVideoUntilDone received done");
+                return false;
+            }
+
             _ = timeout.as_mut() =>{
+                if max_sends.map(|s| sends >= s).unwrap_or(false) {
+                    continue;
+                }
+
                 log::debug!("sendVideoUntilDone timeout");
                 for track in &tracks {
                     log::debug!("sendVideoUntilDone track.WriteSample");
@@ -218,11 +234,8 @@ pub(crate) async fn send_video_until_done(
                         ..Default::default()
                     }).await;
                     assert!(result.is_ok());
+                    sends += 1;
                 }
-            }
-            _ = done_rx.recv() =>{
-                log::debug!("sendVideoUntilDone received done");
-                return;
             }
         }
     }
@@ -280,15 +293,62 @@ async fn test_get_stats() -> Result<()> {
             Box::pin(async {})
         }))
         .await;
+    let track = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    pc_offer
+        .add_track(track.clone())
+        .await
+        .expect("Failed to add track");
+    let (packet_tx, packet_rx) = mpsc::channel(1);
+
+    pc_answer
+        .on_track(Box::new(
+            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
+                let packet_tx = packet_tx.clone();
+                let result = Box::pin(async move {});
+                let track = match track {
+                    Some(t) => t,
+                    None => return result,
+                };
+
+                tokio::spawn(async move {
+                    while let Ok((pkt, _)) = track.read_rtp().await {
+                        dbg!(&pkt);
+                        let last = pkt.payload[pkt.payload.len() - 1];
+
+                        if last == 0xAA {
+                            let _ = packet_tx.send(()).await;
+                            break;
+                        }
+                    }
+                });
+
+                Box::pin(async move {})
+            },
+        ))
+        .await;
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 
     let _ = ice_complete_rx.recv().await;
+    send_video_until_done(
+        packet_rx,
+        vec![track],
+        Bytes::from_static(b"\xDE\xAD\xBE\xEF\xAA"),
+        Some(1),
+    )
+    .await;
 
-    let stats = pc_offer.get_stats().await;
-    assert!(!stats.reports.is_empty());
+    let offer_stats = pc_offer.get_stats().await;
+    assert!(!offer_stats.reports.is_empty());
 
-    match stats.reports.get("ice_transport") {
+    match offer_stats.reports.get("ice_transport") {
         Some(StatsReportType::Transport(ice_transport_stats)) => {
             assert!(ice_transport_stats.bytes_received > 0);
             assert!(ice_transport_stats.bytes_sent > 0);
@@ -296,6 +356,32 @@ async fn test_get_stats() -> Result<()> {
         Some(_other) => panic!("found the wrong type"),
         None => panic!("missed it"),
     }
+    let outbound_stats = offer_stats
+        .reports
+        .values()
+        .find_map(|v| match v {
+            StatsReportType::OutboundRTP(d) => Some(d),
+            _ => None,
+        })
+        .expect("Should have produced an RTP Outbound stat");
+    assert_eq!(outbound_stats.packets_sent, 1);
+    assert_eq!(outbound_stats.kind, "video");
+    assert_eq!(outbound_stats.bytes_sent, 8);
+    assert_eq!(outbound_stats.header_bytes_sent, 12);
+
+    let answer_stats = pc_answer.get_stats().await;
+    let inbound_stats = answer_stats
+        .reports
+        .values()
+        .find_map(|v| match v {
+            StatsReportType::InboundRTP(d) => Some(d),
+            _ => None,
+        })
+        .expect("Should have produced an RTP inbound stat");
+    assert_eq!(inbound_stats.packets_received, 1);
+    assert_eq!(inbound_stats.kind, "video");
+    assert_eq!(inbound_stats.bytes_received, 8);
+    assert_eq!(inbound_stats.header_bytes_received, 12);
 
     close_pair_now(&pc_offer, &pc_answer).await;
 

@@ -27,7 +27,7 @@ pub(crate) struct ReceiverReportRtcpReader {
 #[async_trait]
 impl RTCPReader for ReceiverReportRtcpReader {
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
+        let (n, attr) = self.parent_rtcp_reader.read(buf, a).await?;
 
         let mut b = &buf[..n];
         let pkts = rtcp::packet::unmarshal(&mut b)?;

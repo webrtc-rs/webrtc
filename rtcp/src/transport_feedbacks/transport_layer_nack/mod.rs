@@ -16,7 +16,7 @@ type PacketBitmap = u16;
 
 /// NackPair is a wire-representation of a collection of
 /// Lost RTP packets
-#[derive(Debug, PartialEq, Eq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, Copy)]
 pub struct NackPair {
     /// ID of lost packets
     pub packet_id: u16,
@@ -27,40 +27,64 @@ pub struct NackPair {
 pub type RangeFn =
     Box<dyn (Fn(u16) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>;
 
+pub struct NackIterator {
+    packet_id: u16,
+    bitfield: PacketBitmap,
+    has_yielded_packet_id: bool,
+}
+
+impl Iterator for NackIterator {
+    type Item = u16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.has_yielded_packet_id {
+            self.has_yielded_packet_id = true;
+
+            Some(self.packet_id)
+        } else {
+            let mut i = 0;
+
+            while self.bitfield != 0 {
+                if (self.bitfield & (1 << i)) != 0 {
+                    self.bitfield &= !(1 << i);
+
+                    return Some(self.packet_id.wrapping_add(i + 1));
+                }
+
+                i += 1;
+            }
+
+            None
+        }
+    }
+}
+
 impl NackPair {
     /// PacketList returns a list of Nack'd packets that's referenced by a NackPair
     pub fn packet_list(&self) -> Vec<u16> {
-        let mut out = vec![self.packet_id];
-
-        let mut b = self.lost_packets;
-        let mut i = 0;
-
-        while b != 0 {
-            if (b & (1 << i)) != 0 {
-                b &= !(1 << i);
-                out.push(self.packet_id + i + 1);
-            }
-            i += 1;
-        }
-        out
+        self.into_iter().collect()
     }
 
     pub async fn range(&self, f: RangeFn) {
-        if !f(self.packet_id).await {
-            return;
-        }
-
-        let mut b = self.lost_packets;
-        let mut i = 0u16;
-        while b != 0 {
-            if (b & (1 << i)) != 0 {
-                b &= u16::MAX ^ (1 << i);
-                let (packet_id, _) = self.packet_id.overflowing_add(i + 1);
-                if !f(packet_id).await {
-                    return;
-                }
+        for packet_id in self.into_iter() {
+            if !f(packet_id).await {
+                return;
             }
-            i += 1;
+        }
+    }
+}
+
+/// Create an iterator over all the packet sequence numbers expressed by this NACK pair.
+impl IntoIterator for NackPair {
+    type Item = u16;
+
+    type IntoIter = NackIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        NackIterator {
+            packet_id: self.packet_id,
+            bitfield: self.lost_packets,
+            has_yielded_packet_id: false,
         }
     }
 }
@@ -231,7 +255,7 @@ pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
             continue;
         }
         if seq <= nack_pair.packet_id || seq > nack_pair.packet_id.saturating_add(16) {
-            pairs.push(nack_pair.clone());
+            pairs.push(nack_pair);
             nack_pair.packet_id = seq;
             continue;
         }

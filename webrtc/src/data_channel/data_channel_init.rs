@@ -20,13 +20,10 @@ pub struct RTCDataChannelInit {
     pub protocol: Option<String>,
 
     /// negotiated describes if the data channel is created by the local peer or
-    /// the remote peer. The default value of false tells the user agent to
+    /// the remote peer. The default value of None tells the user agent to
     /// announce the channel in-band and instruct the other peer to dispatch a
-    /// corresponding DataChannel. If set to true, it is up to the application
+    /// corresponding DataChannel. If set to Some(id), it is up to the application
     /// to negotiate the channel and create an DataChannel with the same id
     /// at the other peer.
-    pub negotiated: Option<bool>,
-
-    /// id overrides the default selection of ID for this channel.
-    pub id: Option<u16>,
+    pub negotiated: Option<u16>,
 }

@@ -167,17 +167,6 @@ impl MediaEngine {
             },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=96".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 97,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -189,17 +178,6 @@ impl MediaEngine {
             },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=98".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 99,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -207,17 +185,6 @@ impl MediaEngine {
                     rtcp_feedback: video_rtcp_feedback.clone(),
                 },
                 payload_type: 100,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=100".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 101,
                 ..Default::default()
             },
             RTCRtpCodecParameters {
@@ -235,17 +202,6 @@ impl MediaEngine {
             },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=102".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 121,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -255,17 +211,6 @@ impl MediaEngine {
                     rtcp_feedback: video_rtcp_feedback.clone(),
                 },
                 payload_type: 127,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=127".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 120,
                 ..Default::default()
             },
             RTCRtpCodecParameters {
@@ -283,17 +228,6 @@ impl MediaEngine {
             },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=125".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 107,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -303,17 +237,6 @@ impl MediaEngine {
                     rtcp_feedback: video_rtcp_feedback.clone(),
                 },
                 payload_type: 108,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=108".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 109,
                 ..Default::default()
             },
             RTCRtpCodecParameters {
@@ -331,17 +254,6 @@ impl MediaEngine {
             },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=127".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 120,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -351,17 +263,6 @@ impl MediaEngine {
                     rtcp_feedback: video_rtcp_feedback,
                 },
                 payload_type: 123,
-                ..Default::default()
-            },
-            RTCRtpCodecParameters {
-                capability: RTCRtpCodecCapability {
-                    mime_type: "video/rtx".to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "apt=123".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                payload_type: 118,
                 ..Default::default()
             },
             RTCRtpCodecParameters {

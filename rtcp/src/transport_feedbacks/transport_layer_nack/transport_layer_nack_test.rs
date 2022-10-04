@@ -190,6 +190,24 @@ fn test_nack_pair() {
             lost_packets: 0x8000,
         },
     );
+
+    // Wrap around
+    test_nack(
+        vec![65534, 65535, 0, 1],
+        NackPair {
+            packet_id: 65534,
+            lost_packets: 0b0000_0111,
+        },
+    );
+
+    // Gap
+    test_nack(
+        vec![123, 125, 127, 129],
+        NackPair {
+            packet_id: 123,
+            lost_packets: 0b0010_1010,
+        },
+    );
 }
 
 #[tokio::test]

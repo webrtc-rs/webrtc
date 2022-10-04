@@ -22,6 +22,7 @@ pub struct SampleBuilder<T: Depacketizer> {
     max_late_timestamp: u32,
     buffer: Vec<Option<Packet>>,
     prepared_samples: Vec<Option<Sample>>,
+    last_sample_timestamp: Option<u32>,
 
     /// Interface that allows us to take RTP packets to samples
     depacketizer: T,
@@ -40,6 +41,10 @@ pub struct SampleBuilder<T: Depacketizer> {
 
     /// number of packets forced to be dropped
     dropped_packets: u16,
+
+    /// number of padding packets detected and dropped. This number will be a subset of
+    /// `droppped_packets`
+    padding_packets: u16,
 }
 
 impl<T: Depacketizer> SampleBuilder<T> {
@@ -55,12 +60,14 @@ impl<T: Depacketizer> SampleBuilder<T> {
             max_late_timestamp: 0,
             buffer: vec![None; u16::MAX as usize + 1],
             prepared_samples: (0..=u16::MAX as usize).map(|_| None).collect(),
+            last_sample_timestamp: None,
             depacketizer,
             sample_rate,
             filled: SampleSequenceLocation::new(),
             active: SampleSequenceLocation::new(),
             prepared: SampleSequenceLocation::new(),
             dropped_packets: 0,
+            padding_packets: 0,
         }
     }
 
@@ -276,7 +283,19 @@ impl<T: Depacketizer> SampleBuilder<T> {
             .depacketizer
             .is_partition_head(&self.buffer[consume.head as usize].as_ref()?.payload)
         {
+            // libWebRTC will sometimes send several empty padding packets to smooth out send
+            // rate. These packets don't carry any media payloads.
+            let is_padding = consume.range(&self.buffer).all(|p| {
+                p.map(|p| {
+                    self.last_sample_timestamp == Some(p.header.timestamp) && p.payload.is_empty()
+                })
+                .unwrap_or(false)
+            });
+
             self.dropped_packets += consume.count();
+            if is_padding {
+                self.padding_packets += consume.count();
+            }
             self.purge_consumed_location(&consume, true);
             self.purge_consumed_buffers();
             return None;
@@ -301,9 +320,12 @@ impl<T: Depacketizer> SampleBuilder<T> {
             duration: Duration::from_secs_f64((samples as f64) / (self.sample_rate as f64)),
             packet_timestamp: sample_timestamp,
             prev_dropped_packets: self.dropped_packets,
+            prev_padding_packets: self.padding_packets,
         };
 
         self.dropped_packets = 0;
+        self.padding_packets = 0;
+        self.last_sample_timestamp = Some(sample_timestamp);
 
         self.prepared_samples[self.prepared.tail as usize] = Some(sample);
         self.prepared.tail = self.prepared.tail.wrapping_add(1);
