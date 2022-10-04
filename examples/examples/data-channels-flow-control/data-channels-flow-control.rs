@@ -24,15 +24,14 @@ use webrtc::{
 const BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 512 * 1024; // 512 KB
 const MAX_BUFFERED_AMOUNT: usize = 1024 * 1024; // 1 MB
 
-async fn create_peer_connection() -> RTCPeerConnection {
+async fn create_peer_connection() -> anyhow::Result<RTCPeerConnection> {
     let mut media_engine = MediaEngine::default();
 
-    media_engine.register_default_codecs().unwrap();
+    media_engine.register_default_codecs()?;
 
     let mut interceptor_registry = Registry::new();
 
-    interceptor_registry =
-        register_default_interceptors(interceptor_registry, &mut media_engine).unwrap();
+    interceptor_registry = register_default_interceptors(interceptor_registry, &mut media_engine)?;
 
     let api = APIBuilder::new()
         .with_media_engine(media_engine)
@@ -48,11 +47,11 @@ async fn create_peer_connection() -> RTCPeerConnection {
         ..Default::default()
     };
 
-    api.new_peer_connection(config).await.unwrap()
+    Ok(api.new_peer_connection(config).await?)
 }
 
-async fn create_requester() -> RTCPeerConnection {
-    let pc = create_peer_connection().await;
+async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
+    let pc = create_peer_connection().await?;
 
     let options = Some(RTCDataChannelInit {
         ordered: Some(false),
@@ -61,14 +60,14 @@ async fn create_requester() -> RTCPeerConnection {
     });
 
     let (more_can_be_sent, mut maybe_more_can_be_sent) = tokio::sync::mpsc::channel(1);
-    let dc = pc.create_data_channel("data", options).await.unwrap();
+    let dc = pc.create_data_channel("data", options).await?;
 
     let shared_dc = dc.clone();
     dc.on_open(Box::new(|| {
         Box::pin(async move {
             println!("requester :: on_open");
 
-            let task = tokio::spawn(async move {
+            tokio::spawn(async move {
                 let buf = Bytes::from_static(&[0u8; 1024]);
 
                 loop {
@@ -83,8 +82,6 @@ async fn create_requester() -> RTCPeerConnection {
                     }
                 }
             });
-
-            task.await.unwrap();
         })
     }))
     .await;
@@ -101,11 +98,11 @@ async fn create_requester() -> RTCPeerConnection {
     }))
     .await;
 
-    pc
+    Ok(pc)
 }
 
-async fn create_responder() -> RTCPeerConnection {
-    let pc = create_peer_connection().await;
+async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
+    let pc = create_peer_connection().await?;
 
     pc.on_data_channel(Box::new(move |dc| {
         Box::pin(async move {
@@ -116,7 +113,7 @@ async fn create_responder() -> RTCPeerConnection {
                 Box::pin(async {
                     println!("responder :: on_open");
 
-                    let task = tokio::spawn(async move {
+                    tokio::spawn(async move {
                         let start = SystemTime::now();
 
                         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -135,8 +132,6 @@ async fn create_responder() -> RTCPeerConnection {
                             tokio::time::sleep(Duration::from_secs(1)).await;
                         }
                     });
-
-                    task.await.unwrap();
                 })
             }))
             .await;
@@ -153,13 +148,13 @@ async fn create_responder() -> RTCPeerConnection {
     }))
     .await;
 
-    pc
+    Ok(pc)
 }
 
 #[tokio::main]
-async fn main() {
-    let requester = Arc::new(create_requester().await);
-    let responder = Arc::new(create_responder().await);
+async fn main() -> anyhow::Result<()> {
+    let requester = Arc::new(create_requester().await?);
+    let responder = Arc::new(create_responder().await?);
 
     let maybe_requester = Arc::downgrade(&requester);
     responder
@@ -229,15 +224,15 @@ async fn main() {
         }))
         .await;
 
-    let reqs = requester.create_offer(None).await.unwrap();
+    let reqs = requester.create_offer(None).await?;
 
-    requester.set_local_description(reqs.clone()).await.unwrap();
-    responder.set_remote_description(reqs).await.unwrap();
+    requester.set_local_description(reqs.clone()).await?;
+    responder.set_remote_description(reqs).await?;
 
-    let resp = responder.create_answer(None).await.unwrap();
+    let resp = responder.create_answer(None).await?;
 
-    responder.set_local_description(resp.clone()).await.unwrap();
-    requester.set_remote_description(resp).await.unwrap();
+    responder.set_local_description(resp.clone()).await?;
+    requester.set_remote_description(resp).await?;
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
@@ -260,4 +255,6 @@ async fn main() {
     }
 
     println!("");
+
+    Ok(())
 }
