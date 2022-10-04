@@ -209,8 +209,6 @@ pub enum Error {
     ErrOutboundPacketTooLarge,
     #[error("Stream closed")]
     ErrStreamClosed,
-    #[error("Short buffer to be filled")]
-    ErrShortBuffer,
     #[error("Io EOF")]
     ErrEof,
     #[error("Invalid SystemTime")]

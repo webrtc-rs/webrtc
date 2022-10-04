@@ -173,7 +173,6 @@ impl Stream {
 
     /// Reads a packet of len(p) bytes, dropping the Payload Protocol Identifier.
     ///
-    /// Returns `Error::ErrShortBuffer` if `p` is too short.
     /// Returns `0` if the reading half of this stream is shutdown or it (the stream) was reset.
     pub async fn read(&self, p: &mut [u8]) -> Result<usize> {
         let (n, _) = self.read_sctp(p).await?;
@@ -182,7 +181,6 @@ impl Stream {
 
     /// Reads a packet of len(p) bytes and returns the associated Payload Protocol Identifier.
     ///
-    /// Returns `Error::ErrShortBuffer` if `p` is too short.
     /// Returns `(0, PayloadProtocolIdentifier::Unknown)` if the reading half of this stream is shutdown or it (the stream) was reset.
     pub async fn read_sctp(&self, p: &mut [u8]) -> Result<(usize, PayloadProtocolIdentifier)> {
         loop {
@@ -196,7 +194,7 @@ impl Stream {
             };
 
             match result {
-                Ok(_) | Err(Error::ErrShortBuffer) => return result,
+                Ok(_) => return result,
                 Err(_) => {
                     // wait for the next chunk to become available
                     self.read_notifier.notified().await;
