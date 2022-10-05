@@ -98,7 +98,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             return false;
         }
 
-        let mut i = location.tail - 1;
+        let mut i = location.tail.wrapping_sub(1);
         while i != location.head {
             if let Some(ref packet) = self.buffer[i as usize] {
                 found_tail = Some(packet.header.timestamp);
