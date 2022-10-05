@@ -118,7 +118,7 @@ impl Server {
                             continue;
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => {
-                            let _ = close_rx.close();
+                            close_rx.close();
                             break;
                         }
                         Err(RecvError::Lagged(n)) => {
