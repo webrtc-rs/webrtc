@@ -25,6 +25,8 @@ const BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 512 * 1024; // 512 KB
 const MAX_BUFFERED_AMOUNT: usize = 1024 * 1024; // 1 MB
 
 async fn create_peer_connection() -> anyhow::Result<RTCPeerConnection> {
+    // Create unique MediaEngine,
+    // as MediaEngine must not be shared between PeerConnections
     let mut media_engine = MediaEngine::default();
 
     media_engine.register_default_codecs()?;
@@ -33,6 +35,7 @@ async fn create_peer_connection() -> anyhow::Result<RTCPeerConnection> {
 
     interceptor_registry = register_default_interceptors(interceptor_registry, &mut media_engine)?;
 
+    // Create API that bundles the global functions of the WebRTC API
     let api = APIBuilder::new()
         .with_media_engine(media_engine)
         .with_interceptor_registry(interceptor_registry)
@@ -51,20 +54,27 @@ async fn create_peer_connection() -> anyhow::Result<RTCPeerConnection> {
 }
 
 async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
+    // Create a peer connection first
     let pc = create_peer_connection().await?;
 
+    // Data transmission requires a data channel, so prepare to create one
     let options = Some(RTCDataChannelInit {
         ordered: Some(false),
         max_retransmits: Some(0u16),
         ..Default::default()
     });
 
-    let (more_can_be_sent, mut maybe_more_can_be_sent) = tokio::sync::mpsc::channel(1);
+    // Create a data channel to send data over a peer connection
     let dc = pc.create_data_channel("data", options).await?;
 
+    // Use mpsc channel to send and receive a signal when more data can be sent
+    let (more_can_be_sent, mut maybe_more_can_be_sent) = tokio::sync::mpsc::channel(1);
+
+    // Get a shared pointer to the data channel
     let shared_dc = dc.clone();
     dc.on_open(Box::new(|| {
         Box::pin(async move {
+            // This callback shouldn't be blocked for a long time, so we spawn our handler
             tokio::spawn(async move {
                 let buf = Bytes::from_static(&[0u8; 1024]);
 
@@ -76,6 +86,7 @@ async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
                     let buffered_amount = shared_dc.buffered_amount().await;
 
                     if buffered_amount + buf.len() > MAX_BUFFERED_AMOUNT {
+                        // Wait for the signal that more can be sent
                         let _ = maybe_more_can_be_sent.recv().await;
                     }
                 }
@@ -91,6 +102,7 @@ async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
         let more_can_be_sent = more_can_be_sent.clone();
 
         Box::pin(async move {
+            // Send a signal that more can be sent
             more_can_be_sent.send(()).await.unwrap();
         })
     }))
@@ -100,15 +112,18 @@ async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
 }
 
 async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
+    // Create a peer connection first
     let pc = create_peer_connection().await?;
 
+    // Set a data channel handler so that we can receive data
     pc.on_data_channel(Box::new(move |dc| {
         Box::pin(async move {
             let total_bytes_received = Arc::new(AtomicUsize::new(0));
 
-            let get_total_bytes_received = total_bytes_received.clone();
+            let shared_total_bytes_received = total_bytes_received.clone();
             dc.on_open(Box::new(move || {
                 Box::pin(async {
+                    // This callback shouldn't be blocked for a long time, so we spawn our handler
                     tokio::spawn(async move {
                         let start = SystemTime::now();
 
@@ -116,10 +131,12 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
                         println!("");
 
                         loop {
-                            let total_bytes = get_total_bytes_received.load(Ordering::Relaxed);
+                            let total_bytes_received =
+                                shared_total_bytes_received.load(Ordering::Relaxed);
 
                             let elapsed = SystemTime::now().duration_since(start);
-                            let bps = (total_bytes * 8) as f64 / elapsed.unwrap().as_secs_f64();
+                            let bps =
+                                (total_bytes_received * 8) as f64 / elapsed.unwrap().as_secs_f64();
 
                             println!(
                                 "Throughput is about {:.03} Mbps",
