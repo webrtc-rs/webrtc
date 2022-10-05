@@ -22,10 +22,8 @@ The rate you wish to send data might be much higher than the rate the data chann
 actually send to the peer over the Internet. The above properties/methods help your
 application to pace the amount of data to be pushed into the data channel.
 
-
 ## How to run the example code
-
-The demo code implements two endpoints (offer_pc and answer_pc) in it.
+The demo code implements two endpoints (requester and responder) in it.
 
 ```
                         signaling messages
@@ -34,31 +32,31 @@ The demo code implements two endpoints (offer_pc and answer_pc) in it.
            v                                        v
    +---------------+                        +---------------+
    |               |          data          |               |
-   |    offer_pc    |----------------------->|    answer_pc   |
+   |   requester   |----------------------->|   responder   |
    |:PeerConnection|                        |:PeerConnection|
    +---------------+                        +---------------+
 ```
 
-First offer_pc and answer_pc will exchange signaling message to establish a peer-to-peer
+First requester and responder will exchange signaling message to establish a peer-to-peer
 connection, and data channel (label: "data").
 
-Once the data channel is successfully opened, offer_pc will start sending a series of
-1024-byte packets to answer_pc as fast as it can, until you kill the process by Ctrl-c.
+Once the data channel is successfully opened, requester will start sending a series of
+1024-byte packets to responder, until you kill the process by Ctrl+С.
 
+Here's how to run the code:
 
-Here's how to run the code.
-
-At the root of the example:
 ```
-$ cargo run
-Peer Connection State has changed: connected (offerer)
-Peer Connection State has changed: connected (answerer)
-OnOpen: data-1. Start sending a series of 1024-byte packets as fast as it can
-OnOpen: data-1. Start receiving data
-Throughput: 12.990 Mbps
-Throughput: 13.698 Mbps
-Throughput: 13.559 Mbps
-Throughput: 13.345 Mbps
-Throughput: 13.565 Mbps
- :
+$ cargo run --release --example data-channels-flow-control
+    Finished release [optimized] target(s) in 0.36s
+     Running `target\release\examples\data-channels-flow-control.exe`
+
+Throughput is about 127.060 Mbps
+Throughput is about 122.091 Mbps
+Throughput is about 120.630 Mbps
+Throughput is about 120.105 Mbps
+Throughput is about 119.873 Mbps
+Throughput is about 118.890 Mbps
+Throughput is about 118.525 Mbps
+Throughput is about 118.614 Mbps
+
 ```
