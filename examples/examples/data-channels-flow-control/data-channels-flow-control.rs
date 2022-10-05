@@ -65,8 +65,6 @@ async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
     let shared_dc = dc.clone();
     dc.on_open(Box::new(|| {
         Box::pin(async move {
-            println!("requester :: on_open");
-
             tokio::spawn(async move {
                 let buf = Bytes::from_static(&[0u8; 1024]);
 
@@ -111,8 +109,6 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
             let get_total_bytes_received = total_bytes_received.clone();
             dc.on_open(Box::new(move || {
                 Box::pin(async {
-                    println!("responder :: on_open");
-
                     tokio::spawn(async move {
                         let start = SystemTime::now();
 
@@ -153,6 +149,8 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let requester = Arc::new(create_requester().await?);
     let responder = Arc::new(create_responder().await?);
 
@@ -196,12 +194,8 @@ async fn main() -> anyhow::Result<()> {
             let fault = fault.clone();
 
             Box::pin(async move {
-                println!("requester :: peer_connection_state_change :: {}", s);
-
                 if s == RTCPeerConnectionState::Failed {
-                    println!("{:?}", s);
-
-                    let _ = fault.try_send(());
+                    fault.send(()).await.unwrap();
                 }
             })
         }))
@@ -213,12 +207,8 @@ async fn main() -> anyhow::Result<()> {
             let fault = fault.clone();
 
             Box::pin(async move {
-                println!("responder :: peer_connection_state_change :: {}", s);
-
                 if s == RTCPeerConnectionState::Failed {
-                    println!("{:?}", s);
-
-                    let _ = fault.try_send(());
+                    fault.send(()).await.unwrap();
                 }
             })
         }))
@@ -235,24 +225,17 @@ async fn main() -> anyhow::Result<()> {
     requester.set_remote_description(resp).await?;
 
     tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            println!("");
-        }
+        _ = tokio::signal::ctrl_c() => {}
         _ = reqs_fault.recv() => {
-            println!("reqs_fault");
+            log::error!("Requester's peer connection failed...")
         }
         _ = resp_fault.recv() => {
-            println!("resp_fault");
+            log::error!("Responder's peer connection failed...");
         }
     }
 
-    if let Err(err) = requester.close().await {
-        println!("{}", err);
-    }
-
-    if let Err(err) = responder.close().await {
-        println!("{}", err);
-    }
+    requester.close().await?;
+    responder.close().await?;
 
     println!("");
 
