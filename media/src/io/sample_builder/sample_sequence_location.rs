@@ -28,7 +28,7 @@ impl<'a, T> std::iter::Iterator for Iterator<'a, T> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct SampleSequenceLocation {
     /// head is the first packet in a sequence
     pub(crate) head: u16,

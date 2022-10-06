@@ -98,7 +98,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             return false;
         }
 
-        let mut i = location.tail - 1;
+        let mut i = location.tail.wrapping_sub(1);
         while i != location.head {
             if let Some(ref packet) = self.buffer[i as usize] {
                 found_tail = Some(packet.header.timestamp);
@@ -174,13 +174,18 @@ impl<T: Depacketizer> SampleBuilder<T> {
             if self.active.has_data() && (self.active.head == self.filled.head) {
                 // attempt to force the active packet to be consumed even though
                 // outstanding data may be pending arrival
-                if self.build_sample(true).is_some() {
-                    continue;
+                let err = match self.build_sample(true) {
+                    Ok(_) => continue,
+                    Err(e) => e,
+                };
+
+                if !matches!(err, BuildError::InvalidParition(_)) {
+                    // In the InvalidParition case `build_sample` will have already adjusted `droppped_packets`.
+                    self.dropped_packets += 1;
                 }
 
                 // could not build the sample so drop it
                 self.active.head = self.active.head.wrapping_add(1);
-                self.dropped_packets += 1;
             }
 
             self.release_packet(self.filled.head);
@@ -214,13 +219,16 @@ impl<T: Depacketizer> SampleBuilder<T> {
     /// Creates a sample from a valid collection of RTP Packets by
     /// walking forwards building a sample if everything looks good clear and
     /// update buffer+values
-    fn build_sample(&mut self, purging_buffers: bool) -> Option<()> {
+    fn build_sample(
+        &mut self,
+        purging_buffers: bool,
+    ) -> Result<SampleSequenceLocation, BuildError> {
         if self.active.empty() {
             self.active = self.filled;
         }
 
         if self.active.empty() {
-            return None;
+            return Err(BuildError::NoActiveSegment);
         }
 
         if self.filled.compare(self.active.tail) == Comparison::Inside {
@@ -230,37 +238,49 @@ impl<T: Depacketizer> SampleBuilder<T> {
         let mut consume = SampleSequenceLocation::new();
 
         let mut i = self.active.head;
+        // `self.active` isn't modified in the loop, fetch the timestamp once and cache it.
+        let head_timestamp = self.fetch_timestamp(&self.active);
         while let Some(ref packet) = self.buffer[i as usize] {
             if self.active.compare(i) == Comparison::After {
                 break;
             }
-            if self
+            let is_same_timestamp = head_timestamp.map(|t| packet.header.timestamp == t);
+            let is_different_timestamp = is_same_timestamp.map(std::ops::Not::not);
+            let is_partition_tail = self
                 .depacketizer
-                .is_partition_tail(packet.header.marker, &packet.payload)
-            {
+                .is_partition_tail(packet.header.marker, &packet.payload);
+
+            // If the timestamp is not the same it might be because the next packet is both a start
+            // and end of the next parition in which case a sample should be generated now. This
+            // can happen when padding packets are used .e.g:
+            //
+            // p1(t=1), p2(t=1), p3(t=1), p4(t=2, marker=true, start=true)
+            //
+            // In thic case the generated sample should be p1 through p3, but excluding p4 which is
+            // its own sample.
+            if is_partition_tail && is_same_timestamp.unwrap_or(true) {
                 consume.head = self.active.head;
                 consume.tail = i.wrapping_add(1);
                 break;
             }
-            if let Some(head_timestamp) = self.fetch_timestamp(&self.active) {
-                if packet.header.timestamp != head_timestamp {
-                    consume.head = self.active.head;
-                    consume.tail = i;
-                    break;
-                }
+
+            if is_different_timestamp.unwrap_or(false) {
+                consume.head = self.active.head;
+                consume.tail = i;
+                break;
             }
             i = i.wrapping_add(1);
         }
 
         if consume.empty() {
-            return None;
+            return Err(BuildError::NothingToConsume);
         }
 
         if !purging_buffers && self.buffer[consume.tail as usize].is_none() {
             // wait for the next packet after this set of packets to arrive
             // to ensure at least one post sample timestamp is known
             // (unless we have to release right now)
-            return None;
+            return Err(BuildError::PendingTimestampPacket);
         }
 
         let sample_timestamp = self.fetch_timestamp(&self.active).unwrap_or(0);
@@ -274,15 +294,13 @@ impl<T: Depacketizer> SampleBuilder<T> {
             }
         }
 
-        // the head set of packets is now fully consumed
-        self.active.head = consume.tail;
-
         // prior to decoding all the packets, check if this packet
         // would end being disposed anyway
-        if !self
-            .depacketizer
-            .is_partition_head(&self.buffer[consume.head as usize].as_ref()?.payload)
-        {
+        let head_payload = self.buffer[consume.head as usize]
+            .as_ref()
+            .map(|p| &p.payload)
+            .ok_or(BuildError::GapInSegment)?;
+        if !self.depacketizer.is_partition_head(head_payload) {
             // libWebRTC will sometimes send several empty padding packets to smooth out send
             // rate. These packets don't carry any media payloads.
             let is_padding = consume.range(&self.buffer).all(|p| {
@@ -298,17 +316,28 @@ impl<T: Depacketizer> SampleBuilder<T> {
             }
             self.purge_consumed_location(&consume, true);
             self.purge_consumed_buffers();
-            return None;
+
+            self.active.head = consume.tail;
+            return Err(BuildError::InvalidParition(consume));
         }
+
+        // the head set of packets is now fully consumed
+        self.active.head = consume.tail;
 
         // merge all the buffers into a sample
         let mut data: Vec<u8> = Vec::new();
         let mut i = consume.head;
         while i != consume.tail {
+            let payload = self.buffer[i as usize]
+                .as_ref()
+                .map(|p| &p.payload)
+                .ok_or(BuildError::GapInSegment)?;
+
             let p = self
                 .depacketizer
-                .depacketize(&self.buffer[i as usize].as_ref()?.payload)
-                .ok()?;
+                .depacketize(payload)
+                .map_err(|_| BuildError::DepacketizerFailed)?;
+
             data.extend_from_slice(&p);
             i = i.wrapping_add(1);
         }
@@ -333,13 +362,14 @@ impl<T: Depacketizer> SampleBuilder<T> {
         self.purge_consumed_location(&consume, true);
         self.purge_consumed_buffers();
 
-        Some(())
+        Ok(consume)
     }
 
     /// Compiles pushed RTP packets into media samples and then
     /// returns the next valid sample (or None if no sample is compiled).
     pub fn pop(&mut self) -> Option<Sample> {
-        self.build_sample(false);
+        let _ = self.build_sample(false);
+
         if self.prepared.empty() {
             return None;
         }
@@ -380,4 +410,27 @@ pub(crate) fn seqnum_distance(x: u16, y: u16) -> u16 {
     } else {
         diff
     }
+}
+
+#[derive(Debug)]
+enum BuildError {
+    /// There's no active segment of RTP packets to consider yet.
+    NoActiveSegment,
+
+    /// No sample partition could be found in the active segment.
+    NothingToConsume,
+
+    /// A segment to consume was identified, but a subsequent packet is needed to determine the
+    /// duration of the sample.
+    PendingTimestampPacket,
+
+    /// The active segment's head was not aligned with a sample parition head. Some packets were
+    /// dropped.
+    InvalidParition(SampleSequenceLocation),
+
+    /// There was a gap in the active segment because of one or more missing RTP packets.
+    GapInSegment,
+
+    /// We failed to depacketize an RTP packet.
+    DepacketizerFailed,
 }

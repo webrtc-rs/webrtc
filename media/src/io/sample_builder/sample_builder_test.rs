@@ -49,7 +49,7 @@ impl Depacketizer for FakeDepacketizer {
             return true;
         }
 
-        for b in self.head_bytes.clone() {
+        for b in &self.head_bytes {
             if *payload == b {
                 return true;
             }
@@ -725,7 +725,7 @@ pub fn test_sample_builder() {
         },
         SampleBuilderTest {
             #[rustfmt::skip]
-            message: "Sample builder should skipt time stamps too old".into(),
+            message: "Sample builder should skip timestamps too old".into(),
             packets: vec![
                 Packet {
                     // First packet
@@ -813,7 +813,7 @@ pub fn test_sample_builder() {
                 data: bytes!(4, 5),
                 duration: Duration::from_secs(2),
                 packet_timestamp: 4000,
-                prev_dropped_packets: 13,
+                prev_dropped_packets: 12,
                 ..Default::default()
             }],
             with_head_checker: true,
@@ -822,6 +822,9 @@ pub fn test_sample_builder() {
             max_late_timestamp: Duration::from_secs(2000),
             ..Default::default()
         },
+        // This test is based on observed RTP packet streams from Chrome. libWebRTC inserts padding
+        // packets to keep send rates steady, these are not important for sample building but we
+        // should identify them as padding packets to differentiate them from lost packets.
         SampleBuilderTest {
             #[rustfmt::skip]
             message: "Sample builder should recognise padding packets".into(),
@@ -933,6 +936,254 @@ pub fn test_sample_builder() {
             max_late: 50,
             max_late_timestamp: Duration::from_secs(2000),
             extra_pop_attempts: 1,
+            ..Default::default()
+        },
+        // This test is based on observed RTP packet streams when screen sharing in Chrome.
+        SampleBuilderTest {
+            #[rustfmt::skip]
+            message: "Sample builder should recognise padding packets when combined with max_late_timestamp".into(),
+            packets: vec![
+                Packet {
+                    // First packet
+                    header: Header {
+                        sequence_number: 5000,
+                        timestamp: 1,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+                Packet {
+                    // Second packet
+                    header: Header {
+                        sequence_number: 5001,
+                        timestamp: 1,
+                        ..Default::default()
+                    },
+                    payload: bytes!(2),
+                    ..Default::default()
+                },
+                Packet {
+                    // Third packet
+                    header: Header {
+                        sequence_number: 5002,
+                        timestamp: 1,
+                        marker: true,
+                        ..Default::default()
+                    },
+                    payload: bytes!(3),
+                    ..Default::default()
+                },
+                Packet {
+                    // Padding packet 1
+                    header: Header {
+                        sequence_number: 5003,
+                        timestamp: 1,
+                        ..Default::default()
+                    },
+                    payload: Bytes::from_static(&[]),
+                    ..Default::default()
+                },
+                Packet {
+                    // Padding packet 2
+                    header: Header {
+                        sequence_number: 5004,
+                        timestamp: 1,
+                        ..Default::default()
+                    },
+                    payload: Bytes::from_static(&[]),
+                    ..Default::default()
+                },
+                Packet {
+                    // Sixth packet
+                    header: Header {
+                        sequence_number: 5005,
+                        timestamp: 3,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+                Packet {
+                    // Seventh packet
+                    header: Header {
+                        sequence_number: 5006,
+                        timestamp: 3,
+                        marker: true,
+                        ..Default::default()
+                    },
+                    payload: bytes!(7),
+                    ..Default::default()
+                },
+                Packet {
+                    // Seventh packet
+                    header: Header {
+                        sequence_number: 5007,
+                        timestamp: 4,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+            ],
+            samples: vec![
+                Sample {
+                    // First sample
+                    data: bytes!(1, 2, 3),
+                    duration: Duration::from_secs(0),
+                    packet_timestamp: 1,
+                    prev_dropped_packets: 0,
+                    ..Default::default()
+                },
+                Sample {
+                    // Second sample
+                    data: bytes!(1, 7),
+                    duration: Duration::from_secs(1),
+                    packet_timestamp: 3,
+                    prev_dropped_packets: 2,
+                    prev_padding_packets: 2,
+                    ..Default::default()
+                },
+            ],
+            with_head_checker: true,
+            head_bytes: vec![bytes!(1)],
+            max_late: 50,
+            max_late_timestamp: Duration::from_millis(1050),
+            extra_pop_attempts: 1,
+            ..Default::default()
+        },
+        // This test is based on observed RTP packet streams when screen sharing in Chrome.
+        SampleBuilderTest {
+            #[rustfmt::skip]
+            message: "Sample builder should build a sample out of a packet that's both start and end".into(),
+            packets: vec![
+                Packet {
+                    header: Header {
+                        sequence_number: 5000,
+                        timestamp: 1,
+                        marker: true,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+                Packet {
+                    header: Header {
+                        sequence_number: 5001,
+                        timestamp: 2,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+            ],
+            samples: vec![Sample {
+                // First sample
+                data: bytes!(1),
+                duration: Duration::from_secs(1),
+                packet_timestamp: 1,
+                prev_dropped_packets: 0,
+                ..Default::default()
+            }],
+            with_head_checker: true,
+            head_bytes: vec![bytes!(1)],
+            max_late: 50,
+            max_late_timestamp: Duration::from_millis(1050),
+            ..Default::default()
+        },
+        // This test is based on observed RTP packet streams when screen sharing in Chrome. In
+        // particular the scenario used involved no movement on screen which causes Chrome to
+        // generate padding packets.
+        SampleBuilderTest {
+            #[rustfmt::skip]
+            message: "Sample builder should build a sample out of a packet that's both start and end following a run of padding packets".into(),
+            packets: vec![
+                // First valid packet
+                Packet {
+                    header: Header {
+                        sequence_number: 5000,
+                        timestamp: 1,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+                // Second valid packet
+                Packet {
+                    header: Header {
+                        sequence_number: 5001,
+                        timestamp: 1,
+                        marker: true,
+                        ..Default::default()
+                    },
+                    payload: bytes!(2),
+                    ..Default::default()
+                },
+                // Padding packet 1
+                Packet {
+                    header: Header {
+                        sequence_number: 5002,
+                        timestamp: 1,
+                        ..Default::default()
+                    },
+                    payload: Bytes::default(),
+                    ..Default::default()
+                },
+                // Padding packet 2
+                Packet {
+                    header: Header {
+                        sequence_number: 5003,
+                        timestamp: 1,
+                        ..Default::default()
+                    },
+                    payload: Bytes::default(),
+                    ..Default::default()
+                },
+                // Third valid packet
+                Packet {
+                    header: Header {
+                        sequence_number: 5004,
+                        timestamp: 2,
+                        marker: true,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+                // Fourth valid packet, start of next sample
+                Packet {
+                    header: Header {
+                        sequence_number: 5005,
+                        timestamp: 3,
+                        ..Default::default()
+                    },
+                    payload: bytes!(1),
+                    ..Default::default()
+                },
+            ],
+            samples: vec![
+                Sample {
+                    // First sample
+                    data: bytes!(1, 2),
+                    duration: Duration::from_secs(0),
+                    packet_timestamp: 1,
+                    prev_dropped_packets: 0,
+                    ..Default::default()
+                },
+                Sample {
+                    // Second sample
+                    data: bytes!(1),
+                    duration: Duration::from_secs(1),
+                    packet_timestamp: 2,
+                    prev_dropped_packets: 2,
+                    prev_padding_packets: 2,
+                    ..Default::default()
+                },
+            ],
+            with_head_checker: true,
+            head_bytes: vec![bytes!(1)],
+            extra_pop_attempts: 1,
+            max_late: 50,
             ..Default::default()
         },
     ];
