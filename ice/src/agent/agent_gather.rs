@@ -28,6 +28,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) mdns_name: String,
     pub(crate) net: Arc<Net>,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
+    pub(crate) ip_filter: Arc<Option<IpFilterFn>>,
     pub(crate) ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     pub(crate) agent_internal: Arc<AgentInternal>,
     pub(crate) gathering_state: Arc<AtomicU8>,
@@ -40,6 +41,7 @@ struct GatherCandidatesLocalParams {
     mdns_mode: MulticastDnsMode,
     mdns_name: String,
     interface_filter: Arc<Option<InterfaceFilterFn>>,
+    ip_filter: Arc<Option<IpFilterFn>>,
     ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<AgentInternal>,
@@ -48,6 +50,7 @@ struct GatherCandidatesLocalParams {
 struct GatherCandidatesLocalUDPMuxParams {
     network_types: Vec<NetworkType>,
     interface_filter: Arc<Option<InterfaceFilterFn>>,
+    ip_filter: Arc<Option<IpFilterFn>>,
     ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<AgentInternal>,
@@ -92,6 +95,7 @@ impl Agent {
                         mdns_mode: params.mdns_mode,
                         mdns_name: params.mdns_name.clone(),
                         interface_filter: Arc::clone(&params.interface_filter),
+                        ip_filter: Arc::clone(&params.ip_filter),
                         ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
                         net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
@@ -194,6 +198,7 @@ impl Agent {
             mdns_mode,
             mdns_name,
             interface_filter,
+            ip_filter,
             ext_ip_mapper,
             net,
             agent_internal,
@@ -203,6 +208,7 @@ impl Agent {
             params.mdns_mode,
             params.mdns_name,
             params.interface_filter,
+            params.ip_filter,
             params.ext_ip_mapper,
             params.net,
             params.agent_internal,
@@ -214,6 +220,7 @@ impl Agent {
             let result = Self::gather_candidates_local_udp_mux(GatherCandidatesLocalUDPMuxParams {
                 network_types,
                 interface_filter,
+                ip_filter,
                 ext_ip_mapper,
                 net,
                 agent_internal,
@@ -228,7 +235,7 @@ impl Agent {
             return;
         }
 
-        let ips = local_interfaces(&net, &*interface_filter, &network_types).await;
+        let ips = local_interfaces(&net, &*interface_filter, &*ip_filter, &network_types).await;
         for ip in ips {
             let mut mapped_ip = ip;
 
@@ -374,10 +381,19 @@ impl Agent {
     async fn gather_candidates_local_udp_mux(
         params: GatherCandidatesLocalUDPMuxParams,
     ) -> Result<()> {
-        let (udp_mux, agent_internal, interface_filter, ext_ip_mapper, net, network_types) = (
+        let (
+            udp_mux,
+            agent_internal,
+            interface_filter,
+            ip_filter,
+            ext_ip_mapper,
+            net,
+            network_types,
+        ) = (
             params.udp_mux,
             params.agent_internal,
             params.interface_filter,
+            params.ip_filter,
             params.ext_ip_mapper,
             params.net,
             params.network_types,
@@ -389,7 +405,8 @@ impl Agent {
         let udp_mux = Arc::clone(&udp_mux);
 
         // There's actually only one, but `local_interfaces` requires a slice.
-        let local_ips = local_interfaces(&net, &interface_filter, &relevant_network_types).await;
+        let local_ips =
+            local_interfaces(&net, &interface_filter, &ip_filter, &relevant_network_types).await;
 
         let candidate_ip = ext_ip_mapper
             .as_ref() // Arc

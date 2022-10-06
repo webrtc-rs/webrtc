@@ -1,6 +1,7 @@
 # webrtc-ice changelog
 
 ## Unreleased
+* Add IP filter to ICE `AgentConfig` [#306](https://github.com/webrtc-rs/webrtc/pull/306)
 
 ## v0.8.1
 

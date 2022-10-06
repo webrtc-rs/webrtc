@@ -4,7 +4,7 @@ mod setting_engine_test;
 use crate::dtls_transport::dtls_role::DTLSRole;
 use crate::ice_transport::ice_candidate_type::RTCIceCandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
-use ice::agent::agent_config::InterfaceFilterFn;
+use ice::agent::agent_config::{InterfaceFilterFn, IpFilterFn};
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 use ice::udp_network::UDPNetwork;
@@ -37,6 +37,7 @@ pub struct Candidates {
     pub ice_lite: bool,
     pub ice_network_types: Vec<NetworkType>,
     pub interface_filter: Arc<Option<InterfaceFilterFn>>,
+    pub ip_filter: Arc<Option<IpFilterFn>>,
     pub nat_1to1_ips: Vec<String>,
     pub nat_1to1_ip_candidate_type: RTCIceCandidateType,
     pub multicast_dns_mode: MulticastDnsMode,
@@ -158,6 +159,14 @@ impl SettingEngine {
     /// the amount of information you wish to expose to the remote peer
     pub fn set_interface_filter(&mut self, filter: InterfaceFilterFn) {
         self.candidates.interface_filter = Arc::new(Some(filter));
+    }
+
+    /// set_ip_filter sets the filtering functions when gathering ICE candidates
+    /// This can be used to exclude certain ip from ICE. Which may be
+    /// useful if you know a certain ip will never succeed, or if you wish to reduce
+    /// the amount of information you wish to expose to the remote peer
+    pub fn set_ip_filter(&mut self, filter: IpFilterFn) {
+        self.candidates.ip_filter = Arc::new(Some(filter));
     }
 
     /// set_nat_1to1_ips sets a list of external IP addresses of 1:1 (D)NAT
