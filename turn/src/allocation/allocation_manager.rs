@@ -43,7 +43,8 @@ impl Manager {
         }
         Ok(())
     }
-
+    // Gets the information about the all `Allocation`s associated with
+    // the specified `FiveTuple`s
     pub async fn get_allocation_infos(
         &self,
         five_tuples: Option<Vec<FiveTuple>>,
@@ -68,8 +69,6 @@ impl Manager {
                 ));
             }
         });
-
-        drop(guarded);
 
         infos
     }

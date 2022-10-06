@@ -120,12 +120,7 @@ impl Server {
             let mut info: HashMap<FiveTuple, AllocationInfo> = HashMap::new();
 
             for _ in 0..tx.receiver_count() {
-                info.extend(
-                    allocation_infos_rx
-                        .recv()
-                        .await
-                        .ok_or_else(|| Error::ErrClosed)?,
-                );
+                info.extend(allocation_infos_rx.recv().await.ok_or(Error::ErrClosed)?);
             }
 
             Ok(info)

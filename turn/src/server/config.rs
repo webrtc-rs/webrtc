@@ -15,6 +15,7 @@ pub struct ConnConfig {
     // creates the net.PacketConn and returns the IP/Port it is available at
     pub relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
 
+    // Indicates whether to gather metrics or not
     pub gather_metrics: bool,
 }
 
