@@ -27,7 +27,7 @@ lazy_static! {
         Arc::new(Mutex::new(None));
 }
 
-static INDEX: &str = "examples/ice-restart/index.html";
+static INDEX: &str = "examples/examples/ice-restart/index.html";
 static NOTFOUND: &[u8] = b"Not Found";
 
 /// HTTP status code 404

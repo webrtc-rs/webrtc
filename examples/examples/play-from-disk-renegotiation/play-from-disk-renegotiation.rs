@@ -37,7 +37,7 @@ lazy_static! {
     static ref VIDEO_FILE: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 }
 
-static INDEX: &str = "examples/play-from-disk-renegotiation/index.html";
+static INDEX: &str = "examples/examples/play-from-disk-renegotiation/index.html";
 static NOTFOUND: &[u8] = b"Not Found";
 
 /// HTTP status code 404

@@ -7,6 +7,7 @@ use crate::url::*;
 
 use util::vnet::net::*;
 
+use std::net::IpAddr;
 use std::time::Duration;
 
 /// The interval at which the agent performs candidate checks in the connecting phase.
@@ -51,6 +52,7 @@ pub(crate) fn default_candidate_types() -> Vec<CandidateType> {
 }
 
 pub type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
+pub type IpFilterFn = Box<dyn (Fn(IpAddr) -> bool) + Send + Sync>;
 
 /// Collects the arguments to `ice::Agent` construction into a single structure, for
 /// future-proofness of the interface.
@@ -77,7 +79,7 @@ pub struct AgentConfig {
     /// Controls the hostname for this agent. If none is specified a random one will be generated.
     pub multicast_dns_host_name: String,
 
-    /// Control mDNS destination address    
+    /// Control mDNS destination address
     pub multicast_dns_dest_addr: String,
 
     /// Defaults to 5 seconds when this property is nil.
@@ -142,6 +144,10 @@ pub struct AgentConfig {
     /// A function that you can use in order to whitelist or blacklist the interfaces which are
     /// used to gather ICE candidates.
     pub interface_filter: Arc<Option<InterfaceFilterFn>>,
+
+    /// A function that you can use in order to whitelist or blacklist
+    /// the ips which are used to gather ICE candidates.
+    pub ip_filter: Arc<Option<IpFilterFn>>,
 
     /// Controls if self-signed certificates are accepted when connecting to TURN servers via TLS or
     /// DTLS.

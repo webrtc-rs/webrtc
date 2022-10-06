@@ -5,6 +5,7 @@ use std::time::SystemTime;
 
 use super::{inbound, outbound, StatsContainer};
 use async_trait::async_trait;
+use rtcp::extended_report::{DLRRReportBlock, ExtendedReport};
 use rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use rtcp::receiver_report::ReceiverReport;
@@ -39,39 +40,46 @@ enum Message {
 
 #[derive(Debug)]
 enum StatsUpdate {
-    RecvRTP {
+    /// Stats collected on the receiving end(inbound) of an RTP stream.
+    InboundRTP {
         packets: u64,
         header_bytes: u64,
         payload_bytes: u64,
         last_packet_timestamp: SystemTime,
     },
-    WriteRTP {
+    /// Stats collected on the sending end(outbound) of an RTP stream.
+    OutboundRTP {
         packets: u64,
         header_bytes: u64,
         payload_bytes: u64,
         last_packet_timestamp: SystemTime,
     },
-    RecvRTCP {
-        rtt_ms: Option<f64>,
-        fraction_lost: Option<u8>,
-        fir_count: Option<u64>,
-        pli_count: Option<u64>,
-        nack_count: Option<u64>,
-        sr_packets_sent: Option<u32>,
-        sr_bytes_sent: Option<u32>,
-        rr_ext_seq_num: Option<u32>,
-        rr_total_lost: Option<u32>,
-        rr_jitter: Option<u32>,
-    },
-    WriteRTCP {
-        rtt_ms: Option<f64>,
-        loss: Option<u8>,
+    /// Stats collected from received RTCP packets.
+    InboundRTCP {
         fir_count: Option<u64>,
         pli_count: Option<u64>,
         nack_count: Option<u64>,
     },
-    OutboundSRExtSeqNum {
-        seq_num: u32,
+    /// Stats collected from sent RTCP packets.
+    OutboundRTCP {
+        fir_count: Option<u64>,
+        pli_count: Option<u64>,
+        nack_count: Option<u64>,
+    },
+    /// An extended sequence number sent in an SR.
+    OutboundSRExtSeqNum { seq_num: u32 },
+    /// Stats collected from received Receiver Reports i.e. where we have an outbound RTP stream.
+    InboundRecieverReport {
+        ext_seq_num: u32,
+        total_lost: u32,
+        jitter: u32,
+        rtt_ms: Option<f64>,
+        fraction_lost: u8,
+    },
+    /// Stats collected from recieved Sender Reports i.e. where we have an inbound RTP stream.
+    InboundSenderRerport {
+        packets_and_bytes_sent: Option<(u32, u32)>,
+        rtt_ms: Option<f64>,
     },
 }
 
@@ -207,7 +215,7 @@ async fn run_stats_reducer(mut rx: mpsc::Receiver<Message>) {
 
 fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: StatsUpdate) {
     match update {
-        StatsUpdate::RecvRTP {
+        StatsUpdate::InboundRTP {
             packets,
             header_bytes,
             payload_bytes,
@@ -220,79 +228,69 @@ fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: Stats
                 .update(header_bytes, payload_bytes, packets, last_packet_timestamp);
             stats.mark_updated();
         }
-        StatsUpdate::WriteRTP {
+        StatsUpdate::OutboundRTP {
             packets,
             header_bytes,
             payload_bytes,
             last_packet_timestamp,
         } => {
             let stats = ssrc_stats.get_or_create_outbound_stream_stats(ssrc);
-
             stats
                 .rtp_stats
                 .update(header_bytes, payload_bytes, packets, last_packet_timestamp);
             stats.mark_updated();
         }
-        StatsUpdate::RecvRTCP {
-            rtt_ms,
-            fraction_lost,
+        StatsUpdate::InboundRTCP {
             fir_count,
             pli_count,
             nack_count,
-            sr_packets_sent,
-            sr_bytes_sent,
-            rr_ext_seq_num,
-            rr_total_lost,
-            rr_jitter,
         } => {
             let stats = ssrc_stats.get_or_create_outbound_stream_stats(ssrc);
-
-            stats.rtcp_stats.update(
-                rtt_ms,
-                fraction_lost,
-                fir_count,
-                pli_count,
-                nack_count,
-                sr_packets_sent,
-                sr_bytes_sent,
-            );
-            if let Some(rtt_ms) = rtt_ms {
-                stats.record_remote_round_trip_time(rtt_ms);
-            }
-
-            if let Some(fraction_lost) = fraction_lost {
-                stats.update_remote_fraction_lost(fraction_lost);
-            }
-
-            if let Some(total_lost) = rr_total_lost {
-                stats.update_remote_total_lost(total_lost);
-            }
-
-            if let Some(jitter) = rr_jitter {
-                stats.update_remote_jitter(jitter);
-            }
-
-            stats.update_remote_inbound_packets_received(rr_ext_seq_num, rr_total_lost);
+            stats.rtcp_stats.update(fir_count, pli_count, nack_count);
             stats.mark_updated();
         }
-        StatsUpdate::WriteRTCP {
-            rtt_ms,
-            loss,
+        StatsUpdate::OutboundRTCP {
             fir_count,
             pli_count,
             nack_count,
         } => {
             let stats = ssrc_stats.get_or_create_inbound_stream_stats(ssrc);
-
-            stats
-                .rtcp_stats
-                .update(rtt_ms, loss, fir_count, pli_count, nack_count, None, None);
-
+            stats.rtcp_stats.update(fir_count, pli_count, nack_count);
             stats.mark_updated();
         }
         StatsUpdate::OutboundSRExtSeqNum { seq_num } => {
             let stats = ssrc_stats.get_or_create_outbound_stream_stats(ssrc);
             stats.record_sr_ext_seq_num(seq_num);
+            stats.mark_updated();
+        }
+        StatsUpdate::InboundRecieverReport {
+            ext_seq_num,
+            total_lost,
+            jitter,
+            rtt_ms,
+            fraction_lost,
+        } => {
+            let stats = ssrc_stats.get_or_create_outbound_stream_stats(ssrc);
+            stats.record_remote_round_trip_time(rtt_ms);
+            stats.update_remote_fraction_lost(fraction_lost);
+            stats.update_remote_total_lost(total_lost);
+            stats.update_remote_inbound_packets_received(ext_seq_num, total_lost);
+            stats.update_remote_jitter(jitter);
+
+            stats.mark_updated();
+        }
+        StatsUpdate::InboundSenderRerport {
+            rtt_ms,
+            packets_and_bytes_sent,
+        } => {
+            // This is a sender report we received, as such it concerns an RTP stream that's
+            // outbound at the remote.
+            let stats = ssrc_stats.get_or_create_inbound_stream_stats(ssrc);
+
+            if let Some((packets_sent, bytes_sent)) = packets_and_bytes_sent {
+                stats.record_sender_report(packets_sent, bytes_sent);
+            }
+            stats.record_remote_round_trip_time(rtt_ms);
 
             stats.mark_updated();
         }
@@ -403,25 +401,47 @@ where
         let now = (unix2ntp((self.now_gen)()) >> 16) as u32;
 
         #[derive(Default, Debug)]
-        struct Entry {
-            rtt_ms: Option<f64>,
-            fraction_lost: Option<u8>,
+        struct GenericRTCP {
             fir_count: Option<u64>,
             pli_count: Option<u64>,
             nack_count: Option<u64>,
-            /// Packets Sent(from Sender Report)
-            sr_packets_sent: Option<u32>,
-            /// Bytes Sent(from Sender Report)
-            sr_bytes_sent: Option<u32>,
+        }
 
+        #[derive(Default, Debug)]
+        struct ReceiverReportEntry {
             /// Extended sequence number value from Receiver Report, used to calculate remote
             /// stats.
-            rr_ext_seq_num: Option<u32>,
+            ext_seq_num: u32,
             /// Total loss value from Receiver Report, used to calculate remote
             /// stats.
-            rr_total_lost: Option<u32>,
+            total_lost: u32,
             /// Jitter from Receiver Report.
-            rr_jitter: Option<u32>,
+            jitter: u32,
+            /// Round Trip Time calculated from Receiver Report.
+            rtt_ms: Option<f64>,
+            /// Fraction of packets lost.
+            fraction_lost: u8,
+        }
+
+        #[derive(Default, Debug)]
+        struct SenderReportEntry {
+            /// NTP timestamp(from Sender Report).
+            sr_ntp_time: Option<u64>,
+            /// Packets Sent(from Sender Report).
+            sr_packets_sent: Option<u32>,
+            /// Bytes Sent(from Sender Report).
+            sr_bytes_sent: Option<u32>,
+            /// Last RR timestamp(middle bits) from DLRR extended report block.
+            dlrr_last_rr: Option<u32>,
+            /// Delay since last RR from DLRR extended report block.
+            dlrr_delay_rr: Option<u32>,
+        }
+
+        #[derive(Default, Debug)]
+        struct Entry {
+            generic_rtcp: GenericRTCP,
+            receiver_reports: Vec<ReceiverReportEntry>,
+            sender_reports: Vec<SenderReportEntry>,
         }
         let updates = pkts
             .iter()
@@ -429,43 +449,83 @@ where
                 if let Some(rr) = p.as_any().downcast_ref::<ReceiverReport>() {
                     for recp in &rr.reports {
                         let e = acc.entry(recp.ssrc).or_default();
-                        e.rtt_ms = (recp.delay != 0)
-                            .then(|| calculate_rtt_ms(now, recp.delay, recp.last_sender_report));
-                        e.fraction_lost = Some(recp.fraction_lost);
-                        e.rr_jitter = Some(recp.jitter);
 
-                        match e.rr_ext_seq_num {
-                            // Because of batching we could encounter more than one ReceiverReport
-                            // in a given batch, make sure to use the values from the latest one if
-                            // so.
-                            Some(seq) if seq < recp.last_sequence_number => {
-                                e.rr_ext_seq_num = Some(recp.last_sequence_number);
-                                e.rr_total_lost = Some(recp.total_lost);
-                            }
-                            None => {
-                                e.rr_ext_seq_num = Some(recp.last_sequence_number);
-                                e.rr_total_lost = Some(recp.total_lost);
-                            }
-                            _ => {}
-                        }
+                        let rtt_ms = (recp.delay != 0)
+                            .then(|| calculate_rtt_ms(now, recp.delay, recp.last_sender_report));
+
+                        e.receiver_reports.push(ReceiverReportEntry {
+                            ext_seq_num: recp.last_sequence_number,
+                            total_lost: recp.total_lost,
+                            jitter: recp.jitter,
+                            rtt_ms,
+                            fraction_lost: recp.fraction_lost,
+                        });
                     }
                 } else if let Some(fir) = p.as_any().downcast_ref::<FullIntraRequest>() {
                     for fir_entry in &fir.fir {
                         let e = acc.entry(fir_entry.ssrc).or_default();
-                        e.fir_count = e.fir_count.map(|v| v + 1).or(Some(1));
+                        e.generic_rtcp.fir_count =
+                            e.generic_rtcp.fir_count.map(|v| v + 1).or(Some(1));
                     }
                 } else if let Some(pli) = p.as_any().downcast_ref::<PictureLossIndication>() {
                     let e = acc.entry(pli.media_ssrc).or_default();
-                    e.pli_count = e.pli_count.map(|v| v + 1).or(Some(1));
+                    e.generic_rtcp.pli_count = e.generic_rtcp.pli_count.map(|v| v + 1).or(Some(1));
                 } else if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
                     let count = nack.nacks.iter().flat_map(|p| p.into_iter()).count() as u64;
 
                     let e = acc.entry(nack.media_ssrc).or_default();
-                    e.nack_count = e.nack_count.map(|v| v + count).or(Some(count));
+                    e.generic_rtcp.nack_count =
+                        e.generic_rtcp.nack_count.map(|v| v + count).or(Some(count));
                 } else if let Some(sr) = p.as_any().downcast_ref::<SenderReport>() {
                     let e = acc.entry(sr.ssrc).or_default();
-                    e.sr_packets_sent = Some(sr.packet_count);
-                    e.sr_bytes_sent = Some(sr.octet_count);
+                    let sr_e = {
+                        let need_new_entry = e
+                            .sender_reports
+                            .last()
+                            .map(|e| e.sr_packets_sent.is_some())
+                            .unwrap_or(true);
+
+                        if need_new_entry {
+                            e.sender_reports.push(Default::default());
+                        }
+
+                        // SAFETY: Unrwap ok because we just added an entry above
+                        e.sender_reports.last_mut().unwrap()
+                    };
+
+                    sr_e.sr_ntp_time = Some(sr.ntp_time);
+                    sr_e.sr_packets_sent = Some(sr.packet_count);
+                    sr_e.sr_bytes_sent = Some(sr.octet_count);
+                } else if let Some(xr) = p.as_any().downcast_ref::<ExtendedReport>() {
+                    // Extended Report(XR)
+
+                    // We only care about DLRR reports
+                    let dlrrs = xr.reports.iter().flat_map(|report| {
+                        let dlrr = report.as_any().downcast_ref::<DLRRReportBlock>();
+
+                        dlrr.map(|b| b.reports.iter()).into_iter().flatten()
+                    });
+
+                    for dlrr in dlrrs {
+                        let e = acc.entry(dlrr.ssrc).or_default();
+                        let sr_e = {
+                            let need_new_entry = e
+                                .sender_reports
+                                .last()
+                                .map(|e| e.dlrr_last_rr.is_some())
+                                .unwrap_or(true);
+
+                            if need_new_entry {
+                                e.sender_reports.push(Default::default());
+                            }
+
+                            // SAFETY: Unrwap ok because we just added an entry above
+                            e.sender_reports.last_mut().unwrap()
+                        };
+
+                        sr_e.dlrr_last_rr = Some(dlrr.last_rr);
+                        sr_e.dlrr_delay_rr = Some(dlrr.dlrr);
+                    }
                 }
 
                 acc
@@ -474,38 +534,69 @@ where
         for (
             ssrc,
             Entry {
-                rtt_ms,
-                fraction_lost,
-                fir_count,
-                pli_count,
-                nack_count,
-                sr_packets_sent,
-                sr_bytes_sent,
-
-                rr_ext_seq_num,
-                rr_total_lost,
-                rr_jitter,
+                generic_rtcp,
+                mut receiver_reports,
+                mut sender_reports,
             },
         ) in updates.into_iter()
         {
+            // Sort RR by seq number low to high
+            receiver_reports.sort_by(|a, b| a.ext_seq_num.cmp(&b.ext_seq_num));
+            // Sort SR by ntp time, low to high
+            sender_reports
+                .sort_by(|a, b| a.sr_ntp_time.unwrap_or(0).cmp(&b.sr_ntp_time.unwrap_or(0)));
+
             let _ = self
                 .tx
                 .send(Message::StatUpdate {
                     ssrc,
-                    update: StatsUpdate::RecvRTCP {
-                        rtt_ms,
-                        fraction_lost,
-                        fir_count,
-                        pli_count,
-                        nack_count,
-                        sr_packets_sent,
-                        sr_bytes_sent,
-                        rr_ext_seq_num,
-                        rr_total_lost,
-                        rr_jitter,
+                    update: StatsUpdate::InboundRTCP {
+                        fir_count: generic_rtcp.fir_count,
+                        pli_count: generic_rtcp.pli_count,
+                        nack_count: generic_rtcp.nack_count,
                     },
                 })
                 .await;
+
+            let futures = receiver_reports.into_iter().map(|rr| {
+                self.tx.send(Message::StatUpdate {
+                    ssrc,
+                    update: StatsUpdate::InboundRecieverReport {
+                        ext_seq_num: rr.ext_seq_num,
+                        total_lost: rr.total_lost,
+                        jitter: rr.jitter,
+                        rtt_ms: rr.rtt_ms,
+                        fraction_lost: rr.fraction_lost,
+                    },
+                })
+            });
+            for fut in futures {
+                // TODO: Use futures::join_all
+                let _ = fut.await;
+            }
+
+            let futures = sender_reports.into_iter().map(|sr| {
+                let rtt_ms = match (sr.dlrr_last_rr, sr.dlrr_delay_rr, sr.sr_packets_sent) {
+                    (Some(last_rr), Some(delay_rr), Some(_)) if last_rr != 0 && delay_rr != 0 => {
+                        Some(calculate_rtt_ms(now, delay_rr, last_rr))
+                    }
+                    _ => None,
+                };
+
+                self.tx.send(Message::StatUpdate {
+                    ssrc,
+                    update: StatsUpdate::InboundSenderRerport {
+                        packets_and_bytes_sent: sr
+                            .sr_packets_sent
+                            .and_then(|ps| sr.sr_bytes_sent.map(|bs| (ps, bs))),
+                        rtt_ms,
+                    },
+                })
+            });
+            for fut in futures {
+                // TODO: Use futures::join_all
+                let _ = fut.await;
+            }
         }
 
         Ok((n, attributes))
@@ -528,12 +619,8 @@ where
         pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
         attributes: &Attributes,
     ) -> Result<usize> {
-        let now = (unix2ntp((self.now_gen)()) >> 16) as u32;
-
         #[derive(Default, Debug)]
         struct Entry {
-            rtt_ms: Option<f64>,
-            loss: Option<u8>,
             fir_count: Option<u64>,
             pli_count: Option<u64>,
             nack_count: Option<u64>,
@@ -542,15 +629,7 @@ where
         let updates = pkts
             .iter()
             .fold(HashMap::<u32, Entry>::new(), |mut acc, p| {
-                if let Some(rr) = p.as_any().downcast_ref::<ReceiverReport>() {
-                    for recp in &rr.reports {
-                        let rtt_ms = calculate_rtt_ms(now, recp.delay, recp.last_sender_report);
-
-                        let e = acc.entry(recp.ssrc).or_default();
-                        e.rtt_ms = Some(rtt_ms);
-                        e.loss = Some(recp.fraction_lost);
-                    }
-                } else if let Some(fir) = p.as_any().downcast_ref::<FullIntraRequest>() {
+                if let Some(fir) = p.as_any().downcast_ref::<FullIntraRequest>() {
                     for fir_entry in &fir.fir {
                         let e = acc.entry(fir_entry.ssrc).or_default();
                         e.fir_count = e.fir_count.map(|v| v + 1).or(Some(1));
@@ -586,8 +665,6 @@ where
         for (
             ssrc,
             Entry {
-                rtt_ms,
-                loss,
                 fir_count,
                 pli_count,
                 nack_count,
@@ -599,9 +676,7 @@ where
                 .tx
                 .send(Message::StatUpdate {
                     ssrc,
-                    update: StatsUpdate::WriteRTCP {
-                        rtt_ms,
-                        loss,
+                    update: StatsUpdate::OutboundRTCP {
                         fir_count,
                         pli_count,
                         nack_count,
@@ -654,7 +729,7 @@ impl RTPReader for RTPReadRecorder {
             .tx
             .send(Message::StatUpdate {
                 ssrc: packet.header.ssrc,
-                update: StatsUpdate::RecvRTP {
+                update: StatsUpdate::InboundRTP {
                     packets: 1,
                     header_bytes: (bytes_read - packet.payload.len()) as u64,
                     payload_bytes: packet.payload.len() as u64,
@@ -694,7 +769,7 @@ impl RTPWriter for RTPWriteRecorder {
             .tx
             .send(Message::StatUpdate {
                 ssrc: pkt.header.ssrc,
-                update: StatsUpdate::WriteRTP {
+                update: StatsUpdate::OutboundRTP {
                     packets: 1,
                     header_bytes: pkt.header.marshal_size() as u64,
                     payload_bytes: pkt.payload.len() as u64,
@@ -714,8 +789,8 @@ impl RTPWriter for RTPWriteRecorder {
 ///
 /// - `now` the current middle 32 bits of an NTP timestamp for the current time.
 /// - `delay` the delay(`DLSR`) since last sender report expressed as fractions of a second in 32 bits.
-/// - `last_sender_report` the middle 32 bits of an NTP timestamp for the most recent sender report(LSR).
-fn calculate_rtt_ms(now: u32, delay: u32, last_sender_report: u32) -> f64 {
+/// - `last_report` the middle 32 bits of an NTP timestamp for the most recent sender report(LSR) or Receiver Report(LRR).
+fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> f64 {
     // [10 Nov 1995 11:33:25.125 UTC]       [10 Nov 1995 11:33:36.5 UTC]
     // n                 SR(n)              A=b710:8000 (46864.500 s)
     // ---------------------------------------------------------------->
@@ -734,7 +809,7 @@ fn calculate_rtt_ms(now: u32, delay: u32, last_sender_report: u32) -> f64 {
     // -------------------------------
     // delay 0x0006:2000 (    6.125 s)
 
-    let rtt = now - delay - last_sender_report;
+    let rtt = now - delay - last_report;
     let rtt_seconds = rtt >> 16;
     let rtt_fraction = (rtt & (u16::MAX as u32)) as f64 / (u16::MAX as u32) as f64;
 
@@ -759,6 +834,7 @@ mod test {
     }
 
     use bytes::Bytes;
+    use rtcp::extended_report::{DLRRReport, DLRRReportBlock, ExtendedReport};
     use rtcp::payload_feedbacks::full_intra_request::{FirEntry, FullIntraRequest};
     use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
     use rtcp::receiver_report::ReceiverReport;
@@ -1018,17 +1094,64 @@ mod test {
             .await
             .expect("Failed to write RTCP packets for recv_stream");
 
+        recv_stream
+            .receive_rtcp(vec![
+                Box::new(SenderReport {
+                    ssrc: 123456,
+                    ntp_time: 12345, // Used for ordering
+                    packet_count: 52,
+                    octet_count: 8172,
+                    reports: vec![],
+                    ..Default::default()
+                }),
+                Box::new(SenderReport {
+                    ssrc: 123456,
+                    ntp_time: 23456, // Used for ordering
+                    packet_count: 82,
+                    octet_count: 10351,
+                    reports: vec![],
+                    ..Default::default()
+                }),
+                Box::new(ExtendedReport {
+                    sender_ssrc: 928191,
+                    reports: vec![Box::new(DLRRReportBlock {
+                        reports: vec![DLRRReport {
+                            ssrc: 123456,
+                            last_rr: 0xb705_2000,
+                            dlrr: 0x0005_4000,
+                        }],
+                    })],
+                }),
+                Box::new(SenderReport {
+                    /// NB: Different SSRC
+                    ssrc: 9999999,
+                    ntp_time: 99999, // Used for ordering
+                    packet_count: 1231,
+                    octet_count: 193812,
+                    reports: vec![],
+                    ..Default::default()
+                }),
+            ])
+            .await;
+
+        let snapshots = icpr.fetch_inbound_stats(vec![123456]).await;
+        let recv_snapshot = snapshots[0]
+            .as_ref()
+            .expect("Stats should exist for ssrc: 123456");
+        assert!(
+            recv_snapshot.remote_round_trip_time().is_none()
+                && recv_snapshot.remote_round_trip_time_measurements() == 0,
+            "Before receiving the first SR/DLRR we should not have a remote round trip time"
+        );
+
+        let _ = recv_stream.read_rtcp().await.expect("read_rtcp failed");
+
         let snapshots = icpr.fetch_outbound_stats(vec![234567]).await;
         let send_snapshot = snapshots[0]
             .as_ref()
             .expect("Outbound Stats should exist for ssrc: 234567");
         let rtt_ms = send_snapshot.remote_round_trip_time().expect(
             "After receiving an RR with a DSLR block we should have a remote round trip time",
-        );
-        assert!(
-            rtt_ms > 6124.99 && rtt_ms < 6125.01,
-            "Expected rtt_ms to be about ~6125.0 it was {}",
-            rtt_ms
         );
         assert_feq!(rtt_ms, 6125.0);
 
@@ -1054,6 +1177,15 @@ mod test {
         assert_eq!(recv_snapshot.nacks_sent(), 6);
         assert_eq!(recv_snapshot.plis_sent(), 3);
         assert_eq!(recv_snapshot.firs_sent(), 1);
+        assert_eq!(recv_snapshot.remote_packets_sent(), 82);
+        assert_eq!(recv_snapshot.remote_bytes_sent(), 10351);
+        let rtt_ms = recv_snapshot
+            .remote_round_trip_time()
+            .expect("After reciving SR and DLRR we should have a round trip time ");
+        assert_feq!(rtt_ms, 6125.0);
+        assert_eq!(recv_snapshot.remote_reports_sent(), 2);
+        assert_eq!(recv_snapshot.remote_round_trip_time_measurements(), 1);
+        assert_feq!(recv_snapshot.remote_total_round_trip_time(), 6125.0);
 
         Ok(())
     }
