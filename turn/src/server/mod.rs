@@ -4,17 +4,22 @@ mod server_test;
 pub mod config;
 pub mod request;
 
-use crate::allocation::allocation_manager::*;
-use crate::auth::AuthHandler;
-use crate::error::*;
-use crate::proto::lifetime::DEFAULT_LIFETIME;
+use crate::{
+    allocation::allocation_manager::*, auth::AuthHandler, error::*,
+    proto::lifetime::DEFAULT_LIFETIME,
+};
 use config::*;
 use request::*;
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{watch, Mutex};
-use tokio::time::{Duration, Instant};
+use std::{collections::HashMap, sync::Arc};
+
+use tokio::{
+    sync::{
+        broadcast::{self, error::RecvError},
+        mpsc, oneshot, Mutex,
+    },
+    time::{Duration, Instant},
+};
 use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
@@ -25,7 +30,7 @@ pub struct Server {
     realm: String,
     channel_bind_timeout: Duration,
     pub(crate) nonces: Arc<Mutex<HashMap<String, Instant>>>,
-    shutdown_tx: Mutex<Option<watch::Sender<bool>>>,
+    command_tx: Mutex<Option<broadcast::Sender<Command>>>,
 }
 
 impl Server {
@@ -33,14 +38,13 @@ impl Server {
     pub async fn new(config: ServerConfig) -> Result<Self> {
         config.validate()?;
 
-        let (shutdown_tx, shutdown_rx) = watch::channel(false);
-
+        let (command_tx, _) = broadcast::channel(16);
         let mut s = Server {
             auth_handler: config.auth_handler,
             realm: config.realm,
             channel_bind_timeout: config.channel_bind_timeout,
             nonces: Arc::new(Mutex::new(HashMap::new())),
-            shutdown_tx: Mutex::new(Some(shutdown_tx)),
+            command_tx: Mutex::new(Some(command_tx.clone())),
         };
 
         if s.channel_bind_timeout == Duration::from_secs(0) {
@@ -52,27 +56,40 @@ impl Server {
             let auth_handler = Arc::clone(&s.auth_handler);
             let realm = s.realm.clone();
             let channel_bind_timeout = s.channel_bind_timeout;
-            let shutdown_rx = shutdown_rx.clone();
+            let handle_rx = command_tx.subscribe();
+            let conn = p.conn;
+            let allocation_manager = Arc::new(Manager::new(ManagerConfig {
+                relay_addr_generator: p.relay_addr_generator,
+            }));
 
-            tokio::spawn(async move {
-                let allocation_manager = Arc::new(Manager::new(ManagerConfig {
-                    relay_addr_generator: p.relay_addr_generator,
-                }));
-
-                Server::read_loop(
-                    p.conn,
-                    allocation_manager,
-                    nonces,
-                    auth_handler,
-                    realm,
-                    channel_bind_timeout,
-                    shutdown_rx,
-                )
-                .await;
-            });
+            tokio::spawn(Server::read_loop(
+                conn,
+                allocation_manager,
+                nonces,
+                auth_handler,
+                realm,
+                channel_bind_timeout,
+                handle_rx,
+            ));
         }
 
         Ok(s)
+    }
+
+    /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
+    pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
+        let tx = self.command_tx.lock().await.clone();
+        if let Some(tx) = tx {
+            let (closed_tx, closed_rx) = mpsc::channel(1);
+            tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
+                .map_err(|_| Error::ErrClosed)?;
+
+            closed_tx.closed().await;
+
+            Ok(())
+        } else {
+            Err(Error::ErrClosed)
+        }
     }
 
     async fn read_loop(
@@ -82,9 +99,36 @@ impl Server {
         auth_handler: Arc<dyn AuthHandler + Send + Sync>,
         realm: String,
         channel_bind_timeout: Duration,
-        mut shutdown_rx: watch::Receiver<bool>,
+        mut handle_rx: broadcast::Receiver<Command>,
     ) {
         let mut buf = vec![0u8; INBOUND_MTU];
+
+        let (mut close_tx, mut close_rx) = oneshot::channel::<()>();
+
+        tokio::spawn({
+            let allocation_manager = Arc::clone(&allocation_manager);
+
+            async move {
+                loop {
+                    match handle_rx.recv().await {
+                        Ok(Command::DeleteAllocations(name, _)) => {
+                            allocation_manager
+                                .delete_allocations_by_username(name.as_str())
+                                .await;
+                            continue;
+                        }
+                        Err(RecvError::Closed) | Ok(Command::Close(_)) => {
+                            close_rx.close();
+                            break;
+                        }
+                        Err(RecvError::Lagged(n)) => {
+                            log::warn!("Turn server has lagged by {} messages", n);
+                            continue;
+                        }
+                    }
+                }
+            }
+        });
 
         loop {
             let (n, addr) = tokio::select! {
@@ -97,15 +141,7 @@ impl Server {
                         }
                     }
                 },
-                did_change = shutdown_rx.changed() => {
-                    if did_change.is_err() || *shutdown_rx.borrow() {
-                        // if did_change.is_err, sender was dropped, or if
-                        // bool is set to true, that means we're shutting down.
-                        break
-                    } else {
-                        continue;
-                    }
-                }
+                _ = close_tx.closed() => break
             };
 
             let mut r = Request {
@@ -130,14 +166,29 @@ impl Server {
 
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
     pub async fn close(&self) -> Result<()> {
-        let mut shutdown_tx = self.shutdown_tx.lock().await;
-        if let Some(tx) = shutdown_tx.take() {
-            // errors if there are no receivers, but that's irrelevant.
-            let _ = tx.send(true);
-            // wait for all receivers to drop/close.
-            tx.closed().await;
+        let tx = self.command_tx.lock().await.take();
+        if let Some(tx) = tx {
+            if tx.receiver_count() == 0 {
+                return Ok(());
+            }
+
+            let (closed_tx, closed_rx) = mpsc::channel(1);
+            let _ = tx.send(Command::Close(Arc::new(closed_rx)));
+            closed_tx.closed().await
         }
 
         Ok(())
     }
+}
+
+/// The protocol to communicate between the [`Server`]'s public methods
+/// and the tasks spawned in the [`read_loop`] method.
+#[derive(Clone)]
+enum Command {
+    /// Command to delete [`crate::allocation::Allocation`] by provided
+    /// `username`.
+    DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
+
+    /// Command to close the [`Server`].
+    Close(Arc<mpsc::Receiver<()>>),
 }

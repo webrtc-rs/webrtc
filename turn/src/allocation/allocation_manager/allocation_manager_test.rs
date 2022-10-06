@@ -1,10 +1,9 @@
 use super::*;
-use crate::error::Result;
-use crate::relay::relay_none::*;
 
-use crate::proto::lifetime::DEFAULT_LIFETIME;
-use std::net::Ipv4Addr;
-use std::str::FromStr;
+use crate::{error::Result, proto::lifetime::DEFAULT_LIFETIME, relay::relay_none::*};
+
+use std::{net::Ipv4Addr, str::FromStr};
+use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
 use tokio::net::UdpSocket;
 use util::vnet::net::*;
 
@@ -62,6 +61,7 @@ async fn test_packet_handler() -> Result<()> {
             Arc::new(turn_socket),
             0,
             DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
 
@@ -74,8 +74,6 @@ async fn test_packet_handler() -> Result<()> {
     );
 
     let port = {
-        let a = a.lock().await;
-
         // add permission with peer1 address
         a.add_permission(Permission::new(peer_listener1.local_addr()?))
             .await;
@@ -168,11 +166,18 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
 
     let result = m
-        .create_allocation(five_tuple, Arc::clone(&turn_socket), 0, DEFAULT_LIFETIME)
+        .create_allocation(
+            five_tuple,
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
+        )
         .await;
     assert!(result.is_err(), "expected error, but got ok");
 
@@ -196,6 +201,7 @@ async fn test_delete_allocation() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
 
@@ -231,7 +237,13 @@ async fn test_allocation_timeout() -> Result<()> {
         let five_tuple = random_five_tuple();
 
         let a = m
-            .create_allocation(five_tuple, Arc::clone(&turn_socket), 0, lifetime)
+            .create_allocation(
+                five_tuple,
+                Arc::clone(&turn_socket),
+                0,
+                lifetime,
+                TextAttribute::new(ATTR_USERNAME, "user".into()),
+            )
             .await?;
 
         allocations.push(a);
@@ -250,8 +262,7 @@ async fn test_allocation_timeout() -> Result<()> {
 
         let any_outstanding = false;
 
-        for allocation in &allocations {
-            let mut a = allocation.lock().await;
+        for a in &allocations {
             if a.close().await.is_ok() {
                 continue 'outer;
             }
@@ -280,6 +291,7 @@ async fn test_manager_close() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             Duration::from_millis(100),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     allocations.push(a1);
@@ -290,6 +302,7 @@ async fn test_manager_close() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             Duration::from_millis(200),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     allocations.push(a2);
@@ -300,13 +313,65 @@ async fn test_manager_close() -> Result<()> {
 
     m.close().await?;
 
-    for allocation in allocations {
-        let mut a = allocation.lock().await;
+    for a in allocations {
         assert!(
             a.close().await.is_err(),
             "Allocation should be closed if lifetime timeout"
         );
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delete_allocation_by_username() -> Result<()> {
+    let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let m = new_test_manager();
+
+    let five_tuple1 = random_five_tuple();
+    let five_tuple2 = random_five_tuple();
+    let five_tuple3 = random_five_tuple();
+
+    let _ = m
+        .create_allocation(
+            five_tuple1.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
+        )
+        .await?;
+    let _ = m
+        .create_allocation(
+            five_tuple2.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
+        )
+        .await?;
+    let _ = m
+        .create_allocation(
+            five_tuple3.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, String::from("user2")),
+        )
+        .await?;
+
+    assert_eq!(m.allocations.lock().await.len(), 3);
+
+    m.delete_allocations_by_username("user").await;
+
+    assert_eq!(m.allocations.lock().await.len(), 1);
+
+    assert!(
+        m.get_allocation(&five_tuple1).await.is_none()
+            && m.get_allocation(&five_tuple2).await.is_none()
+            && m.get_allocation(&five_tuple3).await.is_some()
+    );
 
     Ok(())
 }

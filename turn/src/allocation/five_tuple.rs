@@ -12,7 +12,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 // server.  The 5-tuple uniquely identifies this communication
 // stream.  The 5-tuple also uniquely identifies the Allocation on
 // the server.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Hash)]
 pub struct FiveTuple {
     pub protocol: Protocol,
     pub src_addr: SocketAddr,
@@ -32,12 +32,5 @@ impl Default for FiveTuple {
 impl fmt::Display for FiveTuple {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}_{}_{}", self.protocol, self.src_addr, self.dst_addr)
-    }
-}
-
-impl FiveTuple {
-    // fingerprint is the identity of a FiveTuple
-    pub fn fingerprint(&self) -> String {
-        self.to_string()
     }
 }
