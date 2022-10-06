@@ -7,13 +7,13 @@ use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
 use tokio::net::UdpSocket;
 use util::vnet::net::*;
 
-fn new_test_manager() -> Manager {
+fn new_test_manager(gather_metrics: bool) -> Manager {
     let config = ManagerConfig {
         relay_addr_generator: Box::new(RelayAddressGeneratorNone {
             address: "0.0.0.0".to_owned(),
             net: Arc::new(Net::new(None)),
         }),
-        gather_metrics: false,
+        gather_metrics,
     };
     Manager::new(config)
 }
@@ -51,7 +51,7 @@ async fn test_packet_handler() -> Result<()> {
         }
     });
 
-    let m = new_test_manager();
+    let m = new_test_manager(false);
     let a = m
         .create_allocation(
             FiveTuple {
@@ -157,7 +157,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager();
+    let m = new_test_manager(false);
 
     let five_tuple = random_five_tuple();
 
@@ -192,7 +192,7 @@ async fn test_delete_allocation() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager();
+    let m = new_test_manager(false);
 
     let five_tuple = random_five_tuple();
 
@@ -229,7 +229,7 @@ async fn test_allocation_timeout() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager();
+    let m = new_test_manager(false);
 
     let mut allocations = vec![];
     let lifetime = Duration::from_millis(100);
@@ -282,7 +282,7 @@ async fn test_manager_close() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager();
+    let m = new_test_manager(false);
 
     let mut allocations = vec![];
 
@@ -328,7 +328,7 @@ async fn test_manager_close() -> Result<()> {
 async fn test_delete_allocation_by_username() -> Result<()> {
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager();
+    let m = new_test_manager(false);
 
     let five_tuple1 = random_five_tuple();
     let five_tuple2 = random_five_tuple();
@@ -358,7 +358,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user2")),
+            TextAttribute::new(ATTR_USERNAME, "user2".into()),
         )
         .await?;
 
@@ -373,6 +373,115 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             && m.get_allocation(&five_tuple2).await.is_none()
             && m.get_allocation(&five_tuple3).await.is_some()
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_allocation_infos_with_metrics() -> Result<()> {
+    let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let m = new_test_manager(true);
+
+    let five_tuple1 = random_five_tuple();
+    let five_tuple2 = random_five_tuple();
+    let five_tuple3 = random_five_tuple();
+
+    let alloc1 = m
+        .create_allocation(
+            five_tuple1.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user1".into()),
+        )
+        .await?;
+    alloc1.transmitted_bytes.store(111, Ordering::SeqCst);
+
+    let alloc2 = m
+        .create_allocation(
+            five_tuple2.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user2".into()),
+        )
+        .await?;
+    alloc2.transmitted_bytes.store(222, Ordering::SeqCst);
+
+    let alloc3 = m
+        .create_allocation(
+            five_tuple3.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user3".into()),
+        )
+        .await?;
+    alloc3.transmitted_bytes.store(333, Ordering::SeqCst);
+
+    let infos = m
+        .get_allocation_infos(Some(Vec::from([
+            five_tuple1.clone(),
+            five_tuple2.clone(),
+            five_tuple3.clone(),
+        ])))
+        .await;
+
+    assert_eq!(infos.len(), 3);
+
+    assert!(
+        infos.get(&five_tuple1).is_some()
+            && infos.get(&five_tuple2).is_some()
+            && infos.get(&five_tuple3).is_some()
+    );
+
+    assert_eq!(infos.get(&five_tuple1).unwrap().username, "user1");
+    assert_eq!(infos.get(&five_tuple2).unwrap().username, "user2");
+    assert_eq!(infos.get(&five_tuple3).unwrap().username, "user3");
+
+    assert_eq!(infos.get(&five_tuple1).unwrap().five_tuple, five_tuple1);
+    assert_eq!(infos.get(&five_tuple2).unwrap().five_tuple, five_tuple2);
+    assert_eq!(infos.get(&five_tuple3).unwrap().five_tuple, five_tuple3);
+
+    assert_eq!(
+        infos.get(&five_tuple1).unwrap().transmitted_bytes,
+        Some(111)
+    );
+    assert_eq!(
+        infos.get(&five_tuple2).unwrap().transmitted_bytes,
+        Some(222)
+    );
+    assert_eq!(
+        infos.get(&five_tuple3).unwrap().transmitted_bytes,
+        Some(333)
+    );
+
+    let m2 = new_test_manager(false);
+
+    let five_tuple222 = random_five_tuple();
+
+    let _ = m2
+        .create_allocation(
+            five_tuple222.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+            TextAttribute::new(ATTR_USERNAME, "user222".into()),
+        )
+        .await?;
+
+    let infos2 = m2
+        .get_allocation_infos(Some(Vec::from([five_tuple222.clone()])))
+        .await;
+
+    assert!(infos2.get(&five_tuple222).is_some());
+
+    assert!(infos2
+        .get(&five_tuple222)
+        .unwrap()
+        .transmitted_bytes
+        .is_none());
 
     Ok(())
 }
