@@ -17,12 +17,14 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 /// GeneratorBuilder can be used to configure Responder Interceptor
 #[derive(Default)]
 pub struct ResponderBuilder {
     log2_size: Option<u8>,
+    max_packet_age: Option<Duration>,
 }
 
 impl ResponderBuilder {
@@ -30,6 +32,15 @@ impl ResponderBuilder {
     /// Size must be one of: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768
     pub fn with_log2_size(mut self, log2_size: u8) -> ResponderBuilder {
         self.log2_size = Some(log2_size);
+        self
+    }
+
+    /// with_max_packet_age sets the max age of packets that will be resent.
+    ///
+    /// When a resend is requested, packets that were first sent more than `max_packet_age` ago
+    /// will not be resent.
+    pub fn with_max_packet_age(mut self, max_packet_age: Duration) -> ResponderBuilder {
+        self.max_packet_age = Some(max_packet_age);
         self
     }
 }
@@ -43,6 +54,7 @@ impl InterceptorBuilder for ResponderBuilder {
                 } else {
                     13 // 8192 = 1 << 13
                 },
+                max_packet_age: self.max_packet_age,
                 streams: Arc::new(Mutex::new(HashMap::new())),
             }),
         }))
@@ -51,6 +63,7 @@ impl InterceptorBuilder for ResponderBuilder {
 
 pub struct ResponderInternal {
     log2_size: u8,
+    max_packet_age: Option<Duration>,
     streams: Arc<Mutex<HashMap<u32, Arc<ResponderStream>>>>,
 }
 
@@ -58,6 +71,7 @@ impl ResponderInternal {
     async fn resend_packets(
         streams: Arc<Mutex<HashMap<u32, Arc<ResponderStream>>>>,
         nack: TransportLayerNack,
+        max_packet_age: Option<Duration>,
     ) {
         let stream = {
             let m = streams.lock().await;
@@ -73,10 +87,19 @@ impl ResponderInternal {
             n.range(Box::new(
                 move |seq: u16| -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> {
                     let stream3 = Arc::clone(&stream2);
+
                     Box::pin(async move {
                         if let Some(p) = stream3.get(seq).await {
+                            let should_send = max_packet_age
+                                .map(|max_age| p.age() < max_age)
+                                .unwrap_or(true);
+
+                            if !should_send {
+                                return true;
+                            }
+
                             let a = Attributes::new();
-                            if let Err(err) = stream3.next_rtp_writer.write(&p, &a).await {
+                            if let Err(err) = stream3.next_rtp_writer.write(&p.packet, &a).await {
                                 log::warn!("failed resending nacked packet: {}", err);
                             }
                         }
@@ -92,6 +115,7 @@ impl ResponderInternal {
 
 pub struct ResponderRtcpReader {
     parent_rtcp_reader: Arc<dyn RTCPReader + Send + Sync>,
+    max_packet_age: Option<Duration>,
     internal: Arc<ResponderInternal>,
 }
 
@@ -106,8 +130,9 @@ impl RTCPReader for ResponderRtcpReader {
             if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
                 let nack = nack.clone();
                 let streams = Arc::clone(&self.internal.streams);
+                let max_packet_age = self.max_packet_age;
                 tokio::spawn(async move {
-                    ResponderInternal::resend_packets(streams, nack).await;
+                    ResponderInternal::resend_packets(streams, nack, max_packet_age).await;
                 });
             }
         }
@@ -138,6 +163,7 @@ impl Interceptor for Responder {
     ) -> Arc<dyn RTCPReader + Send + Sync> {
         Arc::new(ResponderRtcpReader {
             internal: Arc::clone(&self.internal),
+            max_packet_age: self.internal.max_packet_age,
             parent_rtcp_reader: reader,
         }) as Arc<dyn RTCPReader + Send + Sync>
     }

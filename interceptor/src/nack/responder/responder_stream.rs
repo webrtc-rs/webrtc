@@ -4,10 +4,11 @@ use crate::{Attributes, RTPWriter};
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 struct ResponderStreamInternal {
-    packets: Vec<Option<rtp::packet::Packet>>,
+    packets: Vec<Option<SentPacket>>,
     size: u16,
     last_added: u16,
     started: bool,
@@ -26,7 +27,7 @@ impl ResponderStreamInternal {
     fn add(&mut self, packet: &rtp::packet::Packet) {
         let seq = packet.header.sequence_number;
         if !self.started {
-            self.packets[(seq % self.size) as usize] = Some(packet.clone());
+            self.packets[(seq % self.size) as usize] = Some(packet.clone().into());
             self.last_added = seq;
             self.started = true;
             return;
@@ -43,11 +44,11 @@ impl ResponderStreamInternal {
             }
         }
 
-        self.packets[(seq % self.size) as usize] = Some(packet.clone());
+        self.packets[(seq % self.size) as usize] = Some(packet.clone().into());
         self.last_added = seq;
     }
 
-    fn get(&self, seq: u16) -> Option<&rtp::packet::Packet> {
+    fn get(&self, seq: u16) -> Option<&SentPacket> {
         let diff = self.last_added.wrapping_sub(seq);
         if diff >= UINT16SIZE_HALF {
             return None;
@@ -79,7 +80,7 @@ impl ResponderStream {
         internal.add(pkt);
     }
 
-    pub(super) async fn get(&self, seq: u16) -> Option<rtp::packet::Packet> {
+    pub(super) async fn get(&self, seq: u16) -> Option<SentPacket> {
         let internal = self.internal.lock().await;
         internal.get(seq).cloned()
     }
@@ -93,6 +94,28 @@ impl RTPWriter for ResponderStream {
         self.add(pkt).await;
 
         self.next_rtp_writer.write(pkt, a).await
+    }
+}
+
+#[derive(Clone)]
+/// A packet that has been sent, or at least been queued to send.
+pub struct SentPacket {
+    pub(super) packet: rtp::packet::Packet,
+    sent_at: Instant,
+}
+
+impl SentPacket {
+    pub(super) fn age(&self) -> Duration {
+        self.sent_at.elapsed()
+    }
+}
+
+impl From<rtp::packet::Packet> for SentPacket {
+    fn from(packet: rtp::packet::Packet) -> Self {
+        Self {
+            packet,
+            sent_at: Instant::now(),
+        }
     }
 }
 
@@ -127,9 +150,9 @@ mod test {
                     let seq = start.wrapping_add(*n);
                     if let Some(packet) = sb.get(seq) {
                         assert_eq!(
-                            packet.header.sequence_number, seq,
+                            packet.packet.header.sequence_number, seq,
                             "packet for {} returned with incorrect SequenceNumber: {}",
-                            seq, packet.header.sequence_number
+                            seq, packet.packet.header.sequence_number
                         );
                     } else {
                         assert!(false, "packet not found: {}", seq);
@@ -144,7 +167,7 @@ mod test {
                         assert!(
                             false,
                             "packet found for {}: {}",
-                            seq, packet.header.sequence_number
+                            seq, packet.packet.header.sequence_number
                         );
                     }
                 }
