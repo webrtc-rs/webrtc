@@ -385,7 +385,6 @@ async fn test_delete_allocation_by_username() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_allocations_info() -> Result<()> {
-    // TODO: maybe add integration test?
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
     let m = new_test_manager(true);
