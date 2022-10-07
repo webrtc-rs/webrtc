@@ -45,7 +45,7 @@ impl Manager {
     }
     // Gets the information about the all `Allocation`s associated with
     // the specified `FiveTuple`s
-    pub async fn get_allocation_infos(
+    pub async fn get_allocations_info(
         &self,
         five_tuples: Option<Vec<FiveTuple>>,
     ) -> HashMap<FiveTuple, AllocationInfo> {

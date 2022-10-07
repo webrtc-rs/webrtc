@@ -158,7 +158,7 @@ impl Server {
                             drop(
                                 sender
                                     .send(
-                                        allocation_manager.get_allocation_infos(five_tuples).await,
+                                        allocation_manager.get_allocations_info(five_tuples).await,
                                     )
                                     .await,
                             );

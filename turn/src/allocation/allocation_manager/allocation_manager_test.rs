@@ -421,7 +421,7 @@ async fn test_get_allocation_infos_with_metrics() -> Result<()> {
     alloc3.transmitted_bytes.store(333, Ordering::SeqCst);
 
     let infos = m
-        .get_allocation_infos(Some(Vec::from([
+        .get_allocations_info(Some(Vec::from([
             five_tuple1.clone(),
             five_tuple2.clone(),
             five_tuple3.clone(),
@@ -472,7 +472,7 @@ async fn test_get_allocation_infos_with_metrics() -> Result<()> {
         .await?;
 
     let infos2 = m2
-        .get_allocation_infos(Some(Vec::from([five_tuple222.clone()])))
+        .get_allocations_info(Some(Vec::from([five_tuple222.clone()])))
         .await;
 
     assert!(infos2.get(&five_tuple222).is_some());

@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Added `delete_allocations_by_username` method on `Server`. This method provides possibility to manually delete allocation [#263](https://github.com/webrtc-rs/webrtc/pull/263) by [@logist322](https://github.com/logist322).
+* Added `get_allocations_info` method on `Server`. This method provides possibility to get information about allocations [#288](https://github.com/webrtc-rs/webrtc/pull/288) by [@logist322](https://github.com/logist322).
 
 
 ## v0.6.0
