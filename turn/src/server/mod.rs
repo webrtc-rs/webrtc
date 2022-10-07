@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod server_test;
+pub mod server_test;
 
 pub mod config;
 pub mod request;
@@ -95,7 +95,15 @@ impl Server {
         }
     }
 
-    /// Get information of [`Allocation`]s by provided [`FiveTuple`]s.
+    /// Get information of [`Allocation`]s by specified [`FiveTuple`]s.
+    ///
+    /// If `five_tuples` is:
+    /// - [`None`]:               It returns information about the all
+    ///                           [`Allocation`]s.
+    /// - [`Some`] and not empty: It returns information about
+    ///                           the [`Allocation`]s associated with
+    ///                           the specified [`FiveTuples`].
+    /// - [`Some`], but empty:    It returns an empty [`HashMap`].
     ///
     /// [`Allocation`]: crate::allocation::Allocation
     pub async fn get_allocations_info(
@@ -110,17 +118,14 @@ impl Server {
 
         let tx = self.command_tx.lock().await.clone();
         if let Some(tx) = tx {
-            let (allocation_infos_tx, mut allocation_infos_rx) = mpsc::channel(1);
-            tx.send(Command::GetAllocationsInfo(
-                five_tuples,
-                allocation_infos_tx,
-            ))
-            .map_err(|_| Error::ErrClosed)?;
+            let (infos_tx, mut infos_rx) = mpsc::channel(1);
+            tx.send(Command::GetAllocationsInfo(five_tuples, infos_tx))
+                .map_err(|_| Error::ErrClosed)?;
 
             let mut info: HashMap<FiveTuple, AllocationInfo> = HashMap::new();
 
             for _ in 0..tx.receiver_count() {
-                info.extend(allocation_infos_rx.recv().await.ok_or(Error::ErrClosed)?);
+                info.extend(infos_rx.recv().await.ok_or(Error::ErrClosed)?);
             }
 
             Ok(info)
@@ -154,14 +159,9 @@ impl Server {
                                 .await;
                             continue;
                         }
-                        Ok(Command::GetAllocationsInfo(five_tuples, sender)) => {
-                            drop(
-                                sender
-                                    .send(
-                                        allocation_manager.get_allocations_info(five_tuples).await,
-                                    )
-                                    .await,
-                            );
+                        Ok(Command::GetAllocationsInfo(five_tuples, tx)) => {
+                            let infos = allocation_manager.get_allocations_info(five_tuples).await;
+                            drop(tx.send(infos).await);
 
                             continue;
                         }

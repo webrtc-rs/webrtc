@@ -43,8 +43,9 @@ impl Manager {
         }
         Ok(())
     }
-    // Gets the information about the all `Allocation`s associated with
-    // the specified `FiveTuple`s
+
+    // Returns the information about the all [`Allocation`]s associated with
+    // the specified [`FiveTuple`]s.
     pub async fn get_allocations_info(
         &self,
         five_tuples: Option<Vec<FiveTuple>>,
@@ -53,15 +54,15 @@ impl Manager {
 
         let guarded = self.allocations.lock().await;
 
-        guarded.iter().for_each(|(five_tuple, allocation)| {
+        guarded.iter().for_each(|(five_tuple, alloc)| {
             if five_tuples.is_none() || five_tuples.as_ref().unwrap().contains(five_tuple) {
                 drop(infos.insert(
-                    five_tuple.clone(),
+                    *five_tuple,
                     AllocationInfo::new(
-                        five_tuple.clone(),
-                        allocation.username.text.to_string(),
+                        *five_tuple,
+                        alloc.username.text.clone(),
                         if self.gather_metrics {
-                            Some(allocation.transmitted_bytes.load(Ordering::SeqCst))
+                            Some(alloc.relayed_bytes.load(Ordering::Acquire))
                         } else {
                             None
                         },
@@ -100,13 +101,7 @@ impl Manager {
             .relay_addr_generator
             .allocate_conn(true, requested_port)
             .await?;
-        let mut a = Allocation::new(
-            turn_socket,
-            relay_socket,
-            relay_addr,
-            five_tuple.clone(),
-            username,
-        );
+        let mut a = Allocation::new(turn_socket, relay_socket, relay_addr, five_tuple, username);
         a.allocations = Some(Arc::clone(&self.allocations));
 
         log::debug!("listening on relay addr: {:?}", a.relay_addr);

@@ -12,7 +12,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use util::{vnet::router::Nic, vnet::*};
 
-struct TestAuthHandler {
+pub struct TestAuthHandler {
     cred_map: HashMap<String, Vec<u8>>,
 }
 
@@ -94,15 +94,15 @@ async fn test_server_simple() -> Result<()> {
     Ok(())
 }
 
-struct VNet {
-    wan: Arc<Mutex<router::Router>>,
-    net0: Arc<net::Net>,
-    net1: Arc<net::Net>,
-    netl0: Arc<net::Net>,
-    server: Server,
+pub struct VNet {
+    pub wan: Arc<Mutex<router::Router>>,
+    pub net0: Arc<net::Net>,
+    pub net1: Arc<net::Net>,
+    pub netl0: Arc<net::Net>,
+    pub server: Server,
 }
 
-async fn build_vnet() -> Result<VNet> {
+pub async fn build_vnet() -> Result<VNet> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "0.0.0.0/0".to_owned(),
@@ -189,7 +189,7 @@ async fn build_vnet() -> Result<VNet> {
                 address: "1.2.3.4".to_owned(),
                 net: Arc::clone(&net0),
             }),
-            gather_metrics: false,
+            gather_metrics: true,
         }],
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler::new()),

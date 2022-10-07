@@ -1,6 +1,12 @@
 use super::*;
 
-use crate::{error::Result, proto::lifetime::DEFAULT_LIFETIME, relay::relay_none::*};
+use crate::{
+    client::{Client, ClientConfig},
+    error::Result,
+    proto::lifetime::DEFAULT_LIFETIME,
+    relay::relay_none::*,
+    server::server_test::build_vnet,
+};
 
 use std::{net::Ipv4Addr, str::FromStr};
 use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
@@ -378,7 +384,8 @@ async fn test_delete_allocation_by_username() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_get_allocation_infos_with_metrics() -> Result<()> {
+async fn test_get_allocations_info() -> Result<()> {
+    // TODO: maybe add integration test?
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
     let m = new_test_manager(true);
@@ -396,7 +403,7 @@ async fn test_get_allocation_infos_with_metrics() -> Result<()> {
             TextAttribute::new(ATTR_USERNAME, "user1".into()),
         )
         .await?;
-    alloc1.transmitted_bytes.store(111, Ordering::SeqCst);
+    alloc1.relayed_bytes.store(111, Ordering::SeqCst);
 
     let alloc2 = m
         .create_allocation(
@@ -407,7 +414,7 @@ async fn test_get_allocation_infos_with_metrics() -> Result<()> {
             TextAttribute::new(ATTR_USERNAME, "user2".into()),
         )
         .await?;
-    alloc2.transmitted_bytes.store(222, Ordering::SeqCst);
+    alloc2.relayed_bytes.store(222, Ordering::SeqCst);
 
     let alloc3 = m
         .create_allocation(
@@ -418,7 +425,7 @@ async fn test_get_allocation_infos_with_metrics() -> Result<()> {
             TextAttribute::new(ATTR_USERNAME, "user3".into()),
         )
         .await?;
-    alloc3.transmitted_bytes.store(333, Ordering::SeqCst);
+    alloc3.relayed_bytes.store(333, Ordering::SeqCst);
 
     let infos = m
         .get_allocations_info(Some(Vec::from([
@@ -482,6 +489,103 @@ async fn test_get_allocation_infos_with_metrics() -> Result<()> {
         .unwrap()
         .transmitted_bytes
         .is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_test_get_allocations_info_with_server() -> Result<()> {
+    let v = build_vnet().await?;
+
+    assert!(v.server.get_allocations_info(None).await?.is_empty());
+
+    let lconn = v.netl0.bind(SocketAddr::from_str("0.0.0.0:0")?).await?;
+    let client = Client::new(ClientConfig {
+        stun_serv_addr: "stun.webrtc.rs:3478".to_owned(),
+        turn_serv_addr: "turn.webrtc.rs:3478".to_owned(),
+        username: "user".to_owned(),
+        password: "pass".to_owned(),
+        realm: String::new(),
+        software: String::new(),
+        rto_in_ms: 0,
+        conn: lconn,
+        vnet: Some(Arc::clone(&v.netl0)),
+    })
+    .await?;
+
+    client.listen().await?;
+
+    let conn = client.allocate().await?;
+
+    assert!(!v.server.get_allocations_info(None).await?.is_empty());
+
+    let echo_conn = v.net1.bind(SocketAddr::from_str("1.2.3.5:5678")?).await?;
+    let echo_addr = echo_conn.local_addr().await?;
+
+    let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
+
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1500];
+        loop {
+            tokio::select! {
+                _ = done_rx.recv() => break,
+                _ = echo_conn.recv_from(&mut buf) => {
+                }
+            }
+        }
+    });
+
+    assert_eq!(
+        v.server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .transmitted_bytes,
+        Some(0)
+    );
+
+    for _ in 0..10 {
+        conn.send_to(b"Hello", echo_addr).await?;
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    assert_eq!(
+        v.server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .transmitted_bytes,
+        Some(50)
+    );
+
+    for _ in 0..10 {
+        conn.send_to(b"Hello", echo_addr).await?;
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    assert_eq!(
+        v.server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .transmitted_bytes,
+        Some(100)
+    );
+
+    client.close().await?;
+    drop(done_tx);
 
     Ok(())
 }
