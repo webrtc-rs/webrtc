@@ -12,7 +12,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use util::{vnet::router::Nic, vnet::*};
 
-pub struct TestAuthHandler {
+struct TestAuthHandler {
     cred_map: HashMap<String, Vec<u8>>,
 }
 
