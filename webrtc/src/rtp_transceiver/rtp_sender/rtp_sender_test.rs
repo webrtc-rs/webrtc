@@ -142,10 +142,11 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
     signal_pair(&mut offerer, &mut answerer).await?;
 
     if let Some(sender) = rtp_transceiver.sender().await {
+        let encoding = { sender.track_encodings.lock().await[0].clone() };
         let parameters = sender.get_parameters().await;
         assert_ne!(0, parameters.rtp_parameters.codecs.len());
         assert_eq!(1, parameters.encodings.len());
-        assert_eq!(sender.track_encodings[0].ssrc, parameters.encodings[0].ssrc);
+        assert_eq!(encoding.ssrc, parameters.encodings[0].ssrc);
     } else {
         assert!(false);
     }
