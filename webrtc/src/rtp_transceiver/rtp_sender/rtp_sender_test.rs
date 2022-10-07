@@ -145,7 +145,7 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
         let parameters = sender.get_parameters().await;
         assert_ne!(0, parameters.rtp_parameters.codecs.len());
         assert_eq!(1, parameters.encodings.len());
-        assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
+        assert_eq!(sender.track_encodings[0].ssrc, parameters.encodings[0].ssrc);
     } else {
         assert!(false);
     }

@@ -529,6 +529,7 @@ impl RTCRtpReceiver {
                     let stream_info = create_stream_info(
                         "".to_owned(),
                         encoding.ssrc,
+                        "".to_owned(),
                         0,
                         codec.clone(),
                         &global_params.header_extensions,
@@ -586,6 +587,7 @@ impl RTCRtpReceiver {
                 let stream_info = create_stream_info(
                     "".to_owned(),
                     rtx_ssrc,
+                    "".to_owned(),
                     0,
                     codec.clone(),
                     &global_params.header_extensions,
