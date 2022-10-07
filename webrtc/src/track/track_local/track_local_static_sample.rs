@@ -44,6 +44,11 @@ impl TrackLocalStaticSample {
         self.rtp_track.codec()
     }
 
+    // Sets the RID for this track
+    pub fn set_rid(&mut self, rid: String) {
+        self.rtp_track.set_rid(rid);
+    }
+
     /// write_sample writes a Sample to the TrackLocalStaticSample
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
@@ -170,6 +175,10 @@ impl TrackLocal for TrackLocalStaticSample {
     /// and StreamID would be 'desktop' or 'webcam'
     fn id(&self) -> &str {
         self.rtp_track.id()
+    }
+
+    fn rid(&self) -> &str {
+        self.rtp_track.rid()
     }
 
     /// stream_id is the group this track belongs too. This must be unique

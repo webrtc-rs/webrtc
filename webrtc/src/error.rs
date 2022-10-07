@@ -197,6 +197,23 @@ pub enum Error {
     #[error("new track must be of the same kind as previous")]
     ErrRTPSenderNewTrackHasIncorrectKind,
 
+    #[error("Sender cannot encoding due to RID collision")]
+    ErrRTPSenderRIDCollision,
+
+    #[error("Sender cannot add encoding as provided track does not match base track")]
+    ErrRTPSenderBaseEncodingMismatch,
+
+    /// ErrRTPSenderStopped indicates the sender was already stopped
+    #[error("Sender has already been stopped")]
+    ErrRTPSenderStopped,
+
+    /// ErrRTPSenderRidNil indicates that the track RID was empty
+    #[error("Sender cannot add encoding as rid is empty")]
+    ErrRTPSenderRidNil,
+
+    #[error("Sender cannot add encoding as there is no base track")]
+    ErrRTPSenderNoBaseEncoding,
+
     /// ErrUnbindFailed indicates that a TrackLocal was not able to be unbind
     #[error("failed to unbind TrackLocal from PeerConnection")]
     ErrUnbindFailed,

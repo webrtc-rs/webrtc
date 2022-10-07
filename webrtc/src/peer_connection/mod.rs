@@ -490,16 +490,17 @@ impl RTCPeerConnection {
                             // local description so we can compare all of them. For no we only
                             // consider the first one.
 
-                            let stream_ids = sender.associated_media_stream_ids();
-                            // Different number of lines, 1 vs 0
-                            if stream_ids.is_empty() {
-                                return true;
-                            }
+                            // TODO: Go and see what Pion does these days here
+                            //                            let stream_ids = sender.associated_media_stream_ids();
+                            //                            // Different number of lines, 1 vs 0
+                            //                            if stream_ids.is_empty() {
+                            return true;
+                            //                            }
 
                             // different stream id
-                            if dmsid.split_whitespace().next() != Some(&stream_ids[0]) {
-                                return true;
-                            }
+                            //                            if dmsid.split_whitespace().next() != Some(&stream_ids[0]) {
+                            //                                return true;
+                            //                            }
                         }
                         match local_desc.sdp_type {
                             RTCSdpType::Offer => {

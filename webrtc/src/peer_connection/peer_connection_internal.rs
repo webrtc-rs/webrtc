@@ -1141,6 +1141,7 @@ impl PeerConnectionInternal {
                     let stream_info = create_stream_info(
                         "".to_owned(),
                         ssrc,
+                        "".to_owned(),
                         params.codecs[0].payload_type,
                         params.codecs[0].capability.clone(),
                         &params.header_extensions,
@@ -1535,20 +1536,23 @@ impl PeerConnectionInternal {
                 None => continue,
             };
 
-            let track_id = track.id().to_string();
             let kind = match track.kind() {
                 RTPCodecType::Unspecified => continue,
                 RTPCodecType::Audio => "audio",
                 RTPCodecType::Video => "video",
             };
 
-            track_infos.push(TrackInfo {
-                track_id,
-                ssrc: sender.ssrc,
-                mid: mid.clone(),
-                rid: None,
-                kind,
-            });
+            let encodings = sender.track_encodings.lock().await;
+            for e in encodings.iter() {
+                let track_id = track.id().to_string();
+                track_infos.push(TrackInfo {
+                    track_id,
+                    ssrc: e.ssrc,
+                    mid: mid.clone(),
+                    rid: Some(track.rid().to_owned()),
+                    kind,
+                });
+            }
         }
 
         let stream_stats = self

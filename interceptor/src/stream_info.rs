@@ -11,6 +11,7 @@ pub struct RTPHeaderExtension {
 #[derive(Default, Debug, Clone)]
 pub struct StreamInfo {
     pub id: String,
+    pub rid: String,
     pub attributes: Attributes,
     pub ssrc: u32,
     pub payload_type: u8,

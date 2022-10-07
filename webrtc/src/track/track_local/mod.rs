@@ -9,7 +9,7 @@ use crate::rtp_transceiver::rtp_codec::*;
 use crate::rtp_transceiver::*;
 
 use async_trait::async_trait;
-use interceptor::{Attributes, RTPWriter};
+use interceptor::{Attributes, RTCPReader, RTPWriter};
 use std::any::Any;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,13 +29,14 @@ pub trait TrackLocalWriter: fmt::Debug {
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used
 /// in Interceptors.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Clone)]
 pub struct TrackLocalContext {
     pub(crate) id: String,
     pub(crate) params: RTCRtpParameters,
     pub(crate) ssrc: SSRC,
     pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
     pub(crate) paused: Arc<AtomicBool>,
+    pub(crate) rtcp_intercepter: Option<Arc<dyn RTCPReader + Send + Sync>>,
 }
 
 impl TrackLocalContext {
@@ -63,6 +64,10 @@ impl TrackLocalContext {
         self.write_stream.clone()
     }
 
+    pub fn rtcp_reader(&self) -> Option<Arc<dyn RTCPReader + Send + Sync>> {
+        self.rtcp_intercepter.clone()
+    }
+
     /// id is a unique identifier that is used for both bind/unbind
     pub fn id(&self) -> String {
         self.id.clone()
@@ -86,6 +91,9 @@ pub trait TrackLocal {
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
     /// and stream_id would be 'desktop' or 'webcam'
     fn id(&self) -> &str;
+
+    /// rid is the RTP identifier for this Track
+    fn rid(&self) -> &str;
 
     /// stream_id is the group this track belongs too. This must be unique
     fn stream_id(&self) -> &str;
