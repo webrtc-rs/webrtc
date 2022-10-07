@@ -466,13 +466,13 @@ impl RTCPeerConnection {
                     if let Some(m) = m {
                         // Step 5.3.1
                         if t.direction().has_send() {
-                            let dmsid = match m.attribute(ATTR_KEY_MSID).and_then(|o| o) {
+                            let _dmsid = match m.attribute(ATTR_KEY_MSID).and_then(|o| o) {
                                 Some(m) => m,
                                 None => return true, // doesn't contain a single a=msid line
                             };
 
-                            let sender = match t.sender().await {
-                                Some(s) => s.clone(),
+                            let _sender = match t.sender().await {
+                                Some(s) => s,
                                 None => {
                                     log::warn!(
                                         "RtpSender missing for transeceiver with sending direction {} for mid {}",
