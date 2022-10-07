@@ -582,7 +582,7 @@ impl RTCRtpSender {
 
     pub async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
         if let Some(encoding) = self.encoding_for_rid(rid).await {
-            return self.internal.read(&encoding, b).await;
+            self.internal.read(&encoding, b).await
         } else {
             Err(Error::ErrInterceptorNotBind)
         }
@@ -593,7 +593,7 @@ impl RTCRtpSender {
         rid: &str,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         if let Some(encoding) = self.encoding_for_rid(rid).await {
-            return self.internal.read_rtcp(&encoding, self.receive_mtu).await;
+            self.internal.read_rtcp(&encoding, self.receive_mtu).await
         } else {
             Err(Error::ErrInterceptorNotBind)
         }
