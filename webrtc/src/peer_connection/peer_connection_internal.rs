@@ -1542,7 +1542,7 @@ impl PeerConnectionInternal {
                 RTPCodecType::Video => "video",
             };
 
-            let encodings = sender.track_encodings.lock().await;
+            let encodings = sender.track_encodings.read().await;
             for e in encodings.iter() {
                 let track_id = track.id().to_string();
                 track_infos.push(TrackInfo {
