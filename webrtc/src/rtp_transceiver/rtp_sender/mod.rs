@@ -108,6 +108,9 @@ pub struct RTCRtpSender {
     /// track id should be use when negotiating.
     pub(crate) initial_track_id: std::sync::Mutex<Option<String>>,
 
+    /// AssociatedMediaStreamIds from the WebRTC specifcations
+    pub(crate) associated_media_stream_ids: std::sync::Mutex<Vec<String>>,
+
     rtp_transceiver: Mutex<Option<Weak<RTCRtpTransceiver>>>,
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -144,6 +147,7 @@ impl RTCRtpSender {
         let stop_called_tx = Arc::new(Notify::new());
         let stop_called_rx = stop_called_tx.clone();
         let stop_called_signal = Arc::new(AtomicBool::new(false));
+        let stream_ids = vec![track.stream_id().to_string()];
 
         let internal = Arc::new(RTPSenderInternal {
             send_called_rx: Mutex::new(send_called_rx),
@@ -165,6 +169,7 @@ impl RTCRtpSender {
 
             id,
             initial_track_id: std::sync::Mutex::new(None),
+            associated_media_stream_ids: std::sync::Mutex::new(stream_ids),
             kind: track.kind(),
 
             rtp_transceiver: Mutex::new(None),
@@ -623,6 +628,12 @@ impl RTCRtpSender {
 
     pub(crate) fn initial_track_id(&self) -> Option<String> {
         let lock = self.initial_track_id.lock().unwrap();
+
+        lock.clone()
+    }
+
+    pub(crate) fn associated_media_stream_ids(&self) -> Vec<String> {
+        let lock = self.associated_media_stream_ids.lock().unwrap();
 
         lock.clone()
     }
