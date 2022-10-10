@@ -20,7 +20,7 @@ use interceptor::stream_info::StreamInfo;
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: Mutex<mpsc::Receiver<()>>,
@@ -87,7 +87,7 @@ pub struct TrackEncoding {
 
 /// RTPSender allows an application to control how a given Track is encoded and transmitted to a remote peer
 pub struct RTCRtpSender {
-    pub(crate) track_encodings: Mutex<Vec<Arc<TrackEncoding>>>,
+    pub(crate) track_encodings: RwLock<Vec<Arc<TrackEncoding>>>,
 
     pub(crate) transport: Arc<RTCDtlsTransport>,
 
@@ -156,7 +156,7 @@ impl RTCRtpSender {
         });
 
         let sender = RTCRtpSender {
-            track_encodings: Mutex::new(vec![]),
+            track_encodings: RwLock::new(vec![]),
             transport,
 
             payload_type: 0,
@@ -258,7 +258,7 @@ impl RTCRtpSender {
             context: Mutex::new(TrackLocalContext::default()),
         };
 
-        let mut encodings = self.track_encodings.lock().await;
+        let mut encodings = self.track_encodings.write().await;
         encodings.push(Arc::new(track_encoding));
     }
 
@@ -297,7 +297,7 @@ impl RTCRtpSender {
         let mut encodings: Vec<RTCRtpEncodingParameters> = vec![];
 
         {
-            let track_encodings = self.track_encodings.lock().await;
+            let track_encodings = self.track_encodings.read().await;
             for te in track_encodings.iter() {
                 let track = te.track.lock().await;
                 let rid = track
@@ -340,7 +340,7 @@ impl RTCRtpSender {
 
     /// track returns the RTCRtpTransceiver track, or nil
     pub async fn track(&self) -> Option<Arc<dyn TrackLocal + Send + Sync>> {
-        let encodings = self.track_encodings.lock().await;
+        let encodings = self.track_encodings.read().await;
         if let Some(t) = encodings.first() {
             let track = t.track.lock().await;
             track.clone()
@@ -357,7 +357,7 @@ impl RTCRtpSender {
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         if let Some(t) = &track {
-            let encodings = self.track_encodings.lock().await;
+            let encodings = self.track_encodings.read().await;
             if encodings.len() > 1 {
                 // return ErrRTPSenderNewTrackHasIncorrectEnvelope
                 return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind);
@@ -376,7 +376,7 @@ impl RTCRtpSender {
             }
         }
 
-        let encodings = self.track_encodings.lock().await;
+        let encodings = self.track_encodings.read().await;
         if let Some(re) = encodings.first() {
             if self.has_sent().await {
                 let t = {
@@ -459,8 +459,7 @@ impl RTCRtpSender {
             return Err(Error::ErrRTPSenderSendAlreadyCalled);
         }
 
-        // This is quite a long lived lock?
-        let encodings = self.track_encodings.lock().await;
+        let encodings = self.track_encodings.read().await;
         for te in encodings.iter() {
             let write_stream = Arc::new(InterceptorToTrackLocalWriter::new(self.paused.clone()));
             let (context, stream_info) = {
@@ -547,7 +546,7 @@ impl RTCRtpSender {
 
         self.replace_track(None).await?;
 
-        let encodings = self.track_encodings.lock().await;
+        let encodings = self.track_encodings.read().await;
         for te in encodings.iter() {
             let stream_info = te.stream_info.lock().await;
             self.interceptor.unbind_local_stream(&stream_info).await;
@@ -569,7 +568,7 @@ impl RTCRtpSender {
     // These helpers exist because otherwise I accidentally end up locking on blocking calls
     // because I'm incapable of writing threadsafe code
     async fn encoding_for_rid(&self, rid: &str) -> Option<Arc<TrackEncoding>> {
-        let encodings = self.track_encodings.lock().await;
+        let encodings = self.track_encodings.read().await;
         for e in encodings.iter() {
             if let Some(track) = &*e.track.lock().await {
                 if track.rid() == rid {
@@ -581,7 +580,7 @@ impl RTCRtpSender {
     }
 
     async fn first_encoding(&self) -> Result<Option<Arc<TrackEncoding>>> {
-        let encodings = self.track_encodings.lock().await;
+        let encodings = self.track_encodings.read().await;
         return Ok(encodings.first().map(|x| (*x).clone()));
     }
 
