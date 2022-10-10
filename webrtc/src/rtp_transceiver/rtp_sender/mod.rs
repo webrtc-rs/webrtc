@@ -39,13 +39,13 @@ impl RTPSenderInternal {
 
         tokio::select! {
             _ = send_called_rx.recv() =>{
-                let rtcp_interceptor = encoding.rtcp_interceptor.clone();
+                let rtcp_reader = encoding.rtcp_reader.clone();
                     let a = Attributes::new();
                     tokio::select! {
                         _ = self.stop_called_rx.notified() => {
                             Err(Error::ErrClosedPipe)
                         }
-                        result = rtcp_interceptor.read(b, &a) => {
+                        result = rtcp_reader.read(b, &a) => {
                             Ok(result?)
                         }
                     }
@@ -77,7 +77,7 @@ pub struct TrackEncoding {
 
     pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
 
-    pub(crate) rtcp_interceptor: Arc<dyn RTCPReader + Send + Sync>,
+    pub(crate) rtcp_reader: Arc<dyn RTCPReader + Send + Sync>,
     pub(crate) stream_info: Mutex<StreamInfo>,
 
     pub(crate) context: Mutex<TrackLocalContext>,
@@ -247,13 +247,13 @@ impl RTCRtpSender {
         });
 
         let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
-        let rtcp_interceptor = self.interceptor.bind_rtcp_reader(srtp_rtcp_reader).await;
+        let rtcp_reader = self.interceptor.bind_rtcp_reader(srtp_rtcp_reader).await;
 
         let track_encoding = TrackEncoding {
             track: Mutex::new(Some(track)),
             srtp_stream,
             ssrc,
-            rtcp_interceptor,
+            rtcp_reader,
             stream_info: Mutex::new(StreamInfo::default()),
             context: Mutex::new(TrackLocalContext::default()),
         };
@@ -412,7 +412,7 @@ impl RTCRtpSender {
                         .await,
                     ssrc: context.ssrc,
                     write_stream: context.write_stream.clone(),
-                    rtcp_intercepter: context.rtcp_intercepter.clone(),
+                    rtcp_reader: context.rtcp_reader.clone(),
                 };
 
                 t.bind(&new_context).await
@@ -478,7 +478,7 @@ impl RTCRtpSender {
                         )
                         .await,
                     ssrc: te.ssrc,
-                    rtcp_intercepter: Some(te.rtcp_interceptor.clone()),
+                    rtcp_reader: Some(te.rtcp_reader.clone()),
                     write_stream: Some(
                         Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>
                     ),
@@ -564,9 +564,6 @@ impl RTCRtpSender {
         }
     }
 
-    // Having a mutex on that little collection sure does make this whole module fun
-    // These helpers exist because otherwise I accidentally end up locking on blocking calls
-    // because I'm incapable of writing threadsafe code
     async fn encoding_for_rid(&self, rid: &str) -> Option<Arc<TrackEncoding>> {
         let encodings = self.track_encodings.read().await;
         for e in encodings.iter() {
@@ -588,7 +585,7 @@ impl RTCRtpSender {
         if let Some(encoding) = self.encoding_for_rid(rid).await {
             self.internal.read(&encoding, b).await
         } else {
-            Err(Error::ErrInterceptorNotBind)
+            Err(Error::ErrRTPSenderNoTrackForRID)
         }
     }
 
@@ -599,7 +596,7 @@ impl RTCRtpSender {
         if let Some(encoding) = self.encoding_for_rid(rid).await {
             self.internal.read_rtcp(&encoding, self.receive_mtu).await
         } else {
-            Err(Error::ErrInterceptorNotBind)
+            Err(Error::ErrRTPSenderNoTrackForRID)
         }
     }
 
@@ -635,6 +632,18 @@ impl RTCRtpSender {
         let lock = self.associated_media_stream_ids.lock().unwrap();
 
         lock.clone()
+    }
+
+    pub(crate) fn associate_media_stream_id(&self, id: String) -> bool {
+        let mut lock = self.associated_media_stream_ids.lock().unwrap();
+
+        if lock.contains(&id) {
+            return false;
+        }
+
+        lock.push(id);
+
+        true
     }
 
     pub(crate) fn set_initial_track_id(&self, id: String) -> Result<()> {

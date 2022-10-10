@@ -546,7 +546,7 @@ pub(crate) async fn add_transceiver_sdp(
             let send_parameters = sender.get_parameters().await;
             if let Some(track) = sender.track().await {
                 // Get the different encodings expressed first
-                for encoding in send_parameters.encodings.iter() {
+                for encoding in &send_parameters.encodings {
                     media = media.with_media_source(
                         encoding.ssrc,
                         track.stream_id().to_owned(), /* cname */
@@ -559,11 +559,13 @@ pub(crate) async fn add_transceiver_sdp(
                 if send_parameters.encodings.len() > 1 {
                     let mut send_rids: Vec<String> = vec![];
 
-                    for e in send_parameters.encodings.iter() {
-                        let mut s: String = e.rid.clone();
-                        s.push_str(" send");
-                        media = media.with_value_attribute("rid".into(), s);
-                        send_rids.push(e.rid.clone())
+                    for e in &send_parameters.encodings {
+                        if let Some(rid) = e.rid.clone() {
+                            let mut s: String = rid.clone();
+                            send_rids.push(rid);
+                            s.push_str(" send");
+                            media = media.with_value_attribute("rid".into(), s);
+                        }
                     }
                     // Simulcast)
                     let mut s: String = "send ".to_owned();

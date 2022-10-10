@@ -197,7 +197,10 @@ pub enum Error {
     #[error("new track must be of the same kind as previous")]
     ErrRTPSenderNewTrackHasIncorrectKind,
 
-    #[error("Sender cannot encoding due to RID collision")]
+    #[error("Sender does not have track for RID")]
+    ErrRTPSenderNoTrackForRID,
+
+    #[error("Sender cannot add encoding due to RID collision")]
     ErrRTPSenderRIDCollision,
 
     #[error("Sender cannot add encoding as provided track does not match base track")]
