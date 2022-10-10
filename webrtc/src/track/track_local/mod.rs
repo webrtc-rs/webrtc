@@ -36,7 +36,7 @@ pub struct TrackLocalContext {
     pub(crate) ssrc: SSRC,
     pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
     pub(crate) paused: Arc<AtomicBool>,
-    pub(crate) rtcp_intercepter: Option<Arc<dyn RTCPReader + Send + Sync>>,
+    pub(crate) rtcp_reader: Option<Arc<dyn RTCPReader + Send + Sync>>,
 }
 
 impl TrackLocalContext {
@@ -65,7 +65,7 @@ impl TrackLocalContext {
     }
 
     pub fn rtcp_reader(&self) -> Option<Arc<dyn RTCPReader + Send + Sync>> {
-        self.rtcp_intercepter.clone()
+        self.rtcp_reader.clone()
     }
 
     /// id is a unique identifier that is used for both bind/unbind
