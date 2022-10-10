@@ -537,6 +537,7 @@ pub(crate) async fn add_transceiver_sdp(
         if let Some(sender) = mt.sender().await {
             let send_parameters = sender.get_parameters().await;
             if let Some(track) = sender.track().await {
+                // Get the different encodings expressed first
                 for encoding in send_parameters.encodings.iter() {
                     media = media.with_media_source(
                         encoding.ssrc,
@@ -544,26 +545,9 @@ pub(crate) async fn add_transceiver_sdp(
                         track.stream_id().to_owned(), /* streamLabel */
                         track.id().to_owned(),
                     );
-
-                    // Send msid based on the configured track if we haven't already
-                    // sent on this sender. If we have sent we must keep the msid line consistent, this
-                    // is handled below.
-                    if !is_plan_b {
-                        // We need this?
-                        // related streams don't exist any more in pion (and nor should they?)
-
-                        // I this should become obsolete
-                        if sender.initial_track_id().is_none() {
-                            media = media.with_property_attribute(format!(
-                                "msid:{} {}",
-                                track.stream_id(),
-                                track.id()
-                            ));
-                            sender.set_initial_track_id(track.id().to_string())?;
-                        }
-                    }
                 }
 
+                // Then tell the world about simulcast
                 if send_parameters.encodings.len() > 1 {
                     let mut send_rids: Vec<String> = vec![];
 
@@ -578,10 +562,43 @@ pub(crate) async fn add_transceiver_sdp(
                     s.push_str(send_rids.join(";").as_ref());
                     media = media.with_value_attribute("simulcast".into(), s);
                 }
+                // Send msid based on the configured track if we haven't already
+                // sent on this sender. If we have sent we must keep the msid line consistent, this
+                // is handled below.
+                // And now when we 'break', the above will have been printed properly still?
+                if !is_plan_b && sender.initial_track_id().is_none() {
+                    for stream_id in sender.associated_media_stream_ids() {
+                        media = media.with_property_attribute(format!(
+                            "msid:{} {}",
+                            stream_id,
+                            track.id()
+                        ));
+                    }
+                    sender.set_initial_track_id(track.id().to_string())?;
+                    break;
+                }
             }
-        }
-        if !is_plan_b {
-            break;
+            if !is_plan_b {
+                if let Some(track_id) = sender.initial_track_id() {
+                    // After we have include an msid attribute in an offer it must stay the same for
+                    // all subsequent offer even if the track or transceiver direction changes.
+                    //
+                    // [RFC 8829 Section 5.2.2](https://datatracker.ietf.org/doc/html/rfc8829#section-5.2.2)
+                    //
+                    // For RtpTransceivers that are not stopped, the "a=msid" line or
+                    // lines MUST stay the same if they are present in the current
+                    // description, regardless of changes to the transceiver's direction
+                    // or track.  If no "a=msid" line is present in the current
+                    // description, "a=msid" line(s) MUST be generated according to the
+                    // same rules as for an initial offer.
+                    for stream_id in sender.associated_media_stream_ids() {
+                        media = media
+                            .with_property_attribute(format!("msid:{} {}", stream_id, track_id));
+                    }
+
+                    break;
+                }
+            }
         }
     }
 

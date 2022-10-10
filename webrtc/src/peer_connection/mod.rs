@@ -466,12 +466,12 @@ impl RTCPeerConnection {
                     if let Some(m) = m {
                         // Step 5.3.1
                         if t.direction().has_send() {
-                            let _dmsid = match m.attribute(ATTR_KEY_MSID).and_then(|o| o) {
+                            let dmsid = match m.attribute(ATTR_KEY_MSID).and_then(|o| o) {
                                 Some(m) => m,
                                 None => return true, // doesn't contain a single a=msid line
                             };
 
-                            let _sender = match t.sender().await {
+                            let sender = match t.sender().await {
                                 Some(s) => s,
                                 None => {
                                     log::warn!(
@@ -490,17 +490,15 @@ impl RTCPeerConnection {
                             // local description so we can compare all of them. For no we only
                             // consider the first one.
 
-                            // TODO: Go and see what Pion does these days here
-                            //                            let stream_ids = sender.associated_media_stream_ids();
-                            //                            // Different number of lines, 1 vs 0
-                            //                            if stream_ids.is_empty() {
-                            return true;
-                            //                            }
-
+                            let stream_ids = sender.associated_media_stream_ids();
+                            // Different number of lines, 1 vs 0
+                            if stream_ids.is_empty() {
+                                return true;
+                            }
                             // different stream id
-                            //                            if dmsid.split_whitespace().next() != Some(&stream_ids[0]) {
-                            //                                return true;
-                            //                            }
+                            if dmsid.split_whitespace().next() != Some(&stream_ids[0]) {
+                                return true;
+                            }
                         }
                         match local_desc.sdp_type {
                             RTCSdpType::Offer => {
