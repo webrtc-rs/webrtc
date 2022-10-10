@@ -35,9 +35,17 @@ pub struct TrackLocalContext {
     pub(crate) params: RTCRtpParameters,
     pub(crate) ssrc: SSRC,
     pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
+    pub(crate) paused: Arc<AtomicBool>,
 }
 
 impl TrackLocalContext {
+    pub(crate) fn new(paused: Arc<AtomicBool>) -> TrackLocalContext {
+        TrackLocalContext {
+            paused,
+            ..Default::default()
+        }
+    }
+
     /// codec_parameters returns the negotiated RTPCodecParameters. These are the codecs supported by both
     /// PeerConnections and the SSRC/PayloadTypes
     pub fn codec_parameters(&self) -> &[RTCRtpCodecParameters] {
@@ -118,6 +126,10 @@ impl InterceptorToTrackLocalWriter {
             paused,
         }
     }
+
+    fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
+    }
 }
 
 impl std::fmt::Debug for InterceptorToTrackLocalWriter {
@@ -129,7 +141,7 @@ impl std::fmt::Debug for InterceptorToTrackLocalWriter {
 #[async_trait]
 impl TrackLocalWriter for InterceptorToTrackLocalWriter {
     async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
-        if self.paused.load(Ordering::SeqCst) {
+        if self.is_paused() {
             return Ok(0);
         }
 

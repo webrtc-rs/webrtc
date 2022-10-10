@@ -11,6 +11,7 @@ pub struct TrackLocalStaticRTP {
     codec: RTCRtpCodecCapability,
     id: String,
     stream_id: String,
+    paused: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 impl TrackLocalStaticRTP {
@@ -21,12 +22,20 @@ impl TrackLocalStaticRTP {
             bindings: Mutex::new(vec![]),
             id,
             stream_id,
+            paused: Mutex::new(None),
         }
     }
 
     /// codec gets the Codec of the track
     pub fn codec(&self) -> RTCRtpCodecCapability {
         self.codec.clone()
+    }
+
+    async fn is_paused(&self) -> bool {
+        let p = self.paused.lock().await;
+        p.as_ref()
+            .map(|p| p.load(Ordering::SeqCst))
+            .unwrap_or(false)
     }
 }
 
@@ -40,6 +49,11 @@ impl TrackLocal for TrackLocalStaticRTP {
             capability: self.codec.clone(),
             ..Default::default()
         };
+
+        {
+            let mut p = self.paused.lock().await;
+            *p = Some(t.paused.clone());
+        }
 
         let (codec, match_type) = codec_parameters_fuzzy_search(&parameters, t.codec_parameters());
         if match_type != CodecMatch::None {
@@ -116,6 +130,10 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
         let mut n = 0;
         let mut write_errs = vec![];
         let mut pkt = p.clone();
+
+        if self.is_paused().await {
+            return Ok(0);
+        }
 
         let bindings = {
             let bindings = self.bindings.lock().await;

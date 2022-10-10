@@ -11,6 +11,16 @@ struct TrackLocalStaticSampleInternal {
     packetizer: Option<Box<dyn rtp::packetizer::Packetizer + Send + Sync>>,
     sequencer: Option<Box<dyn rtp::sequence::Sequencer + Send + Sync>>,
     clock_rate: f64,
+    paused: Option<Arc<AtomicBool>>,
+}
+
+impl TrackLocalStaticSampleInternal {
+    fn is_paused(&self) -> bool {
+        self.paused
+            .as_ref()
+            .map(|p| p.load(Ordering::SeqCst))
+            .unwrap_or(false)
+    }
 }
 
 /// TrackLocalStaticSample is a TrackLocal that has a pre-set codec and accepts Samples.
@@ -32,6 +42,7 @@ impl TrackLocalStaticSample {
                 packetizer: None,
                 sequencer: None,
                 clock_rate: 0.0f64,
+                paused: None,
             }),
         }
     }
@@ -49,6 +60,10 @@ impl TrackLocalStaticSample {
         let mut internal = self.internal.lock().await;
 
         if internal.packetizer.is_none() || internal.sequencer.is_none() {
+            return Ok(());
+        }
+
+        if internal.is_paused() {
             return Ok(());
         }
 
@@ -97,6 +112,8 @@ impl TrackLocal for TrackLocalStaticSample {
         let codec = self.rtp_track.bind(t).await?;
 
         let mut internal = self.internal.lock().await;
+
+        internal.paused = Some(t.paused.clone());
 
         // We only need one packetizer
         if internal.packetizer.is_some() {

@@ -166,6 +166,8 @@ impl RTCRtpSender {
             *internal_rtcp_interceptor = Some(rtcp_interceptor);
         }
 
+        let paused = Arc::new(AtomicBool::new(start_paused));
+
         let stream_ids = vec![track.stream_id().to_string()];
         RTCRtpSender {
             track: Mutex::new(Some(track)),
@@ -173,7 +175,7 @@ impl RTCRtpSender {
             srtp_stream,
             stream_info: Mutex::new(StreamInfo::default()),
 
-            context: Mutex::new(TrackLocalContext::default()),
+            context: Mutex::new(TrackLocalContext::new(paused.clone())),
             transport,
 
             payload_type: 0,
@@ -195,7 +197,7 @@ impl RTCRtpSender {
             stop_called_tx,
             stop_called_signal,
 
-            paused: Arc::new(AtomicBool::new(start_paused)),
+            paused,
 
             internal,
         }
@@ -332,6 +334,7 @@ impl RTCRtpSender {
                     .await,
                 ssrc: context.ssrc,
                 write_stream: context.write_stream.clone(),
+                paused: self.paused.clone(),
             };
 
             t.bind(&new_context).await
@@ -392,6 +395,7 @@ impl RTCRtpSender {
                 write_stream: Some(
                     Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>
                 ),
+                paused: self.paused.clone(),
             };
 
             let codec = if let Some(t) = &*track {
