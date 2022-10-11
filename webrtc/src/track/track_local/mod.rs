@@ -92,7 +92,7 @@ pub trait TrackLocal {
     fn id(&self) -> &str;
 
     /// rid is the RTP identifier for this Track
-    fn rid(&self) -> &str;
+    fn rid(&self) -> Option<String>;
 
     /// stream_id is the group this track belongs too. This must be unique
     fn stream_id(&self) -> &str;

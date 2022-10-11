@@ -48,7 +48,7 @@ pub struct TrackRemote {
     ssrc: AtomicU32,        //SSRC,
     codec: Mutex<RTCRtpCodecParameters>,
     pub(crate) params: Mutex<RTCRtpParameters>,
-    rid: String,
+    rid: Option<String>,
 
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
@@ -79,7 +79,7 @@ impl TrackRemote {
         receive_mtu: usize,
         kind: RTPCodecType,
         ssrc: SSRC,
-        rid: String,
+        rid: Option<String>,
         receiver: Weak<RTPReceiverInternal>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
@@ -135,8 +135,8 @@ impl TrackRemote {
     /// rid gets the RTP Stream ID of this Track
     /// With Simulcast you will have multiple tracks with the same ID, but different RID values.
     /// In many cases a TrackRemote will not have an RID, so it is important to assert it is non-zero
-    pub fn rid(&self) -> &str {
-        self.rid.as_str()
+    pub fn rid(&self) -> Option<String> {
+        self.rid.clone()
     }
 
     /// payload_type gets the PayloadType of the track

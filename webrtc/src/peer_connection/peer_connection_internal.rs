@@ -173,10 +173,8 @@ impl PeerConnectionInternal {
                     let mut receiver_needs_stopped = false;
 
                     for t in tracks {
-                        if !t.rid().is_empty() {
-                            if let Some(details) =
-                                track_details_for_rid(&track_details, t.rid().to_owned())
-                            {
+                        if let Some(rid) = t.rid().clone() {
+                            if let Some(details) = track_details_for_rid(&track_details, rid) {
                                 t.set_id(details.id.clone()).await;
                                 t.set_stream_id(details.stream_id.clone()).await;
                                 continue;
@@ -1141,7 +1139,7 @@ impl PeerConnectionInternal {
                     let stream_info = create_stream_info(
                         "".to_owned(),
                         ssrc,
-                        "".to_owned(),
+                        None,
                         params.codecs[0].payload_type,
                         params.codecs[0].capability.clone(),
                         &params.header_extensions,
@@ -1549,7 +1547,7 @@ impl PeerConnectionInternal {
                     track_id,
                     ssrc: e.ssrc,
                     mid: mid.clone(),
-                    rid: Some(track.rid().to_owned()),
+                    rid: track.rid().clone(),
                     kind,
                 });
             }
