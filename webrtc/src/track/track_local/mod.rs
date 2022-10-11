@@ -39,6 +39,17 @@ pub struct TrackLocalContext {
     pub(crate) rtcp_reader: Option<Arc<dyn RTCPReader + Send + Sync>>,
 }
 
+impl std::fmt::Debug for TrackLocalContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TrackLocalContext")
+            .field("id", &self.id)
+            .field("params", &self.params)
+            .field("ssrc", &self.ssrc)
+            .field("write_stream", &self.write_stream)
+            .finish()
+    }
+}
+
 impl TrackLocalContext {
     /// codec_parameters returns the negotiated RTPCodecParameters. These are the codecs supported by both
     /// PeerConnections and the SSRC/PayloadTypes
