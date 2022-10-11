@@ -190,10 +190,6 @@ impl RTCRtpSender {
     }
 
     pub async fn add_encoding(&self, track: Arc<dyn TrackLocal + Send + Sync>) -> Result<()> {
-        if track.rid() == "" {
-            return Err(Error::ErrRTPSenderRidNil);
-        }
-
         if self.has_stopped().await {
             return Err(Error::ErrRTPSenderStopped);
         }
@@ -202,33 +198,38 @@ impl RTCRtpSender {
             return Err(Error::ErrRTPSenderSendAlreadyCalled);
         }
 
-        // oops, somebody code-golf this for me
-        {
-            let ref_track = if let Some(t) = self.first_encoding().await? {
-                let t = t.track.lock().await;
-                if let Some(t) = &*t {
-                    if t.rid() != "" {
-                        t.clone()
-                    } else {
-                        return Err(Error::ErrRTPSenderNoBaseEncoding);
-                    }
+        if track.rid().is_none() {
+            return Err(Error::ErrRTPSenderRidNil);
+        }
+
+        if let Some(rid) = track.rid() {
+            if self.encoding_for_rid(&rid).await.is_some() {
+                return Err(Error::ErrRTPSenderRIDCollision);
+            }
+        } else {
+            return Err(Error::ErrRTPSenderRidNil);
+        }
+
+        let ref_track = if let Some(t) = self.first_encoding().await? {
+            let t = t.track.lock().await;
+            if let Some(t) = &*t {
+                if t.rid().is_some() {
+                    t.clone()
                 } else {
                     return Err(Error::ErrRTPSenderNoBaseEncoding);
                 }
             } else {
                 return Err(Error::ErrRTPSenderNoBaseEncoding);
-            };
-
-            if ref_track.id() != track.id()
-                || ref_track.stream_id() != track.stream_id()
-                || ref_track.kind() != track.kind()
-            {
-                return Err(Error::ErrRTPSenderBaseEncodingMismatch);
             }
+        } else {
+            return Err(Error::ErrRTPSenderNoBaseEncoding);
+        };
 
-            if self.encoding_for_rid(track.rid()).await.is_some() {
-                return Err(Error::ErrRTPSenderRIDCollision);
-            }
+        if ref_track.id() != track.id()
+            || ref_track.stream_id() != track.stream_id()
+            || ref_track.kind() != track.kind()
+        {
+            return Err(Error::ErrRTPSenderBaseEncodingMismatch);
         }
 
         self.add_encoding_internal(track).await;
@@ -300,9 +301,7 @@ impl RTCRtpSender {
             let track_encodings = self.track_encodings.read().await;
             for te in track_encodings.iter() {
                 let track = te.track.lock().await;
-                let rid = track
-                    .as_ref()
-                    .map_or(String::from(""), |t| String::from(t.rid()));
+                let rid = track.as_ref().map_or(None, |t| t.rid().clone());
 
                 encodings.push(RTCRtpEncodingParameters {
                     ssrc: te.ssrc,
@@ -485,9 +484,9 @@ impl RTCRtpSender {
 
                 let (codec, rid) = if let Some(t) = &*track {
                     let codec = t.bind(&context).await?;
-                    (codec, t.rid())
+                    (codec, t.rid().clone())
                 } else {
-                    (RTCRtpCodecParameters::default(), "")
+                    (RTCRtpCodecParameters::default(), None)
                 };
                 let payload_type = codec.payload_type;
                 let capability = codec.capability.clone();
@@ -495,7 +494,7 @@ impl RTCRtpSender {
                 let stream_info = create_stream_info(
                     self.id.clone(),
                     te.ssrc,
-                    rid.to_owned(),
+                    rid.clone(),
                     payload_type,
                     capability,
                     &parameters.rtp_parameters.header_extensions,
@@ -567,7 +566,7 @@ impl RTCRtpSender {
         let encodings = self.track_encodings.read().await;
         for e in encodings.iter() {
             if let Some(track) = &*e.track.lock().await {
-                if track.rid() == rid {
+                if track.rid().map_or(false, |r| r == rid) {
                     return Some(e.clone());
                 }
             };

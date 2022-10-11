@@ -93,7 +93,7 @@ pub struct RTCRtpRtxParameters {
 /// <http://draft.ortc.org/#dom-rtcrtpcodingparameters>
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct RTCRtpCodingParameters {
-    pub rid: String,
+    pub rid: Option<String>,
     pub ssrc: SSRC,
     pub payload_type: PayloadType,
     pub rtx: RTCRtpRtxParameters,
@@ -132,7 +132,7 @@ pub struct RTCRtpTransceiverInit {
 pub(crate) fn create_stream_info(
     id: String,
     ssrc: SSRC,
-    rid: String,
+    rid: Option<String>,
     payload_type: PayloadType,
     codec: RTCRtpCodecCapability,
     webrtc_header_extensions: &[RTCRtpHeaderExtensionParameters],

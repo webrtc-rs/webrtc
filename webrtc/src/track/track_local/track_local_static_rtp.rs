@@ -10,7 +10,7 @@ pub struct TrackLocalStaticRTP {
     pub(crate) bindings: Mutex<Vec<Arc<TrackBinding>>>,
     codec: RTCRtpCodecCapability,
     id: String,
-    rid: String,
+    rid: Option<String>,
     stream_id: String,
 }
 
@@ -21,13 +21,13 @@ impl TrackLocalStaticRTP {
             codec,
             bindings: Mutex::new(vec![]),
             id,
-            rid: "".to_owned(),
+            rid: None,
             stream_id,
         }
     }
 
     pub fn set_rid(&mut self, rid: String) {
-        self.rid = rid;
+        self.rid = Some(rid);
     }
 
     /// codec gets the Codec of the track
@@ -111,8 +111,8 @@ impl TrackLocal for TrackLocalStaticRTP {
         self.stream_id.as_str()
     }
 
-    fn rid(&self) -> &str {
-        self.rid.as_str()
+    fn rid(&self) -> Option<String> {
+        self.rid.clone()
     }
 
     /// kind controls if this TrackLocal is audio or video

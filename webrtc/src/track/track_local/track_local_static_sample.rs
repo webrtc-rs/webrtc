@@ -110,12 +110,13 @@ impl TrackLocalStaticSample {
             if sample.prev_dropped_packets > 0 {
                 packetizer.skip_samples(samples * sample.prev_dropped_packets as u32);
             }
-            /*println!(
-                "clock_rate={}, samples={}, {}",
-                clock_rate,
-                samples,
-                sample.duration.as_secs_f64()
-            );*/
+            //            log::info!(
+            //                "clock_rate={}, samples={}, {}",
+            //                clock_rate,
+            //                samples,
+            //                sample.duration.as_secs_f64()
+            //            );
+            //
             packetizer.packetize(&sample.data, samples).await?
         } else {
             vec![]
@@ -177,7 +178,7 @@ impl TrackLocal for TrackLocalStaticSample {
         self.rtp_track.id()
     }
 
-    fn rid(&self) -> &str {
+    fn rid(&self) -> Option<String> {
         self.rtp_track.rid()
     }
 

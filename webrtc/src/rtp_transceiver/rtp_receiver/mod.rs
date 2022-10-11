@@ -198,7 +198,7 @@ impl RTPReceiverInternal {
 
         let tracks = self.tracks.read().await;
         for t in &*tracks {
-            if t.track.rid() == rid {
+            if t.track.rid().map_or(false, |r| r == rid) {
                 if let Some(rtcp_interceptor) = &t.stream.rtcp_interceptor {
                     let a = Attributes::new();
 
@@ -529,7 +529,7 @@ impl RTCRtpReceiver {
                     let stream_info = create_stream_info(
                         "".to_owned(),
                         encoding.ssrc,
-                        "".to_owned(),
+                        None,
                         0,
                         codec.clone(),
                         &global_params.header_extensions,
@@ -587,7 +587,7 @@ impl RTCRtpReceiver {
                 let stream_info = create_stream_info(
                     "".to_owned(),
                     rtx_ssrc,
-                    "".to_owned(),
+                    None,
                     0,
                     codec.clone(),
                     &global_params.header_extensions,
@@ -656,7 +656,7 @@ impl RTCRtpReceiver {
         let mut encodings = vec![RTCRtpDecodingParameters::default(); encoding_size];
         for (i, encoding) in encodings.iter_mut().enumerate() {
             if incoming.rids.len() > i {
-                encoding.rid = incoming.rids[i].clone();
+                encoding.rid = Some(incoming.rids[i].clone());
             }
             if incoming.ssrcs.len() > i {
                 encoding.ssrc = incoming.ssrcs[i];
@@ -751,7 +751,7 @@ impl RTCRtpReceiver {
     ) -> Result<Arc<TrackRemote>> {
         let mut tracks = self.internal.tracks.write().await;
         for t in &mut *tracks {
-            if t.track.rid() == rid {
+            if t.track.rid().map_or(false, |r| r == rid) {
                 t.track.set_kind(self.kind);
                 if let Some(codec) = params.codecs.first() {
                     t.track.set_codec(codec.clone()).await;
@@ -779,7 +779,7 @@ impl RTCRtpReceiver {
         let mut tracks = self.internal.tracks.write().await;
         let l = tracks.len();
         for t in &mut *tracks {
-            if (ssrc != 0 && l == 1) || t.track.rid() == rsid {
+            if (ssrc != 0 && l == 1) || t.track.rid().map_or(false, |r| r == rsid) {
                 t.repair_stream = repair_stream;
 
                 let receive_mtu = self.receive_mtu;
