@@ -1543,7 +1543,7 @@ impl PeerConnectionInternal {
             let encodings = sender.track_encodings.read().await;
             for e in encodings.iter() {
                 let track_id = track.rid().map_or(track.id().to_string(), |rid| {
-                    track.id().to_string() + "-" + rid.as_str()
+                    format!("{}-{}", track.id(), rid)
                 });
                 track_infos.push(TrackInfo {
                     track_id,
