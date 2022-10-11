@@ -28,6 +28,16 @@ impl TrackLocalStaticRTP {
     pub fn codec(&self) -> RTCRtpCodecCapability {
         self.codec.clone()
     }
+
+    pub async fn any_binding_paused(&self) -> bool {
+        let bindings = self.bindings.lock().await;
+        bindings.iter().any(|b| b.paused.load(Ordering::SeqCst))
+    }
+
+    pub async fn all_binding_paused(&self) -> bool {
+        let bindings = self.bindings.lock().await;
+        bindings.iter().all(|b| b.paused.load(Ordering::SeqCst))
+    }
 }
 
 #[async_trait]
@@ -50,6 +60,7 @@ impl TrackLocal for TrackLocalStaticRTP {
                     payload_type: codec.payload_type,
                     write_stream: t.write_stream(),
                     id: t.id(),
+                    paused: t.paused.clone(),
                 }));
             }
 
@@ -122,6 +133,9 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
             bindings.clone()
         };
         for b in bindings {
+            if b.is_paused() {
+                continue;
+            }
             pkt.header.ssrc = b.ssrc;
             pkt.header.payload_type = b.payload_type;
             if let Some(write_stream) = &b.write_stream {

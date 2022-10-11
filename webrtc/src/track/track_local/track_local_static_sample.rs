@@ -3,6 +3,7 @@ use super::*;
 use crate::error::flatten_errs;
 
 use crate::track::RTP_OUTBOUND_MTU;
+use log::warn;
 use media::Sample;
 use tokio::sync::Mutex;
 
@@ -11,6 +12,7 @@ struct TrackLocalStaticSampleInternal {
     packetizer: Option<Box<dyn rtp::packetizer::Packetizer + Send + Sync>>,
     sequencer: Option<Box<dyn rtp::sequence::Sequencer + Send + Sync>>,
     clock_rate: f64,
+    did_warn_about_wonky_pause: bool,
 }
 
 /// TrackLocalStaticSample is a TrackLocal that has a pre-set codec and accepts Samples.
@@ -32,6 +34,7 @@ impl TrackLocalStaticSample {
                 packetizer: None,
                 sequencer: None,
                 clock_rate: 0.0f64,
+                did_warn_about_wonky_pause: false,
             }),
         }
     }
@@ -50,6 +53,40 @@ impl TrackLocalStaticSample {
 
         if internal.packetizer.is_none() || internal.sequencer.is_none() {
             return Ok(());
+        }
+
+        let (any_paused, all_paused) = (
+            self.rtp_track.any_binding_paused().await,
+            self.rtp_track.all_binding_paused().await,
+        );
+
+        if all_paused {
+            // Abort already here to not increment sequence numbers.
+            return Ok(());
+        }
+
+        if any_paused {
+            // This is a problem state due to how this impl is structured. The sequencer will allocate
+            // one sequence number per RTP packet regardless of how many TrackBinding that will send
+            // the packet. I.e. we get the same sequence number per multiple SSRC, which is not good
+            // for SRTP, but that's how it works.
+            //
+            // Chrome has further a problem with regards to jumps in sequence number. Consider this:
+            //
+            // 1. Create track local
+            // 2. Bind track local to track 1.
+            // 3. Bind track local to track 2.
+            // 4. Pause track 1.
+            // 5. Keep sending...
+            //
+            // At this point, the track local will keep incrementing the sequence number, because we have
+            // one binding that is still active. However Chrome can only accept a relatively small jump
+            // in SRTP key deriving, which means if this pause state of one binding persists for a longer
+            // time, the track can never be resumed (against Chrome).
+            if !internal.did_warn_about_wonky_pause {
+                internal.did_warn_about_wonky_pause = true;
+                warn!("Detected multiple track bindings where only one was paused");
+            }
         }
 
         // skip packets by the number of previously dropped packets
