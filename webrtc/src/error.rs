@@ -197,10 +197,9 @@ pub enum Error {
     #[error("new track must be of the same kind as previous")]
     ErrRTPSenderNewTrackHasIncorrectKind,
 
-    // TODO: Delete this once we've added the ones we actually need
-    //  errRTPSenderTrackNil             = errors.New("Track must not be nil")
-    //	errRTPSenderDTLSTransportNil     = errors.New("DTLSTransport must not be nil")
-    //	errRTPSenderTrackRemoved         = errors.New("Sender Track has been removed or replaced to nil")
+    #[error("Cannot call replace on a sender with multiple tracks")]
+    ErrRTPSenderCannotReplaceSimulcast,
+
     #[error("Sender does not have track for RID")]
     ErrRTPSenderNoTrackForRID,
 
