@@ -31,12 +31,16 @@ impl TrackLocalStaticRTP {
 
     pub async fn any_binding_paused(&self) -> bool {
         let bindings = self.bindings.lock().await;
-        bindings.iter().any(|b| b.paused.load(Ordering::SeqCst))
+        bindings
+            .iter()
+            .any(|b| b.sender_paused.load(Ordering::SeqCst))
     }
 
     pub async fn all_binding_paused(&self) -> bool {
         let bindings = self.bindings.lock().await;
-        bindings.iter().all(|b| b.paused.load(Ordering::SeqCst))
+        bindings
+            .iter()
+            .all(|b| b.sender_paused.load(Ordering::SeqCst))
     }
 }
 
@@ -60,7 +64,7 @@ impl TrackLocal for TrackLocalStaticRTP {
                     payload_type: codec.payload_type,
                     write_stream: t.write_stream(),
                     id: t.id(),
-                    paused: t.paused.clone(),
+                    sender_paused: t.paused.clone(),
                 }));
             }
 
@@ -123,6 +127,11 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
     /// PeerConnections so you can remove them
+    ///
+    /// If the RTCRtpSender direction is such that no packets should be sent, any call to this
+    /// function are blocked internally. Care must be taken to not increase the sequence number
+    /// while the sender is paused. While the actual _sending_ is blocked, the receiver will
+    /// miss out when the sequence number "rolls over", which in turn will break SRTP.
     async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize> {
         let mut n = 0;
         let mut write_errs = vec![];
@@ -133,7 +142,8 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
             bindings.clone()
         };
         for b in bindings {
-            if b.is_paused() {
+            if b.is_sender_paused() {
+                // See caveat in function doc.
                 continue;
             }
             pkt.header.ssrc = b.ssrc;

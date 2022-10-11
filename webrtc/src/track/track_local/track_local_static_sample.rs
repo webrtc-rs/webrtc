@@ -71,7 +71,7 @@ impl TrackLocalStaticSample {
             // the packet. I.e. we get the same sequence number per multiple SSRC, which is not good
             // for SRTP, but that's how it works.
             //
-            // Chrome has further a problem with regards to jumps in sequence number. Consider this:
+            // SRTP has a further problem with regards to jumps in sequence number. Consider this:
             //
             // 1. Create track local
             // 2. Bind track local to track 1.
@@ -80,9 +80,11 @@ impl TrackLocalStaticSample {
             // 5. Keep sending...
             //
             // At this point, the track local will keep incrementing the sequence number, because we have
-            // one binding that is still active. However Chrome can only accept a relatively small jump
-            // in SRTP key deriving, which means if this pause state of one binding persists for a longer
-            // time, the track can never be resumed (against Chrome).
+            // one binding that is still active. However SRTP hmac verifying (tag), can only accept a
+            // relatively small jump in sequence numbers since it uses the ROC (i.e. how many times the
+            // sequence number has rolled over), which means if this pause state of one binding persists
+            // for a longer time, the track can never be resumed since the receiver would have missed
+            // the rollovers.
             if !internal.did_warn_about_wonky_pause {
                 internal.did_warn_about_wonky_pause = true;
                 warn!("Detected multiple track bindings where only one was paused");
