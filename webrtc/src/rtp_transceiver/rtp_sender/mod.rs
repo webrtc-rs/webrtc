@@ -6,7 +6,7 @@ use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
 use crate::rtp_transceiver::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
-use crate::rtp_transceiver::srtp_writer_future::SrtpWriterFuture;
+use crate::rtp_transceiver::trtp_writer_future::SrtpWriterFuture;
 use crate::rtp_transceiver::{
     create_stream_info, PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters,
     RTCRtpTransceiver, SSRC,
@@ -301,7 +301,7 @@ impl RTCRtpSender {
             let track_encodings = self.track_encodings.read().await;
             for te in track_encodings.iter() {
                 let track = te.track.lock().await;
-                let rid = track.as_ref().map_or(None, |t| t.rid().clone());
+                let rid = track.as_ref().map_or(None, |t| t.rid());
 
                 encodings.push(RTCRtpEncodingParameters {
                     ssrc: te.ssrc,
