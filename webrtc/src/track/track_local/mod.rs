@@ -35,6 +35,7 @@ pub struct TrackLocalContext {
     pub(crate) params: RTCRtpParameters,
     pub(crate) ssrc: SSRC,
     pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
+    pub(crate) paused: Arc<AtomicBool>,
 }
 
 impl TrackLocalContext {
@@ -104,19 +105,30 @@ pub(crate) struct TrackBinding {
     ssrc: SSRC,
     payload_type: PayloadType,
     write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
+    sender_paused: Arc<AtomicBool>,
+}
+
+impl TrackBinding {
+    pub fn is_sender_paused(&self) -> bool {
+        self.sender_paused.load(Ordering::SeqCst)
+    }
 }
 
 pub(crate) struct InterceptorToTrackLocalWriter {
     pub(crate) interceptor_rtp_writer: Mutex<Option<Arc<dyn RTPWriter + Send + Sync>>>,
-    paused: Arc<AtomicBool>,
+    sender_paused: Arc<AtomicBool>,
 }
 
 impl InterceptorToTrackLocalWriter {
     pub(crate) fn new(paused: Arc<AtomicBool>) -> Self {
         InterceptorToTrackLocalWriter {
             interceptor_rtp_writer: Mutex::new(None),
-            paused,
+            sender_paused: paused,
         }
+    }
+
+    fn is_sender_paused(&self) -> bool {
+        self.sender_paused.load(Ordering::SeqCst)
     }
 }
 
@@ -129,7 +141,7 @@ impl std::fmt::Debug for InterceptorToTrackLocalWriter {
 #[async_trait]
 impl TrackLocalWriter for InterceptorToTrackLocalWriter {
     async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
-        if self.paused.load(Ordering::SeqCst) {
+        if self.is_sender_paused() {
             return Ok(0);
         }
 
