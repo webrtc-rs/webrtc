@@ -358,8 +358,7 @@ impl RTCRtpSender {
         if let Some(t) = &track {
             let encodings = self.track_encodings.read().await;
             if encodings.len() > 1 {
-                // return ErrRTPSenderNewTrackHasIncorrectEnvelope
-                return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind);
+                return Err(Error::ErrRTPSenderCannotReplaceSimulcast);
             }
             let tr = self.rtp_transceiver.lock().await;
             if let Some(r) = &*tr {
@@ -376,77 +375,75 @@ impl RTCRtpSender {
         }
 
         let encodings = self.track_encodings.read().await;
-        if let Some(re) = encodings.first() {
-            if self.has_sent().await {
-                let t = {
-                    let t = re.track.lock().await;
-                    t.clone()
-                };
-                if let Some(t) = t {
-                    let context = re.context.lock().await;
-                    t.unbind(&context).await?;
-                }
-            }
+        let re = match encodings.first() {
+            Some(re) => re,
+            None => return Ok(()),
+        };
 
-            if !self.has_sent().await || track.is_none() {
-                let mut t = re.track.lock().await;
-                *t = track;
-                return Ok(());
-            }
-
-            let context = {
+        if self.has_sent().await {
+            let t = {
+                let t = re.track.lock().await;
+                t.clone()
+            };
+            if let Some(t) = t {
                 let context = re.context.lock().await;
-                context.clone()
-            };
-
-            let result = if let Some(t) = &track {
-                let new_context = TrackLocalContext {
-                    id: context.id.clone(),
-                    params: self
-                        .media_engine
-                        .get_rtp_parameters_by_kind(t.kind(), RTCRtpTransceiverDirection::Sendonly)
-                        .await,
-                    ssrc: context.ssrc,
-                    write_stream: context.write_stream.clone(),
-                    paused: self.paused.clone(),
-                    rtcp_reader: context.rtcp_reader.clone(),
-                };
-
-                t.bind(&new_context).await
-            } else {
-                Err(Error::ErrRTPSenderTrackNil)
-            };
-
-            match result {
-                Err(err) => {
-                    // Re-bind the original track
-                    let track = re.track.lock().await;
-                    if let Some(t) = &*track {
-                        t.bind(&context).await?;
-                    }
-
-                    Err(err)
-                }
-                Ok(codec) => {
-                    // Codec has changed
-                    if self.payload_type != codec.payload_type {
-                        let mut context = re.context.lock().await;
-                        context.params.codecs = vec![codec];
-                    }
-
-                    {
-                        let mut t = re.track.lock().await;
-                        *t = track;
-                    }
-
-                    Ok(())
-                }
+                t.unbind(&context).await?;
             }
+        }
+
+        if !self.has_sent().await || track.is_none() {
+            let mut t = re.track.lock().await;
+            *t = track;
+            return Ok(());
+        }
+
+        let context = {
+            let context = re.context.lock().await;
+            context
+        };
+
+        let result = if let Some(t) = &track {
+            let new_context = TrackLocalContext {
+                id: context.id.clone(),
+                params: self
+                    .media_engine
+                    .get_rtp_parameters_by_kind(t.kind(), RTCRtpTransceiverDirection::Sendonly)
+                    .await,
+                ssrc: context.ssrc,
+                write_stream: context.write_stream.clone(),
+                rtcp_reader: context.rtcp_reader.clone(),
+                paused: context.paused.clone(),
+            };
+
+            t.bind(&new_context).await
         } else {
-            // Is it though?
-            // How do we end up in a state where we don't have at the very least, the default track
-            // encoding?
-            Ok(())
+            Err(Error::ErrRTPSenderTrackNil)
+        };
+
+        match result {
+            Err(err) => {
+                // Re-bind the original track
+                let track = re.track.lock().await;
+                if let Some(t) = &*track {
+                    t.bind(&context).await?;
+                }
+
+                Err(err)
+            }
+            Ok(codec) => {
+                // Codec has changed
+                if self.payload_type != codec.payload_type {
+                    let mut context = re.context.lock().await;
+                    context.params.codecs = vec![codec];
+                }
+
+                {
+                    let mut t = re.track.lock().await;
+                    *t = track;
+                }
+
+                Ok(())
+            }
         }
     }
 
