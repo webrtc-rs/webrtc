@@ -118,17 +118,13 @@ pub async fn local_interfaces(
 
             if !ipaddr.is_loopback()
                 && ((ipv4requested && ipaddr.is_ipv4()) || (ipv6requested && ipaddr.is_ipv6()))
+                && ip_filter
+                    .as_ref()
+                    .map(|filter| filter(ipaddr))
+                    .unwrap_or(true)
             {
-                continue;
+                ips.insert(ipaddr);
             }
-
-            if let Some(filter) = ip_filter {
-                if !filter(ipaddr) {
-                    continue;
-                }
-            }
-
-            ips.insert(ipaddr);
         }
     }
 
