@@ -152,8 +152,6 @@ pub enum Error {
     ErrNoSuchChannelBind,
     #[error("failed writing to socket")]
     ErrFailedWriteSocket,
-    #[error("no metrics gathered")]
-    ErrNoMetrics,
     #[error("parse int: {0}")]
     ParseInt(#[from] ParseIntError),
     #[error("parse addr: {0}")]
