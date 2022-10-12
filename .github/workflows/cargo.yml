@@ -49,7 +49,7 @@ jobs:
       - name: Test
         run: cargo test
       - name: Test with metrics
-        run: cargo test --features metrics -- allocation::allocation_manager::allocation_manager_test::test_get_allocations_info_with_metrics
+        run: cargo test --features metrics -- allocation::allocation_manager::allocation_manager_test::test_get_allocations_info
 
   test_windows:
     name: Test (windows)
@@ -89,7 +89,7 @@ jobs:
         run: cargo test
       - name: Test with metrics
         working-directory: "C:\\a\\webrtc\\webrtc"
-        run: cargo test --features metrics -- allocation::allocation_manager::allocation_manager_test::test_get_allocations_info_with_metrics
+        run: cargo test --features metrics -- allocation::allocation_manager::allocation_manager_test::test_get_allocations_info
 
   rustfmt_and_clippy:
     name: Check formatting style and run clippy

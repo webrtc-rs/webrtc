@@ -435,6 +435,7 @@ async fn create_client(username: String, server_port: u16) -> Result<Client> {
     .await?)
 }
 
+#[cfg(not(feature = "metrics"))]
 #[tokio::test]
 async fn test_get_allocations_info_no_metrics() -> Result<()> {
     let (server, server_port) = create_server().await?;
@@ -486,7 +487,7 @@ async fn test_get_allocations_info_no_metrics() -> Result<()> {
 
 #[cfg(feature = "metrics")]
 #[tokio::test]
-async fn test_get_allocations_info_with_metrics() -> Result<()> {
+async fn test_get_allocations_info() -> Result<()> {
     let (server, server_port) = create_server().await?;
 
     let client1 = create_client("user1".to_owned(), server_port).await?;
@@ -538,7 +539,7 @@ async fn test_get_allocations_info_with_metrics() -> Result<()> {
 
 #[cfg(feature = "metrics")]
 #[tokio::test]
-async fn test_get_allocations_info_with_metrics_bytes_count() -> Result<()> {
+async fn test_get_allocations_info_bytes_count() -> Result<()> {
     let (server, server_port) = create_server().await?;
 
     let client = create_client("foo".to_owned(), server_port).await?;
