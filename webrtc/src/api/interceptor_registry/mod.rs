@@ -75,7 +75,7 @@ pub fn configure_twcc(mut registry: Registry, media_engine: &mut MediaEngine) ->
             uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
         },
         RTPCodecType::Video,
-        vec![],
+        None,
     )?;
 
     media_engine.register_feedback(
@@ -90,7 +90,7 @@ pub fn configure_twcc(mut registry: Registry, media_engine: &mut MediaEngine) ->
             uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
         },
         RTPCodecType::Audio,
-        vec![],
+        None,
     )?;
 
     let sender = Box::new(Sender::builder());
@@ -111,7 +111,7 @@ pub fn configure_twcc_sender_only(
             uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
         },
         RTPCodecType::Video,
-        vec![],
+        None,
     )?;
 
     media_engine.register_header_extension(
@@ -119,7 +119,7 @@ pub fn configure_twcc_sender_only(
             uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
         },
         RTPCodecType::Audio,
-        vec![],
+        None,
     )?;
 
     let sender = Box::new(Sender::builder());
@@ -144,7 +144,7 @@ pub fn configure_twcc_receiver_only(
             uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
         },
         RTPCodecType::Video,
-        vec![],
+        None,
     )?;
 
     media_engine.register_feedback(
@@ -159,7 +159,7 @@ pub fn configure_twcc_receiver_only(
             uri: sdp::extmap::TRANSPORT_CC_URI.to_owned(),
         },
         RTPCodecType::Audio,
-        vec![],
+        None,
     )?;
 
     let receiver = Box::new(Receiver::builder());
