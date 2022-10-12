@@ -538,7 +538,6 @@ async fn fingerprint_test(
     let dtls_fingerprints = certificate.get_fingerprints()?;
 
     let params = PopulateSdpParams {
-        is_plan_b: false,
         media_description_fingerprint: sdpmedia_description_fingerprints,
         is_icelite: false,
         connection_role: ConnectionRole::Active,
@@ -687,7 +686,6 @@ async fn test_populate_sdp() -> Result<()> {
         let d = SessionDescription::default();
 
         let params = PopulateSdpParams {
-            is_plan_b: false,
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
@@ -769,7 +767,6 @@ async fn test_populate_sdp() -> Result<()> {
         let d = SessionDescription::default();
 
         let params = PopulateSdpParams {
-            is_plan_b: false,
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
@@ -873,7 +870,6 @@ async fn test_populate_sdp_reject() -> Result<()> {
     let d = SessionDescription::default();
 
     let params = PopulateSdpParams {
-        is_plan_b: false,
         media_description_fingerprint: se.sdp_media_level_fingerprints,
         is_icelite: se.candidates.ice_lite,
         connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
