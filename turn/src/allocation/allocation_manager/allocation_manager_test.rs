@@ -460,7 +460,7 @@ async fn test_get_allocations_info_no_metrics() -> Result<()> {
             .last()
             .unwrap()
             .relayed_bytes,
-        Some(0)
+        None
     );
 
     conn.send_to(b"Hello", addr).await?;
