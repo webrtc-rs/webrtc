@@ -8,6 +8,11 @@
 * Stop sequence numbers from increasing in `TrackLocalStaticSample` while the bound `RTCRtpSender` have
 directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull/316)
 
+#### Breaking changes
+
+* Allow one single direction for extmap matching. [#321](https://github.com/webrtc-rs/webrtc/pull/321). API
+change for MediaEngine::register_header_extension
+
 ## 0.5.1
 
 * Promote agent lock in ice_gather.rs create_agent() to top level of the function to avoid a race condition. [#290 Promote create_agent lock to top of function, to avoid race condition](https://github.com/webrtc-rs/webrtc/pull/290) contributed by [efer-ms](https://github.com/efer-ms)
