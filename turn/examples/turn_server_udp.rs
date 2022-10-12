@@ -121,7 +121,6 @@ async fn main() -> Result<(), Error> {
                 address: "0.0.0.0".to_owned(),
                 net: Arc::new(Net::new(None)),
             }),
-            gather_metrics: true,
         }],
         realm: realm.to_owned(),
         auth_handler: Arc::new(MyAuthHandler::new(cred_map)),

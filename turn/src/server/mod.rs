@@ -1,5 +1,5 @@
 #[cfg(test)]
-pub mod server_test;
+mod server_test;
 
 pub mod config;
 pub mod request;
@@ -62,7 +62,6 @@ impl Server {
             let conn = p.conn;
             let allocation_manager = Arc::new(Manager::new(ManagerConfig {
                 relay_addr_generator: p.relay_addr_generator,
-                gather_metrics: p.gather_metrics,
             }));
 
             tokio::spawn(Server::read_loop(
@@ -81,7 +80,10 @@ impl Server {
 
     /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
     pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
-        let tx = self.command_tx.lock().await.clone();
+        let tx = {
+            let command_tx = self.command_tx.lock().await;
+            command_tx.clone()
+        };
         if let Some(tx) = tx {
             let (closed_tx, closed_rx) = mpsc::channel(1);
             tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
@@ -116,7 +118,10 @@ impl Server {
             }
         }
 
-        let tx = self.command_tx.lock().await.clone();
+        let tx = {
+            let command_tx = self.command_tx.lock().await;
+            command_tx.clone()
+        };
         if let Some(tx) = tx {
             let (infos_tx, mut infos_rx) = mpsc::channel(1);
             tx.send(Command::GetAllocationsInfo(five_tuples, infos_tx))
@@ -161,7 +166,7 @@ impl Server {
                         }
                         Ok(Command::GetAllocationsInfo(five_tuples, tx)) => {
                             let infos = allocation_manager.get_allocations_info(five_tuples).await;
-                            drop(tx.send(infos).await);
+                            let _ = tx.send(infos).await;
 
                             continue;
                         }
@@ -214,7 +219,11 @@ impl Server {
 
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
     pub async fn close(&self) -> Result<()> {
-        let tx = self.command_tx.lock().await.take();
+        let tx = {
+            let mut command_tx = self.command_tx.lock().await;
+            command_tx.take()
+        };
+
         if let Some(tx) = tx {
             if tx.receiver_count() == 0 {
                 return Ok(());

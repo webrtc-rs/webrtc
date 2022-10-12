@@ -14,9 +14,6 @@ pub struct ConnConfig {
     // When an allocation is generated the RelayAddressGenerator
     // creates the net.PacketConn and returns the IP/Port it is available at
     pub relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
-
-    // Indicates whether the server should gather relay connections metrics.
-    pub gather_metrics: bool,
 }
 
 impl ConnConfig {

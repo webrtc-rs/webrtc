@@ -32,21 +32,28 @@ const RTP_MTU: usize = 1500;
 
 pub type AllocationMap = Arc<Mutex<HashMap<FiveTuple, Arc<Allocation>>>>;
 
-/// Information about an `Allocation`
+/// Information about an [`Allocation`].
 #[derive(Debug, Clone)]
 pub struct AllocationInfo {
+    /// [`FiveTuple`] of this [`Allocation`].
     pub five_tuple: FiveTuple,
+
+    /// Username of this [`Allocation`].
     pub username: String,
-    pub transmitted_bytes: Option<usize>,
+
+    /// Relayed bytes with this [`Allocation`].
+    ///
+    /// If it is [`None`] it means the relayed bytes are not counted.
+    pub relayed_bytes: Option<usize>,
 }
 
 impl AllocationInfo {
     // Creates a new `AllocationInfo`
-    pub fn new(five_tuple: FiveTuple, username: String, transmitted_bytes: Option<usize>) -> Self {
+    pub fn new(five_tuple: FiveTuple, username: String, relayed_bytes: Option<usize>) -> Self {
         Self {
             five_tuple,
             username,
-            transmitted_bytes,
+            relayed_bytes,
         }
     }
 }

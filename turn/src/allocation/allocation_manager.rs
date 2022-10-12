@@ -13,7 +13,6 @@ use util::Conn;
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {
     pub relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
-    pub gather_metrics: bool,
 }
 
 // Manager is used to hold active allocations
@@ -21,7 +20,6 @@ pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
     relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
-    pub gather_metrics: bool,
 }
 
 impl Manager {
@@ -31,7 +29,6 @@ impl Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
             reservations: Arc::new(Mutex::new(HashMap::new())),
             relay_addr_generator: config.relay_addr_generator,
-            gather_metrics: config.gather_metrics,
         }
     }
 
@@ -56,18 +53,15 @@ impl Manager {
 
         guarded.iter().for_each(|(five_tuple, alloc)| {
             if five_tuples.is_none() || five_tuples.as_ref().unwrap().contains(five_tuple) {
-                drop(infos.insert(
+                #[cfg(not(feature = "metrics"))]
+                let relayed_bytes: Option<usize> = None;
+                #[cfg(feature = "metrics")]
+                let relayed_bytes = Some(alloc.relayed_bytes.load(Ordering::Acquire));
+
+                infos.insert(
                     *five_tuple,
-                    AllocationInfo::new(
-                        *five_tuple,
-                        alloc.username.text.clone(),
-                        if self.gather_metrics {
-                            Some(alloc.relayed_bytes.load(Ordering::Acquire))
-                        } else {
-                            None
-                        },
-                    ),
-                ));
+                    AllocationInfo::new(*five_tuple, alloc.username.text.clone(), relayed_bytes),
+                );
             }
         });
 

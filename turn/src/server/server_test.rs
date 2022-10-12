@@ -54,7 +54,6 @@ async fn test_server_simple() -> Result<()> {
                 address: "0.0.0.0".to_owned(),
                 net: Arc::new(net::Net::new(None)),
             }),
-            gather_metrics: false,
         }],
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler::new()),
@@ -94,15 +93,15 @@ async fn test_server_simple() -> Result<()> {
     Ok(())
 }
 
-pub struct VNet {
-    pub wan: Arc<Mutex<router::Router>>,
-    pub net0: Arc<net::Net>,
-    pub net1: Arc<net::Net>,
-    pub netl0: Arc<net::Net>,
-    pub server: Server,
+struct VNet {
+    wan: Arc<Mutex<router::Router>>,
+    net0: Arc<net::Net>,
+    net1: Arc<net::Net>,
+    netl0: Arc<net::Net>,
+    server: Server,
 }
 
-pub async fn build_vnet() -> Result<VNet> {
+async fn build_vnet() -> Result<VNet> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "0.0.0.0/0".to_owned(),
@@ -189,7 +188,6 @@ pub async fn build_vnet() -> Result<VNet> {
                 address: "1.2.3.4".to_owned(),
                 net: Arc::clone(&net0),
             }),
-            gather_metrics: true,
         }],
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler::new()),

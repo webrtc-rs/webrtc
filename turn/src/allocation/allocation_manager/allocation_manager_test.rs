@@ -1,25 +1,31 @@
 use super::*;
 
 use crate::{
+    auth::{generate_auth_key, AuthHandler},
     client::{Client, ClientConfig},
     error::Result,
     proto::lifetime::DEFAULT_LIFETIME,
-    relay::relay_none::*,
-    server::server_test::build_vnet,
+    relay::{relay_none::*, relay_static::RelayAddressGeneratorStatic},
+    server::{
+        config::{ConnConfig, ServerConfig},
+        Server,
+    },
 };
 
-use std::{net::Ipv4Addr, str::FromStr};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    str::FromStr,
+};
 use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
 use tokio::net::UdpSocket;
 use util::vnet::net::*;
 
-fn new_test_manager(gather_metrics: bool) -> Manager {
+fn new_test_manager() -> Manager {
     let config = ManagerConfig {
         relay_addr_generator: Box::new(RelayAddressGeneratorNone {
             address: "0.0.0.0".to_owned(),
             net: Arc::new(Net::new(None)),
         }),
-        gather_metrics,
     };
     Manager::new(config)
 }
@@ -57,7 +63,7 @@ async fn test_packet_handler() -> Result<()> {
         }
     });
 
-    let m = new_test_manager(false);
+    let m = new_test_manager();
     let a = m
         .create_allocation(
             FiveTuple {
@@ -163,7 +169,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager(false);
+    let m = new_test_manager();
 
     let five_tuple = random_five_tuple();
 
@@ -198,7 +204,7 @@ async fn test_delete_allocation() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager(false);
+    let m = new_test_manager();
 
     let five_tuple = random_five_tuple();
 
@@ -235,7 +241,7 @@ async fn test_allocation_timeout() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager(false);
+    let m = new_test_manager();
 
     let mut allocations = vec![];
     let lifetime = Duration::from_millis(100);
@@ -288,7 +294,7 @@ async fn test_manager_close() -> Result<()> {
     // turn server initialization
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager(false);
+    let m = new_test_manager();
 
     let mut allocations = vec![];
 
@@ -334,7 +340,7 @@ async fn test_manager_close() -> Result<()> {
 async fn test_delete_allocation_by_username() -> Result<()> {
     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager(false);
+    let m = new_test_manager();
 
     let five_tuple1 = random_five_tuple();
     let five_tuple2 = random_five_tuple();
@@ -383,170 +389,280 @@ async fn test_delete_allocation_by_username() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_get_allocations_info() -> Result<()> {
-    let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+// #[tokio::test]
+// async fn test_get_allocations_info() -> Result<()> {
+//     let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    let m = new_test_manager(true);
+//     let m = new_test_manager();
 
-    let five_tuple1 = random_five_tuple();
-    let five_tuple2 = random_five_tuple();
-    let five_tuple3 = random_five_tuple();
+//     let five_tuple1 = random_five_tuple();
+//     let five_tuple2 = random_five_tuple();
+//     let five_tuple3 = random_five_tuple();
 
-    let alloc1 = m
-        .create_allocation(
-            five_tuple1.clone(),
-            Arc::clone(&turn_socket),
-            0,
-            DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, "user1".into()),
-        )
-        .await?;
-    alloc1.relayed_bytes.store(111, Ordering::SeqCst);
+//     let alloc1 = m
+//         .create_allocation(
+//             five_tuple1.clone(),
+//             Arc::clone(&turn_socket),
+//             0,
+//             DEFAULT_LIFETIME,
+//             TextAttribute::new(ATTR_USERNAME, "user1".into()),
+//         )
+//         .await?;
+//     alloc1.relayed_bytes.store(111, Ordering::SeqCst);
 
-    let alloc2 = m
-        .create_allocation(
-            five_tuple2.clone(),
-            Arc::clone(&turn_socket),
-            0,
-            DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, "user2".into()),
-        )
-        .await?;
-    alloc2.relayed_bytes.store(222, Ordering::SeqCst);
+//     let alloc2 = m
+//         .create_allocation(
+//             five_tuple2.clone(),
+//             Arc::clone(&turn_socket),
+//             0,
+//             DEFAULT_LIFETIME,
+//             TextAttribute::new(ATTR_USERNAME, "user2".into()),
+//         )
+//         .await?;
+//     alloc2.relayed_bytes.store(222, Ordering::SeqCst);
 
-    let alloc3 = m
-        .create_allocation(
-            five_tuple3.clone(),
-            Arc::clone(&turn_socket),
-            0,
-            DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, "user3".into()),
-        )
-        .await?;
-    alloc3.relayed_bytes.store(333, Ordering::SeqCst);
+//     let alloc3 = m
+//         .create_allocation(
+//             five_tuple3.clone(),
+//             Arc::clone(&turn_socket),
+//             0,
+//             DEFAULT_LIFETIME,
+//             TextAttribute::new(ATTR_USERNAME, "user3".into()),
+//         )
+//         .await?;
+//     alloc3.relayed_bytes.store(333, Ordering::SeqCst);
 
-    let infos = m
-        .get_allocations_info(Some(Vec::from([
-            five_tuple1.clone(),
-            five_tuple2.clone(),
-            five_tuple3.clone(),
-        ])))
-        .await;
+//     let infos = m
+//         .get_allocations_info(Some(Vec::from([
+//             five_tuple1.clone(),
+//             five_tuple2.clone(),
+//             five_tuple3.clone(),
+//         ])))
+//         .await;
 
-    assert_eq!(infos.len(), 3);
+//     assert_eq!(infos.len(), 3);
 
-    assert!(
-        infos.get(&five_tuple1).is_some()
-            && infos.get(&five_tuple2).is_some()
-            && infos.get(&five_tuple3).is_some()
-    );
+//     assert!(
+//         infos.get(&five_tuple1).is_some()
+//             && infos.get(&five_tuple2).is_some()
+//             && infos.get(&five_tuple3).is_some()
+//     );
 
-    assert_eq!(infos.get(&five_tuple1).unwrap().username, "user1");
-    assert_eq!(infos.get(&five_tuple2).unwrap().username, "user2");
-    assert_eq!(infos.get(&five_tuple3).unwrap().username, "user3");
+//     assert_eq!(infos.get(&five_tuple1).unwrap().username, "user1");
+//     assert_eq!(infos.get(&five_tuple2).unwrap().username, "user2");
+//     assert_eq!(infos.get(&five_tuple3).unwrap().username, "user3");
 
-    assert_eq!(infos.get(&five_tuple1).unwrap().five_tuple, five_tuple1);
-    assert_eq!(infos.get(&five_tuple2).unwrap().five_tuple, five_tuple2);
-    assert_eq!(infos.get(&five_tuple3).unwrap().five_tuple, five_tuple3);
+//     assert_eq!(infos.get(&five_tuple1).unwrap().five_tuple, five_tuple1);
+//     assert_eq!(infos.get(&five_tuple2).unwrap().five_tuple, five_tuple2);
+//     assert_eq!(infos.get(&five_tuple3).unwrap().five_tuple, five_tuple3);
 
-    assert_eq!(
-        infos.get(&five_tuple1).unwrap().transmitted_bytes,
-        Some(111)
-    );
-    assert_eq!(
-        infos.get(&five_tuple2).unwrap().transmitted_bytes,
-        Some(222)
-    );
-    assert_eq!(
-        infos.get(&five_tuple3).unwrap().transmitted_bytes,
-        Some(333)
-    );
+//     assert_eq!(infos.get(&five_tuple1).unwrap().relayed_bytes, Some(111));
+//     assert_eq!(infos.get(&five_tuple2).unwrap().relayed_bytes, Some(222));
+//     assert_eq!(infos.get(&five_tuple3).unwrap().relayed_bytes, Some(333));
 
-    let m2 = new_test_manager(false);
+//     let m2 = new_test_manager();
 
-    let five_tuple222 = random_five_tuple();
+//     let five_tuple222 = random_five_tuple();
 
-    let _ = m2
-        .create_allocation(
-            five_tuple222.clone(),
-            Arc::clone(&turn_socket),
-            0,
-            DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, "user222".into()),
-        )
-        .await?;
+//     let _ = m2
+//         .create_allocation(
+//             five_tuple222.clone(),
+//             Arc::clone(&turn_socket),
+//             0,
+//             DEFAULT_LIFETIME,
+//             TextAttribute::new(ATTR_USERNAME, "user222".into()),
+//         )
+//         .await?;
 
-    let infos2 = m2
-        .get_allocations_info(Some(Vec::from([five_tuple222.clone()])))
-        .await;
+//     let infos2 = m2
+//         .get_allocations_info(Some(Vec::from([five_tuple222.clone()])))
+//         .await;
 
-    assert!(infos2.get(&five_tuple222).is_some());
+//     assert!(infos2.get(&five_tuple222).is_some());
 
-    assert!(infos2
-        .get(&five_tuple222)
-        .unwrap()
-        .transmitted_bytes
-        .is_none());
+//     assert!(infos2.get(&five_tuple222).unwrap().relayed_bytes.is_none());
 
-    Ok(())
+//     Ok(())
+// }
+
+struct TestAuthHandler;
+impl AuthHandler for TestAuthHandler {
+    fn auth_handle(&self, username: &str, realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+        Ok(generate_auth_key(username, realm, "pass"))
+    }
 }
 
-#[tokio::test]
-async fn test_test_get_allocations_info_with_server() -> Result<()> {
-    let v = build_vnet().await?;
+async fn create_server() -> Result<(Server, u16)> {
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+    let server_port = conn.local_addr()?.port();
 
-    assert!(v.server.get_allocations_info(None).await?.is_empty());
+    let server = Server::new(ServerConfig {
+        conn_configs: vec![ConnConfig {
+            conn,
+            relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
+                relay_address: IpAddr::from_str("127.0.0.1")?,
+                address: "0.0.0.0".to_owned(),
+                net: Arc::new(Net::new(None)),
+            }),
+        }],
+        realm: "webrtc.rs".to_owned(),
+        auth_handler: Arc::new(TestAuthHandler {}),
+        channel_bind_timeout: Duration::from_secs(0),
+    })
+    .await?;
 
-    let lconn = v.netl0.bind(SocketAddr::from_str("0.0.0.0:0")?).await?;
-    let client = Client::new(ClientConfig {
-        stun_serv_addr: "stun.webrtc.rs:3478".to_owned(),
-        turn_serv_addr: "turn.webrtc.rs:3478".to_owned(),
-        username: "user".to_owned(),
+    Ok((server, server_port))
+}
+
+async fn create_client(username: String, server_port: u16) -> Result<Client> {
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    Ok(Client::new(ClientConfig {
+        stun_serv_addr: format!("127.0.0.1:{}", server_port),
+        turn_serv_addr: format!("127.0.0.1:{}", server_port),
+        username,
         password: "pass".to_owned(),
         realm: String::new(),
         software: String::new(),
         rto_in_ms: 0,
-        conn: lconn,
-        vnet: Some(Arc::clone(&v.netl0)),
+        conn,
+        vnet: None,
     })
-    .await?;
+    .await?)
+}
+
+#[tokio::test]
+async fn test_get_allocations_info_no_metrics() -> Result<()> {
+    let (server, server_port) = create_server().await?;
+
+    let client = create_client("foo".to_owned(), server_port).await?;
 
     client.listen().await?;
 
+    assert!(server.get_allocations_info(None).await?.is_empty());
+
     let conn = client.allocate().await?;
+    let addr = client
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
 
-    assert!(!v.server.get_allocations_info(None).await?.is_empty());
-
-    let echo_conn = v.net1.bind(SocketAddr::from_str("1.2.3.5:5678")?).await?;
-    let echo_addr = echo_conn.local_addr().await?;
-
-    let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
-
-    tokio::spawn(async move {
-        let mut buf = vec![0u8; 1500];
-        loop {
-            tokio::select! {
-                _ = done_rx.recv() => break,
-                _ = echo_conn.recv_from(&mut buf) => {
-                }
-            }
-        }
-    });
+    assert!(!server.get_allocations_info(None).await?.is_empty());
 
     assert_eq!(
-        v.server
+        server
             .get_allocations_info(None)
             .await?
             .values()
             .last()
             .unwrap()
-            .transmitted_bytes,
+            .relayed_bytes,
+        Some(0)
+    );
+
+    conn.send_to(b"Hello", addr).await?;
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    assert_eq!(
+        server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .relayed_bytes,
+        None
+    );
+
+    client.close().await?;
+    server.close().await?;
+
+    Ok(())
+}
+
+#[cfg(feature = "metrics")]
+#[tokio::test]
+async fn test_get_allocations_info_with_metrics() -> Result<()> {
+    let (server, server_port) = create_server().await?;
+
+    let client1 = create_client("user1".to_owned(), server_port).await?;
+    client1.listen().await?;
+
+    let client2 = create_client("user2".to_owned(), server_port).await?;
+    client2.listen().await?;
+
+    let client3 = create_client("user3".to_owned(), server_port).await?;
+    client3.listen().await?;
+
+    assert!(server.get_allocations_info(None).await?.is_empty());
+
+    let user1 = client1.allocate().await?;
+    let user2 = client2.allocate().await?;
+    let user3 = client3.allocate().await?;
+
+    assert_eq!(server.get_allocations_info(None).await?.len(), 3);
+
+    let addr1 = client1
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+    let addr2 = client2
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+    let addr3 = client3
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+
+    user1.send_to(b"1", addr1).await?;
+    user2.send_to(b"12", addr2).await?;
+    user3.send_to(b"123", addr3).await?;
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    server
+        .get_allocations_info(None)
+        .await?
+        .iter()
+        .for_each(|(_, ai)| match ai.username.as_str() {
+            "user1" => assert_eq!(ai.relayed_bytes, Some(1)),
+            "user2" => assert_eq!(ai.relayed_bytes, Some(2)),
+            "user3" => assert_eq!(ai.relayed_bytes, Some(3)),
+            _ => unreachable!(),
+        });
+
+    Ok(())
+}
+
+#[cfg(feature = "metrics")]
+#[tokio::test]
+async fn test_get_allocations_info_with_metrics_bytes_count() -> Result<()> {
+    let (server, server_port) = create_server().await?;
+
+    let client = create_client("foo".to_owned(), server_port).await?;
+
+    client.listen().await?;
+
+    assert!(server.get_allocations_info(None).await?.is_empty());
+
+    let conn = client.allocate().await?;
+    let addr = client
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+
+    assert!(!server.get_allocations_info(None).await?.is_empty());
+
+    assert_eq!(
+        server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .relayed_bytes,
         Some(0)
     );
 
     for _ in 0..10 {
-        conn.send_to(b"Hello", echo_addr).await?;
+        conn.send_to(b"Hello", addr).await?;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
@@ -554,18 +670,18 @@ async fn test_test_get_allocations_info_with_server() -> Result<()> {
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
     assert_eq!(
-        v.server
+        server
             .get_allocations_info(None)
             .await?
             .values()
             .last()
             .unwrap()
-            .transmitted_bytes,
+            .relayed_bytes,
         Some(50)
     );
 
     for _ in 0..10 {
-        conn.send_to(b"Hello", echo_addr).await?;
+        conn.send_to(b"Hello", addr).await?;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
@@ -573,18 +689,18 @@ async fn test_test_get_allocations_info_with_server() -> Result<()> {
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
     assert_eq!(
-        v.server
+        server
             .get_allocations_info(None)
             .await?
             .values()
             .last()
             .unwrap()
-            .transmitted_bytes,
+            .relayed_bytes,
         Some(100)
     );
 
     client.close().await?;
-    drop(done_tx);
+    server.close().await?;
 
     Ok(())
 }
