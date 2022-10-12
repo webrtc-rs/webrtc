@@ -559,7 +559,7 @@ impl MediaEngine {
                         uri: extension.to_owned(),
                         is_audio: local_extension.is_audio && typ == RTPCodecType::Audio,
                         is_video: local_extension.is_video && typ == RTPCodecType::Video,
-                        allowed_direction: local_extension.allowed_direction.clone(),
+                        allowed_direction: local_extension.allowed_direction,
                     };
                     negotiated_header_extensions.insert(id, h);
                 }
@@ -737,7 +737,7 @@ impl MediaEngine {
                             uri: local_extension.uri.clone(),
                             is_audio: local_extension.is_audio,
                             is_video: local_extension.is_video,
-                            allowed_direction: local_extension.allowed_direction.clone(),
+                            allowed_direction: local_extension.allowed_direction,
                         },
                     );
 
