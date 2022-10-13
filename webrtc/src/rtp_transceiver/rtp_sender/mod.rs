@@ -231,7 +231,6 @@ impl RTCRtpSender {
         {
             return Err(Error::ErrRTPSenderBaseEncodingMismatch);
         }
-
         self.add_encoding_internal(track).await;
         Ok(())
     }
@@ -631,16 +630,10 @@ impl RTCRtpSender {
         lock.clone()
     }
 
-    pub(crate) fn set_initial_track_id(&self, id: String) -> Result<()> {
-        let mut lock = self.initial_track_id.lock().unwrap();
+    pub(crate) fn associated_media_stream_ids(&self) -> Vec<String> {
+        let lock = self.associated_media_stream_ids.lock().unwrap();
 
-        if lock.is_some() {
-            return Err(Error::ErrSenderInitialTrackIdAlreadySet);
-        }
-
-        *lock = Some(id);
-
-        Ok(())
+        lock.clone()
     }
 
     pub(crate) fn associate_media_stream_id(&self, id: String) -> bool {
@@ -655,9 +648,15 @@ impl RTCRtpSender {
         true
     }
 
-    pub(crate) fn associated_media_stream_ids(&self) -> Vec<String> {
-        let lock = self.associated_media_stream_ids.lock().unwrap();
+    pub(crate) fn set_initial_track_id(&self, id: String) -> Result<()> {
+        let mut lock = self.initial_track_id.lock().unwrap();
 
-        lock.clone()
+        if lock.is_some() {
+            return Err(Error::ErrSenderInitialTrackIdAlreadySet);
+        }
+
+        *lock = Some(id);
+
+        Ok(())
     }
 }
