@@ -374,10 +374,12 @@ impl RTCRtpSender {
             }
         }
 
-        let encodings = self.track_encodings.read().await;
-        let re = match encodings.first() {
-            Some(re) => re,
-            None => return Ok(()),
+        let re = {
+            let encodings = self.track_encodings.read().await;
+            match encodings.first() {
+                Some(re) => re.clone(),
+                None => return Ok(()),
+            }
         };
 
         if self.has_sent().await {
@@ -399,7 +401,7 @@ impl RTCRtpSender {
 
         let context = {
             let context = re.context.lock().await;
-            context
+            context.clone()
         };
 
         let result = if let Some(t) = &track {
