@@ -132,6 +132,10 @@ impl Receiver {
                         recorder.build_feedback_packet()
                     };
 
+                    if pkts.is_empty() {
+                        continue;
+                    }
+
                     if let Err(err) = rtcp_writer.write(&pkts, &a).await{
                         log::error!("rtcp_writer.write got err: {}", err);
                     }
