@@ -532,7 +532,6 @@ pub(crate) async fn add_transceiver_sdp(
         );
     }
 
-    // This is equivalent to addSenderSDP in Pion (now)
     for mt in transceivers {
         if let Some(sender) = mt.sender().await {
             if let Some(track) = sender.track().await {
@@ -569,7 +568,6 @@ pub(crate) async fn add_transceiver_sdp(
                 // Send msid based on the configured track if we haven't already
                 // sent on this sender. If we have sent we must keep the msid line consistent, this
                 // is handled below.
-                // And now when we 'break', the above will have been printed properly still?
                 if !is_plan_b && sender.initial_track_id().is_none() {
                     for stream_id in sender.associated_media_stream_ids() {
                         media = media.with_property_attribute(format!(
