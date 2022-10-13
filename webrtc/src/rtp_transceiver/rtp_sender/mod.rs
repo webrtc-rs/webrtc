@@ -247,6 +247,9 @@ impl RTCRtpSender {
             rtp_write_session: Mutex::new(None),
         });
 
+        // TODO: Each encoding currently gets its own srtp_stream over the top of a shared
+        // transport, their own own rtcp_reader, and separate 'bind' calls.
+        // This is directly lifted from Pion but is perhaps the wrong way to go about things
         let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
         let rtcp_reader = self.interceptor.bind_rtcp_reader(srtp_rtcp_reader).await;
 
@@ -295,13 +298,13 @@ impl RTCRtpSender {
     /// get_parameters describes the current configuration for the encoding and
     /// transmission of media on the sender's track.
     pub async fn get_parameters(&self) -> RTCRtpSendParameters {
-        let mut encodings: Vec<RTCRtpEncodingParameters> = vec![];
-
-        {
+        let encodings = {
             let track_encodings = self.track_encodings.read().await;
+            let mut encodings: Vec<RTCRtpEncodingParameters> =
+                Vec::with_capacity(track_encodings.len());
             for te in track_encodings.iter() {
                 let track = te.track.lock().await;
-                let rid = track.as_ref().map_or(None, |t| t.rid());
+                let rid = track.as_ref().and_then(|t| t.rid());
 
                 encodings.push(RTCRtpEncodingParameters {
                     ssrc: te.ssrc,
@@ -310,7 +313,8 @@ impl RTCRtpSender {
                     ..Default::default()
                 })
             }
-        }
+            encodings
+        };
 
         let mut send_parameters = RTCRtpSendParameters {
             rtp_parameters: self
@@ -338,6 +342,8 @@ impl RTCRtpSender {
     }
 
     /// track returns the RTCRtpTransceiver track, or nil
+    /// In the case of an RTCRtpSender with multiple encodings, this will return the track for the
+    /// first encoding only
     pub async fn track(&self) -> Option<Arc<dyn TrackLocal + Send + Sync>> {
         let encodings = self.track_encodings.read().await;
         if let Some(t) = encodings.first() {
@@ -625,10 +631,16 @@ impl RTCRtpSender {
         lock.clone()
     }
 
-    pub(crate) fn associated_media_stream_ids(&self) -> Vec<String> {
-        let lock = self.associated_media_stream_ids.lock().unwrap();
+    pub(crate) fn set_initial_track_id(&self, id: String) -> Result<()> {
+        let mut lock = self.initial_track_id.lock().unwrap();
 
-        lock.clone()
+        if lock.is_some() {
+            return Err(Error::ErrSenderInitialTrackIdAlreadySet);
+        }
+
+        *lock = Some(id);
+
+        Ok(())
     }
 
     pub(crate) fn associate_media_stream_id(&self, id: String) -> bool {
@@ -643,15 +655,9 @@ impl RTCRtpSender {
         true
     }
 
-    pub(crate) fn set_initial_track_id(&self, id: String) -> Result<()> {
-        let mut lock = self.initial_track_id.lock().unwrap();
+    pub(crate) fn associated_media_stream_ids(&self) -> Vec<String> {
+        let lock = self.associated_media_stream_ids.lock().unwrap();
 
-        if lock.is_some() {
-            return Err(Error::ErrSenderInitialTrackIdAlreadySet);
-        }
-
-        *lock = Some(id);
-
-        Ok(())
+        lock.clone()
     }
 }
