@@ -505,16 +505,8 @@ pub(crate) async fn add_transceiver_sdp(
         return Ok((d, false));
     }
 
-    let mut directions = vec![];
-    if t.sender().await.is_some() {
-        directions.push(RTCRtpTransceiverDirection::Sendonly);
-    }
-    if t.receiver().await.is_some() {
-        directions.push(RTCRtpTransceiverDirection::Recvonly);
-    }
-
     let parameters = media_engine
-        .get_rtp_parameters_by_kind(t.kind, &directions)
+        .get_rtp_parameters_by_kind(t.kind, t.direction())
         .await;
     for rtp_extension in &parameters.header_extensions {
         let ext_url = Url::parse(rtp_extension.uri.as_str())?;

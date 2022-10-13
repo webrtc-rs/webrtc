@@ -11,9 +11,7 @@ use crate::rtp_transceiver::rtp_codec::{
     RTCRtpHeaderExtensionCapability, RTCRtpHeaderExtensionParameters, RTCRtpParameters,
     RTPCodecType,
 };
-use crate::rtp_transceiver::rtp_transceiver_direction::{
-    have_rtp_transceiver_direction_intersection, RTCRtpTransceiverDirection,
-};
+use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::rtp_transceiver::{PayloadType, RTCPFeedback};
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::CodecStats;
@@ -58,8 +56,21 @@ pub(crate) struct MediaEngineHeaderExtension {
     pub(crate) uri: String,
     pub(crate) is_audio: bool,
     pub(crate) is_video: bool,
-    // If set only Transceivers of this direction are allowed
-    pub(crate) allowed_directions: Vec<RTCRtpTransceiverDirection>,
+    pub(crate) allowed_direction: Option<RTCRtpTransceiverDirection>,
+}
+
+impl MediaEngineHeaderExtension {
+    pub fn is_matching_direction(&self, dir: RTCRtpTransceiverDirection) -> bool {
+        if let Some(allowed_direction) = self.allowed_direction {
+            use RTCRtpTransceiverDirection::*;
+            allowed_direction == Inactive && dir == Inactive
+                || allowed_direction.has_send() && dir.has_send()
+                || allowed_direction.has_recv() && dir.has_recv()
+        } else {
+            // None means all directions matches.
+            true
+        }
+    }
 }
 
 /// A MediaEngine defines the codecs supported by a PeerConnection, and the
@@ -323,29 +334,18 @@ impl MediaEngine {
         }
     }
 
-    /// register_header_extension adds a header extension to the MediaEngine
-    /// To determine the negotiated value use [`get_header_extension_id`] after signaling is complete
+    /// Adds a header extension to the MediaEngine
+    /// To determine the negotiated value use [`get_header_extension_id`] after signaling is complete.
+    ///
+    /// The `allowed_direction` controls for which transceiver directions the extension matches. If
+    /// set to `None` it matches all directions. The `SendRecv` direction would match all transceiver
+    /// directions apart from `Inactive`. Inactive ony matches inactive.
     pub fn register_header_extension(
         &mut self,
         extension: RTCRtpHeaderExtensionCapability,
         typ: RTPCodecType,
-        mut allowed_directions: Vec<RTCRtpTransceiverDirection>,
+        allowed_direction: Option<RTCRtpTransceiverDirection>,
     ) -> Result<()> {
-        if allowed_directions.is_empty() {
-            allowed_directions = vec![
-                RTCRtpTransceiverDirection::Recvonly,
-                RTCRtpTransceiverDirection::Sendonly,
-            ];
-        }
-
-        for direction in &allowed_directions {
-            if *direction != RTCRtpTransceiverDirection::Recvonly
-                && *direction != RTCRtpTransceiverDirection::Sendonly
-            {
-                return Err(Error::ErrRegisterHeaderExtensionInvalidDirection);
-            }
-        }
-
         let ext = {
             match self
                 .header_extensions
@@ -358,8 +358,10 @@ impl MediaEngine {
                     if self.header_extensions.len() > VALID_EXT_IDS.end as usize {
                         return Err(Error::ErrRegisterHeaderExtensionNoFreeID);
                     }
-                    self.header_extensions
-                        .push(MediaEngineHeaderExtension::default());
+                    self.header_extensions.push(MediaEngineHeaderExtension {
+                        allowed_direction,
+                        ..Default::default()
+                    });
 
                     // Unwrap is fine because we just pushed
                     self.header_extensions.last_mut().unwrap()
@@ -374,8 +376,10 @@ impl MediaEngine {
         }
 
         ext.uri = extension.uri;
-        // TODO: This just overrides the previous allowed directions, which feels wrong
-        ext.allowed_directions = allowed_directions;
+
+        if ext.allowed_direction != allowed_direction {
+            return Err(Error::ErrRegisterHeaderExtensionInvalidDirection);
+        }
 
         Ok(())
     }
@@ -559,7 +563,7 @@ impl MediaEngine {
                         uri: extension.to_owned(),
                         is_audio: local_extension.is_audio && typ == RTPCodecType::Audio,
                         is_video: local_extension.is_video && typ == RTPCodecType::Video,
-                        allowed_directions: local_extension.allowed_directions.clone(),
+                        allowed_direction: local_extension.allowed_direction,
                     };
                     negotiated_header_extensions.insert(id, h);
                 }
@@ -662,7 +666,7 @@ impl MediaEngine {
     pub(crate) async fn get_rtp_parameters_by_kind(
         &self,
         typ: RTPCodecType,
-        directions: &[RTCRtpTransceiverDirection],
+        direction: RTCRtpTransceiverDirection,
     ) -> RTCRtpParameters {
         let mut header_extensions = vec![];
 
@@ -671,7 +675,7 @@ impl MediaEngine {
         {
             let negotiated_header_extensions = self.negotiated_header_extensions.lock().await;
             for (id, e) in &*negotiated_header_extensions {
-                if have_rtp_transceiver_direction_intersection(&e.allowed_directions, directions)
+                if e.is_matching_direction(direction)
                     && (e.is_audio && typ == RTPCodecType::Audio
                         || e.is_video && typ == RTPCodecType::Video)
                 {
@@ -686,11 +690,9 @@ impl MediaEngine {
             let mut negotiated_header_extensions = self.negotiated_header_extensions.lock().await;
 
             for local_extension in &self.header_extensions {
-                let relevant = have_rtp_transceiver_direction_intersection(
-                    &local_extension.allowed_directions,
-                    directions,
-                ) && (local_extension.is_audio && typ == RTPCodecType::Audio
-                    || local_extension.is_video && typ == RTPCodecType::Video);
+                let relevant = local_extension.is_matching_direction(direction)
+                    && (local_extension.is_audio && typ == RTPCodecType::Audio
+                        || local_extension.is_video && typ == RTPCodecType::Video);
 
                 if !relevant {
                     continue;
@@ -739,7 +741,7 @@ impl MediaEngine {
                             uri: local_extension.uri.clone(),
                             is_audio: local_extension.is_audio,
                             is_video: local_extension.is_video,
-                            allowed_directions: local_extension.allowed_directions.clone(),
+                            allowed_direction: local_extension.allowed_direction,
                         },
                     );
 

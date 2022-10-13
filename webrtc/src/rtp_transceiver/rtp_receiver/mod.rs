@@ -312,7 +312,7 @@ impl RTPReceiverInternal {
     async fn get_parameters(&self) -> RTCRtpParameters {
         let mut parameters = self
             .media_engine
-            .get_rtp_parameters_by_kind(self.kind, &[RTCRtpTransceiverDirection::Recvonly])
+            .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly)
             .await;
 
         let transceiver_codecs = self.transceiver_codecs.lock().await;

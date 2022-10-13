@@ -106,20 +106,6 @@ impl RTCRtpTransceiverDirection {
     }
 }
 
-pub(crate) fn have_rtp_transceiver_direction_intersection(
-    haystack: &[RTCRtpTransceiverDirection],
-    needle: &[RTCRtpTransceiverDirection],
-) -> bool {
-    for n in needle {
-        for h in haystack {
-            if n == h {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
