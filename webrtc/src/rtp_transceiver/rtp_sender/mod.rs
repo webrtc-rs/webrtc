@@ -591,17 +591,6 @@ impl RTCRtpSender {
         }
     }
 
-    pub async fn read_simulcast_rtcp(
-        &self,
-        rid: &str,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
-        if let Some(encoding) = self.encoding_for_rid(rid).await {
-            self.internal.read_rtcp(&encoding, self.receive_mtu).await
-        } else {
-            Err(Error::ErrRTPSenderNoTrackForRID)
-        }
-    }
-
     /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
     pub async fn read_rtcp(
         &self,
@@ -659,6 +648,4 @@ impl RTCRtpSender {
 
         lock.clone()
     }
-
-
 }
