@@ -10,6 +10,7 @@ use receiver_stream::ReceiverStream;
 use rtp::extension::transport_cc_extension::TransportCcExtension;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};
+use tokio::time::MissedTickBehavior;
 use util::Unmarshal;
 use waitgroup::WaitGroup;
 
@@ -112,6 +113,7 @@ impl Receiver {
 
         let a = Attributes::new();
         let mut ticker = tokio::time::interval(internal.interval);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         loop {
             tokio::select! {
                 _ = close_rx.recv() =>{
