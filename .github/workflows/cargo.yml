@@ -47,9 +47,7 @@ jobs:
       - name: 🏭 Cache dependencies
         uses: Swatinem/rust-cache@v2
       - name: Test
-        run: cargo test
-      - name: Test with metrics
-        run: cargo test --features metrics -- allocation::allocation_manager::allocation_manager_test::test_get_allocations_info
+        run: cargo test --features metrics
 
   test_windows:
     name: Test (windows)
@@ -86,10 +84,7 @@ jobs:
       #   uses: Swatinem/rust-cache@v2
       - name: Test
         working-directory: "C:\\a\\webrtc\\webrtc"
-        run: cargo test
-      - name: Test with metrics
-        working-directory: "C:\\a\\webrtc\\webrtc"
-        run: cargo test --features metrics -- allocation::allocation_manager::allocation_manager_test::test_get_allocations_info
+        run: cargo test --features metrics
 
   rustfmt_and_clippy:
     name: Check formatting style and run clippy
