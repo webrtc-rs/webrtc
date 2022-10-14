@@ -53,14 +53,14 @@ impl Manager {
 
         guarded.iter().for_each(|(five_tuple, alloc)| {
             if five_tuples.is_none() || five_tuples.as_ref().unwrap().contains(five_tuple) {
-                #[cfg(not(feature = "metrics"))]
-                let relayed_bytes: Option<usize> = None;
-                #[cfg(feature = "metrics")]
-                let relayed_bytes = Some(alloc.relayed_bytes.load(Ordering::Acquire));
-
                 infos.insert(
                     *five_tuple,
-                    AllocationInfo::new(*five_tuple, alloc.username.text.clone(), relayed_bytes),
+                    AllocationInfo::new(
+                        *five_tuple,
+                        alloc.username.text.clone(),
+                        #[cfg(feature = "metrics")]
+                        Some(alloc.relayed_bytes.load(Ordering::Acquire)),
+                    ),
                 );
             }
         });

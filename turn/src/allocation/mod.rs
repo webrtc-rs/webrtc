@@ -42,17 +42,21 @@ pub struct AllocationInfo {
     pub username: String,
 
     /// Relayed bytes with this [`Allocation`].
-    ///
-    /// If it is [`None`] it means the relayed bytes are not counted.
-    pub relayed_bytes: Option<usize>,
+    #[cfg(feature = "metrics")]
+    pub relayed_bytes: usize,
 }
 
 impl AllocationInfo {
     // Creates a new `AllocationInfo`
-    pub fn new(five_tuple: FiveTuple, username: String, relayed_bytes: Option<usize>) -> Self {
+    pub fn new(
+        five_tuple: FiveTuple,
+        username: String,
+        #[cfg(feature = "metrics")] relayed_bytes: Option<usize>,
+    ) -> Self {
         Self {
             five_tuple,
             username,
+            #[cfg(feature = "metrics")]
             relayed_bytes,
         }
     }

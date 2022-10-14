@@ -435,56 +435,6 @@ async fn create_client(username: String, server_port: u16) -> Result<Client> {
     .await?)
 }
 
-#[cfg(not(feature = "metrics"))]
-#[tokio::test]
-async fn test_get_allocations_info_no_metrics() -> Result<()> {
-    let (server, server_port) = create_server().await?;
-
-    let client = create_client("foo".to_owned(), server_port).await?;
-
-    client.listen().await?;
-
-    assert!(server.get_allocations_info(None).await?.is_empty());
-
-    let conn = client.allocate().await?;
-    let addr = client
-        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
-        .await?;
-
-    assert!(!server.get_allocations_info(None).await?.is_empty());
-
-    assert_eq!(
-        server
-            .get_allocations_info(None)
-            .await?
-            .values()
-            .last()
-            .unwrap()
-            .relayed_bytes,
-        None
-    );
-
-    conn.send_to(b"Hello", addr).await?;
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    assert_eq!(
-        server
-            .get_allocations_info(None)
-            .await?
-            .values()
-            .last()
-            .unwrap()
-            .relayed_bytes,
-        None
-    );
-
-    client.close().await?;
-    server.close().await?;
-
-    Ok(())
-}
-
 #[cfg(feature = "metrics")]
 #[tokio::test]
 async fn test_get_allocations_info() -> Result<()> {
