@@ -83,6 +83,7 @@ impl RTCRtpCodecCapability {
         } else if mime_type == MIME_TYPE_G722.to_lowercase()
             || mime_type == MIME_TYPE_PCMU.to_lowercase()
             || mime_type == MIME_TYPE_PCMA.to_lowercase()
+            || mime_type == MIME_TYPE_TELEPHONE_EVENT.to_lowercase()
         {
             Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader::default()))
         } else {

@@ -7,6 +7,7 @@
 * Add IP filter to WebRTC `SettingEngine` [#306](https://github.com/webrtc-rs/webrtc/pull/306)
 * Stop sequence numbers from increasing in `TrackLocalStaticSample` while the bound `RTCRtpSender` have
 directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull/316)
+* Add support for a mime type "audio/telephone-event" (rfc4733) [#322](https://github.com/webrtc-rs/webrtc/pull/322)
 
 #### Breaking changes
 

@@ -48,6 +48,9 @@ pub const MIME_TYPE_PCMU: &str = "audio/PCMU";
 /// MIME_TYPE_PCMA PCMA MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_PCMA: &str = "audio/PCMA";
+/// MIME_TYPE_TELEPHONE_EVENT telephone-event MIME type
+/// Note: Matching should be case insensitive.
+pub const MIME_TYPE_TELEPHONE_EVENT: &str = "audio/telephone-event";
 
 const VALID_EXT_IDS: Range<isize> = 1..15;
 
