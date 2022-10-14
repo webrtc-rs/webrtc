@@ -59,7 +59,7 @@ impl Manager {
                         *five_tuple,
                         alloc.username.text.clone(),
                         #[cfg(feature = "metrics")]
-                        Some(alloc.relayed_bytes.load(Ordering::Acquire)),
+                        alloc.relayed_bytes.load(Ordering::Acquire),
                     ),
                 );
             }

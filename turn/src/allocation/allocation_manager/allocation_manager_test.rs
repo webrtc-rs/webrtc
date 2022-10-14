@@ -478,9 +478,9 @@ async fn test_get_allocations_info() -> Result<()> {
         .await?
         .iter()
         .for_each(|(_, ai)| match ai.username.as_str() {
-            "user1" => assert_eq!(ai.relayed_bytes, Some(1)),
-            "user2" => assert_eq!(ai.relayed_bytes, Some(2)),
-            "user3" => assert_eq!(ai.relayed_bytes, Some(3)),
+            "user1" => assert_eq!(ai.relayed_bytes, 1),
+            "user2" => assert_eq!(ai.relayed_bytes, 2),
+            "user3" => assert_eq!(ai.relayed_bytes, 3),
             _ => unreachable!(),
         });
 
@@ -513,7 +513,7 @@ async fn test_get_allocations_info_bytes_count() -> Result<()> {
             .last()
             .unwrap()
             .relayed_bytes,
-        Some(0)
+        0
     );
 
     for _ in 0..10 {
@@ -532,7 +532,7 @@ async fn test_get_allocations_info_bytes_count() -> Result<()> {
             .last()
             .unwrap()
             .relayed_bytes,
-        Some(50)
+        50
     );
 
     for _ in 0..10 {
@@ -551,7 +551,7 @@ async fn test_get_allocations_info_bytes_count() -> Result<()> {
             .last()
             .unwrap()
             .relayed_bytes,
-        Some(100)
+        100
     );
 
     client.close().await?;

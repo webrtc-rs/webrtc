@@ -51,7 +51,7 @@ impl AllocationInfo {
     pub fn new(
         five_tuple: FiveTuple,
         username: String,
-        #[cfg(feature = "metrics")] relayed_bytes: Option<usize>,
+        #[cfg(feature = "metrics")] relayed_bytes: usize,
     ) -> Self {
         Self {
             five_tuple,
