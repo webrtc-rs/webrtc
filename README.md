@@ -71,7 +71,7 @@
 
 WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href="https://github.com/pion/webrtc/releases/tag/v3.1.5">Pion</a> stack in Rust.
 This project is still in active and early development stage, please refer to the [Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) to track the major milestones and releases.
-[Examples](https://github.com/webrtc-rs/examples/blob/main/examples/README.md) provide code samples to show how to use webrtc-rs to build media and data channel applications.
+[Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) provide code samples to show how to use webrtc-rs to build media and data channel applications.
 
 ## Features
 
