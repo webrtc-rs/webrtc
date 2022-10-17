@@ -472,7 +472,7 @@ impl RTCPeerConnection {
                             };
 
                             let sender = match t.sender().await {
-                                Some(s) => s.clone(),
+                                Some(s) => s,
                                 None => {
                                     log::warn!(
                                         "RtpSender missing for transeceiver with sending direction {} for mid {}",
@@ -495,7 +495,6 @@ impl RTCPeerConnection {
                             if stream_ids.is_empty() {
                                 return true;
                             }
-
                             // different stream id
                             if dmsid.split_whitespace().next() != Some(&stream_ids[0]) {
                                 return true;

@@ -535,13 +535,36 @@ pub(crate) async fn add_transceiver_sdp(
     for mt in transceivers {
         if let Some(sender) = mt.sender().await {
             if let Some(track) = sender.track().await {
-                media = media.with_media_source(
-                    sender.ssrc,
-                    track.stream_id().to_owned(), /* cname */
-                    track.stream_id().to_owned(), /* streamLabel */
-                    track.id().to_owned(),
-                );
+                if mt.direction().has_send() {
+                    let send_parameters = sender.get_parameters().await;
+                    // Get the different encodings expressed first
+                    for encoding in &send_parameters.encodings {
+                        media = media.with_media_source(
+                            encoding.ssrc,
+                            track.stream_id().to_owned(), /* cname */
+                            track.stream_id().to_owned(), /* streamLabel */
+                            track.id().to_owned(),
+                        );
+                    }
 
+                    // Then tell the world about simulcast
+                    if send_parameters.encodings.len() > 1 {
+                        let mut send_rids: Vec<String> = vec![];
+
+                        for e in &send_parameters.encodings {
+                            if let Some(rid) = &e.rid {
+                                let mut s: String = rid.clone();
+                                send_rids.push(rid.clone());
+                                s.push_str(" send");
+                                media = media.with_value_attribute("rid".into(), s);
+                            }
+                        }
+                        // Simulcast)
+                        let mut s: String = "send ".to_owned();
+                        s.push_str(send_rids.join(";").as_ref());
+                        media = media.with_value_attribute("simulcast".into(), s);
+                    }
+                }
                 // Send msid based on the configured track if we haven't already
                 // sent on this sender. If we have sent we must keep the msid line consistent, this
                 // is handled below.
@@ -553,12 +576,10 @@ pub(crate) async fn add_transceiver_sdp(
                             track.id()
                         ));
                     }
-
                     sender.set_initial_track_id(track.id().to_string())?;
                     break;
                 }
             }
-
             if !is_plan_b {
                 if let Some(track_id) = sender.initial_track_id() {
                     // After we have include an msid attribute in an offer it must stay the same for

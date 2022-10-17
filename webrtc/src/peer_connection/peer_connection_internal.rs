@@ -173,9 +173,9 @@ impl PeerConnectionInternal {
                     let mut receiver_needs_stopped = false;
 
                     for t in tracks {
-                        if !t.rid().is_empty() {
+                        if let Some(rid) = t.rid() {
                             if let Some(details) =
-                                track_details_for_rid(&track_details, t.rid().to_owned())
+                                track_details_for_rid(&track_details, String::from(rid))
                             {
                                 t.set_id(details.id.clone()).await;
                                 t.set_stream_id(details.stream_id.clone()).await;
@@ -1141,6 +1141,7 @@ impl PeerConnectionInternal {
                     let stream_info = create_stream_info(
                         "".to_owned(),
                         ssrc,
+                        None,
                         params.codecs[0].payload_type,
                         params.codecs[0].capability.clone(),
                         &params.header_extensions,
@@ -1182,7 +1183,7 @@ impl PeerConnectionInternal {
                                     return receiver
                                         .receive_for_rtx(
                                             0,
-                                            rsid,
+                                            &rsid,
                                             TrackStream {
                                                 stream_info: Some(stream_info.clone()),
                                                 rtp_read_stream,
@@ -1196,7 +1197,7 @@ impl PeerConnectionInternal {
 
                                 let track = receiver
                                     .receive_for_rid(
-                                        rid,
+                                        &rid,
                                         params,
                                         TrackStream {
                                             stream_info: Some(stream_info.clone()),
@@ -1535,20 +1536,25 @@ impl PeerConnectionInternal {
                 None => continue,
             };
 
-            let track_id = track.id().to_string();
             let kind = match track.kind() {
                 RTPCodecType::Unspecified => continue,
                 RTPCodecType::Audio => "audio",
                 RTPCodecType::Video => "video",
             };
 
-            track_infos.push(TrackInfo {
-                track_id,
-                ssrc: sender.ssrc,
-                mid: mid.clone(),
-                rid: None,
-                kind,
-            });
+            let encodings = sender.track_encodings.read().await;
+            for e in encodings.iter() {
+                let track_id = track.rid().map_or(track.id().to_string(), |rid| {
+                    format!("{}-{}", track.id(), rid)
+                });
+                track_infos.push(TrackInfo {
+                    track_id,
+                    ssrc: e.ssrc,
+                    mid: mid.clone(),
+                    rid: track.rid().map(String::from),
+                    kind,
+                });
+            }
         }
 
         let stream_stats = self
@@ -1610,7 +1616,7 @@ impl PeerConnectionInternal {
                     kind,
                     packets_sent,
                     mid,
-                    rid,
+                    rid: rid.map(|a| a.to_owned()),
                     header_bytes_sent,
                     bytes_sent,
                     nack_count,
