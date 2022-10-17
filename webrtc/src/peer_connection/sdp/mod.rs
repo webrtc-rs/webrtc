@@ -552,9 +552,9 @@ pub(crate) async fn add_transceiver_sdp(
                         let mut send_rids: Vec<String> = vec![];
 
                         for e in &send_parameters.encodings {
-                            if let Some(rid) = e.rid.clone() {
+                            if let Some(rid) = &e.rid {
                                 let mut s: String = rid.clone();
-                                send_rids.push(rid);
+                                send_rids.push(rid.clone());
                                 s.push_str(" send");
                                 media = media.with_value_attribute("rid".into(), s);
                             }

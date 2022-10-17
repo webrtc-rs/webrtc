@@ -173,8 +173,10 @@ impl PeerConnectionInternal {
                     let mut receiver_needs_stopped = false;
 
                     for t in tracks {
-                        if let Some(rid) = t.rid().clone() {
-                            if let Some(details) = track_details_for_rid(&track_details, rid) {
+                        if let Some(rid) = t.rid() {
+                            if let Some(details) =
+                                track_details_for_rid(&track_details, String::from(rid))
+                            {
                                 t.set_id(details.id.clone()).await;
                                 t.set_stream_id(details.stream_id.clone()).await;
                                 continue;
@@ -1181,7 +1183,7 @@ impl PeerConnectionInternal {
                                     return receiver
                                         .receive_for_rtx(
                                             0,
-                                            rsid,
+                                            &rsid,
                                             TrackStream {
                                                 stream_info: Some(stream_info.clone()),
                                                 rtp_read_stream,
@@ -1195,7 +1197,7 @@ impl PeerConnectionInternal {
 
                                 let track = receiver
                                     .receive_for_rid(
-                                        rid,
+                                        &rid,
                                         params,
                                         TrackStream {
                                             stream_info: Some(stream_info.clone()),
@@ -1549,7 +1551,7 @@ impl PeerConnectionInternal {
                     track_id,
                     ssrc: e.ssrc,
                     mid: mid.clone(),
-                    rid: track.rid().clone(),
+                    rid: track.rid().map(String::from),
                     kind,
                 });
             }
@@ -1614,7 +1616,7 @@ impl PeerConnectionInternal {
                     kind,
                     packets_sent,
                     mid,
-                    rid,
+                    rid: rid.map(|a| a.to_owned()),
                     header_bytes_sent,
                     bytes_sent,
                     nack_count,

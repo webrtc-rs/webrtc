@@ -135,8 +135,8 @@ impl TrackRemote {
     /// rid gets the RTP Stream ID of this Track
     /// With Simulcast you will have multiple tracks with the same ID, but different RID values.
     /// In many cases a TrackRemote will not have an RID, so it is important to assert it is non-zero
-    pub fn rid(&self) -> Option<String> {
-        self.rid.clone()
+    pub fn rid(&self) -> Option<&str> {
+        self.rid.as_deref()
     }
 
     /// payload_type gets the PayloadType of the track

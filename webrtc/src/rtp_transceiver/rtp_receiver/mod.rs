@@ -198,7 +198,7 @@ impl RTPReceiverInternal {
 
         let tracks = self.tracks.read().await;
         for t in &*tracks {
-            if t.track.rid().map_or(false, |r| r == rid) {
+            if Some(rid) == t.track.rid() {
                 if let Some(rtcp_interceptor) = &t.stream.rtcp_interceptor {
                     let a = Attributes::new();
 
@@ -599,7 +599,7 @@ impl RTCRtpReceiver {
 
                 self.receive_for_rtx(
                     rtx_ssrc,
-                    "".to_owned(),
+                    "",
                     TrackStream {
                         stream_info: Some(stream_info),
                         rtp_read_stream,
@@ -745,13 +745,13 @@ impl RTCRtpReceiver {
     /// It populates all the internal state for the given RID
     pub(crate) async fn receive_for_rid(
         &self,
-        rid: String,
+        rid: &str,
         params: RTCRtpParameters,
         stream: TrackStream,
     ) -> Result<Arc<TrackRemote>> {
         let mut tracks = self.internal.tracks.write().await;
         for t in &mut *tracks {
-            if t.track.rid().map_or(false, |r| r == rid) {
+            if Some(rid) == t.track.rid() {
                 t.track.set_kind(self.kind);
                 if let Some(codec) = params.codecs.first() {
                     t.track.set_codec(codec.clone()).await;
@@ -773,13 +773,13 @@ impl RTCRtpReceiver {
     pub(crate) async fn receive_for_rtx(
         &self,
         ssrc: SSRC,
-        rsid: String,
+        rsid: &str,
         repair_stream: TrackStream,
     ) -> Result<()> {
         let mut tracks = self.internal.tracks.write().await;
         let l = tracks.len();
         for t in &mut *tracks {
-            if (ssrc != 0 && l == 1) || t.track.rid().map_or(false, |r| r == rsid) {
+            if (ssrc != 0 && l == 1) || Some(rsid) == t.track.rid() {
                 t.repair_stream = repair_stream;
 
                 let receive_mtu = self.receive_mtu;

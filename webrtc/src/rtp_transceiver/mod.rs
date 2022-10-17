@@ -132,7 +132,7 @@ pub struct RTCRtpTransceiverInit {
 pub(crate) fn create_stream_info(
     id: String,
     ssrc: SSRC,
-    rid: Option<String>,
+    rid: Option<&str>,
     payload_type: PayloadType,
     codec: RTCRtpCodecCapability,
     webrtc_header_extensions: &[RTCRtpHeaderExtensionParameters],
@@ -155,7 +155,7 @@ pub(crate) fn create_stream_info(
 
     StreamInfo {
         id,
-        rid,
+        rid: rid.map(String::from),
         attributes: Attributes::new(),
         ssrc,
         payload_type,

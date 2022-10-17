@@ -111,8 +111,8 @@ impl TrackLocal for TrackLocalStaticRTP {
         self.stream_id.as_str()
     }
 
-    fn rid(&self) -> Option<String> {
-        self.rid.clone()
+    fn rid(&self) -> Option<&str> {
+        self.rid.as_deref()
     }
 
     /// kind controls if this TrackLocal is audio or video

@@ -303,7 +303,7 @@ impl RTCRtpSender {
                 Vec::with_capacity(track_encodings.len());
             for te in track_encodings.iter() {
                 let track = te.track.lock().await;
-                let rid = track.as_ref().and_then(|t| t.rid());
+                let rid = track.as_ref().and_then(|t| t.rid().map(String::from));
 
                 encodings.push(RTCRtpEncodingParameters {
                     ssrc: te.ssrc,
@@ -488,7 +488,7 @@ impl RTCRtpSender {
 
                 let (codec, rid) = if let Some(t) = &*track {
                     let codec = t.bind(&context).await?;
-                    (codec, t.rid().clone())
+                    (codec, t.rid())
                 } else {
                     (RTCRtpCodecParameters::default(), None)
                 };
@@ -498,7 +498,7 @@ impl RTCRtpSender {
                 let stream_info = create_stream_info(
                     self.id.clone(),
                     te.ssrc,
-                    rid.clone(),
+                    rid,
                     payload_type,
                     capability,
                     &parameters.rtp_parameters.header_extensions,
@@ -570,7 +570,7 @@ impl RTCRtpSender {
         let encodings = self.track_encodings.read().await;
         for e in encodings.iter() {
             if let Some(track) = &*e.track.lock().await {
-                if track.rid().map_or(false, |r| r == rid) {
+                if Some(rid) == track.rid() {
                     return Some(e.clone());
                 }
             };

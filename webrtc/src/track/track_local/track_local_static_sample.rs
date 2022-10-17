@@ -171,7 +171,7 @@ impl TrackLocal for TrackLocalStaticSample {
         self.rtp_track.id()
     }
 
-    fn rid(&self) -> Option<String> {
+    fn rid(&self) -> Option<&str> {
         self.rtp_track.rid()
     }
 

@@ -160,7 +160,7 @@ async fn main() -> Result<()> {
                 if let Some(track) = track {
                     println!("Track has started");
 
-                    let rid = track.rid().unwrap_or("".to_owned());
+                    let rid = track.rid().map_or(String::from(""), String::from);
                     let output_track = if let Some(output_track) = output_tracks.get(&rid) {
                         Arc::clone(output_track)
                     } else {
