@@ -374,7 +374,7 @@ impl RTCSctpTransport {
 
         // data channels
         let mut data_channels_closed = 0;
-        let data_channels = self.data_channels.try_lock().unwrap();
+        let data_channels = self.data_channels.lock().await;
         for data_channel in &*data_channels {
             match data_channel.ready_state() {
                 RTCDataChannelState::Connecting => (),
