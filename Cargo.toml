@@ -18,5 +18,8 @@ members = [
     "webrtc",
 ]
 
+[workspace.package]
+rust-version = "1.57.0"
+
 [profile.dev]
 opt-level = 0
