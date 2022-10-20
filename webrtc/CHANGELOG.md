@@ -8,6 +8,7 @@
 * Stop sequence numbers from increasing in `TrackLocalStaticSample` while the bound `RTCRtpSender` have
 directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull/316)
 * Add support for a mime type "audio/telephone-event" (rfc4733) [#322](https://github.com/webrtc-rs/webrtc/pull/322)
+* Fixed a panic that would sometimes happen when collecting stats. [#327](https://github.com/webrtc-rs/webrtc/pull/327) by [@k0nserv](https://github.com/k0nserv).
 
 #### Breaking changes
 
