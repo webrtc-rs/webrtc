@@ -8,7 +8,6 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/rtcp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtcp"
-rust-version.workspace = true
 
 [dependencies]
 util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }

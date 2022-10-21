@@ -8,7 +8,6 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/sdp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/sdp"
-rust-version.workspace = true
 
 [dependencies]
 url = "2.2"
