@@ -75,7 +75,6 @@ pub(crate) fn track_details_from_sdp(
         let mut tracks_in_media_section = vec![];
         let mut rtx_repair_flows = HashMap::new();
 
-        // Plan B can have multiple tracks in a signle media section
         let mut stream_id = "";
         let mut track_id = "";
 
@@ -132,7 +131,7 @@ pub(crate) fn track_details_from_sdp(
                     }
                 }
 
-                // Handle `a=msid:<stream_id> <track_label>` for Unified plan. The first value is the same as MediaStream.id
+                // Handle `a=msid:<stream_id> <track_label>` The first value is the same as MediaStream.id
                 // in the browser and can be used to figure out which tracks belong to the same stream. The browser should
                 // figure this out automatically when an ontrack event is emitted on RTCPeerConnection.
                 ATTR_KEY_MSID => {
@@ -395,7 +394,6 @@ pub(crate) async fn populate_local_candidates(
 }
 
 pub(crate) struct AddTransceiverSdpParams {
-    is_plan_b: bool,
     should_add_candidates: bool,
     mid_value: String,
     dtls_role: ConnectionRole,
@@ -415,8 +413,7 @@ pub(crate) async fn add_transceiver_sdp(
     if media_section.transceivers.is_empty() {
         return Err(Error::ErrSDPZeroTransceivers);
     }
-    let (is_plan_b, should_add_candidates, mid_value, dtls_role, ice_gathering_state) = (
-        params.is_plan_b,
+    let (should_add_candidates, mid_value, dtls_role, ice_gathering_state) = (
         params.should_add_candidates,
         params.mid_value,
         params.dtls_role,
@@ -545,7 +542,7 @@ pub(crate) async fn add_transceiver_sdp(
                 // Send msid based on the configured track if we haven't already
                 // sent on this sender. If we have sent we must keep the msid line consistent, this
                 // is handled below.
-                if !is_plan_b && sender.initial_track_id().is_none() {
+                if sender.initial_track_id().is_none() {
                     for stream_id in sender.associated_media_stream_ids() {
                         media = media.with_property_attribute(format!(
                             "msid:{} {}",
@@ -559,26 +556,24 @@ pub(crate) async fn add_transceiver_sdp(
                 }
             }
 
-            if !is_plan_b {
-                if let Some(track_id) = sender.initial_track_id() {
-                    // After we have include an msid attribute in an offer it must stay the same for
-                    // all subsequent offer even if the track or transceiver direction changes.
-                    //
-                    // [RFC 8829 Section 5.2.2](https://datatracker.ietf.org/doc/html/rfc8829#section-5.2.2)
-                    //
-                    // For RtpTransceivers that are not stopped, the "a=msid" line or
-                    // lines MUST stay the same if they are present in the current
-                    // description, regardless of changes to the transceiver's direction
-                    // or track.  If no "a=msid" line is present in the current
-                    // description, "a=msid" line(s) MUST be generated according to the
-                    // same rules as for an initial offer.
-                    for stream_id in sender.associated_media_stream_ids() {
-                        media = media
-                            .with_property_attribute(format!("msid:{} {}", stream_id, track_id));
-                    }
-
-                    break;
+            if let Some(track_id) = sender.initial_track_id() {
+                // After we have include an msid attribute in an offer it must stay the same for
+                // all subsequent offer even if the track or transceiver direction changes.
+                //
+                // [RFC 8829 Section 5.2.2](https://datatracker.ietf.org/doc/html/rfc8829#section-5.2.2)
+                //
+                // For RtpTransceivers that are not stopped, the "a=msid" line or
+                // lines MUST stay the same if they are present in the current
+                // description, regardless of changes to the transceiver's direction
+                // or track.  If no "a=msid" line is present in the current
+                // description, "a=msid" line(s) MUST be generated according to the
+                // same rules as for an initial offer.
+                for stream_id in sender.associated_media_stream_ids() {
+                    media =
+                        media.with_property_attribute(format!("msid:{} {}", stream_id, track_id));
                 }
+
+                break;
             }
         }
     }
@@ -648,7 +643,6 @@ pub(crate) struct MediaSection {
 }
 
 pub(crate) struct PopulateSdpParams {
-    pub(crate) is_plan_b: bool,
     pub(crate) media_description_fingerprint: bool,
     pub(crate) is_icelite: bool,
     pub(crate) connection_role: ConnectionRole,
@@ -681,7 +675,7 @@ pub(crate) async fn populate_sdp(
     for (i, m) in media_sections.iter().enumerate() {
         if m.data && !m.transceivers.is_empty() {
             return Err(Error::ErrSDPMediaSectionMediaDataChanInvalid);
-        } else if !params.is_plan_b && m.transceivers.len() > 1 {
+        } else if m.transceivers.len() > 1 {
             return Err(Error::ErrSDPMediaSectionMultipleTrackInvalid);
         }
 
@@ -699,7 +693,6 @@ pub(crate) async fn populate_sdp(
             true
         } else {
             let params = AddTransceiverSdpParams {
-                is_plan_b: params.is_plan_b,
                 should_add_candidates,
                 mid_value: m.id.clone(),
                 dtls_role: params.connection_role,
@@ -749,26 +742,6 @@ pub(crate) fn get_mid_value(media: &MediaDescription) -> Option<&String> {
         }
     }
     None
-}
-
-pub(crate) fn description_is_plan_b(
-    desc: Option<&session_description::RTCSessionDescription>,
-) -> Result<bool> {
-    if let Some(desc) = desc {
-        if let Some(parsed) = &desc.parsed {
-            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$").unwrap();
-            for media in &parsed.media_descriptions {
-                if let Some(s) = get_mid_value(media) {
-                    if let Some(caps) = detection_regex.captures(s) {
-                        if caps.len() == 2 {
-                            return Ok(true);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(false)
 }
 
 pub(crate) fn get_peer_direction(media: &MediaDescription) -> RTCRtpTransceiverDirection {

@@ -46,7 +46,6 @@ use crate::peer_connection::operation::{Operation, Operations};
 use crate::peer_connection::peer_connection_state::{
     NegotiationNeededState, RTCPeerConnectionState,
 };
-use crate::peer_connection::policy::sdp_semantics::RTCSdpSemantics;
 use crate::peer_connection::sdp::sdp_type::RTCSdpType;
 use crate::peer_connection::sdp::session_description::RTCSessionDescription;
 use crate::peer_connection::sdp::*;
@@ -772,70 +771,54 @@ impl RTCPeerConnection {
                 rtp_transceivers.clone()
             };
 
-            // in-parallel steps to create an offer
-            // https://w3c.github.io/webrtc-pc/#dfn-in-parallel-steps-to-create-an-offer
-            let is_plan_b = {
+            // include unmatched local transceivers
+            // update the greater mid if the remote description provides a greater one
+            {
                 let current_remote_description =
                     self.internal.current_remote_description.lock().await;
-                if current_remote_description.is_some() {
-                    description_is_plan_b(current_remote_description.as_ref())?
-                } else {
-                    self.configuration.sdp_semantics == RTCSdpSemantics::PlanB
-                }
-            };
-
-            // include unmatched local transceivers
-            if !is_plan_b {
-                // update the greater mid if the remote description provides a greater one
-                {
-                    let current_remote_description =
-                        self.internal.current_remote_description.lock().await;
-                    if let Some(d) = &*current_remote_description {
-                        if let Some(parsed) = &d.parsed {
-                            for media in &parsed.media_descriptions {
-                                if let Some(mid) = get_mid_value(media) {
-                                    if mid.is_empty() {
-                                        continue;
-                                    }
-                                    let numeric_mid = match mid.parse::<isize>() {
-                                        Ok(n) => n,
-                                        Err(_) => continue,
-                                    };
-                                    if numeric_mid
-                                        > self.internal.greater_mid.load(Ordering::SeqCst)
-                                    {
-                                        self.internal
-                                            .greater_mid
-                                            .store(numeric_mid, Ordering::SeqCst);
-                                    }
+                if let Some(d) = &*current_remote_description {
+                    if let Some(parsed) = &d.parsed {
+                        for media in &parsed.media_descriptions {
+                            if let Some(mid) = get_mid_value(media) {
+                                if mid.is_empty() {
+                                    continue;
+                                }
+                                let numeric_mid = match mid.parse::<isize>() {
+                                    Ok(n) => n,
+                                    Err(_) => continue,
+                                };
+                                if numeric_mid > self.internal.greater_mid.load(Ordering::SeqCst) {
+                                    self.internal
+                                        .greater_mid
+                                        .store(numeric_mid, Ordering::SeqCst);
                                 }
                             }
                         }
                     }
                 }
-                for t in &current_transceivers {
-                    if !t.mid().await.is_empty() {
-                        continue;
-                    }
+            }
+            for t in &current_transceivers {
+                if !t.mid().await.is_empty() {
+                    continue;
+                }
 
-                    if let Some(gen) = &self.internal.setting_engine.mid_generator {
-                        let current_greatest = self.internal.greater_mid.load(Ordering::SeqCst);
-                        let mid = (gen)(current_greatest);
+                if let Some(gen) = &self.internal.setting_engine.mid_generator {
+                    let current_greatest = self.internal.greater_mid.load(Ordering::SeqCst);
+                    let mid = (gen)(current_greatest);
 
-                        // If it's possible to parse the returned mid as numeric, we will update the greater_mid field.
-                        if let Ok(numeric_mid) = mid.parse::<isize>() {
-                            if numeric_mid > self.internal.greater_mid.load(Ordering::SeqCst) {
-                                self.internal
-                                    .greater_mid
-                                    .store(numeric_mid, Ordering::SeqCst);
-                            }
+                    // If it's possible to parse the returned mid as numeric, we will update the greater_mid field.
+                    if let Ok(numeric_mid) = mid.parse::<isize>() {
+                        if numeric_mid > self.internal.greater_mid.load(Ordering::SeqCst) {
+                            self.internal
+                                .greater_mid
+                                .store(numeric_mid, Ordering::SeqCst);
                         }
-
-                        t.set_mid(mid).await?;
-                    } else {
-                        let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
-                        t.set_mid(format!("{}", greater_mid + 1)).await?;
                     }
+
+                    t.set_mid(mid).await?;
+                } else {
+                    let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
+                    t.set_mid(format!("{}", greater_mid + 1)).await?;
                 }
             }
 
@@ -847,11 +830,7 @@ impl RTCPeerConnection {
 
             let mut d = if current_remote_description_is_none {
                 self.internal
-                    .generate_unmatched_sdp(
-                        current_transceivers,
-                        use_identity,
-                        self.configuration.sdp_semantics,
-                    )
+                    .generate_unmatched_sdp(current_transceivers, use_identity)
                     .await?
             } else {
                 self.internal
@@ -860,7 +839,6 @@ impl RTCPeerConnection {
                         use_identity,
                         true, /*includeUnmatched */
                         DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
-                        self.configuration.sdp_semantics,
                     )
                     .await?
             };
@@ -879,7 +857,7 @@ impl RTCPeerConnection {
 
             // Verify local media hasn't changed during offer
             // generation. Recompute if necessary
-            if is_plan_b || !self.internal.has_local_description_changed(&offer).await {
+            if !self.internal.has_local_description_changed(&offer).await {
                 break;
             }
             count += 1;
@@ -978,7 +956,6 @@ impl RTCPeerConnection {
                 use_identity,
                 false, /*includeUnmatched */
                 connection_role,
-                self.configuration.sdp_semantics,
             )
             .await?;
 
@@ -1303,7 +1280,6 @@ impl RTCPeerConnection {
                 self.start_rtp_senders().await?;
 
                 let pci = Arc::clone(&self.internal);
-                let sdp_semantics = self.configuration.sdp_semantics;
                 let remote_desc = Arc::new(remote_desc);
                 self.internal
                     .ops
@@ -1312,9 +1288,7 @@ impl RTCPeerConnection {
                             let pc = Arc::clone(&pci);
                             let rd = Arc::clone(&remote_desc);
                             Box::pin(async move {
-                                let _ = pc
-                                    .start_rtp(have_local_description, rd, sdp_semantics)
-                                    .await;
+                                let _ = pc.start_rtp(have_local_description, rd).await;
                                 false
                             })
                         },
@@ -1365,10 +1339,9 @@ impl RTCPeerConnection {
 
             let mut local_transceivers = self.get_transceivers().await;
             let remote_description = self.remote_description().await;
-            let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
             let we_offer = desc.sdp_type == RTCSdpType::Answer;
 
-            if !we_offer && !detected_plan_b {
+            if !we_offer {
                 if let Some(parsed) = remote_description.as_ref().and_then(|r| r.parsed.as_ref()) {
                     for media in &parsed.media_descriptions {
                         let mid_value = match get_mid_value(media) {
@@ -1529,7 +1502,6 @@ impl RTCPeerConnection {
                     self.start_rtp_senders().await?;
 
                     let pci = Arc::clone(&self.internal);
-                    let sdp_semantics = self.configuration.sdp_semantics;
                     let remote_desc = Arc::new(desc);
                     self.internal
                         .ops
@@ -1538,7 +1510,7 @@ impl RTCPeerConnection {
                                 let pc = Arc::clone(&pci);
                                 let rd = Arc::clone(&remote_desc);
                                 Box::pin(async move {
-                                    let _ = pc.start_rtp(true, rd, sdp_semantics).await;
+                                    let _ = pc.start_rtp(true, rd).await;
                                     false
                                 })
                             },
@@ -1580,7 +1552,6 @@ impl RTCPeerConnection {
             //log::trace!("start_transports: parsed={:?}", parsed);
 
             let pci = Arc::clone(&self.internal);
-            let sdp_semantics = self.configuration.sdp_semantics;
             let dtls_role = DTLSRole::from(parsed);
             let remote_desc = Arc::new(desc);
             self.internal
@@ -1603,7 +1574,7 @@ impl RTCPeerConnection {
                                 .await;
 
                             if we_offer {
-                                let _ = pc.start_rtp(false, rd, sdp_semantics).await;
+                                let _ = pc.start_rtp(false, rd).await;
                             }
                             false
                         })
