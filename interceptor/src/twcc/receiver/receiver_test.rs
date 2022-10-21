@@ -26,18 +26,13 @@ async fn test_twcc_receiver_interceptor_before_any_packets() -> Result<()> {
     )
     .await;
 
-    let pkts = stream.written_rtcp().await.unwrap();
-    assert_eq!(pkts.len(), 1);
-    if let Some(tlcc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(0, tlcc.packet_status_count);
-        assert_eq!(0, tlcc.fb_pkt_count);
-        assert_eq!(0, tlcc.base_sequence_number);
-        assert_eq!(0, tlcc.media_ssrc);
-        assert_eq!(0, tlcc.reference_time);
-        assert_eq!(0, tlcc.recv_deltas.len());
-        assert_eq!(0, tlcc.packet_chunks.len());
-    } else {
-        assert!(false);
+    tokio::select! {
+        pkts = stream.written_rtcp() => {
+            assert!(pkts.map(|p| p.is_empty()).unwrap_or(true), "Should not have sent an RTCP packet before receiving the first RTP packets")
+        }
+        _ = tokio::time::sleep(Duration::from_millis(300)) => {
+            // All good
+        }
     }
 
     stream.close().await?;
