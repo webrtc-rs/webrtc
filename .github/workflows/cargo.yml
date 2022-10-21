@@ -18,7 +18,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        os: ['ubuntu-latest', 'macos-latest']
+        os: ["ubuntu-latest", "macos-latest"]
         toolchain:
           - 1.57.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
           - stable
@@ -28,10 +28,10 @@ jobs:
       - name: Install Rust ${{ matrix.toolchain }}
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: ${{ matrix.toolchain }}
-            override: true      
+          toolchain: ${{ matrix.toolchain }}
+          override: true
       - name: Install Rust
-        run: rustup update stable            
+        run: rustup update stable
       - name: 📦 Cache cargo registry
         uses: actions/cache@v3
         with:
@@ -47,7 +47,7 @@ jobs:
       - name: 🏭 Cache dependencies
         uses: Swatinem/rust-cache@v2
       - name: Test
-        run: cargo test
+        run: cargo test --features metrics
 
   test_windows:
     name: Test (windows)
@@ -62,10 +62,10 @@ jobs:
       - name: Install Rust ${{ matrix.toolchain }}
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: ${{ matrix.toolchain }}
-            override: true      
+          toolchain: ${{ matrix.toolchain }}
+          override: true
       - name: Install Rust
-        run: rustup update stable            
+        run: rustup update stable
       - name: 📦 Cache cargo registry
         uses: actions/cache@v3
         with:
@@ -84,7 +84,7 @@ jobs:
       #   uses: Swatinem/rust-cache@v2
       - name: Test
         working-directory: "C:\\a\\webrtc\\webrtc"
-        run: cargo test
+        run: cargo test --features metrics
 
   rustfmt_and_clippy:
     name: Check formatting style and run clippy

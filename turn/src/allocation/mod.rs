@@ -16,6 +16,7 @@ use stun::{agent::*, message::*, textattrs::Username};
 
 use util::Conn;
 
+use std::sync::atomic::AtomicUsize;
 use std::{
     collections::HashMap,
     marker::{Send, Sync},
@@ -30,6 +31,36 @@ use tokio::{
 const RTP_MTU: usize = 1500;
 
 pub type AllocationMap = Arc<Mutex<HashMap<FiveTuple, Arc<Allocation>>>>;
+
+/// Information about an [`Allocation`].
+#[derive(Debug, Clone)]
+pub struct AllocationInfo {
+    /// [`FiveTuple`] of this [`Allocation`].
+    pub five_tuple: FiveTuple,
+
+    /// Username of this [`Allocation`].
+    pub username: String,
+
+    /// Relayed bytes with this [`Allocation`].
+    #[cfg(feature = "metrics")]
+    pub relayed_bytes: usize,
+}
+
+impl AllocationInfo {
+    // Creates a new `AllocationInfo`
+    pub fn new(
+        five_tuple: FiveTuple,
+        username: String,
+        #[cfg(feature = "metrics")] relayed_bytes: usize,
+    ) -> Self {
+        Self {
+            five_tuple,
+            username,
+            #[cfg(feature = "metrics")]
+            relayed_bytes,
+        }
+    }
+}
 
 // Allocation is tied to a FiveTuple and relays traffic
 // use create_allocation and get_allocation to operate
@@ -46,6 +77,7 @@ pub struct Allocation {
     reset_tx: StdMutex<Option<mpsc::Sender<Duration>>>,
     timer_expired: Arc<AtomicBool>,
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
+    pub(crate) relayed_bytes: AtomicUsize,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -74,6 +106,7 @@ impl Allocation {
             reset_tx: StdMutex::new(None),
             timer_expired: Arc::new(AtomicBool::new(false)),
             closed: AtomicBool::new(false),
+            relayed_bytes: Default::default(),
         }
     }
 
@@ -215,7 +248,7 @@ impl Allocation {
         self.reset_tx.lock().unwrap().replace(reset_tx);
 
         let allocations = self.allocations.clone();
-        let five_tuple = self.five_tuple.clone();
+        let five_tuple = self.five_tuple;
         let timer_expired = Arc::clone(&self.timer_expired);
 
         tokio::spawn(async move {
@@ -283,7 +316,7 @@ impl Allocation {
     //  transport address of the received UDP datagram.  The Data indication
     //  is then sent on the 5-tuple associated with the allocation.
     async fn packet_handler(&self) {
-        let five_tuple = self.five_tuple.clone();
+        let five_tuple = self.five_tuple;
         let relay_addr = self.relay_addr;
         let relay_socket = Arc::clone(&self.relay_socket);
         let turn_socket = Arc::clone(&self.turn_socket);

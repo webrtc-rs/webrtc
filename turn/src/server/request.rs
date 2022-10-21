@@ -33,6 +33,8 @@ use util::Conn;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
+#[cfg(feature = "metrics")]
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
@@ -687,6 +689,10 @@ impl Request {
             if l != data_attr.0.len() {
                 Err(Error::ErrShortWrite)
             } else {
+                #[cfg(feature = "metrics")]
+                a.relayed_bytes
+                    .fetch_add(data_attr.0.len(), Ordering::AcqRel);
+
                 Ok(())
             }
         } else {
@@ -782,6 +788,9 @@ impl Request {
                 if l != c.data.len() {
                     Err(Error::ErrShortWrite)
                 } else {
+                    #[cfg(feature = "metrics")]
+                    a.relayed_bytes.fetch_add(c.data.len(), Ordering::AcqRel);
+
                     Ok(())
                 }
             } else {

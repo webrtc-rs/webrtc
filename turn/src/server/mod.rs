@@ -5,7 +5,9 @@ pub mod config;
 pub mod request;
 
 use crate::{
-    allocation::allocation_manager::*, auth::AuthHandler, error::*,
+    allocation::{allocation_manager::*, five_tuple::FiveTuple, AllocationInfo},
+    auth::AuthHandler,
+    error::*,
     proto::lifetime::DEFAULT_LIFETIME,
 };
 use config::*;
@@ -78,7 +80,10 @@ impl Server {
 
     /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
     pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
-        let tx = self.command_tx.lock().await.clone();
+        let tx = {
+            let command_tx = self.command_tx.lock().await;
+            command_tx.clone()
+        };
         if let Some(tx) = tx {
             let (closed_tx, closed_rx) = mpsc::channel(1);
             tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
@@ -87,6 +92,48 @@ impl Server {
             closed_tx.closed().await;
 
             Ok(())
+        } else {
+            Err(Error::ErrClosed)
+        }
+    }
+
+    /// Get information of [`Allocation`]s by specified [`FiveTuple`]s.
+    ///
+    /// If `five_tuples` is:
+    /// - [`None`]:               It returns information about the all
+    ///                           [`Allocation`]s.
+    /// - [`Some`] and not empty: It returns information about
+    ///                           the [`Allocation`]s associated with
+    ///                           the specified [`FiveTuples`].
+    /// - [`Some`], but empty:    It returns an empty [`HashMap`].
+    ///
+    /// [`Allocation`]: crate::allocation::Allocation
+    pub async fn get_allocations_info(
+        &self,
+        five_tuples: Option<Vec<FiveTuple>>,
+    ) -> Result<HashMap<FiveTuple, AllocationInfo>> {
+        if let Some(five_tuples) = &five_tuples {
+            if five_tuples.is_empty() {
+                return Ok(HashMap::new());
+            }
+        }
+
+        let tx = {
+            let command_tx = self.command_tx.lock().await;
+            command_tx.clone()
+        };
+        if let Some(tx) = tx {
+            let (infos_tx, mut infos_rx) = mpsc::channel(1);
+            tx.send(Command::GetAllocationsInfo(five_tuples, infos_tx))
+                .map_err(|_| Error::ErrClosed)?;
+
+            let mut info: HashMap<FiveTuple, AllocationInfo> = HashMap::new();
+
+            for _ in 0..tx.receiver_count() {
+                info.extend(infos_rx.recv().await.ok_or(Error::ErrClosed)?);
+            }
+
+            Ok(info)
         } else {
             Err(Error::ErrClosed)
         }
@@ -115,6 +162,12 @@ impl Server {
                             allocation_manager
                                 .delete_allocations_by_username(name.as_str())
                                 .await;
+                            continue;
+                        }
+                        Ok(Command::GetAllocationsInfo(five_tuples, tx)) => {
+                            let infos = allocation_manager.get_allocations_info(five_tuples).await;
+                            let _ = tx.send(infos).await;
+
                             continue;
                         }
                         Err(RecvError::Closed) | Ok(Command::Close(_)) => {
@@ -166,7 +219,11 @@ impl Server {
 
     /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
     pub async fn close(&self) -> Result<()> {
-        let tx = self.command_tx.lock().await.take();
+        let tx = {
+            let mut command_tx = self.command_tx.lock().await;
+            command_tx.take()
+        };
+
         if let Some(tx) = tx {
             if tx.receiver_count() == 0 {
                 return Ok(());
@@ -188,6 +245,14 @@ enum Command {
     /// Command to delete [`crate::allocation::Allocation`] by provided
     /// `username`.
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
+
+    /// Command to get information of [`Allocation`]s by provided [`FiveTuple`]s.
+    ///
+    /// [`Allocation`]: [`crate::allocation::Allocation`]
+    GetAllocationsInfo(
+        Option<Vec<FiveTuple>>,
+        mpsc::Sender<HashMap<FiveTuple, AllocationInfo>>,
+    ),
 
     /// Command to close the [`Server`].
     Close(Arc<mpsc::Receiver<()>>),

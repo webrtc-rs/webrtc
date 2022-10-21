@@ -1,8 +1,21 @@
 use super::*;
 
-use crate::{error::Result, proto::lifetime::DEFAULT_LIFETIME, relay::relay_none::*};
+use crate::{
+    auth::{generate_auth_key, AuthHandler},
+    client::{Client, ClientConfig},
+    error::Result,
+    proto::lifetime::DEFAULT_LIFETIME,
+    relay::{relay_none::*, relay_static::RelayAddressGeneratorStatic},
+    server::{
+        config::{ConnConfig, ServerConfig},
+        Server,
+    },
+};
 
-use std::{net::Ipv4Addr, str::FromStr};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    str::FromStr,
+};
 use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
 use tokio::net::UdpSocket;
 use util::vnet::net::*;
@@ -357,7 +370,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
-            TextAttribute::new(ATTR_USERNAME, String::from("user2")),
+            TextAttribute::new(ATTR_USERNAME, "user2".into()),
         )
         .await?;
 
@@ -372,6 +385,177 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             && m.get_allocation(&five_tuple2).await.is_none()
             && m.get_allocation(&five_tuple3).await.is_some()
     );
+
+    Ok(())
+}
+
+struct TestAuthHandler;
+impl AuthHandler for TestAuthHandler {
+    fn auth_handle(&self, username: &str, realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+        Ok(generate_auth_key(username, realm, "pass"))
+    }
+}
+
+async fn create_server() -> Result<(Server, u16)> {
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+    let server_port = conn.local_addr()?.port();
+
+    let server = Server::new(ServerConfig {
+        conn_configs: vec![ConnConfig {
+            conn,
+            relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
+                relay_address: IpAddr::from_str("127.0.0.1")?,
+                address: "0.0.0.0".to_owned(),
+                net: Arc::new(Net::new(None)),
+            }),
+        }],
+        realm: "webrtc.rs".to_owned(),
+        auth_handler: Arc::new(TestAuthHandler {}),
+        channel_bind_timeout: Duration::from_secs(0),
+    })
+    .await?;
+
+    Ok((server, server_port))
+}
+
+async fn create_client(username: String, server_port: u16) -> Result<Client> {
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    Ok(Client::new(ClientConfig {
+        stun_serv_addr: format!("127.0.0.1:{}", server_port),
+        turn_serv_addr: format!("127.0.0.1:{}", server_port),
+        username,
+        password: "pass".to_owned(),
+        realm: String::new(),
+        software: String::new(),
+        rto_in_ms: 0,
+        conn,
+        vnet: None,
+    })
+    .await?)
+}
+
+#[cfg(feature = "metrics")]
+#[tokio::test]
+async fn test_get_allocations_info() -> Result<()> {
+    let (server, server_port) = create_server().await?;
+
+    let client1 = create_client("user1".to_owned(), server_port).await?;
+    client1.listen().await?;
+
+    let client2 = create_client("user2".to_owned(), server_port).await?;
+    client2.listen().await?;
+
+    let client3 = create_client("user3".to_owned(), server_port).await?;
+    client3.listen().await?;
+
+    assert!(server.get_allocations_info(None).await?.is_empty());
+
+    let user1 = client1.allocate().await?;
+    let user2 = client2.allocate().await?;
+    let user3 = client3.allocate().await?;
+
+    assert_eq!(server.get_allocations_info(None).await?.len(), 3);
+
+    let addr1 = client1
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+    let addr2 = client2
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+    let addr3 = client3
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+
+    user1.send_to(b"1", addr1).await?;
+    user2.send_to(b"12", addr2).await?;
+    user3.send_to(b"123", addr3).await?;
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    server
+        .get_allocations_info(None)
+        .await?
+        .iter()
+        .for_each(|(_, ai)| match ai.username.as_str() {
+            "user1" => assert_eq!(ai.relayed_bytes, 1),
+            "user2" => assert_eq!(ai.relayed_bytes, 2),
+            "user3" => assert_eq!(ai.relayed_bytes, 3),
+            _ => unreachable!(),
+        });
+
+    Ok(())
+}
+
+#[cfg(feature = "metrics")]
+#[tokio::test]
+async fn test_get_allocations_info_bytes_count() -> Result<()> {
+    let (server, server_port) = create_server().await?;
+
+    let client = create_client("foo".to_owned(), server_port).await?;
+
+    client.listen().await?;
+
+    assert!(server.get_allocations_info(None).await?.is_empty());
+
+    let conn = client.allocate().await?;
+    let addr = client
+        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .await?;
+
+    assert!(!server.get_allocations_info(None).await?.is_empty());
+
+    assert_eq!(
+        server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .relayed_bytes,
+        0
+    );
+
+    for _ in 0..10 {
+        conn.send_to(b"Hello", addr).await?;
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    assert_eq!(
+        server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .relayed_bytes,
+        50
+    );
+
+    for _ in 0..10 {
+        conn.send_to(b"Hello", addr).await?;
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    assert_eq!(
+        server
+            .get_allocations_info(None)
+            .await?
+            .values()
+            .last()
+            .unwrap()
+            .relayed_bytes,
+        100
+    );
+
+    client.close().await?;
+    server.close().await?;
 
     Ok(())
 }
