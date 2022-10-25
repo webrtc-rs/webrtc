@@ -328,14 +328,29 @@ impl Allocation {
             let mut buffer = vec![0u8; RTP_MTU];
 
             loop {
-                let (n, src_addr) = match relay_socket.recv_from(&mut buffer).await {
-                    Ok((n, src_addr)) => (n, src_addr),
-                    Err(_) => {
-                        if let Some(allocs) = &allocations {
-                            let mut alls = allocs.lock().await;
-                            alls.remove(&five_tuple);
+                let timeout = tokio::time::sleep(Duration::from_secs(10));
+                tokio::pin!(timeout);
+
+                let (n, src_addr) = tokio::select! {
+                    _ = &mut timeout =>{
+                        if Arc::strong_count(&relay_socket) <= 1 {
+                            log::debug!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
+                            break;
+                        } else {
+                            continue;
                         }
-                        break;
+                    }
+                    result = relay_socket.recv_from(&mut buffer) => {
+                        match result {
+                            Ok((n, src_addr)) => (n, src_addr),
+                            Err(_) => {
+                                if let Some(allocs) = &allocations {
+                                    let mut alls = allocs.lock().await;
+                                    alls.remove(&five_tuple);
+                                }
+                                break;
+                            }
+                        }
                     }
                 };
 
