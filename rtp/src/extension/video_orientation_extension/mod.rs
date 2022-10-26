@@ -4,6 +4,7 @@ mod video_orientation_extension_test;
 use std::convert::{TryFrom, TryInto};
 
 use bytes::BufMut;
+use serde::{Deserialize, Serialize};
 use util::{marshal::Unmarshal, Marshal, MarshalSize};
 
 use crate::Error;
@@ -34,20 +35,20 @@ pub const VIDEO_ORIENTATION_EXTENSION_SIZE: usize = 1;
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///   |  ID   | len=0 |0 0 0 0 C F R R|
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(PartialEq, Eq, Debug, Default, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Default, Copy, Clone, Serialize, Deserialize)]
 pub struct VideoOrientationExtension {
     pub direction: CameraDirection,
     pub flip: bool,
     pub rotation: VideoRotation,
 }
 
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum CameraDirection {
     Front = 0,
     Back = 1,
 }
 
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum VideoRotation {
     Degree0 = 0,
     Degree90 = 1,

@@ -17,6 +17,7 @@ bytes = "1"
 rand = "0.8.5"
 thiserror = "1.0"
 async-trait = "0.1.56"
+serde = { version = "1.0.102", features = ["derive"] }
 
 [dev-dependencies]
 chrono = "0.4.19"
