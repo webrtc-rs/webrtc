@@ -2,6 +2,7 @@
 mod audio_level_extension_test;
 
 use crate::error::Error;
+use serde::{Deserialize, Serialize};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use bytes::{Buf, BufMut};
@@ -28,7 +29,7 @@ pub const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |      ID       |     len=1     |V|    level    |    0 (pad)    |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(PartialEq, Eq, Debug, Default, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Default, Copy, Clone, Serialize, Deserialize)]
 pub struct AudioLevelExtension {
     pub level: u8,
     pub voice: bool,
