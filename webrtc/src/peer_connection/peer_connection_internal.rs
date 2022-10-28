@@ -795,7 +795,7 @@ impl PeerConnectionInternal {
         }
 
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
-            cert.get_fingerprints()?
+            cert.get_fingerprints()
         } else {
             return Err(Error::ErrNonCertificate);
         };
@@ -986,7 +986,7 @@ impl PeerConnectionInternal {
         }
 
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
-            cert.get_fingerprints()?
+            cert.get_fingerprints()
         } else {
             return Err(Error::ErrNonCertificate);
         };

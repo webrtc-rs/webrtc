@@ -17,7 +17,8 @@ use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use std::sync::Arc;
 
-#[derive(Clone, PartialEq)]
+/// A X.509 certificate used to authenticate a DTLS connection.
+#[derive(Clone, PartialEq, Debug)]
 pub struct Certificate {
     pub certificate: Vec<rustls::Certificate>,
     pub private_key: CryptoPrivateKey,
@@ -134,12 +135,14 @@ pub(crate) fn value_key_message(
     plaintext
 }
 
+#[derive(Debug)]
 pub enum CryptoPrivateKeyKind {
     Ed25519(Ed25519KeyPair),
     Ecdsa256(EcdsaKeyPair),
     Rsa256(RsaKeyPair),
 }
 
+#[derive(Debug)]
 pub struct CryptoPrivateKey {
     pub kind: CryptoPrivateKeyKind,
     pub serialized_der: Vec<u8>,
