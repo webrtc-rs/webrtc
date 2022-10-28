@@ -55,6 +55,7 @@ env_logger = "0.9.0"
 chrono = "0.4.19"
 criterion = { version = "0.3.5", features = ["stable"]}
 async-global-executor = ">=2.0.0,<=2.2.0" # Transitive dependency due to Criterion, fixed to 2.2.0 because 2.3.0 requires Rust 1.59.0
+blocking = ">= 1.2.0" # Fix of async-global-executor usage which breaks on earlier versions. Can be removed after https://github.com/async-rs/async-global-executor/pull/12 is released
 
 [[bench]]
 name = "bench"
