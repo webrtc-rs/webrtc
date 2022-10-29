@@ -332,14 +332,6 @@ impl Allocation {
                 tokio::pin!(timeout);
 
                 let (n, src_addr) = tokio::select! {
-                    _ = &mut timeout =>{
-                        if Arc::strong_count(&relay_socket) <= 1 {
-                            log::debug!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
-                            break;
-                        } else {
-                            continue;
-                        }
-                    }
                     result = relay_socket.recv_from(&mut buffer) => {
                         match result {
                             Ok((n, src_addr)) => (n, src_addr),
@@ -350,6 +342,14 @@ impl Allocation {
                                 }
                                 break;
                             }
+                        }
+                    }
+                    _ = timeout.as_mut() =>{
+                        if Arc::strong_count(&relay_socket) <= 1 {
+                            log::debug!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
+                            break;
+                        } else {
+                            continue;
                         }
                     }
                 };
