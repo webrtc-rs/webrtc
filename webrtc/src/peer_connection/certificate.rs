@@ -7,7 +7,8 @@ use crate::stats::{CertificateStats, StatsReportType};
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
 use rcgen::{CertificateParams, KeyPair, RcgenError};
 use ring::rand::SystemRandom;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+use ring::rsa;
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
 use sha2::{Digest, Sha256};
 use std::ops::Add;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -68,7 +69,7 @@ impl RTCCertificate {
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
-                    RsaKeyPair::from_pkcs8(&serialized_der)
+                    rsa::KeyPair::from_pkcs8(&serialized_der)
                         .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,
