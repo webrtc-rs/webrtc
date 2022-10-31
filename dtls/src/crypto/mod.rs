@@ -43,6 +43,7 @@ impl Certificate {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
+                        &SystemRandom::new(),
                     )
                     .map_err(|e| Error::Other(e.to_string()))?,
                 ),
@@ -90,6 +91,7 @@ impl Certificate {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
+                        &SystemRandom::new(),
                     )
                     .map_err(|e| Error::Other(e.to_string()))?,
                 ),
@@ -181,6 +183,7 @@ impl Clone for CryptoPrivateKey {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &self.serialized_der,
+                        &SystemRandom::new(),
                     )
                     .unwrap(),
                 ),
@@ -213,6 +216,7 @@ impl CryptoPrivateKey {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
+                        &SystemRandom::new(),
                     )
                     .map_err(|e| Error::Other(e.to_string()))?,
                 ),

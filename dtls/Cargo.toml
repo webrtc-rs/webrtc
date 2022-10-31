@@ -41,7 +41,7 @@ oid-registry = "0.6.0"
 x509-parser = "0.13.2"
 der-parser = "8.1"
 rcgen = "0.9.2"
-ring = "0.16.19"
+ring = { git = "https://github.com/briansmith/ring" }
 webpki = "0.21.4"
 rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
 bincode = "1.3"

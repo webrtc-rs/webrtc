@@ -6,6 +6,7 @@ use crate::stats::{CertificateStats, StatsReportType};
 
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
 use rcgen::{CertificateParams, KeyPair, RcgenError};
+use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
 use std::ops::Add;
@@ -58,6 +59,7 @@ impl RTCCertificate {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
+                        &SystemRandom::new(),
                     )
                     .map_err(|e| Error::new(e.to_string()))?,
                 ),
