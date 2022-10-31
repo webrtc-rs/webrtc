@@ -24,7 +24,7 @@ rand = "0.8.5"
 base64 = "0.13.0"
 subtle = "2.4"
 crc = "3.0"
-ring = { git = "https://github.com/briansmith/ring" }
+ring = { git = "https://github.com/briansmith/ring", rev = "abe9529fc063f575759f8166bba02db171a3a0f6" }
 md-5 = "0.10.1"
 thiserror = "1.0"
 

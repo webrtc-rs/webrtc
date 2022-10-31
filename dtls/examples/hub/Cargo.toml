@@ -12,7 +12,7 @@ dtls = { package = "webrtc-dtls", path = "../../" }
 tokio = { version = "1", features = ["full"] }
 x509-parser = "0.13"
 rcgen = { version = "0.9", features = ["pem", "x509-parser"] }
-ring = { git = "https://github.com/briansmith/ring" }
+ring = { git = "https://github.com/briansmith/ring", rev = "abe9529fc063f575759f8166bba02db171a3a0f6" }
 rustls = "0.19"
 log = "0.4.16"
 thiserror = "1"
