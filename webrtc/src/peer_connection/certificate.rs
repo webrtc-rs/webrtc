@@ -19,7 +19,11 @@ pub struct RTCCertificate {
     pub dtls_certificate: dtls::crypto::Certificate,
     /// Timestamp after which this certificate is no longer valid.
     pub expires: SystemTime,
-    /// ID used for statistics.
+    /// Certificate's ID used for statistics.
+    ///
+    /// Example: "certificate-1667202302853538793"
+    ///
+    /// See [`CertificateStats`].
     pub stats_id: String,
 }
 
@@ -197,7 +201,8 @@ mod test {
         let kp_pem = kp.serialize_pem();
         assert!(kp_pem.contains("PRIVATE KEY"));
 
-        RTCCertificate::from_key_pair(kp)?;
+        let cert = RTCCertificate::from_key_pair(kp)?;
+        assert!(cert.stats_id.contains("certificate"));
 
         //_, err = tls.X509KeyPair(certPEM, skPEM)
 
