@@ -4,6 +4,8 @@
 
 * Further extended stats interceptors to collect stats for `RemoteOutoundRTPStats` and improve `RemoteInboundRTPStats` collection. [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).
 * When generating periodic TWCC feedback packets we no longer burst several packets in a row to catch up, i.e., we now use `MissedTickBehavior::Skip` instead of the default `MissedTickBehavior::Burst` for the ticker in question. [#323](https://github.com/webrtc-rs/webrtc/pull/323) by [@k0nserv](https://github.com/k0nserv).
+* Don't generate empty TWCC packets that libWebRTC will ignore. [#324](https://github.com/webrtc-rs/webrtc/pull/324) by [@k0nserv](https://github.com/k0nserv).
+ 
 
 ## v0.8.0
 
