@@ -5,7 +5,8 @@ pub(super) struct ReceiverStream {
     hdr_ext_id: u8,
     ssrc: u32,
     packet_chan_tx: mpsc::Sender<Packet>,
-    start_time: SystemTime,
+    // we use tokio's Instant because it makes testing easier via `tokio::time::advance`.
+    start_time: tokio::time::Instant,
 }
 
 impl ReceiverStream {
@@ -14,7 +15,7 @@ impl ReceiverStream {
         hdr_ext_id: u8,
         ssrc: u32,
         packet_chan_tx: mpsc::Sender<Packet>,
-        start_time: SystemTime,
+        start_time: tokio::time::Instant,
     ) -> Self {
         ReceiverStream {
             parent_rtp_reader,
@@ -43,10 +44,8 @@ impl RTPReader for ReceiverStream {
                 .send(Packet {
                     hdr: p.header,
                     sequence_number: tcc_ext.transport_sequence,
-                    arrival_time: SystemTime::now()
-                        .duration_since(self.start_time)
-                        .unwrap_or_else(|_| Duration::from_secs(0))
-                        .as_micros() as i64,
+                    arrival_time: (tokio::time::Instant::now() - self.start_time).as_micros()
+                        as i64,
                     ssrc: self.ssrc,
                 })
                 .await;

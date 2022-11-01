@@ -96,9 +96,7 @@ async fn test_twcc_receiver_interceptor_after_rtp_packets() -> Result<()> {
     Ok(())
 }
 
-//TODO: remove this conditional test
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -> Result<()> {
     let builder = Receiver::builder().with_interval(Duration::from_millis(500));
     let icpr = builder.build("")?;
@@ -119,7 +117,7 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
 
     let delays = vec![0, 10, 100, 200];
     for (i, d) in delays.iter().enumerate() {
-        tokio::time::sleep(Duration::from_millis(*d)).await;
+        tokio::time::advance(Duration::from_millis(*d)).await;
 
         let mut hdr = rtp::header::Header::default();
         let tcc = TransportCcExtension {
@@ -134,13 +132,17 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
                 ..Default::default()
             })
             .await;
+
+        // Yield so this packet can be processed
+        tokio::task::yield_now().await;
     }
 
-    // tick immediately, let's ignore the first rtcp pkt
-    let _ = stream.written_rtcp().await.unwrap();
+    // Force a packet to be generated
+    tokio::time::advance(Duration::from_millis(2001)).await;
+    tokio::task::yield_now().await;
 
-    // the second 500ms tick will works
     let pkts = stream.written_rtcp().await.unwrap();
+
     assert_eq!(pkts.len(), 1);
     if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(0, cc.base_sequence_number);
@@ -166,9 +168,7 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
     Ok(())
 }
 
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
     let builder = Receiver::builder().with_interval(Duration::from_secs(2));
     let icpr = builder.build("")?;
@@ -187,7 +187,7 @@ async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
     )
     .await;
 
-    let sequence_number_to_delay: HashMap<u16, u64> = [
+    let sequence_number_to_delay = &[
         (0, 0),
         (1, 10),
         (4, 100),
@@ -195,18 +195,13 @@ async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
         (9, 20),
         (10, 20),
         (30, 300),
-    ]
-    .iter()
-    .cloned()
-    .collect();
+    ];
 
-    for i in &[0, 1, 4, 8, 9, 10, 30] {
-        let d = sequence_number_to_delay.get(i).unwrap();
-        tokio::time::sleep(Duration::from_millis(*d)).await;
-
+    for (i, d) in sequence_number_to_delay {
+        tokio::time::advance(Duration::from_millis(*d)).await;
         let mut hdr = rtp::header::Header::default();
         let tcc = TransportCcExtension {
-            transport_sequence: *i as u16,
+            transport_sequence: *i,
         }
         .marshal()?;
         hdr.set_extension(1, tcc)?;
@@ -216,13 +211,17 @@ async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
                 ..Default::default()
             })
             .await;
+
+        // Yield so this packet can be processed
+        tokio::task::yield_now().await;
     }
 
-    // tick immediately, let's ignore the first rtcp pkt
-    let _ = stream.written_rtcp().await.unwrap();
+    // Force a packet to be generated
+    tokio::time::advance(Duration::from_millis(2001)).await;
+    tokio::task::yield_now().await;
 
-    // the second 500ms tick will works
     let pkts = stream.written_rtcp().await.unwrap();
+
     assert_eq!(pkts.len(), 1);
     if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(0, cc.base_sequence_number);
