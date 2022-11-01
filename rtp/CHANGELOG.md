@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Adds a new generic header extensions type `rtp::extension::HeaderExtension` which allows abstracting over all known extensions as well as custom extensions.
+
 ## v0.6.7
 
 * Bumped util dependecy to `0.6.0`.
