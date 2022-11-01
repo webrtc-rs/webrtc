@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Increased minimum support rust version to `1.60.0`.
+
 ## v0.6.7
 
 * Bumped util dependecy to `0.6.0`.
