@@ -21,7 +21,7 @@ use util::Unmarshal;
 #[async_trait]
 pub trait TrackLocalWriter: fmt::Debug {
     /// write_rtp encrypts a RTP packet and writes to the connection
-    async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize>;
+    async fn write_rtp(&self, p: rtp::packet::Packet) -> Result<usize>;
 
     /// write encrypts and writes a full RTP packet
     async fn write(&self, b: &[u8]) -> Result<usize>;
@@ -104,6 +104,7 @@ pub(crate) struct TrackBinding {
     id: String,
     ssrc: SSRC,
     payload_type: PayloadType,
+    params: RTCRtpParameters,
     write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
     sender_paused: Arc<AtomicBool>,
 }
@@ -140,7 +141,7 @@ impl std::fmt::Debug for InterceptorToTrackLocalWriter {
 
 #[async_trait]
 impl TrackLocalWriter for InterceptorToTrackLocalWriter {
-    async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+    async fn write_rtp(&self, pkt: rtp::packet::Packet) -> Result<usize> {
         if self.is_sender_paused() {
             return Ok(0);
         }
@@ -148,7 +149,7 @@ impl TrackLocalWriter for InterceptorToTrackLocalWriter {
         let interceptor_rtp_writer = self.interceptor_rtp_writer.lock().await;
         if let Some(writer) = &*interceptor_rtp_writer {
             let a = Attributes::new();
-            Ok(writer.write(pkt, &a).await?)
+            Ok(writer.write(&pkt, &a).await?)
         } else {
             Ok(0)
         }
@@ -156,6 +157,6 @@ impl TrackLocalWriter for InterceptorToTrackLocalWriter {
 
     async fn write(&self, mut b: &[u8]) -> Result<usize> {
         let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
-        self.write_rtp(&pkt).await
+        self.write_rtp(pkt).await
     }
 }
