@@ -45,6 +45,7 @@ ring = "0.16.20"
 sha2 = "0.10.2"
 lazy_static = "1.4"
 hex = "0.4.3"
+pem = { version = "1", optional = true }
 
 # [minimal-versions]
 # fixes "the trait bound `time::Month: From<u8>` is not satisfied"
@@ -57,4 +58,4 @@ tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 env_logger = "0.9.0"
 
 [features]
-pem = ["dtls/pem"]
+pem = ["dep:pem", "dtls/pem"]

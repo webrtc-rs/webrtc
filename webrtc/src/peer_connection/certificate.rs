@@ -114,12 +114,29 @@ impl RTCCertificate {
     /// Parses a certificate from the ASCII PEM format.
     #[cfg(feature = "pem")]
     pub fn from_pem(pem_str: &str) -> Result<Self> {
-        let dtls_certificate = dtls::crypto::Certificate::from_pem(pem_str)?;
-        Ok(RTCCertificate::from_existing(
-            dtls_certificate,
-            // TODO: save expires in `pem`
-            SystemTime::now(),
-        ))
+        let mut pem_blocks = pem_str.split("\n\n");
+        let first_block = if let Some(b) = pem_blocks.next() {
+            b
+        } else {
+            return Err(Error::new("empty PEM".to_owned()));
+        };
+        let expires_pem =
+            pem::parse(first_block).map_err(|e| Error::new(format!("can't parse PEM: {}", e)))?;
+        if expires_pem.tag != "EXPIRES" {
+            return Err(Error::new("invalid PEM".to_owned()));
+        }
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&expires_pem.contents[..8]);
+        let expires = if let Some(e) = SystemTime::UNIX_EPOCH
+            .checked_add(Duration::from_nanos(u64::from_le_bytes(bytes)).into())
+        {
+            e
+        } else {
+            return Err(Error::new("failed to calculate SystemTime".to_owned()));
+        };
+        let dtls_certificate =
+            dtls::crypto::Certificate::from_pem(&pem_blocks.collect::<Vec<&str>>().join("\n\n"))?;
+        Ok(RTCCertificate::from_existing(dtls_certificate, expires))
     }
 
     /// Builds a [`RTCCertificate`] using the existing DTLS certificate.
@@ -141,7 +158,22 @@ impl RTCCertificate {
     /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
     #[cfg(feature = "pem")]
     pub fn serialize_pem(&self) -> String {
-        self.dtls_certificate.serialize_pem()
+        // Encode `expires` as a PEM block.
+        let expires_pem = pem::Pem {
+            tag: "EXPIRES".to_string(),
+            contents: self
+                .expires
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("expires to be valid")
+                .as_nanos()
+                .to_le_bytes()
+                .to_vec(),
+        };
+        format!(
+            "{}\n{}",
+            pem::encode(&expires_pem),
+            self.dtls_certificate.serialize_pem()
+        )
     }
 
     /// get_fingerprints returns a SHA-256 fingerprint of this certificate.
@@ -236,6 +268,20 @@ mod test {
         let now = SystemTime::now();
         assert!(cert.expires.duration_since(now).is_ok());
         assert!(cert.stats_id.contains("certificate"));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "pem")]
+    #[test]
+    fn test_certificate_serialize_pem_and_from_pem() -> Result<()> {
+        let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let cert = RTCCertificate::from_key_pair(kp)?;
+
+        let pem = cert.serialize_pem();
+        let loaded_cert = RTCCertificate::from_pem(&pem)?;
+
+        assert_eq!(loaded_cert, cert);
 
         Ok(())
     }

@@ -12,8 +12,6 @@ use crate::record_layer::record_layer_header::*;
 use crate::signature_hash_algorithm::{HashAlgorithm, SignatureAlgorithm, SignatureHashAlgorithm};
 
 use der_parser::{oid, oid::Oid};
-#[cfg(feature = "pem")]
-use pem::Pem;
 use rcgen::KeyPair;
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
@@ -90,12 +88,12 @@ impl Certificate {
     /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
     #[cfg(feature = "pem")]
     pub fn serialize_pem(&self) -> String {
-        let mut data = vec![Pem {
+        let mut data = vec![pem::Pem {
             tag: "PRIVATE_KEY".to_string(),
             contents: self.private_key.serialized_der.clone(),
         }];
         for rustls_cert in &self.certificate {
-            data.push(Pem {
+            data.push(pem::Pem {
                 tag: "CERTIFICATE".to_string(),
                 contents: rustls_cert.0.clone(),
             });
