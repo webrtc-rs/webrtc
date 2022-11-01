@@ -4,10 +4,11 @@
 
 * Added more stats to `RemoteInboundRTPStats` and `RemoteOutboundRTPStats` [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).
 * Don't register `video/rtx` codecs in `MediaEngine::register_default_codecs`. These weren't actually support and prevented RTX in the existing RTP stream from being used. Long term we should support RTX via this method, this is tracked in [#295](https://github.com/webrtc-rs/webrtc/issues/295). [#294 Remove video/rtx codecs](https://github.com/webrtc-rs/webrtc/pull/294) contributed by [k0nserv](https://github.com/k0nserv)
+* Add `RTCCertificate::from_pem` and `RTCCertificate::serialize_pem` (only work with `pem` feature enabled) [#333]
 
 #### Breaking changes
 
-* Removed `RTCCertificate::pem` and `RTCCertificate::from_existing` [#333]
+* Removed `RTCCertificate::pem` and `RTCCertificate::expires` [#333]
 * Do not return a result in `RTCCertificate::get_fingerprints` [#333]
 
 [#333]: https://github.com/webrtc-rs/webrtc/pull/333
