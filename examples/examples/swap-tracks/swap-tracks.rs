@@ -266,7 +266,7 @@ async fn main() -> Result<()> {
             // Keep an increasing sequence number
             packet.header.sequence_number = i;
             // Write out the packet, ignoring closed pipe if nobody is listening
-            if let Err(err) = output_track.write_rtp(&packet).await {
+            if let Err(err) = output_track.write_rtp(packet).await {
                 if Error::ErrClosedPipe == err {
                     // The peerConnection has been closed.
                     return;
