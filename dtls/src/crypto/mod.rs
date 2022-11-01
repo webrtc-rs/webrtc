@@ -12,6 +12,8 @@ use crate::record_layer::record_layer_header::*;
 use crate::signature_hash_algorithm::{HashAlgorithm, SignatureAlgorithm, SignatureHashAlgorithm};
 
 use der_parser::{oid, oid::Oid};
+#[cfg(feature = "pem")]
+use pem::Pem;
 use rcgen::KeyPair;
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
@@ -57,6 +59,48 @@ impl Certificate {
             certificate: vec![rustls::Certificate(cert.serialize_der()?)],
             private_key: CryptoPrivateKey::try_from(key_pair)?,
         })
+    }
+
+    /// Parses a certificate from the ASCII PEM format.
+    #[cfg(feature = "pem")]
+    pub fn from_pem(pem_str: &str) -> Result<Self> {
+        let mut pems = pem::parse_many(pem_str)
+            .map_err(|e| Error::Other(format!("can't parse certificate's PEM: {}", e)))?;
+        if pems.len() < 2 || pems[0].tag != "PRIVATE_KEY" {
+            return Err(Error::Other("invalid PEM".into()));
+        }
+
+        let keypair = rcgen::KeyPair::from_der(&pems[0].contents)
+            .map_err(|e| Error::Other(format!("can't decode keypair: {}", e)))?;
+
+        let mut rustls_certs = Vec::new();
+        for p in pems.drain(1..) {
+            if p.tag != "CERTIFICATE" {
+                return Err(Error::Other("invalid PEM".into()));
+            }
+            rustls_certs.push(rustls::Certificate(p.contents));
+        }
+
+        Ok(Certificate {
+            certificate: rustls_certs,
+            private_key: CryptoPrivateKey::try_from(&keypair)?,
+        })
+    }
+
+    /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
+    #[cfg(feature = "pem")]
+    pub fn serialize_pem(&self) -> String {
+        let mut data = vec![Pem {
+            tag: "PRIVATE_KEY".to_string(),
+            contents: self.private_key.serialized_der.clone(),
+        }];
+        for rustls_cert in &self.certificate {
+            data.push(Pem {
+                tag: "CERTIFICATE".to_string(),
+                contents: rustls_cert.0.clone(),
+            });
+        }
+        pem::encode_many(&data)
     }
 }
 
@@ -447,4 +491,22 @@ pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: 
     additional_data[11..].copy_from_slice(&(payload_len as u16).to_be_bytes());
 
     additional_data
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[cfg(feature = "pem")]
+    #[test]
+    fn test_certificate_serialize_pem_and_from_pem() -> Result<()> {
+        let cert = Certificate::generate_self_signed(vec!["webrtc.rs".to_owned()])?;
+
+        let pem = cert.serialize_pem();
+        let loaded_cert = Certificate::from_pem(&pem)?;
+
+        assert_eq!(loaded_cert, cert);
+
+        Ok(())
+    }
 }
