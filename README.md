@@ -58,7 +58,7 @@
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-  - [Toolchain](#toolchain)
+  - [Toolchain(MSRV)](#toolchain)
   - [Monorepo Setup](#monorepo-setup)
   - [Testing with Local Dependencies](#testing-with-local-dependencies)
 - [Open Source License](#open-source-license) 
@@ -108,7 +108,11 @@ This project is still in active and early development stage, please refer to the
 
 ### Toolchain
 
-webrtc-rs currently requires Rust 1.57.0+ to build.
+**Minimum Supported Rust Version:** `1.60.0`
+
+Our minimum supported rust version(MSRV) policy is to support versions of the compiler released within the last six months. We don't eagerly bump the minimum version we support, instead the minimum will be bumped on a needed by needed basis, usually because downstream dependencies force us to.
+
+**Note:** Changes to the minimum supported version are not consider breaking from a [semver](https://semver.org/) perspective.
 
 ### Monorepo Setup
 

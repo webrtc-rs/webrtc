@@ -8,7 +8,7 @@ use crate::*;
 use receiver_stream::ReceiverStream;
 
 use rtp::extension::transport_cc_extension::TransportCcExtension;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::MissedTickBehavior;
 use util::Unmarshal;
@@ -44,7 +44,7 @@ impl InterceptorBuilder for ReceiverBuilder {
                 streams: Mutex::new(HashMap::new()),
                 close_rx: Mutex::new(Some(close_rx)),
             }),
-            start_time: SystemTime::now(),
+            start_time: tokio::time::Instant::now(),
             packet_chan_tx,
             wg: Mutex::new(Some(WaitGroup::new())),
             close_tx: Mutex::new(Some(close_tx)),
@@ -72,7 +72,8 @@ struct ReceiverInternal {
 pub struct Receiver {
     internal: Arc<ReceiverInternal>,
 
-    start_time: SystemTime,
+    // we use tokio's Instant because it makes testing easier via `tokio::time::advance`.
+    start_time: tokio::time::Instant,
     packet_chan_tx: mpsc::Sender<Packet>,
 
     wg: Mutex<Option<WaitGroup>>,
@@ -131,6 +132,10 @@ impl Receiver {
                         let mut recorder = internal.recorder.lock().await;
                         recorder.build_feedback_packet()
                     };
+
+                    if pkts.is_empty() {
+                        continue;
+                    }
 
                     if let Err(err) = rtcp_writer.write(&pkts, &a).await{
                         log::error!("rtcp_writer.write got err: {}", err);
