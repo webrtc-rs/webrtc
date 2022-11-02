@@ -10,6 +10,7 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
 * Add support for a mime type "audio/telephone-event" (rfc4733) [#322](https://github.com/webrtc-rs/webrtc/pull/322)
 * Fixed a panic that would sometimes happen when collecting stats. [#327](https://github.com/webrtc-rs/webrtc/pull/327) by [@k0nserv](https://github.com/k0nserv).
 * Added new extension marshaller/unmarshaller for VideoOrientation, and made marshallers serializable via serde [#331](https://github.com/webrtc-rs/webrtc/pull/331) [#332](https://github.com/webrtc-rs/webrtc/pull/332)
+* Updated minimum rust version to `1.60.0`
 
 
 #### Breaking changes

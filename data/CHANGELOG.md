@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Increased minimum support rust version to `1.60.0`.
+
 ## 0.5.0
 
 * [#16 [PollDataChannel] reset shutdown_fut future after done](https://github.com/webrtc-rs/data/pull/16) by [@melekes](https://github.com/melekes).

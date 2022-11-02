@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Increased minimum support rust version to `1.60.0`.
+
 ## v0.7.0
 
 * [#14 Prevent crash in RTCP NACK writing](https://github.com/webrtc-rs/rtcp/pull/14) by [@pthatcher](https://github.com/pthatcher).
