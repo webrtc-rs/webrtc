@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 
 use crate::error::flatten_errs;
@@ -59,18 +61,37 @@ impl TrackLocalStaticRTP {
     /// `extensions`.
     pub async fn write_rtp_with_extensions(
         &self,
-        p: rtp::packet::Packet,
+        p: &rtp::packet::Packet,
         extensions: &[rtp::extension::HeaderExtension],
     ) -> Result<usize> {
         let mut n = 0;
         let mut write_errs = vec![];
+        let mut pkt = p.clone();
 
         let bindings = {
             let bindings = self.bindings.lock().await;
             bindings.clone()
         };
-        let packet_iterator = RepeatNIterator::new(p, bindings.len());
-        for (b, mut pkt) in bindings.into_iter().zip(packet_iterator) {
+        // Prepare the extensions data
+        let extension_data: HashMap<_, _> = extensions
+            .into_iter()
+            .flat_map(|extension| {
+                let buf = {
+                    let mut buf = BytesMut::with_capacity(extension.marshal_size());
+                    buf.resize(extension.marshal_size(), 0);
+                    if let Err(err) = extension.marshal_to(&mut buf) {
+                        write_errs.push(Error::Util(err));
+                        return None;
+                    }
+
+                    buf.freeze()
+                };
+
+                Some((extension.uri(), buf))
+            })
+            .collect();
+
+        for b in bindings.into_iter() {
             if b.is_sender_paused() {
                 // See caveat in function doc.
                 continue;
@@ -78,26 +99,15 @@ impl TrackLocalStaticRTP {
             pkt.header.ssrc = b.ssrc;
             pkt.header.payload_type = b.payload_type;
 
-            for extension in extensions {
+            for (uri, data) in extension_data.iter() {
                 if let Some(id) = b
                     .params
                     .header_extensions
                     .iter()
-                    .find(|ext| ext.uri == extension.uri())
+                    .find(|ext| &ext.uri == uri)
                     .map(|ext| ext.id)
                 {
-                    let buf = {
-                        let mut buf = BytesMut::with_capacity(extension.marshal_size());
-                        buf.resize(extension.marshal_size(), 0);
-                        if let Err(err) = extension.marshal_to(&mut buf) {
-                            write_errs.push(Error::Util(err));
-                            continue;
-                        }
-
-                        buf.freeze()
-                    };
-
-                    if let Err(err) = pkt.header.set_extension(id as u8, buf) {
+                    if let Err(err) = pkt.header.set_extension(id as u8, data.clone()) {
                         write_errs.push(Error::Rtp(err));
                         continue;
                     }
@@ -105,7 +115,7 @@ impl TrackLocalStaticRTP {
             }
 
             if let Some(write_stream) = &b.write_stream {
-                match write_stream.write_rtp(pkt).await {
+                match write_stream.write_rtp(&pkt).await {
                     Ok(m) => {
                         n += m;
                     }
@@ -212,8 +222,7 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// function are blocked internally. Care must be taken to not increase the sequence number
     /// while the sender is paused. While the actual _sending_ is blocked, the receiver will
     /// miss out when the sequence number "rolls over", which in turn will break SRTP.
-    async fn write_rtp(&self, p: rtp::packet::Packet) -> Result<usize> {
-        let p = p.clone();
+    async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize> {
         self.write_rtp_with_extensions(p, &[]).await
     }
 
@@ -223,45 +232,7 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// PeerConnections so you can remove them
     async fn write(&self, mut b: &[u8]) -> Result<usize> {
         let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
-        self.write_rtp(pkt).await?;
+        self.write_rtp(&pkt).await?;
         Ok(b.len())
-    }
-}
-
-struct RepeatNIterator<T> {
-    item: Option<T>,
-    repeats_left: usize,
-}
-
-impl<T: Clone> RepeatNIterator<T> {
-    fn new(item: T, n: usize) -> Self {
-        Self {
-            item: Some(item),
-            repeats_left: n,
-        }
-    }
-}
-
-impl<T: Clone> Iterator for RepeatNIterator<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.repeats_left {
-            0 => None,
-            1 => {
-                self.repeats_left = self.repeats_left.saturating_sub(1);
-
-                self.item.take()
-            }
-            _ => {
-                self.repeats_left = self.repeats_left.saturating_sub(1);
-
-                self.item.clone()
-            }
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.repeats_left, Some(self.repeats_left))
     }
 }

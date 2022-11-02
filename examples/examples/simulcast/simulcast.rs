@@ -201,7 +201,7 @@ async fn main() -> Result<()> {
                         // Read RTP packets being sent to webrtc-rs
                         println!("enter track loop {}", track.rid());
                         while let Ok((rtp, _)) = track.read_rtp().await {
-                            if let Err(err) = output_track.write_rtp(rtp).await {
+                            if let Err(err) = output_track.write_rtp(&rtp).await {
                                 if Error::ErrClosedPipe != err {
                                     println!("output track write_rtp got error: {} and break", err);
                                     break;

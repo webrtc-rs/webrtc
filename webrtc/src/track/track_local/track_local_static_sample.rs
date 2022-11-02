@@ -122,7 +122,7 @@ impl TrackLocalStaticSample {
         for p in packets {
             if let Err(err) = self
                 .rtp_track
-                .write_rtp_with_extensions(p, extensions)
+                .write_rtp_with_extensions(&p, extensions)
                 .await
             {
                 write_errs.push(err);

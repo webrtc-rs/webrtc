@@ -338,7 +338,7 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
         ..Default::default()
     };
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
-        v.write_rtp(pkt.clone()).await?;
+        v.write_rtp(&pkt).await?;
     } else {
         assert!(false);
     }
