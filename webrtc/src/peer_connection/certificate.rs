@@ -131,7 +131,7 @@ impl RTCCertificate {
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(&expires_pem.contents[..8]);
         let expires = if let Some(e) = SystemTime::UNIX_EPOCH
-            .checked_add(Duration::from_nanos(u64::from_le_bytes(bytes)).into())
+            .checked_add(Duration::from_secs(u64::from_le_bytes(bytes)).into())
         {
             e
         } else {
@@ -162,13 +162,15 @@ impl RTCCertificate {
     #[cfg(feature = "pem")]
     pub fn serialize_pem(&self) -> String {
         // Encode `expires` as a PEM block.
+        //
+        // TODO: serialize as nanos when https://github.com/rust-lang/rust/issues/103332 is fixed.
         let expires_pem = pem::Pem {
             tag: "EXPIRES".to_string(),
             contents: self
                 .expires
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .expect("expires to be valid")
-                .as_nanos()
+                .as_secs()
                 .to_le_bytes()
                 .to_vec(),
         };
