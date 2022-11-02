@@ -74,7 +74,7 @@ impl TrackLocalStaticRTP {
         };
         // Prepare the extensions data
         let extension_data: HashMap<_, _> = extensions
-            .into_iter()
+            .iter()
             .flat_map(|extension| {
                 let buf = {
                     let mut buf = BytesMut::with_capacity(extension.marshal_size());

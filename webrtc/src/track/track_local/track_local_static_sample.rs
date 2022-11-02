@@ -131,6 +131,10 @@ impl TrackLocalStaticSample {
 
         flatten_errs(write_errs)
     }
+
+    pub fn sample_writer(&self) -> SampleWriter<'_> {
+        SampleWriter::new(self)
+    }
 }
 
 #[async_trait]
@@ -192,3 +196,50 @@ impl TrackLocal for TrackLocalStaticSample {
         self
     }
 }
+
+mod sample_writer {
+    use super::TrackLocalStaticSample;
+    use crate::error::Result;
+    use media::Sample;
+    use rtp::extension::audio_level_extension::AudioLevelExtension;
+    use rtp::extension::video_orientation_extension::VideoOrientationExtension;
+    use rtp::extension::HeaderExtension;
+
+    pub struct SampleWriter<'track> {
+        track: &'track TrackLocalStaticSample,
+        extensions: Vec<HeaderExtension>,
+    }
+
+    impl<'track> SampleWriter<'track> {
+        pub(super) fn new(track: &'track TrackLocalStaticSample) -> Self {
+            Self {
+                track,
+                extensions: vec![],
+            }
+        }
+
+        pub fn with_audio_level(self, ext: AudioLevelExtension) -> Self {
+            self.with_extension(HeaderExtension::AudioLevel(ext))
+        }
+
+        pub fn with_video_orientation(self, ext: VideoOrientationExtension) -> Self {
+            self.with_extension(HeaderExtension::VideoOrientation(ext))
+        }
+
+        pub fn with_extension(mut self, ext: HeaderExtension) -> Self {
+            self.extensions.retain(|e| !e.is_same(&ext));
+
+            self.extensions.push(ext);
+
+            self
+        }
+
+        pub async fn write_sample(self, sample: &Sample) -> Result<()> {
+            self.track
+                .write_sample_with_extensions(sample, &self.extensions)
+                .await
+        }
+    }
+}
+
+pub use sample_writer::SampleWriter;

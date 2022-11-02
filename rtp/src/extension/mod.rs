@@ -36,6 +36,18 @@ impl HeaderExtension {
             Custom { uri, .. } => uri.clone(),
         }
     }
+
+    pub fn is_same(&self, other: &Self) -> bool {
+        use HeaderExtension::*;
+        match (self, other) {
+            (AbsSendTime(_), AbsSendTime(_)) => true,
+            (AudioLevel(_), AudioLevel(_)) => true,
+            (TransportCc(_), TransportCc(_)) => true,
+            (VideoOrientation(_), VideoOrientation(_)) => true,
+            (Custom { uri, .. }, Custom { uri: other_uri, .. }) => uri == other_uri,
+            _ => false,
+        }
+    }
 }
 
 impl MarshalSize for HeaderExtension {
