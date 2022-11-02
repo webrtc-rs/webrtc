@@ -62,19 +62,27 @@ impl Certificate {
     /// Parses a certificate from the ASCII PEM format.
     #[cfg(feature = "pem")]
     pub fn from_pem(pem_str: &str) -> Result<Self> {
-        let mut pems = pem::parse_many(pem_str)
-            .map_err(|e| Error::Other(format!("can't parse certificate's PEM: {}", e)))?;
-        if pems.len() < 2 || pems[0].tag != "PRIVATE_KEY" {
-            return Err(Error::Other("invalid PEM".into()));
+        let mut pems = pem::parse_many(pem_str).map_err(|e| Error::InvalidPEM(e.to_string()))?;
+        if pems.len() < 2 {
+            return Err(Error::InvalidPEM("not enough PEM blocks".into()));
+        }
+        if pems[0].tag != "PRIVATE_KEY" {
+            return Err(Error::InvalidPEM(format!(
+                "invalid tag (expected: 'PRIVATE_KEY', got: '{}')",
+                pems[0].tag
+            )));
         }
 
         let keypair = rcgen::KeyPair::from_der(&pems[0].contents)
-            .map_err(|e| Error::Other(format!("can't decode keypair: {}", e)))?;
+            .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {}", e)))?;
 
         let mut rustls_certs = Vec::new();
         for p in pems.drain(1..) {
             if p.tag != "CERTIFICATE" {
-                return Err(Error::Other("invalid PEM".into()));
+                return Err(Error::InvalidPEM(format!(
+                    "invalid tag (expected: 'CERTIFICATE', got: '{}')",
+                    p.tag
+                )));
             }
             rustls_certs.push(rustls::Certificate(p.contents));
         }

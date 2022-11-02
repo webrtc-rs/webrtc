@@ -118,12 +118,15 @@ impl RTCCertificate {
         let first_block = if let Some(b) = pem_blocks.next() {
             b
         } else {
-            return Err(Error::new("empty PEM".to_owned()));
+            return Err(Error::InvalidPEM("empty PEM".into()));
         };
         let expires_pem =
             pem::parse(first_block).map_err(|e| Error::new(format!("can't parse PEM: {}", e)))?;
         if expires_pem.tag != "EXPIRES" {
-            return Err(Error::new("invalid PEM".to_owned()));
+            return Err(Error::InvalidPEM(format!(
+                "invalid tag (expected: 'EXPIRES', got '{}')",
+                expires_pem.tag
+            )));
         }
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(&expires_pem.contents[..8]);
@@ -132,7 +135,7 @@ impl RTCCertificate {
         {
             e
         } else {
-            return Err(Error::new("failed to calculate SystemTime".to_owned()));
+            return Err(Error::InvalidPEM("failed to calculate SystemTime".into()));
         };
         let dtls_certificate =
             dtls::crypto::Certificate::from_pem(&pem_blocks.collect::<Vec<&str>>().join("\n\n"))?;
