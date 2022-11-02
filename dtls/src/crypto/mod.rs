@@ -64,7 +64,10 @@ impl Certificate {
     pub fn from_pem(pem_str: &str) -> Result<Self> {
         let mut pems = pem::parse_many(pem_str).map_err(|e| Error::InvalidPEM(e.to_string()))?;
         if pems.len() < 2 {
-            return Err(Error::InvalidPEM("not enough PEM blocks".into()));
+            return Err(Error::InvalidPEM(format!(
+                "expected at least two PEM blocks, got {}",
+                pems.len()
+            )));
         }
         if pems[0].tag != "PRIVATE_KEY" {
             return Err(Error::InvalidPEM(format!(

@@ -8,8 +8,8 @@
 
 #### Breaking changes
 
-* Removed `RTCCertificate::pem` and `RTCCertificate::expires` [#333]
-* Do not return a result in `RTCCertificate::get_fingerprints` [#333]
+* Removed `RTCCertificate::pem` and `RTCCertificate::expires` methods [#333]
+* `RTCCertificate::get_fingerprints` no longer returns `Result` [#333]
 
 [#333]: https://github.com/webrtc-rs/webrtc/pull/333
 
