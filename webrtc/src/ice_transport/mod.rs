@@ -1,3 +1,4 @@
+use arc_swap::ArcSwapOption;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -65,9 +66,9 @@ struct ICETransportInternal {
 #[derive(Default)]
 pub struct RTCIceTransport {
     pub(crate) gatherer: Arc<RTCIceGatherer>,
-    on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
+    on_connection_state_change_handler: Arc<ArcSwapOption<Mutex<OnConnectionStateChangeHdlrFn>>>,
     on_selected_candidate_pair_change_handler:
-        Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
+        Arc<ArcSwapOption<Mutex<OnSelectedCandidatePairChangeHdlrFn>>>,
     state: Arc<AtomicU8>, // ICETransportState
     internal: Mutex<ICETransportInternal>,
 }
@@ -84,9 +85,9 @@ impl RTCIceTransport {
 
     /// get_selected_candidate_pair returns the selected candidate pair on which packets are sent
     /// if there is no selected pair nil is returned
-    pub async fn get_selected_candidate_pair(&self) -> Option<RTCIceCandidatePair> {
-        if let Some(agent) = self.gatherer.get_agent().await {
-            if let Some(ice_pair) = agent.get_selected_candidate_pair().await {
+    pub fn get_selected_candidate_pair(&self) -> Option<RTCIceCandidatePair> {
+        if let Some(agent) = self.gatherer.get_agent() {
+            if let Some(ice_pair) = agent.get_selected_candidate_pair() {
                 let local = RTCIceCandidate::from(&ice_pair.local);
                 let remote = RTCIceCandidate::from(&ice_pair.remote);
                 return Some(RTCIceCandidatePair::new(local, remote));
@@ -103,46 +104,43 @@ impl RTCIceTransport {
 
         self.ensure_gatherer().await?;
 
-        if let Some(agent) = self.gatherer.get_agent().await {
+        if let Some(agent) = self.gatherer.get_agent() {
             let state = Arc::clone(&self.state);
 
             let on_connection_state_change_handler =
                 Arc::clone(&self.on_connection_state_change_handler);
-            agent
-                .on_connection_state_change(Box::new(move |ice_state: ConnectionState| {
-                    let s = RTCIceTransportState::from(ice_state);
-                    let on_connection_state_change_handler_clone =
-                        Arc::clone(&on_connection_state_change_handler);
-                    state.store(s as u8, Ordering::SeqCst);
-                    Box::pin(async move {
-                        let mut handler = on_connection_state_change_handler_clone.lock().await;
-                        if let Some(f) = &mut *handler {
-                            f(s).await;
-                        }
-                    })
-                }))
-                .await;
+            agent.on_connection_state_change(Box::new(move |ice_state: ConnectionState| {
+                let s = RTCIceTransportState::from(ice_state);
+                let on_connection_state_change_handler_clone =
+                    Arc::clone(&on_connection_state_change_handler);
+                state.store(s as u8, Ordering::SeqCst);
+                Box::pin(async move {
+                    if let Some(hndlr) = &*on_connection_state_change_handler_clone.load() {
+                        let mut f = hndlr.lock().await;
+                        f(s).await;
+                    }
+                })
+            }));
 
             let on_selected_candidate_pair_change_handler =
                 Arc::clone(&self.on_selected_candidate_pair_change_handler);
-            agent
-                .on_selected_candidate_pair_change(Box::new(
-                    move |local: &Arc<dyn Candidate + Send + Sync>,
-                          remote: &Arc<dyn Candidate + Send + Sync>| {
-                        let on_selected_candidate_pair_change_handler_clone =
-                            Arc::clone(&on_selected_candidate_pair_change_handler);
-                        let local = RTCIceCandidate::from(local);
-                        let remote = RTCIceCandidate::from(remote);
-                        Box::pin(async move {
-                            let mut handler =
-                                on_selected_candidate_pair_change_handler_clone.lock().await;
-                            if let Some(f) = &mut *handler {
-                                f(RTCIceCandidatePair::new(local, remote)).await;
-                            }
-                        })
-                    },
-                ))
-                .await;
+            agent.on_selected_candidate_pair_change(Box::new(
+                move |local: &Arc<dyn Candidate + Send + Sync>,
+                      remote: &Arc<dyn Candidate + Send + Sync>| {
+                    let on_selected_candidate_pair_change_handler_clone =
+                        Arc::clone(&on_selected_candidate_pair_change_handler);
+                    let local = RTCIceCandidate::from(local);
+                    let remote = RTCIceCandidate::from(remote);
+                    Box::pin(async move {
+                        if let Some(hndlr) =
+                            &*on_selected_candidate_pair_change_handler_clone.load()
+                        {
+                            let mut f = hndlr.lock().await;
+                            f(RTCIceCandidatePair::new(local, remote)).await;
+                        }
+                    })
+                },
+            ));
 
             let role = if let Some(role) = role {
                 role
@@ -201,7 +199,7 @@ impl RTCIceTransport {
     /// restart is not exposed currently because ORTC has users create a whole new ICETransport
     /// so for now lets keep it private so we don't cause ORTC users to depend on non-standard APIs
     pub(crate) async fn restart(&self) -> Result<()> {
-        if let Some(agent) = self.gatherer.get_agent().await {
+        if let Some(agent) = self.gatherer.get_agent() {
             agent
                 .restart(
                     self.gatherer
@@ -245,18 +243,16 @@ impl RTCIceTransport {
 
     /// on_selected_candidate_pair_change sets a handler that is invoked when a new
     /// ICE candidate pair is selected
-    pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
-        let mut on_selected_candidate_pair_change_handler =
-            self.on_selected_candidate_pair_change_handler.lock().await;
-        *on_selected_candidate_pair_change_handler = Some(f);
+    pub fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
+        self.on_selected_candidate_pair_change_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_connection_state_change sets a handler that is fired when the ICE
     /// connection state changes.
-    pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
-        let mut on_connection_state_change_handler =
-            self.on_connection_state_change_handler.lock().await;
-        *on_connection_state_change_handler = Some(f);
+    pub fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
+        self.on_connection_state_change_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// Role indicates the current role of the ICE transport.
@@ -269,10 +265,10 @@ impl RTCIceTransport {
     pub async fn set_remote_candidates(&self, remote_candidates: &[RTCIceCandidate]) -> Result<()> {
         self.ensure_gatherer().await?;
 
-        if let Some(agent) = self.gatherer.get_agent().await {
+        if let Some(agent) = self.gatherer.get_agent() {
             for rc in remote_candidates {
-                let c: Arc<dyn Candidate + Send + Sync> = Arc::new(rc.to_ice().await?);
-                agent.add_remote_candidate(&c).await?;
+                let c: Arc<dyn Candidate + Send + Sync> = Arc::new(rc.to_ice()?);
+                agent.add_remote_candidate(&c)?;
             }
             Ok(())
         } else {
@@ -287,10 +283,10 @@ impl RTCIceTransport {
     ) -> Result<()> {
         self.ensure_gatherer().await?;
 
-        if let Some(agent) = self.gatherer.get_agent().await {
+        if let Some(agent) = self.gatherer.get_agent() {
             if let Some(r) = remote_candidate {
-                let c: Arc<dyn Candidate + Send + Sync> = Arc::new(r.to_ice().await?);
-                agent.add_remote_candidate(&c).await?;
+                let c: Arc<dyn Candidate + Send + Sync> = Arc::new(r.to_ice()?);
+                agent.add_remote_candidate(&c)?;
             }
 
             Ok(())
@@ -318,7 +314,7 @@ impl RTCIceTransport {
     }
 
     pub(crate) async fn ensure_gatherer(&self) -> Result<()> {
-        if self.gatherer.get_agent().await.is_none() {
+        if self.gatherer.get_agent().is_none() {
             self.gatherer.create_agent().await
         } else {
             Ok(())
@@ -326,8 +322,8 @@ impl RTCIceTransport {
     }
 
     pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
-        if let Some(agent) = self.gatherer.get_agent().await {
-            let stats = ICETransportStats::new("ice_transport".to_string(), agent).await;
+        if let Some(agent) = self.gatherer.get_agent() {
+            let stats = ICETransportStats::new("ice_transport".to_string(), agent);
 
             collector.insert("ice_transport".to_string(), Transport(stats));
         }
@@ -338,7 +334,7 @@ impl RTCIceTransport {
         new_ufrag: &str,
         new_pwd: &str,
     ) -> bool {
-        if let Some(agent) = self.gatherer.get_agent().await {
+        if let Some(agent) = self.gatherer.get_agent() {
             let (ufrag, upwd) = agent.get_remote_user_credentials().await;
             ufrag != new_ufrag || upwd != new_pwd
         } else {
@@ -351,7 +347,7 @@ impl RTCIceTransport {
         new_ufrag: String,
         new_pwd: String,
     ) -> Result<()> {
-        if let Some(agent) = self.gatherer.get_agent().await {
+        if let Some(agent) = self.gatherer.get_agent() {
             Ok(agent.set_remote_credentials(new_ufrag, new_pwd).await?)
         } else {
             Err(Error::ErrICEAgentNotExist)

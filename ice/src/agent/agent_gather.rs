@@ -192,7 +192,7 @@ impl Agent {
     }
 
     async fn gather_candidates_local(params: GatherCandidatesLocalParams) {
-        let (
+        let GatherCandidatesLocalParams {
             udp_network,
             network_types,
             mdns_mode,
@@ -202,17 +202,7 @@ impl Agent {
             ext_ip_mapper,
             net,
             agent_internal,
-        ) = (
-            params.udp_network,
-            params.network_types,
-            params.mdns_mode,
-            params.mdns_name,
-            params.interface_filter,
-            params.ip_filter,
-            params.ext_ip_mapper,
-            params.net,
-            params.agent_internal,
-        );
+        } = params;
 
         // If we wanna use UDP mux, do so
         // FIXME: We still need to support TCP in combination with this option
@@ -303,7 +293,7 @@ impl Agent {
                     }
                 };
 
-                let port = match conn.local_addr().await {
+                let port = match conn.local_addr() {
                     Ok(addr) => addr.port(),
                     Err(err) => {
                         log::warn!(
@@ -328,10 +318,10 @@ impl Agent {
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> =
-                    match host_config.new_candidate_host().await {
+                    match host_config.new_candidate_host() {
                         Ok(candidate) => {
                             if mdns_mode == MulticastDnsMode::QueryAndGather {
-                                if let Err(err) = candidate.set_ip(&ip).await {
+                                if let Err(err) = candidate.set_ip(&ip) {
                                     log::warn!(
                                         "[{}]: Failed to create host candidate: {} {} {}: {:?}",
                                         agent_internal.get_name(),
@@ -381,23 +371,16 @@ impl Agent {
     async fn gather_candidates_local_udp_mux(
         params: GatherCandidatesLocalUDPMuxParams,
     ) -> Result<()> {
-        let (
-            udp_mux,
-            agent_internal,
+        let GatherCandidatesLocalUDPMuxParams {
+            network_types,
             interface_filter,
             ip_filter,
             ext_ip_mapper,
             net,
-            network_types,
-        ) = (
-            params.udp_mux,
-            params.agent_internal,
-            params.interface_filter,
-            params.ip_filter,
-            params.ext_ip_mapper,
-            params.net,
-            params.network_types,
-        );
+            agent_internal,
+            udp_mux,
+        } = params;
+
         // Filter out non UDP network types
         let relevant_network_types: Vec<_> =
             network_types.into_iter().filter(|n| n.is_udp()).collect();
@@ -444,7 +427,7 @@ impl Agent {
         };
 
         let conn = udp_mux.get_conn(&ufrag).await?;
-        let port = conn.local_addr().await?.port();
+        let port = conn.local_addr()?.port();
 
         let host_config = CandidateHostConfig {
             base_config: CandidateBaseConfig {
@@ -459,7 +442,7 @@ impl Agent {
         };
 
         let candidate: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(host_config.new_candidate_host().await?);
+            Arc::new(host_config.new_candidate_host()?);
 
         agent_internal.add_candidate(&candidate).await?;
 
@@ -467,14 +450,14 @@ impl Agent {
     }
 
     async fn gather_candidates_srflx_mapped(params: GatherCandidatesSrflxMappedParasm) {
-        let (network_types, port_max, port_min, ext_ip_mapper, net, agent_internal) = (
-            params.network_types,
-            params.port_max,
-            params.port_min,
-            params.ext_ip_mapper,
-            params.net,
-            params.agent_internal,
-        );
+        let GatherCandidatesSrflxMappedParasm {
+            network_types,
+            port_max,
+            port_min,
+            ext_ip_mapper,
+            net,
+            agent_internal,
+        } = params;
 
         let wg = WaitGroup::new();
 
@@ -516,7 +499,7 @@ impl Agent {
                     }
                 };
 
-                let laddr = conn.local_addr().await?;
+                let laddr = conn.local_addr()?;
                 let mapped_ip = {
                     if let Some(ext_ip_mapper3) = &*ext_ip_mapper2 {
                         match ext_ip_mapper3.find_external_ip(&laddr.ip().to_string()) {
@@ -554,7 +537,7 @@ impl Agent {
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> =
-                    match srflx_config.new_candidate_server_reflexive().await {
+                    match srflx_config.new_candidate_server_reflexive() {
                         Ok(candidate) => Arc::new(candidate),
                         Err(err) => {
                             log::warn!(
@@ -594,14 +577,14 @@ impl Agent {
     }
 
     async fn gather_candidates_srflx(params: GatherCandidatesSrflxParams) {
-        let (urls, network_types, port_max, port_min, net, agent_internal) = (
-            params.urls,
-            params.network_types,
-            params.port_max,
-            params.port_min,
-            params.net,
-            params.agent_internal,
-        );
+        let GatherCandidatesSrflxParams {
+            urls,
+            network_types,
+            port_max,
+            port_min,
+            net,
+            agent_internal,
+        } = params;
 
         let wg = WaitGroup::new();
         for network_type in network_types {
@@ -675,7 +658,7 @@ impl Agent {
 
                     let (ip, port) = (xoraddr.ip, xoraddr.port);
 
-                    let laddr = conn.local_addr().await?;
+                    let laddr = conn.local_addr()?;
                     let srflx_config = CandidateServerReflexiveConfig {
                         base_config: CandidateBaseConfig {
                             network: network.clone(),
@@ -690,7 +673,7 @@ impl Agent {
                     };
 
                     let candidate: Arc<dyn Candidate + Send + Sync> =
-                        match srflx_config.new_candidate_server_reflexive().await {
+                        match srflx_config.new_candidate_server_reflexive() {
                             Ok(candidate) => Arc::new(candidate),
                             Err(err) => {
                                 log::warn!(
@@ -782,7 +765,7 @@ impl Agent {
                             }
                         };
 
-                        let local_addr = loc_conn.local_addr().await?;
+                        let local_addr = loc_conn.local_addr()?;
                         let rel_addr = local_addr.ip().to_string();
                         let rel_port = local_addr.port();
                         (loc_conn, rel_addr, rel_port)
@@ -847,7 +830,7 @@ impl Agent {
                     }
                 };
 
-                let raddr = relay_conn.local_addr().await?;
+                let raddr = relay_conn.local_addr()?;
                 let relay_config = CandidateRelayConfig {
                     base_config: CandidateBaseConfig {
                         network: network.clone(),
@@ -863,7 +846,7 @@ impl Agent {
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> =
-                    match relay_config.new_candidate_relay().await {
+                    match relay_config.new_candidate_relay() {
                         Ok(candidate) => Arc::new(candidate),
                         Err(err) => {
                             let _ = client.close().await;

@@ -111,62 +111,57 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {}", s);
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Register data channel creation handling
-    peer_connection
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            let d_label = d.label().to_owned();
-            let d_id = d.id();
-            println!("New DataChannel {} {}", d_label, d_id);
+    peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        let d_label = d.label().to_owned();
+        let d_id = d.id();
+        println!("New DataChannel {} {}", d_label, d_id);
 
-            // Register channel opening handling
-            Box::pin(async move {
-                let d2 = Arc::clone(&d);
-                let d_label2 = d_label.clone();
-                let d_id2 = d_id;
-                d.on_open(Box::new(move || {
-                    println!("Data channel '{}'-'{}' open.", d_label2, d_id2);
+        // Register channel opening handling
+        Box::pin(async move {
+            let d2 = Arc::clone(&d);
+            let d_label2 = d_label.clone();
+            let d_id2 = d_id;
+            d.on_open(Box::new(move || {
+                println!("Data channel '{}'-'{}' open.", d_label2, d_id2);
 
-                    Box::pin(async move {
-                        let raw = match d2.detach().await {
-                            Ok(raw) => raw,
-                            Err(err) => {
-                                println!("data channel detach got err: {}", err);
-                                return;
-                            }
-                        };
+                Box::pin(async move {
+                    let raw = match d2.detach().await {
+                        Ok(raw) => raw,
+                        Err(err) => {
+                            println!("data channel detach got err: {}", err);
+                            return;
+                        }
+                    };
 
-                        // Handle reading from the data channel
-                        let r = Arc::clone(&raw);
-                        tokio::spawn(async move {
-                            let _ = read_loop(r).await;
-                        });
+                    // Handle reading from the data channel
+                    let r = Arc::clone(&raw);
+                    tokio::spawn(async move {
+                        let _ = read_loop(r).await;
+                    });
 
-                        // Handle writing to the data channel
-                        tokio::spawn(async move {
-                            let _ = write_loop(raw).await;
-                        });
-                    })
-                }))
-                .await;
-            })
-        }))
-        .await;
+                    // Handle writing to the data channel
+                    tokio::spawn(async move {
+                        let _ = write_loop(raw).await;
+                    });
+                })
+            }));
+        })
+    }));
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;

@@ -101,21 +101,19 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {}", s);
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Register channel opening handling
     let d1 = Arc::clone(&data_channel);
@@ -138,17 +136,15 @@ async fn main() -> Result<()> {
                 };
             }
         })
-    })).await;
+    }));
 
     // Register text message handling
     let d_label = data_channel.label().to_owned();
-    data_channel
-        .on_message(Box::new(move |msg: DataChannelMessage| {
-            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-            println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
-            Box::pin(async {})
-        }))
-        .await;
+    data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
+        let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+        println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+        Box::pin(async {})
+    }));
 
     // Create an offer to send to the browser
     let offer = peer_connection.create_offer(None).await?;

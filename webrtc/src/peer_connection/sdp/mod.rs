@@ -269,7 +269,7 @@ pub(crate) async fn add_candidates_to_media_descriptions(
     };
 
     for c in candidates {
-        let candidate = c.to_ice().await?;
+        let candidate = c.to_ice()?;
 
         candidate.set_component(1);
         m = append_candidate_if_new(&candidate, m);
@@ -810,8 +810,7 @@ pub(crate) async fn extract_ice_details(
         for a in &m.attributes {
             if a.is_ice_candidate() {
                 if let Some(value) = &a.value {
-                    let c: Arc<dyn Candidate + Send + Sync> =
-                        Arc::new(unmarshal_candidate(value).await?);
+                    let c: Arc<dyn Candidate + Send + Sync> = Arc::new(unmarshal_candidate(value)?);
                     let candidate = RTCIceCandidate::from(&c);
                     candidates.push(candidate);
                 }

@@ -289,11 +289,11 @@ impl Conn for UDPMuxConn {
         self.inner.send_to(buf, &normalized_target).await
     }
 
-    async fn local_addr(&self) -> ConnResult<SocketAddr> {
+    fn local_addr(&self) -> ConnResult<SocketAddr> {
         Ok(self.inner.local_addr())
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
     async fn close(&self) -> ConnResult<()> {

@@ -29,9 +29,9 @@ impl Hub {
 
     /// register adds a new conn to the Hub
     pub async fn register(&self, conn: Arc<dyn Conn + Send + Sync>) {
-        println!("Connected to {}", conn.remote_addr().await.unwrap());
+        println!("Connected to {}", conn.remote_addr().unwrap());
 
-        if let Some(remote_addr) = conn.remote_addr().await {
+        if let Some(remote_addr) = conn.remote_addr() {
             let mut conns = self.conns.lock().await;
             conns.insert(remote_addr.to_string(), Arc::clone(&conn));
         }
@@ -60,7 +60,7 @@ impl Hub {
         conns: Arc<Mutex<HashMap<String, Arc<dyn Conn + Send + Sync>>>>,
         conn: Arc<dyn Conn + Send + Sync>,
     ) -> Result<(), Error> {
-        if let Some(remote_addr) = conn.remote_addr().await {
+        if let Some(remote_addr) = conn.remote_addr() {
             {
                 let mut cs = conns.lock().await;
                 cs.remove(&remote_addr.to_string());
@@ -82,7 +82,7 @@ impl Hub {
             if let Err(err) = conn.send(msg).await {
                 println!(
                     "Failed to write message to {:?}: {}",
-                    conn.remote_addr().await,
+                    conn.remote_addr(),
                     err
                 );
             }

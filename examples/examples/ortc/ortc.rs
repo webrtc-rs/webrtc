@@ -122,30 +122,25 @@ async fn main() -> Result<()> {
 
                     println!("exit data answer");
                 })
-            }))
-            .await;
+            }));
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
                 println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
                 Box::pin(async {})
-            }))
-            .await;
+            }));
         })
-    }))
-    .await;
+    }));
 
     let (gather_finished_tx, mut gather_finished_rx) = tokio::sync::mpsc::channel::<()>(1);
     let mut gather_finished_tx = Some(gather_finished_tx);
-    gatherer
-        .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            if c.is_none() {
-                gather_finished_tx.take();
-            }
-            Box::pin(async {})
-        }))
-        .await;
+    gatherer.on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+        if c.is_none() {
+            gather_finished_tx.take();
+        }
+        Box::pin(async {})
+    }));
 
     // Gather candidates
     gatherer.gather().await?;
@@ -229,8 +224,7 @@ async fn main() -> Result<()> {
             let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
             println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
             Box::pin(async {})
-        }))
-        .await;
+        }));
     }
 
     println!("Press ctrl-c to stop");

@@ -74,14 +74,14 @@ pub trait Candidate: fmt::Display {
 
     fn marshal(&self) -> String;
 
-    async fn addr(&self) -> SocketAddr;
+    fn addr(&self) -> SocketAddr;
 
     async fn close(&self) -> Result<()>;
     fn seen(&self, outbound: bool);
 
     async fn write_to(&self, raw: &[u8], dst: &(dyn Candidate + Send + Sync)) -> Result<usize>;
     fn equal(&self, other: &dyn Candidate) -> bool;
-    async fn set_ip(&self, ip: &IpAddr) -> Result<()>;
+    fn set_ip(&self, ip: &IpAddr) -> Result<()>;
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
 }

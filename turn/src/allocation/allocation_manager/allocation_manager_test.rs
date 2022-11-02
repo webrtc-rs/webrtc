@@ -94,7 +94,7 @@ async fn test_packet_handler() -> Result<()> {
         a.add_channel_bind(channel_bind.clone(), DEFAULT_LIFETIME)
             .await?;
 
-        a.relay_socket.local_addr().await?.port()
+        a.relay_socket.local_addr()?.port()
     };
 
     let relay_addr_with_host_str = format!("127.0.0.1:{}", port);

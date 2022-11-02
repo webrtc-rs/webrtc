@@ -341,7 +341,7 @@ impl Allocation {
 
                 log::debug!(
                     "relay socket {:?} received {} bytes from {}",
-                    relay_socket.local_addr().await,
+                    relay_socket.local_addr(),
                     n,
                     src_addr
                 );
