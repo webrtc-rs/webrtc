@@ -614,7 +614,7 @@ impl RTCPeerConnection {
     }
 
     async fn do_ice_connection_state_change(
-        handler: Arc<ArcSwapOption<Mutex<OnICEConnectionStateChangeHdlrFn>>>,
+        handler: &Arc<ArcSwapOption<Mutex<OnICEConnectionStateChangeHdlrFn>>>,
         ice_connection_state: &Arc<AtomicU8>,
         cs: RTCIceConnectionState,
     ) {
@@ -636,7 +636,7 @@ impl RTCPeerConnection {
     }
 
     async fn do_peer_connection_state_change(
-        handler: Arc<ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>>,
+        handler: &Arc<ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>>,
         cs: RTCPeerConnectionState,
     ) {
         if let Some(hndlr) = &*handler.load() {
@@ -865,7 +865,7 @@ impl RTCPeerConnection {
     /// Update the PeerConnectionState given the state of relevant transports
     /// <https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum>
     async fn update_connection_state(
-        on_peer_connection_state_change_handler: Arc<
+        on_peer_connection_state_change_handler: &Arc<
             ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>,
         >,
         is_closed: &Arc<AtomicBool>,
@@ -1958,7 +1958,7 @@ impl RTCPeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
         RTCPeerConnection::update_connection_state(
-            Arc::clone(&self.internal.on_peer_connection_state_change_handler),
+            &self.internal.on_peer_connection_state_change_handler,
             &self.internal.is_closed,
             &self.internal.peer_connection_state,
             self.ice_connection_state(),

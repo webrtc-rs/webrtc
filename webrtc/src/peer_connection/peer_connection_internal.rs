@@ -643,7 +643,7 @@ impl PeerConnectionInternal {
             })
             .await;
         RTCPeerConnection::update_connection_state(
-            Arc::clone(&self.on_peer_connection_state_change_handler),
+            &self.on_peer_connection_state_change_handler,
             &self.is_closed,
             &self.peer_connection_state,
             self.ice_connection_state.load(Ordering::SeqCst).into(),
@@ -1158,14 +1158,14 @@ impl PeerConnectionInternal {
             let peer_connection_state2 = Arc::clone(&peer_connection_state);
             Box::pin(async move {
                 RTCPeerConnection::do_ice_connection_state_change(
-                    on_ice_connection_state_change_handler2,
+                    &on_ice_connection_state_change_handler2,
                     &ice_connection_state2,
                     cs,
                 )
                 .await;
 
                 RTCPeerConnection::update_connection_state(
-                    on_peer_connection_state_change_handler2,
+                    &on_peer_connection_state_change_handler2,
                     &is_closed2,
                     &peer_connection_state2,
                     cs,
