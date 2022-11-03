@@ -23,7 +23,6 @@ use sctp::association::Association;
 
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
 
-use arc_swap::access::Access;
 use arc_swap::ArcSwapOption;
 use data::data_channel::DataChannel;
 use std::collections::HashMap;
