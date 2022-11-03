@@ -52,6 +52,11 @@ impl TrackLocalStaticSample {
         self.write_sample_with_extensions(sample, &[]).await
     }
 
+    /// Write a sample with provided RTP extensions.
+    ///
+    /// Alternatively to this method [`TrackLocalStaticSample::sample_writer`] can be used instead.
+    ///
+    /// See [`TrackLocalStaticSample::write_sample`]  for further details.
     pub async fn write_sample_with_extensions(
         &self,
         sample: &Sample,
@@ -132,6 +137,22 @@ impl TrackLocalStaticSample {
         flatten_errs(write_errs)
     }
 
+    /// Create a builder for writing samples with additional data.
+    ///
+    /// # Example
+    /// ```no-run
+    /// # use crate::track_local::track_local_static_sample::TrackLocalStaticSample;
+    /// # let track: TrackLocalStaticSample = todo!();
+    /// use rtp::extension::audio_level_extension::AudioLevelExtension;
+    /// let result = track
+    ///     .sample_writer()
+    ///     .with_audio_level(AudioLevelExtension {
+    ///         level: 10,
+    ///         voice: true,
+    ///     })
+    ///     .write_sample()
+    ///     .await;
+    /// ```
     pub fn sample_writer(&self) -> SampleWriter<'_> {
         SampleWriter::new(self)
     }
@@ -205,6 +226,9 @@ mod sample_writer {
     use rtp::extension::video_orientation_extension::VideoOrientationExtension;
     use rtp::extension::HeaderExtension;
 
+    /// Helper for writing Samples via [`TrackLocalStaticSample`] that carry extra RTP data.
+    ///
+    /// Created via [`TrackLocalStaticSample::sample_writer`].
     pub struct SampleWriter<'track> {
         track: &'track TrackLocalStaticSample,
         extensions: Vec<HeaderExtension>,
@@ -218,14 +242,21 @@ mod sample_writer {
             }
         }
 
+        /// Add a RTP audio level extension to all packets written for the sample.
+        ///
+        /// This overwrites any previously configured audio level extension.
         pub fn with_audio_level(self, ext: AudioLevelExtension) -> Self {
             self.with_extension(HeaderExtension::AudioLevel(ext))
         }
 
+        /// Add a RTP video orientation extension to all packets written for the sample.
+        ///
+        /// This overwrites any previously configured video orientation extension.
         pub fn with_video_orientation(self, ext: VideoOrientationExtension) -> Self {
             self.with_extension(HeaderExtension::VideoOrientation(ext))
         }
 
+        /// Add any RTP extension to all packets written for the sample.
         pub fn with_extension(mut self, ext: HeaderExtension) -> Self {
             self.extensions.retain(|e| !e.is_same(&ext));
 
@@ -234,6 +265,10 @@ mod sample_writer {
             self
         }
 
+        /// Write the sample to the track.
+        ///
+        /// Creates one or more RTP packets with any extensions specified for each packet and sends
+        /// them.
         pub async fn write_sample(self, sample: &Sample) -> Result<()> {
             self.track
                 .write_sample_with_extensions(sample, &self.extensions)

@@ -12,6 +12,7 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
 * Added new extension marshaller/unmarshaller for VideoOrientation, and made marshallers serializable via serde [#331](https://github.com/webrtc-rs/webrtc/pull/331) [#332](https://github.com/webrtc-rs/webrtc/pull/332)
 * Updated minimum rust version to `1.60.0`
 * Added a new `write_rtp_with_extensions` method to `TrackLocalStaticSample` and `TrackLocalStatiRTP`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
+* Added a new `sample_writer` helper to `TrackLocalStaticSample`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
 
 #### Breaking changes
 
