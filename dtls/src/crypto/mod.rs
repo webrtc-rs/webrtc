@@ -300,7 +300,12 @@ fn verify_signature(
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha1 => {
             &ring::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
         }
-        SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha256 => {
+        SignatureAlgorithm::Rsa if (hash_algorithm.hash == HashAlgorithm::Sha256)
+            && (remote_key_signature.len() < 256) => {
+            &ring::signature::RSA_PKCS1_1024_8192_SHA256_FOR_LEGACY_USE_ONLY
+        }
+        SignatureAlgorithm::Rsa if (hash_algorithm.hash == HashAlgorithm::Sha256)
+            && (remote_key_signature.len() >= 256) => {
             &ring::signature::RSA_PKCS1_2048_8192_SHA256
         }
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha384 => {
