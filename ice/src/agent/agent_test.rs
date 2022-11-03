@@ -1031,7 +1031,7 @@ async fn test_invalid_gather() -> Result<()> {
     //"Gather with no OnCandidate should error"
     let a = Agent::new(AgentConfig::default()).await?;
 
-    if let Err(err) = a.gather_candidates().await {
+    if let Err(err) = a.gather_candidates() {
         assert_eq!(
             Error::ErrNoOnCandidateHandler,
             err,

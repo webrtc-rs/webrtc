@@ -203,7 +203,7 @@ impl RTCIceGatherer {
                 },
             ));
 
-            agent.gather_candidates().await?;
+            agent.gather_candidates()?;
         }
 
         Ok(())

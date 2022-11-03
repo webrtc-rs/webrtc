@@ -11,6 +11,35 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
 * Fixed a panic that would sometimes happen when collecting stats. [#327](https://github.com/webrtc-rs/webrtc/pull/327) by [@k0nserv](https://github.com/k0nserv).
 * Added new extension marshaller/unmarshaller for VideoOrientation, and made marshallers serializable via serde [#331](https://github.com/webrtc-rs/webrtc/pull/331) [#332](https://github.com/webrtc-rs/webrtc/pull/332)
 * Updated minimum rust version to `1.60.0`
+* Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
+    - `RTCDataChannel`:
+        - `on_open`;
+        - `on_close`;
+        - `on_message`;
+        - `on_error`.
+    - `RTCDtlsTransport::on_state_change`;
+    - `RTCIceCandidate::to_json`;
+    - `RTCIceGatherer`:
+        - `on_local_candidate`;
+        - `on_state_change`;
+        - `on_gathering_complete`.
+    - `RTCIceTransport`:
+        - `get_selected_candidate_pair`;
+        - `on_selected_candidate_pair_change`;
+        - `on_connection_state_change`.
+    - `RTCPeerConnection`:
+        - `on_signaling_state_change`;
+        - `on_data_channel`;
+        - `on_negotiation_needed`;
+        - `on_ice_candidate`;
+        - `on_ice_gathering_state_change`;
+        - `on_track`;
+        - `on_ice_connection_state_change`;
+        - `on_peer_connection_state_change`.
+    - `RTCSctpTransport`:
+        - `on_error`;
+        - `on_data_channel`;
+        - `on_data_channel_opened`.
 
 
 #### Breaking changes

@@ -304,7 +304,7 @@ async fn main() -> Result<(), Error> {
             }
         });
 
-        ice_agent.gather_candidates().await?;
+        ice_agent.gather_candidates()?;
         println!("Connecting...");
 
         let (_cancel_tx, cancel_rx) = mpsc::channel(1);

@@ -166,7 +166,7 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
         },
     ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;
@@ -283,7 +283,7 @@ async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<()> {
         },
     ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;
@@ -467,7 +467,7 @@ async fn test_vnet_gather_muxed_udp() -> Result<()> {
         },
     ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;

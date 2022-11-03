@@ -432,7 +432,7 @@ impl Agent {
     }
 
     /// Initiates the trickle based gathering process.
-    pub async fn gather_candidates(&self) -> Result<()> {
+    pub fn gather_candidates(&self) -> Result<()> {
         if self.gathering_state.load(Ordering::SeqCst) != GatheringState::New as u8 {
             return Err(Error::ErrMultipleGatherAttempted);
         }

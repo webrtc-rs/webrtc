@@ -119,7 +119,7 @@ async fn test_multicast_dns_static_host_name() -> Result<()> {
         },
     ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;

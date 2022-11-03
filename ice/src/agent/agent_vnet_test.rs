@@ -371,7 +371,7 @@ pub(crate) async fn gather_and_exchange_candidates(
             })
         },
     ));
-    a_agent.gather_candidates().await?;
+    a_agent.gather_candidates()?;
 
     let w2 = Arc::new(Mutex::new(Some(wg.worker())));
     b_agent.on_candidate(Box::new(
@@ -385,7 +385,7 @@ pub(crate) async fn gather_and_exchange_candidates(
             })
         },
     ));
-    b_agent.gather_candidates().await?;
+    b_agent.gather_candidates()?;
 
     wg.wait().await;
 
