@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Increased minimum support rust version to `1.60.0`.
+* Adds a new generic header extensions type `rtp::extension::HeaderExtension` which allows abstracting over all known extensions as well as custom extensions. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
 
 ## v0.6.7
 
