@@ -271,7 +271,7 @@ impl RTCPeerConnection {
         if !configuration.certificates.is_empty() {
             let now = SystemTime::now();
             for cert in &configuration.certificates {
-                cert.expires()
+                cert.expires
                     .duration_since(now)
                     .map_err(|_| Error::ErrCertificateExpired)?;
             }

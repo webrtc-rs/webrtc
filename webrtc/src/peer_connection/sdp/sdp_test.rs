@@ -535,7 +535,7 @@ async fn fingerprint_test(
 ) -> Result<()> {
     let s = SessionDescription::default();
 
-    let dtls_fingerprints = certificate.get_fingerprints()?;
+    let dtls_fingerprints = certificate.get_fingerprints();
 
     let params = PopulateSdpParams {
         media_description_fingerprint: sdpmedia_description_fingerprints,
