@@ -1,13 +1,12 @@
 use super::*;
 use crate::relay::relay_none::*;
 
+use std::{net::IpAddr, str::FromStr};
+use tokio::{
+    net::UdpSocket,
+    time::{Duration, Instant},
+};
 use util::vnet::net::*;
-
-use std::net::IpAddr;
-use std::str::FromStr;
-
-use tokio::net::UdpSocket;
-use tokio::time::{Duration, Instant};
 
 const STATIC_KEY: &str = "ABC";
 
@@ -93,6 +92,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
             Arc::clone(&r.conn),
             0,
             Duration::from_secs(3600),
+            TextAttribute::new(ATTR_USERNAME, "user".into()),
         )
         .await?;
     assert!(r

@@ -147,7 +147,6 @@ impl PeerConnectionInternal {
         self: &Arc<Self>,
         is_renegotiation: bool,
         remote_desc: Arc<RTCSessionDescription>,
-        sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
             track_details_from_sdp(parsed, false)
@@ -220,7 +219,7 @@ impl PeerConnectionInternal {
             }
         }
 
-        self.start_rtp_receivers(&mut track_details, &current_transceivers, sdp_semantics)
+        self.start_rtp_receivers(&mut track_details, &current_transceivers)
             .await?;
         if let Some(parsed) = &remote_desc.parsed {
             if have_application_media_section(parsed) {
@@ -324,16 +323,7 @@ impl PeerConnectionInternal {
         self: &Arc<Self>,
         incoming_tracks: &mut Vec<TrackDetails>,
         local_transceivers: &[Arc<RTCRtpTransceiver>],
-        sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
-        let remote_is_plan_b = match sdp_semantics {
-            RTCSdpSemantics::PlanB => true,
-            RTCSdpSemantics::UnifiedPlanWithFallback => {
-                description_is_plan_b(self.remote_description().await.as_ref())?
-            }
-            _ => false,
-        };
-
         // Ensure we haven't already started a transceiver for this ssrc
         let mut filtered_tracks = incoming_tracks.clone();
         for incoming_track in incoming_tracks {
@@ -383,40 +373,6 @@ impl PeerConnectionInternal {
 
             if !track_handled {
                 unhandled_tracks.push(incoming_track);
-            }
-        }
-
-        if remote_is_plan_b {
-            for incoming in unhandled_tracks {
-                let t = match self
-                    .add_transceiver_from_kind(
-                        incoming.kind,
-                        &[RTCRtpTransceiverInit {
-                            direction: RTCRtpTransceiverDirection::Sendrecv,
-                            send_encodings: vec![],
-                        }],
-                    )
-                    .await
-                {
-                    Ok(t) => t,
-                    Err(err) => {
-                        log::warn!(
-                            "Could not add transceiver for remote SSRC {}: {}",
-                            incoming.ssrcs[0],
-                            err
-                        );
-                        continue;
-                    }
-                };
-                if let Some(receiver) = t.receiver().await {
-                    PeerConnectionInternal::start_receiver(
-                        self.setting_engine.get_receive_mtu(),
-                        incoming,
-                        receiver,
-                        Arc::clone(&self.on_track_handler),
-                    )
-                    .await;
-                }
             }
         }
 
@@ -704,7 +660,6 @@ impl PeerConnectionInternal {
         &self,
         local_transceivers: Vec<Arc<RTCRtpTransceiver>>,
         use_identity: bool,
-        sdp_semantics: RTCSdpSemantics,
     ) -> Result<SessionDescription> {
         let d = SessionDescription::new_jsep_session_description(use_identity);
 
@@ -712,86 +667,38 @@ impl PeerConnectionInternal {
 
         let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        let is_plan_b = sdp_semantics == RTCSdpSemantics::PlanB;
         let mut media_sections = vec![];
 
-        // Needed for self.sctpTransport.dataChannelsRequested
-        if is_plan_b {
-            let mut video = vec![];
-            let mut audio = vec![];
-
-            for t in &local_transceivers {
-                if t.kind == RTPCodecType::Video {
-                    video.push(Arc::clone(t));
-                } else if t.kind == RTPCodecType::Audio {
-                    audio.push(Arc::clone(t));
-                }
-                if let Some(sender) = t.sender().await {
-                    sender.set_negotiated();
-                }
+        for t in &local_transceivers {
+            if t.stopped.load(Ordering::SeqCst) {
+                // An "m=" section is generated for each
+                // RtpTransceiver that has been added to the PeerConnection, excluding
+                // any stopped RtpTransceivers;
+                continue;
             }
 
-            if !video.is_empty() {
-                media_sections.push(MediaSection {
-                    id: "video".to_owned(),
-                    transceivers: video,
-                    ..Default::default()
-                })
+            if let Some(sender) = t.sender().await {
+                // TODO: This is dubious because of rollbacks.
+                sender.set_negotiated();
             }
-            if !audio.is_empty() {
-                media_sections.push(MediaSection {
-                    id: "audio".to_owned(),
-                    transceivers: audio,
-                    ..Default::default()
-                });
-            }
+            media_sections.push(MediaSection {
+                id: t.mid().await,
+                transceivers: vec![Arc::clone(t)],
+                ..Default::default()
+            });
+        }
 
-            if self
-                .sctp_transport
-                .data_channels_requested
-                .load(Ordering::SeqCst)
-                != 0
-            {
-                media_sections.push(MediaSection {
-                    id: "data".to_owned(),
-                    data: true,
-                    ..Default::default()
-                });
-            }
-        } else {
-            {
-                for t in &local_transceivers {
-                    if t.stopped.load(Ordering::SeqCst) {
-                        // An "m=" section is generated for each
-                        // RtpTransceiver that has been added to the PeerConnection, excluding
-                        // any stopped RtpTransceivers;
-                        continue;
-                    }
-
-                    if let Some(sender) = t.sender().await {
-                        // TODO: This is dubious because of rollbacks.
-                        sender.set_negotiated();
-                    }
-                    media_sections.push(MediaSection {
-                        id: t.mid().await,
-                        transceivers: vec![Arc::clone(t)],
-                        ..Default::default()
-                    });
-                }
-            }
-
-            if self
-                .sctp_transport
-                .data_channels_requested
-                .load(Ordering::SeqCst)
-                != 0
-            {
-                media_sections.push(MediaSection {
-                    id: format!("{}", media_sections.len()),
-                    data: true,
-                    ..Default::default()
-                });
-            }
+        if self
+            .sctp_transport
+            .data_channels_requested
+            .load(Ordering::SeqCst)
+            != 0
+        {
+            media_sections.push(MediaSection {
+                id: format!("{}", media_sections.len()),
+                data: true,
+                ..Default::default()
+            });
         }
 
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
@@ -801,7 +708,6 @@ impl PeerConnectionInternal {
         };
 
         let params = PopulateSdpParams {
-            is_plan_b,
             media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
             is_icelite: self.setting_engine.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
@@ -827,7 +733,6 @@ impl PeerConnectionInternal {
         use_identity: bool,
         include_unmatched: bool,
         connection_role: ConnectionRole,
-        sdp_semantics: RTCSdpSemantics,
     ) -> Result<SessionDescription> {
         let d = SessionDescription::new_jsep_session_description(use_identity);
 
@@ -835,7 +740,6 @@ impl PeerConnectionInternal {
         let candidates = self.ice_gatherer.get_local_candidates().await?;
 
         let remote_description = self.remote_description().await;
-        let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
         let mut media_sections = vec![];
         let mut already_have_application_media_section = false;
         if let Some(remote_description) = remote_description.as_ref() {
@@ -864,80 +768,26 @@ impl PeerConnectionInternal {
                             continue;
                         }
 
-                        if sdp_semantics == RTCSdpSemantics::PlanB
-                            || (sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback
-                                && detected_plan_b)
-                        {
-                            if !detected_plan_b {
-                                return Err(Error::ErrIncorrectSDPSemantics);
+                        if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
+                            if let Some(sender) = t.sender().await {
+                                sender.set_negotiated();
                             }
-                            // If we're responding to a plan-b offer, then we should try to fill up this
-                            // media entry with all matching local transceivers
-                            let mut media_transceivers = vec![];
-                            loop {
-                                // keep going until we can't get any more
-                                if let Some(t) = satisfy_type_and_direction(
-                                    kind,
-                                    direction,
-                                    &mut local_transceivers,
-                                )
-                                .await
-                                {
-                                    if let Some(sender) = t.sender().await {
-                                        sender.set_negotiated();
-                                    }
-                                    media_transceivers.push(t);
-                                } else {
-                                    if media_transceivers.is_empty() {
-                                        let t = RTCRtpTransceiver::new(
-                                            None,
-                                            None,
-                                            RTCRtpTransceiverDirection::Inactive,
-                                            kind,
-                                            vec![],
-                                            Arc::clone(&self.media_engine),
-                                            Some(Box::new(self.make_negotiation_needed_trigger())),
-                                        )
-                                        .await;
-                                        media_transceivers.push(t);
-                                    }
-                                    break;
-                                }
-                            }
+                            let media_transceivers = vec![t];
+
+                            // NB: The below could use `then_some`, but with our current MSRV
+                            // it's not possible to actually do this. The clippy version that
+                            // ships with 1.64.0 complains about this so we disable it for now.
+                            #[allow(clippy::unnecessary_lazy_evaluations)]
                             media_sections.push(MediaSection {
                                 id: mid_value.to_owned(),
                                 transceivers: media_transceivers,
+                                rid_map: get_rids(media),
+                                offered_direction: (!include_unmatched).then(|| direction),
                                 ..Default::default()
                             });
-                        } else if sdp_semantics == RTCSdpSemantics::UnifiedPlan
-                            || sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback
-                        {
-                            if detected_plan_b {
-                                return Err(Error::ErrIncorrectSDPSemantics);
-                            }
-                            if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
-                                if let Some(sender) = t.sender().await {
-                                    sender.set_negotiated();
-                                }
-                                let media_transceivers = vec![t];
-
-                                // NB: The below could use `then_some`, but with our current MSRV
-                                // it's not possible to actually do this. The clippy version that
-                                // ships with 1.64.0 complains about this so we disable it for now.
-                                #[allow(clippy::unnecessary_lazy_evaluations)]
-                                media_sections.push(MediaSection {
-                                    id: mid_value.to_owned(),
-                                    transceivers: media_transceivers,
-                                    rid_map: get_rids(media),
-                                    offered_direction: (!include_unmatched).then(|| direction),
-                                    ..Default::default()
-                                });
-                            } else {
-                                return Err(Error::ErrPeerConnTranscieverMidNil);
-                            }
+                        } else {
+                            return Err(Error::ErrPeerConnTranscieverMidNil);
                         }
-                    } else {
-                        return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue);
                     }
                 }
             }
@@ -945,17 +795,15 @@ impl PeerConnectionInternal {
 
         // If we are offering also include unmatched local transceivers
         if include_unmatched {
-            if !detected_plan_b {
-                for t in &local_transceivers {
-                    if let Some(sender) = t.sender().await {
-                        sender.set_negotiated();
-                    }
-                    media_sections.push(MediaSection {
-                        id: t.mid().await,
-                        transceivers: vec![Arc::clone(t)],
-                        ..Default::default()
-                    });
+            for t in &local_transceivers {
+                if let Some(sender) = t.sender().await {
+                    sender.set_negotiated();
                 }
+                media_sections.push(MediaSection {
+                    id: t.mid().await,
+                    transceivers: vec![Arc::clone(t)],
+                    ..Default::default()
+                });
             }
 
             if self
@@ -965,24 +813,12 @@ impl PeerConnectionInternal {
                 != 0
                 && !already_have_application_media_section
             {
-                if detected_plan_b {
-                    media_sections.push(MediaSection {
-                        id: "data".to_owned(),
-                        data: true,
-                        ..Default::default()
-                    });
-                } else {
-                    media_sections.push(MediaSection {
-                        id: format!("{}", media_sections.len()),
-                        data: true,
-                        ..Default::default()
-                    });
-                }
+                media_sections.push(MediaSection {
+                    id: format!("{}", media_sections.len()),
+                    data: true,
+                    ..Default::default()
+                });
             }
-        }
-
-        if sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback && detected_plan_b {
-            log::info!("Plan-B Offer detected; responding with Plan-B Answer");
         }
 
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
@@ -992,7 +828,6 @@ impl PeerConnectionInternal {
         };
 
         let params = PopulateSdpParams {
-            is_plan_b: detected_plan_b,
             media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
             is_icelite: self.setting_engine.candidates.ice_lite,
             connection_role,

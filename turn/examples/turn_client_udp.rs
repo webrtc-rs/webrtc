@@ -7,7 +7,7 @@ use tokio::net::UdpSocket;
 use tokio::time::Duration;
 use util::Conn;
 
-// RUST_LOG=trace cargo run --color=always --package webrtc-turn --example turn_client_udp -- --host 0.0.0.0 --user user=pass --ping
+// RUST_LOG=trace cargo run --color=always --package turn --example turn_client_udp -- --host 0.0.0.0 --user user=pass --ping
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {

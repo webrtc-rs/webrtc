@@ -367,8 +367,8 @@ pub struct DataChannelStats {
     pub state: RTCDataChannelState,
 }
 
-impl From<&RTCDataChannel> for DataChannelStats {
-    fn from(data_channel: &RTCDataChannel) -> Self {
+impl DataChannelStats {
+    pub(crate) async fn from(data_channel: &RTCDataChannel) -> Self {
         let state = data_channel.ready_state();
 
         let mut bytes_received = 0;
@@ -376,7 +376,7 @@ impl From<&RTCDataChannel> for DataChannelStats {
         let mut messages_received = 0;
         let mut messages_sent = 0;
 
-        let lock = data_channel.data_channel.try_lock().unwrap();
+        let lock = data_channel.data_channel.lock().await;
 
         if let Some(internal) = &*lock {
             bytes_received = internal.bytes_received();
@@ -385,7 +385,7 @@ impl From<&RTCDataChannel> for DataChannelStats {
             messages_sent = internal.messages_sent();
         }
 
-        DataChannelStats {
+        Self {
             bytes_received,
             bytes_sent,
             data_channel_identifier: data_channel.id(), // TODO: "The value is initially null"

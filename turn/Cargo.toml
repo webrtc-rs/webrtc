@@ -8,10 +8,12 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/turn"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/turn"
+rust-version = "1.60.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+futures = "0.3.21"
 util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
 stun = { version = "0.4.3", path = "../stun" }
 
@@ -31,6 +33,9 @@ chrono = "0.4.19"
 hex = "0.4.3"
 clap = "3.2.6"
 criterion = "0.3.5"
+
+[features]
+metrics = []
 
 [[bench]]
 name = "bench"

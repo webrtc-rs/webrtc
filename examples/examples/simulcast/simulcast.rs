@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
                 uri: extension.to_owned(),
             },
             RTPCodecType::Video,
-            vec![],
+            None,
         )?;
     }
     // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.

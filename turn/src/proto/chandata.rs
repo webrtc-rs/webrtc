@@ -35,16 +35,8 @@ impl PartialEq for ChannelData {
 }
 
 impl ChannelData {
-    // grow ensures that internal buffer will fit v more bytes and
-    // increases it capacity if necessary.
-    //
-    // Similar to stun.Message.grow method.
-    fn grow(&mut self, v: usize) {
-        let n = self.raw.len() + v;
-        self.raw.extend_from_slice(&vec![0; n - self.raw.len()]);
-    }
-
     // Reset resets Length, Data and Raw length.
+    #[inline]
     pub fn reset(&mut self) {
         self.raw.clear();
         self.data.clear();
@@ -90,7 +82,8 @@ impl ChannelData {
         if self.raw.len() < CHANNEL_DATA_HEADER_SIZE {
             // Making WriteHeader call valid even when c.Raw
             // is nil or len(c.Raw) is less than needed for header.
-            self.grow(CHANNEL_DATA_HEADER_SIZE);
+            self.raw
+                .resize(self.raw.len() + CHANNEL_DATA_HEADER_SIZE, 0);
         }
         self.raw[..CHANNEL_DATA_NUMBER_SIZE].copy_from_slice(&self.number.0.to_be_bytes());
         self.raw[CHANNEL_DATA_NUMBER_SIZE..CHANNEL_DATA_HEADER_SIZE]

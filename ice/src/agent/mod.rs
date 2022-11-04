@@ -97,6 +97,7 @@ pub struct Agent {
 
     pub(crate) udp_network: UDPNetwork,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
+    pub(crate) ip_filter: Arc<Option<IpFilterFn>>,
     pub(crate) mdns_mode: MulticastDnsMode,
     pub(crate) mdns_name: String,
     pub(crate) mdns_conn: Option<Arc<DnsConn>>,
@@ -195,6 +196,7 @@ impl Agent {
             udp_network: config.udp_network,
             internal: Arc::new(ai),
             interface_filter: Arc::clone(&config.interface_filter),
+            ip_filter: Arc::clone(&config.ip_filter),
             mdns_mode,
             mdns_name,
             mdns_conn,
@@ -462,6 +464,7 @@ impl Agent {
             mdns_name: self.mdns_name.clone(),
             net: Arc::clone(&self.net),
             interface_filter: self.interface_filter.clone(),
+            ip_filter: self.ip_filter.clone(),
             ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
             agent_internal: Arc::clone(&self.internal),
             gathering_state: Arc::clone(&self.gathering_state),

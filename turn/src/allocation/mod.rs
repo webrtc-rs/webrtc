@@ -12,21 +12,55 @@ use channel_bind::*;
 use five_tuple::*;
 use permission::*;
 
-use stun::agent::*;
-use stun::message::*;
+use stun::{agent::*, message::*, textattrs::Username};
 
 use util::Conn;
 
-use std::collections::HashMap;
-use std::marker::{Send, Sync};
-use std::net::SocketAddr;
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::{Duration, Instant};
+use std::sync::atomic::AtomicUsize;
+use std::{
+    collections::HashMap,
+    marker::{Send, Sync},
+    net::SocketAddr,
+    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex as StdMutex},
+};
+use tokio::{
+    sync::{mpsc, Mutex},
+    time::{Duration, Instant},
+};
 
 const RTP_MTU: usize = 1500;
 
-pub type AllocationMap = Arc<Mutex<HashMap<String, Arc<Mutex<Allocation>>>>>;
+pub type AllocationMap = Arc<Mutex<HashMap<FiveTuple, Arc<Allocation>>>>;
+
+/// Information about an [`Allocation`].
+#[derive(Debug, Clone)]
+pub struct AllocationInfo {
+    /// [`FiveTuple`] of this [`Allocation`].
+    pub five_tuple: FiveTuple,
+
+    /// Username of this [`Allocation`].
+    pub username: String,
+
+    /// Relayed bytes with this [`Allocation`].
+    #[cfg(feature = "metrics")]
+    pub relayed_bytes: usize,
+}
+
+impl AllocationInfo {
+    // Creates a new `AllocationInfo`
+    pub fn new(
+        five_tuple: FiveTuple,
+        username: String,
+        #[cfg(feature = "metrics")] relayed_bytes: usize,
+    ) -> Self {
+        Self {
+            five_tuple,
+            username,
+            #[cfg(feature = "metrics")]
+            relayed_bytes,
+        }
+    }
+}
 
 // Allocation is tied to a FiveTuple and relays traffic
 // use create_allocation and get_allocation to operate
@@ -36,12 +70,14 @@ pub struct Allocation {
     pub(crate) relay_addr: SocketAddr,
     pub(crate) relay_socket: Arc<dyn Conn + Send + Sync>,
     five_tuple: FiveTuple,
+    username: Username,
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
     pub(crate) allocations: Option<AllocationMap>,
-    reset_tx: Option<mpsc::Sender<Duration>>,
+    reset_tx: StdMutex<Option<mpsc::Sender<Duration>>>,
     timer_expired: Arc<AtomicBool>,
-    closed: bool, // Option<mpsc::Receiver<()>>,
+    closed: AtomicBool, // Option<mpsc::Receiver<()>>,
+    pub(crate) relayed_bytes: AtomicUsize,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -55,6 +91,7 @@ impl Allocation {
         relay_socket: Arc<dyn Conn + Send + Sync>,
         relay_addr: SocketAddr,
         five_tuple: FiveTuple,
+        username: Username,
     ) -> Self {
         Allocation {
             protocol: PROTO_UDP,
@@ -62,12 +99,14 @@ impl Allocation {
             relay_addr,
             relay_socket,
             five_tuple,
+            username,
             permissions: Arc::new(Mutex::new(HashMap::new())),
             channel_bindings: Arc::new(Mutex::new(HashMap::new())),
             allocations: None,
-            reset_tx: None,
+            reset_tx: StdMutex::new(None),
             timer_expired: Arc::new(AtomicBool::new(false)),
-            closed: false,
+            closed: AtomicBool::new(false),
+            relayed_bytes: Default::default(),
         }
     }
 
@@ -174,12 +213,12 @@ impl Allocation {
     }
 
     // Close closes the allocation
-    pub async fn close(&mut self) -> Result<()> {
-        if self.closed {
+    pub async fn close(&self) -> Result<()> {
+        if self.closed.load(Ordering::Acquire) {
             return Err(Error::ErrClosed);
         }
 
-        self.closed = true;
+        self.closed.store(true, Ordering::Release);
         self.stop();
 
         {
@@ -204,12 +243,12 @@ impl Allocation {
         Ok(())
     }
 
-    pub async fn start(&mut self, lifetime: Duration) {
+    pub async fn start(&self, lifetime: Duration) {
         let (reset_tx, mut reset_rx) = mpsc::channel(1);
-        self.reset_tx = Some(reset_tx);
+        self.reset_tx.lock().unwrap().replace(reset_tx);
 
         let allocations = self.allocations.clone();
-        let five_tuple = self.five_tuple.clone();
+        let five_tuple = self.five_tuple;
         let timer_expired = Arc::clone(&self.timer_expired);
 
         tokio::spawn(async move {
@@ -222,8 +261,7 @@ impl Allocation {
                     _ = &mut timer => {
                         if let Some(allocs) = &allocations{
                             let mut alls = allocs.lock().await;
-                            if let Some(a) = alls.remove(&five_tuple.fingerprint()) {
-                                let mut a = a.lock().await;
+                            if let Some(a) = alls.remove(&five_tuple) {
                                 let _ = a.close().await;
                             }
                         }
@@ -243,15 +281,17 @@ impl Allocation {
         });
     }
 
-    pub fn stop(&mut self) -> bool {
-        let expired = self.reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
-        self.reset_tx.take();
+    fn stop(&self) -> bool {
+        let mut reset_tx = self.reset_tx.lock().unwrap();
+        let expired = reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
+        reset_tx.take();
         expired
     }
 
     // Refresh updates the allocations lifetime
     pub async fn refresh(&self, lifetime: Duration) {
-        if let Some(tx) = &self.reset_tx {
+        let reset_tx = self.reset_tx.lock().unwrap().clone();
+        if let Some(tx) = reset_tx {
             let _ = tx.send(lifetime).await;
         }
     }
@@ -276,7 +316,7 @@ impl Allocation {
     //  transport address of the received UDP datagram.  The Data indication
     //  is then sent on the 5-tuple associated with the allocation.
     async fn packet_handler(&self) {
-        let five_tuple = self.five_tuple.clone();
+        let five_tuple = self.five_tuple;
         let relay_addr = self.relay_addr;
         let relay_socket = Arc::clone(&self.relay_socket);
         let turn_socket = Arc::clone(&self.turn_socket);
@@ -293,7 +333,7 @@ impl Allocation {
                     Err(_) => {
                         if let Some(allocs) = &allocations {
                             let mut alls = allocs.lock().await;
-                            alls.remove(&five_tuple.fingerprint());
+                            alls.remove(&five_tuple);
                         }
                         break;
                     }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Increased minimum support rust version to `1.60.0`.
+
+
 ## v0.9.0
 
 * [#8 update deps + loosen some requirements](https://github.com/webrtc-rs/srtp/pull/8) by [@melekes](https://github.com/melekes).

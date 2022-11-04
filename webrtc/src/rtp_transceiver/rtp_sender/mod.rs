@@ -246,7 +246,7 @@ impl RTCRtpSender {
             RTCRtpSendParameters {
                 rtp_parameters: self
                     .media_engine
-                    .get_rtp_parameters_by_kind(kind, &[RTCRtpTransceiverDirection::Sendonly])
+                    .get_rtp_parameters_by_kind(kind, RTCRtpTransceiverDirection::Sendonly)
                     .await,
                 encodings: vec![RTCRtpEncodingParameters {
                     ssrc: self.ssrc,
@@ -328,10 +328,11 @@ impl RTCRtpSender {
                 id: context.id.clone(),
                 params: self
                     .media_engine
-                    .get_rtp_parameters_by_kind(t.kind(), &[RTCRtpTransceiverDirection::Sendonly])
+                    .get_rtp_parameters_by_kind(t.kind(), RTCRtpTransceiverDirection::Sendonly)
                     .await,
                 ssrc: context.ssrc,
                 write_stream: context.write_stream.clone(),
+                paused: self.paused.clone(),
             };
 
             t.bind(&new_context).await
@@ -385,13 +386,14 @@ impl RTCRtpSender {
                         } else {
                             RTPCodecType::default()
                         },
-                        &[RTCRtpTransceiverDirection::Sendonly],
+                        RTCRtpTransceiverDirection::Sendonly,
                     )
                     .await,
                 ssrc: parameters.encodings[0].ssrc,
                 write_stream: Some(
                     Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>
                 ),
+                paused: self.paused.clone(),
             };
 
             let codec = if let Some(t) = &*track {

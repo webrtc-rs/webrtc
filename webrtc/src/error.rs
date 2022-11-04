@@ -205,8 +205,9 @@ pub enum Error {
     #[error("the requested codec does not have a payloader")]
     ErrNoPayloaderForCodec,
 
-    /// ErrRegisterHeaderExtensionInvalidDirection indicates that a extension was registered with a direction besides `sendonly` or `recvonly`
-    #[error("a header extension must be registered as 'recvonly', 'sendonly' or both")]
+    /// ErrRegisterHeaderExtensionInvalidDirection indicates that a extension was registered with different
+    /// directions for two different calls.
+    #[error("a header extension must be registered with the same direction each time")]
     ErrRegisterHeaderExtensionInvalidDirection,
 
     /// ErrRegisterHeaderExtensionNoFreeID indicates that there was no extension ID available which

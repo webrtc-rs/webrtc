@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+* Increased minimum support rust version to `1.60.0`.
+
+## v0.8.2
+
+* Add IP filter to ICE `AgentConfig` [#306](https://github.com/webrtc-rs/webrtc/pull/306) and [#318](https://github.com/webrtc-rs/webrtc/pull/318).
+* Add `rust-version` at 1.57.0 to `Cargo.toml`. This was already the minimum version so does not constitute a change.
+
 ## v0.8.1
 
 This release was released in error and contains no changes from 0.8.0.

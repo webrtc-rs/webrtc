@@ -18,7 +18,13 @@ async fn test_vnet_gather_no_local_ip_address() -> Result<()> {
     })
     .await?;
 
-    let local_ips = local_interfaces(&vnet, &a.interface_filter, &[NetworkType::Udp4]).await;
+    let local_ips = local_interfaces(
+        &vnet,
+        &a.interface_filter,
+        &a.ip_filter,
+        &[NetworkType::Udp4],
+    )
+    .await;
     assert!(local_ips.is_empty(), "should return no local IP");
 
     a.close().await?;
@@ -44,7 +50,8 @@ async fn test_vnet_gather_dynamic_ip_address() -> Result<()> {
     })
     .await?;
 
-    let local_ips = local_interfaces(&nw, &a.interface_filter, &[NetworkType::Udp4]).await;
+    let local_ips =
+        local_interfaces(&nw, &a.interface_filter, &a.ip_filter, &[NetworkType::Udp4]).await;
     assert!(!local_ips.is_empty(), "should have one local IP");
 
     for ip in &local_ips {
@@ -77,7 +84,8 @@ async fn test_vnet_gather_listen_udp() -> Result<()> {
     })
     .await?;
 
-    let local_ips = local_interfaces(&nw, &a.interface_filter, &[NetworkType::Udp4]).await;
+    let local_ips =
+        local_interfaces(&nw, &a.interface_filter, &a.ip_filter, &[NetworkType::Udp4]).await;
     assert!(!local_ips.is_empty(), "should have one local IP");
 
     for ip in local_ips {
@@ -334,7 +342,8 @@ async fn test_vnet_gather_with_interface_filter() -> Result<()> {
         })
         .await?;
 
-        let local_ips = local_interfaces(&nw, &a.interface_filter, &[NetworkType::Udp4]).await;
+        let local_ips =
+            local_interfaces(&nw, &a.interface_filter, &a.ip_filter, &[NetworkType::Udp4]).await;
         assert!(
             local_ips.is_empty(),
             "InterfaceFilter should have excluded everything"
@@ -354,7 +363,8 @@ async fn test_vnet_gather_with_interface_filter() -> Result<()> {
         })
         .await?;
 
-        let local_ips = local_interfaces(&nw, &a.interface_filter, &[NetworkType::Udp4]).await;
+        let local_ips =
+            local_interfaces(&nw, &a.interface_filter, &a.ip_filter, &[NetworkType::Udp4]).await;
         assert_eq!(
             local_ips.len(),
             1,

@@ -58,7 +58,7 @@
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-  - [Toolchain](#toolchain)
+  - [Toolchain(MSRV)](#toolchain)
   - [Monorepo Setup](#monorepo-setup)
   - [Testing with Local Dependencies](#testing-with-local-dependencies)
 - [Open Source License](#open-source-license) 
@@ -71,7 +71,7 @@
 
 WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href="https://github.com/pion/webrtc/releases/tag/v3.1.5">Pion</a> stack in Rust.
 This project is still in active and early development stage, please refer to the [Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) to track the major milestones and releases.
-[Examples](https://github.com/webrtc-rs/examples/blob/main/examples/README.md) provide code samples to show how to use webrtc-rs to build media and data channel applications.
+[Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) provide code samples to show how to use webrtc-rs to build media and data channel applications.
 
 ## Features
 
@@ -108,7 +108,11 @@ This project is still in active and early development stage, please refer to the
 
 ### Toolchain
 
-webrtc-rs currently requires Rust 1.57.0+ to build.
+**Minimum Supported Rust Version:** `1.60.0`
+
+Our minimum supported rust version(MSRV) policy is to support versions of the compiler released within the last six months. We don't eagerly bump the minimum version we support, instead the minimum will be bumped on a needed by needed basis, usually because downstream dependencies force us to.
+
+**Note:** Changes to the minimum supported version are not consider breaking from a [semver](https://semver.org/) perspective.
 
 ### Monorepo Setup
 

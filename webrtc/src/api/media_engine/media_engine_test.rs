@@ -189,7 +189,7 @@ a=rtpmap:111 opus/48000/2
                     uri: extension.to_owned(),
                 },
                 RTPCodecType::Audio,
-                vec![],
+                None,
             )?;
         }
 
@@ -529,14 +529,11 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
-            vec![],
+            None,
         )?;
 
         let params = m
-            .get_rtp_parameters_by_kind(
-                RTPCodecType::Audio,
-                &[RTCRtpTransceiverDirection::Recvonly],
-            )
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
             .await;
 
         assert_eq!(1, params.header_extensions.len());
@@ -551,14 +548,11 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
-            vec![RTCRtpTransceiverDirection::Recvonly],
+            Some(RTCRtpTransceiverDirection::Recvonly),
         )?;
 
         let params = m
-            .get_rtp_parameters_by_kind(
-                RTPCodecType::Audio,
-                &[RTCRtpTransceiverDirection::Recvonly],
-            )
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
             .await;
 
         assert_eq!(1, params.header_extensions.len());
@@ -573,61 +567,33 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
-            vec![RTCRtpTransceiverDirection::Sendonly],
+            Some(RTCRtpTransceiverDirection::Sendonly),
         )?;
 
         let params = m
-            .get_rtp_parameters_by_kind(
-                RTPCodecType::Audio,
-                &[RTCRtpTransceiverDirection::Recvonly],
-            )
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
             .await;
 
         assert_eq!(0, params.header_extensions.len());
     }
 
-    //"Invalid Direction"
+    //"No direction and inactive"
     {
         let mut m = MediaEngine::default();
         register_codec(&mut m)?;
+        m.register_header_extension(
+            RTCRtpHeaderExtensionCapability {
+                uri: "webrtc-header-test".to_owned(),
+            },
+            RTPCodecType::Audio,
+            None,
+        )?;
 
-        let result = m.register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: "webrtc-header-test".to_owned(),
-            },
-            RTPCodecType::Audio,
-            vec![RTCRtpTransceiverDirection::Sendrecv],
-        );
-        if let Err(err) = result {
-            assert_eq!(Error::ErrRegisterHeaderExtensionInvalidDirection, err);
-        } else {
-            assert!(false);
-        }
+        let params = m
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive)
+            .await;
 
-        let result = m.register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: "webrtc-header-test".to_owned(),
-            },
-            RTPCodecType::Audio,
-            vec![RTCRtpTransceiverDirection::Inactive],
-        );
-        if let Err(err) = result {
-            assert_eq!(Error::ErrRegisterHeaderExtensionInvalidDirection, err);
-        } else {
-            assert!(false);
-        }
-        let result = m.register_header_extension(
-            RTCRtpHeaderExtensionCapability {
-                uri: "webrtc-header-test".to_owned(),
-            },
-            RTPCodecType::Audio,
-            vec![RTCRtpTransceiverDirection::Unspecified],
-        );
-        if let Err(err) = result {
-            assert_eq!(Error::ErrRegisterHeaderExtensionInvalidDirection, err);
-        } else {
-            assert!(false);
-        }
+        assert_eq!(1, params.header_extensions.len());
     }
 
     Ok(())
@@ -713,7 +679,7 @@ async fn test_update_header_extenstion_to_cloned_media_engine() -> Result<()> {
             uri: "test-extension".to_owned(),
         },
         RTPCodecType::Audio,
-        vec![],
+        None,
     )?;
 
     validate(&m).await?;
@@ -748,7 +714,7 @@ a=rtpmap:111 opus/48000/2
                 uri: extension.to_owned(),
             },
             RTPCodecType::Video,
-            vec![],
+            None,
         )?;
     }
     for extension in [
@@ -761,7 +727,7 @@ a=rtpmap:111 opus/48000/2
                 uri: extension.to_owned(),
             },
             RTPCodecType::Audio,
-            vec![],
+            None,
         )?;
     }
 
@@ -799,7 +765,7 @@ a=rtpmap:111 opus/48000/2
     assert!(!mid_video_enabled);
 
     let params = m
-        .get_rtp_parameters_by_kind(RTPCodecType::Video, &[RTCRtpTransceiverDirection::Sendonly])
+        .get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly)
         .await;
     dbg!(&params);
 
