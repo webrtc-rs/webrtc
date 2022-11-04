@@ -245,7 +245,13 @@ impl Allocation {
 
     pub async fn start(&self, lifetime: Duration) {
         let (reset_tx, mut reset_rx) = mpsc::channel(1);
-        self.reset_tx.lock().unwrap().replace(reset_tx);
+        {
+            // Won't panic since we only do set/take/clone one-liners.
+            self.reset_tx
+                .lock()
+                .expect("Allocation::reset_tx is poisoned")
+                .replace(reset_tx);
+        }
 
         let allocations = self.allocations.clone();
         let five_tuple = self.five_tuple;
@@ -282,15 +288,26 @@ impl Allocation {
     }
 
     fn stop(&self) -> bool {
-        let mut reset_tx = self.reset_tx.lock().unwrap();
+        let mut reset_tx = {
+            // Won't panic since we only do set/take/clone one-liners.
+            self.reset_tx
+                .lock()
+                .expect("Allocation::reset_tx is poisoned")
+                .take()
+        };
         let expired = reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
-        reset_tx.take();
         expired
     }
 
     // Refresh updates the allocations lifetime
     pub async fn refresh(&self, lifetime: Duration) {
-        let reset_tx = self.reset_tx.lock().unwrap().clone();
+        let reset_tx = {
+            // Won't panic since we only do set/take/clone one-liners.
+            self.reset_tx
+                .lock()
+                .expect("Allocation::reset_tx is poisoned")
+                .clone()
+        };
         if let Some(tx) = reset_tx {
             let _ = tx.send(lifetime).await;
         }

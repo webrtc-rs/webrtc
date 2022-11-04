@@ -1079,14 +1079,14 @@ impl AgentInternal {
                 tokio::select! {
                     opt_state = chan_state_rx.recv() => {
                         if let Some(s) = opt_state {
-                            if let Some(hndlr) = &*ai.on_connection_state_change_hdlr.load() {
-                                let mut f = hndlr.lock().await;
+                            if let Some(handler) = &*ai.on_connection_state_change_hdlr.load() {
+                                let mut f = handler.lock().await;
                                 f(s).await;
                             }
                         } else {
                             while let Some(c) = chan_candidate_rx.recv().await {
-                                if let Some(hndlr) = &*ai.on_candidate_hdlr.load() {
-                                    let mut f = hndlr.lock().await;
+                                if let Some(handler) = &*ai.on_candidate_hdlr.load() {
+                                    let mut f = handler.lock().await;
                                     f(c).await;
                                 }
                             }
@@ -1095,14 +1095,14 @@ impl AgentInternal {
                     },
                     opt_cand = chan_candidate_rx.recv() => {
                         if let Some(c) = opt_cand {
-                            if let Some(hndlr) = &*ai.on_candidate_hdlr.load() {
-                                let mut f = hndlr.lock().await;
+                            if let Some(handler) = &*ai.on_candidate_hdlr.load() {
+                                let mut f = handler.lock().await;
                                 f(c).await;
                             }
                         } else {
                             while let Some(s) = chan_state_rx.recv().await {
-                                if let Some(hndlr) = &*ai.on_connection_state_change_hdlr.load() {
-                                    let mut f = hndlr.lock().await;
+                                if let Some(handler) = &*ai.on_connection_state_change_hdlr.load() {
+                                    let mut f = handler.lock().await;
                                     f(s).await;
                                 }
                             }

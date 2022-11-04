@@ -233,7 +233,11 @@ impl Candidate for CandidateBase {
     }
 
     fn addr(&self) -> SocketAddr {
-        *self.resolved_addr.lock().unwrap()
+        // Won't panic since we only do set/get one-liners.
+        *self
+            .resolved_addr
+            .lock()
+            .expect("CandidateBase::resolved_addr is poisoned")
     }
 
     /// Stops the recvLoop.
@@ -296,7 +300,14 @@ impl Candidate for CandidateBase {
         self.network_type
             .store(network_type as u8, Ordering::SeqCst);
 
-        *self.resolved_addr.lock().unwrap() = create_addr(network_type, *ip, self.port);
+        let addr = create_addr(network_type, *ip, self.port);
+        {
+            // Won't panic since we only do set/get one-liners.
+            *self
+                .resolved_addr
+                .lock()
+                .expect("CandidateBase::resolved_addr is poisoned") = addr;
+        }
 
         Ok(())
     }

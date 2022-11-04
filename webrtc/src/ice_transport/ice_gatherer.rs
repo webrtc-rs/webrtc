@@ -176,26 +176,26 @@ impl RTCIceGatherer {
 
                     Box::pin(async move {
                         if let Some(cand) = candidate {
-                            if let Some(hndlr) = &*on_local_candidate_handler_clone.load() {
-                                let mut f = hndlr.lock().await;
+                            if let Some(handler) = &*on_local_candidate_handler_clone.load() {
+                                let mut f = handler.lock().await;
                                 f(Some(RTCIceCandidate::from(&cand))).await;
                             }
                         } else {
                             state_clone
                                 .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
 
-                            if let Some(hndlr) = &*on_state_change_handler_clone.load() {
-                                let mut f = hndlr.lock().await;
+                            if let Some(handler) = &*on_state_change_handler_clone.load() {
+                                let mut f = handler.lock().await;
                                 f(RTCIceGathererState::Complete).await;
                             }
 
-                            if let Some(hndlr) = &*on_gathering_complete_handler_clone.load() {
-                                let mut f = hndlr.lock().await;
+                            if let Some(handler) = &*on_gathering_complete_handler_clone.load() {
+                                let mut f = handler.lock().await;
                                 f().await;
                             }
 
-                            if let Some(hndlr) = &*on_local_candidate_handler_clone.load() {
-                                let mut f = hndlr.lock().await;
+                            if let Some(handler) = &*on_local_candidate_handler_clone.load() {
+                                let mut f = handler.lock().await;
                                 f(None).await;
                             }
                         }
@@ -279,8 +279,8 @@ impl RTCIceGatherer {
     pub async fn set_state(&self, s: RTCIceGathererState) {
         self.state.store(s as u8, Ordering::SeqCst);
 
-        if let Some(hndlr) = &*self.on_state_change_handler.load() {
-            let mut f = hndlr.lock().await;
+        if let Some(handler) = &*self.on_state_change_handler.load() {
+            let mut f = handler.lock().await;
             f(s).await;
         }
     }

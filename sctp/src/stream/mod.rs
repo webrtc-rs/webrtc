@@ -453,8 +453,8 @@ impl Stream {
         );
 
         if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
-            if let Some(hndlr) = &*self.on_buffered_amount_low.load() {
-                let mut f = hndlr.lock().await;
+            if let Some(handler) = &*self.on_buffered_amount_low.load() {
+                let mut f = handler.lock().await;
                 f().await;
             }
         }

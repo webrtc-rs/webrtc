@@ -30,7 +30,11 @@ impl Conn for DisconnectedPacketConn {
     async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let (n, addr) = self.pconn.recv_from(buf).await?;
         {
-            *self.raddr.lock().unwrap() = addr;
+            // Won't panic since we only do set/get one-liners.
+            *self
+                .raddr
+                .lock()
+                .expect("DisconnectedPacketConn::raddr is poisoned") = addr;
         }
         Ok(n)
     }
@@ -40,7 +44,13 @@ impl Conn for DisconnectedPacketConn {
     }
 
     async fn send(&self, buf: &[u8]) -> Result<usize> {
-        let addr = { *self.raddr.lock().unwrap() };
+        let addr = {
+            // Won't panic since we only do set/get one-liners.
+            *self
+                .raddr
+                .lock()
+                .expect("DisconnectedPacketConn::raddr is poisoned")
+        };
         self.pconn.send_to(buf, addr).await
     }
 
@@ -53,7 +63,14 @@ impl Conn for DisconnectedPacketConn {
     }
 
     fn remote_addr(&self) -> Option<SocketAddr> {
-        Some(*self.raddr.lock().unwrap())
+        let raddr = {
+            // Won't panic since we only do set/get one-liners.
+            *self
+                .raddr
+                .lock()
+                .expect("DisconnectedPacketConn::raddr is poisoned")
+        };
+        Some(raddr)
     }
 
     async fn close(&self) -> Result<()> {

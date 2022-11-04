@@ -119,8 +119,8 @@ impl RTCDtlsTransport {
     /// state_change requires the caller holds the lock
     async fn state_change(&self, state: RTCDtlsTransportState) {
         self.state.store(state as u8, Ordering::SeqCst);
-        if let Some(hndlr) = &*self.on_state_change_handler.load() {
-            let mut f = hndlr.lock().await;
+        if let Some(handler) = &*self.on_state_change_handler.load() {
+            let mut f = handler.lock().await;
             f(state).await;
         }
     }

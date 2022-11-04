@@ -62,7 +62,13 @@ impl UdpConn {
 #[async_trait]
 impl Conn for UdpConn {
     async fn connect(&self, addr: SocketAddr) -> Result<()> {
-        self.rem_addr.lock().unwrap().replace(addr);
+        {
+            // Won't panic since we only do set/get one-liners.
+            self.rem_addr
+                .lock()
+                .expect("UdpConn::rem_addr is poisoned")
+                .replace(addr);
+        }
 
         Ok(())
     }
@@ -80,7 +86,10 @@ impl Conn for UdpConn {
     /// the n > 0 bytes returned before considering the error err.
     async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut read_ch = self.read_ch_rx.lock().await;
-        let rem_addr = { *self.rem_addr.lock().unwrap() };
+        let rem_addr = {
+            // Won't panic since we only do set/get one-liners.
+            *self.rem_addr.lock().expect("UdpConn::rem_addr is poisoned")
+        };
         while let Some(chunk) = read_ch.recv().await {
             let user_data = chunk.user_data();
             let n = std::cmp::min(buf.len(), user_data.len());
@@ -100,7 +109,10 @@ impl Conn for UdpConn {
     }
 
     async fn send(&self, buf: &[u8]) -> Result<usize> {
-        let rem_addr = { *self.rem_addr.lock().unwrap() };
+        let rem_addr = {
+            // Won't panic since we only do set/get one-liners.
+            *self.rem_addr.lock().expect("UdpConn::rem_addr is poisoned")
+        };
         if let Some(rem_addr) = rem_addr {
             self.send_to(buf, rem_addr).await
         } else {
@@ -137,7 +149,8 @@ impl Conn for UdpConn {
     }
 
     fn remote_addr(&self) -> Option<SocketAddr> {
-        *self.rem_addr.lock().unwrap()
+        // Won't panic since we only do set/get one-liners.
+        *self.rem_addr.lock().expect("UdpConn::rem_addr is poisoned")
     }
 
     async fn close(&self) -> Result<()> {

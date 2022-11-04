@@ -134,8 +134,8 @@ impl PeerConnectionInternal {
             .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
                 let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
                 Box::pin(async move {
-                    if let Some(hndlr) = &*on_data_channel_handler2.load() {
-                        let mut f = hndlr.lock().await;
+                    if let Some(handler) = &*on_data_channel_handler2.load() {
+                        let mut f = handler.lock().await;
                         f(d).await;
                     }
                 })

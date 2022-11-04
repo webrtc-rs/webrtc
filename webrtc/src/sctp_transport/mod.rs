@@ -235,8 +235,8 @@ impl RTCSctpTransport {
                         Err(err) => {
                             if data::Error::ErrStreamClosed == err {
                                 log::error!("Failed to accept data channel: {}", err);
-                                if let Some(hndlr) = &*param.on_error_handler.load() {
-                                    let mut f = hndlr.lock().await;
+                                if let Some(handler) = &*param.on_error_handler.load() {
+                                    let mut f = handler.lock().await;
                                     f(err.into()).await;
                                 }
                             }
@@ -293,8 +293,8 @@ impl RTCSctpTransport {
                 Arc::clone(&param.setting_engine),
             ));
 
-            if let Some(hndlr) = &*param.on_data_channel_handler.load() {
-                let mut f = hndlr.lock().await;
+            if let Some(handler) = &*param.on_data_channel_handler.load() {
+                let mut f = handler.lock().await;
                 f(Arc::clone(&rtc_dc)).await;
 
                 param.data_channels_accepted.fetch_add(1, Ordering::SeqCst);
@@ -305,8 +305,8 @@ impl RTCSctpTransport {
 
             rtc_dc.handle_open(Arc::new(dc)).await;
 
-            if let Some(hndlr) = &*param.on_data_channel_opened_handler.load() {
-                let mut f = hndlr.lock().await;
+            if let Some(handler) = &*param.on_data_channel_opened_handler.load() {
+                let mut f = handler.lock().await;
                 f(rtc_dc).await;
                 param.data_channels_opened.fetch_add(1, Ordering::SeqCst);
             }

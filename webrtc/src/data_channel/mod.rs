@@ -206,7 +206,14 @@ impl RTCDataChannel {
     /// on_open sets an event handler which is invoked when
     /// the underlying data transport has been established (or re-established).
     pub fn on_open(&self, f: OnOpenHdlrFn) {
-        let _ = self.on_open_handler.lock().unwrap().replace(f);
+        {
+            // Won't panic since we only do set/take one-liners.
+            let _ = self
+                .on_open_handler
+                .lock()
+                .expect("RTCDataChannel::on_open_handler is poisoned")
+                .replace(f);
+        }
 
         if self.ready_state() == RTCDataChannelState::Open {
             self.do_open();
@@ -214,7 +221,13 @@ impl RTCDataChannel {
     }
 
     fn do_open(&self) {
-        let on_open_handler = self.on_open_handler.lock().unwrap().take();
+        let on_open_handler = {
+            // Won't panic since we only do set/take one-liners.
+            self.on_open_handler
+                .lock()
+                .expect("RTCDataChannel::on_open_handler is poisoned")
+                .take()
+        };
         if on_open_handler.is_none() {
             return;
         }
@@ -254,8 +267,8 @@ impl RTCDataChannel {
     }
 
     async fn do_message(&self, msg: DataChannelMessage) {
-        if let Some(hndlr) = &*self.on_message_handler.load() {
-            let mut f = hndlr.lock().await;
+        if let Some(handler) = &*self.on_message_handler.load() {
+            let mut f = handler.lock().await;
             f(msg).await;
         }
     }
@@ -317,8 +330,8 @@ impl RTCDataChannel {
 
                             let on_close_handler2 = Arc::clone(&on_close_handler);
                             tokio::spawn(async move {
-                                if let Some(hndlr) = &*on_close_handler2.load() {
-                                    let mut f = hndlr.lock().await;
+                                if let Some(handler) = &*on_close_handler2.load() {
+                                    let mut f = handler.lock().await;
                                     f().await;
                                 }
                             });
@@ -331,16 +344,16 @@ impl RTCDataChannel {
 
                             let on_error_handler2 = Arc::clone(&on_error_handler);
                             tokio::spawn(async move {
-                                if let Some(hndlr) = &*on_error_handler2.load() {
-                                    let mut f = hndlr.lock().await;
+                                if let Some(handler) = &*on_error_handler2.load() {
+                                    let mut f = handler.lock().await;
                                     f(err.into()).await;
                                 }
                             });
 
                             let on_close_handler2 = Arc::clone(&on_close_handler);
                             tokio::spawn(async move {
-                                if let Some(hndlr) = &*on_close_handler2.load() {
-                                    let mut f = hndlr.lock().await;
+                                if let Some(handler) = &*on_close_handler2.load() {
+                                    let mut f = handler.lock().await;
                                     f().await;
                                 }
                             });
@@ -351,8 +364,8 @@ impl RTCDataChannel {
                 }
             };
 
-            if let Some(hndlr) = &*on_message_handler.load() {
-                let mut f = hndlr.lock().await;
+            if let Some(handler) = &*on_message_handler.load() {
+                let mut f = handler.lock().await;
                 f(DataChannelMessage {
                     is_string,
                     data: Bytes::from(buffer[..n].to_vec()),

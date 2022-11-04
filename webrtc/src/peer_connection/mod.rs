@@ -295,8 +295,8 @@ impl RTCPeerConnection {
 
     async fn do_signaling_state_change(&self, new_state: RTCSignalingState) {
         log::info!("signaling state changed to {}", new_state);
-        if let Some(hndlr) = &*self.internal.on_signaling_state_change_handler.load() {
-            let mut f = hndlr.lock().await;
+        if let Some(handler) = &*self.internal.on_signaling_state_change_handler.load() {
+            let mut f = handler.lock().await;
             f(new_state).await;
         }
     }
@@ -415,8 +415,8 @@ impl RTCPeerConnection {
         params.is_negotiation_needed.store(true, Ordering::SeqCst);
 
         // Step 2.7
-        if let Some(hndlr) = handler {
-            let mut f = hndlr.lock().await;
+        if let Some(handler) = handler {
+            let mut f = handler.lock().await;
             f().await;
         }
 
@@ -595,8 +595,8 @@ impl RTCPeerConnection {
 
         if t.is_some() {
             tokio::spawn(async move {
-                if let Some(hndlr) = &*on_track_handler.load() {
-                    let mut f = hndlr.lock().await;
+                if let Some(handler) = &*on_track_handler.load() {
+                    let mut f = handler.lock().await;
                     f(t, r).await;
                 } else {
                     log::warn!("on_track unset, unable to handle incoming media streams");
@@ -621,8 +621,8 @@ impl RTCPeerConnection {
         ice_connection_state.store(cs as u8, Ordering::SeqCst);
 
         log::info!("ICE connection state changed: {}", cs);
-        if let Some(hndlr) = &*handler.load() {
-            let mut f = hndlr.lock().await;
+        if let Some(handler) = &*handler.load() {
+            let mut f = handler.lock().await;
             f(cs).await;
         }
     }
@@ -639,8 +639,8 @@ impl RTCPeerConnection {
         handler: &Arc<ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>>,
         cs: RTCPeerConnectionState,
     ) {
-        if let Some(hndlr) = &*handler.load() {
-            let mut f = hndlr.lock().await;
+        if let Some(handler) = &*handler.load() {
+            let mut f = handler.lock().await;
             f(cs).await;
         }
     }

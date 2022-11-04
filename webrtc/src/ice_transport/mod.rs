@@ -115,8 +115,8 @@ impl RTCIceTransport {
                     Arc::clone(&on_connection_state_change_handler);
                 state.store(s as u8, Ordering::SeqCst);
                 Box::pin(async move {
-                    if let Some(hndlr) = &*on_connection_state_change_handler_clone.load() {
-                        let mut f = hndlr.lock().await;
+                    if let Some(handler) = &*on_connection_state_change_handler_clone.load() {
+                        let mut f = handler.lock().await;
                         f(s).await;
                     }
                 })
@@ -132,10 +132,10 @@ impl RTCIceTransport {
                     let local = RTCIceCandidate::from(local);
                     let remote = RTCIceCandidate::from(remote);
                     Box::pin(async move {
-                        if let Some(hndlr) =
+                        if let Some(handler) =
                             &*on_selected_candidate_pair_change_handler_clone.load()
                         {
-                            let mut f = hndlr.lock().await;
+                            let mut f = handler.lock().await;
                             f(RTCIceCandidatePair::new(local, remote)).await;
                         }
                     })
