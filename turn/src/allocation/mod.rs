@@ -288,15 +288,14 @@ impl Allocation {
     }
 
     fn stop(&self) -> bool {
-        let mut reset_tx = {
+        let reset_tx = {
             // Won't panic since we only do set/take/clone one-liners.
             self.reset_tx
                 .lock()
                 .expect("Allocation::reset_tx is poisoned")
                 .take()
         };
-        let expired = reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
-        expired
+        reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst)
     }
 
     // Refresh updates the allocations lifetime
