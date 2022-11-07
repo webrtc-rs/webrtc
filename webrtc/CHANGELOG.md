@@ -13,7 +13,6 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
 * Updated minimum rust version to `1.60.0`
 * Added a new `write_rtp_with_extensions` method to `TrackLocalStaticSample` and `TrackLocalStatiRTP`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
 * Added a new `sample_writer` helper to `TrackLocalStaticSample`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
-* Fixed a potential bug in `PollDataChannel::poll_write` [#341](https://github.com/webrtc-rs/webrtc/pull/341).
 
 #### Breaking changes
 
