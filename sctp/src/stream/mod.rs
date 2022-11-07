@@ -700,44 +700,34 @@ impl AsyncWrite for PollStream {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        let (fut, fut_is_new) = match self.write_fut.as_mut() {
-            Some(fut) => (fut, false),
+        let fut = match self.write_fut.as_mut() {
+            Some(fut) => fut,
             None => {
                 let stream = self.stream.clone();
                 let bytes = Bytes::copy_from_slice(buf);
-                (
-                    self.write_fut
-                        .get_or_insert(Box::pin(async move { stream.write(&bytes).await })),
-                    true,
-                )
+                self.write_fut
+                    .get_or_insert(Box::pin(async move { stream.write(&bytes).await }))
             }
         };
 
-        match fut.as_mut().poll(cx) {
-            Poll::Pending => {
-                // If it's the first time we're polling the future, `Poll::Pending` can't be
-                // returned because that would mean the `PollStream` is not ready for writing. And
-                // this is not true since we've just created a future, which is going to write the
-                // buf to the underlying stream.
-                //
-                // It's okay to return `Poll::Ready` if the data is buffered (this is what the
-                // buffered writer and `File` do).
-                if fut_is_new {
-                    Poll::Ready(Ok(buf.len()))
-                } else {
-                    // If it's the subsequent poll, it's okay to return `Poll::Pending` as it
-                    // indicates that the `PollStream` is not ready for writing. Only one future
-                    // can be in progress at the time.
-                    Poll::Pending
+        // It's okay to loop here since the data is buffered by the data channel (IO is happening
+        // in a separate thread).
+        loop {
+            match fut.as_mut().poll(cx) {
+                Poll::Pending => {
+                    // `Poll::Pending` can't be returned because that would mean the `PollStream` is
+                    // not ready for writing. And this is not true since we've just created a future,
+                    // which is going to write the buf to the underlying stream.
+                    continue;
                 }
-            }
-            Poll::Ready(Err(e)) => {
-                self.write_fut = None;
-                Poll::Ready(Err(e.into()))
-            }
-            Poll::Ready(Ok(n)) => {
-                self.write_fut = None;
-                Poll::Ready(Ok(n))
+                Poll::Ready(Err(e)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Err(e.into()))
+                }
+                Poll::Ready(Ok(n)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Ok(n))
+                }
             }
         }
     }
