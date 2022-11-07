@@ -62,13 +62,7 @@ trait ControlledSelector {
 
 impl AgentInternal {
     fn is_nominatable(&self, c: &Arc<dyn Candidate + Send + Sync>) -> bool {
-        let start_time = {
-            // Won't panic since we only do set/get one-liners.
-            *self
-                .start_time
-                .lock()
-                .expect("AgentInternal::start_time is poisoned")
-        };
+        let start_time = { *self.start_time.lock() };
         match c.candidate_type() {
             CandidateType::Host => {
                 Instant::now()
@@ -224,11 +218,7 @@ impl ControllingSelector for AgentInternal {
             *nominated_pair = None;
         }
         {
-            // Won't panic since we only do set/get one-liners.
-            *self
-                .start_time
-                .lock()
-                .expect("AgentInternal::start_time is poisoned") = Instant::now();
+            *self.start_time.lock() = Instant::now();
         }
     }
 

@@ -16,7 +16,7 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering},
-        Arc, Mutex as StdMutex, Weak,
+        Arc, Weak,
     },
     time::SystemTime,
 };
@@ -24,6 +24,7 @@ use std::{
 use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::{Mutex, Notify};
+use util::sync::Mutex as SyncMutex;
 
 use data_channel_state::RTCDataChannelState;
 
@@ -73,7 +74,7 @@ pub struct RTCDataChannel {
     // "blob". This attribute controls how binary data is exposed to scripts.
     // binaryType                 string
     pub(crate) on_message_handler: Arc<ArcSwapOption<Mutex<OnMessageHdlrFn>>>,
-    pub(crate) on_open_handler: StdMutex<Option<OnOpenHdlrFn>>,
+    pub(crate) on_open_handler: SyncMutex<Option<OnOpenHdlrFn>>,
     pub(crate) on_close_handler: Arc<ArcSwapOption<Mutex<OnCloseHdlrFn>>>,
     pub(crate) on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
 
@@ -207,12 +208,7 @@ impl RTCDataChannel {
     /// the underlying data transport has been established (or re-established).
     pub fn on_open(&self, f: OnOpenHdlrFn) {
         {
-            // Won't panic since we only do set/take one-liners.
-            let _ = self
-                .on_open_handler
-                .lock()
-                .expect("RTCDataChannel::on_open_handler is poisoned")
-                .replace(f);
+            let _ = self.on_open_handler.lock().replace(f);
         }
 
         if self.ready_state() == RTCDataChannelState::Open {
@@ -221,13 +217,7 @@ impl RTCDataChannel {
     }
 
     fn do_open(&self) {
-        let on_open_handler = {
-            // Won't panic since we only do set/take one-liners.
-            self.on_open_handler
-                .lock()
-                .expect("RTCDataChannel::on_open_handler is poisoned")
-                .take()
-        };
+        let on_open_handler = { self.on_open_handler.lock().take() };
         if on_open_handler.is_none() {
             return;
         }

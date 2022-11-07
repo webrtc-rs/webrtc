@@ -1,21 +1,21 @@
 use super::*;
 
+use crate::sync::RwLock;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
 
 /// Since UDP is connectionless, as a server, it doesn't know how to reply
 /// simply using the `Write` method. So, to make it work, `disconnectedPacketConn`
 /// will infer the last packet that it reads as the reply address for `Write`
 pub struct DisconnectedPacketConn {
-    raddr: StdMutex<SocketAddr>,
+    raddr: RwLock<SocketAddr>,
     pconn: Arc<dyn Conn + Send + Sync>,
 }
 
 impl DisconnectedPacketConn {
     pub fn new(conn: Arc<dyn Conn + Send + Sync>) -> Self {
         DisconnectedPacketConn {
-            raddr: StdMutex::new(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)),
+            raddr: RwLock::new(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)),
             pconn: conn,
         }
     }
@@ -30,11 +30,7 @@ impl Conn for DisconnectedPacketConn {
     async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let (n, addr) = self.pconn.recv_from(buf).await?;
         {
-            // Won't panic since we only do set/get one-liners.
-            *self
-                .raddr
-                .lock()
-                .expect("DisconnectedPacketConn::raddr is poisoned") = addr;
+            *self.raddr.write() = addr;
         }
         Ok(n)
     }
@@ -44,13 +40,7 @@ impl Conn for DisconnectedPacketConn {
     }
 
     async fn send(&self, buf: &[u8]) -> Result<usize> {
-        let addr = {
-            // Won't panic since we only do set/get one-liners.
-            *self
-                .raddr
-                .lock()
-                .expect("DisconnectedPacketConn::raddr is poisoned")
-        };
+        let addr = { *self.raddr.read() };
         self.pconn.send_to(buf, addr).await
     }
 
@@ -63,13 +53,7 @@ impl Conn for DisconnectedPacketConn {
     }
 
     fn remote_addr(&self) -> Option<SocketAddr> {
-        let raddr = {
-            // Won't panic since we only do set/get one-liners.
-            *self
-                .raddr
-                .lock()
-                .expect("DisconnectedPacketConn::raddr is poisoned")
-        };
+        let raddr = { *self.raddr.read() };
         Some(raddr)
     }
 

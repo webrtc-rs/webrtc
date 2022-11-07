@@ -13,11 +13,12 @@ use std::{
     ops::Add,
     sync::{
         atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering},
-        Arc, Mutex as StdMutex,
+        Arc,
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::{broadcast, Mutex};
+use util::sync::Mutex as SyncMutex;
 
 #[derive(Default)]
 pub struct CandidateBaseConfig {
@@ -43,7 +44,7 @@ pub struct CandidateBase {
     pub(crate) related_address: Option<CandidateRelatedAddress>,
     pub(crate) tcp_type: TcpType,
 
-    pub(crate) resolved_addr: StdMutex<SocketAddr>,
+    pub(crate) resolved_addr: SyncMutex<SocketAddr>,
 
     pub(crate) last_sent: AtomicU64,
     pub(crate) last_received: AtomicU64,
@@ -73,7 +74,7 @@ impl Default for CandidateBase {
             related_address: None,
             tcp_type: TcpType::default(),
 
-            resolved_addr: StdMutex::new(SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0)),
+            resolved_addr: SyncMutex::new(SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0)),
 
             last_sent: AtomicU64::new(0),
             last_received: AtomicU64::new(0),
@@ -233,11 +234,7 @@ impl Candidate for CandidateBase {
     }
 
     fn addr(&self) -> SocketAddr {
-        // Won't panic since we only do set/get one-liners.
-        *self
-            .resolved_addr
-            .lock()
-            .expect("CandidateBase::resolved_addr is poisoned")
+        *self.resolved_addr.lock()
     }
 
     /// Stops the recvLoop.
@@ -302,11 +299,7 @@ impl Candidate for CandidateBase {
 
         let addr = create_addr(network_type, *ip, self.port);
         {
-            // Won't panic since we only do set/get one-liners.
-            *self
-                .resolved_addr
-                .lock()
-                .expect("CandidateBase::resolved_addr is poisoned") = addr;
+            *self.resolved_addr.lock() = addr;
         }
 
         Ok(())

@@ -314,7 +314,7 @@ impl CandidatePair {
         // maxUint32, this result would overflow uint64
         ((1 << 32_u64) - 1) * u64::from(std::cmp::min(g, d))
             + 2 * u64::from(std::cmp::max(g, d))
-            + if g > d { 1 } else { 0 }
+            + u64::from(g > d)
     }
 
     pub async fn write(&self, b: &[u8]) -> Result<usize> {
