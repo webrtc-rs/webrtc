@@ -3,6 +3,9 @@
 ## Unreleased
 
 * Increased minimum support rust version to `1.60.0`.
+
+#### Breaking changes
+
 * Make `Stream::on_buffered_amount_low` function non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338).
     
 

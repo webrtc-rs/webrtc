@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+#### Breaking changes
+
 * Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
     - `Bridge`:
         - `drop_next_nwrites`;

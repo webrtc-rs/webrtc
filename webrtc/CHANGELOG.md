@@ -13,6 +13,13 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
 * Updated minimum rust version to `1.60.0`
 * Added a new `write_rtp_with_extensions` method to `TrackLocalStaticSample` and `TrackLocalStatiRTP`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
 * Added a new `sample_writer` helper to `TrackLocalStaticSample`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
+
+
+#### Breaking changes
+
+* Allow one single direction for extmap matching. [#321](https://github.com/webrtc-rs/webrtc/pull/321). API
+change for MediaEngine::register_header_extension
+* Removes support for Plan-B. All major implementations of WebRTC now support unified and continuing support for plan-b is an undue maintenance burden when unified can be used. See [“Unified Plan” Transition Guide (JavaScript)](https://docs.google.com/document/d/1-ZfikoUtoJa9k-GZG1daN0BU3IjIanQ_JSscHxQesvU/) for an overview of the changes required to migrate. [#320](https://github.com/webrtc-rs/webrtc/pull/320) by [@algesten](https://github.com/algesten).
 * Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
     - `RTCDataChannel`:
         - `on_open`;
@@ -42,14 +49,6 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
         - `on_error`;
         - `on_data_channel`;
         - `on_data_channel_opened`.
-
-
-#### Breaking changes
-
-* Allow one single direction for extmap matching. [#321](https://github.com/webrtc-rs/webrtc/pull/321). API
-change for MediaEngine::register_header_extension
-* Removes support for Plan-B. All major implementations of WebRTC now support unified and continuing support for plan-b is an undue maintenance burden when unified can be used. See [“Unified Plan” Transition Guide (JavaScript)](https://docs.google.com/document/d/1-ZfikoUtoJa9k-GZG1daN0BU3IjIanQ_JSscHxQesvU/) for an overview of the changes required to migrate. [#320](https://github.com/webrtc-rs/webrtc/pull/320) by [@algesten](https://github.com/algesten).
-
 
 ## 0.5.1
 
