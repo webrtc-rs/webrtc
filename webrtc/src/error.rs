@@ -408,6 +408,10 @@ pub enum Error {
     #[error("parse url: {0}")]
     ParseUrl(#[from] url::ParseError),
 
+    /// Error parsing a given PEM string.
+    #[error("invalid PEM: {0}")]
+    InvalidPEM(String),
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     new(String),

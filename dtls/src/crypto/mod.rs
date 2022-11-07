@@ -15,57 +15,35 @@ use der_parser::{oid, oid::Oid};
 use rcgen::KeyPair;
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+use std::convert::TryFrom;
 use std::sync::Arc;
 
-#[derive(Clone, PartialEq)]
+/// A X.509 certificate(s) used to authenticate a DTLS connection.
+#[derive(Clone, PartialEq, Debug)]
 pub struct Certificate {
+    /// DER-encoded certificates.
     pub certificate: Vec<rustls::Certificate>,
+    /// Private key.
     pub private_key: CryptoPrivateKey,
 }
 
 impl Certificate {
+    /// Generate a self-signed certificate.
+    ///
+    /// See [`rcgen::generate_simple_self_signed`].
     pub fn generate_self_signed(subject_alt_names: impl Into<Vec<String>>) -> Result<Self> {
         let cert = rcgen::generate_simple_self_signed(subject_alt_names)?;
-        let certificate = cert.serialize_der()?;
         let key_pair = cert.get_key_pair();
-        let serialized_der = key_pair.serialize_der();
-        let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
-            CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ed25519(
-                    Ed25519KeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            }
-        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
-            CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ecdsa256(
-                    EcdsaKeyPair::from_pkcs8(
-                        &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-                        &serialized_der,
-                    )
-                    .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            }
-        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
-            CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Rsa256(
-                    RsaKeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            }
-        } else {
-            return Err(Error::Other("Unsupported key_pair".to_owned()));
-        };
 
         Ok(Certificate {
-            certificate: vec![rustls::Certificate(certificate)],
-            private_key,
+            certificate: vec![rustls::Certificate(cert.serialize_der()?)],
+            private_key: CryptoPrivateKey::try_from(key_pair)?,
         })
     }
 
+    /// Generate a self-signed certificate with the given algorithm.
+    ///
+    /// See [`rcgen::Certificate::from_params`].
     pub fn generate_self_signed_with_alg(
         subject_alt_names: impl Into<Vec<String>>,
         alg: &'static rcgen::SignatureAlgorithm,
@@ -73,44 +51,65 @@ impl Certificate {
         let mut params = rcgen::CertificateParams::new(subject_alt_names);
         params.alg = alg;
         let cert = rcgen::Certificate::from_params(params)?;
-        let certificate = cert.serialize_der()?;
         let key_pair = cert.get_key_pair();
-        let serialized_der = key_pair.serialize_der();
-        let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
-            CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ed25519(
-                    Ed25519KeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            }
-        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
-            CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ecdsa256(
-                    EcdsaKeyPair::from_pkcs8(
-                        &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-                        &serialized_der,
-                    )
-                    .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            }
-        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
-            CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Rsa256(
-                    RsaKeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            }
-        } else {
-            return Err(Error::Other("Unsupported key_pair".to_owned()));
-        };
 
         Ok(Certificate {
-            certificate: vec![rustls::Certificate(certificate)],
-            private_key,
+            certificate: vec![rustls::Certificate(cert.serialize_der()?)],
+            private_key: CryptoPrivateKey::try_from(key_pair)?,
         })
+    }
+
+    /// Parses a certificate from the ASCII PEM format.
+    #[cfg(feature = "pem")]
+    pub fn from_pem(pem_str: &str) -> Result<Self> {
+        let mut pems = pem::parse_many(pem_str).map_err(|e| Error::InvalidPEM(e.to_string()))?;
+        if pems.len() < 2 {
+            return Err(Error::InvalidPEM(format!(
+                "expected at least two PEM blocks, got {}",
+                pems.len()
+            )));
+        }
+        if pems[0].tag != "PRIVATE_KEY" {
+            return Err(Error::InvalidPEM(format!(
+                "invalid tag (expected: 'PRIVATE_KEY', got: '{}')",
+                pems[0].tag
+            )));
+        }
+
+        let keypair = rcgen::KeyPair::from_der(&pems[0].contents)
+            .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {}", e)))?;
+
+        let mut rustls_certs = Vec::new();
+        for p in pems.drain(1..) {
+            if p.tag != "CERTIFICATE" {
+                return Err(Error::InvalidPEM(format!(
+                    "invalid tag (expected: 'CERTIFICATE', got: '{}')",
+                    p.tag
+                )));
+            }
+            rustls_certs.push(rustls::Certificate(p.contents));
+        }
+
+        Ok(Certificate {
+            certificate: rustls_certs,
+            private_key: CryptoPrivateKey::try_from(&keypair)?,
+        })
+    }
+
+    /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
+    #[cfg(feature = "pem")]
+    pub fn serialize_pem(&self) -> String {
+        let mut data = vec![pem::Pem {
+            tag: "PRIVATE_KEY".to_string(),
+            contents: self.private_key.serialized_der.clone(),
+        }];
+        for rustls_cert in &self.certificate {
+            data.push(pem::Pem {
+                tag: "CERTIFICATE".to_string(),
+                contents: rustls_cert.0.clone(),
+            });
+        }
+        pem::encode_many(&data)
     }
 }
 
@@ -134,14 +133,20 @@ pub(crate) fn value_key_message(
     plaintext
 }
 
+/// Either ED25519, ECDSA or RSA keypair.
+#[derive(Debug)]
 pub enum CryptoPrivateKeyKind {
     Ed25519(Ed25519KeyPair),
     Ecdsa256(EcdsaKeyPair),
     Rsa256(RsaKeyPair),
 }
 
+/// Private key.
+#[derive(Debug)]
 pub struct CryptoPrivateKey {
+    /// Keypair.
     pub kind: CryptoPrivateKeyKind,
+    /// DER-encoded keypair.
     pub serialized_der: Vec<u8>,
 }
 
@@ -192,6 +197,44 @@ impl Clone for CryptoPrivateKey {
                 ),
                 serialized_der: self.serialized_der.clone(),
             },
+        }
+    }
+}
+
+impl TryFrom<&KeyPair> for CryptoPrivateKey {
+    type Error = Error;
+
+    fn try_from(key_pair: &KeyPair) -> Result<Self> {
+        let serialized_der = key_pair.serialize_der();
+        if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
+            Ok(CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::Ed25519(
+                    Ed25519KeyPair::from_pkcs8(&serialized_der)
+                        .map_err(|e| Error::Other(e.to_string()))?,
+                ),
+                serialized_der,
+            })
+        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
+            Ok(CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::Ecdsa256(
+                    EcdsaKeyPair::from_pkcs8(
+                        &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                        &serialized_der,
+                    )
+                    .map_err(|e| Error::Other(e.to_string()))?,
+                ),
+                serialized_der,
+            })
+        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
+            Ok(CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::Rsa256(
+                    RsaKeyPair::from_pkcs8(&serialized_der)
+                        .map_err(|e| Error::Other(e.to_string()))?,
+                ),
+                serialized_der,
+            })
+        } else {
+            Err(Error::Other("Unsupported key_pair".to_owned()))
         }
     }
 }
@@ -457,4 +500,22 @@ pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: 
     additional_data[11..].copy_from_slice(&(payload_len as u16).to_be_bytes());
 
     additional_data
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[cfg(feature = "pem")]
+    #[test]
+    fn test_certificate_serialize_pem_and_from_pem() -> Result<()> {
+        let cert = Certificate::generate_self_signed(vec!["webrtc.rs".to_owned()])?;
+
+        let pem = cert.serialize_pem();
+        let loaded_cert = Certificate::from_pem(&pem)?;
+
+        assert_eq!(loaded_cert, cert);
+
+        Ok(())
+    }
 }

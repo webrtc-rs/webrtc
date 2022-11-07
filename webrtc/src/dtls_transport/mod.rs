@@ -157,7 +157,7 @@ impl RTCDtlsTransport {
         let mut fingerprints = vec![];
 
         for c in &self.certificates {
-            fingerprints.extend(c.get_fingerprints()?);
+            fingerprints.extend(c.get_fingerprints());
         }
 
         Ok(DTLSParameters {
@@ -337,7 +337,7 @@ impl RTCDtlsTransport {
         }
 
         let certificate = if let Some(cert) = self.certificates.first() {
-            cert.certificate.clone()
+            cert.dtls_certificate.clone()
         } else {
             return Err(Error::ErrNonCertificate);
         };
