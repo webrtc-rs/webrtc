@@ -81,11 +81,7 @@ impl FixedBigInt {
         }
         let chunk = i / 64;
         let pos = i % 64;
-        if self.bits[chunk] & (1 << pos) != 0 {
-            1
-        } else {
-            0
-        }
+        usize::from(self.bits[chunk] & (1 << pos) != 0)
     }
 
     // set_bit sets i-th bit to 1.
