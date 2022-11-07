@@ -46,14 +46,16 @@ impl<T> RwLock<T> {
         Self(sync::RwLock::new(value))
     }
 
-    /// Acquires a mutex, blocking the current thread until it is able to do so.
+    /// Locks this rwlock with shared read access, blocking the current thread
+    /// until it can be acquired.
     pub fn read(&self) -> RwLockReadGuard<'_, T> {
         let guard = self.0.read().unwrap();
 
         RwLockReadGuard(guard)
     }
 
-    /// Acquires a mutex, blocking the current thread until it is able to do so.
+    /// Locks this rwlock with exclusive write access, blocking the current
+    /// thread until it can be acquired.
     pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         let guard = self.0.write().unwrap();
 

@@ -1,9 +1,9 @@
-use arc_swap::ArcSwapOption;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
+use arc_swap::ArcSwapOption;
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
