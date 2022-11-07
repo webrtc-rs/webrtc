@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Increased minimum support rust version to `1.60.0`.
+* Fixed a potential bug in `PollDataChannel::poll_write` [#341](https://github.com/webrtc-rs/webrtc/pull/341).
 
 ## 0.5.0
 

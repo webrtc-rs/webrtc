@@ -584,15 +584,15 @@ impl AsyncWrite for PollDataChannel {
                     // `Poll::Pending` can't be returned because that would mean the `PollStream`
                     // is not ready for writing. And this is not true since we've just created a
                     // future, which is going to write the buf to the underlying stream.
-                    continue;
+                    continue
                 }
                 Poll::Ready(Err(e)) => {
                     self.write_fut = None;
-                    Poll::Ready(Err(e.into()))
+                    return Poll::Ready(Err(e.into()));
                 }
                 Poll::Ready(Ok(n)) => {
                     self.write_fut = None;
-                    Poll::Ready(Ok(n))
+                    return Poll::Ready(Ok(n));
                 }
             }
         }
