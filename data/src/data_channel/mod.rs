@@ -628,7 +628,7 @@ impl AsyncWrite for PollDataChannel {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.as_mut().poll_flush(cx) {
             Poll::Pending => return Poll::Pending,
-            Poll::Ready(_) => {},
+            Poll::Ready(_) => {}
         }
 
         let fut = match self.shutdown_fut.as_mut() {

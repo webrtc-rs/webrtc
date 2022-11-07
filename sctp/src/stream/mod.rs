@@ -4,19 +4,19 @@ mod stream_test;
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::{Error, Result};
-use crate::queue::reassembly_queue::ReassemblyQueue;
 use crate::queue::pending_queue::PendingQueue;
+use crate::queue::reassembly_queue::ReassemblyQueue;
 
 use bytes::Bytes;
 use std::{
-  fmt,
-  future::Future,
-  io,
-  net::Shutdown,
-  pin::Pin,
-  sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering},
-  sync::Arc,
-  task::{Context, Poll},
+    fmt,
+    future::Future,
+    io,
+    net::Shutdown,
+    pin::Pin,
+    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering},
+    sync::Arc,
+    task::{Context, Poll},
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -765,7 +765,7 @@ impl AsyncWrite for PollStream {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.as_mut().poll_flush(cx) {
             Poll::Pending => return Poll::Pending,
-            Poll::Ready(_) => {},
+            Poll::Ready(_) => {}
         }
 
         let fut = match self.shutdown_fut.as_mut() {
