@@ -1,7 +1,7 @@
 use std::{ops, sync};
 
 /// A synchronous mutual exclusion primitive useful for protecting shared data.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Mutex<T>(sync::Mutex<T>);
 
 impl<T> Mutex<T> {
@@ -15,6 +15,11 @@ impl<T> Mutex<T> {
         let guard = self.0.lock().unwrap();
 
         MutexGuard(guard)
+    }
+
+    /// Consumes this mutex, returning the underlying data.
+    pub fn into_inner(self) -> T {
+        self.0.into_inner().unwrap()
     }
 }
 
@@ -37,7 +42,7 @@ impl<'a, T> ops::DerefMut for MutexGuard<'a, T> {
 }
 
 /// A synchronous reader-writer lock.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RwLock<T>(sync::RwLock<T>);
 
 impl<T> RwLock<T> {

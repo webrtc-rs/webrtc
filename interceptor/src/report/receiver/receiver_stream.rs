@@ -2,8 +2,8 @@ use super::*;
 use crate::{Attributes, RTPReader};
 
 use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
+use util::sync::Mutex;
 use util::Unmarshal;
 
 struct ReceiverStreamInternal {
@@ -185,7 +185,7 @@ impl ReceiverStream {
     }
 
     pub(crate) fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet) {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.process_rtp(now, pkt);
     }
 
@@ -194,12 +194,12 @@ impl ReceiverStream {
         now: SystemTime,
         sr: &rtcp::sender_report::SenderReport,
     ) {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.process_sender_report(now, sr);
     }
 
     pub(crate) fn generate_report(&self, now: SystemTime) -> rtcp::receiver_report::ReceiverReport {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.generate_report(now)
     }
 }
