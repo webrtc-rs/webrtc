@@ -63,7 +63,7 @@ change for MediaEngine::register_header_extension
 
 ### Changes
 
-### Breaking changes
+#### Breaking changes
 
 * The serialized format for `RTCIceCandidateInit` has changed to match what the specification i.e. keys are camelCase. [#153 Make RTCIceCandidateInit conform to WebRTC spec](https://github.com/webrtc-rs/webrtc/pull/153) contributed by [jmatss](https://github.com/jmatss).
 * Improved robustness when proposing RTP extension IDs and handling of collisions in these. This change is only breaking if you have assumed anything about the nature of these extension IDs. [#154 Fix RTP extension id collision](https://github.com/webrtc-rs/webrtc/pull/154) contributed by [k0nserv](https://github.com/k0nserv)
