@@ -29,9 +29,7 @@ impl Conn for DisconnectedPacketConn {
 
     async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let (n, addr) = self.pconn.recv_from(buf).await?;
-        {
-            *self.raddr.write() = addr;
-        }
+        *self.raddr.write() = addr;
         Ok(n)
     }
 
@@ -40,7 +38,7 @@ impl Conn for DisconnectedPacketConn {
     }
 
     async fn send(&self, buf: &[u8]) -> Result<usize> {
-        let addr = { *self.raddr.read() };
+        let addr = *self.raddr.read();
         self.pconn.send_to(buf, addr).await
     }
 
@@ -53,7 +51,7 @@ impl Conn for DisconnectedPacketConn {
     }
 
     fn remote_addr(&self) -> Option<SocketAddr> {
-        let raddr = { *self.raddr.read() };
+        let raddr = *self.raddr.read();
         Some(raddr)
     }
 

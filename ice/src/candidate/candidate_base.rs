@@ -298,9 +298,7 @@ impl Candidate for CandidateBase {
             .store(network_type as u8, Ordering::SeqCst);
 
         let addr = create_addr(network_type, *ip, self.port);
-        {
-            *self.resolved_addr.lock() = addr;
-        }
+        *self.resolved_addr.lock() = addr;
 
         Ok(())
     }

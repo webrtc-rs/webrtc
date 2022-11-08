@@ -245,9 +245,7 @@ impl Allocation {
 
     pub async fn start(&self, lifetime: Duration) {
         let (reset_tx, mut reset_rx) = mpsc::channel(1);
-        {
-            self.reset_tx.lock().replace(reset_tx);
-        }
+        self.reset_tx.lock().replace(reset_tx);
 
         let allocations = self.allocations.clone();
         let five_tuple = self.five_tuple;
@@ -284,13 +282,13 @@ impl Allocation {
     }
 
     fn stop(&self) -> bool {
-        let reset_tx = { self.reset_tx.lock().take() };
+        let reset_tx = self.reset_tx.lock().take();
         reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst)
     }
 
     // Refresh updates the allocations lifetime
     pub async fn refresh(&self, lifetime: Duration) {
-        let reset_tx = { self.reset_tx.lock().clone() };
+        let reset_tx = self.reset_tx.lock().clone();
         if let Some(tx) = reset_tx {
             let _ = tx.send(lifetime).await;
         }

@@ -62,7 +62,7 @@ trait ControlledSelector {
 
 impl AgentInternal {
     fn is_nominatable(&self, c: &Arc<dyn Candidate + Send + Sync>) -> bool {
-        let start_time = { *self.start_time.lock() };
+        let start_time = *self.start_time.lock();
         match c.candidate_type() {
             CandidateType::Host => {
                 Instant::now()
@@ -217,9 +217,7 @@ impl ControllingSelector for AgentInternal {
             let mut nominated_pair = self.nominated_pair.lock().await;
             *nominated_pair = None;
         }
-        {
-            *self.start_time.lock() = Instant::now();
-        }
+        *self.start_time.lock() = Instant::now();
     }
 
     async fn contact_candidates(&self) {

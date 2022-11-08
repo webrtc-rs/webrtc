@@ -207,9 +207,7 @@ impl RTCDataChannel {
     /// on_open sets an event handler which is invoked when
     /// the underlying data transport has been established (or re-established).
     pub fn on_open(&self, f: OnOpenHdlrFn) {
-        {
-            let _ = self.on_open_handler.lock().replace(f);
-        }
+        let _ = self.on_open_handler.lock().replace(f);
 
         if self.ready_state() == RTCDataChannelState::Open {
             self.do_open();
@@ -217,7 +215,7 @@ impl RTCDataChannel {
     }
 
     fn do_open(&self) {
-        let on_open_handler = { self.on_open_handler.lock().take() };
+        let on_open_handler = self.on_open_handler.lock().take();
         if on_open_handler.is_none() {
             return;
         }
