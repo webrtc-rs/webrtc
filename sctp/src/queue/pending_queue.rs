@@ -91,9 +91,11 @@ impl PendingQueue {
                     let mut unordered_queue = self.unordered_queue.write().unwrap();
                     unordered_queue.pop_front()
                 };
-                if let Some(p) = &popped && !p.ending_fragment {
-                    self.selected.store(true, Ordering::SeqCst);
-                    self.unordered_is_selected.store(true, Ordering::SeqCst);
+                if let Some(p) = &popped {
+                    if !p.ending_fragment {
+                        self.selected.store(true, Ordering::SeqCst);
+                        self.unordered_is_selected.store(true, Ordering::SeqCst);
+                    }
                 }
                 popped
             } else {
@@ -101,9 +103,11 @@ impl PendingQueue {
                     let mut ordered_queue = self.ordered_queue.write().unwrap();
                     ordered_queue.pop_front()
                 };
-                if let Some(p) = &popped && !p.ending_fragment {
-                    self.selected.store(true, Ordering::SeqCst);
-                    self.unordered_is_selected.store(false, Ordering::SeqCst);
+                if let Some(p) = &popped {
+                    if !p.ending_fragment {
+                        self.selected.store(true, Ordering::SeqCst);
+                        self.unordered_is_selected.store(false, Ordering::SeqCst);
+                    }
                 }
                 popped
             }
