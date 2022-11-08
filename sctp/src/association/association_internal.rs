@@ -1897,67 +1897,68 @@ impl AssociationInternal {
     async fn pop_pending_data_chunks_to_send(&mut self) -> (Vec<ChunkPayloadData>, Vec<u16>) {
         let mut chunks = vec![];
         let mut sis_to_reset = vec![]; // stream identifiers to reset
-        let is_empty = self.pending_queue.len() == 0;
-        if !is_empty {
-            // RFC 4960 sec 6.1.  Transmission of DATA Chunks
-            //   A) At any given time, the data sender MUST NOT transmit new data to
-            //      any destination transport address if its peer's rwnd indicates
-            //      that the peer has no buffer space (i.e., rwnd is 0; see Section
-            //      6.2.1).  However, regardless of the value of rwnd (including if it
-            //      is 0), the data sender can always have one DATA chunk in flight to
-            //      the receiver if allowed by cwnd (see rule B, below).
 
-            while let Some(c) = self.pending_queue.peek().await {
-                let (beginning_fragment, unordered, data_len, stream_identifier) = (
-                    c.beginning_fragment,
-                    c.unordered,
-                    c.user_data.len(),
-                    c.stream_identifier,
-                );
+        if self.pending_queue.len() == 0 {
+            return (chunks, sis_to_reset);
+        }
 
-                if data_len == 0 {
-                    sis_to_reset.push(stream_identifier);
-                    if self
-                        .pending_queue
-                        .pop(beginning_fragment, unordered)
-                        .await
-                        .is_none()
-                    {
-                        log::error!("failed to pop from pending queue");
-                    }
-                    continue;
+        // RFC 4960 sec 6.1.  Transmission of DATA Chunks
+        //   A) At any given time, the data sender MUST NOT transmit new data to
+        //      any destination transport address if its peer's rwnd indicates
+        //      that the peer has no buffer space (i.e., rwnd is 0; see Section
+        //      6.2.1).  However, regardless of the value of rwnd (including if it
+        //      is 0), the data sender can always have one DATA chunk in flight to
+        //      the receiver if allowed by cwnd (see rule B, below).
+        while let Some(c) = self.pending_queue.peek().await {
+            let (beginning_fragment, unordered, data_len, stream_identifier) = (
+                c.beginning_fragment,
+                c.unordered,
+                c.user_data.len(),
+                c.stream_identifier,
+            );
+
+            if data_len == 0 {
+                sis_to_reset.push(stream_identifier);
+                if self
+                    .pending_queue
+                    .pop(beginning_fragment, unordered)
+                    .await
+                    .is_none()
+                {
+                    log::error!("failed to pop from pending queue");
                 }
+                continue;
+            }
 
-                if self.inflight_queue.get_num_bytes() + data_len > self.cwnd as usize {
-                    break; // would exceeds cwnd
-                }
+            if self.inflight_queue.get_num_bytes() + data_len > self.cwnd as usize {
+                break; // would exceed cwnd
+            }
 
-                if data_len > self.rwnd as usize {
-                    break; // no more rwnd
-                }
+            if data_len > self.rwnd as usize {
+                break; // no more rwnd
+            }
 
-                self.rwnd -= data_len as u32;
+            self.rwnd -= data_len as u32;
+
+            if let Some(chunk) = self
+                .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                .await
+            {
+                chunks.push(chunk);
+            }
+        }
+
+        // the data sender can always have one DATA chunk in flight to the receiver
+        if chunks.is_empty() && self.inflight_queue.is_empty() {
+            // Send zero window probe
+            if let Some(c) = self.pending_queue.peek().await {
+                let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
                 if let Some(chunk) = self
                     .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
                     .await
                 {
                     chunks.push(chunk);
-                }
-            }
-
-            // the data sender can always have one DATA chunk in flight to the receiver
-            if chunks.is_empty() && self.inflight_queue.is_empty() {
-                // Send zero window probe
-                if let Some(c) = self.pending_queue.peek().await {
-                    let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
-
-                    if let Some(chunk) = self
-                        .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
-                        .await
-                    {
-                        chunks.push(chunk);
-                    }
                 }
             }
         }
