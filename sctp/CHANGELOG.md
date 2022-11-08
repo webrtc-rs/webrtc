@@ -4,6 +4,7 @@
 
 * Increased minimum support rust version to `1.60.0`.
 * Fixed a potential bug in `PollStream::poll_write` [#341](https://github.com/webrtc-rs/webrtc/pull/341).
+* `PollStream::poll_shutdown`: make sure to flush any writes before shutting down [#340](https://github.com/webrtc-rs/webrtc/pull/340)
 
 ## v0.6.1
 
@@ -13,4 +14,3 @@
 ## Prior to 0.6.1
 
 Before 0.6.1 there was no changelog, previous changes are sometimes, but not always, available in the [GitHub Releases](https://github.com/webrtc-rs/sctp/releases).
-
