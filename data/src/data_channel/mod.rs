@@ -597,9 +597,9 @@ impl AsyncWrite for PollDataChannel {
 
             match fut.as_mut().poll(cx) {
                 // If it's the first time we're polling the future, `Poll::Pending` can't be
-                // returned because that would mean the `PollStream` is not ready for writing. And
-                // this is not true since we've just created a future, which is going to write the
-                // buf to the underlying stream.
+                // returned because that would mean the `PollDataChannel` is not ready for writing.
+                // And this is not true since we've just created a future, which is going to write
+                // the buf to the underlying stream.
                 //
                 // It's okay to return `Poll::Ready` if the data is buffered (this is what the
                 // buffered writer and `File` do).
