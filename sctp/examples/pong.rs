@@ -86,7 +86,7 @@ async fn main() -> Result<(), Error> {
 
             let pong_msg = format!("pong [{}]", ping_msg);
             println!("sent: {}", pong_msg);
-            stream2.write(&Bytes::from(pong_msg)).await?;
+            stream2.write(&Bytes::from(pong_msg))?;
 
             tokio::time::sleep(Duration::from_secs(1)).await;
         }

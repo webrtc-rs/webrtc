@@ -1,19 +1,21 @@
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
 
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use tokio::sync::Mutex;
+use std::{
+    collections::VecDeque,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::RwLock,
+};
 
-/// pendingBaseQueue
+/// Basic queue for either ordered or unordered chunks.
 pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
 
 // TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<PendingQueueInternal>
 
-/// pendingQueue
+/// A queue for both ordered and unordered chunks.
 #[derive(Debug, Default)]
 pub(crate) struct PendingQueue {
-    unordered_queue: Mutex<PendingBaseQueue>,
-    ordered_queue: Mutex<PendingBaseQueue>,
+    unordered_queue: RwLock<PendingBaseQueue>,
+    ordered_queue: RwLock<PendingBaseQueue>,
     queue_len: AtomicUsize,
     n_bytes: AtomicUsize,
     selected: AtomicBool,
@@ -25,31 +27,31 @@ impl PendingQueue {
         PendingQueue::default()
     }
 
-    pub(crate) async fn push(&self, c: ChunkPayloadData) {
+    pub(crate) fn push(&self, c: ChunkPayloadData) {
         self.n_bytes.fetch_add(c.user_data.len(), Ordering::SeqCst);
+        self.queue_len.fetch_add(1, Ordering::SeqCst);
         if c.unordered {
-            let mut unordered_queue = self.unordered_queue.lock().await;
+            let mut unordered_queue = self.unordered_queue.write().unwrap();
             unordered_queue.push_back(c);
         } else {
-            let mut ordered_queue = self.ordered_queue.lock().await;
+            let mut ordered_queue = self.ordered_queue.write().unwrap();
             ordered_queue.push_back(c);
         }
-        self.queue_len.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub(crate) async fn peek(&self) -> Option<ChunkPayloadData> {
+    pub(crate) fn peek(&self) -> Option<ChunkPayloadData> {
         if self.selected.load(Ordering::SeqCst) {
             if self.unordered_is_selected.load(Ordering::SeqCst) {
-                let unordered_queue = self.unordered_queue.lock().await;
+                let unordered_queue = self.unordered_queue.read().unwrap();
                 return unordered_queue.get(0).cloned();
             } else {
-                let ordered_queue = self.ordered_queue.lock().await;
+                let ordered_queue = self.ordered_queue.read().unwrap();
                 return ordered_queue.get(0).cloned();
             }
         }
 
         let c = {
-            let unordered_queue = self.unordered_queue.lock().await;
+            let unordered_queue = self.unordered_queue.read().unwrap();
             unordered_queue.get(0).cloned()
         };
 
@@ -57,21 +59,21 @@ impl PendingQueue {
             return c;
         }
 
-        let ordered_queue = self.ordered_queue.lock().await;
+        let ordered_queue = self.ordered_queue.read().unwrap();
         ordered_queue.get(0).cloned()
     }
 
-    pub(crate) async fn pop(
+    pub(crate) fn pop(
         &self,
         beginning_fragment: bool,
         unordered: bool,
     ) -> Option<ChunkPayloadData> {
         let popped = if self.selected.load(Ordering::SeqCst) {
             let popped = if self.unordered_is_selected.load(Ordering::SeqCst) {
-                let mut unordered_queue = self.unordered_queue.lock().await;
+                let mut unordered_queue = self.unordered_queue.write().unwrap();
                 unordered_queue.pop_front()
             } else {
-                let mut ordered_queue = self.ordered_queue.lock().await;
+                let mut ordered_queue = self.ordered_queue.write().unwrap();
                 ordered_queue.pop_front()
             };
             if let Some(p) = &popped {
@@ -86,7 +88,7 @@ impl PendingQueue {
             }
             if unordered {
                 let popped = {
-                    let mut unordered_queue = self.unordered_queue.lock().await;
+                    let mut unordered_queue = self.unordered_queue.write().unwrap();
                     unordered_queue.pop_front()
                 };
                 if let Some(p) = &popped && !p.ending_fragment {
@@ -96,7 +98,7 @@ impl PendingQueue {
                 popped
             } else {
                 let popped = {
-                    let mut ordered_queue = self.ordered_queue.lock().await;
+                    let mut ordered_queue = self.ordered_queue.write().unwrap();
                     ordered_queue.pop_front()
                 };
                 if let Some(p) = &popped && !p.ending_fragment {
