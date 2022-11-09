@@ -1996,20 +1996,6 @@ impl AssociationInternal {
         packets
     }
 
-    /// send_payload_data sends the data chunks.
-    async fn send_payload_data(&mut self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
-        let state = self.get_state();
-        if state != AssociationState::Established {
-            return Err(Error::ErrPayloadDataStateNotExist);
-        }
-
-        // NOTE: append is used here instead of push in order to prevent chunks interlacing.
-        self.pending_queue.append(chunks).await;
-
-        self.awake_write_loop();
-        Ok(())
-    }
-
     fn check_partial_reliability_status(&self, c: &ChunkPayloadData) {
         if !self.use_forward_tsn {
             return;
