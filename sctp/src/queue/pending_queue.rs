@@ -50,27 +50,29 @@ impl PendingQueue {
         }
 
         let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
-        self.n_bytes
-            .fetch_add(total_user_data_len, Ordering::SeqCst);
-        self.queue_len.fetch_add(chunks.len(), Ordering::SeqCst);
+        let chunks_len = chunks.len();
+
         let unordered = chunks
             .first()
             .expect("chunks to not be empty because of the above check")
             .unordered;
-
         if unordered {
             let mut unordered_queue = self.unordered_queue.lock().await;
             for c in chunks {
-                assert!(c.unordered);
+                assert!(c.unordered, "expected all chunks to be unordered");
                 unordered_queue.push_back(c);
             }
         } else {
             let mut ordered_queue = self.ordered_queue.lock().await;
             for c in chunks {
-                assert!(!c.unordered);
+                assert!(!c.unordered, "expected all chunks to be ordered");
                 ordered_queue.push_back(c);
             }
         }
+
+        self.n_bytes
+            .fetch_add(total_user_data_len, Ordering::SeqCst);
+        self.queue_len.fetch_add(chunks_len, Ordering::SeqCst);
     }
 
     pub(crate) async fn peek(&self) -> Option<ChunkPayloadData> {
