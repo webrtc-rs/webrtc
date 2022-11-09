@@ -27,6 +27,8 @@ impl PendingQueue {
 
     /// Appends a chunk to the back of the pending queue.
     pub(crate) async fn push(&self, c: ChunkPayloadData) {
+        let user_data_len = c.user_data.len();
+
         if c.unordered {
             let mut unordered_queue = self.unordered_queue.lock().await;
             unordered_queue.push_back(c);
@@ -35,7 +37,7 @@ impl PendingQueue {
             ordered_queue.push_back(c);
         }
 
-        self.n_bytes.fetch_add(c.user_data.len(), Ordering::SeqCst);
+        self.n_bytes.fetch_add(user_data_len, Ordering::SeqCst);
         self.queue_len.fetch_add(1, Ordering::SeqCst);
     }
 
