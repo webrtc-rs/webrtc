@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Increased minimum support rust version to `1.60.0`.
+* Do not loose data in `PollDataChannel::poll_write` [#341](https://github.com/webrtc-rs/webrtc/pull/341).
 * `PollDataChannel::poll_shutdown`: make sure to flush any writes before shutting down [#340](https://github.com/webrtc-rs/webrtc/pull/340)
 
 ## 0.5.0
