@@ -43,14 +43,20 @@ impl PendingQueue {
     ///
     /// # Panics
     ///
-    /// - If it's a mix of unordered and ordered chunks.
-    /// - If `chunks` are empty.
+    /// If it's a mix of unordered and ordered chunks.
     pub(crate) async fn append(&self, chunks: Vec<ChunkPayloadData>) {
+        if chunks.is_empty() {
+            return;
+        }
+
         let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
         self.n_bytes
             .fetch_add(total_user_data_len, Ordering::SeqCst);
         self.queue_len.fetch_add(chunks.len(), Ordering::SeqCst);
-        let unordered = chunks.first().expect("chunks to not be empty").unordered;
+        let unordered = chunks
+            .first()
+            .expect("chunks to not be empty because of the above check")
+            .unordered;
 
         if unordered {
             let mut unordered_queue = self.unordered_queue.lock().await;
