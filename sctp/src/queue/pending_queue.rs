@@ -25,8 +25,11 @@ impl PendingQueue {
         PendingQueue::default()
     }
 
+    /// Appends a chunk to the back of the pending queue.
     pub(crate) async fn push(&self, c: ChunkPayloadData) {
         self.n_bytes.fetch_add(c.user_data.len(), Ordering::SeqCst);
+        self.queue_len.fetch_add(1, Ordering::SeqCst);
+
         if c.unordered {
             let mut unordered_queue = self.unordered_queue.lock().await;
             unordered_queue.push_back(c);
@@ -34,7 +37,34 @@ impl PendingQueue {
             let mut ordered_queue = self.ordered_queue.lock().await;
             ordered_queue.push_back(c);
         }
-        self.queue_len.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// Appends chunks to the back of the pending queue.
+    ///
+    /// # Panics
+    ///
+    /// - If it's a mix of unordered and ordered chunks.
+    /// - If `chunks` are empty.
+    pub(crate) async fn append(&self, chunks: Vec<ChunkPayloadData>) {
+        let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
+        self.n_bytes
+            .fetch_add(total_user_data_len, Ordering::SeqCst);
+        self.queue_len.fetch_add(chunks.len(), Ordering::SeqCst);
+        let unordered = chunks.first().expect("chunks to not be empty").unordered;
+
+        if unordered {
+            let mut unordered_queue = self.unordered_queue.lock().await;
+            for c in chunks {
+                assert!(c.unordered);
+                unordered_queue.push_back(c);
+            }
+        } else {
+            let mut ordered_queue = self.ordered_queue.lock().await;
+            for c in chunks {
+                assert!(!c.unordered);
+                ordered_queue.push_back(c);
+            }
+        }
     }
 
     pub(crate) async fn peek(&self) -> Option<ChunkPayloadData> {
