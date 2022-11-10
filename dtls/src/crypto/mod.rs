@@ -207,38 +207,7 @@ impl TryFrom<&KeyPair> for CryptoPrivateKey {
     type Error = Error;
 
     fn try_from(key_pair: &KeyPair) -> Result<Self> {
-        let serialized_der = key_pair.serialize_der();
-        if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
-            Ok(CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ed25519(
-                    Ed25519KeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            })
-        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
-            Ok(CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ecdsa256(
-                    EcdsaKeyPair::from_pkcs8(
-                        &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-                        &serialized_der,
-                        &SystemRandom::new()
-                    )
-                    .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            })
-        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
-            Ok(CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Rsa256(
-                    rsa::KeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            })
-        } else {
-            Err(Error::Other("Unsupported key_pair".to_owned()))
-        }
+        Self::from_key_pair(key_pair)
     }
 }
 
