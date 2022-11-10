@@ -83,14 +83,16 @@ async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
         .sctp()
         .transport()
         .ice_transport()
-        .get_selected_candidate_pair();
+        .get_selected_candidate_pair()
+        .await;
     assert!(offerer_selected_pair.is_none());
 
     let answerer_selected_pair = answerer
         .sctp()
         .transport()
         .ice_transport()
-        .get_selected_candidate_pair();
+        .get_selected_candidate_pair()
+        .await;
     assert!(answerer_selected_pair.is_none());
 
     signal_pair(&mut offerer, &mut answerer).await?;
@@ -101,14 +103,16 @@ async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
         .sctp()
         .transport()
         .ice_transport()
-        .get_selected_candidate_pair();
+        .get_selected_candidate_pair()
+        .await;
     assert!(offerer_selected_pair.is_some());
 
     let answerer_selected_pair = answerer
         .sctp()
         .transport()
         .ice_transport()
-        .get_selected_candidate_pair();
+        .get_selected_candidate_pair()
+        .await;
     assert!(answerer_selected_pair.is_some());
 
     close_pair_now(&offerer, &answerer).await;

@@ -387,7 +387,7 @@ impl RTCSctpTransport {
         reports.insert(peer_connection_id, PeerConnection(peer_connection_stats));
 
         // conn
-        if let Some(agent) = dtls_transport.ice_transport.gatherer.get_agent() {
+        if let Some(agent) = dtls_transport.ice_transport.gatherer.get_agent().await {
             let stats = ICETransportStats::new("sctp_transport".to_owned(), agent);
             reports.insert(stats.id.clone(), SCTPTransport(stats));
         }

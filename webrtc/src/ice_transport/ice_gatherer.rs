@@ -55,7 +55,7 @@ pub struct RTCIceGatherer {
     pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
-    pub(crate) agent: ArcSwapOption<ice::agent::Agent>,
+    pub(crate) agent: Mutex<Option<Arc<ice::agent::Agent>>>,
 
     pub(crate) on_local_candidate_handler: Arc<ArcSwapOption<Mutex<OnLocalCandidateHdlrFn>>>,
     pub(crate) on_state_change_handler: Arc<ArcSwapOption<Mutex<OnICEGathererStateChangeHdlrFn>>>,
@@ -84,8 +84,9 @@ impl RTCIceGatherer {
         // avoid potential double-agent creations. Care should be taken to
         // ensure we do not do anything expensive other than the actual agent
         // creation in this function.
+        let mut agent = self.agent.lock().await;
 
-        if self.agent.load().is_some() || self.state() != RTCIceGathererState::New {
+        if agent.is_some() || self.state() != RTCIceGathererState::New {
             return Ok(());
         }
 
@@ -149,8 +150,7 @@ impl RTCIceGatherer {
 
         config.network_types.extend(requested_network_types);
 
-        self.agent
-            .store(Some(Arc::new(ice::agent::Agent::new(config).await?)));
+        *agent = Some(Arc::new(ice::agent::Agent::new(config).await?));
 
         Ok(())
     }
@@ -160,7 +160,7 @@ impl RTCIceGatherer {
         self.create_agent().await?;
         self.set_state(RTCIceGathererState::Gathering).await;
 
-        if let Some(agent) = self.get_agent() {
+        if let Some(agent) = self.get_agent().await {
             let state = Arc::clone(&self.state);
             let on_local_candidate_handler = Arc::clone(&self.on_local_candidate_handler);
             let on_state_change_handler = Arc::clone(&self.on_state_change_handler);
@@ -213,7 +213,10 @@ impl RTCIceGatherer {
     pub async fn close(&self) -> Result<()> {
         self.set_state(RTCIceGathererState::Closed).await;
 
-        let agent = self.agent.swap(None);
+        let agent = {
+            let mut agent_opt = self.agent.lock().await;
+            agent_opt.take()
+        };
 
         if let Some(agent) = agent {
             agent.close().await?;
@@ -226,7 +229,7 @@ impl RTCIceGatherer {
     pub async fn get_local_parameters(&self) -> Result<RTCIceParameters> {
         self.create_agent().await?;
 
-        let (frag, pwd) = if let Some(agent) = self.get_agent() {
+        let (frag, pwd) = if let Some(agent) = self.get_agent().await {
             agent.get_local_user_credentials().await
         } else {
             return Err(Error::ErrICEAgentNotExist);
@@ -243,7 +246,7 @@ impl RTCIceGatherer {
     pub async fn get_local_candidates(&self) -> Result<Vec<RTCIceCandidate>> {
         self.create_agent().await?;
 
-        let ice_candidates = if let Some(agent) = self.get_agent() {
+        let ice_candidates = if let Some(agent) = self.get_agent().await {
             agent.get_local_candidates().await?
         } else {
             return Err(Error::ErrICEAgentNotExist);
@@ -285,12 +288,13 @@ impl RTCIceGatherer {
         }
     }
 
-    pub(crate) fn get_agent(&self) -> Option<Arc<Agent>> {
-        self.agent.load().clone()
+    pub(crate) async fn get_agent(&self) -> Option<Arc<Agent>> {
+        let agent = self.agent.lock().await;
+        agent.clone()
     }
 
     pub(crate) async fn collect_stats(&self, collector: &StatsCollector) {
-        if let Some(agent) = self.get_agent() {
+        if let Some(agent) = self.get_agent().await {
             let mut reports = HashMap::new();
 
             for stats in agent.get_candidate_pairs_stats().await {
