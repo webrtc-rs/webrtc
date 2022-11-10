@@ -15,7 +15,7 @@ rust-version = "1.60.0"
 [features]
 default = ["buffer", "conn", "ifaces", "vnet", "marshal", "sync"]
 buffer = []
-conn = ["buffer"]
+conn = ["buffer", "sync"]
 ifaces = []
 vnet = ["ifaces"]
 marshal = []
