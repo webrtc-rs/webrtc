@@ -80,7 +80,7 @@ impl<'a, T> ops::Deref for RwLockReadGuard<'a, T> {
     }
 }
 
-/// RAII structure used to release the shared read access of a lock when
+/// RAII structure used to release the exclusive write access of a lock when
 /// dropped.
 pub struct RwLockWriteGuard<'a, T>(sync::RwLockWriteGuard<'a, T>);
 

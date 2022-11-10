@@ -14,8 +14,7 @@
         - `on_selected_candidate_pair_change`;
         - `on_candidate`;
         - `add_remote_candidate`;
-        - `gather_candidates`;
-        - `get_selected_candidate_pair`.
+        - `gather_candidates`.
     - `unmarshal_candidate`;
     - `CandidateHostConfig::new_candidate_host`;
     - `CandidatePeerReflexiveConfig::new_candidate_peer_reflexive`;
