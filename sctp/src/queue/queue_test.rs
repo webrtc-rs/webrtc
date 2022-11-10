@@ -425,6 +425,21 @@ async fn test_pending_queue_selection_persistence() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_pending_queue_append() -> Result<()> {
+    let pq = PendingQueue::new();
+    pq.append(vec![
+        make_data_chunk(0, false, NO_FRAGMENT),
+        make_data_chunk(1, false, NO_FRAGMENT),
+        make_data_chunk(3, false, NO_FRAGMENT),
+    ])
+    .await;
+    assert_eq!(30, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(3, pq.len(), "len mismatch");
+
+    Ok(())
+}
+
 ///////////////////////////////////////////////////////////////////
 //reassembly_queue_test
 ///////////////////////////////////////////////////////////////////

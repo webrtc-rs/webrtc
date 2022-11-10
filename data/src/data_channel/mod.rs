@@ -566,44 +566,52 @@ impl AsyncWrite for PollDataChannel {
             return Poll::Ready(Ok(0));
         }
 
-        let (fut, fut_is_new) = match self.write_fut.as_mut() {
-            Some(fut) => (fut, false),
-            None => {
-                let data_channel = self.data_channel.clone();
-                let bytes = Bytes::copy_from_slice(buf);
-                (
-                    self.write_fut
-                        .get_or_insert(Box::pin(async move { data_channel.write(&bytes).await })),
-                    true,
-                )
+        if let Some(fut) = self.write_fut.as_mut() {
+            match fut.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    let data_channel = self.data_channel.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut =
+                        Some(Box::pin(async move { data_channel.write(&bytes).await }));
+                    Poll::Ready(Err(e.into()))
+                }
+                // Given the data is buffered, it's okay to ignore the number of written bytes.
+                //
+                // TODO: In the long term, `data_channel.write` should be made sync. Then we could
+                // remove the whole `if` condition and just call `data_channel.write`.
+                Poll::Ready(Ok(_)) => {
+                    let data_channel = self.data_channel.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut =
+                        Some(Box::pin(async move { data_channel.write(&bytes).await }));
+                    Poll::Ready(Ok(buf.len()))
+                }
             }
-        };
+        } else {
+            let data_channel = self.data_channel.clone();
+            let bytes = Bytes::copy_from_slice(buf);
+            let fut = self
+                .write_fut
+                .insert(Box::pin(async move { data_channel.write(&bytes).await }));
 
-        match fut.as_mut().poll(cx) {
-            Poll::Pending => {
+            match fut.as_mut().poll(cx) {
                 // If it's the first time we're polling the future, `Poll::Pending` can't be
-                // returned because that would mean the `PollStream` is not ready for writing. And
-                // this is not true since we've just created a future, which is going to write the
-                // buf to the underlying stream.
+                // returned because that would mean the `PollDataChannel` is not ready for writing.
+                // And this is not true since we've just created a future, which is going to write
+                // the buf to the underlying stream.
                 //
                 // It's okay to return `Poll::Ready` if the data is buffered (this is what the
                 // buffered writer and `File` do).
-                if fut_is_new {
-                    Poll::Ready(Ok(buf.len()))
-                } else {
-                    // If it's the subsequent poll, it's okay to return `Poll::Pending` as it
-                    // indicates that the `PollStream` is not ready for writing. Only one future
-                    // can be in progress at the time.
-                    Poll::Pending
+                Poll::Pending => Poll::Ready(Ok(buf.len())),
+                Poll::Ready(Err(e)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Err(e.into()))
                 }
-            }
-            Poll::Ready(Err(e)) => {
-                self.write_fut = None;
-                Poll::Ready(Err(e.into()))
-            }
-            Poll::Ready(Ok(n)) => {
-                self.write_fut = None;
-                Poll::Ready(Ok(n))
+                Poll::Ready(Ok(n)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Ok(n))
+                }
             }
         }
     }
