@@ -140,7 +140,7 @@ impl TrackLocalStaticSample {
     /// Create a builder for writing samples with additional data.
     ///
     /// # Example
-    /// ```no-run
+    /// ```no_run
     /// # use crate::track_local::track_local_static_sample::TrackLocalStaticSample;
     /// # let track: TrackLocalStaticSample = todo!();
     /// use rtp::extension::audio_level_extension::AudioLevelExtension;
