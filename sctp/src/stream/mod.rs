@@ -487,10 +487,8 @@ impl Stream {
             return Err(Error::ErrPayloadDataStateNotExist);
         }
 
-        // Push the chunks into the pending queue first.
-        for c in chunks {
-            self.pending_queue.push(c);
-        }
+        // NOTE: append is used here instead of push in order to prevent chunks interlacing.
+        self.pending_queue.append(chunks);
 
         self.awake_write_loop();
         Ok(())
