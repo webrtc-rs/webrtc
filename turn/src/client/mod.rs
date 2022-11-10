@@ -103,7 +103,7 @@ impl RelayConnObserver for ClientInternal {
         to: &str,
         ignore_result: bool,
     ) -> Result<TransactionResult> {
-        let tr_key = base64::encode(&msg.transaction_id.0);
+        let tr_key = base64::encode(msg.transaction_id.0);
 
         let mut tr = Transaction::new(TransactionConfig {
             key: tr_key.clone(),
@@ -341,7 +341,7 @@ impl ClientInternal {
         // - stun.ClassSuccessResponse
         // - stun.ClassErrorResponse
 
-        let tr_key = base64::encode(&msg.transaction_id.0);
+        let tr_key = base64::encode(msg.transaction_id.0);
 
         let mut tm = tr_map.lock().await;
         if tm.find(&tr_key).is_none() {
