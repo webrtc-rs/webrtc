@@ -89,19 +89,24 @@ impl ResponderInternal {
                     let stream3 = Arc::clone(&stream2);
 
                     Box::pin(async move {
-                        if let Some(p) = stream3.get(seq).await {
-                            let should_send = max_packet_age
-                                .map(|max_age| p.age() < max_age)
-                                .unwrap_or(true);
+                        let p = match stream3.get(seq).await {
+                            None => return true,
+                            Some(p) => p,
+                        };
 
+                        if let Some(max_packet_age) = max_packet_age {
+                            let packet_age = p.age();
+                            let should_send = packet_age < max_packet_age;
                             if !should_send {
+                                log::debug!("Not resending packet {} as it's older than the configured max age {}s. Packet was initially sent {}s ago", p.packet.header.sequence_number, max_packet_age.as_secs_f64(), packet_age.as_secs_f64());
                                 return true;
                             }
+                        }
 
-                            let a = Attributes::new();
-                            if let Err(err) = stream3.next_rtp_writer.write(&p.packet, &a).await {
-                                log::warn!("failed resending nacked packet: {}", err);
-                            }
+
+                        let a = Attributes::new();
+                        if let Err(err) = stream3.next_rtp_writer.write(&p.packet, &a).await {
+                            log::warn!("failed resending nacked packet: {}", err);
                         }
 
                         true

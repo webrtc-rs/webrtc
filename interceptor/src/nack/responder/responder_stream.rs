@@ -2,10 +2,12 @@ use crate::error::Result;
 use crate::nack::UINT16SIZE_HALF;
 use crate::{Attributes, RTPWriter};
 
-use async_trait::async_trait;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use async_trait::async_trait;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 
 struct ResponderStreamInternal {
     packets: Vec<Option<SentPacket>>,
@@ -101,6 +103,7 @@ impl RTPWriter for ResponderStream {
 /// A packet that has been sent, or at least been queued to send.
 pub struct SentPacket {
     pub(super) packet: rtp::packet::Packet,
+    // We use tokio's instant because it's mockable.
     sent_at: Instant,
 }
 

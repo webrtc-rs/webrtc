@@ -210,10 +210,19 @@ impl MockStream {
         last
     }
 
-    /// written_rtp returns a channel containing rtp packets written, modified by the interceptor
+    /// Wait for a written RTP packet to appear after traversing interceptor chains.
     pub async fn written_rtp(&self) -> Option<rtp::packet::Packet> {
         let mut rtp_out_modified_rx = self.rtp_out_modified_rx.lock().await;
         rtp_out_modified_rx.recv().await
+    }
+
+    /// Assert that a RTP packet has traversed interceptor chains.
+    ///
+    /// Like [`writte_rtp`]  but does not wait.
+    pub async fn written_rtp_expected(&self) -> Option<rtp::packet::Packet> {
+        let mut rtp_out_modified_rx = self.rtp_out_modified_rx.lock().await;
+
+        rtp_out_modified_rx.try_recv().ok()
     }
 
     /// read_rtcp returns a channel containing the rtcp batched read, modified by the interceptor
