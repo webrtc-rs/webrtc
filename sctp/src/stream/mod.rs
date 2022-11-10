@@ -4,21 +4,24 @@ mod stream_test;
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::{Error, Result};
+use crate::queue::pending_queue::PendingQueue;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
-use crate::queue::pending_queue::PendingQueue;
-
 use bytes::Bytes;
-use std::fmt;
-use std::future::Future;
-use std::io;
-use std::net::Shutdown;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::sync::{mpsc, Mutex, Notify};
+use std::{
+    fmt,
+    future::Future,
+    io,
+    net::Shutdown,
+    pin::Pin,
+    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering},
+    sync::Arc,
+    task::{Context, Poll},
+};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    sync::{mpsc, Mutex, Notify},
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
@@ -485,10 +488,8 @@ impl Stream {
             return Err(Error::ErrPayloadDataStateNotExist);
         }
 
-        // Push the chunks into the pending queue first.
-        for c in chunks {
-            self.pending_queue.push(c).await;
-        }
+        // NOTE: append is used here instead of push in order to prevent chunks interlacing.
+        self.pending_queue.append(chunks).await;
 
         self.awake_write_loop();
         Ok(())
@@ -700,21 +701,38 @@ impl AsyncWrite for PollStream {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        let (fut, fut_is_new) = match self.write_fut.as_mut() {
-            Some(fut) => (fut, false),
-            None => {
-                let stream = self.stream.clone();
-                let bytes = Bytes::copy_from_slice(buf);
-                (
-                    self.write_fut
-                        .get_or_insert(Box::pin(async move { stream.write(&bytes).await })),
-                    true,
-                )
-            }
-        };
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
 
-        match fut.as_mut().poll(cx) {
-            Poll::Pending => {
+        if let Some(fut) = self.write_fut.as_mut() {
+            match fut.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    let stream = self.stream.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
+                    Poll::Ready(Err(e.into()))
+                }
+                // Given the data is buffered, it's okay to ignore the number of written bytes.
+                //
+                // TODO: In the long term, `stream.write` should be made sync. Then we could
+                // remove the whole `if` condition and just call `stream.write`.
+                Poll::Ready(Ok(_)) => {
+                    let stream = self.stream.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
+                    Poll::Ready(Ok(buf.len()))
+                }
+            }
+        } else {
+            let stream = self.stream.clone();
+            let bytes = Bytes::copy_from_slice(buf);
+            let fut = self
+                .write_fut
+                .insert(Box::pin(async move { stream.write(&bytes).await }));
+
+            match fut.as_mut().poll(cx) {
                 // If it's the first time we're polling the future, `Poll::Pending` can't be
                 // returned because that would mean the `PollStream` is not ready for writing. And
                 // this is not true since we've just created a future, which is going to write the
@@ -722,22 +740,15 @@ impl AsyncWrite for PollStream {
                 //
                 // It's okay to return `Poll::Ready` if the data is buffered (this is what the
                 // buffered writer and `File` do).
-                if fut_is_new {
-                    Poll::Ready(Ok(buf.len()))
-                } else {
-                    // If it's the subsequent poll, it's okay to return `Poll::Pending` as it
-                    // indicates that the `PollStream` is not ready for writing. Only one future
-                    // can be in progress at the time.
-                    Poll::Pending
+                Poll::Pending => Poll::Ready(Ok(buf.len())),
+                Poll::Ready(Err(e)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Err(e.into()))
                 }
-            }
-            Poll::Ready(Err(e)) => {
-                self.write_fut = None;
-                Poll::Ready(Err(e.into()))
-            }
-            Poll::Ready(Ok(n)) => {
-                self.write_fut = None;
-                Poll::Ready(Ok(n))
+                Poll::Ready(Ok(n)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Ok(n))
+                }
             }
         }
     }
@@ -760,6 +771,11 @@ impl AsyncWrite for PollStream {
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.as_mut().poll_flush(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(_) => {}
+        }
+
         let fut = match self.shutdown_fut.as_mut() {
             Some(fut) => fut,
             None => {

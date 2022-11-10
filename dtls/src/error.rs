@@ -166,6 +166,10 @@ pub enum Error {
     #[error("keying material: {0}")]
     KeyingMaterial(#[from] KeyingMaterialExporterError),
 
+    /// Error parsing a given PEM string.
+    #[error("invalid PEM: {0}")]
+    InvalidPEM(String),
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     Other(String),

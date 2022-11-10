@@ -494,16 +494,15 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
     let mut r = Recorder::new(5000);
 
     let mut arrival_time = SCALE_FACTOR_REFERENCE_TIME as i64;
-    add_run(&mut r, &[0], &[arrival_time]);
+    add_run(&mut r, &[3], &[arrival_time]);
 
     let rtcp_packets = r.build_feedback_packet();
-    assert_eq!(1, rtcp_packets.len()); // Empty TWCC
+    assert_eq!(0, rtcp_packets.len());
 
     add_run(
         &mut r,
-        &[4, 8, 9, 10],
+        &[4, 8, 9],
         &[
-            increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
             increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
             increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
             increase_time(&mut arrival_time, TYPE_TCC_DELTA_SCALE_FACTOR),
@@ -516,19 +515,19 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
     let expected = TransportLayerCc {
         sender_ssrc: 5000,
         media_ssrc: 5000,
-        base_sequence_number: 4,
+        base_sequence_number: 3,
         reference_time: 1,
-        fb_pkt_count: 1,
+        fb_pkt_count: 0,
         packet_status_count: 7,
         packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
             type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
             symbol_size: SymbolSizeTypeTcc::TwoBit,
             symbol_list: vec![
                 SymbolTypeTcc::PacketReceivedSmallDelta,
-                SymbolTypeTcc::PacketNotReceived,
-                SymbolTypeTcc::PacketNotReceived,
-                SymbolTypeTcc::PacketNotReceived,
                 SymbolTypeTcc::PacketReceivedSmallDelta,
+                SymbolTypeTcc::PacketNotReceived,
+                SymbolTypeTcc::PacketNotReceived,
+                SymbolTypeTcc::PacketNotReceived,
                 SymbolTypeTcc::PacketReceivedSmallDelta,
                 SymbolTypeTcc::PacketReceivedSmallDelta,
             ],
@@ -536,7 +535,7 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
         recv_deltas: vec![
             RecvDelta {
                 type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
-                delta: TYPE_TCC_DELTA_SCALE_FACTOR,
+                delta: 0,
             },
             RecvDelta {
                 type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,

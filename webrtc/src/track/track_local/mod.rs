@@ -104,6 +104,7 @@ pub(crate) struct TrackBinding {
     id: String,
     ssrc: SSRC,
     payload_type: PayloadType,
+    params: RTCRtpParameters,
     write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
     sender_paused: Arc<AtomicBool>,
 }

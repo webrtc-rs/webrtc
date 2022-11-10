@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Increased minimum support rust version to `1.60.0`.
+
 ## v0.8.2
 
 * Add IP filter to ICE `AgentConfig` [#306](https://github.com/webrtc-rs/webrtc/pull/306) and [#318](https://github.com/webrtc-rs/webrtc/pull/318).
