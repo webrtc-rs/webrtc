@@ -235,7 +235,7 @@ impl Agent {
             return;
         }
 
-        let ips = local_interfaces(&net, &*interface_filter, &*ip_filter, &network_types).await;
+        let ips = local_interfaces(&net, &interface_filter, &ip_filter, &network_types).await;
         for ip in ips {
             let mut mapped_ip = ip;
 

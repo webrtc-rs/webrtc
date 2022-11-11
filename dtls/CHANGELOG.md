@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-* Increased minimum support rust version to `1.60.0`.
-* Add `RTCCertificate::from_pem` and `RTCCertificate::serialize_pem` (only work with `pem` feature enabled) [#333]
+## v0.6.1
 
-[#333]: https://github.com/webrtc-rs/webrtc/pull/333
+* Increased minimum support rust version to `1.60.0`.
+* Add `RTCCertificate::from_pem` and `RTCCertificate::serialize_pem` (only work with `pem` feature enabled) [#333](https://github.com/webrtc-rs/webrtc/pull/333)
 
 ## v0.6.0
 
