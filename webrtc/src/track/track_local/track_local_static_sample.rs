@@ -140,18 +140,36 @@ impl TrackLocalStaticSample {
     /// Create a builder for writing samples with additional data.
     ///
     /// # Example
-    /// ```no-run
-    /// # use crate::track_local::track_local_static_sample::TrackLocalStaticSample;
-    /// # let track: TrackLocalStaticSample = todo!();
+    /// ```no_run
     /// use rtp::extension::audio_level_extension::AudioLevelExtension;
-    /// let result = track
-    ///     .sample_writer()
-    ///     .with_audio_level(AudioLevelExtension {
-    ///         level: 10,
-    ///         voice: true,
-    ///     })
-    ///     .write_sample()
-    ///     .await;
+    /// use std::time::Duration;
+    /// use webrtc::api::media_engine::MIME_TYPE_VP8;
+    /// use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+    /// use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let track = TrackLocalStaticSample::new(
+    ///        RTCRtpCodecCapability {
+    ///            mime_type: MIME_TYPE_VP8.to_owned(),
+    ///            ..Default::default()
+    ///        },
+    ///        "video".to_owned(),
+    ///        "webrtc-rs".to_owned(),
+    ///     );
+    ///     let result = track
+    ///         .sample_writer()
+    ///         .with_audio_level(AudioLevelExtension {
+    ///             level: 10,
+    ///             voice: true,
+    ///         })
+    ///         .write_sample(&media::Sample{
+    ///              data: bytes::Bytes::new(),
+    ///              duration: Duration::from_secs(1),
+    ///              ..Default::default()
+    ///         })
+    ///         .await;
+    /// }
     /// ```
     pub fn sample_writer(&self) -> SampleWriter<'_> {
         SampleWriter::new(self)
