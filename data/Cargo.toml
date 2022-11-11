@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-data"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of WebRTC DataChannel API"
@@ -14,7 +14,7 @@ rust-version = "1.60.0"
 
 [dependencies]
 util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "marshal"]  }
-sctp = { version = "0.6.1", path = "../sctp", package = "webrtc-sctp" }
+sctp = { version = "0.6.2", path = "../sctp", package = "webrtc-sctp" }
 
 tokio = { version = "1.19", features = ["full"] }
 bytes = "1"
