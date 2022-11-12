@@ -86,7 +86,7 @@ impl API {
         if !certificates.is_empty() {
             let now = SystemTime::now();
             for cert in &certificates {
-                cert.expires()
+                cert.expires
                     .duration_since(now)
                     .map_err(|_| Error::ErrCertificateExpired)?;
             }

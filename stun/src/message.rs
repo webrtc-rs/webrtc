@@ -64,7 +64,7 @@ pub struct Message {
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let t_id = base64::encode(&self.transaction_id.0);
+        let t_id = base64::encode(self.transaction_id.0);
         write!(
             f,
             "{} l={} attrs={} id={}",

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.6.1
+
+* Increased minimum support rust version to `1.60.0`.
+* Add `RTCCertificate::from_pem` and `RTCCertificate::serialize_pem` (only work with `pem` feature enabled) [#333](https://github.com/webrtc-rs/webrtc/pull/333)
+
 ## v0.6.0
 
 * [#254 [DTLS] Add NamedCurve::P384](https://github.com/webrtc-rs/webrtc/pull/254) contributed by [neonphog](https://github.com/neonphog)

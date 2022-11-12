@@ -21,6 +21,7 @@ pub const TRANSPORT_CC_URI: &str =
 pub const SDES_MID_URI: &str = "urn:ietf:params:rtp-hdrext:sdes:mid";
 pub const SDES_RTP_STREAM_ID_URI: &str = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
 pub const AUDIO_LEVEL_URI: &str = "urn:ietf:params:rtp-hdrext:ssrc-audio-level";
+pub const VIDEO_ORIENTATION_URI: &str = "urn:3gpp:video-orientation";
 
 /// ExtMap represents the activation of a single RTP header extension
 #[derive(Debug, Clone, Default)]

@@ -2,6 +2,7 @@
 mod transport_cc_extension_test;
 
 use crate::error::Error;
+use serde::{Deserialize, Serialize};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use bytes::{Buf, BufMut};
@@ -18,7 +19,7 @@ pub const TRANSPORT_CC_EXTENSION_SIZE: usize = 2;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |  ID   | L=1   |transport-wide sequence number | zero padding  |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(PartialEq, Eq, Debug, Default, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Default, Copy, Clone, Serialize, Deserialize)]
 pub struct TransportCcExtension {
     pub transport_sequence: u16,
 }

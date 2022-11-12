@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Increased minimum support rust version to `1.60.0`.
+
 ## v0.5.2
 
 * [#10 update deps + loosen some requirements](https://github.com/webrtc-rs/sdp/pull/10) by [@melekes](https://github.com/melekes).
