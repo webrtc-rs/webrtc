@@ -16,12 +16,16 @@ use stun::{agent::*, message::*, textattrs::Username};
 
 use util::Conn;
 
+use futures::channel::oneshot::{self, Receiver, Sender};
 use std::sync::atomic::AtomicUsize;
 use std::{
     collections::HashMap,
+    future::Future,
     marker::{Send, Sync},
     net::SocketAddr,
+    pin::Pin,
     sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex as StdMutex},
+    task::{Context, Poll},
 };
 use tokio::{
     sync::{mpsc, Mutex},
@@ -78,6 +82,7 @@ pub struct Allocation {
     timer_expired: Arc<AtomicBool>,
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
     pub(crate) relayed_bytes: AtomicUsize,
+    closed_tx: Option<Sender<()>>,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -107,6 +112,7 @@ impl Allocation {
             timer_expired: Arc::new(AtomicBool::new(false)),
             closed: AtomicBool::new(false),
             relayed_bytes: Default::default(),
+            closed_tx: None,
         }
     }
 
@@ -315,7 +321,7 @@ impl Allocation {
     //  datagram, and the XOR-PEER-ADDRESS attribute is set to the source
     //  transport address of the received UDP datagram.  The Data indication
     //  is then sent on the 5-tuple associated with the allocation.
-    async fn packet_handler(&self) {
+    async fn packet_handler(&mut self) {
         let five_tuple = self.five_tuple;
         let relay_addr = self.relay_addr;
         let relay_socket = Arc::clone(&self.relay_socket);
@@ -323,14 +329,16 @@ impl Allocation {
         let allocations = self.allocations.clone();
         let channel_bindings = Arc::clone(&self.channel_bindings);
         let permissions = Arc::clone(&self.permissions);
+        let (closed_tx, closed_rx) = oneshot::channel();
+        self.closed_tx = Some(closed_tx);
+        let drop_listener = DropListener::new(closed_rx);
 
         tokio::spawn(async move {
             let mut buffer = vec![0u8; RTP_MTU];
 
-            loop {
-                let timeout = tokio::time::sleep(Duration::from_secs(10));
-                tokio::pin!(timeout);
+            tokio::pin!(drop_listener);
 
+            loop {
                 let (n, src_addr) = tokio::select! {
                     result = relay_socket.recv_from(&mut buffer) => {
                         match result {
@@ -344,13 +352,9 @@ impl Allocation {
                             }
                         }
                     }
-                    _ = timeout.as_mut() =>{
-                        if Arc::strong_count(&relay_socket) <= 1 {
-                            log::debug!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
-                            break;
-                        } else {
-                            continue;
-                        }
+                    _ = drop_listener.as_mut() => {
+                        log::trace!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
+                        break;
                     }
                 };
 
@@ -449,5 +453,26 @@ impl Allocation {
                 }
             }
         });
+    }
+}
+
+struct DropListener {
+    rx: Receiver<()>,
+}
+
+impl DropListener {
+    pub fn new(rx: Receiver<()>) -> Self {
+        Self { rx }
+    }
+}
+
+impl Future for DropListener {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.rx.try_recv() {
+            Ok(_) => Poll::Pending,
+            Err(_) => Poll::Ready(()),
+        }
     }
 }
