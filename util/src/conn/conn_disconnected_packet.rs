@@ -2,20 +2,21 @@ use super::*;
 
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+
+use crate::sync::RwLock;
 
 /// Since UDP is connectionless, as a server, it doesn't know how to reply
 /// simply using the `Write` method. So, to make it work, `disconnectedPacketConn`
 /// will infer the last packet that it reads as the reply address for `Write`
 pub struct DisconnectedPacketConn {
-    raddr: Mutex<SocketAddr>,
+    raddr: RwLock<SocketAddr>,
     pconn: Arc<dyn Conn + Send + Sync>,
 }
 
 impl DisconnectedPacketConn {
     pub fn new(conn: Arc<dyn Conn + Send + Sync>) -> Self {
         DisconnectedPacketConn {
-            raddr: Mutex::new(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)),
+            raddr: RwLock::new(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)),
             pconn: conn,
         }
     }
@@ -29,10 +30,7 @@ impl Conn for DisconnectedPacketConn {
 
     async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let (n, addr) = self.pconn.recv_from(buf).await?;
-        {
-            let mut raddr = self.raddr.lock().await;
-            *raddr = addr;
-        }
+        *self.raddr.write() = addr;
         Ok(n)
     }
 
@@ -41,10 +39,7 @@ impl Conn for DisconnectedPacketConn {
     }
 
     async fn send(&self, buf: &[u8]) -> Result<usize> {
-        let addr = {
-            let raddr = self.raddr.lock().await;
-            *raddr
-        };
+        let addr = *self.raddr.read();
         self.pconn.send_to(buf, addr).await
     }
 
@@ -52,13 +47,13 @@ impl Conn for DisconnectedPacketConn {
         self.pconn.send_to(buf, target).await
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
-        self.pconn.local_addr().await
+    fn local_addr(&self) -> Result<SocketAddr> {
+        self.pconn.local_addr()
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
-        let raddr = self.raddr.lock().await;
-        Some(*raddr)
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        let raddr = *self.raddr.read();
+        Some(raddr)
     }
 
     async fn close(&self) -> Result<()> {

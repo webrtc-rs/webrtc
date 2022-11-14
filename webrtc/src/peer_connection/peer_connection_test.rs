@@ -255,8 +255,7 @@ pub(crate) async fn until_connection_state(
                 worker.take();
             }
         })
-    }))
-    .await;
+    }));
 }
 
 #[tokio::test]
@@ -269,18 +268,16 @@ async fn test_get_stats() -> Result<()> {
 
     let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
     let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
-    pc_answer
-        .on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
-            let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
-            Box::pin(async move {
-                if ice_state == RTCIceConnectionState::Connected {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    let mut done = ice_complete_tx2.lock().await;
-                    done.take();
-                }
-            })
-        }))
-        .await;
+    pc_answer.on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
+        let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
+        Box::pin(async move {
+            if ice_state == RTCIceConnectionState::Connected {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                let mut done = ice_complete_tx2.lock().await;
+                done.take();
+            }
+        })
+    }));
 
     let sender_called_candidate_change = Arc::new(AtomicU32::new(0));
     let sender_called_candidate_change2 = Arc::clone(&sender_called_candidate_change);
@@ -291,8 +288,7 @@ async fn test_get_stats() -> Result<()> {
         .on_selected_candidate_pair_change(Box::new(move |_: RTCIceCandidatePair| {
             sender_called_candidate_change2.store(1, Ordering::SeqCst);
             Box::pin(async {})
-        }))
-        .await;
+        }));
     let track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
@@ -307,32 +303,30 @@ async fn test_get_stats() -> Result<()> {
         .expect("Failed to add track");
     let (packet_tx, packet_rx) = mpsc::channel(1);
 
-    pc_answer
-        .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
-                let packet_tx = packet_tx.clone();
-                let result = Box::pin(async move {});
-                let track = match track {
-                    Some(t) => t,
-                    None => return result,
-                };
+    pc_answer.on_track(Box::new(
+        move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
+            let packet_tx = packet_tx.clone();
+            let result = Box::pin(async move {});
+            let track = match track {
+                Some(t) => t,
+                None => return result,
+            };
 
-                tokio::spawn(async move {
-                    while let Ok((pkt, _)) = track.read_rtp().await {
-                        dbg!(&pkt);
-                        let last = pkt.payload[pkt.payload.len() - 1];
+            tokio::spawn(async move {
+                while let Ok((pkt, _)) = track.read_rtp().await {
+                    dbg!(&pkt);
+                    let last = pkt.payload[pkt.payload.len() - 1];
 
-                        if last == 0xAA {
-                            let _ = packet_tx.send(()).await;
-                            break;
-                        }
+                    if last == 0xAA {
+                        let _ = packet_tx.send(()).await;
+                        break;
                     }
-                });
+                }
+            });
 
-                Box::pin(async move {})
-            },
-        ))
-        .await;
+            Box::pin(async move {})
+        },
+    ));
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 

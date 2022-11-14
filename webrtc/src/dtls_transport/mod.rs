@@ -1,3 +1,4 @@
+use arc_swap::ArcSwapOption;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -67,7 +68,7 @@ pub struct RTCDtlsTransport {
     pub(crate) remote_certificate: Mutex<Bytes>,
     pub(crate) state: AtomicU8, //DTLSTransportState,
     pub(crate) srtp_protection_profile: Mutex<ProtectionProfile>,
-    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnDTLSTransportStateChangeHdlrFn>>>,
+    pub(crate) on_state_change_handler: ArcSwapOption<Mutex<OnDTLSTransportStateChangeHdlrFn>>,
     pub(crate) conn: Mutex<Option<Arc<DTLSConn>>>,
 
     pub(crate) srtp_session: Mutex<Option<Arc<Session>>>,
@@ -118,17 +119,17 @@ impl RTCDtlsTransport {
     /// state_change requires the caller holds the lock
     async fn state_change(&self, state: RTCDtlsTransportState) {
         self.state.store(state as u8, Ordering::SeqCst);
-        let mut handler = self.on_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*self.on_state_change_handler.load() {
+            let mut f = handler.lock().await;
             f(state).await;
         }
     }
 
     /// on_state_change sets a handler that is fired when the DTLS
     /// connection state changes.
-    pub async fn on_state_change(&self, f: OnDTLSTransportStateChangeHdlrFn) {
-        let mut on_state_change_handler = self.on_state_change_handler.lock().await;
-        *on_state_change_handler = Some(f);
+    pub fn on_state_change(&self, f: OnDTLSTransportStateChangeHdlrFn) {
+        self.on_state_change_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// state returns the current dtls_transport transport state.

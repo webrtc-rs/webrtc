@@ -4,6 +4,7 @@ use crate::error::*;
 use crate::rand::generate_cand_id;
 use crate::util::*;
 use std::sync::atomic::{AtomicU16, AtomicU8};
+use util::sync::Mutex as SyncMutex;
 
 /// The config required to create a new `CandidateServerReflexive`.
 #[derive(Default)]
@@ -16,7 +17,7 @@ pub struct CandidateServerReflexiveConfig {
 
 impl CandidateServerReflexiveConfig {
     /// Creates a new server reflective candidate.
-    pub async fn new_candidate_server_reflexive(self) -> Result<CandidateBase> {
+    pub fn new_candidate_server_reflexive(self) -> Result<CandidateBase> {
         let ip: IpAddr = match self.base_config.address.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(Error::ErrAddressParseFailed),
@@ -34,7 +35,7 @@ impl CandidateServerReflexiveConfig {
             candidate_type: CandidateType::ServerReflexive,
             address: self.base_config.address,
             port: self.base_config.port,
-            resolved_addr: Mutex::new(create_addr(network_type, ip, self.base_config.port)),
+            resolved_addr: SyncMutex::new(create_addr(network_type, ip, self.base_config.port)),
             component: AtomicU16::new(self.base_config.component),
             foundation_override: self.base_config.foundation,
             priority_override: self.base_config.priority,

@@ -59,7 +59,7 @@ async fn main() -> Result<(), Error> {
 
     let host = matches.value_of("host").unwrap();
     let conn = DisconnectedPacketConn::new(Arc::new(UdpSocket::bind(host).await.unwrap()));
-    println!("listening {}...", conn.local_addr().await.unwrap());
+    println!("listening {}...", conn.local_addr().unwrap());
 
     let config = Config {
         net_conn: Arc::new(conn),

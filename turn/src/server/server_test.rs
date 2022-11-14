@@ -275,12 +275,12 @@ async fn test_server_vnet_echo_via_relay() -> Result<()> {
 
     log::debug!("sending a binding request.");
     let conn = client.allocate().await?;
-    let local_addr = conn.local_addr().await?;
+    let local_addr = conn.local_addr()?;
 
-    log::debug!("laddr: {}", conn.local_addr().await?);
+    log::debug!("laddr: {}", conn.local_addr()?);
 
     let echo_conn = v.net1.bind(SocketAddr::from_str("1.2.3.5:5678")?).await?;
-    let echo_addr = echo_conn.local_addr().await?;
+    let echo_addr = echo_conn.local_addr()?;
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
 

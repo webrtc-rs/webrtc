@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::queue::pending_queue::PendingQueue;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use std::{
     fmt,
@@ -87,7 +88,7 @@ pub struct Stream {
     pub(crate) reliability_value: AtomicU32,
     pub(crate) buffered_amount: AtomicUsize,
     pub(crate) buffered_amount_low: AtomicUsize,
-    pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
+    pub(crate) on_buffered_amount_low: ArcSwapOption<Mutex<OnBufferedAmountLowFn>>,
     pub(crate) name: String,
 }
 
@@ -143,7 +144,7 @@ impl Stream {
             reliability_value: AtomicU32::new(0),
             buffered_amount: AtomicUsize::new(0),
             buffered_amount_low: AtomicUsize::new(0),
-            on_buffered_amount_low: Mutex::new(None),
+            on_buffered_amount_low: ArcSwapOption::empty(),
             name,
         }
     }
@@ -415,9 +416,9 @@ impl Stream {
 
     /// on_buffered_amount_low sets the callback handler which would be called when the number of
     /// bytes of outgoing data buffered is lower than the threshold.
-    pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
-        let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
-        *on_buffered_amount_low = Some(f);
+    pub fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+        self.on_buffered_amount_low
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// This method is called by association's read_loop (go-)routine to notify this stream
@@ -455,8 +456,8 @@ impl Stream {
         );
 
         if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
-            let mut handler = self.on_buffered_amount_low.lock().await;
-            if let Some(f) = &mut *handler {
+            if let Some(handler) = &*self.on_buffered_amount_low.load() {
+                let mut f = handler.lock().await;
                 f().await;
             }
         }

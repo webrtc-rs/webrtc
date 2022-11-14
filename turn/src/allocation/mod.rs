@@ -11,8 +11,8 @@ use crate::proto::{chandata::*, channum::*, data::*, peeraddr::*, *};
 use channel_bind::*;
 use five_tuple::*;
 use permission::*;
-
 use stun::{agent::*, message::*, textattrs::Username};
+use util::sync::Mutex as SyncMutex;
 
 use util::Conn;
 
@@ -21,7 +21,7 @@ use std::{
     collections::HashMap,
     marker::{Send, Sync},
     net::SocketAddr,
-    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex as StdMutex},
+    sync::{atomic::AtomicBool, atomic::Ordering, Arc},
 };
 use tokio::{
     sync::{mpsc, Mutex},
@@ -74,7 +74,7 @@ pub struct Allocation {
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
     pub(crate) allocations: Option<AllocationMap>,
-    reset_tx: StdMutex<Option<mpsc::Sender<Duration>>>,
+    reset_tx: SyncMutex<Option<mpsc::Sender<Duration>>>,
     timer_expired: Arc<AtomicBool>,
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
     pub(crate) relayed_bytes: AtomicUsize,
@@ -103,7 +103,7 @@ impl Allocation {
             permissions: Arc::new(Mutex::new(HashMap::new())),
             channel_bindings: Arc::new(Mutex::new(HashMap::new())),
             allocations: None,
-            reset_tx: StdMutex::new(None),
+            reset_tx: SyncMutex::new(None),
             timer_expired: Arc::new(AtomicBool::new(false)),
             closed: AtomicBool::new(false),
             relayed_bytes: Default::default(),
@@ -245,7 +245,7 @@ impl Allocation {
 
     pub async fn start(&self, lifetime: Duration) {
         let (reset_tx, mut reset_rx) = mpsc::channel(1);
-        self.reset_tx.lock().unwrap().replace(reset_tx);
+        self.reset_tx.lock().replace(reset_tx);
 
         let allocations = self.allocations.clone();
         let five_tuple = self.five_tuple;
@@ -282,15 +282,13 @@ impl Allocation {
     }
 
     fn stop(&self) -> bool {
-        let mut reset_tx = self.reset_tx.lock().unwrap();
-        let expired = reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
-        reset_tx.take();
-        expired
+        let reset_tx = self.reset_tx.lock().take();
+        reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst)
     }
 
     // Refresh updates the allocations lifetime
     pub async fn refresh(&self, lifetime: Duration) {
-        let reset_tx = self.reset_tx.lock().unwrap().clone();
+        let reset_tx = self.reset_tx.lock().clone();
         if let Some(tx) = reset_tx {
             let _ = tx.send(lifetime).await;
         }
@@ -341,7 +339,7 @@ impl Allocation {
 
                 log::debug!(
                     "relay socket {:?} received {} bytes from {}",
-                    relay_socket.local_addr().await,
+                    relay_socket.local_addr(),
                     n,
                     src_addr
                 );

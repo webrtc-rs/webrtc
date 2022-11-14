@@ -59,8 +59,7 @@ async fn test_pair_priority() -> Result<()> {
         },
         ..Default::default()
     };
-    let host_local: Arc<dyn Candidate + Send + Sync> =
-        Arc::new(host_config.new_candidate_host().await?);
+    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host()?);
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -75,7 +74,7 @@ async fn test_pair_priority() -> Result<()> {
         ..Default::default()
     };
 
-    let relay_remote = relay_config.new_candidate_relay().await?;
+    let relay_remote = relay_config.new_candidate_relay()?;
 
     let srflx_config = CandidateServerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -89,7 +88,7 @@ async fn test_pair_priority() -> Result<()> {
         rel_port: 43212,
     };
 
-    let srflx_remote = srflx_config.new_candidate_server_reflexive().await?;
+    let srflx_remote = srflx_config.new_candidate_server_reflexive()?;
 
     let prflx_config = CandidatePeerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -103,7 +102,7 @@ async fn test_pair_priority() -> Result<()> {
         rel_port: 43211,
     };
 
-    let prflx_remote = prflx_config.new_candidate_peer_reflexive().await?;
+    let prflx_remote = prflx_config.new_candidate_peer_reflexive()?;
 
     let host_config = CandidateHostConfig {
         base_config: CandidateBaseConfig {
@@ -115,7 +114,7 @@ async fn test_pair_priority() -> Result<()> {
         },
         ..Default::default()
     };
-    let host_remote = host_config.new_candidate_host().await?;
+    let host_remote = host_config.new_candidate_host()?;
 
     let remotes: Vec<Arc<dyn Candidate + Send + Sync>> = vec![
         Arc::new(relay_remote),
@@ -168,20 +167,20 @@ async fn test_pair_priority() -> Result<()> {
 #[tokio::test]
 async fn test_agent_get_stats() -> Result<()> {
     let (conn_a, conn_b, agent_a, agent_b) = pipe(None, None).await?;
-    assert_eq!(agent_a.get_bytes_received().await, 0);
-    assert_eq!(agent_a.get_bytes_sent().await, 0);
-    assert_eq!(agent_b.get_bytes_received().await, 0);
-    assert_eq!(agent_b.get_bytes_sent().await, 0);
+    assert_eq!(agent_a.get_bytes_received(), 0);
+    assert_eq!(agent_a.get_bytes_sent(), 0);
+    assert_eq!(agent_b.get_bytes_received(), 0);
+    assert_eq!(agent_b.get_bytes_sent(), 0);
 
     let _na = conn_a.send(&[0u8; 10]).await?;
     let mut buf = vec![0u8; 10];
     let _nb = conn_b.recv(&mut buf).await?;
 
-    assert_eq!(agent_a.get_bytes_received().await, 0);
-    assert_eq!(agent_a.get_bytes_sent().await, 10);
+    assert_eq!(agent_a.get_bytes_received(), 0);
+    assert_eq!(agent_a.get_bytes_sent(), 10);
 
-    assert_eq!(agent_b.get_bytes_received().await, 10);
-    assert_eq!(agent_b.get_bytes_sent().await, 0);
+    assert_eq!(agent_b.get_bytes_received(), 10);
+    assert_eq!(agent_b.get_bytes_sent(), 0);
 
     Ok(())
 }
@@ -198,7 +197,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<()> {
             tx.take();
         })
     });
-    a.on_selected_candidate_pair_change(cb).await;
+    a.on_selected_candidate_pair_change(cb);
 
     let host_config = CandidateHostConfig {
         base_config: CandidateBaseConfig {
@@ -210,7 +209,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<()> {
         },
         ..Default::default()
     };
-    let host_local = host_config.new_candidate_host().await?;
+    let host_local = host_config.new_candidate_host()?;
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -224,7 +223,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<()> {
         rel_port: 43210,
         ..Default::default()
     };
-    let relay_remote = relay_config.new_candidate_relay().await?;
+    let relay_remote = relay_config.new_candidate_relay()?;
 
     // select the pair
     let p = Arc::new(CandidatePair::new(
@@ -257,7 +256,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
         ..Default::default()
     };
 
-    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host()?);
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
     let (username, local_pwd, tie_breaker) = {
@@ -356,7 +355,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
         ..Default::default()
     };
 
-    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host()?);
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
     let mut msg = Message::new();
@@ -437,7 +436,7 @@ async fn test_connectivity_on_startup() -> Result<()> {
     };
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: supported_network_types(),
@@ -450,7 +449,7 @@ async fn test_connectivity_on_startup() -> Result<()> {
     };
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier).await;
+    b_agent.on_connection_state_change(b_notifier);
 
     // Manual signaling
     let (a_ufrag, a_pwd) = a_agent.get_local_user_credentials().await;
@@ -464,17 +463,15 @@ async fn test_connectivity_on_startup() -> Result<()> {
     let (_b_cancel_tx, b_cancel_rx) = mpsc::channel(1);
 
     let accepting_tx = Arc::new(Mutex::new(Some(accepting_tx)));
-    a_agent
-        .on_connection_state_change(Box::new(move |s: ConnectionState| {
-            let accepted_tx_clone = Arc::clone(&accepting_tx);
-            Box::pin(async move {
-                if s == ConnectionState::Checking {
-                    let mut tx = accepted_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        }))
-        .await;
+    a_agent.on_connection_state_change(Box::new(move |s: ConnectionState| {
+        let accepted_tx_clone = Arc::clone(&accepting_tx);
+        Box::pin(async move {
+            if s == ConnectionState::Checking {
+                let mut tx = accepted_tx_clone.lock().await;
+                tx.take();
+            }
+        })
+    }));
 
     tokio::spawn(async move {
         let result = a_agent.accept(a_cancel_rx, b_ufrag, b_pwd).await;
@@ -547,7 +544,7 @@ async fn test_connectivity_lite() -> Result<()> {
     };
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let cfg1 = AgentConfig {
         urls: vec![],
@@ -560,7 +557,7 @@ async fn test_connectivity_lite() -> Result<()> {
     };
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier).await;
+    b_agent.on_connection_state_change(b_notifier);
 
     let _ = connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -605,11 +602,11 @@ impl Conn for MockPacketConn {
         Ok(0)
     }
 
-    async fn local_addr(&self) -> std::result::Result<SocketAddr, util::Error> {
+    fn local_addr(&self) -> std::result::Result<SocketAddr, util::Error> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 
@@ -660,8 +657,7 @@ async fn test_inbound_validity() -> Result<()> {
             },
             ..Default::default()
         }
-        .new_candidate_host()
-        .await?,
+        .new_candidate_host()?,
     );
 
     //"Invalid Binding requests should be discarded"
@@ -972,45 +968,43 @@ async fn test_connection_state_callback() -> Result<()> {
     let is_failed_tx = Arc::new(Mutex::new(Some(is_failed_tx)));
     let is_closed_tx = Arc::new(Mutex::new(Some(is_closed_tx)));
 
-    a_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let is_checking_tx_clone = Arc::clone(&is_checking_tx);
-            let is_connected_tx_clone = Arc::clone(&is_connected_tx);
-            let is_disconnected_tx_clone = Arc::clone(&is_disconnected_tx);
-            let is_failed_tx_clone = Arc::clone(&is_failed_tx);
-            let is_closed_tx_clone = Arc::clone(&is_closed_tx);
-            Box::pin(async move {
-                match c {
-                    ConnectionState::Checking => {
-                        log::debug!("drop is_checking_tx");
-                        let mut tx = is_checking_tx_clone.lock().await;
-                        tx.take();
-                    }
-                    ConnectionState::Connected => {
-                        log::debug!("drop is_connected_tx");
-                        let mut tx = is_connected_tx_clone.lock().await;
-                        tx.take();
-                    }
-                    ConnectionState::Disconnected => {
-                        log::debug!("drop is_disconnected_tx");
-                        let mut tx = is_disconnected_tx_clone.lock().await;
-                        tx.take();
-                    }
-                    ConnectionState::Failed => {
-                        log::debug!("drop is_failed_tx");
-                        let mut tx = is_failed_tx_clone.lock().await;
-                        tx.take();
-                    }
-                    ConnectionState::Closed => {
-                        log::debug!("drop is_closed_tx");
-                        let mut tx = is_closed_tx_clone.lock().await;
-                        tx.take();
-                    }
-                    _ => {}
-                };
-            })
-        }))
-        .await;
+    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let is_checking_tx_clone = Arc::clone(&is_checking_tx);
+        let is_connected_tx_clone = Arc::clone(&is_connected_tx);
+        let is_disconnected_tx_clone = Arc::clone(&is_disconnected_tx);
+        let is_failed_tx_clone = Arc::clone(&is_failed_tx);
+        let is_closed_tx_clone = Arc::clone(&is_closed_tx);
+        Box::pin(async move {
+            match c {
+                ConnectionState::Checking => {
+                    log::debug!("drop is_checking_tx");
+                    let mut tx = is_checking_tx_clone.lock().await;
+                    tx.take();
+                }
+                ConnectionState::Connected => {
+                    log::debug!("drop is_connected_tx");
+                    let mut tx = is_connected_tx_clone.lock().await;
+                    tx.take();
+                }
+                ConnectionState::Disconnected => {
+                    log::debug!("drop is_disconnected_tx");
+                    let mut tx = is_disconnected_tx_clone.lock().await;
+                    tx.take();
+                }
+                ConnectionState::Failed => {
+                    log::debug!("drop is_failed_tx");
+                    let mut tx = is_failed_tx_clone.lock().await;
+                    tx.take();
+                }
+                ConnectionState::Closed => {
+                    log::debug!("drop is_closed_tx");
+                    let mut tx = is_closed_tx_clone.lock().await;
+                    tx.take();
+                }
+                _ => {}
+            };
+        })
+    }));
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -1037,7 +1031,7 @@ async fn test_invalid_gather() -> Result<()> {
     //"Gather with no OnCandidate should error"
     let a = Agent::new(AgentConfig::default()).await?;
 
-    if let Err(err) = a.gather_candidates().await {
+    if let Err(err) = a.gather_candidates() {
         assert_eq!(
             Error::ErrNoOnCandidateHandler,
             err,
@@ -1065,8 +1059,7 @@ async fn test_candidate_pair_stats() -> Result<()> {
             },
             ..Default::default()
         }
-        .new_candidate_host()
-        .await?,
+        .new_candidate_host()?,
     );
 
     let relay_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1082,8 +1075,7 @@ async fn test_candidate_pair_stats() -> Result<()> {
             rel_port: 43210,
             ..Default::default()
         }
-        .new_candidate_relay()
-        .await?,
+        .new_candidate_relay()?,
     );
 
     let srflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1098,8 +1090,7 @@ async fn test_candidate_pair_stats() -> Result<()> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
         }
-        .new_candidate_server_reflexive()
-        .await?,
+        .new_candidate_server_reflexive()?,
     );
 
     let prflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1114,8 +1105,7 @@ async fn test_candidate_pair_stats() -> Result<()> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43211,
         }
-        .new_candidate_peer_reflexive()
-        .await?,
+        .new_candidate_peer_reflexive()?,
     );
 
     let host_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1129,8 +1119,7 @@ async fn test_candidate_pair_stats() -> Result<()> {
             },
             ..Default::default()
         }
-        .new_candidate_host()
-        .await?,
+        .new_candidate_host()?,
     );
 
     for remote in &[
@@ -1232,8 +1221,7 @@ async fn test_local_candidate_stats() -> Result<()> {
             },
             ..Default::default()
         }
-        .new_candidate_host()
-        .await?,
+        .new_candidate_host()?,
     );
 
     let srflx_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1248,8 +1236,7 @@ async fn test_local_candidate_stats() -> Result<()> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
         }
-        .new_candidate_server_reflexive()
-        .await?,
+        .new_candidate_server_reflexive()?,
     );
 
     {
@@ -1327,8 +1314,7 @@ async fn test_remote_candidate_stats() -> Result<()> {
             rel_port: 43210,
             ..Default::default()
         }
-        .new_candidate_relay()
-        .await?,
+        .new_candidate_relay()?,
     );
 
     let srflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1343,8 +1329,7 @@ async fn test_remote_candidate_stats() -> Result<()> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
         }
-        .new_candidate_server_reflexive()
-        .await?,
+        .new_candidate_server_reflexive()?,
     );
 
     let prflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1359,8 +1344,7 @@ async fn test_remote_candidate_stats() -> Result<()> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43211,
         }
-        .new_candidate_peer_reflexive()
-        .await?,
+        .new_candidate_peer_reflexive()?,
     );
 
     let host_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1374,8 +1358,7 @@ async fn test_remote_candidate_stats() -> Result<()> {
             },
             ..Default::default()
         }
-        .new_candidate_host()
-        .await?,
+        .new_candidate_host()?,
     );
 
     {
@@ -1677,17 +1660,15 @@ async fn test_connection_state_failed_delete_all_candidates() -> Result<()> {
 
     let (is_failed_tx, mut is_failed_rx) = mpsc::channel::<()>(1);
     let is_failed_tx = Arc::new(Mutex::new(Some(is_failed_tx)));
-    a_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let is_failed_tx_clone = Arc::clone(&is_failed_tx);
-            Box::pin(async move {
-                if c == ConnectionState::Failed {
-                    let mut tx = is_failed_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        }))
-        .await;
+    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let is_failed_tx_clone = Arc::clone(&is_failed_tx);
+        Box::pin(async move {
+            if c == ConnectionState::Failed {
+                let mut tx = is_failed_tx_clone.lock().await;
+                tx.take();
+            }
+        })
+    }));
 
     connect_with_vnet(&a_agent, &b_agent).await?;
     let _ = is_failed_rx.recv().await;
@@ -1756,14 +1737,10 @@ async fn test_connection_state_connecting_to_failed() -> Result<()> {
     };
 
     let (wf1, wc1) = (is_failed.worker(), is_checking.worker());
-    a_agent
-        .on_connection_state_change(connection_state_check(wf1, wc1))
-        .await;
+    a_agent.on_connection_state_change(connection_state_check(wf1, wc1));
 
     let (wf2, wc2) = (is_failed.worker(), is_checking.worker());
-    b_agent
-        .on_connection_state_change(connection_state_check(wf2, wc2))
-        .await;
+    b_agent.on_connection_state_change(connection_state_check(wf2, wc2));
 
     let agent_a = Arc::clone(&a_agent);
     tokio::spawn(async move {
@@ -1850,17 +1827,15 @@ async fn test_agent_restart_one_side() -> Result<()> {
 
     let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
     let cancel_tx = Arc::new(Mutex::new(Some(cancel_tx)));
-    agent_b
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let cancel_tx_clone = Arc::clone(&cancel_tx);
-            Box::pin(async move {
-                if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
-                    let mut tx = cancel_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        }))
-        .await;
+    agent_b.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let cancel_tx_clone = Arc::clone(&cancel_tx);
+        Box::pin(async move {
+            if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
+                let mut tx = cancel_tx_clone.lock().await;
+                tx.take();
+            }
+        })
+    }));
 
     agent_a.restart("".to_owned(), "".to_owned()).await?;
 
@@ -1914,10 +1889,10 @@ async fn test_agent_restart_both_side() -> Result<()> {
         generate_candidate_address_strings(agent_b.get_local_candidates().await);
 
     let (a_notifier, mut a_connected) = on_connected();
-    agent_a.on_connection_state_change(a_notifier).await;
+    agent_a.on_connection_state_change(a_notifier);
 
     let (b_notifier, mut b_connected) = on_connected();
-    agent_b.on_connection_state_change(b_notifier).await;
+    agent_b.on_connection_state_change(b_notifier);
 
     // Restart and Re-Signal
     agent_a.restart("".to_owned(), "".to_owned()).await?;
@@ -2009,21 +1984,19 @@ async fn test_close_in_connection_state_callback() -> Result<()> {
     let (is_connected_tx, mut is_connected_rx) = mpsc::channel::<()>(1);
     let is_closed_tx = Arc::new(Mutex::new(Some(is_closed_tx)));
     let is_connected_tx = Arc::new(Mutex::new(Some(is_connected_tx)));
-    a_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let is_closed_tx_clone = Arc::clone(&is_closed_tx);
-            let is_connected_tx_clone = Arc::clone(&is_connected_tx);
-            Box::pin(async move {
-                if c == ConnectionState::Connected {
-                    let mut tx = is_connected_tx_clone.lock().await;
-                    tx.take();
-                } else if c == ConnectionState::Closed {
-                    let mut tx = is_closed_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        }))
-        .await;
+    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let is_closed_tx_clone = Arc::clone(&is_closed_tx);
+        let is_connected_tx_clone = Arc::clone(&is_connected_tx);
+        Box::pin(async move {
+            if c == ConnectionState::Connected {
+                let mut tx = is_connected_tx_clone.lock().await;
+                tx.take();
+            } else if c == ConnectionState::Closed {
+                let mut tx = is_closed_tx_clone.lock().await;
+                tx.take();
+            }
+        })
+    }));
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -2066,17 +2039,15 @@ async fn test_run_task_in_connection_state_callback() -> Result<()> {
 
     let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
     let is_complete_tx = Arc::new(Mutex::new(Some(is_complete_tx)));
-    a_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let is_complete_tx_clone = Arc::clone(&is_complete_tx);
-            Box::pin(async move {
-                if c == ConnectionState::Connected {
-                    let mut tx = is_complete_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        }))
-        .await;
+    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let is_complete_tx_clone = Arc::clone(&is_complete_tx);
+        Box::pin(async move {
+            if c == ConnectionState::Connected {
+                let mut tx = is_complete_tx_clone.lock().await;
+                tx.take();
+            }
+        })
+    }));
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -2120,31 +2091,27 @@ async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()
 
     let (is_tested_tx, mut is_tested_rx) = mpsc::channel::<()>(1);
     let is_tested_tx = Arc::new(Mutex::new(Some(is_tested_tx)));
-    a_agent
-        .on_selected_candidate_pair_change(Box::new(
-            move |_: &Arc<dyn Candidate + Send + Sync>, _: &Arc<dyn Candidate + Send + Sync>| {
-                let is_tested_tx_clone = Arc::clone(&is_tested_tx);
-                Box::pin(async move {
-                    let mut tx = is_tested_tx_clone.lock().await;
-                    tx.take();
-                })
-            },
-        ))
-        .await;
+    a_agent.on_selected_candidate_pair_change(Box::new(
+        move |_: &Arc<dyn Candidate + Send + Sync>, _: &Arc<dyn Candidate + Send + Sync>| {
+            let is_tested_tx_clone = Arc::clone(&is_tested_tx);
+            Box::pin(async move {
+                let mut tx = is_tested_tx_clone.lock().await;
+                tx.take();
+            })
+        },
+    ));
 
     let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
     let is_complete_tx = Arc::new(Mutex::new(Some(is_complete_tx)));
-    a_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let is_complete_tx_clone = Arc::clone(&is_complete_tx);
-            Box::pin(async move {
-                if c == ConnectionState::Connected {
-                    let mut tx = is_complete_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        }))
-        .await;
+    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let is_complete_tx_clone = Arc::clone(&is_complete_tx);
+        Box::pin(async move {
+            if c == ConnectionState::Connected {
+                let mut tx = is_complete_tx_clone.lock().await;
+                tx.take();
+            }
+        })
+    }));
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -2173,7 +2140,7 @@ async fn test_lite_lifecycle() -> Result<()> {
         .await?,
     );
 
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let disconnected_duration = Duration::from_secs(1);
     let failed_duration = Duration::from_secs(1);
@@ -2201,26 +2168,24 @@ async fn test_lite_lifecycle() -> Result<()> {
     let b_disconnected_tx = Arc::new(Mutex::new(Some(b_disconnected_tx)));
     let b_failed_tx = Arc::new(Mutex::new(Some(b_failed_tx)));
 
-    b_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let b_connected_tx_clone = Arc::clone(&b_connected_tx);
-            let b_disconnected_tx_clone = Arc::clone(&b_disconnected_tx);
-            let b_failed_tx_clone = Arc::clone(&b_failed_tx);
+    b_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let b_connected_tx_clone = Arc::clone(&b_connected_tx);
+        let b_disconnected_tx_clone = Arc::clone(&b_disconnected_tx);
+        let b_failed_tx_clone = Arc::clone(&b_failed_tx);
 
-            Box::pin(async move {
-                if c == ConnectionState::Connected {
-                    let mut tx = b_connected_tx_clone.lock().await;
-                    tx.take();
-                } else if c == ConnectionState::Disconnected {
-                    let mut tx = b_disconnected_tx_clone.lock().await;
-                    tx.take();
-                } else if c == ConnectionState::Failed {
-                    let mut tx = b_failed_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        }))
-        .await;
+        Box::pin(async move {
+            if c == ConnectionState::Connected {
+                let mut tx = b_connected_tx_clone.lock().await;
+                tx.take();
+            } else if c == ConnectionState::Disconnected {
+                let mut tx = b_disconnected_tx_clone.lock().await;
+                tx.take();
+            } else if c == ConnectionState::Failed {
+                let mut tx = b_failed_tx_clone.lock().await;
+                tx.take();
+            }
+        })
+    }));
 
     connect_with_vnet(&b_agent, &a_agent).await?;
 

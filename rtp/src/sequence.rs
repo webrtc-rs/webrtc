@@ -1,5 +1,7 @@
 use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use util::sync::Mutex;
 
 /// Sequencer generates sequential sequence numbers for building RTP packets
 pub trait Sequencer: fmt::Debug {
@@ -50,7 +52,7 @@ impl Sequencer for SequencerImpl {
     /// NextSequenceNumber increment and returns a new sequence number for
     /// building RTP packets
     fn next_sequence_number(&self) -> u16 {
-        let mut lock = self.0.lock().unwrap();
+        let mut lock = self.0.lock();
 
         if lock.sequence_number == u16::MAX {
             lock.roll_over_count += 1;
@@ -65,7 +67,7 @@ impl Sequencer for SequencerImpl {
     /// RollOverCount returns the amount of times the 16bit sequence number
     /// has wrapped
     fn roll_over_count(&self) -> u64 {
-        self.0.lock().unwrap().roll_over_count
+        self.0.lock().roll_over_count
     }
 
     fn clone_to(&self) -> Box<dyn Sequencer + Send + Sync> {

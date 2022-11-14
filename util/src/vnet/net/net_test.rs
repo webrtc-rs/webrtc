@@ -59,7 +59,7 @@ async fn test_net_native_bind() -> Result<()> {
     assert!(!nw.is_virtual(), "should be false");
 
     let conn = nw.bind(SocketAddr::from_str("127.0.0.1:0")?).await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string(),
         "127.0.0.1",
@@ -76,7 +76,7 @@ async fn test_net_native_dail() -> Result<()> {
     assert!(!nw.is_virtual(), "should be false");
 
     let conn = nw.dail(true, "127.0.0.1:1234").await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string(),
         "127.0.0.1",
@@ -94,7 +94,7 @@ async fn test_net_native_loopback() -> Result<()> {
     assert!(!nw.is_virtual(), "should be false");
 
     let conn = nw.bind(SocketAddr::from_str("127.0.0.1:0")?).await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
 
     let msg = "PING!";
     let n = conn.send_to(msg.as_bytes(), laddr).await?;
@@ -414,7 +414,7 @@ async fn test_net_virtual_loopback1() -> Result<()> {
     assert!(nw.is_virtual(), "should be true");
 
     let conn = nw.bind(SocketAddr::from_str("127.0.0.1:0")?).await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
 
     let msg = "PING!";
     let n = conn.send_to(msg.as_bytes(), laddr).await?;
@@ -440,7 +440,7 @@ async fn test_net_virtual_bind_specific_port() -> Result<()> {
     assert!(nw.is_virtual(), "should be true");
 
     let conn = nw.bind(SocketAddr::from_str("127.0.0.1:50916")?).await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
         "127.0.0.1",
@@ -458,7 +458,7 @@ async fn test_net_virtual_dail_lo0() -> Result<()> {
     assert!(nw.is_virtual(), "should be true");
 
     let conn = nw.dail(true, "127.0.0.1:1234").await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
         "127.0.0.1",
@@ -490,7 +490,7 @@ async fn test_net_virtual_dail_eth0() -> Result<()> {
     };
 
     let conn = nw.dail(true, "27.3.4.5:1234").await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
         "1.2.3.1",
@@ -536,7 +536,7 @@ async fn test_net_virtual_resolver() -> Result<()> {
             (nw.dail(true, "test.webrtc.rs:1234").await?, raddr)
         };
 
-        let laddr = conn.local_addr().await?;
+        let laddr = conn.local_addr()?;
         assert_eq!(
             laddr.ip().to_string().as_str(),
             "1.2.3.1",
@@ -566,7 +566,7 @@ async fn test_net_virtual_loopback2() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
 
     let conn = nw.bind(SocketAddr::from_str("127.0.0.1:50916")?).await?;
-    let laddr = conn.local_addr().await?;
+    let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.to_string().as_str(),
         "127.0.0.1:50916",
@@ -770,7 +770,7 @@ async fn test_net_virtual_end2end() -> Result<()> {
     });
 
     log::debug!("conn1: sending");
-    let n = conn1.send_to(b"Hello!", conn2.local_addr().await?).await?;
+    let n = conn1.send_to(b"Hello!", conn2.local_addr()?).await?;
     assert_eq!(6, n, "should match");
 
     let _ = conn1_recv_ch_rx.recv().await;
@@ -902,7 +902,7 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<()> {
     });
 
     log::debug!("conn1: sending");
-    let n = conn1.send_to(b"Hello!", conn2.local_addr().await?).await?;
+    let n = conn1.send_to(b"Hello!", conn2.local_addr()?).await?;
     assert_eq!(6, n, "should match");
 
     let _ = conn1_recv_ch_rx.recv().await;

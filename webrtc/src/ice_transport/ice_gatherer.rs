@@ -14,6 +14,7 @@ use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
 use ice::url::Url;
 
+use arc_swap::ArcSwapOption;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -56,11 +57,11 @@ pub struct RTCIceGatherer {
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
     pub(crate) agent: Mutex<Option<Arc<ice::agent::Agent>>>,
 
-    pub(crate) on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
-    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnICEGathererStateChangeHdlrFn>>>,
+    pub(crate) on_local_candidate_handler: Arc<ArcSwapOption<Mutex<OnLocalCandidateHdlrFn>>>,
+    pub(crate) on_state_change_handler: Arc<ArcSwapOption<Mutex<OnICEGathererStateChangeHdlrFn>>>,
 
     // Used for gathering_complete_promise
-    pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
+    pub(crate) on_gathering_complete_handler: Arc<ArcSwapOption<Mutex<OnGatheringCompleteHdlrFn>>>,
 }
 
 impl RTCIceGatherer {
@@ -83,8 +84,8 @@ impl RTCIceGatherer {
         // avoid potential double-agent creations. Care should be taken to
         // ensure we do not do anything expensive other than the actual agent
         // creation in this function.
-
         let mut agent = self.agent.lock().await;
+
         if agent.is_some() || self.state() != RTCIceGathererState::New {
             return Ok(());
         }
@@ -165,59 +166,44 @@ impl RTCIceGatherer {
             let on_state_change_handler = Arc::clone(&self.on_state_change_handler);
             let on_gathering_complete_handler = Arc::clone(&self.on_gathering_complete_handler);
 
-            agent
-                .on_candidate(Box::new(
-                    move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-                        let state_clone = Arc::clone(&state);
-                        let on_local_candidate_handler_clone =
-                            Arc::clone(&on_local_candidate_handler);
-                        let on_state_change_handler_clone = Arc::clone(&on_state_change_handler);
-                        let on_gathering_complete_handler_clone =
-                            Arc::clone(&on_gathering_complete_handler);
+            agent.on_candidate(Box::new(
+                move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
+                    let state_clone = Arc::clone(&state);
+                    let on_local_candidate_handler_clone = Arc::clone(&on_local_candidate_handler);
+                    let on_state_change_handler_clone = Arc::clone(&on_state_change_handler);
+                    let on_gathering_complete_handler_clone =
+                        Arc::clone(&on_gathering_complete_handler);
 
-                        Box::pin(async move {
-                            if let Some(cand) = candidate {
-                                let c = RTCIceCandidate::from(&cand);
-
-                                let mut on_local_candidate_handler =
-                                    on_local_candidate_handler_clone.lock().await;
-                                if let Some(handler) = &mut *on_local_candidate_handler {
-                                    handler(Some(c)).await;
-                                }
-                            } else {
-                                state_clone
-                                    .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
-
-                                {
-                                    let mut on_state_change_handler =
-                                        on_state_change_handler_clone.lock().await;
-                                    if let Some(handler) = &mut *on_state_change_handler {
-                                        handler(RTCIceGathererState::Complete).await;
-                                    }
-                                }
-
-                                {
-                                    let mut on_gathering_complete_handler =
-                                        on_gathering_complete_handler_clone.lock().await;
-                                    if let Some(handler) = &mut *on_gathering_complete_handler {
-                                        handler().await;
-                                    }
-                                }
-
-                                {
-                                    let mut on_local_candidate_handler =
-                                        on_local_candidate_handler_clone.lock().await;
-                                    if let Some(handler) = &mut *on_local_candidate_handler {
-                                        handler(None).await;
-                                    }
-                                }
+                    Box::pin(async move {
+                        if let Some(cand) = candidate {
+                            if let Some(handler) = &*on_local_candidate_handler_clone.load() {
+                                let mut f = handler.lock().await;
+                                f(Some(RTCIceCandidate::from(&cand))).await;
                             }
-                        })
-                    },
-                ))
-                .await;
+                        } else {
+                            state_clone
+                                .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
 
-            agent.gather_candidates().await?;
+                            if let Some(handler) = &*on_state_change_handler_clone.load() {
+                                let mut f = handler.lock().await;
+                                f(RTCIceGathererState::Complete).await;
+                            }
+
+                            if let Some(handler) = &*on_gathering_complete_handler_clone.load() {
+                                let mut f = handler.lock().await;
+                                f().await;
+                            }
+
+                            if let Some(handler) = &*on_local_candidate_handler_clone.load() {
+                                let mut f = handler.lock().await;
+                                f(None).await;
+                            }
+                        }
+                    })
+                },
+            ));
+
+            agent.gather_candidates()?;
         }
 
         Ok(())
@@ -271,21 +257,21 @@ impl RTCIceGatherer {
 
     /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
     /// Take note that the handler is gonna be called with a nil pointer when gathering is finished.
-    pub async fn on_local_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        let mut on_local_candidate_handler = self.on_local_candidate_handler.lock().await;
-        *on_local_candidate_handler = Some(f);
+    pub fn on_local_candidate(&self, f: OnLocalCandidateHdlrFn) {
+        self.on_local_candidate_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_state_change sets an event handler which fires any time the ICEGatherer changes
-    pub async fn on_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
-        let mut on_state_change_handler = self.on_state_change_handler.lock().await;
-        *on_state_change_handler = Some(f);
+    pub fn on_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
+        self.on_state_change_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_gathering_complete sets an event handler which fires any time the ICEGatherer changes
-    pub async fn on_gathering_complete(&self, f: OnGatheringCompleteHdlrFn) {
-        let mut on_gathering_complete_handler = self.on_gathering_complete_handler.lock().await;
-        *on_gathering_complete_handler = Some(f);
+    pub fn on_gathering_complete(&self, f: OnGatheringCompleteHdlrFn) {
+        self.on_gathering_complete_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// State indicates the current state of the ICE gatherer.
@@ -296,9 +282,9 @@ impl RTCIceGatherer {
     pub async fn set_state(&self, s: RTCIceGathererState) {
         self.state.store(s as u8, Ordering::SeqCst);
 
-        let mut on_state_change_handler = self.on_state_change_handler.lock().await;
-        if let Some(handler) = &mut *on_state_change_handler {
-            handler(s).await;
+        if let Some(handler) = &*self.on_state_change_handler.load() {
+            let mut f = handler.lock().await;
+            f(s).await;
         }
     }
 
@@ -363,17 +349,15 @@ mod test {
 
         let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
         let gather_finished_tx = Arc::new(Mutex::new(Some(gather_finished_tx)));
-        gatherer
-            .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-                let gather_finished_tx_clone = Arc::clone(&gather_finished_tx);
-                Box::pin(async move {
-                    if c.is_none() {
-                        let mut tx = gather_finished_tx_clone.lock().await;
-                        tx.take();
-                    }
-                })
-            }))
-            .await;
+        gatherer.on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+            let gather_finished_tx_clone = Arc::clone(&gather_finished_tx);
+            Box::pin(async move {
+                if c.is_none() {
+                    let mut tx = gather_finished_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
+        }));
 
         gatherer.gather().await?;
 
@@ -407,19 +391,17 @@ mod test {
 
         let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-        gatherer
-            .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-                let done_tx_clone = Arc::clone(&done_tx);
-                Box::pin(async move {
-                    if let Some(c) = c {
-                        if c.address.ends_with(".local") {
-                            let mut tx = done_tx_clone.lock().await;
-                            tx.take();
-                        }
+        gatherer.on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+            let done_tx_clone = Arc::clone(&done_tx);
+            Box::pin(async move {
+                if let Some(c) = c {
+                    if c.address.ends_with(".local") {
+                        let mut tx = done_tx_clone.lock().await;
+                        tx.take();
                     }
-                })
-            }))
-            .await;
+                }
+            })
+        }));
 
         gatherer.gather().await?;
 

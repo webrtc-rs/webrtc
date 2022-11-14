@@ -167,11 +167,11 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
     }
 
     // LocalAddr returns the local network address.
-    async fn local_addr(&self) -> Result<SocketAddr, util::Error> {
+    fn local_addr(&self) -> Result<SocketAddr, util::Error> {
         Ok(self.relayed_addr)
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 

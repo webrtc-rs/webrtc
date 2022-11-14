@@ -69,7 +69,7 @@ impl Listener for ListenerImpl {
 
     /// Addr returns the listener's network address.
     async fn addr(&self) -> Result<SocketAddr> {
-        self.pconn.local_addr().await
+        self.pconn.local_addr()
     }
 }
 
@@ -277,11 +277,11 @@ impl Conn for UdpConn {
         self.pconn.send_to(buf, target).await
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
-        self.pconn.local_addr().await
+    fn local_addr(&self) -> Result<SocketAddr> {
+        self.pconn.local_addr()
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         Some(self.raddr)
     }
 

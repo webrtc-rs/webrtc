@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Breaking changes
+
+* Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
+    - `Bridge`:
+        - `drop_next_nwrites`;
+        - `reorder_next_nwrites`.
+    - `Conn`:
+        - `local_addr`;
+        - `remote_addr`.
+
 ## v0.6.0
 
 * Increase min verison of `log` dependency to `0.4.16`. [#250 Fix log at ^0.4.16 to make tests compile](https://github.com/webrtc-rs/webrtc/pull/250) by [@k0nserv](https://github.com/k0nserv).
