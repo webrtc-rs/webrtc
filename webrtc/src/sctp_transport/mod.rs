@@ -23,6 +23,7 @@ use sctp::association::Association;
 
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
 
+use arc_swap::ArcSwapOption;
 use data::data_channel::DataChannel;
 use std::collections::HashMap;
 use std::future::Future;
@@ -50,9 +51,9 @@ struct AcceptDataChannelParams {
     notify_rx: Arc<Notify>,
     sctp_association: Arc<Association>,
     data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
-    on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
-    on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
-    on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
+    on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
+    on_data_channel_handler: Arc<ArcSwapOption<Mutex<OnDataChannelHdlrFn>>>,
+    on_data_channel_opened_handler: Arc<ArcSwapOption<Mutex<OnDataChannelOpenedHdlrFn>>>,
     data_channels_opened: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
     setting_engine: Arc<SettingEngine>,
@@ -80,9 +81,9 @@ pub struct RTCSctpTransport {
 
     sctp_association: Mutex<Option<Arc<Association>>>,
 
-    on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
-    on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
-    on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
+    on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
+    on_data_channel_handler: Arc<ArcSwapOption<Mutex<OnDataChannelHdlrFn>>>,
+    on_data_channel_opened_handler: Arc<ArcSwapOption<Mutex<OnDataChannelOpenedHdlrFn>>>,
 
     // DataChannels
     pub(crate) data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
@@ -107,9 +108,9 @@ impl RTCSctpTransport {
             max_message_size: RTCSctpTransport::calc_message_size(65536, 65536),
             max_channels: SCTP_MAX_CHANNELS,
             sctp_association: Mutex::new(None),
-            on_error_handler: Arc::new(Mutex::new(None)),
-            on_data_channel_handler: Arc::new(Mutex::new(None)),
-            on_data_channel_opened_handler: Arc::new(Mutex::new(None)),
+            on_error_handler: Arc::new(ArcSwapOption::empty()),
+            on_data_channel_handler: Arc::new(ArcSwapOption::empty()),
+            on_data_channel_opened_handler: Arc::new(ArcSwapOption::empty()),
 
             data_channels: Arc::new(Mutex::new(vec![])),
             data_channels_opened: Arc::new(AtomicU32::new(0)),
@@ -234,8 +235,8 @@ impl RTCSctpTransport {
                         Err(err) => {
                             if data::Error::ErrStreamClosed == err {
                                 log::error!("Failed to accept data channel: {}", err);
-                                let mut handler = param.on_error_handler.lock().await;
-                                if let Some(f) = &mut *handler {
+                                if let Some(handler) = &*param.on_error_handler.load() {
+                                    let mut f = handler.lock().await;
                                     f(err.into()).await;
                                 }
                             }
@@ -292,48 +293,44 @@ impl RTCSctpTransport {
                 Arc::clone(&param.setting_engine),
             ));
 
-            {
-                let mut handler = param.on_data_channel_handler.lock().await;
-                if let Some(f) = &mut *handler {
-                    f(Arc::clone(&rtc_dc)).await;
-                    param.data_channels_accepted.fetch_add(1, Ordering::SeqCst);
+            if let Some(handler) = &*param.on_data_channel_handler.load() {
+                let mut f = handler.lock().await;
+                f(Arc::clone(&rtc_dc)).await;
 
-                    let mut dcs = param.data_channels.lock().await;
-                    dcs.push(Arc::clone(&rtc_dc));
-                }
+                param.data_channels_accepted.fetch_add(1, Ordering::SeqCst);
+
+                let mut dcs = param.data_channels.lock().await;
+                dcs.push(Arc::clone(&rtc_dc));
             }
 
             rtc_dc.handle_open(Arc::new(dc)).await;
 
-            {
-                let mut handler = param.on_data_channel_opened_handler.lock().await;
-                if let Some(f) = &mut *handler {
-                    f(rtc_dc).await;
-                    param.data_channels_opened.fetch_add(1, Ordering::SeqCst);
-                }
+            if let Some(handler) = &*param.on_data_channel_opened_handler.load() {
+                let mut f = handler.lock().await;
+                f(rtc_dc).await;
+                param.data_channels_opened.fetch_add(1, Ordering::SeqCst);
             }
         }
     }
 
     /// on_error sets an event handler which is invoked when
     /// the SCTP connection error occurs.
-    pub async fn on_error(&self, f: OnErrorHdlrFn) {
-        let mut handler = self.on_error_handler.lock().await;
-        *handler = Some(f);
+    pub fn on_error(&self, f: OnErrorHdlrFn) {
+        self.on_error_handler.store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_data_channel sets an event handler which is invoked when a data
     /// channel message arrives from a remote peer.
-    pub async fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
-        let mut handler = self.on_data_channel_handler.lock().await;
-        *handler = Some(f);
+    pub fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
+        self.on_data_channel_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_data_channel_opened sets an event handler which is invoked when a data
     /// channel is opened
-    pub async fn on_data_channel_opened(&self, f: OnDataChannelOpenedHdlrFn) {
-        let mut handler = self.on_data_channel_opened_handler.lock().await;
-        *handler = Some(f);
+    pub fn on_data_channel_opened(&self, f: OnDataChannelOpenedHdlrFn) {
+        self.on_data_channel_opened_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     fn calc_message_size(remote_max_message_size: usize, can_send_size: usize) -> usize {
@@ -391,7 +388,7 @@ impl RTCSctpTransport {
 
         // conn
         if let Some(agent) = dtls_transport.ice_transport.gatherer.get_agent().await {
-            let stats = ICETransportStats::new("sctp_transport".to_owned(), agent).await;
+            let stats = ICETransportStats::new("sctp_transport".to_owned(), agent);
             reports.insert(stats.id.clone(), SCTPTransport(stats));
         }
 

@@ -130,8 +130,8 @@ impl RTCCertificate {
         }
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(&expires_pem.contents[..8]);
-        let expires = if let Some(e) = SystemTime::UNIX_EPOCH
-            .checked_add(Duration::from_secs(u64::from_le_bytes(bytes)).into())
+        let expires = if let Some(e) =
+            SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(u64::from_le_bytes(bytes)))
         {
             e
         } else {

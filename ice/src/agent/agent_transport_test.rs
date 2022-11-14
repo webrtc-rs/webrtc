@@ -21,7 +21,7 @@ pub(crate) async fn pipe(
     cfg0.network_types = supported_network_types();
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let mut cfg1 = if let Some(cfg) = default_config1 {
         cfg
@@ -32,7 +32,7 @@ pub(crate) async fn pipe(
     cfg1.network_types = supported_network_types();
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier).await;
+    b_agent.on_connection_state_change(b_notifier);
 
     let (a_conn, b_conn) = connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -70,7 +70,7 @@ async fn test_remote_local_addr() -> Result<()> {
     //"Disconnected Returns nil"
     {
         let disconnected_conn = AgentConn::new();
-        let result = disconnected_conn.local_addr().await;
+        let result = disconnected_conn.local_addr();
         assert!(result.is_err(), "Disconnected Returns nil");
     }
 
@@ -89,8 +89,8 @@ async fn test_remote_local_addr() -> Result<()> {
         )
         .await?;
 
-        let a_laddr = ca.local_addr().await?;
-        let b_laddr = cb.local_addr().await?;
+        let a_laddr = ca.local_addr()?;
+        let b_laddr = cb.local_addr()?;
 
         // Assert addresses
         assert_eq!(a_laddr.ip().to_string(), VNET_LOCAL_IPA.to_string());

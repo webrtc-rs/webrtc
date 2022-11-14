@@ -104,8 +104,8 @@ impl UDPMuxDefault {
     }
 
     /// Create a muxed connection for a given ufrag.
-    async fn create_muxed_conn(self: &Arc<Self>, ufrag: &str) -> Result<UDPMuxConn, Error> {
-        let local_addr = self.params.conn.local_addr().await?;
+    fn create_muxed_conn(self: &Arc<Self>, ufrag: &str) -> Result<UDPMuxConn, Error> {
+        let local_addr = self.params.conn.local_addr()?;
 
         let params = UDPMuxConnParams {
             local_addr,
@@ -267,7 +267,7 @@ impl UDPMux for UDPMuxDefault {
                 return Ok(Arc::new(conn.clone()) as Arc<dyn Conn + Send + Sync>);
             }
 
-            let muxed_conn = self.create_muxed_conn(ufrag).await?;
+            let muxed_conn = self.create_muxed_conn(ufrag)?;
             let mut close_rx = muxed_conn.close_rx();
             let cloned_self = Arc::clone(&self);
             let cloned_ufrag = ufrag.to_string();

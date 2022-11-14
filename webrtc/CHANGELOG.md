@@ -14,7 +14,7 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
 * Added a new `write_rtp_with_extensions` method to `TrackLocalStaticSample` and `TrackLocalStatiRTP`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
 * Added a new `sample_writer` helper to `TrackLocalStaticSample`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
 
-#### Breaking changes
+### Breaking changes
 
 * Allowed one single direction for extmap matching. [#321](https://github.com/webrtc-rs/webrtc/pull/321).
 API change for `MediaEngine::register_header_extension`.
@@ -23,6 +23,35 @@ API change for `MediaEngine::register_header_extension`.
 * Renamed `RTCCertificate::pem` to `serialize_pem`  and guard it with `pem` feature [#333]
 * Removed `RTCCertificate::expires` [#333]
 * `RTCCertificate::get_fingerprints` no longer returns `Result` [#333]
+* Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
+    - `RTCDataChannel`:
+        - `on_open`;
+        - `on_close`;
+        - `on_message`;
+        - `on_error`.
+    - `RTCDtlsTransport::on_state_change`;
+    - `RTCIceCandidate::to_json`;
+    - `RTCIceGatherer`:
+        - `on_local_candidate`;
+        - `on_state_change`;
+        - `on_gathering_complete`.
+    - `RTCIceTransport`:
+        - `get_selected_candidate_pair`;
+        - `on_selected_candidate_pair_change`;
+        - `on_connection_state_change`.
+    - `RTCPeerConnection`:
+        - `on_signaling_state_change`;
+        - `on_data_channel`;
+        - `on_negotiation_needed`;
+        - `on_ice_candidate`;
+        - `on_ice_gathering_state_change`;
+        - `on_track`;
+        - `on_ice_connection_state_change`;
+        - `on_peer_connection_state_change`.
+    - `RTCSctpTransport`:
+        - `on_error`;
+        - `on_data_channel`;
+        - `on_data_channel_opened`.
 
 [#333]: https://github.com/webrtc-rs/webrtc/pull/333
 

@@ -92,8 +92,7 @@ async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
                 }
             });
         })
-    }))
-    .await;
+    }));
 
     dc.set_buffered_amount_low_threshold(BUFFERED_AMOUNT_LOW_THRESHOLD)
         .await;
@@ -146,8 +145,7 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
                         }
                     });
                 })
-            }))
-            .await;
+            }));
 
             dc.on_message(Box::new(move |msg| {
                 let total_bytes_received = total_bytes_received.clone();
@@ -155,11 +153,9 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
                 Box::pin(async move {
                     total_bytes_received.fetch_add(msg.data.len(), Ordering::Relaxed);
                 })
-            }))
-            .await;
+            }));
         })
-    }))
-    .await;
+    }));
 
     Ok(pc)
 }
@@ -172,68 +168,60 @@ async fn main() -> anyhow::Result<()> {
     let responder = Arc::new(create_responder().await?);
 
     let maybe_requester = Arc::downgrade(&requester);
-    responder
-        .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-            let maybe_requester = maybe_requester.clone();
+    responder.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
+        let maybe_requester = maybe_requester.clone();
 
-            Box::pin(async move {
-                if let Some(candidate) = candidate {
-                    if let Ok(candidate) = candidate.to_json().await {
-                        if let Some(requester) = maybe_requester.upgrade() {
-                            if let Err(err) = requester.add_ice_candidate(candidate).await {
-                                log::warn!("{}", err);
-                            }
+        Box::pin(async move {
+            if let Some(candidate) = candidate {
+                if let Ok(candidate) = candidate.to_json() {
+                    if let Some(requester) = maybe_requester.upgrade() {
+                        if let Err(err) = requester.add_ice_candidate(candidate).await {
+                            log::warn!("{}", err);
                         }
                     }
                 }
-            })
-        }))
-        .await;
+            }
+        })
+    }));
 
     let maybe_responder = Arc::downgrade(&responder);
-    requester
-        .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-            let maybe_responder = maybe_responder.clone();
+    requester.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
+        let maybe_responder = maybe_responder.clone();
 
-            Box::pin(async move {
-                if let Some(candidate) = candidate {
-                    if let Ok(candidate) = candidate.to_json().await {
-                        if let Some(responder) = maybe_responder.upgrade() {
-                            if let Err(err) = responder.add_ice_candidate(candidate).await {
-                                log::warn!("{}", err);
-                            }
+        Box::pin(async move {
+            if let Some(candidate) = candidate {
+                if let Ok(candidate) = candidate.to_json() {
+                    if let Some(responder) = maybe_responder.upgrade() {
+                        if let Err(err) = responder.add_ice_candidate(candidate).await {
+                            log::warn!("{}", err);
                         }
                     }
                 }
-            })
-        }))
-        .await;
+            }
+        })
+    }));
 
     let (fault, mut reqs_fault) = tokio::sync::mpsc::channel(1);
-    requester
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            let fault = fault.clone();
+    requester.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        let fault = fault.clone();
 
-            Box::pin(async move {
-                if s == RTCPeerConnectionState::Failed {
-                    fault.send(()).await.unwrap();
-                }
-            })
-        }))
-        .await;
+        Box::pin(async move {
+            if s == RTCPeerConnectionState::Failed {
+                fault.send(()).await.unwrap();
+            }
+        })
+    }));
 
     let (fault, mut resp_fault) = tokio::sync::mpsc::channel(1);
-    responder
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            let fault = fault.clone();
+    responder.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        let fault = fault.clone();
 
-            Box::pin(async move {
-                if s == RTCPeerConnectionState::Failed {
-                    fault.send(()).await.unwrap();
-                }
-            })
-        }))
-        .await;
+        Box::pin(async move {
+            if s == RTCPeerConnectionState::Failed {
+                fault.send(()).await.unwrap();
+            }
+        })
+    }));
 
     let reqs = requester.create_offer(None).await?;
 

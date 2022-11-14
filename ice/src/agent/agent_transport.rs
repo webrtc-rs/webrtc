@@ -1,6 +1,7 @@
 use super::*;
 use crate::error::*;
 
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -80,7 +81,7 @@ impl Agent {
 }
 
 pub(crate) struct AgentConn {
-    pub(crate) selected_pair: Mutex<Option<Arc<CandidatePair>>>,
+    pub(crate) selected_pair: ArcSwapOption<CandidatePair>,
     pub(crate) checklist: Mutex<Vec<Arc<CandidatePair>>>,
 
     pub(crate) buffer: Buffer,
@@ -92,7 +93,7 @@ pub(crate) struct AgentConn {
 impl AgentConn {
     pub(crate) fn new() -> Self {
         Self {
-            selected_pair: Mutex::new(None),
+            selected_pair: ArcSwapOption::empty(),
             checklist: Mutex::new(vec![]),
             // Make sure the buffer doesn't grow indefinitely.
             // NOTE: We actually won't get anywhere close to this limit.
@@ -103,9 +104,8 @@ impl AgentConn {
             done: AtomicBool::new(false),
         }
     }
-    pub(crate) async fn get_selected_pair(&self) -> Option<Arc<CandidatePair>> {
-        let selected_pair = self.selected_pair.lock().await;
-        selected_pair.clone()
+    pub(crate) fn get_selected_pair(&self) -> Option<Arc<CandidatePair>> {
+        self.selected_pair.load().clone()
     }
 
     pub(crate) async fn get_best_available_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
@@ -185,7 +185,7 @@ impl Conn for AgentConn {
         &self,
         buf: &mut [u8],
     ) -> std::result::Result<(usize, SocketAddr), util::Error> {
-        if let Some(raddr) = self.remote_addr().await {
+        if let Some(raddr) = self.remote_addr() {
             let n = self.recv(buf).await?;
             Ok((n, raddr))
         } else {
@@ -202,7 +202,7 @@ impl Conn for AgentConn {
             return Err(util::Error::Other("ErrIceWriteStunMessage".into()));
         }
 
-        let result = if let Some(pair) = self.get_selected_pair().await {
+        let result = if let Some(pair) = self.get_selected_pair() {
             pair.write(buf).await
         } else if let Some(pair) = self.get_best_available_candidate_pair().await {
             pair.write(buf).await
@@ -227,20 +227,16 @@ impl Conn for AgentConn {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> std::result::Result<SocketAddr, util::Error> {
-        if let Some(pair) = self.get_selected_pair().await {
-            Ok(pair.local.addr().await)
+    fn local_addr(&self) -> std::result::Result<SocketAddr, util::Error> {
+        if let Some(pair) = self.get_selected_pair() {
+            Ok(pair.local.addr())
         } else {
             Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
         }
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
-        if let Some(pair) = self.get_selected_pair().await {
-            Some(pair.remote.addr().await)
-        } else {
-            None
-        }
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        self.get_selected_pair().map(|pair| pair.remote.addr())
     }
 
     async fn close(&self) -> std::result::Result<(), util::Error> {

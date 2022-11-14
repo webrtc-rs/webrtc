@@ -36,8 +36,7 @@ async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
     s.on_buffered_amount_low(Box::new(move || {
         n_cbs2.fetch_add(1, Ordering::SeqCst);
         Box::pin(async {})
-    }))
-    .await;
+    }));
 
     // Negative value should be ignored (by design)
     s.on_buffer_released(-32).await; // bufferedAmount = 3072

@@ -61,33 +61,33 @@ trait ControlledSelector {
 }
 
 impl AgentInternal {
-    async fn is_nominatable(&self, c: &Arc<dyn Candidate + Send + Sync>) -> bool {
-        let start_time = self.start_time.lock().await;
+    fn is_nominatable(&self, c: &Arc<dyn Candidate + Send + Sync>) -> bool {
+        let start_time = *self.start_time.lock();
         match c.candidate_type() {
             CandidateType::Host => {
                 Instant::now()
-                    .checked_duration_since(*start_time)
+                    .checked_duration_since(start_time)
                     .unwrap_or_else(|| Duration::from_secs(0))
                     .as_nanos()
                     > self.host_acceptance_min_wait.as_nanos()
             }
             CandidateType::ServerReflexive => {
                 Instant::now()
-                    .checked_duration_since(*start_time)
+                    .checked_duration_since(start_time)
                     .unwrap_or_else(|| Duration::from_secs(0))
                     .as_nanos()
                     > self.srflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::PeerReflexive => {
                 Instant::now()
-                    .checked_duration_since(*start_time)
+                    .checked_duration_since(start_time)
                     .unwrap_or_else(|| Duration::from_secs(0))
                     .as_nanos()
                     > self.prflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::Relay => {
                 Instant::now()
-                    .checked_duration_since(*start_time)
+                    .checked_duration_since(start_time)
                     .unwrap_or_else(|| Duration::from_secs(0))
                     .as_nanos()
                     > self.relay_acceptance_min_wait.as_nanos()
@@ -217,10 +217,7 @@ impl ControllingSelector for AgentInternal {
             let mut nominated_pair = self.nominated_pair.lock().await;
             *nominated_pair = None;
         }
-        {
-            let mut start_time = self.start_time.lock().await;
-            *start_time = Instant::now();
-        }
+        *self.start_time.lock() = Instant::now();
     }
 
     async fn contact_candidates(&self) {
@@ -235,7 +232,7 @@ impl ControllingSelector for AgentInternal {
             nominated_pair.is_some()
         };
 
-        if self.agent_conn.get_selected_pair().await.is_some() {
+        if self.agent_conn.get_selected_pair().is_some() {
             if self.validate_selected_pair().await {
                 log::trace!("[{}]: checking keepalive", self.get_name());
                 self.check_keepalive().await;
@@ -245,7 +242,7 @@ impl ControllingSelector for AgentInternal {
         } else {
             let has_nominated_pair =
                 if let Some(p) = self.agent_conn.get_best_valid_candidate_pair().await {
-                    self.is_nominatable(&p.local).await && self.is_nominatable(&p.remote).await
+                    self.is_nominatable(&p.local) && self.is_nominatable(&p.remote)
                 } else {
                     false
                 };
@@ -323,7 +320,7 @@ impl ControllingSelector for AgentInternal {
                 remote,
                 local
             );
-            let selected_pair_is_none = self.agent_conn.get_selected_pair().await.is_none();
+            let selected_pair_is_none = self.agent_conn.get_selected_pair().is_none();
 
             if let Some(p) = self.find_pair(local, remote).await {
                 p.state
@@ -375,7 +372,7 @@ impl ControllingSelector for AgentInternal {
             );
             if p.state.load(Ordering::SeqCst) == CandidatePairState::Succeeded as u8
                 && nominated_pair_is_none
-                && self.agent_conn.get_selected_pair().await.is_none()
+                && self.agent_conn.get_selected_pair().is_none()
             {
                 if let Some(best_pair) = self.agent_conn.get_best_available_candidate_pair().await {
                     log::trace!(
@@ -383,8 +380,8 @@ impl ControllingSelector for AgentInternal {
                         best_pair
                     );
                     if best_pair == p
-                        && self.is_nominatable(&p.local).await
-                        && self.is_nominatable(&p.remote).await
+                        && self.is_nominatable(&p.local)
+                        && self.is_nominatable(&p.remote)
                     {
                         log::trace!("The candidate ({}, {}) is the best candidate available, marking it as nominated",
                             p.local, p.remote);
@@ -413,7 +410,7 @@ impl ControlledSelector for AgentInternal {
         // A lite selector should not contact candidates
         if self.lite.load(Ordering::SeqCst) {
             self.validate_selected_pair().await;
-        } else if self.agent_conn.get_selected_pair().await.is_some() {
+        } else if self.agent_conn.get_selected_pair().is_some() {
             if self.validate_selected_pair().await {
                 log::trace!("[{}]: checking keepalive", self.get_name());
                 self.check_keepalive().await;
@@ -519,7 +516,7 @@ impl ControlledSelector for AgentInternal {
                     // previously sent by this pair produced a successful response and
                     // generated a valid pair (Section 7.2.5.3.2).  The agent sets the
                     // nominated flag value of the valid pair to true.
-                    if self.agent_conn.get_selected_pair().await.is_none() {
+                    if self.agent_conn.get_selected_pair().is_none() {
                         self.set_selected_pair(Some(Arc::clone(&p))).await;
                     }
                     self.send_binding_success(m, local, remote).await;

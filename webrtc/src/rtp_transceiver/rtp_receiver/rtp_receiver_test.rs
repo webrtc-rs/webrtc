@@ -86,53 +86,48 @@ async fn test_set_rtp_parameters() -> Result<()> {
 
     let (seen_packet_tx, mut seen_packet_rx) = mpsc::channel::<()>(1);
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
-    receiver
-        .on_track(Box::new(
-            move |_: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
-                let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
-                Box::pin(async move {
-                    if let Some(r) = &receiver {
-                        r.set_rtp_parameters(P.clone()).await;
+    receiver.on_track(Box::new(
+        move |_: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
+            let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
+            Box::pin(async move {
+                if let Some(r) = &receiver {
+                    r.set_rtp_parameters(P.clone()).await;
 
-                        if let Some(t) = r.track().await {
-                            let incoming_track_codecs = t.codec().await;
+                    if let Some(t) = r.track().await {
+                        let incoming_track_codecs = t.codec().await;
 
-                            assert_eq!(P.header_extensions, t.params().await.header_extensions);
-                            assert_eq!(
-                                P.codecs[0].capability.mime_type,
-                                incoming_track_codecs.capability.mime_type
-                            );
-                            assert_eq!(
-                                P.codecs[0].capability.clock_rate,
-                                incoming_track_codecs.capability.clock_rate
-                            );
-                            assert_eq!(
-                                P.codecs[0].capability.channels,
-                                incoming_track_codecs.capability.channels
-                            );
-                            assert_eq!(
-                                P.codecs[0].capability.sdp_fmtp_line,
-                                incoming_track_codecs.capability.sdp_fmtp_line
-                            );
-                            assert_eq!(
-                                P.codecs[0].capability.rtcp_feedback,
-                                incoming_track_codecs.capability.rtcp_feedback
-                            );
-                            assert_eq!(
-                                P.codecs[0].payload_type,
-                                incoming_track_codecs.payload_type
-                            );
+                        assert_eq!(P.header_extensions, t.params().await.header_extensions);
+                        assert_eq!(
+                            P.codecs[0].capability.mime_type,
+                            incoming_track_codecs.capability.mime_type
+                        );
+                        assert_eq!(
+                            P.codecs[0].capability.clock_rate,
+                            incoming_track_codecs.capability.clock_rate
+                        );
+                        assert_eq!(
+                            P.codecs[0].capability.channels,
+                            incoming_track_codecs.capability.channels
+                        );
+                        assert_eq!(
+                            P.codecs[0].capability.sdp_fmtp_line,
+                            incoming_track_codecs.capability.sdp_fmtp_line
+                        );
+                        assert_eq!(
+                            P.codecs[0].capability.rtcp_feedback,
+                            incoming_track_codecs.capability.rtcp_feedback
+                        );
+                        assert_eq!(P.codecs[0].payload_type, incoming_track_codecs.payload_type);
 
-                            {
-                                let mut done = seen_packet_tx2.lock().await;
-                                done.take();
-                            }
+                        {
+                            let mut done = seen_packet_tx2.lock().await;
+                            done.take();
                         }
                     }
-                })
-            },
-        ))
-        .await;
+                }
+            })
+        },
+    ));
 
     let wg = WaitGroup::new();
 
@@ -186,39 +181,36 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
 
     let (seen_packet_tx, mut seen_packet_rx) = mpsc::channel::<()>(1);
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
-    receiver
-        .on_track(Box::new(
-            move |track_remote: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
-                let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
-                Box::pin(async move {
-                    // First call will not error because we cache for probing
-                    if let Some(track) = &track_remote {
-                        let result =
-                            tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
-                        assert!(
-                            result.is_ok(),
-                            " First call will not error because we cache for probing"
-                        );
+    receiver.on_track(Box::new(
+        move |track_remote: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
+            let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
+            Box::pin(async move {
+                // First call will not error because we cache for probing
+                if let Some(track) = &track_remote {
+                    let result =
+                        tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
+                    assert!(
+                        result.is_ok(),
+                        " First call will not error because we cache for probing"
+                    );
 
-                        let result =
-                            tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
-                        assert!(result.is_err());
-                    }
+                    let result =
+                        tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
+                    assert!(result.is_err());
+                }
 
-                    if let Some(r) = &receiver {
-                        let result =
-                            tokio::time::timeout(Duration::from_secs(1), r.read_rtcp()).await;
-                        assert!(result.is_err());
-                    }
+                if let Some(r) = &receiver {
+                    let result = tokio::time::timeout(Duration::from_secs(1), r.read_rtcp()).await;
+                    assert!(result.is_err());
+                }
 
-                    {
-                        let mut done = seen_packet_tx2.lock().await;
-                        done.take();
-                    }
-                })
-            },
-        ))
-        .await;
+                {
+                    let mut done = seen_packet_tx2.lock().await;
+                    done.take();
+                }
+            })
+        },
+    ));
 
     let wg = WaitGroup::new();
     until_connection_state(&mut sender, &wg, RTCPeerConnectionState::Connected).await;

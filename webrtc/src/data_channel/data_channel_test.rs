@@ -138,34 +138,30 @@ async fn test_data_channel_open() -> Result<()> {
 
         let open_calls_tx = Arc::new(open_calls_tx);
         let done_tx = Arc::new(done_tx);
-        answer_pc
-            .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-                if d.label() == EXPECTED_LABEL {
-                    let open_calls_tx2 = Arc::clone(&open_calls_tx);
-                    let done_tx2 = Arc::clone(&done_tx);
-                    Box::pin(async move {
-                        d.on_open(Box::new(move || {
-                            Box::pin(async move {
-                                let _ = open_calls_tx2.send(()).await;
-                            })
-                        }))
-                        .await;
-                        d.on_message(Box::new(move |_: DataChannelMessage| {
-                            let done_tx3 = Arc::clone(&done_tx2);
-                            tokio::spawn(async move {
-                                // Wait a little bit to ensure all messages are processed.
-                                tokio::time::sleep(Duration::from_millis(100)).await;
-                                let _ = done_tx3.send(()).await;
-                            });
-                            Box::pin(async {})
-                        }))
-                        .await;
-                    })
-                } else {
-                    Box::pin(async {})
-                }
-            }))
-            .await;
+        answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+            if d.label() == EXPECTED_LABEL {
+                let open_calls_tx2 = Arc::clone(&open_calls_tx);
+                let done_tx2 = Arc::clone(&done_tx);
+                Box::pin(async move {
+                    d.on_open(Box::new(move || {
+                        Box::pin(async move {
+                            let _ = open_calls_tx2.send(()).await;
+                        })
+                    }));
+                    d.on_message(Box::new(move |_: DataChannelMessage| {
+                        let done_tx3 = Arc::clone(&done_tx2);
+                        tokio::spawn(async move {
+                            // Wait a little bit to ensure all messages are processed.
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            let _ = done_tx3.send(()).await;
+                        });
+                        Box::pin(async {})
+                    }));
+                })
+            } else {
+                Box::pin(async {})
+            }
+        }));
 
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
@@ -175,8 +171,7 @@ async fn test_data_channel_open() -> Result<()> {
                 let result = dc2.send_text("Ping".to_owned()).await;
                 assert!(result.is_ok(), "Failed to send string on data channel");
             })
-        }))
-        .await;
+        }));
 
         signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -198,27 +193,24 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
 
     let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
-            }
-            Box::pin(async move {
-                let d2 = Arc::clone(&d);
-                d.on_message(Box::new(move |_: DataChannelMessage| {
-                    let d3 = Arc::clone(&d2);
-                    Box::pin(async move {
-                        let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
-                        assert!(result.is_ok(), "Failed to send string on data channel");
-                    })
-                }))
-                .await;
-                assert!(d.ordered(), "Ordered should be set to true");
-            })
-        }))
-        .await;
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        // Make sure this is the data channel we were looking for. (Not the one
+        // created in signalPair).
+        if d.label() != EXPECTED_LABEL {
+            return Box::pin(async {});
+        }
+        Box::pin(async move {
+            let d2 = Arc::clone(&d);
+            d.on_message(Box::new(move |_: DataChannelMessage| {
+                let d3 = Arc::clone(&d2);
+                Box::pin(async move {
+                    let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
+                    assert!(result.is_ok(), "Failed to send string on data channel");
+                })
+            }));
+            assert!(d.ordered(), "Ordered should be set to true");
+        })
+    }));
 
     let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
@@ -231,8 +223,7 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
             let result = dc3.send_text("Ping".to_owned()).await;
             assert!(result.is_ok(), "Failed to send string on data channel");
         })
-    }))
-    .await;
+    }));
 
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
@@ -242,8 +233,7 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
             let mut done = done_tx2.lock().await;
             done.take();
         })
-    }))
-    .await;
+    }));
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -259,28 +249,25 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
 
     let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
-            }
-            Box::pin(async move {
-                let d2 = Arc::clone(&d);
-                d.on_message(Box::new(move |_: DataChannelMessage| {
-                    let d3 = Arc::clone(&d2);
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        // Make sure this is the data channel we were looking for. (Not the one
+        // created in signalPair).
+        if d.label() != EXPECTED_LABEL {
+            return Box::pin(async {});
+        }
+        Box::pin(async move {
+            let d2 = Arc::clone(&d);
+            d.on_message(Box::new(move |_: DataChannelMessage| {
+                let d3 = Arc::clone(&d2);
 
-                    Box::pin(async move {
-                        let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
-                        assert!(result.is_ok(), "Failed to send string on data channel");
-                    })
-                }))
-                .await;
-                assert!(d.ordered(), "Ordered should be set to true");
-            })
-        }))
-        .await;
+                Box::pin(async move {
+                    let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
+                    assert!(result.is_ok(), "Failed to send string on data channel");
+                })
+            }));
+            assert!(d.ordered(), "Ordered should be set to true");
+        })
+    }));
 
     let dc = match offer_pc.create_data_channel(EXPECTED_LABEL, None).await {
         Ok(dc) => dc,
@@ -294,48 +281,41 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
 
     //once := &sync.Once{}
-    offer_pc
-        .on_ice_connection_state_change(Box::new(move |state: RTCIceConnectionState| {
-            let done_tx1 = Arc::clone(&done_tx);
-            let dc1 = Arc::clone(&dc);
-            Box::pin(async move {
-                if state == RTCIceConnectionState::Connected
-                    || state == RTCIceConnectionState::Completed
+    offer_pc.on_ice_connection_state_change(Box::new(move |state: RTCIceConnectionState| {
+        let done_tx1 = Arc::clone(&done_tx);
+        let dc1 = Arc::clone(&dc);
+        Box::pin(async move {
+            if state == RTCIceConnectionState::Connected
+                || state == RTCIceConnectionState::Completed
+            {
+                // wasm fires completed state multiple times
+                /*once.Do(func()*/
                 {
-                    // wasm fires completed state multiple times
-                    /*once.Do(func()*/
-                    {
-                        assert!(dc1.ordered(), "Ordered should be set to true");
+                    assert!(dc1.ordered(), "Ordered should be set to true");
 
-                        dc1.on_message(Box::new(move |_: DataChannelMessage| {
-                            let done_tx2 = Arc::clone(&done_tx1);
+                    dc1.on_message(Box::new(move |_: DataChannelMessage| {
+                        let done_tx2 = Arc::clone(&done_tx1);
+                        Box::pin(async move {
+                            let mut done = done_tx2.lock().await;
+                            done.take();
+                        })
+                    }));
+
+                    if let Err(_) = dc1.send_text("Ping".to_owned()).await {
+                        // wasm binding doesn't fire OnOpen (we probably already missed it)
+                        let dc2 = Arc::clone(&dc1);
+                        dc1.on_open(Box::new(move || {
+                            let dc3 = Arc::clone(&dc2);
                             Box::pin(async move {
-                                let mut done = done_tx2.lock().await;
-                                done.take();
+                                let result = dc3.send_text("Ping".to_owned()).await;
+                                assert!(result.is_ok(), "Failed to send string on data channel");
                             })
-                        }))
-                        .await;
-
-                        if let Err(_) = dc1.send_text("Ping".to_owned()).await {
-                            // wasm binding doesn't fire OnOpen (we probably already missed it)
-                            let dc2 = Arc::clone(&dc1);
-                            dc1.on_open(Box::new(move || {
-                                let dc3 = Arc::clone(&dc2);
-                                Box::pin(async move {
-                                    let result = dc3.send_text("Ping".to_owned()).await;
-                                    assert!(
-                                        result.is_ok(),
-                                        "Failed to send string on data channel"
-                                    );
-                                })
-                            }))
-                            .await;
-                        }
+                        }));
                     }
                 }
-            })
-        }))
-        .await;
+            }
+        })
+    }));
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -403,29 +383,27 @@ async fn test_data_channel_parameters_max_packet_life_time_exchange() -> Result<
     );
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
-            }
-            // Check if parameters are correctly set
-            assert_eq!(
-                d.ordered(),
-                ordered,
-                "Ordered should be same value as set in DataChannelInit"
-            );
-            assert_eq!(
-                d.max_packet_lifetime(),
-                max_packet_life_time,
-                "should match"
-            );
-            let done_tx2 = Arc::clone(&done_tx);
-            Box::pin(async move {
-                let mut done = done_tx2.lock().await;
-                done.take();
-            })
-        }))
-        .await;
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        if d.label() != EXPECTED_LABEL {
+            return Box::pin(async {});
+        }
+        // Check if parameters are correctly set
+        assert_eq!(
+            d.ordered(),
+            ordered,
+            "Ordered should be same value as set in DataChannelInit"
+        );
+        assert_eq!(
+            d.max_packet_lifetime(),
+            max_packet_life_time,
+            "should match"
+        );
+        let done_tx2 = Arc::clone(&done_tx);
+        Box::pin(async move {
+            let mut done = done_tx2.lock().await;
+            done.take();
+        })
+    }));
 
     close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
@@ -454,24 +432,22 @@ async fn test_data_channel_parameters_max_retransmits_exchange() -> Result<()> {
     assert_eq!(dc.max_retransmits(), max_retransmits, "should match");
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
-            }
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        // Make sure this is the data channel we were looking for. (Not the one
+        // created in signalPair).
+        if d.label() != EXPECTED_LABEL {
+            return Box::pin(async {});
+        }
 
-            // Check if parameters are correctly set
-            assert!(!d.ordered(), "Ordered should be set to false");
-            assert_eq!(max_retransmits, d.max_retransmits(), "should match");
-            let done_tx2 = Arc::clone(&done_tx);
-            Box::pin(async move {
-                let mut done = done_tx2.lock().await;
-                done.take();
-            })
-        }))
-        .await;
+        // Check if parameters are correctly set
+        assert!(!d.ordered(), "Ordered should be set to false");
+        assert_eq!(max_retransmits, d.max_retransmits(), "should match");
+        let done_tx2 = Arc::clone(&done_tx);
+        Box::pin(async move {
+            let mut done = done_tx2.lock().await;
+            done.take();
+        })
+    }));
 
     close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
@@ -501,27 +477,25 @@ async fn test_data_channel_parameters_protocol_exchange() -> Result<()> {
     );
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
-            }
-            // Check if parameters are correctly set
-            assert_eq!(
-                protocol,
-                d.protocol(),
-                "Protocol should match what channel creator declared"
-            );
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        // Make sure this is the data channel we were looking for. (Not the one
+        // created in signalPair).
+        if d.label() != EXPECTED_LABEL {
+            return Box::pin(async {});
+        }
+        // Check if parameters are correctly set
+        assert_eq!(
+            protocol,
+            d.protocol(),
+            "Protocol should match what channel creator declared"
+        );
 
-            let done_tx2 = Arc::clone(&done_tx);
-            Box::pin(async move {
-                let mut done = done_tx2.lock().await;
-                done.take();
-            })
-        }))
-        .await;
+        let done_tx2 = Arc::clone(&done_tx);
+        Box::pin(async move {
+            let mut done = done_tx2.lock().await;
+            done.take();
+        })
+    }));
 
     close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
@@ -549,55 +523,47 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
         .create_data_channel(EXPECTED_LABEL, Some(options))
         .await?;
 
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Ignore our default channel, exists to force ICE candidates. See signalPair for more info
-            if d.label() == "initial_data_channel" {
-                return Box::pin(async {});
-            }
-            assert!(
-                false,
-                "OnDataChannel must not be fired when negotiated == true"
-            );
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        // Ignore our default channel, exists to force ICE candidates. See signalPair for more info
+        if d.label() == "initial_data_channel" {
+            return Box::pin(async {});
+        }
+        assert!(
+            false,
+            "OnDataChannel must not be fired when negotiated == true"
+        );
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
-    offer_pc
-        .on_data_channel(Box::new(move |_d: Arc<RTCDataChannel>| {
-            assert!(
-                false,
-                "OnDataChannel must not be fired when negotiated == true"
-            );
+    offer_pc.on_data_channel(Box::new(move |_d: Arc<RTCDataChannel>| {
+        assert!(
+            false,
+            "OnDataChannel must not be fired when negotiated == true"
+        );
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     let seen_answer_message = Arc::new(AtomicBool::new(false));
     let seen_offer_message = Arc::new(AtomicBool::new(false));
 
     let seen_answer_message2 = Arc::clone(&seen_answer_message);
-    answer_datachannel
-        .on_message(Box::new(move |msg: DataChannelMessage| {
-            if msg.is_string && msg.data == EXPECTED_MESSAGE {
-                seen_answer_message2.store(true, Ordering::SeqCst);
-            }
+    answer_datachannel.on_message(Box::new(move |msg: DataChannelMessage| {
+        if msg.is_string && msg.data == EXPECTED_MESSAGE {
+            seen_answer_message2.store(true, Ordering::SeqCst);
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     let seen_offer_message2 = Arc::clone(&seen_offer_message);
-    offer_datachannel
-        .on_message(Box::new(move |msg: DataChannelMessage| {
-            if msg.is_string && msg.data == EXPECTED_MESSAGE {
-                seen_offer_message2.store(true, Ordering::SeqCst);
-            }
-            Box::pin(async {})
-        }))
-        .await;
+    offer_datachannel.on_message(Box::new(move |msg: DataChannelMessage| {
+        if msg.is_string && msg.data == EXPECTED_MESSAGE {
+            seen_offer_message2.store(true, Ordering::SeqCst);
+        }
+        Box::pin(async {})
+    }));
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     tokio::spawn(async move {
@@ -646,7 +612,7 @@ async fn test_data_channel_event_handlers() -> Result<()> {
     let (on_message_called_tx, mut on_message_called_rx) = mpsc::channel::<()>(1);
 
     // Verify that the noop case works
-    dc.do_open().await;
+    dc.do_open();
 
     let on_open_called_tx = Arc::new(Mutex::new(Some(on_open_called_tx)));
     dc.on_open(Box::new(move || {
@@ -655,8 +621,7 @@ async fn test_data_channel_event_handlers() -> Result<()> {
             let mut done = on_open_called_tx2.lock().await;
             done.take();
         })
-    }))
-    .await;
+    }));
 
     let on_message_called_tx = Arc::new(Mutex::new(Some(on_message_called_tx)));
     dc.on_message(Box::new(move |_: DataChannelMessage| {
@@ -665,11 +630,10 @@ async fn test_data_channel_event_handlers() -> Result<()> {
             let mut done = on_message_called_tx2.lock().await;
             done.take();
         })
-    }))
-    .await;
+    }));
 
     // Verify that the set handlers are called
-    dc.do_open().await;
+    dc.do_open();
     dc.do_message(DataChannelMessage {
         is_string: false,
         data: Bytes::from_static(b"o hai"),
@@ -714,8 +678,7 @@ async fn test_data_channel_messages_are_ordered() -> Result<()> {
 
             let _ = out_tx2.send(s).await;
         })
-    }))
-    .await;
+    }));
 
     tokio::spawn(async move {
         for j in 1..=m {
@@ -746,8 +709,7 @@ async fn test_data_channel_messages_are_ordered() -> Result<()> {
 
                         let _ = out_tx2.send(s).await;
                     })
-                }))
-                .await;
+                }));
             }
         }
     });
@@ -798,29 +760,27 @@ async fn test_data_channel_parameters_go() -> Result<()> {
         );
 
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-        answer_pc
-            .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-                // Make sure this is the data channel we were looking for. (Not the one
-                // created in signalPair).
-                if d.label() != EXPECTED_LABEL {
-                    return Box::pin(async {});
-                }
+        answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+            // Make sure this is the data channel we were looking for. (Not the one
+            // created in signalPair).
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
+            }
 
-                // Check if parameters are correctly set
-                assert!(d.ordered, "Ordered should be set to true");
-                assert_eq!(
-                    max_packet_life_time,
-                    d.max_packet_lifetime(),
-                    "should match"
-                );
+            // Check if parameters are correctly set
+            assert!(d.ordered, "Ordered should be set to true");
+            assert_eq!(
+                max_packet_life_time,
+                d.max_packet_lifetime(),
+                "should match"
+            );
 
-                let done_tx2 = Arc::clone(&done_tx);
-                Box::pin(async move {
-                    let mut done = done_tx2.lock().await;
-                    done.take();
-                })
-            }))
-            .await;
+            let done_tx2 = Arc::clone(&done_tx);
+            Box::pin(async move {
+                let mut done = done_tx2.lock().await;
+                done.take();
+            })
+        }));
 
         close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
     }
@@ -885,36 +845,33 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     let n_packets_received = Arc::new(AtomicU16::new(0));
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
-            }
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        // Make sure this is the data channel we were looking for. (Not the one
+        // created in signalPair).
+        if d.label() != EXPECTED_LABEL {
+            return Box::pin(async {});
+        }
 
-            let done_tx2 = Arc::clone(&done_tx);
-            let n_packets_received2 = Arc::clone(&n_packets_received);
-            Box::pin(async move {
-                d.on_message(Box::new(move |_msg: DataChannelMessage| {
-                    let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
-                    if n == 9 {
-                        let done_tx3 = Arc::clone(&done_tx2);
-                        tokio::spawn(async move {
-                            tokio::time::sleep(Duration::from_millis(10)).await;
-                            let mut done = done_tx3.lock().await;
-                            done.take();
-                        });
-                    }
+        let done_tx2 = Arc::clone(&done_tx);
+        let n_packets_received2 = Arc::clone(&n_packets_received);
+        Box::pin(async move {
+            d.on_message(Box::new(move |_msg: DataChannelMessage| {
+                let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
+                if n == 9 {
+                    let done_tx3 = Arc::clone(&done_tx2);
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                        let mut done = done_tx3.lock().await;
+                        done.take();
+                    });
+                }
 
-                    Box::pin(async {})
-                }))
-                .await;
+                Box::pin(async {})
+            }));
 
-                assert!(d.ordered(), "Ordered should be set to true");
-            })
-        }))
-        .await;
+            assert!(d.ordered(), "Ordered should be set to true");
+        })
+    }));
 
     let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
@@ -935,11 +892,9 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
                 );
             }
         })
-    }))
-    .await;
+    }));
 
-    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})))
-        .await;
+    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})));
 
     // The value is temporarily stored in the dc object
     // until the dc gets opened
@@ -980,36 +935,33 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     let n_packets_received = Arc::new(AtomicU16::new(0));
-    answer_pc
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
-            }
+    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
+        // Make sure this is the data channel we were looking for. (Not the one
+        // created in signalPair).
+        if d.label() != EXPECTED_LABEL {
+            return Box::pin(async {});
+        }
 
-            let done_tx2 = Arc::clone(&done_tx);
-            let n_packets_received2 = Arc::clone(&n_packets_received);
-            Box::pin(async move {
-                d.on_message(Box::new(move |_msg: DataChannelMessage| {
-                    let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
-                    if n == 9 {
-                        let done_tx3 = Arc::clone(&done_tx2);
-                        tokio::spawn(async move {
-                            tokio::time::sleep(Duration::from_millis(10)).await;
-                            let mut done = done_tx3.lock().await;
-                            done.take();
-                        });
-                    }
+        let done_tx2 = Arc::clone(&done_tx);
+        let n_packets_received2 = Arc::clone(&n_packets_received);
+        Box::pin(async move {
+            d.on_message(Box::new(move |_msg: DataChannelMessage| {
+                let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
+                if n == 9 {
+                    let done_tx3 = Arc::clone(&done_tx2);
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                        let mut done = done_tx3.lock().await;
+                        done.take();
+                    });
+                }
 
-                    Box::pin(async {})
-                }))
-                .await;
+                Box::pin(async {})
+            }));
 
-                assert!(d.ordered(), "Ordered should be set to true");
-            })
-        }))
-        .await;
+            assert!(d.ordered(), "Ordered should be set to true");
+        })
+    }));
 
     let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
@@ -1040,11 +992,9 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
                 );
             }
         })
-    }))
-    .await;
+    }));
 
-    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})))
-        .await;
+    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})));
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -1100,11 +1050,9 @@ async fn test_eof_detach() -> Result<()> {
 
                     let _ = dc_chan_tx3.send(detached).await;
                 })
-            }))
-            .await;
+            }));
         })
-    }))
-    .await;
+    }));
 
     let w = wg.worker();
     tokio::spawn(async move {
@@ -1134,14 +1082,12 @@ async fn test_eof_detach() -> Result<()> {
     log::debug!("Waiting for data channel to open");
     let (open_tx, mut open_rx) = mpsc::channel::<()>(1);
     let open_tx = Arc::new(open_tx);
-    attached
-        .on_open(Box::new(move || {
-            let open_tx2 = Arc::clone(&open_tx);
-            Box::pin(async move {
-                let _ = open_tx2.send(()).await;
-            })
-        }))
-        .await;
+    attached.on_open(Box::new(move || {
+        let open_tx2 = Arc::clone(&open_tx);
+        Box::pin(async move {
+            let _ = open_tx2.send(()).await;
+        })
+    }));
 
     let _ = open_rx.recv().await;
     log::debug!("data channel opened");
@@ -1200,8 +1146,7 @@ async fn test_eof_no_detach() -> Result<()> {
             dc.on_open(Box::new(move || {
                 log::debug!("pcb: datachannel opened");
                 Box::pin(async {})
-            }))
-            .await;
+            }));
 
             dc.on_close(Box::new(move || {
                 // (2)
@@ -1210,8 +1155,7 @@ async fn test_eof_no_detach() -> Result<()> {
                 Box::pin(async move {
                     let _ = dcb_closed_ch_tx3.send(()).await;
                 })
-            }))
-            .await;
+            }));
 
             // Register the OnMessage to handle incoming messages
             log::debug!("pcb: registering onMessage callback");
@@ -1220,11 +1164,9 @@ async fn test_eof_no_detach() -> Result<()> {
                 log::debug!("pcb: received ping: {:?}", dc_msg.data);
                 assert_eq!(&dc_msg.data[..], test_data, "data mismatch");
                 Box::pin(async {})
-            }))
-            .await;
+            }));
         })
-    }))
-    .await;
+    }));
 
     let dca = pca.create_data_channel(label, None).await?;
     let dca2 = Arc::clone(&dca);
@@ -1237,8 +1179,7 @@ async fn test_eof_no_detach() -> Result<()> {
             log::debug!("pca: sent ping");
             assert!(dca3.close().await.is_ok(), "should succeed"); // <-- dca closes
         })
-    }))
-    .await;
+    }));
 
     let dca_closed_ch_tx = Arc::new(dca_closed_ch_tx);
     dca.on_close(Box::new(move || {
@@ -1248,8 +1189,7 @@ async fn test_eof_no_detach() -> Result<()> {
         Box::pin(async move {
             let _ = dca_closed_ch_tx2.send(()).await;
         })
-    }))
-    .await;
+    }));
 
     // Register the OnMessage to handle incoming messages
     log::debug!("pca: registering onMessage callback");
@@ -1257,8 +1197,7 @@ async fn test_eof_no_detach() -> Result<()> {
         log::debug!("pca: received pong: {:?}", &dc_msg.data[..]);
         assert_eq!(&dc_msg.data[..], test_data, "data mismatch");
         Box::pin(async {})
-    }))
-    .await;
+    }));
 
     signal_pair(&mut pca, &mut pcb).await?;
 
@@ -1287,14 +1226,12 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
 
     let (on_data_channel_called_tx, mut on_data_channel_called_rx) = mpsc::channel::<()>(1);
     let on_data_channel_called_tx = Arc::new(on_data_channel_called_tx);
-    answer_pc
-        .on_data_channel(Box::new(move |_: Arc<RTCDataChannel>| {
-            let on_data_channel_called_tx2 = Arc::clone(&on_data_channel_called_tx);
-            Box::pin(async move {
-                let _ = on_data_channel_called_tx2.send(()).await;
-            })
-        }))
-        .await;
+    answer_pc.on_data_channel(Box::new(move |_: Arc<RTCDataChannel>| {
+        let on_data_channel_called_tx2 = Arc::clone(&on_data_channel_called_tx);
+        Box::pin(async move {
+            let _ = on_data_channel_called_tx2.send(()).await;
+        })
+    }));
 
     let offer = offer_pc.create_offer(None).await?;
 
@@ -1408,8 +1345,7 @@ impl TestOrtcStack {
                         let _ = gather_finished_tx2.send(()).await;
                     }
                 })
-            }))
-            .await;
+            }));
 
         self.gatherer.gather().await?;
 
@@ -1513,11 +1449,9 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
                             let _ = await_binary_tx3.send(()).await;
                         }
                     })
-                }))
-                .await;
+                }));
             })
-        }))
-        .await;
+        }));
 
     signal_ortc_pair(Arc::clone(&stack_a), Arc::clone(&stack_b)).await?;
 

@@ -296,7 +296,7 @@ impl Request {
 
         let five_tuple = FiveTuple {
             src_addr: self.src_addr,
-            dst_addr: self.conn.local_addr().await?,
+            dst_addr: self.conn.local_addr()?,
             protocol: PROTO_UDP,
         };
         let mut requested_port = 0;
@@ -565,7 +565,7 @@ impl Request {
         let lifetime_duration = allocation_lifetime(m);
         let five_tuple = FiveTuple {
             src_addr: self.src_addr,
-            dst_addr: self.conn.local_addr().await?,
+            dst_addr: self.conn.local_addr()?,
             protocol: PROTO_UDP,
         };
 
@@ -599,7 +599,7 @@ impl Request {
             .allocation_manager
             .get_allocation(&FiveTuple {
                 src_addr: self.src_addr,
-                dst_addr: self.conn.local_addr().await?,
+                dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
             .await;
@@ -666,7 +666,7 @@ impl Request {
             .allocation_manager
             .get_allocation(&FiveTuple {
                 src_addr: self.src_addr,
-                dst_addr: self.conn.local_addr().await?,
+                dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
             .await;
@@ -707,7 +707,7 @@ impl Request {
             .allocation_manager
             .get_allocation(&FiveTuple {
                 src_addr: self.src_addr,
-                dst_addr: self.conn.local_addr().await?,
+                dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
             .await;
@@ -776,7 +776,7 @@ impl Request {
             .allocation_manager
             .get_allocation(&FiveTuple {
                 src_addr: self.src_addr,
-                dst_addr: self.conn.local_addr().await?,
+                dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
             .await;

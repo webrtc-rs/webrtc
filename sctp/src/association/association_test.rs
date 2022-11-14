@@ -543,7 +543,7 @@ async fn test_assoc_reliable_unordered_ordered() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Reliable, 0);
     s1.set_reliability_params(true, ReliabilityType::Reliable, 0);
 
-    br.reorder_next_nwrites(0, 2).await;
+    br.reorder_next_nwrites(0, 2);
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0.write_sctp(
@@ -776,7 +776,7 @@ async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(false, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0.write_sctp(
@@ -862,7 +862,7 @@ async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(false, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0.write_sctp(
@@ -943,7 +943,7 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(true, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0.write_sctp(
@@ -1118,7 +1118,7 @@ async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Timed, 0);
     s1.set_reliability_params(false, ReliabilityType::Timed, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0.write_sctp(
@@ -1199,7 +1199,7 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Timed, 0);
     s1.set_reliability_params(true, ReliabilityType::Timed, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0.write_sctp(
@@ -1293,7 +1293,7 @@ async fn test_assoc_congestion_control_fast_retransmission() -> Result<()> {
 
     let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     for i in 0..4u32 {
         sbuf[0..4].copy_from_slice(&i.to_be_bytes());
@@ -2112,11 +2112,11 @@ impl Conn for FakeEchoConn {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> UResult<SocketAddr> {
+    fn local_addr(&self) -> UResult<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 

@@ -176,114 +176,110 @@ async fn main() -> Result<()> {
     // our UDP listeners.
     // In your application this is where you would handle/process audio/video
     let pc = Arc::downgrade(&peer_connection);
-    peer_connection
-        .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-                if let Some(track) = track {
-                    // Retrieve udp connection
-                    let c = if let Some(c) = udp_conns.get(&track.kind().to_string()) {
-                        c.clone()
-                    } else {
-                        return Box::pin(async {});
-                    };
+    peer_connection.on_track(Box::new(
+        move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
+            if let Some(track) = track {
+                // Retrieve udp connection
+                let c = if let Some(c) = udp_conns.get(&track.kind().to_string()) {
+                    c.clone()
+                } else {
+                    return Box::pin(async {});
+                };
 
-                    // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-                    let media_ssrc = track.ssrc();
-                    let pc2 = pc.clone();
-                    tokio::spawn(async move {
-                        let mut result = Result::<usize>::Ok(0);
-                        while result.is_ok() {
-                            let timeout = tokio::time::sleep(Duration::from_secs(3));
-                            tokio::pin!(timeout);
+                // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+                let media_ssrc = track.ssrc();
+                let pc2 = pc.clone();
+                tokio::spawn(async move {
+                    let mut result = Result::<usize>::Ok(0);
+                    while result.is_ok() {
+                        let timeout = tokio::time::sleep(Duration::from_secs(3));
+                        tokio::pin!(timeout);
 
-                            tokio::select! {
-                                _ = timeout.as_mut() =>{
-                                    if let Some(pc) = pc2.upgrade(){
-                                        result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                            sender_ssrc: 0,
-                                            media_ssrc,
-                                        })]).await.map_err(Into::into);
-                                    }else{
-                                        break;
-                                    }
-                                }
-                            };
-                        }
-                    });
-
-                    tokio::spawn(async move {
-                        let mut b = vec![0u8; 1500];
-                        while let Ok((n, _)) = track.read(&mut b).await {
-                            // Unmarshal the packet and update the PayloadType
-                            let mut buf = &b[..n];
-                            let mut rtp_packet = webrtc::rtp::packet::Packet::unmarshal(&mut buf)?;
-                            rtp_packet.header.payload_type = c.payload_type;
-
-                            // Marshal into original buffer with updated PayloadType
-
-                            let n = rtp_packet.marshal_to(&mut b)?;
-
-                            // Write
-                            if let Err(err) = c.conn.send(&b[..n]).await {
-                                // For this particular example, third party applications usually timeout after a short
-                                // amount of time during which the user doesn't have enough time to provide the answer
-                                // to the browser.
-                                // That's why, for this particular example, the user first needs to provide the answer
-                                // to the browser then open the third party application. Therefore we must not kill
-                                // the forward on "connection refused" errors
-                                //if opError, ok := err.(*net.OpError); ok && opError.Err.Error() == "write: connection refused" {
-                                //    continue
-                                //}
-                                //panic(err)
-                                if err.to_string().contains("Connection refused") {
-                                    continue;
-                                } else {
-                                    println!("conn send err: {}", err);
+                        tokio::select! {
+                            _ = timeout.as_mut() =>{
+                                if let Some(pc) = pc2.upgrade(){
+                                    result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                        sender_ssrc: 0,
+                                        media_ssrc,
+                                    })]).await.map_err(Into::into);
+                                }else{
                                     break;
                                 }
                             }
+                        };
+                    }
+                });
+
+                tokio::spawn(async move {
+                    let mut b = vec![0u8; 1500];
+                    while let Ok((n, _)) = track.read(&mut b).await {
+                        // Unmarshal the packet and update the PayloadType
+                        let mut buf = &b[..n];
+                        let mut rtp_packet = webrtc::rtp::packet::Packet::unmarshal(&mut buf)?;
+                        rtp_packet.header.payload_type = c.payload_type;
+
+                        // Marshal into original buffer with updated PayloadType
+
+                        let n = rtp_packet.marshal_to(&mut b)?;
+
+                        // Write
+                        if let Err(err) = c.conn.send(&b[..n]).await {
+                            // For this particular example, third party applications usually timeout after a short
+                            // amount of time during which the user doesn't have enough time to provide the answer
+                            // to the browser.
+                            // That's why, for this particular example, the user first needs to provide the answer
+                            // to the browser then open the third party application. Therefore we must not kill
+                            // the forward on "connection refused" errors
+                            //if opError, ok := err.(*net.OpError); ok && opError.Err.Error() == "write: connection refused" {
+                            //    continue
+                            //}
+                            //panic(err)
+                            if err.to_string().contains("Connection refused") {
+                                continue;
+                            } else {
+                                println!("conn send err: {}", err);
+                                break;
+                            }
                         }
+                    }
 
-                        Result::<()>::Ok(())
-                    });
-                }
+                    Result::<()>::Ok(())
+                });
+            }
 
-                Box::pin(async {})
-            },
-        ))
-        .await;
+            Box::pin(async {})
+        },
+    ));
 
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
+    peer_connection.on_ice_connection_state_change(Box::new(
+        move |connection_state: RTCIceConnectionState| {
             println!("Connection State has changed {}", connection_state);
             if connection_state == RTCIceConnectionState::Connected {
                 println!("Ctrl+C the remote client to stop the demo");
             }
             Box::pin(async {})
-        }))
-        .await;
+        },
+    ));
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {}", s);
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting: Done forwarding");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting: Done forwarding");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;

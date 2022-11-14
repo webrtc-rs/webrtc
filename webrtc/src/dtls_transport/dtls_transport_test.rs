@@ -41,29 +41,25 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
-    pc_answer
-        .on_data_channel(Box::new(|_: Arc<RTCDataChannel>| {
-            assert!(
-                false,
-                "A DataChannel must not be created when Fingerprint verification fails"
-            );
-            Box::pin(async {})
-        }))
-        .await;
+    pc_answer.on_data_channel(Box::new(|_: Arc<RTCDataChannel>| {
+        assert!(
+            false,
+            "A DataChannel must not be created when Fingerprint verification fails"
+        );
+        Box::pin(async {})
+    }));
 
     let (offer_chan_tx, mut offer_chan_rx) = mpsc::channel::<()>(1);
 
     let offer_chan_tx = Arc::new(offer_chan_tx);
-    pc_offer
-        .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-            let offer_chan_tx2 = Arc::clone(&offer_chan_tx);
-            Box::pin(async move {
-                if candidate.is_none() {
-                    let _ = offer_chan_tx2.send(()).await;
-                }
-            })
-        }))
-        .await;
+    pc_offer.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
+        let offer_chan_tx2 = Arc::clone(&offer_chan_tx);
+        Box::pin(async move {
+            if candidate.is_none() {
+                let _ = offer_chan_tx2.send(()).await;
+            }
+        })
+    }));
 
     let offer_connection_has_failed = WaitGroup::new();
     until_connection_state(
