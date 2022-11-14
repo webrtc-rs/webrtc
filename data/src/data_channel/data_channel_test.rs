@@ -282,7 +282,7 @@ async fn test_data_channel_channel_type_reliable_ordered() -> Result<()> {
     assert_eq!(dc0.config, cfg, "local config should match");
     assert_eq!(dc1.config, cfg, "remote config should match");
 
-    br.reorder_next_nwrites(0, 2).await; // reordering on the wire
+    br.reorder_next_nwrites(0, 2); // reordering on the wire
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = dc0.write(&Bytes::from(sbuf.clone())).await?;
@@ -475,8 +475,7 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     dc0.on_buffered_amount_low(Box::new(move || {
         n_cbs2.fetch_add(1, Ordering::SeqCst);
         Box::pin(async {})
-    }))
-    .await;
+    }));
 
     // Write 10 1000-byte packets (total 10,000 bytes)
     for i in 0..10 {

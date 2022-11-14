@@ -36,7 +36,7 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
     );*/
-    let payload = c.to_json().await?.candidate;
+    let payload = c.to_json()?.candidate;
     let req = match Request::builder()
         .method(Method::POST)
         .uri(format!("http://{}/candidate", addr))
@@ -238,28 +238,26 @@ async fn main() -> Result<()> {
     let pc = Arc::downgrade(&peer_connection);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = answer_addr.clone();
-    peer_connection
-        .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            //println!("on_ice_candidate {:?}", c);
+    peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+        //println!("on_ice_candidate {:?}", c);
 
-            let pc2 = pc.clone();
-            let pending_candidates3 = Arc::clone(&pending_candidates2);
-            let addr3 = addr2.clone();
-            Box::pin(async move {
-                if let Some(c) = c {
-                    if let Some(pc) = pc2.upgrade() {
-                        let desc = pc.remote_description().await;
-                        if desc.is_none() {
-                            let mut cs = pending_candidates3.lock().await;
-                            cs.push(c);
-                        } else if let Err(err) = signal_candidate(&addr3, &c).await {
-                            assert!(false, "{}", err);
-                        }
+        let pc2 = pc.clone();
+        let pending_candidates3 = Arc::clone(&pending_candidates2);
+        let addr3 = addr2.clone();
+        Box::pin(async move {
+            if let Some(c) = c {
+                if let Some(pc) = pc2.upgrade() {
+                    let desc = pc.remote_description().await;
+                    if desc.is_none() {
+                        let mut cs = pending_candidates3.lock().await;
+                        cs.push(c);
+                    } else if let Err(err) = signal_candidate(&addr3, &c).await {
+                        assert!(false, "{}", err);
                     }
                 }
-            })
-        }))
-        .await;
+            }
+        })
+    }));
 
     println!("Listening on http://{}", offer_addr);
     {
@@ -285,21 +283,19 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {}", s);
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Register channel opening handling
     let d1 = Arc::clone(&data_channel);
@@ -322,17 +318,15 @@ async fn main() -> Result<()> {
                 };
             }
         })
-    })).await;
+    }));
 
     // Register text message handling
     let d_label = data_channel.label().to_owned();
-    data_channel
-        .on_message(Box::new(move |msg: DataChannelMessage| {
-            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-            println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
-            Box::pin(async {})
-        }))
-        .await;
+    data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
+        let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+        println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+        Box::pin(async {})
+    }));
 
     // Create an offer to send to the other process
     let offer = peer_connection.create_offer(None).await?;

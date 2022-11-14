@@ -347,7 +347,7 @@ pub enum Error {
     #[error("can't rollback from stable state")]
     ErrSignalingStateCannotRollback,
     #[error(
-        "invalid proposed signaling state transition from {} applying {} {}", 
+        "invalid proposed signaling state transition from {} applying {} {}",
         from,
         if *is_local { "local" } else {  "remote" },
         applying

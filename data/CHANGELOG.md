@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking changes
+
+* Make `DataChannel::on_buffered_amount_low` function non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338).
+
 ## v0.5.1
 
 * Increased minimum support rust version to `1.60.0`.

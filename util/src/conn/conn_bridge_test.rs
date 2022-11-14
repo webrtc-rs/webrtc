@@ -215,7 +215,7 @@ async fn test_bridge_inverse_error() -> Result<()> {
 async fn test_bridge_drop_next_n_packets() -> Result<()> {
     for id in 0..2 {
         let (br, conn0, conn1) = Bridge::new(0, None, None);
-        br.drop_next_nwrites(id, 3).await;
+        br.drop_next_nwrites(id, 3);
         let conns: Vec<Arc<dyn Conn + Send + Sync>> = vec![Arc::new(conn0), Arc::new(conn1)];
         let src_conn = Arc::clone(&conns[id]);
         let dst_conn = Arc::clone(&conns[1 - id]);

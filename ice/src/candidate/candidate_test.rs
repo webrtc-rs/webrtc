@@ -300,8 +300,8 @@ fn test_candidate_type_to_string() {
     }
 }
 
-#[tokio::test]
-async fn test_candidate_marshal() -> Result<()> {
+#[test]
+fn test_candidate_marshal() -> Result<()> {
     let tests = vec![
        (
             Some(CandidateBase{
@@ -332,7 +332,7 @@ async fn test_candidate_marshal() -> Result<()> {
                     address:        "191.228.238.68".to_owned(),
                     port:           53991,
                     related_address: Some(CandidateRelatedAddress{
-                        address: "192.168.0.274".to_owned(), 
+                        address: "192.168.0.274".to_owned(),
                         port:53991
                     }),
                 ..Default::default()
@@ -347,7 +347,7 @@ async fn test_candidate_marshal() -> Result<()> {
                     port:           5000,
                     related_address: Some(
                         CandidateRelatedAddress{
-                            address: "192.168.0.1".to_owned(), 
+                            address: "192.168.0.1".to_owned(),
                             port:5001}
                     ),
                 ..Default::default()
@@ -373,7 +373,7 @@ async fn test_candidate_marshal() -> Result<()> {
                     port:          60542,
                 ..Default::default()
             }),
-            "1380287402 1 udp 2130706431 e2494022-4d9a-4c1e-a750-cc48d4f8d6ee.local 60542 typ host", 
+            "1380287402 1 udp 2130706431 e2494022-4d9a-4c1e-a750-cc48d4f8d6ee.local 60542 typ host",
         ),
         // Invalid candidates
         (None, ""),
@@ -390,7 +390,7 @@ async fn test_candidate_marshal() -> Result<()> {
     ];
 
     for (candidate, marshaled) in tests {
-        let actual_candidate = unmarshal_candidate(marshaled).await;
+        let actual_candidate = unmarshal_candidate(marshaled);
         if let Some(candidate) = candidate {
             if let Ok(actual_candidate) = actual_candidate {
                 assert!(

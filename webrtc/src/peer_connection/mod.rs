@@ -72,6 +72,7 @@ use ::ice::candidate::candidate_base::unmarshal_candidate;
 use ::ice::candidate::Candidate;
 use ::sdp::description::session::*;
 use ::sdp::util::ConnectionRole;
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
@@ -168,7 +169,7 @@ struct CheckNegotiationNeededParams {
 
 #[derive(Clone)]
 struct NegotiationNeededParams {
-    on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
+    on_negotiation_needed_handler: Arc<ArcSwapOption<Mutex<OnNegotiationNeededHdlrFn>>>,
     is_closed: Arc<AtomicBool>,
     ops: Arc<Operations>,
     negotiation_needed_state: Arc<AtomicU8>,
@@ -286,33 +287,34 @@ impl RTCPeerConnection {
 
     /// on_signaling_state_change sets an event handler which is invoked when the
     /// peer connection's signaling state changes
-    pub async fn on_signaling_state_change(&self, f: OnSignalingStateChangeHdlrFn) {
-        let mut on_signaling_state_change_handler =
-            self.internal.on_signaling_state_change_handler.lock().await;
-        *on_signaling_state_change_handler = Some(f);
+    pub fn on_signaling_state_change(&self, f: OnSignalingStateChangeHdlrFn) {
+        self.internal
+            .on_signaling_state_change_handler
+            .store(Some(Arc::new(Mutex::new(f))))
     }
 
     async fn do_signaling_state_change(&self, new_state: RTCSignalingState) {
         log::info!("signaling state changed to {}", new_state);
-        let mut handler = self.internal.on_signaling_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*self.internal.on_signaling_state_change_handler.load() {
+            let mut f = handler.lock().await;
             f(new_state).await;
         }
     }
 
     /// on_data_channel sets an event handler which is invoked when a data
     /// channel message arrives from a remote peer.
-    pub async fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
-        let mut on_data_channel_handler = self.internal.on_data_channel_handler.lock().await;
-        *on_data_channel_handler = Some(f);
+    pub fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
+        self.internal
+            .on_data_channel_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_negotiation_needed sets an event handler which is invoked when
     /// a change has occurred which requires session negotiation
-    pub async fn on_negotiation_needed(&self, f: OnNegotiationNeededHdlrFn) {
-        let mut on_negotiation_needed_handler =
-            self.internal.on_negotiation_needed_handler.lock().await;
-        *on_negotiation_needed_handler = Some(f);
+    pub fn on_negotiation_needed(&self, f: OnNegotiationNeededHdlrFn) {
+        self.internal
+            .on_negotiation_needed_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     fn do_negotiation_needed_inner(params: &NegotiationNeededParams) -> bool {
@@ -372,11 +374,9 @@ impl RTCPeerConnection {
 
     async fn negotiation_needed_op(params: NegotiationNeededParams) -> bool {
         // Don't run NegotiatedNeeded checks if on_negotiation_needed is not set
-        {
-            let handler = params.on_negotiation_needed_handler.lock().await;
-            if handler.is_none() {
-                return false;
-            }
+        let handler = &*params.on_negotiation_needed_handler.load();
+        if handler.is_none() {
+            return false;
         }
 
         // https://www.w3.org/TR/webrtc/#updating-the-negotiation-needed-flag
@@ -415,11 +415,9 @@ impl RTCPeerConnection {
         params.is_negotiation_needed.store(true, Ordering::SeqCst);
 
         // Step 2.7
-        {
-            let mut handler = params.on_negotiation_needed_handler.lock().await;
-            if let Some(f) = &mut *handler {
-                f().await;
-            }
+        if let Some(handler) = handler {
+            let mut f = handler.lock().await;
+            f().await;
         }
 
         RTCPeerConnection::after_negotiation_needed_op(params).await
@@ -570,25 +568,26 @@ impl RTCPeerConnection {
     /// candidate is found.
     /// Take note that the handler is gonna be called with a nil pointer when
     /// gathering is finished.
-    pub async fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        self.internal.ice_gatherer.on_local_candidate(f).await
+    pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
+        self.internal.ice_gatherer.on_local_candidate(f)
     }
 
     /// on_ice_gathering_state_change sets an event handler which is invoked when the
     /// ICE candidate gathering state has changed.
-    pub async fn on_ice_gathering_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
-        self.internal.ice_gatherer.on_state_change(f).await
+    pub fn on_ice_gathering_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
+        self.internal.ice_gatherer.on_state_change(f)
     }
 
     /// on_track sets an event handler which is called when remote track
     /// arrives from a remote peer.
-    pub async fn on_track(&self, f: OnTrackHdlrFn) {
-        let mut on_track_handler = self.internal.on_track_handler.lock().await;
-        *on_track_handler = Some(f);
+    pub fn on_track(&self, f: OnTrackHdlrFn) {
+        self.internal
+            .on_track_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     async fn do_track(
-        on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
+        on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
         t: Option<Arc<TrackRemote>>,
         r: Option<Arc<RTCRtpReceiver>>,
     ) {
@@ -596,8 +595,8 @@ impl RTCPeerConnection {
 
         if t.is_some() {
             tokio::spawn(async move {
-                let mut handler = on_track_handler.lock().await;
-                if let Some(f) = &mut *handler {
+                if let Some(handler) = &*on_track_handler.load() {
+                    let mut f = handler.lock().await;
                     f(t, r).await;
                 } else {
                     log::warn!("on_track unset, unable to handle incoming media streams");
@@ -608,50 +607,40 @@ impl RTCPeerConnection {
 
     /// on_ice_connection_state_change sets an event handler which is called
     /// when an ICE connection state is changed.
-    pub async fn on_ice_connection_state_change(&self, f: OnICEConnectionStateChangeHdlrFn) {
-        let mut on_ice_connection_state_change_handler = self
-            .internal
+    pub fn on_ice_connection_state_change(&self, f: OnICEConnectionStateChangeHdlrFn) {
+        self.internal
             .on_ice_connection_state_change_handler
-            .lock()
-            .await;
-        *on_ice_connection_state_change_handler = Some(f);
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     async fn do_ice_connection_state_change(
-        on_ice_connection_state_change_handler: &Arc<
-            Mutex<Option<OnICEConnectionStateChangeHdlrFn>>,
-        >,
+        handler: &Arc<ArcSwapOption<Mutex<OnICEConnectionStateChangeHdlrFn>>>,
         ice_connection_state: &Arc<AtomicU8>,
         cs: RTCIceConnectionState,
     ) {
         ice_connection_state.store(cs as u8, Ordering::SeqCst);
 
         log::info!("ICE connection state changed: {}", cs);
-        let mut handler = on_ice_connection_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*handler.load() {
+            let mut f = handler.lock().await;
             f(cs).await;
         }
     }
 
     /// on_peer_connection_state_change sets an event handler which is called
     /// when the PeerConnectionState has changed
-    pub async fn on_peer_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
-        let mut on_peer_connection_state_change_handler = self
-            .internal
+    pub fn on_peer_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
+        self.internal
             .on_peer_connection_state_change_handler
-            .lock()
-            .await;
-        *on_peer_connection_state_change_handler = Some(f);
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     async fn do_peer_connection_state_change(
-        on_peer_connection_state_change_handler: &Arc<
-            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
-        >,
+        handler: &Arc<ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>>,
         cs: RTCPeerConnectionState,
     ) {
-        let mut handler = on_peer_connection_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*handler.load() {
+            let mut f = handler.lock().await;
             f(cs).await;
         }
     }
@@ -877,35 +866,35 @@ impl RTCPeerConnection {
     /// <https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum>
     async fn update_connection_state(
         on_peer_connection_state_change_handler: &Arc<
-            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
+            ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>,
         >,
         is_closed: &Arc<AtomicBool>,
         peer_connection_state: &Arc<AtomicU8>,
         ice_connection_state: RTCIceConnectionState,
         dtls_transport_state: RTCDtlsTransportState,
     ) {
-        let  connection_state =
-        // The RTCPeerConnection object's [[IsClosed]] slot is true.
-        if is_closed.load(Ordering::SeqCst) {
-             RTCPeerConnectionState::Closed
-        }else if ice_connection_state == RTCIceConnectionState::Failed || dtls_transport_state == RTCDtlsTransportState::Failed {
-            // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
-             RTCPeerConnectionState::Failed
-        }else if ice_connection_state == RTCIceConnectionState::Disconnected {
-            // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
-            // state and none of them are in the "failed" or "connecting" or "checking" state.
-            RTCPeerConnectionState::Disconnected
-        }else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == RTCDtlsTransportState::Connected {
-            // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
-            // state and at least one of them is in the "connected" or "completed" state.
-            RTCPeerConnectionState::Connected
-        }else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == RTCDtlsTransportState::Connecting{
-        //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
-        // "checking" state and none of them is in the "failed" state.
-             RTCPeerConnectionState::Connecting
-        }else{
-            RTCPeerConnectionState::New
-        };
+        let connection_state =
+            // The RTCPeerConnection object's [[IsClosed]] slot is true.
+            if is_closed.load(Ordering::SeqCst) {
+                RTCPeerConnectionState::Closed
+            } else if ice_connection_state == RTCIceConnectionState::Failed || dtls_transport_state == RTCDtlsTransportState::Failed {
+                // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
+                RTCPeerConnectionState::Failed
+            } else if ice_connection_state == RTCIceConnectionState::Disconnected {
+                // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
+                // state and none of them are in the "failed" or "connecting" or "checking" state.
+                RTCPeerConnectionState::Disconnected
+            } else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == RTCDtlsTransportState::Connected {
+                // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
+                // state and at least one of them is in the "connected" or "completed" state.
+                RTCPeerConnectionState::Connected
+            } else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == RTCDtlsTransportState::Connecting {
+                //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
+                // "checking" state and none of them is in the "failed" state.
+                RTCPeerConnectionState::Connecting
+            } else {
+                RTCPeerConnectionState::New
+            };
 
         if peer_connection_state.load(Ordering::SeqCst) == connection_state as u8 {
             return;
@@ -1623,7 +1612,7 @@ impl RTCPeerConnection {
 
         let ice_candidate = if !candidate_value.is_empty() {
             let candidate: Arc<dyn Candidate + Send + Sync> =
-                Arc::new(unmarshal_candidate(candidate_value).await?);
+                Arc::new(unmarshal_candidate(candidate_value)?);
 
             Some(RTCIceCandidate::from(&candidate))
         } else {
@@ -2082,16 +2071,14 @@ impl RTCPeerConnection {
         // state has changed to complete so that we don't block the caller forever.
         let done = Arc::new(Mutex::new(Some(gathering_complete_tx)));
         let done2 = Arc::clone(&done);
-        self.internal
-            .set_gather_complete_handler(Box::new(move || {
-                log::trace!("setGatherCompleteHandler");
-                let done3 = Arc::clone(&done2);
-                Box::pin(async move {
-                    let mut d = done3.lock().await;
-                    d.take();
-                })
-            }))
-            .await;
+        self.internal.set_gather_complete_handler(Box::new(move || {
+            log::trace!("setGatherCompleteHandler");
+            let done3 = Arc::clone(&done2);
+            Box::pin(async move {
+                let mut d = done3.lock().await;
+                d.take();
+            })
+        }));
 
         if self.ice_gathering_state() == RTCIceGatheringState::Complete {
             log::trace!("ICEGatheringState::Complete");

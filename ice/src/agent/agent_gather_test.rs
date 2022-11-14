@@ -98,7 +98,7 @@ async fn test_vnet_gather_listen_udp() -> Result<()> {
         );
 
         let conn = listen_udp_in_port_range(&nw, 5000, 5000, SocketAddr::new(ip, 0)).await?;
-        let port = conn.local_addr().await?.port();
+        let port = conn.local_addr()?.port();
         assert_eq!(
             port, 5000,
             "listenUDP with port restriction of 5000 listened on incorrect port ({})",
@@ -164,10 +164,9 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
                 }
             })
         },
-    ))
-    .await;
+    ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;
@@ -179,7 +178,7 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
     let mut laddrs = vec![];
     for candi in &candidates {
         if let Some(conn) = candi.get_conn() {
-            let laddr = conn.local_addr().await?;
+            let laddr = conn.local_addr()?;
             assert_eq!(
                 candi.port(),
                 laddr.port(),
@@ -282,10 +281,9 @@ async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<()> {
                 }
             })
         },
-    ))
-    .await;
+    ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;
@@ -467,10 +465,9 @@ async fn test_vnet_gather_muxed_udp() -> Result<()> {
                 }
             })
         },
-    ))
-    .await;
+    ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;
@@ -480,7 +477,7 @@ async fn test_vnet_gather_muxed_udp() -> Result<()> {
     assert_eq!(candidates.len(), 1, "There must be a single candidate");
 
     let candi = &candidates[0];
-    let laddr = candi.get_conn().unwrap().local_addr().await?;
+    let laddr = candi.get_conn().unwrap().local_addr()?;
     assert_eq!(candi.address(), "1.2.3.4");
     assert_eq!(
         candi.port(),

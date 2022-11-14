@@ -230,61 +230,70 @@ async fn main() -> Result<()> {
     // an ivf file, since we could have multiple video tracks we provide a counter.
     // In your application this is where you would handle/process video
     let pc = Arc::downgrade(&peer_connection);
-    peer_connection.on_track(Box::new(move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-        if let Some(track) = track {
-            // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-            let media_ssrc = track.ssrc();
-            let pc2 = pc.clone();
-            tokio::spawn(async move {
-                let mut result = Result::<usize>::Ok(0);
-                while result.is_ok() {
-                    let timeout = tokio::time::sleep(Duration::from_secs(3));
-                    tokio::pin!(timeout);
+    peer_connection.on_track(Box::new(
+        move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
+            if let Some(track) = track {
+                // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+                let media_ssrc = track.ssrc();
+                let pc2 = pc.clone();
+                tokio::spawn(async move {
+                    let mut result = Result::<usize>::Ok(0);
+                    while result.is_ok() {
+                        let timeout = tokio::time::sleep(Duration::from_secs(3));
+                        tokio::pin!(timeout);
 
-                    tokio::select! {
-                        _ = timeout.as_mut() =>{
-                            if let Some(pc) = pc2.upgrade(){
-                                result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                    sender_ssrc: 0,
-                                    media_ssrc,
-                                })]).await.map_err(Into::into);
-                            }else{
-                                break;
+                        tokio::select! {
+                            _ = timeout.as_mut() =>{
+                                if let Some(pc) = pc2.upgrade(){
+                                    result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                        sender_ssrc: 0,
+                                        media_ssrc,
+                                    })]).await.map_err(Into::into);
+                                }else{
+                                    break;
+                                }
                             }
-                        }
-                    };
-                }
-            });
+                        };
+                    }
+                });
 
-            let notify_rx2 = Arc::clone(&notify_rx);
-            let ivf_writer2 = Arc::clone(&ivf_writer);
-            let ogg_writer2 = Arc::clone(&ogg_writer);
-            Box::pin(async move {
-                let codec = track.codec().await;
-                let mime_type = codec.capability.mime_type.to_lowercase();
-                if mime_type == MIME_TYPE_OPUS.to_lowercase() {
-                    println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");     
-                    tokio::spawn(async move {
-                        let _ = save_to_disk(ogg_writer2, track, notify_rx2).await;
-                    });
-                } else if mime_type == MIME_TYPE_VP8.to_lowercase() || mime_type == MIME_TYPE_VP9.to_lowercase(){
-                    println!("Got {} track, saving to disk as output.ivf", if is_vp9 {"VP9"} else { "VP8"});
-                     tokio::spawn(async move {
-                         let _ = save_to_disk(ivf_writer2, track, notify_rx2).await;
-                     });
-                }
-            })
-        }else {
-            Box::pin(async {})
-        }
-	})).await;
+                let notify_rx2 = Arc::clone(&notify_rx);
+                let ivf_writer2 = Arc::clone(&ivf_writer);
+                let ogg_writer2 = Arc::clone(&ogg_writer);
+                Box::pin(async move {
+                    let codec = track.codec().await;
+                    let mime_type = codec.capability.mime_type.to_lowercase();
+                    if mime_type == MIME_TYPE_OPUS.to_lowercase() {
+                        println!(
+                            "Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)"
+                        );
+                        tokio::spawn(async move {
+                            let _ = save_to_disk(ogg_writer2, track, notify_rx2).await;
+                        });
+                    } else if mime_type == MIME_TYPE_VP8.to_lowercase()
+                        || mime_type == MIME_TYPE_VP9.to_lowercase()
+                    {
+                        println!(
+                            "Got {} track, saving to disk as output.ivf",
+                            if is_vp9 { "VP9" } else { "VP8" }
+                        );
+                        tokio::spawn(async move {
+                            let _ = save_to_disk(ivf_writer2, track, notify_rx2).await;
+                        });
+                    }
+                })
+            } else {
+                Box::pin(async {})
+            }
+        },
+    ));
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
+    peer_connection.on_ice_connection_state_change(Box::new(
+        move |connection_state: RTCIceConnectionState| {
             println!("Connection State has changed {}", connection_state);
 
             if connection_state == RTCIceConnectionState::Connected {
@@ -297,8 +306,8 @@ async fn main() -> Result<()> {
                 let _ = done_tx.try_send(());
             }
             Box::pin(async {})
-        }))
-        .await;
+        },
+    ));
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;

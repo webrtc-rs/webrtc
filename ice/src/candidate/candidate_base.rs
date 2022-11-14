@@ -8,12 +8,17 @@ use crate::util::*;
 
 use async_trait::async_trait;
 use crc::{Crc, CRC_32_ISCSI};
-use std::fmt;
-use std::ops::Add;
-use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    fmt,
+    ops::Add,
+    sync::{
+        atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering},
+        Arc,
+    },
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::{broadcast, Mutex};
+use util::sync::Mutex as SyncMutex;
 
 #[derive(Default)]
 pub struct CandidateBaseConfig {
@@ -28,8 +33,6 @@ pub struct CandidateBaseConfig {
     pub initialized_ch: Option<broadcast::Receiver<()>>,
 }
 
-pub(crate) type OnClose = fn() -> Result<()>;
-
 pub struct CandidateBase {
     pub(crate) id: String,
     pub(crate) network_type: AtomicU8,
@@ -41,7 +44,7 @@ pub struct CandidateBase {
     pub(crate) related_address: Option<CandidateRelatedAddress>,
     pub(crate) tcp_type: TcpType,
 
-    pub(crate) resolved_addr: Mutex<SocketAddr>,
+    pub(crate) resolved_addr: SyncMutex<SocketAddr>,
 
     pub(crate) last_sent: AtomicU64,
     pub(crate) last_received: AtomicU64,
@@ -71,7 +74,7 @@ impl Default for CandidateBase {
             related_address: None,
             tcp_type: TcpType::default(),
 
-            resolved_addr: Mutex::new(SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0)),
+            resolved_addr: SyncMutex::new(SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0)),
 
             last_sent: AtomicU64::new(0),
             last_received: AtomicU64::new(0),
@@ -230,9 +233,8 @@ impl Candidate for CandidateBase {
         val
     }
 
-    async fn addr(&self) -> SocketAddr {
-        let resolved_addr = self.resolved_addr.lock().await;
-        *resolved_addr
+    fn addr(&self) -> SocketAddr {
+        *self.resolved_addr.lock()
     }
 
     /// Stops the recvLoop.
@@ -270,7 +272,7 @@ impl Candidate for CandidateBase {
 
     async fn write_to(&self, raw: &[u8], dst: &(dyn Candidate + Send + Sync)) -> Result<usize> {
         let n = if let Some(conn) = &self.conn {
-            let addr = dst.addr().await;
+            let addr = dst.addr();
             conn.send_to(raw, addr).await?
         } else {
             0
@@ -289,14 +291,14 @@ impl Candidate for CandidateBase {
             && self.related_address() == other.related_address()
     }
 
-    async fn set_ip(&self, ip: &IpAddr) -> Result<()> {
+    fn set_ip(&self, ip: &IpAddr) -> Result<()> {
         let network_type = determine_network_type(&self.network, ip)?;
 
         self.network_type
             .store(network_type as u8, Ordering::SeqCst);
 
-        let mut resolved_addr = self.resolved_addr.lock().await;
-        *resolved_addr = create_addr(network_type, *ip, self.port);
+        let addr = create_addr(network_type, *ip, self.port);
+        *self.resolved_addr.lock() = addr;
 
         Ok(())
     }
@@ -388,7 +390,7 @@ impl CandidateBase {
 }
 
 /// Creates a Candidate from its string representation.
-pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
+pub fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
     let split: Vec<&str> = raw.split_whitespace().collect();
     if split.len() < 8 {
         return Err(Error::Other(format!(
@@ -464,7 +466,7 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
                 },
                 tcp_type,
             };
-            config.new_candidate_host().await
+            config.new_candidate_host()
         }
         "srflx" => {
             let config = CandidateServerReflexiveConfig {
@@ -480,7 +482,7 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
                 rel_addr,
                 rel_port,
             };
-            config.new_candidate_server_reflexive().await
+            config.new_candidate_server_reflexive()
         }
         "prflx" => {
             let config = CandidatePeerReflexiveConfig {
@@ -497,7 +499,7 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
                 rel_port,
             };
 
-            config.new_candidate_peer_reflexive().await
+            config.new_candidate_peer_reflexive()
         }
         "relay" => {
             let config = CandidateRelayConfig {
@@ -514,7 +516,7 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
                 rel_port,
                 ..CandidateRelayConfig::default()
             };
-            config.new_candidate_relay().await
+            config.new_candidate_relay()
         }
         _ => Err(Error::Other(format!(
             "{:?} ({})",

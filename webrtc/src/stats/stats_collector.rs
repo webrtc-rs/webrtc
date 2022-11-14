@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 use super::StatsReportType;
+
+use util::sync::Mutex;
 
 #[derive(Debug, Default)]
 pub struct StatsCollector {
@@ -16,16 +17,16 @@ impl StatsCollector {
     }
 
     pub(crate) fn insert(&self, id: String, stats: StatsReportType) {
-        let mut reports = self.reports.lock().unwrap();
+        let mut reports = self.reports.lock();
         reports.insert(id, stats);
     }
 
     pub(crate) fn merge(&self, stats: HashMap<String, StatsReportType>) {
-        let mut reports = self.reports.lock().unwrap();
+        let mut reports = self.reports.lock();
         reports.extend(stats)
     }
 
     pub(crate) fn into_reports(self) -> HashMap<String, StatsReportType> {
-        self.reports.into_inner().unwrap()
+        self.reports.into_inner()
     }
 }

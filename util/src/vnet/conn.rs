@@ -3,6 +3,7 @@ mod conn_test;
 
 use crate::conn::Conn;
 use crate::error::*;
+use crate::sync::RwLock;
 use crate::vnet::chunk::{Chunk, ChunkUdp};
 
 use std::net::{IpAddr, SocketAddr};
@@ -28,7 +29,7 @@ pub(crate) type ChunkChTx = mpsc::Sender<Box<dyn Chunk + Send + Sync>>;
 /// comatible with net.PacketConn and net.Conn
 pub(crate) struct UdpConn {
     loc_addr: SocketAddr,
-    rem_addr: Mutex<Option<SocketAddr>>,
+    rem_addr: RwLock<Option<SocketAddr>>,
     read_ch_tx: Arc<Mutex<Option<ChunkChTx>>>,
     read_ch_rx: Mutex<mpsc::Receiver<Box<dyn Chunk + Send + Sync>>>,
     closed: AtomicBool,
@@ -45,7 +46,7 @@ impl UdpConn {
 
         UdpConn {
             loc_addr,
-            rem_addr: Mutex::new(rem_addr),
+            rem_addr: RwLock::new(rem_addr),
             read_ch_tx: Arc::new(Mutex::new(Some(read_ch_tx))),
             read_ch_rx: Mutex::new(read_ch_rx),
             closed: AtomicBool::new(false),
@@ -61,8 +62,7 @@ impl UdpConn {
 #[async_trait]
 impl Conn for UdpConn {
     async fn connect(&self, addr: SocketAddr) -> Result<()> {
-        let mut rem_addr = self.rem_addr.lock().await;
-        *rem_addr = Some(addr);
+        self.rem_addr.write().replace(addr);
 
         Ok(())
     }
@@ -80,14 +80,14 @@ impl Conn for UdpConn {
     /// the n > 0 bytes returned before considering the error err.
     async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut read_ch = self.read_ch_rx.lock().await;
+        let rem_addr = *self.rem_addr.read();
         while let Some(chunk) = read_ch.recv().await {
             let user_data = chunk.user_data();
             let n = std::cmp::min(buf.len(), user_data.len());
             buf[..n].copy_from_slice(&user_data[..n]);
             let addr = chunk.source_addr();
             {
-                let rem_addr = self.rem_addr.lock().await;
-                if let Some(rem_addr) = &*rem_addr {
+                if let Some(rem_addr) = &rem_addr {
                     if &addr != rem_addr {
                         continue; // discard (shouldn't happen)
                     }
@@ -100,10 +100,7 @@ impl Conn for UdpConn {
     }
 
     async fn send(&self, buf: &[u8]) -> Result<usize> {
-        let rem_addr = {
-            let rem_addr = self.rem_addr.lock().await;
-            *rem_addr
-        };
+        let rem_addr = *self.rem_addr.read();
         if let Some(rem_addr) = rem_addr {
             self.send_to(buf, rem_addr).await
         } else {
@@ -135,13 +132,12 @@ impl Conn for UdpConn {
         Ok(buf.len())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    fn local_addr(&self) -> Result<SocketAddr> {
         Ok(self.loc_addr)
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
-        let rem_addr = self.rem_addr.lock().await;
-        *rem_addr
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        *self.rem_addr.read()
     }
 
     async fn close(&self) -> Result<()> {

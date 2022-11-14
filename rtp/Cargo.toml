@@ -11,7 +11,7 @@ repository = "https://github.com/webrtc-rs/rtp"
 rust-version = "1.60.0"
 
 [dependencies]
-util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
+util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal", "sync"] }
 
 bytes = "1"
 rand = "0.8.5"

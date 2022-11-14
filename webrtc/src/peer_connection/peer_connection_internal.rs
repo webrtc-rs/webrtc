@@ -9,6 +9,7 @@ use crate::stats::{
 };
 use crate::track::TrackStream;
 use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
+use arc_swap::ArcSwapOption;
 use std::sync::atomic::AtomicIsize;
 use std::sync::Weak;
 
@@ -22,7 +23,7 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) last_offer: Mutex<String>,
     pub(super) last_answer: Mutex<String>,
 
-    pub(super) on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
+    pub(super) on_negotiation_needed_handler: Arc<ArcSwapOption<Mutex<OnNegotiationNeededHdlrFn>>>,
     pub(super) is_closed: Arc<AtomicBool>,
 
     /// ops is an operations queue which will ensure the enqueued actions are
@@ -36,18 +37,19 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) ice_transport: Arc<RTCIceTransport>,
     pub(super) dtls_transport: Arc<RTCDtlsTransport>,
     pub(super) on_peer_connection_state_change_handler:
-        Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
+        Arc<ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>>,
     pub(super) peer_connection_state: Arc<AtomicU8>,
     pub(super) ice_connection_state: Arc<AtomicU8>,
 
     pub(super) sctp_transport: Arc<RTCSctpTransport>,
     pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
 
-    pub(super) on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
-    pub(super) on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
+    pub(super) on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
+    pub(super) on_signaling_state_change_handler:
+        ArcSwapOption<Mutex<OnSignalingStateChangeHdlrFn>>,
     pub(super) on_ice_connection_state_change_handler:
-        Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
-    pub(super) on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
+        Arc<ArcSwapOption<Mutex<OnICEConnectionStateChangeHdlrFn>>>,
+    pub(super) on_data_channel_handler: Arc<ArcSwapOption<Mutex<OnDataChannelHdlrFn>>>,
 
     pub(super) ice_gatherer: Arc<RTCIceGatherer>,
 
@@ -76,7 +78,7 @@ impl PeerConnectionInternal {
             last_offer: Mutex::new("".to_owned()),
             last_answer: Mutex::new("".to_owned()),
 
-            on_negotiation_needed_handler: Arc::new(Default::default()),
+            on_negotiation_needed_handler: Arc::new(ArcSwapOption::empty()),
             ops: Arc::new(Operations::new()),
             is_closed: Arc::new(AtomicBool::new(false)),
             is_negotiation_needed: Arc::new(AtomicBool::new(false)),
@@ -87,9 +89,9 @@ impl PeerConnectionInternal {
             ice_connection_state: Arc::new(AtomicU8::new(RTCIceConnectionState::New as u8)),
             sctp_transport: Arc::new(Default::default()),
             rtp_transceivers: Arc::new(Default::default()),
-            on_track_handler: Arc::new(Default::default()),
-            on_signaling_state_change_handler: Arc::new(Default::default()),
-            on_ice_connection_state_change_handler: Arc::new(Default::default()),
+            on_track_handler: Arc::new(ArcSwapOption::empty()),
+            on_signaling_state_change_handler: ArcSwapOption::empty(),
+            on_ice_connection_state_change_handler: Arc::new(ArcSwapOption::empty()),
             on_data_channel_handler: Arc::new(Default::default()),
             ice_gatherer: Arc::new(Default::default()),
             current_local_description: Arc::new(Default::default()),
@@ -105,7 +107,7 @@ impl PeerConnectionInternal {
             },
             interceptor,
             stats_interceptor,
-            on_peer_connection_state_change_handler: Arc::new(Default::default()),
+            on_peer_connection_state_change_handler: Arc::new(ArcSwapOption::empty()),
             pending_remote_description: Arc::new(Default::default()),
         };
 
@@ -132,13 +134,12 @@ impl PeerConnectionInternal {
             .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
                 let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
                 Box::pin(async move {
-                    let mut handler = on_data_channel_handler2.lock().await;
-                    if let Some(f) = &mut *handler {
+                    if let Some(handler) = &*on_data_channel_handler2.load() {
+                        let mut f = handler.lock().await;
                         f(d).await;
                     }
                 })
-            }))
-            .await;
+            }));
 
         Ok((Arc::new(pc), configuration))
     }
@@ -599,8 +600,8 @@ impl PeerConnectionInternal {
         }
     }
 
-    pub(super) async fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
-        self.ice_gatherer.on_gathering_complete(f).await;
+    pub(super) fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
+        self.ice_gatherer.on_gathering_complete(f);
     }
 
     /// Start all transports. PeerConnection now has enough state
@@ -1075,7 +1076,7 @@ impl PeerConnectionInternal {
         receive_mtu: usize,
         incoming: &TrackDetails,
         receiver: Arc<RTCRtpReceiver>,
-        on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
+        on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
     ) {
         receiver.start(incoming).await;
         for t in receiver.tracks().await {
@@ -1132,49 +1133,47 @@ impl PeerConnectionInternal {
         let on_peer_connection_state_change_handler =
             Arc::clone(&self.on_peer_connection_state_change_handler);
 
-        ice_transport
-            .on_connection_state_change(Box::new(move |state: RTCIceTransportState| {
-                let cs = match state {
-                    RTCIceTransportState::New => RTCIceConnectionState::New,
-                    RTCIceTransportState::Checking => RTCIceConnectionState::Checking,
-                    RTCIceTransportState::Connected => RTCIceConnectionState::Connected,
-                    RTCIceTransportState::Completed => RTCIceConnectionState::Completed,
-                    RTCIceTransportState::Failed => RTCIceConnectionState::Failed,
-                    RTCIceTransportState::Disconnected => RTCIceConnectionState::Disconnected,
-                    RTCIceTransportState::Closed => RTCIceConnectionState::Closed,
-                    _ => {
-                        log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
-                        return Box::pin(async {});
-                    }
-                };
+        ice_transport.on_connection_state_change(Box::new(move |state: RTCIceTransportState| {
+            let cs = match state {
+                RTCIceTransportState::New => RTCIceConnectionState::New,
+                RTCIceTransportState::Checking => RTCIceConnectionState::Checking,
+                RTCIceTransportState::Connected => RTCIceConnectionState::Connected,
+                RTCIceTransportState::Completed => RTCIceConnectionState::Completed,
+                RTCIceTransportState::Failed => RTCIceConnectionState::Failed,
+                RTCIceTransportState::Disconnected => RTCIceConnectionState::Disconnected,
+                RTCIceTransportState::Closed => RTCIceConnectionState::Closed,
+                _ => {
+                    log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
+                    return Box::pin(async {});
+                }
+            };
 
-                let ice_connection_state2 = Arc::clone(&ice_connection_state);
-                let on_ice_connection_state_change_handler2 =
-                    Arc::clone(&on_ice_connection_state_change_handler);
-                let on_peer_connection_state_change_handler2 =
-                    Arc::clone(&on_peer_connection_state_change_handler);
-                let is_closed2 = Arc::clone(&is_closed);
-                let dtls_transport_state = dtls_transport.state();
-                let peer_connection_state2 = Arc::clone(&peer_connection_state);
-                Box::pin(async move {
-                    RTCPeerConnection::do_ice_connection_state_change(
-                        &on_ice_connection_state_change_handler2,
-                        &ice_connection_state2,
-                        cs,
-                    )
-                    .await;
+            let ice_connection_state2 = Arc::clone(&ice_connection_state);
+            let on_ice_connection_state_change_handler2 =
+                Arc::clone(&on_ice_connection_state_change_handler);
+            let on_peer_connection_state_change_handler2 =
+                Arc::clone(&on_peer_connection_state_change_handler);
+            let is_closed2 = Arc::clone(&is_closed);
+            let dtls_transport_state = dtls_transport.state();
+            let peer_connection_state2 = Arc::clone(&peer_connection_state);
+            Box::pin(async move {
+                RTCPeerConnection::do_ice_connection_state_change(
+                    &on_ice_connection_state_change_handler2,
+                    &ice_connection_state2,
+                    cs,
+                )
+                .await;
 
-                    RTCPeerConnection::update_connection_state(
-                        &on_peer_connection_state_change_handler2,
-                        &is_closed2,
-                        &peer_connection_state2,
-                        cs,
-                        dtls_transport_state,
-                    )
-                    .await;
-                })
-            }))
-            .await;
+                RTCPeerConnection::update_connection_state(
+                    &on_peer_connection_state_change_handler2,
+                    &is_closed2,
+                    &peer_connection_state2,
+                    cs,
+                    dtls_transport_state,
+                )
+                .await;
+            })
+        }));
 
         ice_transport
     }

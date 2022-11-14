@@ -3,8 +3,11 @@ use super::*;
 use crate::error::*;
 use crate::rand::generate_cand_id;
 use crate::util::*;
-use std::sync::atomic::{AtomicU16, AtomicU8};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU16, AtomicU8},
+    Arc,
+};
+use util::sync::Mutex as SyncMutex;
 
 /// The config required to create a new `CandidateRelay`.
 #[derive(Default)]
@@ -18,7 +21,7 @@ pub struct CandidateRelayConfig {
 
 impl CandidateRelayConfig {
     /// Creates a new relay candidate.
-    pub async fn new_candidate_relay(self) -> Result<CandidateBase> {
+    pub fn new_candidate_relay(self) -> Result<CandidateBase> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
             candidate_id = generate_cand_id();
@@ -36,7 +39,7 @@ impl CandidateRelayConfig {
             candidate_type: CandidateType::Relay,
             address: self.base_config.address,
             port: self.base_config.port,
-            resolved_addr: Mutex::new(create_addr(network_type, ip, self.base_config.port)),
+            resolved_addr: SyncMutex::new(create_addr(network_type, ip, self.base_config.port)),
             component: AtomicU16::new(self.base_config.component),
             foundation_override: self.base_config.foundation,
             priority_override: self.base_config.priority,

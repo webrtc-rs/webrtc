@@ -271,11 +271,11 @@ pub struct ICETransportStats {
 }
 
 impl ICETransportStats {
-    pub(crate) async fn new(id: String, agent: Arc<Agent>) -> Self {
+    pub(crate) fn new(id: String, agent: Arc<Agent>) -> Self {
         ICETransportStats {
             id,
-            bytes_received: agent.get_bytes_received().await,
-            bytes_sent: agent.get_bytes_sent().await,
+            bytes_received: agent.get_bytes_received(),
+            bytes_sent: agent.get_bytes_sent(),
             stats_type: RTCStatsType::Transport,
             timestamp: Instant::now(),
         }
