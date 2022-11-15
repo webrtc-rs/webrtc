@@ -17,7 +17,7 @@ default = [ "reuse_port" ]
 reuse_port = []
 
 [dependencies]
-util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["ifaces"] }
+util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["ifaces"] }
 
 tokio = { version = "1.19", features = ["full"] }
 socket2 = { version = "0.4.4", features = ["all"] }

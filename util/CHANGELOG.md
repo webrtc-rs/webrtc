@@ -1,6 +1,6 @@
 # webrtc-util changelog
 
-## Unreleased
+## v0.7.0
 
 ### Breaking changes
 
@@ -11,6 +11,7 @@
     - `Conn`:
         - `local_addr`;
         - `remote_addr`.
+
 
 ## v0.6.0
 

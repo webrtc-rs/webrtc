@@ -13,7 +13,7 @@ rust-version = "1.60.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
+util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
 
 byteorder = "1"
 rand_core = "0.6.3"

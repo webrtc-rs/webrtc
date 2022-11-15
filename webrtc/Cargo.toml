@@ -27,7 +27,7 @@ sdp = { version = "0.5.2", path = "../sdp" }
 srtp = { version = "0.9.0", path = "../srtp", package = "webrtc-srtp" }
 stun = { version = "0.4.3", path = "../stun" }
 turn = { version = "0.6.0", path = "../turn" }
-util = { version = "0.6.0", path = "../util", package = "webrtc-util" }
+util = { version = "0.7.0", path = "../util", package = "webrtc-util" }
 
 arc-swap = "1.5"
 tokio = { version = "1.19", features = ["full"] }
