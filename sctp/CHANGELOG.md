@@ -2,21 +2,18 @@
 
 ## Unreleased
 
-### Breaking
-
-* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` sync [#344](https://github.com/webrtc-rs/webrtc/pull/344)
-
-## v0.6.2
+## v0.7.0
 
 * Increased minimum support rust version to `1.60.0`.
 * Do not loose data in `PollStream::poll_write` [#341](https://github.com/webrtc-rs/webrtc/pull/341).
 * `PollStream::poll_shutdown`: make sure to flush any writes before shutting down [#340](https://github.com/webrtc-rs/webrtc/pull/340)
 * Fixed a possible bug when adding chunks to pending queue [#345](https://github.com/webrtc-rs/webrtc/pull/345)
+* Increased required `webrtc-util` version to `0.7.0`.
 
 ### Breaking changes
 
 * Make `Stream::on_buffered_amount_low` function non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338).
-    
+* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` sync [#344](https://github.com/webrtc-rs/webrtc/pull/344)
 
 ## v0.6.1
 
