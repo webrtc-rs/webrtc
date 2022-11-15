@@ -455,22 +455,23 @@ impl Allocation {
 }
 
 struct DropListener {
-    rx: Receiver<()>,
+    closed_rx: Receiver<()>,
 }
 
 impl DropListener {
     pub fn new(rx: Receiver<()>) -> Self {
-        Self { rx }
+        Self { closed_rx: rx }
     }
 }
 
 impl Future for DropListener {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.rx.try_recv() {
-            Ok(_) => Poll::Pending,
-            Err(_) => Poll::Ready(()),
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match Pin::new(&mut self.closed_rx).poll(cx) {
+            Poll::Ready(Ok(_)) => Poll::Pending,
+            Poll::Ready(Err(_)) => Poll::Ready(()),
+            Poll::Pending => return Poll::Pending,
         }
     }
 }
