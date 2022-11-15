@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-ice"
-version = "0.8.2"
+version = "0.9.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of ICE"
