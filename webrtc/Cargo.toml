@@ -1,6 +1,6 @@
 [package]
 name = "webrtc"
-version = "0.5.1"
+version = "0.6.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of WebRTC API"
