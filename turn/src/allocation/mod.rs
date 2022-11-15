@@ -16,19 +16,19 @@ use util::sync::Mutex as SyncMutex;
 
 use util::Conn;
 
-use futures::channel::oneshot::{self, Receiver, Sender};
 use std::sync::atomic::AtomicUsize;
 use std::{
     collections::HashMap,
-    future::Future,
     marker::{Send, Sync},
     net::SocketAddr,
-    pin::Pin,
     sync::{atomic::AtomicBool, atomic::Ordering, Arc},
-    task::{Context, Poll},
 };
 use tokio::{
-    sync::{mpsc, Mutex},
+    sync::{
+        mpsc,
+        oneshot::{self, Sender},
+        Mutex,
+    },
     time::{Duration, Instant},
 };
 
@@ -82,7 +82,7 @@ pub struct Allocation {
     timer_expired: Arc<AtomicBool>,
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
     pub(crate) relayed_bytes: AtomicUsize,
-    closed_tx: Option<Sender<()>>,
+    drop_tx: Option<Sender<u32>>,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -112,7 +112,7 @@ impl Allocation {
             timer_expired: Arc::new(AtomicBool::new(false)),
             closed: AtomicBool::new(false),
             relayed_bytes: Default::default(),
-            closed_tx: None,
+            drop_tx: None,
         }
     }
 
@@ -327,14 +327,13 @@ impl Allocation {
         let allocations = self.allocations.clone();
         let channel_bindings = Arc::clone(&self.channel_bindings);
         let permissions = Arc::clone(&self.permissions);
-        let (closed_tx, closed_rx) = oneshot::channel();
-        self.closed_tx = Some(closed_tx);
-        let drop_listener = DropListener::new(closed_rx);
+        let (drop_tx, drop_rx) = oneshot::channel::<u32>();
+        self.drop_tx = Some(drop_tx);
 
         tokio::spawn(async move {
             let mut buffer = vec![0u8; RTP_MTU];
 
-            tokio::pin!(drop_listener);
+            tokio::pin!(drop_rx);
 
             loop {
                 let (n, src_addr) = tokio::select! {
@@ -350,7 +349,7 @@ impl Allocation {
                             }
                         }
                     }
-                    _ = drop_listener.as_mut() => {
+                    _ = drop_rx.as_mut() => {
                         log::trace!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
                         break;
                     }
@@ -451,27 +450,5 @@ impl Allocation {
                 }
             }
         });
-    }
-}
-
-struct DropListener {
-    closed_rx: Receiver<()>,
-}
-
-impl DropListener {
-    pub fn new(rx: Receiver<()>) -> Self {
-        Self { closed_rx: rx }
-    }
-}
-
-impl Future for DropListener {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match Pin::new(&mut self.closed_rx).poll(cx) {
-            Poll::Ready(Ok(_)) => Poll::Pending,
-            Poll::Ready(Err(_)) => Poll::Ready(()),
-            Poll::Pending => return Poll::Pending,
-        }
     }
 }
