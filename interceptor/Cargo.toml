@@ -1,6 +1,6 @@
 [package]
 name = "interceptor"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of Pluggable RTP/RTCP processors"
