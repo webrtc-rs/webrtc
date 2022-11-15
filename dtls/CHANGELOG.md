@@ -2,10 +2,14 @@
 
 ## Unreleased
 
-## v0.6.1
+## v0.7.0
 
 * Increased minimum support rust version to `1.60.0`.
 * Add `RTCCertificate::from_pem` and `RTCCertificate::serialize_pem` (only work with `pem` feature enabled) [#333](https://github.com/webrtc-rs/webrtc/pull/333)
+
+### Breaking
+
+* Increased required `webrtc-util` version to `0.7.0`, with this change some methods in `DTLSConn` that implement `webrtc_util::Conn` have changed from async to sync.
 
 ## v0.6.0
 
