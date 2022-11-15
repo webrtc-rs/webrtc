@@ -1,19 +1,22 @@
+use std::{
+    collections::VecDeque,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+};
+
+use util::sync::RwLock;
+
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
 
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use tokio::sync::Mutex;
-
-/// pendingBaseQueue
+/// Basic queue for either ordered or unordered chunks.
 pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
 
 // TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<PendingQueueInternal>
 
-/// pendingQueue
+/// A queue for both ordered and unordered chunks.
 #[derive(Debug, Default)]
 pub(crate) struct PendingQueue {
-    unordered_queue: Mutex<PendingBaseQueue>,
-    ordered_queue: Mutex<PendingBaseQueue>,
+    unordered_queue: RwLock<PendingBaseQueue>,
+    ordered_queue: RwLock<PendingBaseQueue>,
     queue_len: AtomicUsize,
     n_bytes: AtomicUsize,
     selected: AtomicBool,
@@ -26,14 +29,14 @@ impl PendingQueue {
     }
 
     /// Appends a chunk to the back of the pending queue.
-    pub(crate) async fn push(&self, c: ChunkPayloadData) {
+    pub(crate) fn push(&self, c: ChunkPayloadData) {
         let user_data_len = c.user_data.len();
 
         if c.unordered {
-            let mut unordered_queue = self.unordered_queue.lock().await;
+            let mut unordered_queue = self.unordered_queue.write();
             unordered_queue.push_back(c);
         } else {
-            let mut ordered_queue = self.ordered_queue.lock().await;
+            let mut ordered_queue = self.ordered_queue.write();
             ordered_queue.push_back(c);
         }
 
@@ -46,7 +49,7 @@ impl PendingQueue {
     /// # Panics
     ///
     /// If it's a mix of unordered and ordered chunks.
-    pub(crate) async fn append(&self, chunks: Vec<ChunkPayloadData>) {
+    pub(crate) fn append(&self, chunks: Vec<ChunkPayloadData>) {
         if chunks.is_empty() {
             return;
         }
@@ -59,13 +62,13 @@ impl PendingQueue {
             .expect("chunks to not be empty because of the above check")
             .unordered;
         if unordered {
-            let mut unordered_queue = self.unordered_queue.lock().await;
+            let mut unordered_queue = self.unordered_queue.write();
             for c in chunks {
                 assert!(c.unordered, "expected all chunks to be unordered");
                 unordered_queue.push_back(c);
             }
         } else {
-            let mut ordered_queue = self.ordered_queue.lock().await;
+            let mut ordered_queue = self.ordered_queue.write();
             for c in chunks {
                 assert!(!c.unordered, "expected all chunks to be ordered");
                 ordered_queue.push_back(c);
@@ -77,19 +80,19 @@ impl PendingQueue {
         self.queue_len.fetch_add(chunks_len, Ordering::SeqCst);
     }
 
-    pub(crate) async fn peek(&self) -> Option<ChunkPayloadData> {
+    pub(crate) fn peek(&self) -> Option<ChunkPayloadData> {
         if self.selected.load(Ordering::SeqCst) {
             if self.unordered_is_selected.load(Ordering::SeqCst) {
-                let unordered_queue = self.unordered_queue.lock().await;
+                let unordered_queue = self.unordered_queue.read();
                 return unordered_queue.get(0).cloned();
             } else {
-                let ordered_queue = self.ordered_queue.lock().await;
+                let ordered_queue = self.ordered_queue.read();
                 return ordered_queue.get(0).cloned();
             }
         }
 
         let c = {
-            let unordered_queue = self.unordered_queue.lock().await;
+            let unordered_queue = self.unordered_queue.read();
             unordered_queue.get(0).cloned()
         };
 
@@ -97,21 +100,21 @@ impl PendingQueue {
             return c;
         }
 
-        let ordered_queue = self.ordered_queue.lock().await;
+        let ordered_queue = self.ordered_queue.read();
         ordered_queue.get(0).cloned()
     }
 
-    pub(crate) async fn pop(
+    pub(crate) fn pop(
         &self,
         beginning_fragment: bool,
         unordered: bool,
     ) -> Option<ChunkPayloadData> {
         let popped = if self.selected.load(Ordering::SeqCst) {
             let popped = if self.unordered_is_selected.load(Ordering::SeqCst) {
-                let mut unordered_queue = self.unordered_queue.lock().await;
+                let mut unordered_queue = self.unordered_queue.write();
                 unordered_queue.pop_front()
             } else {
-                let mut ordered_queue = self.ordered_queue.lock().await;
+                let mut ordered_queue = self.ordered_queue.write();
                 ordered_queue.pop_front()
             };
             if let Some(p) = &popped {
@@ -126,7 +129,7 @@ impl PendingQueue {
             }
             if unordered {
                 let popped = {
-                    let mut unordered_queue = self.unordered_queue.lock().await;
+                    let mut unordered_queue = self.unordered_queue.write();
                     unordered_queue.pop_front()
                 };
                 if let Some(p) = &popped {
@@ -138,7 +141,7 @@ impl PendingQueue {
                 popped
             } else {
                 let popped = {
-                    let mut ordered_queue = self.ordered_queue.lock().await;
+                    let mut ordered_queue = self.ordered_queue.write();
                     ordered_queue.pop_front()
                 };
                 if let Some(p) = &popped {

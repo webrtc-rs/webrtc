@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking
+
+* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` sync [#344](https://github.com/webrtc-rs/webrtc/pull/344)
+
 ## v0.6.2
 
 * Increased minimum support rust version to `1.60.0`.

@@ -94,12 +94,10 @@ async fn test_stream() -> std::result::Result<(), io::Error> {
     s.set_reliability_params(true, ReliabilityType::Reliable, 0);
 
     // write
-    let n = s.write(&Bytes::from("Hello ")).await?;
+    let n = s.write(&Bytes::from("Hello "))?;
     assert_eq!(6, n);
     assert_eq!(6, s.buffered_amount());
-    let n = s
-        .write_sctp(&Bytes::from("world"), PayloadProtocolIdentifier::Binary)
-        .await?;
+    let n = s.write_sctp(&Bytes::from("world"), PayloadProtocolIdentifier::Binary)?;
     assert_eq!(5, n);
     assert_eq!(11, s.buffered_amount());
 
@@ -122,7 +120,7 @@ async fn test_stream() -> std::result::Result<(), io::Error> {
     // shutdown write
     s.shutdown(Shutdown::Write).await?;
     // write must fail
-    assert!(s.write(&Bytes::from("error")).await.is_err());
+    assert!(s.write(&Bytes::from("error")).is_err());
     // read should continue working
     s.handle_data(ChunkPayloadData {
         unordered: true,
