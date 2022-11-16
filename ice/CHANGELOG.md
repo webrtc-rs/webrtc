@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.9.0
+
 * Increased minimum support rust version to `1.60.0`.
 
 ### Breaking changes  

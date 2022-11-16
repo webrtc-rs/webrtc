@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+## v0.5.0
+
 * Improve handling of padding packets in `SampleBuiler`. Prior to this `SampleBuilder` would sometimes, incorrectly, drop packets that carry media when they appeared adjacent to runs of padding packets. Contributed by [@k0nserv](https://github.com/k0nserv) in [#309](https://github.com/webrtc-rs/webrtc/pull/309)
 * Increased minimum support rust version to `1.60.0`.
+* Increased required `webrtc-util` version to `0.7.0`.
 
 ### Breaking
 

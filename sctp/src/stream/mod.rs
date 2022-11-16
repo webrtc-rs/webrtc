@@ -269,15 +269,14 @@ impl Stream {
     /// Writes `p` to the DTLS connection with the default Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub async fn write(&self, p: &Bytes) -> Result<usize> {
+    pub fn write(&self, p: &Bytes) -> Result<usize> {
         self.write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
-            .await
     }
 
     /// Writes `p` to the DTLS connection with the given Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
+    pub fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
         if self.write_shutdown.load(Ordering::SeqCst) {
             return Err(Error::ErrStreamClosed);
         }
@@ -296,7 +295,7 @@ impl Stream {
         };
 
         let chunks = self.packetize(p, ppi);
-        self.send_payload_data(chunks).await?;
+        self.send_payload_data(chunks)?;
 
         Ok(p.len())
     }
@@ -391,7 +390,7 @@ impl Stream {
         {
             // Reset the stream
             // https://tools.ietf.org/html/rfc6525
-            self.send_reset_request(self.stream_identifier).await?;
+            self.send_reset_request(self.stream_identifier)?;
         }
 
         Ok(())
@@ -483,20 +482,20 @@ impl Stream {
         }
     }
 
-    async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
+    fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrPayloadDataStateNotExist);
         }
 
         // NOTE: append is used here instead of push in order to prevent chunks interlacing.
-        self.pending_queue.append(chunks).await;
+        self.pending_queue.append(chunks);
 
         self.awake_write_loop();
         Ok(())
     }
 
-    async fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
+    fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrResetPacketInStateNotExist);
@@ -512,7 +511,7 @@ impl Stream {
             ..Default::default()
         };
 
-        self.pending_queue.push(c).await;
+        self.pending_queue.push(c);
 
         self.awake_write_loop();
         Ok(())
@@ -698,59 +697,14 @@ impl AsyncRead for PollStream {
 
 impl AsyncWrite for PollStream {
     fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        if buf.is_empty() {
-            return Poll::Ready(Ok(0));
-        }
-
-        if let Some(fut) = self.write_fut.as_mut() {
-            match fut.as_mut().poll(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(Err(e)) => {
-                    let stream = self.stream.clone();
-                    let bytes = Bytes::copy_from_slice(buf);
-                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
-                    Poll::Ready(Err(e.into()))
-                }
-                // Given the data is buffered, it's okay to ignore the number of written bytes.
-                //
-                // TODO: In the long term, `stream.write` should be made sync. Then we could
-                // remove the whole `if` condition and just call `stream.write`.
-                Poll::Ready(Ok(_)) => {
-                    let stream = self.stream.clone();
-                    let bytes = Bytes::copy_from_slice(buf);
-                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
-                    Poll::Ready(Ok(buf.len()))
-                }
-            }
-        } else {
-            let stream = self.stream.clone();
-            let bytes = Bytes::copy_from_slice(buf);
-            let fut = self
-                .write_fut
-                .insert(Box::pin(async move { stream.write(&bytes).await }));
-
-            match fut.as_mut().poll(cx) {
-                // If it's the first time we're polling the future, `Poll::Pending` can't be
-                // returned because that would mean the `PollStream` is not ready for writing. And
-                // this is not true since we've just created a future, which is going to write the
-                // buf to the underlying stream.
-                //
-                // It's okay to return `Poll::Ready` if the data is buffered (this is what the
-                // buffered writer and `File` do).
-                Poll::Pending => Poll::Ready(Ok(buf.len())),
-                Poll::Ready(Err(e)) => {
-                    self.write_fut = None;
-                    Poll::Ready(Err(e.into()))
-                }
-                Poll::Ready(Ok(n)) => {
-                    self.write_fut = None;
-                    Poll::Ready(Ok(n))
-                }
-            }
+        let bytes = Bytes::copy_from_slice(buf);
+        match self.stream.write(&bytes) {
+            Ok(n) => Poll::Ready(Ok(n)),
+            Err(e) => Poll::Ready(Err(e.into())),
         }
     }
 

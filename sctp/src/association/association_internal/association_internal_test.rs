@@ -437,8 +437,8 @@ async fn test_assoc_handle_init() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_assoc_max_message_size_default() -> Result<()> {
+#[test]
+fn test_assoc_max_message_size_default() -> Result<()> {
     let mut a = create_association_internal(Config {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
@@ -458,7 +458,7 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
         let p = Bytes::from(vec![0u8; 65537]);
         let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
 
-        if let Err(err) = s.write_sctp(&p.slice(..65536), ppi).await {
+        if let Err(err) = s.write_sctp(&p.slice(..65536), ppi) {
             assert_ne!(
                 Error::ErrOutboundPacketTooLarge,
                 err,
@@ -468,7 +468,7 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
             assert!(false, "should be error");
         }
 
-        if let Err(err) = s.write_sctp(&p.slice(..65537), ppi).await {
+        if let Err(err) = s.write_sctp(&p.slice(..65537), ppi) {
             assert_eq!(
                 Error::ErrOutboundPacketTooLarge,
                 err,
@@ -482,8 +482,8 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_assoc_max_message_size_explicit() -> Result<()> {
+#[test]
+fn test_assoc_max_message_size_explicit() -> Result<()> {
     let mut a = create_association_internal(Config {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
@@ -504,7 +504,7 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
         let p = Bytes::from(vec![0u8; 30001]);
         let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
 
-        if let Err(err) = s.write_sctp(&p.slice(..30000), ppi).await {
+        if let Err(err) = s.write_sctp(&p.slice(..30000), ppi) {
             assert_ne!(
                 Error::ErrOutboundPacketTooLarge,
                 err,
@@ -514,7 +514,7 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
             assert!(false, "should be error");
         }
 
-        if let Err(err) = s.write_sctp(&p.slice(..30001), ppi).await {
+        if let Err(err) = s.write_sctp(&p.slice(..30001), ppi) {
             assert_eq!(
                 Error::ErrOutboundPacketTooLarge,
                 err,
