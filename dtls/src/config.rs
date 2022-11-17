@@ -58,6 +58,9 @@ pub struct Config {
     /// to be vulnerable.
     pub insecure_hashes: bool,
 
+    /// insecure_verification allows the use of verification algorithms that are
+    /// known to be vulnerable or deprecated
+    pub insecure_verification: bool,
     /// VerifyPeerCertificate, if not nil, is called after normal
     /// certificate verification by either a client or server. It
     /// receives the certificate provided by the peer and also a flag
@@ -112,6 +115,7 @@ impl Default for Config {
             psk_identity_hint: None,
             insecure_skip_verify: false,
             insecure_hashes: false,
+            insecure_verification: false,
             verify_peer_certificate: None,
             roots_cas: rustls::RootCertStore::empty(),
             client_cas: rustls::RootCertStore::empty(),

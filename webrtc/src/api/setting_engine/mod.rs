@@ -65,7 +65,7 @@ pub struct SettingEngine {
     pub(crate) sdp_media_level_fingerprints: bool,
     pub(crate) answering_dtls_role: DTLSRole,
     pub(crate) disable_certificate_fingerprint_verification: bool,
-    pub(crate) allow_insecure_signature_algorithm: bool,
+    pub(crate) allow_insecure_verification_algorithm: bool,
     pub(crate) disable_srtp_replay_protection: bool,
     pub(crate) disable_srtcp_replay_protection: bool,
     pub(crate) vnet: Option<Arc<Net>>,
@@ -247,10 +247,10 @@ impl SettingEngine {
         self.disable_certificate_fingerprint_verification = is_disabled;
     }
 
-    /// allow_insecure_signature_algorithm allows the usage of certain signature algorithm
-    /// that are known to be deprecated or insecure.
-    pub fn allow_insecure_signature_algorithm(&mut self, is_allowed: bool) {
-        self.allow_insecure_signature_algorithm = is_allowed;
+    /// allow_insecure_verification_algorithm allows the usage of certain signature verification
+    /// algorithm that are known to be vulnerable or deprecated.
+    pub fn allow_insecure_verification_algorithm(&mut self, is_allowed: bool) {
+        self.allow_insecure_verification_algorithm = is_allowed;
     }
     /// set_dtls_replay_protection_window sets a replay attack protection window size of dtls_transport connection.
     pub fn set_dtls_replay_protection_window(&mut self, n: usize) {
