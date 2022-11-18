@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* * Added support for insecure/deprecated signature verification algorithms [#342](https://github.com/webrtc-rs/webrtc/pull/342) by [@chuigda](https://github.com/chuigda).
 * Increased minimum support rust version to `1.60.0`.
 
 ## v0.6.0
