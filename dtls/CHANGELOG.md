@@ -12,7 +12,7 @@
 ### Breaking
 
 * Increased required `webrtc-util` version to `0.7.0`, with this change some methods in `DTLSConn` that implement `webrtc_util::Conn` have changed from async to sync.
-  
+
 ## v0.6.0
 
 * [#254 [DTLS] Add NamedCurve::P384](https://github.com/webrtc-rs/webrtc/pull/254) contributed by [neonphog](https://github.com/neonphog)
