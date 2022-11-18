@@ -351,7 +351,7 @@ pub(crate) fn verify_key_signature(
         hash_algorithm,
         remote_key_signature,
         raw_certificates,
-        insecure_verification
+        insecure_verification,
     )
 }
 
