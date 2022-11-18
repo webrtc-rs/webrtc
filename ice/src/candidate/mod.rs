@@ -74,14 +74,14 @@ pub trait Candidate: fmt::Display {
 
     fn marshal(&self) -> String;
 
-    async fn addr(&self) -> SocketAddr;
+    fn addr(&self) -> SocketAddr;
 
     async fn close(&self) -> Result<()>;
     fn seen(&self, outbound: bool);
 
     async fn write_to(&self, raw: &[u8], dst: &(dyn Candidate + Send + Sync)) -> Result<usize>;
     fn equal(&self, other: &dyn Candidate) -> bool;
-    async fn set_ip(&self, ip: &IpAddr) -> Result<()>;
+    fn set_ip(&self, ip: &IpAddr) -> Result<()>;
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
 }
@@ -314,7 +314,7 @@ impl CandidatePair {
         // maxUint32, this result would overflow uint64
         ((1 << 32_u64) - 1) * u64::from(std::cmp::min(g, d))
             + 2 * u64::from(std::cmp::max(g, d))
-            + if g > d { 1 } else { 0 }
+            + u64::from(g > d)
     }
 
     pub async fn write(&self, b: &[u8]) -> Result<usize> {

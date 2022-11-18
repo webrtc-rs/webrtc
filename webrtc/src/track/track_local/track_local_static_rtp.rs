@@ -1,7 +1,11 @@
+use std::collections::HashMap;
+
 use super::*;
 
 use crate::error::flatten_errs;
+use bytes::BytesMut;
 use tokio::sync::Mutex;
+use util::{Marshal, MarshalSize};
 
 /// TrackLocalStaticRTP  is a TrackLocal that has a pre-set codec and accepts RTP Packets.
 /// If you wish to send a media.Sample use TrackLocalStaticSample
@@ -42,6 +46,91 @@ impl TrackLocalStaticRTP {
             .iter()
             .all(|b| b.sender_paused.load(Ordering::SeqCst))
     }
+
+    /// write_rtp_with_extensions writes a RTP Packet to the TrackLocalStaticRTP
+    /// If one PeerConnection fails the packets will still be sent to
+    /// all PeerConnections. The error message will contain the ID of the failed
+    /// PeerConnections so you can remove them
+    ///
+    /// If the RTCRtpSender direction is such that no packets should be sent, any call to this
+    /// function are blocked internally. Care must be taken to not increase the sequence number
+    /// while the sender is paused. While the actual _sending_ is blocked, the receiver will
+    /// miss out when the sequence number "rolls over", which in turn will break SRTP.
+    ///
+    /// Extensions that are already configured on the packet are overwritten by extensions in
+    /// `extensions`.
+    pub async fn write_rtp_with_extensions(
+        &self,
+        p: &rtp::packet::Packet,
+        extensions: &[rtp::extension::HeaderExtension],
+    ) -> Result<usize> {
+        let mut n = 0;
+        let mut write_errs = vec![];
+        let mut pkt = p.clone();
+
+        let bindings = {
+            let bindings = self.bindings.lock().await;
+            bindings.clone()
+        };
+        // Prepare the extensions data
+        let extension_data: HashMap<_, _> = extensions
+            .iter()
+            .flat_map(|extension| {
+                let buf = {
+                    let mut buf = BytesMut::with_capacity(extension.marshal_size());
+                    buf.resize(extension.marshal_size(), 0);
+                    if let Err(err) = extension.marshal_to(&mut buf) {
+                        write_errs.push(Error::Util(err));
+                        return None;
+                    }
+
+                    buf.freeze()
+                };
+
+                Some((extension.uri(), buf))
+            })
+            .collect();
+
+        for b in bindings.into_iter() {
+            if b.is_sender_paused() {
+                // See caveat in function doc.
+                continue;
+            }
+            pkt.header.ssrc = b.ssrc;
+            pkt.header.payload_type = b.payload_type;
+
+            for (uri, data) in extension_data.iter() {
+                if let Some(id) = b
+                    .params
+                    .header_extensions
+                    .iter()
+                    .find(|ext| &ext.uri == uri)
+                    .map(|ext| ext.id)
+                {
+                    if let Err(err) = pkt.header.set_extension(id as u8, data.clone()) {
+                        write_errs.push(Error::Rtp(err));
+                        continue;
+                    }
+                }
+            }
+
+            if let Some(write_stream) = &b.write_stream {
+                match write_stream.write_rtp(&pkt).await {
+                    Ok(m) => {
+                        n += m;
+                    }
+                    Err(err) => {
+                        write_errs.push(err);
+                    }
+                }
+            } else {
+                write_errs.push(Error::new("track binding has none write_stream".to_owned()));
+            }
+        }
+
+        flatten_errs(write_errs)?;
+        Ok(n)
+    }
 }
 
 #[async_trait]
@@ -63,6 +152,7 @@ impl TrackLocal for TrackLocalStaticRTP {
                     ssrc: t.ssrc(),
                     payload_type: codec.payload_type,
                     write_stream: t.write_stream(),
+                    params: t.params.clone(),
                     id: t.id(),
                     sender_paused: t.paused.clone(),
                 }));
@@ -133,37 +223,7 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// while the sender is paused. While the actual _sending_ is blocked, the receiver will
     /// miss out when the sequence number "rolls over", which in turn will break SRTP.
     async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize> {
-        let mut n = 0;
-        let mut write_errs = vec![];
-        let mut pkt = p.clone();
-
-        let bindings = {
-            let bindings = self.bindings.lock().await;
-            bindings.clone()
-        };
-        for b in bindings {
-            if b.is_sender_paused() {
-                // See caveat in function doc.
-                continue;
-            }
-            pkt.header.ssrc = b.ssrc;
-            pkt.header.payload_type = b.payload_type;
-            if let Some(write_stream) = &b.write_stream {
-                match write_stream.write_rtp(&pkt).await {
-                    Ok(m) => {
-                        n += m;
-                    }
-                    Err(err) => {
-                        write_errs.push(err);
-                    }
-                }
-            } else {
-                write_errs.push(Error::new("track binding has none write_stream".to_owned()));
-            }
-        }
-
-        flatten_errs(write_errs)?;
-        Ok(n)
+        self.write_rtp_with_extensions(p, &[]).await
     }
 
     /// write writes a RTP Packet as a buffer to the TrackLocalStaticRTP

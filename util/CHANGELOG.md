@@ -1,6 +1,17 @@
 # webrtc-util changelog
 
-## Unreleased
+## v0.7.0
+
+### Breaking changes
+
+* Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
+    - `Bridge`:
+        - `drop_next_nwrites`;
+        - `reorder_next_nwrites`.
+    - `Conn`:
+        - `local_addr`;
+        - `remote_addr`.
+
 
 ## v0.6.0
 

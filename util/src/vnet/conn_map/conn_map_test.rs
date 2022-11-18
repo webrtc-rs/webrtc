@@ -37,25 +37,25 @@ async fn test_udp_conn_map_insert_remove() -> Result<()> {
 
     conn_map.insert(Arc::clone(&conn_in)).await?;
 
-    let conn_out = conn_map.find(&conn_in.local_addr().await?).await;
+    let conn_out = conn_map.find(&conn_in.local_addr()?).await;
     assert!(conn_out.is_some(), "should succeed");
     if let Some(conn_out) = conn_out {
         assert_eq!(
-            conn_in.local_addr().await?,
-            conn_out.local_addr().await?,
+            conn_in.local_addr()?,
+            conn_out.local_addr()?,
             "should match"
         );
         let port_map = conn_map.port_map.lock().await;
         assert_eq!(1, port_map.len(), "should match");
     }
 
-    conn_map.delete(&conn_in.local_addr().await?).await?;
+    conn_map.delete(&conn_in.local_addr()?).await?;
     {
         let port_map = conn_map.port_map.lock().await;
         assert_eq!(0, port_map.len(), "should match");
     }
 
-    let result = conn_map.delete(&conn_in.local_addr().await?).await;
+    let result = conn_map.delete(&conn_in.local_addr()?).await;
     assert!(result.is_err(), "should fail");
 
     Ok(())
@@ -76,25 +76,25 @@ async fn test_udp_conn_map_insert_0_remove() -> Result<()> {
 
     conn_map.insert(Arc::clone(&conn_in)).await?;
 
-    let conn_out = conn_map.find(&conn_in.local_addr().await?).await;
+    let conn_out = conn_map.find(&conn_in.local_addr()?).await;
     assert!(conn_out.is_some(), "should succeed");
     if let Some(conn_out) = conn_out {
         assert_eq!(
-            conn_in.local_addr().await?,
-            conn_out.local_addr().await?,
+            conn_in.local_addr()?,
+            conn_out.local_addr()?,
             "should match"
         );
         let port_map = conn_map.port_map.lock().await;
         assert_eq!(1, port_map.len(), "should match");
     }
 
-    conn_map.delete(&conn_in.local_addr().await?).await?;
+    conn_map.delete(&conn_in.local_addr()?).await?;
     {
         let port_map = conn_map.port_map.lock().await;
         assert_eq!(0, port_map.len(), "should match");
     }
 
-    let result = conn_map.delete(&conn_in.local_addr().await?).await;
+    let result = conn_map.delete(&conn_in.local_addr()?).await;
     assert!(result.is_err(), "should fail");
 
     Ok(())
@@ -119,8 +119,8 @@ async fn test_udp_conn_map_find_0() -> Result<()> {
     let conn_out = conn_map.find(&addr).await;
     assert!(conn_out.is_some(), "should succeed");
     if let Some(conn_out) = conn_out {
-        let addr_in = conn_in.local_addr().await?;
-        let addr_out = conn_out.local_addr().await?;
+        let addr_in = conn_in.local_addr()?;
+        let addr_out = conn_out.local_addr()?;
         assert_eq!(addr_in, addr_out, "should match");
         let port_map = conn_map.port_map.lock().await;
         assert_eq!(1, port_map.len(), "should match");
@@ -155,8 +155,8 @@ async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<()> {
     let conn_out1 = conn_map.find(&addr1).await;
     assert!(conn_out1.is_some(), "should succeed");
     if let Some(conn_out1) = conn_out1 {
-        let addr_in = conn_in1.local_addr().await?;
-        let addr_out = conn_out1.local_addr().await?;
+        let addr_in = conn_in1.local_addr()?;
+        let addr_out = conn_out1.local_addr()?;
         assert_eq!(addr_in, addr_out, "should match");
         let port_map = conn_map.port_map.lock().await;
         assert_eq!(1, port_map.len(), "should match");
@@ -166,8 +166,8 @@ async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<()> {
     let conn_out2 = conn_map.find(&addr2).await;
     assert!(conn_out2.is_some(), "should succeed");
     if let Some(conn_out2) = conn_out2 {
-        let addr_in = conn_in2.local_addr().await?;
-        let addr_out = conn_out2.local_addr().await?;
+        let addr_in = conn_in2.local_addr()?;
+        let addr_out = conn_out2.local_addr()?;
         assert_eq!(addr_in, addr_out, "should match");
         let port_map = conn_map.port_map.lock().await;
         assert_eq!(1, port_map.len(), "should match");
@@ -316,8 +316,8 @@ async fn test_udp_conn_map_insert_two_on_same_port_then_remove() -> Result<()> {
     conn_map.insert(Arc::clone(&conn_in1)).await?;
     conn_map.insert(Arc::clone(&conn_in2)).await?;
 
-    conn_map.delete(&conn_in1.local_addr().await?).await?;
-    conn_map.delete(&conn_in2.local_addr().await?).await?;
+    conn_map.delete(&conn_in1.local_addr()?).await?;
+    conn_map.delete(&conn_in2.local_addr()?).await?;
 
     Ok(())
 }

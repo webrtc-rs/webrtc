@@ -1,6 +1,8 @@
-# webrtc-rc changelog
+# webrtc-rs changelog
 
 ## Unreleased
+
+## v0.6.0
 
 * Added more stats to `RemoteInboundRTPStats` and `RemoteOutboundRTPStats` [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).
 * Don't register `video/rtx` codecs in `MediaEngine::register_default_codecs`. These weren't actually support and prevented RTX in the existing RTP stream from being used. Long term we should support RTX via this method, this is tracked in [#295](https://github.com/webrtc-rs/webrtc/issues/295). [#294 Remove video/rtx codecs](https://github.com/webrtc-rs/webrtc/pull/294) contributed by [k0nserv](https://github.com/k0nserv)
@@ -12,19 +14,60 @@ directions that should not send. [#316](https://github.com/webrtc-rs/webrtc/pull
 * Added new extension marshaller/unmarshaller for VideoOrientation, and made marshallers serializable via serde [#331](https://github.com/webrtc-rs/webrtc/pull/331) [#332](https://github.com/webrtc-rs/webrtc/pull/332)
 * Added support for insecure/deprecated signature verification algorithms [#342](https://github.com/webrtc-rs/webrtc/pull/342).
 * Updated minimum rust version to `1.60.0`
+* Added a new `write_rtp_with_extensions` method to `TrackLocalStaticSample` and `TrackLocalStaticRTP`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
+* Added a new `sample_writer` helper to `TrackLocalStaticSample`. [#336](https://github.com/webrtc-rs/webrtc/pull/336) by [@k0nserv](https://github.com/k0nserv).
+* Increased minimum versions for sub-dependencies:
+  * `webrtc-data` version to `0.6.0`.
+  * `webrtc-ice` version to `0.9.0`.
+  * `webrtc-media` version to `0.5.0`.
+  * `webrtc-sctp` version to `0.7.0`.
+  * `webrtc-util` version to `0.7.0`.
 
+### Breaking changes
 
-#### Breaking changes
+* Allowed one single direction for extmap matching. [#321](https://github.com/webrtc-rs/webrtc/pull/321). API change for `MediaEngine::register_header_extension`.
+* Removed support for Plan-B. All major implementations of WebRTC now support unified and continuing support for plan-b is an undue maintenance burden when unified can be used. See [“Unified Plan” Transition Guide (JavaScript)](https://docs.google.com/document/d/1-ZfikoUtoJa9k-GZG1daN0BU3IjIanQ_JSscHxQesvU/) for an overview of the changes required to migrate. [#320](https://github.com/webrtc-rs/webrtc/pull/320) by [@algesten](https://github.com/algesten).
+* Removed 2nd argument from `RTCCertificate::from_pem` and guard it with `pem` feature [#333]
+* Renamed `RTCCertificate::pem` to `serialize_pem`  and guard it with `pem` feature [#333]
+* Removed `RTCCertificate::expires` [#333]
+* `RTCCertificate::get_fingerprints` no longer returns `Result` [#333]
+* Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
+    - `RTCDataChannel`:
+        - `on_open`;
+        - `on_close`;
+        - `on_message`;
+        - `on_error`.
+    - `RTCDtlsTransport::on_state_change`;
+    - `RTCIceCandidate::to_json`;
+    - `RTCIceGatherer`:
+        - `on_local_candidate`;
+        - `on_state_change`;
+        - `on_gathering_complete`.
+    - `RTCIceTransport`:
+        - `get_selected_candidate_pair`;
+        - `on_selected_candidate_pair_change`;
+        - `on_connection_state_change`.
+    - `RTCPeerConnection`:
+        - `on_signaling_state_change`;
+        - `on_data_channel`;
+        - `on_negotiation_needed`;
+        - `on_ice_candidate`;
+        - `on_ice_gathering_state_change`;
+        - `on_track`;
+        - `on_ice_connection_state_change`;
+        - `on_peer_connection_state_change`.
+    - `RTCSctpTransport`:
+        - `on_error`;
+        - `on_data_channel`;
+        - `on_data_channel_opened`.
 
-* Allow one single direction for extmap matching. [#321](https://github.com/webrtc-rs/webrtc/pull/321). API
-change for MediaEngine::register_header_extension
-* Removes support for Plan-B. All major implementations of WebRTC now support unified and continuing support for plan-b is an undue maintenance burden when unified can be used. See [“Unified Plan” Transition Guide (JavaScript)](https://docs.google.com/document/d/1-ZfikoUtoJa9k-GZG1daN0BU3IjIanQ_JSscHxQesvU/) for an overview of the changes required to migrate. [#320](https://github.com/webrtc-rs/webrtc/pull/320) by [@algesten](https://github.com/algesten).
+[#333]: https://github.com/webrtc-rs/webrtc/pull/333
 
-## 0.5.1
+## v0.5.1
 
 * Promote agent lock in ice_gather.rs create_agent() to top level of the function to avoid a race condition. [#290 Promote create_agent lock to top of function, to avoid race condition](https://github.com/webrtc-rs/webrtc/pull/290) contributed by [efer-ms](https://github.com/efer-ms)
 
-## 0.5.0
+## v0.5.0
 
 ### Changes
 
@@ -32,12 +75,12 @@ change for MediaEngine::register_header_extension
 
 * The serialized format for `RTCIceCandidateInit` has changed to match what the specification i.e. keys are camelCase. [#153 Make RTCIceCandidateInit conform to WebRTC spec](https://github.com/webrtc-rs/webrtc/pull/153) contributed by [jmatss](https://github.com/jmatss).
 * Improved robustness when proposing RTP extension IDs and handling of collisions in these. This change is only breaking if you have assumed anything about the nature of these extension IDs. [#154 Fix RTP extension id collision](https://github.com/webrtc-rs/webrtc/pull/154) contributed by [k0nserv](https://github.com/k0nserv)
-* Transceivers will now not stop when either or both directions are disabled. That is, applying and SDP with `a=inactive` will not stop the transceiver, instead attached senders and receivers will pause. A transceiver can be resurrected by setting direction back to e.g. `a=sendrecv`. The desired direction can be controlled with the newly introduced public method `set_direction` on `RTCRtpTransceiver`.  
+* Transceivers will now not stop when either or both directions are disabled. That is, applying and SDP with `a=inactive` will not stop the transceiver, instead attached senders and receivers will pause. A transceiver can be resurrected by setting direction back to e.g. `a=sendrecv`. The desired direction can be controlled with the newly introduced public method `set_direction` on `RTCRtpTransceiver`.
   * [#201 Handle inactive transceivers more correctly](https://github.com/webrtc-rs/webrtc/pull/201) contributed by [k0nserv](https://github.com/k0nserv)
-  * [#210 Rework transceiver direction support further](https://github.com/webrtc-rs/webrtc/pull/210) contributed by [k0nserv](https://github.com/k0nserv) 
+  * [#210 Rework transceiver direction support further](https://github.com/webrtc-rs/webrtc/pull/210) contributed by [k0nserv](https://github.com/k0nserv)
   * [#214 set_direction add missing Send + Sync bound](https://github.com/webrtc-rs/webrtc/pull/214) contributed by [algesten](https://github.com/algesten)
   * [#213 set_direction add missing Sync bound](https://github.com/webrtc-rs/webrtc/pull/213) contributed by [algesten](https://github.com/algesten)
-  * [#212 Public RTCRtpTransceiver::set_direction](https://github.com/webrtc-rs/webrtc/pull/212) contributed by [algesten](https://github.com/algesten) 
+  * [#212 Public RTCRtpTransceiver::set_direction](https://github.com/webrtc-rs/webrtc/pull/212) contributed by [algesten](https://github.com/algesten)
   * [#268 Fix current direction update when applying answer](https://github.com/webrtc-rs/webrtc/pull/268) contributed by [k0nserv](https://github.com/k0nserv)
   * [#236 Pause RTP writing if direction indicates it](https://github.com/webrtc-rs/webrtc/pull/236) contributed by [algesten](https://github.com/algesten)
 * Generated the `a=msid` line for `m=` line sections according to the specification. This might be break remote peers that relied on the previous, incorrect, behaviour. This also fixes a bug where an endless negotiation loop could happen. [#217 Correct msid handling for RtpSender](https://github.com/webrtc-rs/webrtc/pull/217) contributed by [k0nserv](https://github.com/k0nserv)
@@ -107,7 +150,7 @@ The various sub-crates have been updated as follows:
 
 Their respective change logs are found in the old, now archived, repositories and within their respective `CHANGELOG.md` files in the monorepo.
 
-### Contributors 
+### Contributors
 
 A big thanks to all the contributors that have made this release happen:
 

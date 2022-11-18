@@ -63,7 +63,7 @@ impl From<&Arc<dyn Candidate + Send + Sync>> for RTCIceCandidate {
 }
 
 impl RTCIceCandidate {
-    pub(crate) async fn to_ice(&self) -> Result<impl Candidate> {
+    pub(crate) fn to_ice(&self) -> Result<impl Candidate> {
         let candidate_id = self.stats_id.clone();
         let c = match self.typ {
             RTCIceCandidateType::Host => {
@@ -81,7 +81,7 @@ impl RTCIceCandidate {
                     },
                     ..Default::default()
                 };
-                config.new_candidate_host().await?
+                config.new_candidate_host()?
             }
             RTCIceCandidateType::Srflx => {
                 let config = CandidateServerReflexiveConfig {
@@ -98,7 +98,7 @@ impl RTCIceCandidate {
                     rel_addr: self.related_address.clone(),
                     rel_port: self.related_port,
                 };
-                config.new_candidate_server_reflexive().await?
+                config.new_candidate_server_reflexive()?
             }
             RTCIceCandidateType::Prflx => {
                 let config = CandidatePeerReflexiveConfig {
@@ -115,7 +115,7 @@ impl RTCIceCandidate {
                     rel_addr: self.related_address.clone(),
                     rel_port: self.related_port,
                 };
-                config.new_candidate_peer_reflexive().await?
+                config.new_candidate_peer_reflexive()?
             }
             RTCIceCandidateType::Relay => {
                 let config = CandidateRelayConfig {
@@ -133,7 +133,7 @@ impl RTCIceCandidate {
                     rel_port: self.related_port,
                     relay_client: None, //TODO?
                 };
-                config.new_candidate_relay().await?
+                config.new_candidate_relay()?
             }
             _ => return Err(Error::ErrICECandidateTypeUnknown),
         };
@@ -143,8 +143,8 @@ impl RTCIceCandidate {
 
     /// to_json returns an ICECandidateInit
     /// as indicated by the spec <https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson>
-    pub async fn to_json(&self) -> Result<RTCIceCandidateInit> {
-        let candidate = self.to_ice().await?;
+    pub fn to_json(&self) -> Result<RTCIceCandidateInit> {
+        let candidate = self.to_ice()?;
 
         Ok(RTCIceCandidateInit {
             candidate: format!("candidate:{}", candidate.marshal()),

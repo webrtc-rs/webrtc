@@ -2,7 +2,10 @@
 
 ## Unreleased
 
+## v0.7.1
+
 * Increased minimum support rust version to `1.60.0`.
+* Increased required `webrtc-util` version to `0.7.0`.
 
 ## v0.7.0
 

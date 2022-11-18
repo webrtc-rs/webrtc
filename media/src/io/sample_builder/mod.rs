@@ -94,7 +94,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             i = i.wrapping_add(1);
         }
 
-        if found_head == None {
+        if found_head.is_none() {
             return false;
         }
 
@@ -107,7 +107,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             i = i.wrapping_sub(1);
         }
 
-        if found_tail == None {
+        if found_tail.is_none() {
             return false;
         }
 

@@ -59,7 +59,7 @@ async fn main() -> Result<(), Error> {
 
     let host = matches.value_of("host").unwrap();
     let conn = DisconnectedPacketConn::new(Arc::new(UdpSocket::bind(host).await.unwrap()));
-    println!("listening {}...", conn.local_addr().await.unwrap());
+    println!("listening {}...", conn.local_addr().unwrap());
 
     let config = Config {
         net_conn: Arc::new(conn),
@@ -86,7 +86,7 @@ async fn main() -> Result<(), Error> {
 
             let pong_msg = format!("pong [{}]", ping_msg);
             println!("sent: {}", pong_msg);
-            stream2.write(&Bytes::from(pong_msg)).await?;
+            stream2.write(&Bytes::from(pong_msg))?;
 
             tokio::time::sleep(Duration::from_secs(1)).await;
         }

@@ -29,7 +29,7 @@ async fn pipe() -> Result<(
     let (l_conn, raddr) = listener.accept().await?;
     assert_eq!(daddr, raddr, "remote address should be match");
 
-    let raddr = l_conn.remote_addr().await;
+    let raddr = l_conn.remote_addr();
     if let Some(raddr) = raddr {
         assert_eq!(daddr, raddr, "remote address should be match");
     } else {

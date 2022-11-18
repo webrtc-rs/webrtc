@@ -2,9 +2,17 @@
 
 ## Unreleased
 
-* * Added support for insecure/deprecated signature verification algorithms [#342](https://github.com/webrtc-rs/webrtc/pull/342) by [@chuigda](https://github.com/chuigda).
-* Increased minimum support rust version to `1.60.0`.
+* Added support for insecure/deprecated signature verification algorithms [#342](https://github.com/webrtc-rs/webrtc/pull/342) by [@chuigda](https://github.com/chuigda).
 
+## v0.7.0
+
+* Increased minimum support rust version to `1.60.0`.
+* Add `RTCCertificate::from_pem` and `RTCCertificate::serialize_pem` (only work with `pem` feature enabled) [#333](https://github.com/webrtc-rs/webrtc/pull/333)
+
+### Breaking
+
+* Increased required `webrtc-util` version to `0.7.0`, with this change some methods in `DTLSConn` that implement `webrtc_util::Conn` have changed from async to sync.
+  
 ## v0.6.0
 
 * [#254 [DTLS] Add NamedCurve::P384](https://github.com/webrtc-rs/webrtc/pull/254) contributed by [neonphog](https://github.com/neonphog)

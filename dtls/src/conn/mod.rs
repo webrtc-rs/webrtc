@@ -114,7 +114,7 @@ impl Conn for DTLSConn {
         self.read(buf, None).await.map_err(util::Error::from_std)
     }
     async fn recv_from(&self, buf: &mut [u8]) -> UtilResult<(usize, SocketAddr)> {
-        if let Some(raddr) = self.conn.remote_addr().await {
+        if let Some(raddr) = self.conn.remote_addr() {
             let n = self.read(buf, None).await.map_err(util::Error::from_std)?;
             Ok((n, raddr))
         } else {
@@ -129,11 +129,11 @@ impl Conn for DTLSConn {
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> UtilResult<usize> {
         Err(util::Error::Other("Not applicable".to_owned()))
     }
-    async fn local_addr(&self) -> UtilResult<SocketAddr> {
-        self.conn.local_addr().await
+    fn local_addr(&self) -> UtilResult<SocketAddr> {
+        self.conn.local_addr()
     }
-    async fn remote_addr(&self) -> Option<SocketAddr> {
-        self.conn.remote_addr().await
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        self.conn.remote_addr()
     }
     async fn close(&self) -> UtilResult<()> {
         self.close().await.map_err(util::Error::from_std)
@@ -191,7 +191,7 @@ impl DTLSConn {
 
         // Use host from conn address when server_name is not provided
         if is_client && server_name.is_empty() {
-            if let Some(remote_addr) = conn.remote_addr().await {
+            if let Some(remote_addr) = conn.remote_addr() {
                 server_name = remote_addr.ip().to_string();
             } else {
                 log::warn!("conn.remote_addr is empty, please set explicitly server_name in Config! Use default \"localhost\" as server_name now");

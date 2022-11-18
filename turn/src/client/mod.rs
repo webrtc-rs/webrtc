@@ -103,7 +103,7 @@ impl RelayConnObserver for ClientInternal {
         to: &str,
         ignore_result: bool,
     ) -> Result<TransactionResult> {
-        let tr_key = base64::encode(&msg.transaction_id.0);
+        let tr_key = base64::encode(msg.transaction_id.0);
 
         let mut tr = Transaction::new(TransactionConfig {
             key: tr_key.clone(),
@@ -166,7 +166,7 @@ impl ClientInternal {
             String::new()
         } else {
             log::debug!("resolving {}", config.stun_serv_addr);
-            let local_addr = config.conn.local_addr().await?;
+            let local_addr = config.conn.local_addr()?;
             let stun_serv = net
                 .resolve_addr(local_addr.is_ipv4(), &config.stun_serv_addr)
                 .await?;
@@ -178,7 +178,7 @@ impl ClientInternal {
             String::new()
         } else {
             log::debug!("resolving {}", config.turn_serv_addr);
-            let local_addr = config.conn.local_addr().await?;
+            let local_addr = config.conn.local_addr()?;
             let turn_serv = net
                 .resolve_addr(local_addr.is_ipv4(), &config.turn_serv_addr)
                 .await?;
@@ -341,7 +341,7 @@ impl ClientInternal {
         // - stun.ClassSuccessResponse
         // - stun.ClassErrorResponse
 
-        let tr_key = base64::encode(&msg.transaction_id.0);
+        let tr_key = base64::encode(msg.transaction_id.0);
 
         let mut tm = tr_map.lock().await;
         if tm.find(&tr_key).is_none() {

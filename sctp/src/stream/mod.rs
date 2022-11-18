@@ -4,21 +4,25 @@ mod stream_test;
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::{Error, Result};
+use crate::queue::pending_queue::PendingQueue;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
-use crate::queue::pending_queue::PendingQueue;
-
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
-use std::fmt;
-use std::future::Future;
-use std::io;
-use std::net::Shutdown;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::sync::{mpsc, Mutex, Notify};
+use std::{
+    fmt,
+    future::Future,
+    io,
+    net::Shutdown,
+    pin::Pin,
+    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering},
+    sync::Arc,
+    task::{Context, Poll},
+};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    sync::{mpsc, Mutex, Notify},
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
@@ -84,7 +88,7 @@ pub struct Stream {
     pub(crate) reliability_value: AtomicU32,
     pub(crate) buffered_amount: AtomicUsize,
     pub(crate) buffered_amount_low: AtomicUsize,
-    pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
+    pub(crate) on_buffered_amount_low: ArcSwapOption<Mutex<OnBufferedAmountLowFn>>,
     pub(crate) name: String,
 }
 
@@ -140,7 +144,7 @@ impl Stream {
             reliability_value: AtomicU32::new(0),
             buffered_amount: AtomicUsize::new(0),
             buffered_amount_low: AtomicUsize::new(0),
-            on_buffered_amount_low: Mutex::new(None),
+            on_buffered_amount_low: ArcSwapOption::empty(),
             name,
         }
     }
@@ -265,15 +269,14 @@ impl Stream {
     /// Writes `p` to the DTLS connection with the default Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub async fn write(&self, p: &Bytes) -> Result<usize> {
+    pub fn write(&self, p: &Bytes) -> Result<usize> {
         self.write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
-            .await
     }
 
     /// Writes `p` to the DTLS connection with the given Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
+    pub fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
         if self.write_shutdown.load(Ordering::SeqCst) {
             return Err(Error::ErrStreamClosed);
         }
@@ -292,7 +295,7 @@ impl Stream {
         };
 
         let chunks = self.packetize(p, ppi);
-        self.send_payload_data(chunks).await?;
+        self.send_payload_data(chunks)?;
 
         Ok(p.len())
     }
@@ -387,7 +390,7 @@ impl Stream {
         {
             // Reset the stream
             // https://tools.ietf.org/html/rfc6525
-            self.send_reset_request(self.stream_identifier).await?;
+            self.send_reset_request(self.stream_identifier)?;
         }
 
         Ok(())
@@ -412,9 +415,9 @@ impl Stream {
 
     /// on_buffered_amount_low sets the callback handler which would be called when the number of
     /// bytes of outgoing data buffered is lower than the threshold.
-    pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
-        let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
-        *on_buffered_amount_low = Some(f);
+    pub fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+        self.on_buffered_amount_low
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// This method is called by association's read_loop (go-)routine to notify this stream
@@ -452,8 +455,8 @@ impl Stream {
         );
 
         if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
-            let mut handler = self.on_buffered_amount_low.lock().await;
-            if let Some(f) = &mut *handler {
+            if let Some(handler) = &*self.on_buffered_amount_low.load() {
+                let mut f = handler.lock().await;
                 f().await;
             }
         }
@@ -479,22 +482,20 @@ impl Stream {
         }
     }
 
-    async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
+    fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrPayloadDataStateNotExist);
         }
 
-        // Push the chunks into the pending queue first.
-        for c in chunks {
-            self.pending_queue.push(c).await;
-        }
+        // NOTE: append is used here instead of push in order to prevent chunks interlacing.
+        self.pending_queue.append(chunks);
 
         self.awake_write_loop();
         Ok(())
     }
 
-    async fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
+    fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrResetPacketInStateNotExist);
@@ -510,7 +511,7 @@ impl Stream {
             ..Default::default()
         };
 
-        self.pending_queue.push(c).await;
+        self.pending_queue.push(c);
 
         self.awake_write_loop();
         Ok(())
@@ -696,49 +697,14 @@ impl AsyncRead for PollStream {
 
 impl AsyncWrite for PollStream {
     fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        let (fut, fut_is_new) = match self.write_fut.as_mut() {
-            Some(fut) => (fut, false),
-            None => {
-                let stream = self.stream.clone();
-                let bytes = Bytes::copy_from_slice(buf);
-                (
-                    self.write_fut
-                        .get_or_insert(Box::pin(async move { stream.write(&bytes).await })),
-                    true,
-                )
-            }
-        };
-
-        match fut.as_mut().poll(cx) {
-            Poll::Pending => {
-                // If it's the first time we're polling the future, `Poll::Pending` can't be
-                // returned because that would mean the `PollStream` is not ready for writing. And
-                // this is not true since we've just created a future, which is going to write the
-                // buf to the underlying stream.
-                //
-                // It's okay to return `Poll::Ready` if the data is buffered (this is what the
-                // buffered writer and `File` do).
-                if fut_is_new {
-                    Poll::Ready(Ok(buf.len()))
-                } else {
-                    // If it's the subsequent poll, it's okay to return `Poll::Pending` as it
-                    // indicates that the `PollStream` is not ready for writing. Only one future
-                    // can be in progress at the time.
-                    Poll::Pending
-                }
-            }
-            Poll::Ready(Err(e)) => {
-                self.write_fut = None;
-                Poll::Ready(Err(e.into()))
-            }
-            Poll::Ready(Ok(n)) => {
-                self.write_fut = None;
-                Poll::Ready(Ok(n))
-            }
+        let bytes = Bytes::copy_from_slice(buf);
+        match self.stream.write(&bytes) {
+            Ok(n) => Poll::Ready(Ok(n)),
+            Err(e) => Poll::Ready(Err(e.into())),
         }
     }
 
@@ -760,6 +726,11 @@ impl AsyncWrite for PollStream {
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.as_mut().poll_flush(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(_) => {}
+        }
+
         let fut = match self.shutdown_fut.as_mut() {
             Some(fut) => fut,
             None => {

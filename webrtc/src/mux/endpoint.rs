@@ -58,12 +58,12 @@ impl Conn for Endpoint {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
-        self.next_conn.local_addr().await
+    fn local_addr(&self) -> Result<SocketAddr> {
+        self.next_conn.local_addr()
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
-        self.next_conn.remote_addr().await
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        self.next_conn.remote_addr()
     }
 
     async fn close(&self) -> Result<()> {

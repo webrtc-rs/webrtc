@@ -248,14 +248,12 @@ async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> 
 
     {
         let count = count.clone();
-        offer_pc
-            .on_negotiation_needed(Box::new(move || {
-                let count = count.clone();
-                Box::pin(async move {
-                    count.fetch_add(1, Ordering::SeqCst);
-                })
-            }))
-            .await;
+        offer_pc.on_negotiation_needed(Box::new(move || {
+            let count = count.clone();
+            Box::pin(async move {
+                count.fetch_add(1, Ordering::SeqCst);
+            })
+        }));
     }
 
     let offer_transceiver = offer_pc

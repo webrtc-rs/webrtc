@@ -185,9 +185,7 @@ async fn establish_session_pair(
     let s0 = client
         .open_stream(si, PayloadProtocolIdentifier::Binary)
         .await?;
-    let _ = s0
-        .write_sctp(&hello_msg, PayloadProtocolIdentifier::Dcep)
-        .await?;
+    let _ = s0.write_sctp(&hello_msg, PayloadProtocolIdentifier::Dcep)?;
 
     flush_buffers(br, client, server).await;
 
@@ -253,9 +251,7 @@ async fn test_assoc_reliable_simple() -> Result<()> {
         assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
     }
 
-    let n = s0
-        .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
-        .await?;
+    let n = s0.write_sctp(&MSG, PayloadProtocolIdentifier::Binary)?;
     assert_eq!(MSG.len(), n, "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
@@ -329,21 +325,17 @@ async fn test_assoc_reliable_ordered_reordered() -> Result<()> {
     }
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     tokio::time::sleep(Duration::from_millis(10)).await;
@@ -421,12 +413,10 @@ async fn test_assoc_reliable_ordered_fragmented_then_defragmented() -> Result<()
     s0.set_reliability_params(false, ReliabilityType::Reliable, 0);
     s1.set_reliability_params(false, ReliabilityType::Reliable, 0);
 
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbufl.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbufl.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbufl.len(), n, "unexpected length of received data");
 
     flush_buffers(&br, &a0, &a1).await;
@@ -488,12 +478,10 @@ async fn test_assoc_reliable_unordered_fragmented_then_defragmented() -> Result<
     s0.set_reliability_params(true, ReliabilityType::Reliable, 0);
     s1.set_reliability_params(true, ReliabilityType::Reliable, 0);
 
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbufl.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbufl.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbufl.len(), n, "unexpected length of received data");
 
     flush_buffers(&br, &a0, &a1).await;
@@ -555,24 +543,20 @@ async fn test_assoc_reliable_unordered_ordered() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Reliable, 0);
     s1.set_reliability_params(true, ReliabilityType::Reliable, 0);
 
-    br.reorder_next_nwrites(0, 2).await;
+    br.reorder_next_nwrites(0, 2);
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     flush_buffers(&br, &a0, &a1).await;
@@ -646,14 +630,10 @@ async fn test_assoc_reliable_retransmission() -> Result<()> {
 
     let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
 
-    let n = s0
-        .write_sctp(&MSG1, PayloadProtocolIdentifier::Binary)
-        .await?;
+    let n = s0.write_sctp(&MSG1, PayloadProtocolIdentifier::Binary)?;
     assert_eq!(MSG1.len(), n, "unexpected length of received data");
 
-    let n = s0
-        .write_sctp(&MSG2, PayloadProtocolIdentifier::Binary)
-        .await?;
+    let n = s0.write_sctp(&MSG2, PayloadProtocolIdentifier::Binary)?;
     assert_eq!(MSG2.len(), n, "unexpected length of received data");
 
     tokio::time::sleep(Duration::from_millis(10)).await;
@@ -724,9 +704,7 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
         assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
     }
 
-    let n = s0
-        .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
-        .await?;
+    let n = s0.write_sctp(&MSG, PayloadProtocolIdentifier::Binary)?;
     assert_eq!(MSG.len(), n, "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
@@ -798,24 +776,20 @@ async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(false, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     log::debug!("flush_buffers");
@@ -888,24 +862,20 @@ async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(false, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     //log::debug!("flush_buffers");
@@ -973,24 +943,20 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(true, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     //log::debug!("flush_buffers");
@@ -1062,21 +1028,17 @@ async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<()> {
     s1.set_reliability_params(true, ReliabilityType::Rexmit, 0); // doesn't matter
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     //log::debug!("flush_buffers");
@@ -1156,24 +1118,20 @@ async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Timed, 0);
     s1.set_reliability_params(false, ReliabilityType::Timed, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     //log::debug!("flush_buffers");
@@ -1241,24 +1199,20 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Timed, 0);
     s1.set_reliability_params(true, ReliabilityType::Timed, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0
-        .write_sctp(
-            &Bytes::from(sbuf.clone()),
-            PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+    let n = s0.write_sctp(
+        &Bytes::from(sbuf.clone()),
+        PayloadProtocolIdentifier::Binary,
+    )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     //log::debug!("flush_buffers");
@@ -1339,16 +1293,14 @@ async fn test_assoc_congestion_control_fast_retransmission() -> Result<()> {
 
     let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     for i in 0..4u32 {
         sbuf[0..4].copy_from_slice(&i.to_be_bytes());
-        let n = s0
-            .write_sctp(
-                &Bytes::from(sbuf.clone()),
-                PayloadProtocolIdentifier::Binary,
-            )
-            .await?;
+        let n = s0.write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )?;
         assert_eq!(sbuf.len(), n, "unexpected length of received data");
     }
 
@@ -1448,12 +1400,10 @@ async fn test_assoc_congestion_control_congestion_avoidance() -> Result<()> {
 
     for i in 0..N_PACKETS_TO_SEND {
         sbuf[0..4].copy_from_slice(&i.to_be_bytes());
-        let n = s0
-            .write_sctp(
-                &Bytes::from(sbuf.clone()),
-                PayloadProtocolIdentifier::Binary,
-            )
-            .await?;
+        let n = s0.write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )?;
         assert_eq!(sbuf.len(), n, "unexpected length of received data");
     }
 
@@ -1583,12 +1533,10 @@ async fn test_assoc_congestion_control_slow_reader() -> Result<()> {
 
     for i in 0..N_PACKETS_TO_SEND {
         sbuf[0..4].copy_from_slice(&i.to_be_bytes());
-        let n = s0
-            .write_sctp(
-                &Bytes::from(sbuf.clone()),
-                PayloadProtocolIdentifier::Binary,
-            )
-            .await?;
+        let n = s0.write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )?;
         assert_eq!(sbuf.len(), n, "unexpected length of received data");
     }
 
@@ -1716,8 +1664,7 @@ async fn test_assoc_delayed_ack() -> Result<()> {
         .write_sctp(
             &Bytes::from(sbuf.clone()),
             PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
+        )?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     // Repeat calling br.Tick() until the buffered amount becomes 0
@@ -1821,9 +1768,7 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
         assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
     }
 
-    let n = s0
-        .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
-        .await?;
+    let n = s0.write_sctp(&MSG, PayloadProtocolIdentifier::Binary)?;
     assert_eq!(MSG.len(), n, "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
@@ -1921,9 +1866,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
         assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
     }
 
-    let n = s0
-        .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
-        .await?;
+    let n = s0.write_sctp(&MSG, PayloadProtocolIdentifier::Binary)?;
     assert_eq!(MSG.len(), n, "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
@@ -2169,11 +2112,11 @@ impl Conn for FakeEchoConn {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> UResult<SocketAddr> {
+    fn local_addr(&self) -> UResult<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 
@@ -2318,7 +2261,7 @@ async fn test_association_shutdown() -> Result<()> {
 
     let test_data = Bytes::from_static(b"test");
 
-    let n = s11.write(&test_data).await?;
+    let n = s11.write(&test_data)?;
     assert_eq!(test_data.len(), n);
 
     let mut buf = vec![0u8; test_data.len()];
@@ -2379,7 +2322,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
     let ss21 = Arc::clone(&s21);
     tokio::spawn(async move {
         let mut i = 0;
-        while ss21.write(&Bytes::from(vec![i])).await.is_ok() {
+        while ss21.write(&Bytes::from(vec![i])).is_ok() {
             if i == 255 {
                 i = 0;
             } else {
@@ -2396,7 +2339,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
 
     let test_data = Bytes::from_static(b"test");
 
-    let n = s11.write(&test_data).await?;
+    let n = s11.write(&test_data)?;
     assert_eq!(test_data.len(), n);
 
     let mut buf = vec![0u8; test_data.len()];

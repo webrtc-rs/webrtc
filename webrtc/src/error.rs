@@ -347,7 +347,7 @@ pub enum Error {
     #[error("can't rollback from stable state")]
     ErrSignalingStateCannotRollback,
     #[error(
-        "invalid proposed signaling state transition from {} applying {} {}", 
+        "invalid proposed signaling state transition from {} applying {} {}",
         from,
         if *is_local { "local" } else {  "remote" },
         applying
@@ -407,6 +407,10 @@ pub enum Error {
     ParseInt(#[from] ParseIntError),
     #[error("parse url: {0}")]
     ParseUrl(#[from] url::ParseError),
+
+    /// Error parsing a given PEM string.
+    #[error("invalid PEM: {0}")]
+    InvalidPEM(String),
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]

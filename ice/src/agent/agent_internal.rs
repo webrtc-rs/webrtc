@@ -3,7 +3,9 @@ use super::*;
 use crate::candidate::candidate_base::CandidateBaseConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
+use arc_swap::ArcSwapOption;
 use std::sync::atomic::{AtomicBool, AtomicU64};
+use util::sync::Mutex as SyncMutex;
 
 pub type ChanCandidateTx =
     Arc<Mutex<Option<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>>;
@@ -32,16 +34,16 @@ pub struct AgentInternal {
     pub(crate) chan_candidate_pair_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) chan_state_tx: Mutex<Option<mpsc::Sender<ConnectionState>>>,
 
-    pub(crate) on_connection_state_change_hdlr: Mutex<Option<OnConnectionStateChangeHdlrFn>>,
+    pub(crate) on_connection_state_change_hdlr: ArcSwapOption<Mutex<OnConnectionStateChangeHdlrFn>>,
     pub(crate) on_selected_candidate_pair_change_hdlr:
-        Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>,
-    pub(crate) on_candidate_hdlr: Mutex<Option<OnCandidateHdlrFn>>,
+        ArcSwapOption<Mutex<OnSelectedCandidatePairChangeHdlrFn>>,
+    pub(crate) on_candidate_hdlr: ArcSwapOption<Mutex<OnCandidateHdlrFn>>,
 
     pub(crate) tie_breaker: AtomicU64,
     pub(crate) is_controlling: AtomicBool,
     pub(crate) lite: AtomicBool,
 
-    pub(crate) start_time: Mutex<Instant>,
+    pub(crate) start_time: SyncMutex<Instant>,
     pub(crate) nominated_pair: Mutex<Option<Arc<CandidatePair>>>,
 
     pub(crate) connection_state: AtomicU8, //ConnectionState,
@@ -104,15 +106,15 @@ impl AgentInternal {
             chan_candidate_pair_tx: Mutex::new(Some(chan_candidate_pair_tx)),
             chan_state_tx: Mutex::new(Some(chan_state_tx)),
 
-            on_connection_state_change_hdlr: Mutex::new(None),
-            on_selected_candidate_pair_change_hdlr: Mutex::new(None),
-            on_candidate_hdlr: Mutex::new(None),
+            on_connection_state_change_hdlr: ArcSwapOption::empty(),
+            on_selected_candidate_pair_change_hdlr: ArcSwapOption::empty(),
+            on_candidate_hdlr: ArcSwapOption::empty(),
 
             tie_breaker: AtomicU64::new(rand::random::<u64>()),
             is_controlling: AtomicBool::new(config.is_controlling),
             lite: AtomicBool::new(config.lite),
 
-            start_time: Mutex::new(Instant::now()),
+            start_time: SyncMutex::new(Instant::now()),
             nominated_pair: Mutex::new(None),
 
             connection_state: AtomicU8::new(ConnectionState::New as u8),
@@ -333,10 +335,7 @@ impl AgentInternal {
 
         if let Some(p) = p {
             p.nominated.store(true, Ordering::SeqCst);
-            {
-                let mut selected_pair = self.agent_conn.selected_pair.lock().await;
-                *selected_pair = Some(p);
-            }
+            self.agent_conn.selected_pair.store(Some(p));
 
             self.update_connection_state(ConnectionState::Connected)
                 .await;
@@ -355,8 +354,7 @@ impl AgentInternal {
                 on_connected_tx.take();
             }
         } else {
-            let mut selected_pair = self.agent_conn.selected_pair.lock().await;
-            *selected_pair = None;
+            self.agent_conn.selected_pair.store(None);
         }
     }
 
@@ -439,7 +437,7 @@ impl AgentInternal {
     /// Note: the caller should hold the agent lock.
     pub(crate) async fn validate_selected_pair(&self) -> bool {
         let (valid, disconnected_time) = {
-            let selected_pair = self.agent_conn.selected_pair.lock().await;
+            let selected_pair = self.agent_conn.selected_pair.load();
             (*selected_pair).as_ref().map_or_else(
                 || (false, Duration::from_secs(0)),
                 |selected_pair| {
@@ -481,7 +479,7 @@ impl AgentInternal {
     /// Note: the caller should hold the agent lock.
     pub(crate) async fn check_keepalive(&self) {
         let (local, remote) = {
-            let selected_pair = self.agent_conn.selected_pair.lock().await;
+            let selected_pair = self.agent_conn.selected_pair.load();
             (*selected_pair)
                 .as_ref()
                 .map_or((None, None), |selected_pair| {
@@ -726,7 +724,7 @@ impl AgentInternal {
             pending_binding_requests.push(BindingRequest {
                 timestamp: Instant::now(),
                 transaction_id: m.transaction_id,
-                destination: remote.addr().await,
+                destination: remote.addr(),
                 is_use_candidate: m.contains(ATTR_USE_CANDIDATE),
             });
         }
@@ -740,7 +738,7 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        let addr = remote.addr().await;
+        let addr = remote.addr();
         let (ip, port) = (addr.ip(), addr.port());
         let local_pwd = {
             let ufrag_pwd = self.ufrag_pwd.lock().await;
@@ -936,7 +934,7 @@ impl AgentInternal {
                     rel_port: 0,
                 };
 
-                match prflx_candidate_config.new_candidate_peer_reflexive().await {
+                match prflx_candidate_config.new_candidate_peer_reflexive() {
                     Ok(prflx_candidate) => remote_candidate = Some(Arc::new(prflx_candidate)),
                     Err(err) => {
                         log::error!(
@@ -1039,7 +1037,7 @@ impl AgentInternal {
         let cand = Arc::clone(candidate);
         if let Some(conn) = candidate.get_conn() {
             let conn = Arc::clone(conn);
-            let addr = candidate.addr().await;
+            let addr = candidate.addr();
             let ai = Arc::clone(self);
             tokio::spawn(async move {
                 let _ = ai
@@ -1051,7 +1049,7 @@ impl AgentInternal {
         }
     }
 
-    pub(super) async fn start_on_connection_state_change_routine(
+    pub(super) fn start_on_connection_state_change_routine(
         self: &Arc<Self>,
         mut chan_state_rx: mpsc::Receiver<ConnectionState>,
         mut chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
@@ -1062,19 +1060,12 @@ impl AgentInternal {
             // CandidatePair and ConnectionState are usually changed at once.
             // Blocking one by the other one causes deadlock.
             while chan_candidate_pair_rx.recv().await.is_some() {
-                let selected_pair = {
-                    let selected_pair = ai.agent_conn.selected_pair.lock().await;
-                    selected_pair.clone()
-                };
-
-                {
-                    let mut on_selected_candidate_pair_change_hdlr =
-                        ai.on_selected_candidate_pair_change_hdlr.lock().await;
-                    if let (Some(f), Some(p)) =
-                        (&mut *on_selected_candidate_pair_change_hdlr, &selected_pair)
-                    {
-                        f(&p.local, &p.remote).await;
-                    }
+                if let (Some(cb), Some(p)) = (
+                    &*ai.on_selected_candidate_pair_change_hdlr.load(),
+                    &*ai.agent_conn.selected_pair.load(),
+                ) {
+                    let mut f = cb.lock().await;
+                    f(&p.local, &p.remote).await;
                 }
             }
         });
@@ -1085,14 +1076,14 @@ impl AgentInternal {
                 tokio::select! {
                     opt_state = chan_state_rx.recv() => {
                         if let Some(s) = opt_state {
-                            let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
-                            if let Some(f) = &mut *on_connection_state_change_hdlr{
+                            if let Some(handler) = &*ai.on_connection_state_change_hdlr.load() {
+                                let mut f = handler.lock().await;
                                 f(s).await;
                             }
                         } else {
                             while let Some(c) = chan_candidate_rx.recv().await {
-                                let mut on_candidate_hdlr = ai.on_candidate_hdlr.lock().await;
-                                if let Some(f) = &mut *on_candidate_hdlr {
+                                if let Some(handler) = &*ai.on_candidate_hdlr.load() {
+                                    let mut f = handler.lock().await;
                                     f(c).await;
                                 }
                             }
@@ -1101,14 +1092,14 @@ impl AgentInternal {
                     },
                     opt_cand = chan_candidate_rx.recv() => {
                         if let Some(c) = opt_cand {
-                            let mut on_candidate_hdlr = ai.on_candidate_hdlr.lock().await;
-                            if let Some(f) = &mut *on_candidate_hdlr{
+                            if let Some(handler) = &*ai.on_candidate_hdlr.load() {
+                                let mut f = handler.lock().await;
                                 f(c).await;
                             }
                         } else {
                             while let Some(s) = chan_state_rx.recv().await {
-                                let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
-                                if let Some(f) = &mut *on_connection_state_change_hdlr{
+                                if let Some(handler) = &*ai.on_connection_state_change_hdlr.load() {
+                                    let mut f = handler.lock().await;
                                     f(s).await;
                                 }
                             }

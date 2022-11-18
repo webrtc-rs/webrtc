@@ -114,8 +114,7 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
                     println!("ICE Connection State has changed: {}", connection_state);
                     Box::pin(async {})
                 },
-            ))
-            .await;
+            ));
 
             // Send the current time via a DataChannel to the remote peer every 3 seconds
             pc.on_data_channel(Box::new(|d: Arc<RTCDataChannel>| {
@@ -131,11 +130,9 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
                                 tokio::time::sleep(Duration::from_secs(3)).await;
                             }
                         })
-                    }))
-                    .await;
+                    }));
                 })
-            }))
-            .await;
+            }));
 
             *peer_connection = Some(Arc::clone(&pc));
             pc

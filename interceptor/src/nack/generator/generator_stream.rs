@@ -1,9 +1,8 @@
-use std::sync::Mutex;
-
 use super::*;
 
 use crate::nack::UINT16SIZE_HALF;
 
+use util::sync::Mutex;
 use util::Unmarshal;
 
 struct GeneratorStreamInternal {
@@ -139,12 +138,12 @@ impl GeneratorStream {
     }
 
     pub(super) fn missing_seq_numbers(&self, skip_last_n: u16) -> Vec<u16> {
-        let internal = self.internal.lock().unwrap();
+        let internal = self.internal.lock();
         internal.missing_seq_numbers(skip_last_n)
     }
 
     pub(super) fn add(&self, seq: u16) {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.add(seq);
     }
 }

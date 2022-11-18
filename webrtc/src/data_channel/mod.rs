@@ -9,16 +9,22 @@ pub mod data_channel_state;
 use data_channel_message::*;
 use data_channel_parameters::*;
 
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{Arc, Weak};
-use std::time::SystemTime;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering},
+        Arc, Weak,
+    },
+    time::SystemTime,
+};
 
 use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::{Mutex, Notify};
+use util::sync::Mutex as SyncMutex;
 
 use data_channel_state::RTCDataChannelState;
 
@@ -67,10 +73,10 @@ pub struct RTCDataChannel {
     // is created, the binaryType attribute MUST be initialized to the string
     // "blob". This attribute controls how binary data is exposed to scripts.
     // binaryType                 string
-    pub(crate) on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
-    pub(crate) on_open_handler: Arc<Mutex<Option<OnOpenHdlrFn>>>,
-    pub(crate) on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
-    pub(crate) on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
+    pub(crate) on_message_handler: Arc<ArcSwapOption<Mutex<OnMessageHdlrFn>>>,
+    pub(crate) on_open_handler: SyncMutex<Option<OnOpenHdlrFn>>,
+    pub(crate) on_close_handler: Arc<ArcSwapOption<Mutex<OnCloseHdlrFn>>>,
+    pub(crate) on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
 
     pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
 
@@ -180,7 +186,7 @@ impl RTCDataChannel {
             {
                 let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
                 if let Some(f) = on_buffered_amount_low.take() {
-                    dc.on_buffered_amount_low(f).await;
+                    dc.on_buffered_amount_low(f);
                 }
             }
 
@@ -200,24 +206,24 @@ impl RTCDataChannel {
 
     /// on_open sets an event handler which is invoked when
     /// the underlying data transport has been established (or re-established).
-    pub async fn on_open(&self, f: OnOpenHdlrFn) {
-        {
-            let mut handler = self.on_open_handler.lock().await;
-            *handler = Some(f);
-        }
+    pub fn on_open(&self, f: OnOpenHdlrFn) {
+        let _ = self.on_open_handler.lock().replace(f);
 
         if self.ready_state() == RTCDataChannelState::Open {
-            self.do_open().await;
+            self.do_open();
         }
     }
 
-    async fn do_open(&self) {
-        let on_open_handler = Arc::clone(&self.on_open_handler);
+    fn do_open(&self) {
+        let on_open_handler = self.on_open_handler.lock().take();
+        if on_open_handler.is_none() {
+            return;
+        }
+
         let detach_data_channels = self.setting_engine.detach.data_channels;
         let detach_called = Arc::clone(&self.detach_called);
         tokio::spawn(async move {
-            let mut handler = on_open_handler.lock().await;
-            if let Some(f) = handler.take() {
+            if let Some(f) = on_open_handler {
                 f().await;
 
                 // self.check_detach_after_open();
@@ -234,9 +240,8 @@ impl RTCDataChannel {
 
     /// on_close sets an event handler which is invoked when
     /// the underlying data transport has been closed.
-    pub async fn on_close(&self, f: OnCloseHdlrFn) {
-        let mut handler = self.on_close_handler.lock().await;
-        *handler = Some(f);
+    pub fn on_close(&self, f: OnCloseHdlrFn) {
+        self.on_close_handler.store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_message sets an event handler which is invoked on a binary
@@ -245,14 +250,13 @@ impl RTCDataChannel {
     /// in size. Check out the detach API if you want to use larger
     /// message sizes. Note that browser support for larger messages
     /// is also limited.
-    pub async fn on_message(&self, f: OnMessageHdlrFn) {
-        let mut handler = self.on_message_handler.lock().await;
-        *handler = Some(f);
+    pub fn on_message(&self, f: OnMessageHdlrFn) {
+        self.on_message_handler.store(Some(Arc::new(Mutex::new(f))));
     }
 
     async fn do_message(&self, msg: DataChannelMessage) {
-        let mut handler = self.on_message_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*self.on_message_handler.load() {
+            let mut f = handler.lock().await;
             f(msg).await;
         }
     }
@@ -264,7 +268,7 @@ impl RTCDataChannel {
         }
         self.set_ready_state(RTCDataChannelState::Open);
 
-        self.do_open().await;
+        self.do_open();
 
         if !self.setting_engine.detach.data_channels {
             let ready_state = Arc::clone(&self.ready_state);
@@ -288,18 +292,17 @@ impl RTCDataChannel {
 
     /// on_error sets an event handler which is invoked when
     /// the underlying data transport cannot be read.
-    pub async fn on_error(&self, f: OnErrorHdlrFn) {
-        let mut handler = self.on_error_handler.lock().await;
-        *handler = Some(f);
+    pub fn on_error(&self, f: OnErrorHdlrFn) {
+        self.on_error_handler.store(Some(Arc::new(Mutex::new(f))));
     }
 
     async fn read_loop(
         notify_rx: Arc<Notify>,
         data_channel: Arc<data::data_channel::DataChannel>,
         ready_state: Arc<AtomicU8>,
-        on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
-        on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
-        on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
+        on_message_handler: Arc<ArcSwapOption<Mutex<OnMessageHdlrFn>>>,
+        on_close_handler: Arc<ArcSwapOption<Mutex<OnCloseHdlrFn>>>,
+        on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
     ) {
         let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
         loop {
@@ -315,8 +318,8 @@ impl RTCDataChannel {
 
                             let on_close_handler2 = Arc::clone(&on_close_handler);
                             tokio::spawn(async move {
-                                let mut handler = on_close_handler2.lock().await;
-                                if let Some(f) = &mut *handler {
+                                if let Some(handler) = &*on_close_handler2.load() {
+                                    let mut f = handler.lock().await;
                                     f().await;
                                 }
                             });
@@ -329,16 +332,16 @@ impl RTCDataChannel {
 
                             let on_error_handler2 = Arc::clone(&on_error_handler);
                             tokio::spawn(async move {
-                                let mut handler = on_error_handler2.lock().await;
-                                if let Some(f) = &mut *handler {
+                                if let Some(handler) = &*on_error_handler2.load() {
+                                    let mut f = handler.lock().await;
                                     f(err.into()).await;
                                 }
                             });
 
                             let on_close_handler2 = Arc::clone(&on_close_handler);
                             tokio::spawn(async move {
-                                let mut handler = on_close_handler2.lock().await;
-                                if let Some(f) = &mut *handler {
+                                if let Some(handler) = &*on_close_handler2.load() {
+                                    let mut f = handler.lock().await;
                                     f().await;
                                 }
                             });
@@ -349,15 +352,13 @@ impl RTCDataChannel {
                 }
             };
 
-            {
-                let mut handler = on_message_handler.lock().await;
-                if let Some(f) = &mut *handler {
-                    f(DataChannelMessage {
-                        is_string,
-                        data: Bytes::from(buffer[..n].to_vec()),
-                    })
-                    .await;
-                }
+            if let Some(handler) = &*on_message_handler.load() {
+                let mut f = handler.lock().await;
+                f(DataChannelMessage {
+                    is_string,
+                    data: Bytes::from(buffer[..n].to_vec()),
+                })
+                .await;
             }
         }
     }
@@ -538,7 +539,7 @@ impl RTCDataChannel {
     pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
-            dc.on_buffered_amount_low(f).await;
+            dc.on_buffered_amount_low(f);
         } else {
             let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
             *on_buffered_amount_low = Some(f);

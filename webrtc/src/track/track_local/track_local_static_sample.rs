@@ -49,6 +49,19 @@ impl TrackLocalStaticSample {
     /// all PeerConnections. The error message will contain the ID of the failed
     /// PeerConnections so you can remove them
     pub async fn write_sample(&self, sample: &Sample) -> Result<()> {
+        self.write_sample_with_extensions(sample, &[]).await
+    }
+
+    /// Write a sample with provided RTP extensions.
+    ///
+    /// Alternatively to this method [`TrackLocalStaticSample::sample_writer`] can be used instead.
+    ///
+    /// See [`TrackLocalStaticSample::write_sample`]  for further details.
+    pub async fn write_sample_with_extensions(
+        &self,
+        sample: &Sample,
+        extensions: &[rtp::extension::HeaderExtension],
+    ) -> Result<()> {
         let mut internal = self.internal.lock().await;
 
         if internal.packetizer.is_none() || internal.sequencer.is_none() {
@@ -105,12 +118,6 @@ impl TrackLocalStaticSample {
             if sample.prev_dropped_packets > 0 {
                 packetizer.skip_samples(samples * sample.prev_dropped_packets as u32);
             }
-            /*println!(
-                "clock_rate={}, samples={}, {}",
-                clock_rate,
-                samples,
-                sample.duration.as_secs_f64()
-            );*/
             packetizer.packetize(&sample.data, samples).await?
         } else {
             vec![]
@@ -118,12 +125,54 @@ impl TrackLocalStaticSample {
 
         let mut write_errs = vec![];
         for p in packets {
-            if let Err(err) = self.rtp_track.write_rtp(&p).await {
+            if let Err(err) = self
+                .rtp_track
+                .write_rtp_with_extensions(&p, extensions)
+                .await
+            {
                 write_errs.push(err);
             }
         }
 
         flatten_errs(write_errs)
+    }
+
+    /// Create a builder for writing samples with additional data.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use rtp::extension::audio_level_extension::AudioLevelExtension;
+    /// use std::time::Duration;
+    /// use webrtc::api::media_engine::MIME_TYPE_VP8;
+    /// use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+    /// use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let track = TrackLocalStaticSample::new(
+    ///        RTCRtpCodecCapability {
+    ///            mime_type: MIME_TYPE_VP8.to_owned(),
+    ///            ..Default::default()
+    ///        },
+    ///        "video".to_owned(),
+    ///        "webrtc-rs".to_owned(),
+    ///     );
+    ///     let result = track
+    ///         .sample_writer()
+    ///         .with_audio_level(AudioLevelExtension {
+    ///             level: 10,
+    ///             voice: true,
+    ///         })
+    ///         .write_sample(&media::Sample{
+    ///              data: bytes::Bytes::new(),
+    ///              duration: Duration::from_secs(1),
+    ///              ..Default::default()
+    ///         })
+    ///         .await;
+    /// }
+    /// ```
+    pub fn sample_writer(&self) -> SampleWriter<'_> {
+        SampleWriter::new(self)
     }
 }
 
@@ -186,3 +235,64 @@ impl TrackLocal for TrackLocalStaticSample {
         self
     }
 }
+
+mod sample_writer {
+    use super::TrackLocalStaticSample;
+    use crate::error::Result;
+    use media::Sample;
+    use rtp::extension::audio_level_extension::AudioLevelExtension;
+    use rtp::extension::video_orientation_extension::VideoOrientationExtension;
+    use rtp::extension::HeaderExtension;
+
+    /// Helper for writing Samples via [`TrackLocalStaticSample`] that carry extra RTP data.
+    ///
+    /// Created via [`TrackLocalStaticSample::sample_writer`].
+    pub struct SampleWriter<'track> {
+        track: &'track TrackLocalStaticSample,
+        extensions: Vec<HeaderExtension>,
+    }
+
+    impl<'track> SampleWriter<'track> {
+        pub(super) fn new(track: &'track TrackLocalStaticSample) -> Self {
+            Self {
+                track,
+                extensions: vec![],
+            }
+        }
+
+        /// Add a RTP audio level extension to all packets written for the sample.
+        ///
+        /// This overwrites any previously configured audio level extension.
+        pub fn with_audio_level(self, ext: AudioLevelExtension) -> Self {
+            self.with_extension(HeaderExtension::AudioLevel(ext))
+        }
+
+        /// Add a RTP video orientation extension to all packets written for the sample.
+        ///
+        /// This overwrites any previously configured video orientation extension.
+        pub fn with_video_orientation(self, ext: VideoOrientationExtension) -> Self {
+            self.with_extension(HeaderExtension::VideoOrientation(ext))
+        }
+
+        /// Add any RTP extension to all packets written for the sample.
+        pub fn with_extension(mut self, ext: HeaderExtension) -> Self {
+            self.extensions.retain(|e| !e.is_same(&ext));
+
+            self.extensions.push(ext);
+
+            self
+        }
+
+        /// Write the sample to the track.
+        ///
+        /// Creates one or more RTP packets with any extensions specified for each packet and sends
+        /// them.
+        pub async fn write_sample(self, sample: &Sample) -> Result<()> {
+            self.track
+                .write_sample_with_extensions(sample, &self.extensions)
+                .await
+        }
+    }
+}
+
+pub use sample_writer::SampleWriter;

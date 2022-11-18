@@ -201,53 +201,49 @@ async fn main() -> Result<(), Error> {
 
         // When we have gathered a new ICE Candidate send it to the remote peer
         let client2 = Arc::clone(&client);
-        ice_agent
-            .on_candidate(Box::new(
-                move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-                    let client3 = Arc::clone(&client2);
-                    Box::pin(async move {
-                        if let Some(c) = c {
-                            println!("posting remoteCandidate with {}", c.marshal());
+        ice_agent.on_candidate(Box::new(
+            move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
+                let client3 = Arc::clone(&client2);
+                Box::pin(async move {
+                    if let Some(c) = c {
+                        println!("posting remoteCandidate with {}", c.marshal());
 
-                            let req = match Request::builder()
-                                .method(Method::POST)
-                                .uri(format!(
-                                    "http://localhost:{}/remoteCandidate",
-                                    remote_http_port
-                                ))
-                                .body(Body::from(c.marshal()))
-                            {
-                                Ok(req) => req,
-                                Err(err) => {
-                                    println!("{}", err);
-                                    return;
-                                }
-                            };
-                            let resp = match client3.request(req).await {
-                                Ok(resp) => resp,
-                                Err(err) => {
-                                    println!("{}", err);
-                                    return;
-                                }
-                            };
-                            println!("Response from remoteCandidate: {}", resp.status());
-                        }
-                    })
-                },
-            ))
-            .await;
+                        let req = match Request::builder()
+                            .method(Method::POST)
+                            .uri(format!(
+                                "http://localhost:{}/remoteCandidate",
+                                remote_http_port
+                            ))
+                            .body(Body::from(c.marshal()))
+                        {
+                            Ok(req) => req,
+                            Err(err) => {
+                                println!("{}", err);
+                                return;
+                            }
+                        };
+                        let resp = match client3.request(req).await {
+                            Ok(resp) => resp,
+                            Err(err) => {
+                                println!("{}", err);
+                                return;
+                            }
+                        };
+                        println!("Response from remoteCandidate: {}", resp.status());
+                    }
+                })
+            },
+        ));
 
         let (ice_done_tx, mut ice_done_rx) = mpsc::channel::<()>(1);
         // When ICE Connection state has change print to stdout
-        ice_agent
-            .on_connection_state_change(Box::new(move |c: ConnectionState| {
-                println!("ICE Connection State has changed: {}", c);
-                if c == ConnectionState::Failed {
-                    let _ = ice_done_tx.try_send(());
-                }
-                Box::pin(async move {})
-            }))
-            .await;
+        ice_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+            println!("ICE Connection State has changed: {}", c);
+            if c == ConnectionState::Failed {
+                let _ = ice_done_tx.try_send(());
+            }
+            Box::pin(async move {})
+        }));
 
         // Get the local auth details and send to remote peer
         let (local_ufrag, local_pwd) = ice_agent.get_local_user_credentials().await;
@@ -291,10 +287,10 @@ async fn main() -> Result<(), Error> {
                     }
                     result = rx.recv() => {
                         if let Some(s) = result {
-                            if let Ok(c) = unmarshal_candidate(&s).await {
+                            if let Ok(c) = unmarshal_candidate(&s) {
                                 println!("add_remote_candidate: {}", c);
                                 let c: Arc<dyn Candidate + Send + Sync> = Arc::new(c);
-                                let _ = ice_agent2.add_remote_candidate(&c).await;
+                                let _ = ice_agent2.add_remote_candidate(&c);
                             }else{
                                 println!("unmarshal_candidate error!");
                                 break;
@@ -308,7 +304,7 @@ async fn main() -> Result<(), Error> {
             }
         });
 
-        ice_agent.gather_candidates().await?;
+        ice_agent.gather_candidates()?;
         println!("Connecting...");
 
         let (_cancel_tx, cancel_rx) = mpsc::channel(1);
