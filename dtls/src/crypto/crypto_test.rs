@@ -193,6 +193,7 @@ fn test_certificate_verify() -> Result<()> {
             .iter()
             .map(|x| x.0.clone())
             .collect::<Vec<Vec<u8>>>(),
+        false,
     )?;
 
     //test ED25519
@@ -214,6 +215,7 @@ fn test_certificate_verify() -> Result<()> {
             .iter()
             .map(|x| x.0.clone())
             .collect::<Vec<Vec<u8>>>(),
+        false,
     )?;
 
     Ok(())

@@ -214,6 +214,7 @@ impl Flight for Flight4 {
                 &h.algorithm,
                 &h.signature,
                 &state.peer_certificates,
+                cfg.insecure_verification,
             ) {
                 return Err((
                     Some(Alert {

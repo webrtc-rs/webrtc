@@ -324,6 +324,7 @@ fn verify_signature(
     hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
+    insecure_verification: bool,
 ) -> Result<()> {
     if raw_certificates.is_empty() {
         return Err(Error::ErrLengthMismatch);
@@ -343,14 +344,22 @@ fn verify_signature(
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha1 => {
             &ring::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
         }
-        SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha256 => {
-            &ring::signature::RSA_PKCS1_2048_8192_SHA256
+        SignatureAlgorithm::Rsa if (hash_algorithm.hash == HashAlgorithm::Sha256) => {
+            if remote_key_signature.len() < 256 && insecure_verification {
+                &ring::signature::RSA_PKCS1_1024_8192_SHA256_FOR_LEGACY_USE_ONLY
+            } else {
+                &ring::signature::RSA_PKCS1_2048_8192_SHA256
+            }
         }
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha384 => {
             &ring::signature::RSA_PKCS1_2048_8192_SHA384
         }
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha512 => {
-            &ring::signature::RSA_PKCS1_2048_8192_SHA512
+            if remote_key_signature.len() < 256 && insecure_verification {
+                &ring::signature::RSA_PKCS1_1024_8192_SHA512_FOR_LEGACY_USE_ONLY
+            } else {
+                &ring::signature::RSA_PKCS1_2048_8192_SHA512
+            }
         }
         _ => return Err(Error::ErrKeySignatureVerifyUnimplemented),
     };
@@ -378,12 +387,14 @@ pub(crate) fn verify_key_signature(
     hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
+    insecure_verification: bool,
 ) -> Result<()> {
     verify_signature(
         message,
         hash_algorithm,
         remote_key_signature,
         raw_certificates,
+        insecure_verification,
     )
 }
 
@@ -431,12 +442,14 @@ pub(crate) fn verify_certificate_verify(
     hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
+    insecure_verification: bool,
 ) -> Result<()> {
     verify_signature(
         handshake_bodies,
         hash_algorithm,
         remote_key_signature,
         raw_certificates,
+        insecure_verification,
     )
 }
 

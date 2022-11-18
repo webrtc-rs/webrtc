@@ -358,6 +358,7 @@ impl RTCDtlsTransport {
                 },
                 client_auth: ClientAuthType::RequireAnyClientCert,
                 insecure_skip_verify: true,
+                insecure_verification: self.setting_engine.allow_insecure_verification_algorithm,
                 ..Default::default()
             },
         ))
