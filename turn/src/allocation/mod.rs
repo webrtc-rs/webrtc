@@ -24,7 +24,11 @@ use std::{
     sync::{atomic::AtomicBool, atomic::Ordering, Arc},
 };
 use tokio::{
-    sync::{mpsc, Mutex},
+    sync::{
+        mpsc,
+        oneshot::{self, Sender},
+        Mutex,
+    },
     time::{Duration, Instant},
 };
 
@@ -78,6 +82,7 @@ pub struct Allocation {
     timer_expired: Arc<AtomicBool>,
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
     pub(crate) relayed_bytes: AtomicUsize,
+    drop_tx: Option<Sender<u32>>,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -107,6 +112,7 @@ impl Allocation {
             timer_expired: Arc::new(AtomicBool::new(false)),
             closed: AtomicBool::new(false),
             relayed_bytes: Default::default(),
+            drop_tx: None,
         }
     }
 
@@ -313,7 +319,7 @@ impl Allocation {
     //  datagram, and the XOR-PEER-ADDRESS attribute is set to the source
     //  transport address of the received UDP datagram.  The Data indication
     //  is then sent on the 5-tuple associated with the allocation.
-    async fn packet_handler(&self) {
+    async fn packet_handler(&mut self) {
         let five_tuple = self.five_tuple;
         let relay_addr = self.relay_addr;
         let relay_socket = Arc::clone(&self.relay_socket);
@@ -321,18 +327,30 @@ impl Allocation {
         let allocations = self.allocations.clone();
         let channel_bindings = Arc::clone(&self.channel_bindings);
         let permissions = Arc::clone(&self.permissions);
+        let (drop_tx, drop_rx) = oneshot::channel::<u32>();
+        self.drop_tx = Some(drop_tx);
 
         tokio::spawn(async move {
             let mut buffer = vec![0u8; RTP_MTU];
 
+            tokio::pin!(drop_rx);
+
             loop {
-                let (n, src_addr) = match relay_socket.recv_from(&mut buffer).await {
-                    Ok((n, src_addr)) => (n, src_addr),
-                    Err(_) => {
-                        if let Some(allocs) = &allocations {
-                            let mut alls = allocs.lock().await;
-                            alls.remove(&five_tuple);
+                let (n, src_addr) = tokio::select! {
+                    result = relay_socket.recv_from(&mut buffer) => {
+                        match result {
+                            Ok((n, src_addr)) => (n, src_addr),
+                            Err(_) => {
+                                if let Some(allocs) = &allocations {
+                                    let mut alls = allocs.lock().await;
+                                    alls.remove(&five_tuple);
+                                }
+                                break;
+                            }
                         }
+                    }
+                    _ = drop_rx.as_mut() => {
+                        log::trace!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
                         break;
                     }
                 };
