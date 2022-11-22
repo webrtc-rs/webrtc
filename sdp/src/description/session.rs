@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, io};
 use url::Url;
@@ -560,6 +561,21 @@ impl SessionDescription {
         }
 
         Ok(lexer.desc)
+    }
+}
+
+impl From<SessionDescription> for String {
+    fn from(sdp: SessionDescription) -> String {
+        sdp.marshal()
+    }
+}
+
+impl TryFrom<String> for SessionDescription {
+    type Error = Error;
+    fn try_from(sdp_string: String) -> Result<Self> {
+        let mut reader = io::Cursor::new(sdp_string.as_bytes());
+        let session_description = SessionDescription::unmarshal(&mut reader)?;
+        Ok(session_description)
     }
 }
 
