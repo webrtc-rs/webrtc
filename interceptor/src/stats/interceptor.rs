@@ -450,8 +450,11 @@ where
                     for recp in &rr.reports {
                         let e = acc.entry(recp.ssrc).or_default();
 
-                        let rtt_ms = (recp.delay != 0)
-                            .then(|| calculate_rtt_ms(now, recp.delay, recp.last_sender_report));
+                        let rtt_ms = if recp.delay != 0 {
+                            calculate_rtt_ms(now, recp.delay, recp.last_sender_report)
+                        } else {
+                            None
+                        };
 
                         e.receiver_reports.push(ReceiverReportEntry {
                             ext_seq_num: recp.last_sequence_number,
@@ -578,7 +581,7 @@ where
             let futures = sender_reports.into_iter().map(|sr| {
                 let rtt_ms = match (sr.dlrr_last_rr, sr.dlrr_delay_rr, sr.sr_packets_sent) {
                     (Some(last_rr), Some(delay_rr), Some(_)) if last_rr != 0 && delay_rr != 0 => {
-                        Some(calculate_rtt_ms(now, delay_rr, last_rr))
+                        calculate_rtt_ms(now, delay_rr, last_rr)
                     }
                     _ => None,
                 };
@@ -790,7 +793,7 @@ impl RTPWriter for RTPWriteRecorder {
 /// - `now` the current middle 32 bits of an NTP timestamp for the current time.
 /// - `delay` the delay(`DLSR`) since last sender report expressed as fractions of a second in 32 bits.
 /// - `last_report` the middle 32 bits of an NTP timestamp for the most recent sender report(LSR) or Receiver Report(LRR).
-fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> f64 {
+fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> Option<f64> {
     // [10 Nov 1995 11:33:25.125 UTC]       [10 Nov 1995 11:33:36.5 UTC]
     // n                 SR(n)              A=b710:8000 (46864.500 s)
     // ---------------------------------------------------------------->
@@ -809,11 +812,11 @@ fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> f64 {
     // -------------------------------
     // delay 0x0006:2000 (    6.125 s)
 
-    let rtt = now - delay - last_report;
+    let rtt = now.checked_sub(delay)?.checked_sub(last_report)?;
     let rtt_seconds = rtt >> 16;
     let rtt_fraction = (rtt & (u16::MAX as u32)) as f64 / (u16::MAX as u32) as f64;
 
-    rtt_seconds as f64 * 1000.0 + (rtt_fraction as f64) * 1000.0
+    Some(rtt_seconds as f64 * 1000.0 + (rtt_fraction as f64) * 1000.0)
 }
 
 #[cfg(test)]
