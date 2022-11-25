@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Added support for insecure/deprecated signature verification algorithms, opt in via `SettingsEngine::allow_insecure_verification_algorithm` [#342](https://github.com/webrtc-rs/webrtc/pull/342).
+* Make RTCRtpCodecCapability::payloader_for_codec public API [#349](https://github.com/webrtc-rs/webrtc/pull/349).
 
 ## v0.6.0
 
