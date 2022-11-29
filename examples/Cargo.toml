@@ -23,7 +23,7 @@ env_logger = "0.9"
 clap = "3.0"
 hyper = { version = "0.14", features = ["full"] }
 signal = { path = "examples/signal" }
-tokio-util = { version="0.6", features = ["codec"] }
+tokio-util = { version="0.7", features = ["codec", "rt"] }
 anyhow = "1.0"
 chrono = "0.4"
 log = "0.4.16"
@@ -32,6 +32,7 @@ serde_json = "1.0"
 bytes = "1.1"
 lazy_static = "1.4"
 rand = "0.8"
+h264_webcam_stream = "0.1.0"
 
 
 [[example]]
@@ -42,6 +43,11 @@ bench = false
 [[example]]
 name = "broadcast"
 path = "examples/broadcast/broadcast.rs"
+bench = false
+
+[[example]]
+name = "capture-webcam-h264"
+path = "examples/capture-webcam-h264/capture-webcam-h264.rs"
 bench = false
 
 [[example]]
