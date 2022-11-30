@@ -18,8 +18,6 @@ use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndicat
 use webrtc::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
 };
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
-use webrtc::track::track_remote::TrackRemote;
 use webrtc::util::{Conn, Marshal, Unmarshal};
 
 #[derive(Clone)]
@@ -176,80 +174,76 @@ async fn main() -> Result<()> {
     // our UDP listeners.
     // In your application this is where you would handle/process audio/video
     let pc = Arc::downgrade(&peer_connection);
-    peer_connection.on_track(Box::new(
-        move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-            if let Some(track) = track {
-                // Retrieve udp connection
-                let c = if let Some(c) = udp_conns.get(&track.kind().to_string()) {
-                    c.clone()
-                } else {
-                    return Box::pin(async {});
-                };
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        // Retrieve udp connection
+        let c = if let Some(c) = udp_conns.get(&track.kind().to_string()) {
+            c.clone()
+        } else {
+            return Box::pin(async {});
+        };
 
-                // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-                let media_ssrc = track.ssrc();
-                let pc2 = pc.clone();
-                tokio::spawn(async move {
-                    let mut result = Result::<usize>::Ok(0);
-                    while result.is_ok() {
-                        let timeout = tokio::time::sleep(Duration::from_secs(3));
-                        tokio::pin!(timeout);
+        // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+        let media_ssrc = track.ssrc();
+        let pc2 = pc.clone();
+        tokio::spawn(async move {
+            let mut result = Result::<usize>::Ok(0);
+            while result.is_ok() {
+                let timeout = tokio::time::sleep(Duration::from_secs(3));
+                tokio::pin!(timeout);
 
-                        tokio::select! {
-                            _ = timeout.as_mut() =>{
-                                if let Some(pc) = pc2.upgrade(){
-                                    result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                        sender_ssrc: 0,
-                                        media_ssrc,
-                                    })]).await.map_err(Into::into);
-                                }else{
-                                    break;
-                                }
-                            }
-                        };
-                    }
-                });
-
-                tokio::spawn(async move {
-                    let mut b = vec![0u8; 1500];
-                    while let Ok((n, _)) = track.read(&mut b).await {
-                        // Unmarshal the packet and update the PayloadType
-                        let mut buf = &b[..n];
-                        let mut rtp_packet = webrtc::rtp::packet::Packet::unmarshal(&mut buf)?;
-                        rtp_packet.header.payload_type = c.payload_type;
-
-                        // Marshal into original buffer with updated PayloadType
-
-                        let n = rtp_packet.marshal_to(&mut b)?;
-
-                        // Write
-                        if let Err(err) = c.conn.send(&b[..n]).await {
-                            // For this particular example, third party applications usually timeout after a short
-                            // amount of time during which the user doesn't have enough time to provide the answer
-                            // to the browser.
-                            // That's why, for this particular example, the user first needs to provide the answer
-                            // to the browser then open the third party application. Therefore we must not kill
-                            // the forward on "connection refused" errors
-                            //if opError, ok := err.(*net.OpError); ok && opError.Err.Error() == "write: connection refused" {
-                            //    continue
-                            //}
-                            //panic(err)
-                            if err.to_string().contains("Connection refused") {
-                                continue;
-                            } else {
-                                println!("conn send err: {}", err);
-                                break;
-                            }
+                tokio::select! {
+                    _ = timeout.as_mut() =>{
+                        if let Some(pc) = pc2.upgrade(){
+                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                sender_ssrc: 0,
+                                media_ssrc,
+                            })]).await.map_err(Into::into);
+                        }else{
+                            break;
                         }
                     }
+                };
+            }
+        });
 
-                    Result::<()>::Ok(())
-                });
+        tokio::spawn(async move {
+            let mut b = vec![0u8; 1500];
+            while let Ok((n, _)) = track.read(&mut b).await {
+                // Unmarshal the packet and update the PayloadType
+                let mut buf = &b[..n];
+                let mut rtp_packet = webrtc::rtp::packet::Packet::unmarshal(&mut buf)?;
+                rtp_packet.header.payload_type = c.payload_type;
+
+                // Marshal into original buffer with updated PayloadType
+
+                let n = rtp_packet.marshal_to(&mut b)?;
+
+                // Write
+                if let Err(err) = c.conn.send(&b[..n]).await {
+                    // For this particular example, third party applications usually timeout after a short
+                    // amount of time during which the user doesn't have enough time to provide the answer
+                    // to the browser.
+                    // That's why, for this particular example, the user first needs to provide the answer
+                    // to the browser then open the third party application. Therefore we must not kill
+                    // the forward on "connection refused" errors
+                    //if opError, ok := err.(*net.OpError); ok && opError.Err.Error() == "write: connection refused" {
+                    //    continue
+                    //}
+                    //panic(err)
+                    if err.to_string().contains("Connection refused") {
+                        continue;
+                    } else {
+                        println!("conn send err: {}", err);
+                        break;
+                    }
+                }
             }
 
-            Box::pin(async {})
-        },
-    ));
+            Result::<()>::Ok(())
+        });
+
+        Box::pin(async {})
+    }));
 
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected

@@ -16,6 +16,7 @@ use interceptor::{
 
 use log::trace;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -474,6 +475,21 @@ impl RTCRtpTransceiver {
         ));
 
         Ok(())
+    }
+}
+
+impl fmt::Debug for RTCRtpTransceiver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RTCRtpTransceiver")
+            .field("mid", &self.mid)
+            .field("sender", &self.sender)
+            .field("receiver", &self.receiver)
+            .field("direction", &self.direction)
+            .field("current_direction", &self.current_direction)
+            .field("codecs", &self.codecs)
+            .field("stopped", &self.stopped)
+            .field("kind", &self.kind)
+            .finish()
     }
 }
 

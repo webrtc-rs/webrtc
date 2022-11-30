@@ -14,10 +14,8 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
 
 #[tokio::main]
@@ -145,69 +143,65 @@ async fn main() -> Result<()> {
     let pc = Arc::downgrade(&peer_connection);
     let curr_track1 = Arc::clone(&curr_track);
     let track_count1 = Arc::clone(&track_count);
-    peer_connection.on_track(Box::new(
-        move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-            if let Some(track) = track {
-                let track_num = track_count1.fetch_add(1, Ordering::SeqCst);
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        let track_num = track_count1.fetch_add(1, Ordering::SeqCst);
 
-                let curr_track2 = Arc::clone(&curr_track1);
-                let pc2 = pc.clone();
-                let packets_tx2 = Arc::clone(&packets_tx);
-                tokio::spawn(async move {
-                    println!(
-                        "Track has started, of type {}: {}",
-                        track.payload_type(),
-                        track.codec().await.capability.mime_type
-                    );
+        let curr_track2 = Arc::clone(&curr_track1);
+        let pc2 = pc.clone();
+        let packets_tx2 = Arc::clone(&packets_tx);
+        tokio::spawn(async move {
+            println!(
+                "Track has started, of type {}: {}",
+                track.payload_type(),
+                track.codec().await.capability.mime_type
+            );
 
-                    let mut last_timestamp = 0;
-                    let mut is_curr_track = false;
-                    while let Ok((mut rtp, _)) = track.read_rtp().await {
-                        // Change the timestamp to only be the delta
-                        let old_timestamp = rtp.header.timestamp;
-                        if last_timestamp == 0 {
-                            rtp.header.timestamp = 0
-                        } else {
-                            rtp.header.timestamp -= last_timestamp;
-                        }
-                        last_timestamp = old_timestamp;
+            let mut last_timestamp = 0;
+            let mut is_curr_track = false;
+            while let Ok((mut rtp, _)) = track.read_rtp().await {
+                // Change the timestamp to only be the delta
+                let old_timestamp = rtp.header.timestamp;
+                if last_timestamp == 0 {
+                    rtp.header.timestamp = 0
+                } else {
+                    rtp.header.timestamp -= last_timestamp;
+                }
+                last_timestamp = old_timestamp;
 
-                        // Check if this is the current track
-                        if curr_track2.load(Ordering::SeqCst) == track_num {
-                            // If just switched to this track, send PLI to get picture refresh
-                            if !is_curr_track {
-                                is_curr_track = true;
-                                if let Some(pc) = pc2.upgrade() {
-                                    if let Err(err) = pc
-                                        .write_rtcp(&[Box::new(PictureLossIndication {
-                                            sender_ssrc: 0,
-                                            media_ssrc: track.ssrc(),
-                                        })])
-                                        .await
-                                    {
-                                        println!("write_rtcp err: {}", err);
-                                    }
-                                } else {
-                                    break;
-                                }
+                // Check if this is the current track
+                if curr_track2.load(Ordering::SeqCst) == track_num {
+                    // If just switched to this track, send PLI to get picture refresh
+                    if !is_curr_track {
+                        is_curr_track = true;
+                        if let Some(pc) = pc2.upgrade() {
+                            if let Err(err) = pc
+                                .write_rtcp(&[Box::new(PictureLossIndication {
+                                    sender_ssrc: 0,
+                                    media_ssrc: track.ssrc(),
+                                })])
+                                .await
+                            {
+                                println!("write_rtcp err: {}", err);
                             }
-                            let _ = packets_tx2.send(rtp).await;
                         } else {
-                            is_curr_track = false;
+                            break;
                         }
                     }
-
-                    println!(
-                        "Track has ended, of type {}: {}",
-                        track.payload_type(),
-                        track.codec().await.capability.mime_type
-                    );
-                });
+                    let _ = packets_tx2.send(rtp).await;
+                } else {
+                    is_curr_track = false;
+                }
             }
 
-            Box::pin(async {})
-        },
-    ));
+            println!(
+                "Track has ended, of type {}: {}",
+                track.payload_type(),
+                track.codec().await.capability.mime_type
+            );
+        });
+
+        Box::pin(async {})
+    }));
 
     let (connected_tx, mut connected_rx) = tokio::sync::mpsc::channel(1);
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel(1);

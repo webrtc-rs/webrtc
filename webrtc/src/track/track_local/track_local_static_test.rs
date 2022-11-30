@@ -3,8 +3,6 @@ use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::peer_connection_test::*;
-use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
-use crate::track::track_remote::TrackRemote;
 
 use bytes::Bytes;
 use std::sync::Arc;
@@ -257,22 +255,18 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     let (on_track_fired_tx, on_track_fired_rx) = mpsc::channel::<()>(1);
     let on_track_fired_tx = Arc::new(Mutex::new(Some(on_track_fired_tx)));
-    offerer.on_track(Box::new(
-        move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
-            let on_track_fired_tx2 = Arc::clone(&on_track_fired_tx);
-            Box::pin(async move {
-                if let Some(t) = &track {
-                    assert_eq!(t.payload_type(), 100);
-                    assert_eq!(t.codec().await.capability.mime_type, MIME_TYPE_VP8);
-                }
-                {
-                    log::debug!("onTrackFiredFunc!!!");
-                    let mut done = on_track_fired_tx2.lock().await;
-                    done.take();
-                }
-            })
-        },
-    ));
+    offerer.on_track(Box::new(move |track, _, _| {
+        let on_track_fired_tx2 = Arc::clone(&on_track_fired_tx);
+        Box::pin(async move {
+            assert_eq!(track.payload_type(), 100);
+            assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_VP8);
+            {
+                log::debug!("onTrackFiredFunc!!!");
+                let mut done = on_track_fired_tx2.lock().await;
+                done.take();
+            }
+        })
+    }));
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
