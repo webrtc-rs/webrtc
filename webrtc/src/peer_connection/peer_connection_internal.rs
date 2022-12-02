@@ -365,6 +365,7 @@ impl PeerConnectionInternal {
                         self.setting_engine.get_receive_mtu(),
                         incoming_track,
                         receiver,
+                        Arc::clone(t),
                         Arc::clone(&self.on_track_handler),
                     )
                     .await;
@@ -910,6 +911,7 @@ impl PeerConnectionInternal {
                 self.setting_engine.get_receive_mtu(),
                 &incoming,
                 receiver,
+                t,
                 Arc::clone(&self.on_track_handler),
             )
             .await;
@@ -1046,10 +1048,10 @@ impl PeerConnectionInternal {
 
                                 RTCPeerConnection::do_track(
                                     Arc::clone(&self.on_track_handler),
-                                    Some(track),
-                                    Some(receiver.clone()),
-                                )
-                                .await;
+                                    track,
+                                    receiver,
+                                    Arc::clone(t),
+                                );
                             }
                             return Ok(());
                         }
@@ -1076,6 +1078,7 @@ impl PeerConnectionInternal {
         receive_mtu: usize,
         incoming: &TrackDetails,
         receiver: Arc<RTCRtpReceiver>,
+        transceiver: Arc<RTCRtpTransceiver>,
         on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
     ) {
         receiver.start(incoming).await;
@@ -1084,10 +1087,11 @@ impl PeerConnectionInternal {
                 return;
             }
 
-            let receiver2 = Arc::clone(&receiver);
-            let on_track_handler2 = Arc::clone(&on_track_handler);
+            let receiver = Arc::clone(&receiver);
+            let transceiver = Arc::clone(&transceiver);
+            let on_track_handler = Arc::clone(&on_track_handler);
             tokio::spawn(async move {
-                if let Some(track) = receiver2.track().await {
+                if let Some(track) = receiver.track().await {
                     let mut b = vec![0u8; receive_mtu];
                     let n = match track.peek(&mut b).await {
                         Ok((n, _)) => n,
@@ -1110,12 +1114,7 @@ impl PeerConnectionInternal {
                         return;
                     }
 
-                    RTCPeerConnection::do_track(
-                        on_track_handler2,
-                        receiver2.track().await,
-                        Some(receiver2),
-                    )
-                    .await;
+                    RTCPeerConnection::do_track(on_track_handler, track, receiver, transceiver);
                 }
             });
         }

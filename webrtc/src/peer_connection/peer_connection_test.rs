@@ -303,30 +303,22 @@ async fn test_get_stats() -> Result<()> {
         .expect("Failed to add track");
     let (packet_tx, packet_rx) = mpsc::channel(1);
 
-    pc_answer.on_track(Box::new(
-        move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
-            let packet_tx = packet_tx.clone();
-            let result = Box::pin(async move {});
-            let track = match track {
-                Some(t) => t,
-                None => return result,
-            };
+    pc_answer.on_track(Box::new(move |track, _, _| {
+        let packet_tx = packet_tx.clone();
+        tokio::spawn(async move {
+            while let Ok((pkt, _)) = track.read_rtp().await {
+                dbg!(&pkt);
+                let last = pkt.payload[pkt.payload.len() - 1];
 
-            tokio::spawn(async move {
-                while let Ok((pkt, _)) = track.read_rtp().await {
-                    dbg!(&pkt);
-                    let last = pkt.payload[pkt.payload.len() - 1];
-
-                    if last == 0xAA {
-                        let _ = packet_tx.send(()).await;
-                        break;
-                    }
+                if last == 0xAA {
+                    let _ = packet_tx.send(()).await;
+                    break;
                 }
-            });
+            }
+        });
 
-            Box::pin(async move {})
-        },
-    ));
+        Box::pin(async move {})
+    }));
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 

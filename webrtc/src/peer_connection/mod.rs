@@ -139,8 +139,9 @@ pub type OnDataChannelHdlrFn = Box<
 
 pub type OnTrackHdlrFn = Box<
     dyn (FnMut(
-            Option<Arc<TrackRemote>>,
-            Option<Arc<RTCRtpReceiver>>,
+            Arc<TrackRemote>,
+            Arc<RTCRtpReceiver>,
+            Arc<RTCRtpTransceiver>,
         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
@@ -586,23 +587,22 @@ impl RTCPeerConnection {
             .store(Some(Arc::new(Mutex::new(f))));
     }
 
-    async fn do_track(
+    fn do_track(
         on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
-        t: Option<Arc<TrackRemote>>,
-        r: Option<Arc<RTCRtpReceiver>>,
+        track: Arc<TrackRemote>,
+        receiver: Arc<RTCRtpReceiver>,
+        transceiver: Arc<RTCRtpTransceiver>,
     ) {
-        log::debug!("got new track: {:?}", t);
+        log::debug!("got new track: {:?}", track);
 
-        if t.is_some() {
-            tokio::spawn(async move {
-                if let Some(handler) = &*on_track_handler.load() {
-                    let mut f = handler.lock().await;
-                    f(t, r).await;
-                } else {
-                    log::warn!("on_track unset, unable to handle incoming media streams");
-                }
-            });
-        }
+        tokio::spawn(async move {
+            if let Some(handler) = &*on_track_handler.load() {
+                let mut f = handler.lock().await;
+                f(track, receiver, transceiver).await;
+            } else {
+                log::warn!("on_track unset, unable to handle incoming media streams");
+            }
+        });
     }
 
     /// on_ice_connection_state_change sets an event handler which is called
