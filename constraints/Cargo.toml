@@ -1,9 +1,14 @@
 [package]
 name = "webrtc-constraints"
+version = "0.1.0"
 authors = ["Vincent Esche <regexident@gmail.com>"]
 edition = "2018"
+description = "A pure Rust implementation of WebRTC Media Constraints API"
 license = "MIT/Apache-2.0"
-version = "0.1.0"
+documentation = "https://docs.rs/webrtc-constraints"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/constraints"
+rust-version = "1.60.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
