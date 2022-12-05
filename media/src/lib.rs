@@ -4,7 +4,6 @@
 pub mod audio;
 mod error;
 pub mod io;
-pub mod track;
 pub mod video;
 
 pub use error::Error;
