@@ -54,6 +54,8 @@ pub(super) fn apply_advanced_constraints<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::iter::FromIterator;
+
     use crate::{
         property::all::name::*, MediaTrackSupportedConstraints, ResizeMode,
         ResolvedAdvancedMediaTrackConstraints, ResolvedMediaTrackConstraintSet,

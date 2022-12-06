@@ -72,6 +72,8 @@ impl MediaStreamConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod tests {
+    use std::iter::FromIterator;
+
     use crate::{
         constraints::{
             advanced::AdvancedMediaTrackConstraints,

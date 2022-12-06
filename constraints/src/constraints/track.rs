@@ -237,6 +237,8 @@ impl ResolvedMediaTrackConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
+    use std::iter::FromIterator;
+
     use crate::{
         constraints::mandatory::MandatoryMediaTrackConstraints, macros::test_serde_symmetry,
         property::all::name::*, AdvancedMediaTrackConstraints, MediaTrackConstraintSet,

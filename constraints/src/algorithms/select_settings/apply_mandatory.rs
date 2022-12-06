@@ -65,6 +65,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::iter::FromIterator;
+
     use crate::{
         property::all::name::*, MediaTrackSupportedConstraints, ResizeMode,
         ResolvedMandatoryMediaTrackConstraints, ResolvedValueConstraint,

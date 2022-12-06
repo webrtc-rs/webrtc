@@ -1,3 +1,5 @@
+use std::iter::FromIterator;
+
 use ordered_float::NotNan;
 
 use crate::{
