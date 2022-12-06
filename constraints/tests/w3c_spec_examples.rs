@@ -1,3 +1,4 @@
+#[cfg(feature = "serde")]
 use webrtc_constraints::{
     property::all::name::*, AdvancedMediaTrackConstraints, BoolOrMediaTrackConstraints,
     MediaTrackConstraintSet, MediaTrackConstraints, ResolvedValueRangeConstraint,
