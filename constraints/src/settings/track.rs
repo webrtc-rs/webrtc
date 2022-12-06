@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    iter::FromIterator,
     ops::{Deref, DerefMut},
 };
 

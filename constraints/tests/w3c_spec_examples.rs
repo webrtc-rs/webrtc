@@ -8,6 +8,8 @@ use webrtc_constraints::{
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_1() {
+    use std::iter::FromIterator;
+
     use webrtc_constraints::{MandatoryMediaTrackConstraints, MediaStreamConstraints};
 
     let actual: MediaStreamConstraints = {
@@ -39,6 +41,8 @@ fn w3c_spec_example_1() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_2() {
+    use std::iter::FromIterator;
+
     use webrtc_constraints::{MandatoryMediaTrackConstraints, MediaStreamConstraints};
 
     let actual: MediaStreamConstraints = {
@@ -100,6 +104,8 @@ fn w3c_spec_example_2() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_3() {
+    use std::iter::FromIterator;
+
     use webrtc_constraints::{MandatoryMediaTrackConstraints, MediaStreamConstraints};
 
     let actual: MediaStreamConstraints = {
@@ -188,6 +194,8 @@ fn w3c_spec_example_3() {
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_4() {
+    use std::iter::FromIterator;
+
     let actual: MediaTrackConstraintSet = {
         let json = serde_json::json!({
             "width": 1920,

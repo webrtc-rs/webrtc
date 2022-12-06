@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    iter::FromIterator,
+    ops::{Deref, DerefMut},
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
