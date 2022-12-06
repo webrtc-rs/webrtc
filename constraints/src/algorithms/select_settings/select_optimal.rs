@@ -9,7 +9,23 @@ where
 
     for (candidate, fitness_distance) in candidates {
         use std::cmp::Ordering;
+
+        #[cfg(feature = "total_cmp")]
         let ordering = fitness_distance.total_cmp(&optimal_fitness_distance);
+
+        // TODO: remove fallback once MSRV has been bumped to 1.62 or later:
+        #[cfg(not(feature = "total_cmp"))]
+        let ordering = {
+            // See http://doc.rust-lang.org/1.65.0/core/primitive.f64.html#method.total_cmp:
+
+            let mut left = fitness_distance.to_bits() as i64;
+            let mut right = optimal_fitness_distance.to_bits() as i64;
+
+            left ^= (((left >> 63) as u64) >> 1) as i64;
+            right ^= (((right >> 63) as u64) >> 1) as i64;
+
+            left.cmp(&right)
+        };
 
         if ordering == Ordering::Less {
             // Candidate is new optimal, so drop current selection:
@@ -18,7 +34,7 @@ where
         }
 
         if ordering != Ordering::Greater {
-            // Candiate is optimal, so add to selection:
+            // Candidate is optimal, so add to selection:
             optimal_candidates.push(candidate);
         }
     }
