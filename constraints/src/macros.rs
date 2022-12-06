@@ -15,6 +15,7 @@ macro_rules! constraint {
         $($p:ident: $c:expr),+ $(,)?
     }) => {
         $crate::ValueConstraint::Constraint(
+            #[allow(clippy::needless_update)]
             $crate::ResolvedValueConstraint {
                 $($p: Some($c)),+,
                 ..Default::default()
@@ -106,6 +107,7 @@ macro_rules! constraints {
     };
 }
 
+#[allow(unused_macros)]
 #[cfg(test)]
 macro_rules! test_serde_symmetry {
     (subject: $s:expr, json: $j:expr) => {
@@ -127,6 +129,7 @@ macro_rules! test_serde_symmetry {
     };
 }
 
+#[allow(unused_imports)]
 #[cfg(test)]
 pub(crate) use test_serde_symmetry;
 
@@ -134,10 +137,8 @@ pub(crate) use test_serde_symmetry;
 mod tests {
     use crate::{
         property::all::name::*, AdvancedMediaTrackConstraints, FacingMode,
-        MandatoryMediaTrackConstraints, MediaTrackConstraint, MediaTrackConstraintSet,
-        MediaTrackConstraints, MediaTrackSettings, ResolvedAdvancedMediaTrackConstraints,
-        ResolvedMandatoryMediaTrackConstraints, ResolvedMediaTrackConstraintSet,
-        ResolvedMediaTrackConstraints, ResolvedValueConstraint, ResolvedValueRangeConstraint,
+        MandatoryMediaTrackConstraints, MediaTrackConstraintSet, MediaTrackConstraints,
+        MediaTrackSettings, ResolvedValueConstraint, ResolvedValueRangeConstraint,
         ResolvedValueSequenceConstraint, ValueConstraint, ValueRangeConstraint,
         ValueSequenceConstraint,
     };
