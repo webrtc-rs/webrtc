@@ -500,6 +500,7 @@ impl Association {
         log::debug!("[{}] write_loop entered", name);
         let mut done = false;
         let name = Arc::new(name);
+        let mut marshal_buffer = BytesMut::with_capacity(16 * 1024);
         while !done {
             //log::debug!("[{}] gather_outbound begin", name);
             let (packets, continue_loop) = {
@@ -514,24 +515,42 @@ impl Association {
             // Doing it this way, tokio schedules this to a new thread, this future is suspended, and the read_loop can make progress
             let net_conn = Arc::clone(&net_conn);
             let bytes_sent = Arc::clone(&bytes_sent);
-            let name = Arc::clone(&name);
-            tokio::task::spawn(async move {
-                let mut buf = BytesMut::with_capacity(16 * 1024);
+            let name2 = Arc::clone(&name);
+            let buf = std::mem::replace(&mut marshal_buffer, BytesMut::new());
+            let res = tokio::task::spawn(async move {
+                let mut buf = buf;
                 for raw in packets {
                     buf.clear();
-                    raw.marshal_to(&mut buf).unwrap();
-                    let raw = buf.as_ref();
-                    if let Err(err) = net_conn.send(raw.as_ref()).await {
-                        log::warn!("[{}] failed to write packets on net_conn: {}", name, err);
-                        break;
+                    if let Err(err) = raw.marshal_to(&mut buf) {
+                        log::warn!("[{}] failed to serialize a packet: {:?}", name2, err);
                     } else {
-                        bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+                        let raw = buf.as_ref();
+                        if let Err(err) = net_conn.send(raw.as_ref()).await {
+                            log::warn!("[{}] failed to write packets on net_conn: {}", name2, err);
+                            return Err(());
+                        } else {
+                            bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+                        }
                     }
                     //log::debug!("[{}] sending {} bytes done", name, raw.len());
                 }
+                buf.clear();
+                Ok(buf)
             })
-            .await
-            .unwrap();
+            .await;
+
+            match res {
+                Ok(Ok(buf)) => marshal_buffer = buf,
+                Ok(Err(())) => break,
+                Err(err) => {
+                    log::warn!(
+                        "[{}] failed to execute task for marshalling and sending packets: {}",
+                        name,
+                        err
+                    );
+                    break;
+                }
+            }
 
             if !continue_loop {
                 break;
