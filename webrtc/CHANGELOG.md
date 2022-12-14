@@ -6,7 +6,7 @@
 * Make RTCRtpCodecCapability::payloader_for_codec public API [#349](https://github.com/webrtc-rs/webrtc/pull/349).
 * Fixed a panic in `calculate_rtt_ms` [#350](https://github.com/webrtc-rs/webrtc/pull/350).
 * SCTP performance improvements
-  * reuse as many allocations as possible when marshaling
+  * reuse as many allocations as possible when marshaling [#364](https://github.com/webrtc-rs/webrtc/pull/364)
 
 ### Breaking changes
 
