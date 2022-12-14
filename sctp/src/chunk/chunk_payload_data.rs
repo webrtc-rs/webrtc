@@ -233,7 +233,7 @@ impl Chunk for ChunkPayloadData {
         writer.put_u16(self.stream_identifier);
         writer.put_u16(self.stream_sequence_number);
         writer.put_u32(self.payload_type as u32);
-        writer.extend(self.user_data.clone());
+        writer.extend_from_slice(&self.user_data);
 
         Ok(writer.len())
     }
