@@ -34,9 +34,7 @@ impl PayloadQueue {
         self.chunk_map.insert(tsn, p);
         self.length.fetch_add(1, Ordering::SeqCst);
 
-        if self.sorted.is_empty() {
-            self.sorted.push_back(tsn);
-        } else if sna32gt(tsn, *self.sorted.back().unwrap()) {
+        if self.sorted.is_empty() || sna32gt(tsn, *self.sorted.back().unwrap()) {
             self.sorted.push_back(tsn);
         } else if sna32lt(tsn, *self.sorted.front().unwrap()) {
             self.sorted.push_front(tsn);
