@@ -508,6 +508,10 @@ impl Association {
             };
             //log::debug!("[{}] gather_outbound done with {}", name, packets.len());
 
+            // We schedule a new task here for a reason:
+            // If we don't tokio tends to run the write_loop and read_loop of one connection on the same OS thread
+            // This means that even though we release the lock above, the read_loop isn't able to take it, simply because it is not being scheduled by tokio
+            // Doing it this way, tokio schedules this to a new thread, this future is suspended, and the read_loop can make progress
             let net_conn = Arc::clone(&net_conn);
             let bytes_sent = Arc::clone(&bytes_sent);
             let name = Arc::clone(&name);
