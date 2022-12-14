@@ -40,7 +40,7 @@ use crate::util::*;
 use association_internal::*;
 use association_stats::*;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use rand::random;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
@@ -499,27 +499,37 @@ impl Association {
     ) {
         log::debug!("[{}] write_loop entered", name);
         let mut done = false;
+        let name = Arc::new(name);
         while !done {
             //log::debug!("[{}] gather_outbound begin", name);
-            let (raw_packets, mut ok) = {
+            let (packets, continue_loop) = {
                 let mut ai = association_internal.lock().await;
                 ai.gather_outbound().await
             };
-            //log::debug!("[{}] gather_outbound done with {}", name, raw_packets.len());
+            //log::debug!("[{}] gather_outbound done with {}", name, packets.len());
 
-            for raw in &raw_packets {
-                log::debug!("[{}] sending {} bytes", name, raw.len());
-                if let Err(err) = net_conn.send(raw).await {
-                    log::warn!("[{}] failed to write packets on net_conn: {}", name, err);
-                    ok = false;
-                    break;
-                } else {
-                    bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+            let net_conn = Arc::clone(&net_conn);
+            let bytes_sent = Arc::clone(&bytes_sent);
+            let name = Arc::clone(&name);
+            tokio::task::spawn(async move {
+                let mut buf = BytesMut::with_capacity(16 * 1024);
+                for raw in packets {
+                    buf.clear();
+                    raw.marshal_to(&mut buf).unwrap();
+                    let raw = buf.as_ref();
+                    if let Err(err) = net_conn.send(raw.as_ref()).await {
+                        log::warn!("[{}] failed to write packets on net_conn: {}", name, err);
+                        break;
+                    } else {
+                        bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+                    }
+                    //log::debug!("[{}] sending {} bytes done", name, raw.len());
                 }
-                //log::debug!("[{}] sending {} bytes done", name, raw.len());
-            }
+            })
+            .await
+            .unwrap();
 
-            if !ok {
+            if !continue_loop {
                 break;
             }
 
