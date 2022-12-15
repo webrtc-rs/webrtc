@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Performance improvements
+  * The lock for the internal association was contended badly because marshaling was done while still in a critical section and also tokio was scheduling tasks badly[#363](https://github.com/webrtc-rs/webrtc/pull/363)
+
 ## v0.7.0
 
 * Increased minimum support rust version to `1.60.0`.
