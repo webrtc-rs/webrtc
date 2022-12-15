@@ -1062,17 +1062,21 @@ async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<()> {
     s1.set_reliability_params(true, ReliabilityType::Rexmit, 0); // doesn't matter
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
-    let n = s0.write_sctp(
-        &Bytes::from(sbuf.clone()),
-        PayloadProtocolIdentifier::Binary,
-    )?;
+    let n = s0
+        .write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )
+        .await?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
-    let n = s0.write_sctp(
-        &Bytes::from(sbuf.clone()),
-        PayloadProtocolIdentifier::Binary,
-    )?;
+    let n = s0
+        .write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )
+        .await?;
     assert_eq!(sbuf.len(), n, "unexpected length of received data");
 
     //log::debug!("flush_buffers");
