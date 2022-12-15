@@ -1,6 +1,9 @@
 use std::{
     collections::VecDeque,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Condvar, Mutex,
+    },
 };
 
 use util::sync::RwLock;
@@ -15,12 +18,49 @@ pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
 /// A queue for both ordered and unordered chunks.
 #[derive(Debug, Default)]
 pub(crate) struct PendingQueue {
+    semaphore: PushLimitSemaphore,
     unordered_queue: RwLock<PendingBaseQueue>,
     ordered_queue: RwLock<PendingBaseQueue>,
     queue_len: AtomicUsize,
     n_bytes: AtomicUsize,
     selected: AtomicBool,
     unordered_is_selected: AtomicBool,
+}
+
+/// Simple diy semaphore not directly protecting a resource other than the current capacity of the Queue in bytes
+#[derive(Debug)]
+struct PushLimitSemaphore {
+    m: Mutex<u64>,
+    c: Condvar,
+}
+
+impl Default for PushLimitSemaphore {
+    fn default() -> Self {
+        Self {
+            m: Mutex::new(1_000_000_000),
+            c: Condvar::new(),
+        }
+    }
+}
+
+impl PushLimitSemaphore {
+    /// blocks until the credits where sucessfully taken
+    fn aquire(&self, credits: u64) {
+        let capacity = self.m.lock().unwrap();
+        let mut capacity = self
+            .c
+            .wait_while(capacity, |capacity| *capacity < credits)
+            .unwrap();
+        assert!(*capacity >= credits);
+        *capacity = *capacity - credits;
+    }
+
+    /// releases credits and allows them to be taken by a process calling aquire
+    fn release(&self, credits: u64) {
+        let mut capacity = self.m.lock().unwrap();
+        *capacity = *capacity + credits;
+        self.c.notify_one();
+    }
 }
 
 impl PendingQueue {
@@ -31,6 +71,8 @@ impl PendingQueue {
     /// Appends a chunk to the back of the pending queue.
     pub(crate) fn push(&self, c: ChunkPayloadData) {
         let user_data_len = c.user_data.len();
+
+        self.semaphore.aquire(user_data_len as u64);
 
         if c.unordered {
             let mut unordered_queue = self.unordered_queue.write();
@@ -57,22 +99,26 @@ impl PendingQueue {
         let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
         let chunks_len = chunks.len();
 
+        self.semaphore.aquire(total_user_data_len as u64);
+
         let unordered = chunks
             .first()
             .expect("chunks to not be empty because of the above check")
             .unordered;
         if unordered {
             let mut unordered_queue = self.unordered_queue.write();
-            for c in chunks {
-                assert!(c.unordered, "expected all chunks to be unordered");
-                unordered_queue.push_back(c);
-            }
+            assert!(
+                chunks.iter().all(|c| c.unordered),
+                "expected all chunks to be unordered"
+            );
+            unordered_queue.extend(chunks);
         } else {
             let mut ordered_queue = self.ordered_queue.write();
-            for c in chunks {
-                assert!(!c.unordered, "expected all chunks to be ordered");
-                ordered_queue.push_back(c);
-            }
+            assert!(
+                chunks.iter().all(|c| !c.unordered),
+                "expected all chunks to be ordered"
+            );
+            ordered_queue.extend(chunks);
         }
 
         self.n_bytes
@@ -155,8 +201,10 @@ impl PendingQueue {
         };
 
         if let Some(p) = &popped {
-            self.n_bytes.fetch_sub(p.user_data.len(), Ordering::SeqCst);
+            let user_data_len = p.user_data.len();
+            self.n_bytes.fetch_sub(user_data_len, Ordering::SeqCst);
             self.queue_len.fetch_sub(1, Ordering::SeqCst);
+            self.semaphore.release(user_data_len as u64);
         }
 
         popped
