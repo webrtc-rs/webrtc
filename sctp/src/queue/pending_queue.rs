@@ -75,7 +75,6 @@ impl PendingQueue {
         }
 
         let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
-        let chunks_len = chunks.len();
 
         let permits = self
             .semaphore
@@ -84,6 +83,29 @@ impl PendingQueue {
         // unwrap ok because we never close the semaphore unless we have dropped self
         permits.unwrap().forget();
 
+        self.append_unlimited(chunks, total_user_data_len);
+    }
+
+    pub(crate) fn try_append(&self, chunks: Vec<ChunkPayloadData>) -> bool {
+        if chunks.is_empty() {
+            return true;
+        }
+
+        let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
+
+        match self.semaphore.try_acquire_many(total_user_data_len as u32) {
+            Ok(permits) => {
+                permits.forget();
+
+                self.append_unlimited(chunks, total_user_data_len);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    fn append_unlimited(&self, chunks: Vec<ChunkPayloadData>, total_user_data_len: usize) {
+        let chunks_len = chunks.len();
         let unordered = chunks
             .first()
             .expect("chunks to not be empty because of the above check")
