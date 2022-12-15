@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Performance improvements
+  * improve algorithm used to push to pending queue from O(n*log(n)) to O(log(n)) [#365](https://github.com/webrtc-rs/webrtc/pull/365)
+
 ## v0.7.0
 
 * Increased minimum support rust version to `1.60.0`.
