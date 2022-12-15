@@ -51,6 +51,9 @@ impl PushLimitSemaphore {
                 self.n.notified().await;
             } else {
                 *capacity = *capacity - credits;
+                if *capacity > 0 {
+                    self.n.notify_one();
+                }
                 break;
             }
         }
