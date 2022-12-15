@@ -269,14 +269,15 @@ impl Stream {
     /// Writes `p` to the DTLS connection with the default Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub fn write(&self, p: &Bytes) -> Result<usize> {
+    pub async fn write(&self, p: &Bytes) -> Result<usize> {
         self.write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
+            .await
     }
 
     /// Writes `p` to the DTLS connection with the given Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
+    pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
         if self.write_shutdown.load(Ordering::SeqCst) {
             return Err(Error::ErrStreamClosed);
         }
@@ -295,7 +296,7 @@ impl Stream {
         };
 
         let chunks = self.packetize(p, ppi);
-        self.send_payload_data(chunks)?;
+        self.send_payload_data(chunks).await?;
 
         Ok(p.len())
     }
@@ -390,7 +391,7 @@ impl Stream {
         {
             // Reset the stream
             // https://tools.ietf.org/html/rfc6525
-            self.send_reset_request(self.stream_identifier)?;
+            self.send_reset_request(self.stream_identifier).await?;
         }
 
         Ok(())
@@ -482,20 +483,20 @@ impl Stream {
         }
     }
 
-    fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
+    async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrPayloadDataStateNotExist);
         }
 
         // NOTE: append is used here instead of push in order to prevent chunks interlacing.
-        self.pending_queue.append(chunks);
+        self.pending_queue.append(chunks).await;
 
         self.awake_write_loop();
         Ok(())
     }
 
-    fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
+    async fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrResetPacketInStateNotExist);
@@ -511,7 +512,7 @@ impl Stream {
             ..Default::default()
         };
 
-        self.pending_queue.push(c);
+        self.pending_queue.push(c).await;
 
         self.awake_write_loop();
         Ok(())
@@ -702,10 +703,9 @@ impl AsyncWrite for PollStream {
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
         let bytes = Bytes::copy_from_slice(buf);
-        match self.stream.write(&bytes) {
-            Ok(n) => Poll::Ready(Ok(n)),
-            Err(e) => Poll::Ready(Err(e.into())),
-        }
+        let mut fut = self.stream.write(&bytes);
+        let pin = unsafe { std::pin::Pin::new_unchecked(&mut fut) };
+        std::future::Future::poll(pin, _cx).map_err(|e| e.into())
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
