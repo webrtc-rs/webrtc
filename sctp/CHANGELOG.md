@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Performance improvements
+  * reuse as many allocations as possible when marshaling [#364](https://github.com/webrtc-rs/webrtc/pull/364)
+
 ## v0.7.0
 
 * Increased minimum support rust version to `1.60.0`.
