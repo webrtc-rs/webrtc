@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* Change log level for packet reception [#366](https://github.com/webrtc-rs/webrtc/pull/366).
 * Increased minimum support rust version to `1.60.0`.
 * Increased required `webrtc-util` version to `0.7.0`.
 
