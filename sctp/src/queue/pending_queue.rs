@@ -155,7 +155,7 @@ impl PendingQueue {
         ordered_queue.get(0).cloned()
     }
 
-    pub(crate) async fn pop(
+    pub(crate) fn pop(
         &self,
         beginning_fragment: bool,
         unordered: bool,
