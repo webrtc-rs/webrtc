@@ -5,6 +5,10 @@
 * Performance improvements
     * Limit the bytes in the PendingQueue to avoid packetz accumulating there uncontrollably [367](https://github.com/webrtc-rs/webrtc/pull/367)
 
+### Breaking
+
+* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` async again but provide non-blocking sync alternatives as try_write(_sctp) [367](https://github.com/webrtc-rs/webrtc/pull/367)
+
 ## v0.7.0
 
 * Increased minimum support rust version to `1.60.0`.
