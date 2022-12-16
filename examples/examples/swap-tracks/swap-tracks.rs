@@ -299,7 +299,7 @@ async fn main() -> Result<()> {
                         break;
                     }
                     _ = tokio::signal::ctrl_c() => {
-                        println!("");
+                        println!();
                         break;
                     }
                 };

@@ -1469,7 +1469,7 @@ impl PeerConnectionInternal {
                     ssrc,
                     kind,
 
-                    packets_received: remote_inbound_packets_received as u64,
+                    packets_received: remote_inbound_packets_received,
                     packets_lost: remote_inbound_packets_lost as i64,
 
                     local_id,
