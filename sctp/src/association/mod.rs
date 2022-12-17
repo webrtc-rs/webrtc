@@ -498,10 +498,9 @@ impl Association {
         mut awake_write_loop_ch: mpsc::Receiver<()>,
     ) {
         log::debug!("[{}] write_loop entered", name);
-        let mut done = false;
+        let done = Arc::new(AtomicBool::new(false));
         let name = Arc::new(name);
-        let mut marshal_buffer = BytesMut::with_capacity(16 * 1024);
-        while !done {
+        while !done.load(Ordering::Relaxed) {
             //log::debug!("[{}] gather_outbound begin", name);
             let (packets, continue_loop) = {
                 let mut ai = association_internal.lock().await;
@@ -516,9 +515,9 @@ impl Association {
             let net_conn = Arc::clone(&net_conn);
             let bytes_sent = Arc::clone(&bytes_sent);
             let name2 = Arc::clone(&name);
-            let buf = std::mem::replace(&mut marshal_buffer, BytesMut::new());
-            let res = tokio::task::spawn(async move {
-                let mut buf = buf;
+            let done2 = Arc::clone(&done);
+            tokio::task::spawn(async move {
+                let mut buf = BytesMut::with_capacity(16 * 1024);
                 for raw in packets {
                     buf.clear();
                     if let Err(err) = raw.marshal_to(&mut buf) {
@@ -527,30 +526,14 @@ impl Association {
                         let raw = buf.as_ref();
                         if let Err(err) = net_conn.send(raw.as_ref()).await {
                             log::warn!("[{}] failed to write packets on net_conn: {}", name2, err);
-                            return Err(());
+                            done2.store(true, Ordering::Relaxed)
                         } else {
                             bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
                         }
                     }
                     //log::debug!("[{}] sending {} bytes done", name, raw.len());
                 }
-                buf.clear();
-                Ok(buf)
-            })
-            .await;
-
-            match res {
-                Ok(Ok(buf)) => marshal_buffer = buf,
-                Ok(Err(())) => break,
-                Err(err) => {
-                    log::warn!(
-                        "[{}] failed to execute task for marshalling and sending packets: {}",
-                        name,
-                        err
-                    );
-                    break;
-                }
-            }
+            });
 
             if !continue_loop {
                 break;
@@ -560,7 +543,7 @@ impl Association {
             tokio::select! {
                 _ = awake_write_loop_ch.recv() =>{}
                 _ = close_loop_ch.recv() => {
-                    done = true;
+                    done.store(true, Ordering::Relaxed);
                 }
             };
             //log::debug!("[{}] wait awake_write_loop_ch done", name);
