@@ -72,6 +72,34 @@ impl<T> GenericMandatoryMediaTrackConstraints<T> {
     }
 }
 
+impl GenericMandatoryMediaTrackConstraints<ResolvedMediaTrackConstraint> {
+    pub fn basic(&self) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
+        self.basic_or_required(false)
+    }
+
+    pub fn required(&self) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
+        self.basic_or_required(true)
+    }
+
+    fn basic_or_required(
+        &self,
+        required: bool,
+    ) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
+        GenericMediaTrackConstraintSet::new(
+            self.0
+                .iter()
+                .filter_map(|(property, constraint)| {
+                    if constraint.is_required() == required {
+                        Some((property.clone(), constraint.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        )
+    }
+}
+
 impl<T> Deref for GenericMandatoryMediaTrackConstraints<T> {
     type Target = GenericMediaTrackConstraintSet<T>;
 
@@ -137,6 +165,93 @@ impl ResolvedMandatoryMediaTrackConstraints {
         supported_constraints: &MediaTrackSupportedConstraints,
     ) -> SanitizedMandatoryMediaTrackConstraints {
         SanitizedMandatoryMediaTrackConstraints::new(self.0.into_sanitized(supported_constraints))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        property::all::name::*, ResolvedMediaTrackConstraintSet, ResolvedValueConstraint,
+        ResolvedValueRangeConstraint,
+    };
+
+    use super::*;
+
+    #[test]
+    fn basic() {
+        let mandatory = ResolvedMandatoryMediaTrackConstraints::new(
+            ResolvedMediaTrackConstraintSet::from_iter([
+                (
+                    &DEVICE_ID,
+                    ResolvedValueConstraint::default()
+                        .exact("device-id".to_owned())
+                        .into(),
+                ),
+                (
+                    &AUTO_GAIN_CONTROL,
+                    ResolvedValueConstraint::default().ideal(true).into(),
+                ),
+                (
+                    &CHANNEL_COUNT,
+                    ResolvedValueRangeConstraint::default()
+                        .exact(2)
+                        .ideal(3)
+                        .into(),
+                ),
+            ]),
+        );
+
+        let actual = mandatory.basic();
+        let expected = ResolvedMediaTrackConstraintSet::from_iter([(
+            &AUTO_GAIN_CONTROL,
+            ResolvedValueConstraint::default().ideal(true).into(),
+        )]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn required() {
+        let mandatory = ResolvedMandatoryMediaTrackConstraints::new(
+            ResolvedMediaTrackConstraintSet::from_iter([
+                (
+                    &DEVICE_ID,
+                    ResolvedValueConstraint::default()
+                        .exact("device-id".to_owned())
+                        .into(),
+                ),
+                (
+                    &AUTO_GAIN_CONTROL,
+                    ResolvedValueConstraint::default().ideal(true).into(),
+                ),
+                (
+                    &CHANNEL_COUNT,
+                    ResolvedValueRangeConstraint::default()
+                        .exact(2)
+                        .ideal(3)
+                        .into(),
+                ),
+            ]),
+        );
+
+        let actual = mandatory.required();
+        let expected = ResolvedMediaTrackConstraintSet::from_iter([
+            (
+                &DEVICE_ID,
+                ResolvedValueConstraint::default()
+                    .exact("device-id".to_owned())
+                    .into(),
+            ),
+            (
+                &CHANNEL_COUNT,
+                ResolvedValueRangeConstraint::default()
+                    .exact(2)
+                    .ideal(3)
+                    .into(),
+            ),
+        ]);
+
+        assert_eq!(actual, expected);
     }
 }
 
