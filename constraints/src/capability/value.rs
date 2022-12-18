@@ -37,6 +37,23 @@ impl From<&str> for MediaTrackValueCapability<String> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Subject = MediaTrackValueCapability<String>;
+
+    #[test]
+    fn from_str() {
+        let subject = Subject::from("string");
+
+        let actual = subject.value.as_str();
+        let expected = "string";
+
+        assert_eq!(actual, expected);
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
@@ -44,12 +61,14 @@ mod serde_tests {
 
     use super::*;
 
-    type Subject = MediaTrackValueCapability<i64>;
+    type Subject = MediaTrackValueCapability<String>;
 
     #[test]
     fn customized() {
-        let subject = Subject { value: 42 };
-        let json = serde_json::json!(42);
+        let subject = Subject {
+            value: "string".to_owned(),
+        };
+        let json = serde_json::json!("string");
 
         test_serde_symmetry!(subject: subject, json: json);
     }

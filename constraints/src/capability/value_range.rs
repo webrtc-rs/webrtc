@@ -96,6 +96,93 @@ impl<T> MediaTrackValueRangeCapability<T> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Subject = MediaTrackValueRangeCapability<i64>;
+
+    #[test]
+    fn default() {
+        let subject = Subject::default();
+
+        assert_eq!(subject.min, None);
+        assert_eq!(subject.max, None);
+    }
+
+    mod from {
+        use super::*;
+
+        #[test]
+        fn range_inclusive() {
+            let subject = Subject::from(1..=5);
+
+            assert_eq!(subject.min, Some(1));
+            assert_eq!(subject.max, Some(5));
+        }
+
+        #[test]
+        fn range_from() {
+            let subject = Subject::from(1..);
+
+            assert_eq!(subject.min, Some(1));
+            assert_eq!(subject.max, None);
+        }
+
+        #[test]
+        fn range_to_inclusive() {
+            let subject = Subject::from(..=5);
+
+            assert_eq!(subject.min, None);
+            assert_eq!(subject.max, Some(5));
+        }
+    }
+
+    mod contains {
+        use super::*;
+
+        #[test]
+        fn default() {
+            let subject = Subject::default();
+
+            assert!(subject.contains(&0));
+            assert!(subject.contains(&1));
+            assert!(subject.contains(&5));
+            assert!(subject.contains(&6));
+        }
+
+        #[test]
+        fn from_range_inclusive() {
+            let subject = Subject::from(1..=5);
+
+            assert!(!subject.contains(&0));
+            assert!(subject.contains(&1));
+            assert!(subject.contains(&5));
+            assert!(!subject.contains(&6));
+        }
+
+        #[test]
+        fn from_range_from() {
+            let subject = Subject::from(1..);
+
+            assert!(!subject.contains(&0));
+            assert!(subject.contains(&1));
+            assert!(subject.contains(&5));
+            assert!(subject.contains(&6));
+        }
+
+        #[test]
+        fn from_range_to_inclusive() {
+            let subject = Subject::from(..=5);
+
+            assert!(subject.contains(&0));
+            assert!(subject.contains(&1));
+            assert!(subject.contains(&5));
+            assert!(!subject.contains(&6));
+        }
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {

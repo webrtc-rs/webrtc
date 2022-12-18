@@ -35,6 +35,50 @@ impl<T> From<Vec<T>> for MediaTrackValueSequenceCapability<T> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Subject = MediaTrackValueSequenceCapability<String>;
+
+    #[test]
+    fn default() {
+        let subject = Subject::default();
+
+        let actual = subject.values;
+
+        let expected: Vec<String> = vec![];
+
+        assert_eq!(actual, expected);
+    }
+
+    mod from {
+        use super::*;
+
+        #[test]
+        fn value() {
+            let subject = Subject::from("foo".to_owned());
+
+            let actual = subject.values;
+
+            let expected: Vec<String> = vec!["foo".to_owned()];
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn values() {
+            let subject = Subject::from(vec!["foo".to_owned(), "bar".to_owned()]);
+
+            let actual = subject.values;
+
+            let expected: Vec<String> = vec!["foo".to_owned(), "bar".to_owned()];
+
+            assert_eq!(actual, expected);
+        }
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
@@ -42,14 +86,14 @@ mod serde_tests {
 
     use super::*;
 
-    type Subject = MediaTrackValueSequenceCapability<i64>;
+    type Subject = MediaTrackValueSequenceCapability<String>;
 
     #[test]
     fn customized() {
         let subject = Subject {
-            values: vec![1, 2, 3],
+            values: vec!["foo".to_owned(), "bar".to_owned()],
         };
-        let json = serde_json::json!([1, 2, 3]);
+        let json = serde_json::json!(["foo", "bar"]);
 
         test_serde_symmetry!(subject: subject, json: json);
     }
