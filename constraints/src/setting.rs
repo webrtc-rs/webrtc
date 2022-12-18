@@ -62,6 +62,57 @@ impl<'a> From<&'a str> for MediaTrackSetting {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Subject = MediaTrackSetting;
+
+    mod from {
+        use super::*;
+
+        #[test]
+        fn bool() {
+            let actual = Subject::from(true);
+            let expected = Subject::Bool(true);
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn integer() {
+            let actual = Subject::from(42);
+            let expected = Subject::Integer(42);
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn float() {
+            let actual = Subject::from(4.2);
+            let expected = Subject::Float(4.2);
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn string() {
+            let actual = Subject::from("string".to_owned());
+            let expected = Subject::String("string".to_owned());
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn to_string() {
+        assert_eq!(Subject::from(true).to_string(), "true");
+        assert_eq!(Subject::from(42).to_string(), "42");
+        assert_eq!(Subject::from(4.2).to_string(), "4.2");
+        assert_eq!(Subject::from("string".to_owned()).to_string(), "\"string\"");
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
