@@ -1,6 +1,7 @@
 # rtcp changelog
 
 ## Unreleased
+- [#372 Fix over-NACK due not resetting lost_packets bitmask](https://github.com/webrtc-rs/webrtc/pull/372/)
 
 ## v0.7.1
 
