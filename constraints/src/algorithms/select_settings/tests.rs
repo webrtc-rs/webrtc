@@ -27,7 +27,6 @@ lazy_static! {
     ]);
     static ref VIDEO_480P: MediaTrackSettings = MediaTrackSettings::from_iter([
         (&DEVICE_ID, "480p".into()),
-        (&GROUP_ID, "builtin".into()),
         (&ASPECT_RATIO, 0.5625.into()),
         (&FACING_MODE, FacingMode::user().into()),
         (&FRAME_RATE, 240.into()),
@@ -37,7 +36,6 @@ lazy_static! {
     ]);
     static ref VIDEO_720P: MediaTrackSettings = MediaTrackSettings::from_iter([
         (&DEVICE_ID, "720p".into()),
-        (&GROUP_ID, "builtin".into()),
         (&ASPECT_RATIO, 0.5625.into()),
         (&FACING_MODE, FacingMode::user().into()),
         (&FRAME_RATE, 120.into()),
@@ -47,7 +45,6 @@ lazy_static! {
     ]);
     static ref VIDEO_1080P: MediaTrackSettings = MediaTrackSettings::from_iter([
         (&DEVICE_ID, "1080p".into()),
-        (&GROUP_ID, "builtin".into()),
         (&ASPECT_RATIO, 0.5625.into()),
         (&FACING_MODE, FacingMode::user().into()),
         (&FRAME_RATE, 60.into()),
@@ -57,7 +54,6 @@ lazy_static! {
     ]);
     static ref VIDEO_1440P: MediaTrackSettings = MediaTrackSettings::from_iter([
         (&DEVICE_ID, "1440p".into()),
-        (&GROUP_ID, "builtin".into()),
         (&ASPECT_RATIO, 0.5625.into()),
         (&FACING_MODE, FacingMode::user().into()),
         (&FRAME_RATE, 30.into()),
@@ -67,7 +63,6 @@ lazy_static! {
     ]);
     static ref VIDEO_2160P: MediaTrackSettings = MediaTrackSettings::from_iter([
         (&DEVICE_ID, "2160p".into()),
-        (&GROUP_ID, "builtin".into()),
         (&ASPECT_RATIO, 0.5625.into()),
         (&FACING_MODE, FacingMode::user().into()),
         (&FRAME_RATE, 15.into()),
@@ -210,7 +205,7 @@ mod overconstrained {
             assert_eq!(constraint, &GROUP_ID);
             assert_eq!(
                 err_message,
-                "Setting was a mismatch ([\"builtin\"] do not satisfy (x == \"missing-group\"))."
+                "Setting was missing (does not satisfy (x == \"missing-group\"))."
             );
         }
 
