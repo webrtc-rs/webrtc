@@ -4,14 +4,26 @@
 
 use std::collections::HashMap;
 
-use crate::algorithms::{ConstraintFailureInfo, SettingFitnessDistanceErrorKind};
+use crate::{
+    algorithms::{ConstraintFailureInfo, SettingFitnessDistanceErrorKind},
+    MediaTrackProperty,
+};
 
-#[derive(Clone, Default, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct OverconstrainedError {
     /// The offending constraint's name.
-    pub constraint: String,
+    pub constraint: MediaTrackProperty,
     /// Error message.
     pub message: Option<String>,
+}
+
+impl Default for OverconstrainedError {
+    fn default() -> Self {
+        Self {
+            constraint: MediaTrackProperty::from(""),
+            message: Default::default(),
+        }
+    }
 }
 
 impl std::fmt::Display for OverconstrainedError {
@@ -28,7 +40,7 @@ impl std::error::Error for OverconstrainedError {}
 
 impl OverconstrainedError {
     pub(super) fn exposing_device_information(
-        failed_constraints: HashMap<String, ConstraintFailureInfo>,
+        failed_constraints: HashMap<MediaTrackProperty, ConstraintFailureInfo>,
     ) -> Self {
         let failed_constraint = failed_constraints
             .into_iter()

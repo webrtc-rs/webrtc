@@ -6,7 +6,7 @@ use crate::{
         FitnessDistance,
     },
     errors::OverconstrainedError,
-    MediaTrackSettings, SanitizedMediaTrackConstraintSet,
+    MediaTrackProperty, MediaTrackSettings, SanitizedMediaTrackConstraintSet,
 };
 
 /// Returns the set of settings for which all mandatory constraints'
@@ -30,7 +30,8 @@ where
     // > set of settings dictionaries for which the fitness distance is finite.
 
     let mut feasible_candidates: Vec<(&'a MediaTrackSettings, f64)> = vec![];
-    let mut failed_constraints: HashMap<String, ConstraintFailureInfo> = Default::default();
+    let mut failed_constraints: HashMap<MediaTrackProperty, ConstraintFailureInfo> =
+        Default::default();
 
     for candidate in candidates {
         match mandatory_constraints.fitness_distance(candidate) {
@@ -78,18 +79,22 @@ mod tests {
     // Advanced constraint sets that do not match any candidates should just get ignored:
     #[test]
     fn overconstrained() {
-        let supported_constraints =
-            MediaTrackSupportedConstraints::from_iter(vec![DEVICE_ID, HEIGHT, WIDTH, RESIZE_MODE]);
+        let supported_constraints = MediaTrackSupportedConstraints::from_iter(vec![
+            &DEVICE_ID,
+            &HEIGHT,
+            &WIDTH,
+            &RESIZE_MODE,
+        ]);
 
         let settings = vec![
-            MediaTrackSettings::from_iter([(DEVICE_ID, "foo".into())]),
-            MediaTrackSettings::from_iter([(DEVICE_ID, "bar".into())]),
+            MediaTrackSettings::from_iter([(&DEVICE_ID, "foo".into())]),
+            MediaTrackSettings::from_iter([(&DEVICE_ID, "bar".into())]),
         ];
 
         let candidates: Vec<_> = settings.iter().collect();
 
         let constraints = ResolvedMandatoryMediaTrackConstraints::from_iter([(
-            DEVICE_ID,
+            &DEVICE_ID,
             ResolvedValueConstraint::default()
                 .exact("mismatched-device".to_owned())
                 .into(),
@@ -107,7 +112,7 @@ mod tests {
         let constraint = &error.constraint;
         let err_message = error.message.as_ref().expect("Error message.");
 
-        assert_eq!(constraint, DEVICE_ID);
+        assert_eq!(constraint, &DEVICE_ID);
         assert_eq!(
             err_message,
             "Setting was a mismatch ([\"bar\", \"foo\"] do not satisfy (x == \"mismatched-device\"))."
@@ -116,39 +121,43 @@ mod tests {
 
     #[test]
     fn constrained() {
-        let supported_constraints =
-            MediaTrackSupportedConstraints::from_iter(vec![DEVICE_ID, HEIGHT, WIDTH, RESIZE_MODE]);
+        let supported_constraints = MediaTrackSupportedConstraints::from_iter(vec![
+            &DEVICE_ID,
+            &HEIGHT,
+            &WIDTH,
+            &RESIZE_MODE,
+        ]);
 
         let settings = vec![
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "480p".into()),
-                (HEIGHT, 480.into()),
-                (WIDTH, 720.into()),
-                (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+                (&DEVICE_ID, "480p".into()),
+                (&HEIGHT, 480.into()),
+                (&WIDTH, 720.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "720p".into()),
-                (HEIGHT, 720.into()),
-                (WIDTH, 1280.into()),
-                (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+                (&DEVICE_ID, "720p".into()),
+                (&HEIGHT, 720.into()),
+                (&WIDTH, 1280.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "1080p".into()),
-                (HEIGHT, 1080.into()),
-                (WIDTH, 1920.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "1080p".into()),
+                (&HEIGHT, 1080.into()),
+                (&WIDTH, 1920.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "1440p".into()),
-                (HEIGHT, 1440.into()),
-                (WIDTH, 2560.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "1440p".into()),
+                (&HEIGHT, 1440.into()),
+                (&WIDTH, 2560.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "2160p".into()),
-                (HEIGHT, 2160.into()),
-                (WIDTH, 3840.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "2160p".into()),
+                (&HEIGHT, 2160.into()),
+                (&WIDTH, 3840.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
         ];
 
@@ -156,17 +165,17 @@ mod tests {
 
         let constraints = ResolvedMandatoryMediaTrackConstraints::from_iter([
             (
-                RESIZE_MODE,
+                &RESIZE_MODE,
                 ResolvedValueConstraint::default()
                     .exact(ResizeMode::none())
                     .into(),
             ),
             (
-                HEIGHT,
+                &HEIGHT,
                 ResolvedValueRangeConstraint::default().min(1000).into(),
             ),
             (
-                WIDTH,
+                &WIDTH,
                 ResolvedValueRangeConstraint::default().max(2000).into(),
             ),
         ]);

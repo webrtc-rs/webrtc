@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
-use crate::{MediaTrackSettings, SanitizedMediaTrackConstraintSet};
+use crate::{MediaTrackProperty, MediaTrackSettings, SanitizedMediaTrackConstraintSet};
 
 use super::{setting::SettingFitnessDistanceError, FitnessDistance};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SettingsFitnessDistanceError {
-    pub setting_errors: HashMap<String, SettingFitnessDistanceError>,
+    pub setting_errors: HashMap<MediaTrackProperty, SettingFitnessDistanceError>,
 }
 
 impl<'a> FitnessDistance<&'a MediaTrackSettings> for SanitizedMediaTrackConstraintSet {
     type Error = SettingsFitnessDistanceError;
 
     fn fitness_distance(&self, settings: &'a MediaTrackSettings) -> Result<f64, Self::Error> {
-        let results: HashMap<String, _> = self
+        let results: HashMap<MediaTrackProperty, _> = self
             .iter()
             .map(|(property, constraint)| {
                 let setting = settings.get(property);
@@ -24,7 +24,8 @@ impl<'a> FitnessDistance<&'a MediaTrackSettings> for SanitizedMediaTrackConstrai
 
         let mut total_fitness_distance = 0.0;
 
-        let mut setting_errors: HashMap<String, SettingFitnessDistanceError> = Default::default();
+        let mut setting_errors: HashMap<MediaTrackProperty, SettingFitnessDistanceError> =
+            Default::default();
 
         for (property, result) in results.into_iter() {
             match result {

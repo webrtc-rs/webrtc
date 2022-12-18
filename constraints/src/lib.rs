@@ -36,6 +36,7 @@ pub use self::{
         SanitizedMediaTrackConstraintSet, SanitizedMediaTrackConstraints,
     },
     enumerations::{FacingMode, ResizeMode},
+    property::MediaTrackProperty,
     setting::MediaTrackSetting,
     settings::MediaTrackSettings,
     supported_constraints::MediaTrackSupportedConstraints,

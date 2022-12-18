@@ -7,7 +7,7 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackCapability;
+use crate::{MediaTrackCapability, MediaTrackProperty};
 
 /// The capabilities of a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -28,20 +28,20 @@ use crate::MediaTrackCapability;
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
-pub struct MediaTrackCapabilities(HashMap<String, MediaTrackCapability>);
+pub struct MediaTrackCapabilities(HashMap<MediaTrackProperty, MediaTrackCapability>);
 
 impl MediaTrackCapabilities {
-    pub fn new(capabilities: HashMap<String, MediaTrackCapability>) -> Self {
+    pub fn new(capabilities: HashMap<MediaTrackProperty, MediaTrackCapability>) -> Self {
         Self(capabilities)
     }
 
-    pub fn into_inner(self) -> HashMap<String, MediaTrackCapability> {
+    pub fn into_inner(self) -> HashMap<MediaTrackProperty, MediaTrackCapability> {
         self.0
     }
 }
 
 impl Deref for MediaTrackCapabilities {
-    type Target = HashMap<String, MediaTrackCapability>;
+    type Target = HashMap<MediaTrackProperty, MediaTrackCapability>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -56,7 +56,7 @@ impl DerefMut for MediaTrackCapabilities {
 
 impl<T> FromIterator<(T, MediaTrackCapability)> for MediaTrackCapabilities
 where
-    T: Into<String>,
+    T: Into<MediaTrackProperty>,
 {
     fn from_iter<I>(iter: I) -> Self
     where
@@ -67,8 +67,8 @@ where
 }
 
 impl IntoIterator for MediaTrackCapabilities {
-    type Item = (String, MediaTrackCapability);
-    type IntoIter = std::collections::hash_map::IntoIter<String, MediaTrackCapability>;
+    type Item = (MediaTrackProperty, MediaTrackCapability);
+    type IntoIter = std::collections::hash_map::IntoIter<MediaTrackProperty, MediaTrackCapability>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -95,10 +95,10 @@ mod serde_tests {
     #[test]
     fn customized() {
         let subject = Subject::from_iter([
-            (DEVICE_ID, "device-id".into()),
-            (AUTO_GAIN_CONTROL, true.into()),
-            (CHANNEL_COUNT, (12..=34).into()),
-            (LATENCY, (1.2..=3.4).into()),
+            (&DEVICE_ID, "device-id".into()),
+            (&AUTO_GAIN_CONTROL, true.into()),
+            (&CHANNEL_COUNT, (12..=34).into()),
+            (&LATENCY, (1.2..=3.4).into()),
         ]);
         let json = serde_json::json!({
             "deviceId": "device-id".to_owned(),

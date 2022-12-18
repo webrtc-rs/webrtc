@@ -152,10 +152,10 @@ mod serde_tests {
     fn serialize() {
         let advanced =
             AdvancedMediaTrackConstraints::new(vec![MediaTrackConstraintSet::from_iter([
-                (DEVICE_ID, "device-id".into()),
-                (AUTO_GAIN_CONTROL, true.into()),
-                (CHANNEL_COUNT, 2.into()),
-                (LATENCY, 0.123.into()),
+                (&DEVICE_ID, "device-id".into()),
+                (&AUTO_GAIN_CONTROL, true.into()),
+                (&CHANNEL_COUNT, 2.into()),
+                (&LATENCY, 0.123.into()),
             ])]);
         let actual = serde_json::to_value(advanced).unwrap();
         let expected = serde_json::json!([
@@ -183,10 +183,10 @@ mod serde_tests {
         let actual: AdvancedMediaTrackConstraints = serde_json::from_value(json).unwrap();
         let expected =
             AdvancedMediaTrackConstraints::new(vec![MediaTrackConstraintSet::from_iter([
-                (DEVICE_ID, "device-id".into()),
-                (AUTO_GAIN_CONTROL, true.into()),
-                (CHANNEL_COUNT, 2.into()),
-                (LATENCY, 0.123.into()),
+                (&DEVICE_ID, "device-id".into()),
+                (&AUTO_GAIN_CONTROL, true.into()),
+                (&CHANNEL_COUNT, 2.into()),
+                (&LATENCY, 0.123.into()),
             ])]);
 
         assert_eq!(actual, expected);
