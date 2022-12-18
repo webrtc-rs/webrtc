@@ -7,7 +7,7 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackSetting;
+use crate::{MediaTrackProperty, MediaTrackSetting};
 
 /// The settings of a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -30,20 +30,20 @@ use crate::MediaTrackSetting;
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
-pub struct MediaTrackSettings(HashMap<String, MediaTrackSetting>);
+pub struct MediaTrackSettings(HashMap<MediaTrackProperty, MediaTrackSetting>);
 
 impl MediaTrackSettings {
-    pub fn new(settings: HashMap<String, MediaTrackSetting>) -> Self {
+    pub fn new(settings: HashMap<MediaTrackProperty, MediaTrackSetting>) -> Self {
         Self(settings)
     }
 
-    pub fn into_inner(self) -> HashMap<String, MediaTrackSetting> {
+    pub fn into_inner(self) -> HashMap<MediaTrackProperty, MediaTrackSetting> {
         self.0
     }
 }
 
 impl Deref for MediaTrackSettings {
-    type Target = HashMap<String, MediaTrackSetting>;
+    type Target = HashMap<MediaTrackProperty, MediaTrackSetting>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -58,7 +58,7 @@ impl DerefMut for MediaTrackSettings {
 
 impl<T> FromIterator<(T, MediaTrackSetting)> for MediaTrackSettings
 where
-    T: Into<String>,
+    T: Into<MediaTrackProperty>,
 {
     fn from_iter<I>(iter: I) -> Self
     where
@@ -69,8 +69,8 @@ where
 }
 
 impl IntoIterator for MediaTrackSettings {
-    type Item = (String, MediaTrackSetting);
-    type IntoIter = std::collections::hash_map::IntoIter<String, MediaTrackSetting>;
+    type Item = (MediaTrackProperty, MediaTrackSetting);
+    type IntoIter = std::collections::hash_map::IntoIter<MediaTrackProperty, MediaTrackSetting>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -97,10 +97,10 @@ mod serde_tests {
     #[test]
     fn customized() {
         let subject = Subject::from_iter([
-            (DEVICE_ID, "device-id".into()),
-            (AUTO_GAIN_CONTROL, true.into()),
-            (CHANNEL_COUNT, 2.into()),
-            (LATENCY, 0.123.into()),
+            (&DEVICE_ID, "device-id".into()),
+            (&AUTO_GAIN_CONTROL, true.into()),
+            (&CHANNEL_COUNT, 2.into()),
+            (&LATENCY, 0.123.into()),
         ]);
         let json = serde_json::json!({
             "deviceId": "device-id".to_owned(),

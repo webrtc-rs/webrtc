@@ -7,8 +7,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
-    ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
+    MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackProperty,
+    MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
 };
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
@@ -94,7 +94,7 @@ impl<T> Default for GenericMandatoryMediaTrackConstraints<T> {
 
 impl<T, U> FromIterator<(U, T)> for GenericMandatoryMediaTrackConstraints<T>
 where
-    U: Into<String>,
+    U: Into<MediaTrackProperty>,
 {
     fn from_iter<I>(iter: I) -> Self
     where
@@ -105,8 +105,8 @@ where
 }
 
 impl<T> IntoIterator for GenericMandatoryMediaTrackConstraints<T> {
-    type Item = (String, T);
-    type IntoIter = indexmap::map::IntoIter<String, T>;
+    type Item = (MediaTrackProperty, T);
+    type IntoIter = indexmap::map::IntoIter<MediaTrackProperty, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -168,10 +168,10 @@ mod serde_tests {
     #[test]
     fn serialize() {
         let mandatory = MandatoryMediaTrackConstraints::new(MediaTrackConstraintSet::from_iter([
-            (DEVICE_ID, "device-id".into()),
-            (AUTO_GAIN_CONTROL, true.into()),
-            (CHANNEL_COUNT, 2.into()),
-            (LATENCY, 0.123.into()),
+            (&DEVICE_ID, "device-id".into()),
+            (&AUTO_GAIN_CONTROL, true.into()),
+            (&CHANNEL_COUNT, 2.into()),
+            (&LATENCY, 0.123.into()),
         ]));
         let actual = serde_json::to_value(mandatory).unwrap();
         let expected = serde_json::json!(
@@ -198,10 +198,10 @@ mod serde_tests {
         );
         let actual: MandatoryMediaTrackConstraints = serde_json::from_value(json).unwrap();
         let expected = MandatoryMediaTrackConstraints::new(MediaTrackConstraintSet::from_iter([
-            (DEVICE_ID, "device-id".into()),
-            (AUTO_GAIN_CONTROL, true.into()),
-            (CHANNEL_COUNT, 2.into()),
-            (LATENCY, 0.123.into()),
+            (&DEVICE_ID, "device-id".into()),
+            (&AUTO_GAIN_CONTROL, true.into()),
+            (&CHANNEL_COUNT, 2.into()),
+            (&LATENCY, 0.123.into()),
         ]));
 
         assert_eq!(actual, expected);

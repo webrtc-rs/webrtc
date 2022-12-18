@@ -11,6 +11,8 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
+use crate::MediaTrackProperty;
+
 /// The list of constraints recognized by a User Agent for controlling the
 /// capabilities of a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -31,16 +33,16 @@ use serde::{
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams
 /// [webidl_spec]: https://webidl.spec.whatwg.org/#idl-dictionaries
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct MediaTrackSupportedConstraints(HashSet<String>);
+pub struct MediaTrackSupportedConstraints(HashSet<MediaTrackProperty>);
 
 impl MediaTrackSupportedConstraints {
-    pub fn into_inner(self) -> HashSet<String> {
+    pub fn into_inner(self) -> HashSet<MediaTrackProperty> {
         self.0
     }
 }
 
 impl Deref for MediaTrackSupportedConstraints {
-    type Target = HashSet<String>;
+    type Target = HashSet<MediaTrackProperty>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -60,13 +62,13 @@ impl Default for MediaTrackSupportedConstraints {
     fn default() -> Self {
         use crate::property::all::names as property_names;
 
-        Self::from_iter(property_names())
+        Self::from_iter(property_names().into_iter().cloned())
     }
 }
 
 impl<T> FromIterator<T> for MediaTrackSupportedConstraints
 where
-    T: Into<String>,
+    T: Into<MediaTrackProperty>,
 {
     fn from_iter<I>(iter: I) -> Self
     where
@@ -77,8 +79,8 @@ where
 }
 
 impl IntoIterator for MediaTrackSupportedConstraints {
-    type Item = String;
-    type IntoIter = std::collections::hash_set::IntoIter<String>;
+    type Item = MediaTrackProperty;
+    type IntoIter = std::collections::hash_set::IntoIter<MediaTrackProperty>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -170,12 +172,12 @@ mod serde_tests {
     #[test]
     fn customized() {
         let subject = Subject::from_iter([
-            DEVICE_ID,
-            GROUP_ID,
-            AUTO_GAIN_CONTROL,
-            CHANNEL_COUNT,
-            ASPECT_RATIO,
-            FACING_MODE,
+            &DEVICE_ID,
+            &GROUP_ID,
+            &AUTO_GAIN_CONTROL,
+            &CHANNEL_COUNT,
+            &ASPECT_RATIO,
+            &FACING_MODE,
         ]);
         let json = serde_json::json!({
             "deviceId": true,

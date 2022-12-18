@@ -146,17 +146,17 @@ mod tests {
     #[test]
     fn settings() {
         let actual: MediaTrackSettings = settings![
-            DEVICE_ID => "foobar".to_owned(),
-            FRAME_RATE => 30.0,
-            HEIGHT => 1080,
-            FACING_MODE => FacingMode::user(),
+            &DEVICE_ID => "foobar".to_owned(),
+            &FRAME_RATE => 30.0,
+            &HEIGHT => 1080,
+            &FACING_MODE => FacingMode::user(),
         ];
 
         let expected = <MediaTrackSettings as std::iter::FromIterator<_>>::from_iter([
-            (DEVICE_ID, "foobar".to_owned().into()),
-            (FRAME_RATE, 30.0.into()),
-            (HEIGHT, 1080.into()),
-            (FACING_MODE, FacingMode::user().into()),
+            (&DEVICE_ID, "foobar".to_owned().into()),
+            (&FRAME_RATE, 30.0.into()),
+            (&HEIGHT, 1080.into()),
+            (&FACING_MODE, FacingMode::user().into()),
         ]);
 
         assert_eq!(actual, expected);
@@ -242,22 +242,22 @@ mod tests {
     #[test]
     fn mandatory_constraints() {
         let actual = mandatory_constraints! {
-            DEVICE_ID => constraint!(value: {
+            &DEVICE_ID => constraint!(value: {
                 exact: "foobar".to_owned(),
                 ideal: "bazblee".to_owned(),
             }),
-            FRAME_RATE => constraint!(range: {
+            &FRAME_RATE => constraint!(range: {
                 min: 30.0,
                 max: 60.0,
             }),
-            FACING_MODE => constraint!(sequence: {
+            &FACING_MODE => constraint!(sequence: {
                 exact: vec![FacingMode::user(), FacingMode::environment()]
             }),
         };
 
         let expected = <MandatoryMediaTrackConstraints as std::iter::FromIterator<_>>::from_iter([
             (
-                DEVICE_ID,
+                &DEVICE_ID,
                 ValueConstraint::Constraint(
                     ResolvedValueConstraint::default()
                         .exact("foobar".to_owned())
@@ -266,14 +266,14 @@ mod tests {
                 .into(),
             ),
             (
-                FRAME_RATE,
+                &FRAME_RATE,
                 ValueRangeConstraint::Constraint(
                     ResolvedValueRangeConstraint::default().min(30.0).max(60.0),
                 )
                 .into(),
             ),
             (
-                FACING_MODE,
+                &FACING_MODE,
                 ValueSequenceConstraint::Constraint(
                     ResolvedValueSequenceConstraint::default()
                         .exact(vec![FacingMode::user(), FacingMode::environment()]),
@@ -289,19 +289,19 @@ mod tests {
     fn advanced_constraints() {
         let actual = advanced_constraints! [
             {
-                DEVICE_ID => constraint!(value: {
+                &DEVICE_ID => constraint!(value: {
                     exact: "foobar".to_owned(),
                     ideal: "bazblee".to_owned(),
                 }),
             },
             {
-                FRAME_RATE => constraint!(range: {
+                &FRAME_RATE => constraint!(range: {
                     min: 30.0,
                     max: 60.0,
                 }),
             },
             {
-                FACING_MODE => constraint!(sequence: {
+                &FACING_MODE => constraint!(sequence: {
                     exact: vec![FacingMode::user(), FacingMode::environment()]
                 }),
             },
@@ -309,21 +309,21 @@ mod tests {
 
         let expected = <AdvancedMediaTrackConstraints as std::iter::FromIterator<_>>::from_iter([
             <MediaTrackConstraintSet as std::iter::FromIterator<_>>::from_iter([(
-                DEVICE_ID,
+                &DEVICE_ID,
                 ResolvedValueConstraint::default()
                     .exact("foobar".to_owned())
                     .ideal("bazblee".to_owned())
                     .into(),
             )]),
             <MediaTrackConstraintSet as std::iter::FromIterator<_>>::from_iter([(
-                FRAME_RATE,
+                &FRAME_RATE,
                 ResolvedValueRangeConstraint::default()
                     .min(30.0)
                     .max(60.0)
                     .into(),
             )]),
             <MediaTrackConstraintSet as std::iter::FromIterator<_>>::from_iter([(
-                FACING_MODE,
+                &FACING_MODE,
                 ResolvedValueSequenceConstraint::default()
                     .exact(vec![FacingMode::user(), FacingMode::environment()])
                     .into(),
@@ -337,33 +337,33 @@ mod tests {
     fn constraints() {
         let actual: MediaTrackConstraints = constraints!(
             mandatory: {
-                DEVICE_ID => constraint!(value: {
+                &DEVICE_ID => constraint!(value: {
                     exact: "foobar".to_owned(),
                     ideal: "bazblee".to_owned(),
                 }),
-                FRAME_RATE => constraint!(range: {
+                &FRAME_RATE => constraint!(range: {
                     min: 30.0,
                     max: 60.0,
                 }),
-                FACING_MODE => constraint!(sequence: {
+                &FACING_MODE => constraint!(sequence: {
                     exact: vec![FacingMode::user(), FacingMode::environment()]
                 }),
             },
             advanced: [
                 {
-                    DEVICE_ID => constraint!(value: {
+                    &DEVICE_ID => constraint!(value: {
                         exact: "foobar".to_owned(),
                         ideal: "bazblee".to_owned(),
                     }),
                 },
                 {
-                    FRAME_RATE => constraint!(range: {
+                    &FRAME_RATE => constraint!(range: {
                         min: 30.0,
                         max: 60.0,
                     }),
                 },
                 {
-                    FACING_MODE => constraint!(sequence: {
+                    &FACING_MODE => constraint!(sequence: {
                         exact: vec![FacingMode::user(), FacingMode::environment()]
                     }),
                 },
@@ -373,21 +373,21 @@ mod tests {
         let expected = MediaTrackConstraints {
             mandatory: <MandatoryMediaTrackConstraints as std::iter::FromIterator<_>>::from_iter([
                 (
-                    DEVICE_ID,
+                    &DEVICE_ID,
                     ResolvedValueConstraint::default()
                         .exact("foobar".to_owned())
                         .ideal("bazblee".to_owned())
                         .into(),
                 ),
                 (
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint::default()
                         .min(30.0)
                         .max(60.0)
                         .into(),
                 ),
                 (
-                    FACING_MODE,
+                    &FACING_MODE,
                     ResolvedValueSequenceConstraint::default()
                         .exact(vec![FacingMode::user(), FacingMode::environment()])
                         .into(),
@@ -395,21 +395,21 @@ mod tests {
             ]),
             advanced: <AdvancedMediaTrackConstraints as std::iter::FromIterator<_>>::from_iter([
                 <MediaTrackConstraintSet as std::iter::FromIterator<_>>::from_iter([(
-                    DEVICE_ID,
+                    &DEVICE_ID,
                     ResolvedValueConstraint::default()
                         .exact("foobar".to_owned())
                         .ideal("bazblee".to_owned())
                         .into(),
                 )]),
                 <MediaTrackConstraintSet as std::iter::FromIterator<_>>::from_iter([(
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint::default()
                         .min(30.0)
                         .max(60.0)
                         .into(),
                 )]),
                 <MediaTrackConstraintSet as std::iter::FromIterator<_>>::from_iter([(
-                    FACING_MODE,
+                    &FACING_MODE,
                     ResolvedValueSequenceConstraint::default()
                         .exact(vec![FacingMode::user(), FacingMode::environment()])
                         .into(),

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     constraint::SanitizedMediaTrackConstraint, property::all::name::*, MediaTrackConstraint,
-    MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
+    MediaTrackConstraintResolutionStrategy, MediaTrackProperty, MediaTrackSupportedConstraints,
     ResolvedMediaTrackConstraint, ResolvedValueConstraint, ResolvedValueRangeConstraint,
 };
 
@@ -38,20 +38,20 @@ pub type SanitizedMediaTrackConstraintSet =
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
-pub struct GenericMediaTrackConstraintSet<T>(IndexMap<String, T>);
+pub struct GenericMediaTrackConstraintSet<T>(IndexMap<MediaTrackProperty, T>);
 
 impl<T> GenericMediaTrackConstraintSet<T> {
-    pub fn new(constraint_set: IndexMap<String, T>) -> Self {
+    pub fn new(constraint_set: IndexMap<MediaTrackProperty, T>) -> Self {
         Self(constraint_set)
     }
 
-    pub fn into_inner(self) -> IndexMap<String, T> {
+    pub fn into_inner(self) -> IndexMap<MediaTrackProperty, T> {
         self.0
     }
 }
 
 impl<T> Deref for GenericMediaTrackConstraintSet<T> {
-    type Target = IndexMap<String, T>;
+    type Target = IndexMap<MediaTrackProperty, T>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -72,7 +72,7 @@ impl<T> Default for GenericMediaTrackConstraintSet<T> {
 
 impl<T, U> FromIterator<(U, T)> for GenericMediaTrackConstraintSet<T>
 where
-    U: Into<String>,
+    U: Into<MediaTrackProperty>,
 {
     fn from_iter<I>(iter: I) -> Self
     where
@@ -83,8 +83,8 @@ where
 }
 
 impl<T> IntoIterator for GenericMediaTrackConstraintSet<T> {
-    type Item = (String, T);
-    type IntoIter = indexmap::map::IntoIter<String, T>;
+    type Item = (MediaTrackProperty, T);
+    type IntoIter = indexmap::map::IntoIter<MediaTrackProperty, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -123,7 +123,7 @@ impl ResolvedMediaTrackConstraintSet {
         self,
         supported_constraints: &MediaTrackSupportedConstraints,
     ) -> SanitizedMediaTrackConstraintSet {
-        let index_map: IndexMap<String, _> = self
+        let index_map: IndexMap<MediaTrackProperty, _> = self
             .into_iter()
             .filter_map(|(property, constraint)| {
                 if supported_constraints.contains(&property) {
@@ -142,91 +142,91 @@ impl ResolvedMediaTrackConstraintSet {
 impl SanitizedMediaTrackConstraintSet {
     pub fn device_id(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
-            .get(DEVICE_ID)
+            .get(&DEVICE_ID)
             .and_then(SanitizedMediaTrackConstraint::string)
     }
 
     pub fn group_id(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
-            .get(GROUP_ID)
+            .get(&GROUP_ID)
             .and_then(SanitizedMediaTrackConstraint::string)
     }
 
     pub fn auto_gain_control(&self) -> Option<&ResolvedValueConstraint<bool>> {
         self.0
-            .get(AUTO_GAIN_CONTROL)
+            .get(&AUTO_GAIN_CONTROL)
             .and_then(SanitizedMediaTrackConstraint::bool)
     }
 
     pub fn channel_count(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
-            .get(CHANNEL_COUNT)
+            .get(&CHANNEL_COUNT)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
     pub fn echo_cancellation(&self) -> Option<&ResolvedValueConstraint<bool>> {
         self.0
-            .get(ECHO_CANCELLATION)
+            .get(&ECHO_CANCELLATION)
             .and_then(SanitizedMediaTrackConstraint::bool)
     }
 
     pub fn latency(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
-            .get(LATENCY)
+            .get(&LATENCY)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
     pub fn noise_suppression(&self) -> Option<&ResolvedValueConstraint<bool>> {
         self.0
-            .get(NOISE_SUPPRESSION)
+            .get(&NOISE_SUPPRESSION)
             .and_then(SanitizedMediaTrackConstraint::bool)
     }
 
     pub fn sample_rate(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
-            .get(SAMPLE_RATE)
+            .get(&SAMPLE_RATE)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
     pub fn sample_size(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
-            .get(SAMPLE_SIZE)
+            .get(&SAMPLE_SIZE)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
     pub fn aspect_ratio(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
-            .get(ASPECT_RATIO)
+            .get(&ASPECT_RATIO)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
     pub fn facing_mode(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
-            .get(FACING_MODE)
+            .get(&FACING_MODE)
             .and_then(SanitizedMediaTrackConstraint::string)
     }
 
     pub fn frame_rate(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
         self.0
-            .get(FRAME_RATE)
+            .get(&FRAME_RATE)
             .and_then(SanitizedMediaTrackConstraint::float_range)
     }
 
     pub fn height(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
-            .get(HEIGHT)
+            .get(&HEIGHT)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
     pub fn width(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
         self.0
-            .get(WIDTH)
+            .get(&WIDTH)
             .and_then(SanitizedMediaTrackConstraint::integer_range)
     }
 
     pub fn resize_mode(&self) -> Option<&ResolvedValueConstraint<String>> {
         self.0
-            .get(RESIZE_MODE)
+            .get(&RESIZE_MODE)
             .and_then(SanitizedMediaTrackConstraint::string)
     }
 }
@@ -259,10 +259,10 @@ mod serde_tests {
     #[test]
     fn serialize() {
         let constraint_set = MediaTrackConstraintSet::from_iter([
-            (DEVICE_ID, "device-id".into()),
-            (AUTO_GAIN_CONTROL, true.into()),
-            (CHANNEL_COUNT, 2.into()),
-            (LATENCY, 0.123.into()),
+            (&DEVICE_ID, "device-id".into()),
+            (&AUTO_GAIN_CONTROL, true.into()),
+            (&CHANNEL_COUNT, 2.into()),
+            (&LATENCY, 0.123.into()),
         ]);
         let actual = serde_json::to_value(constraint_set).unwrap();
         let expected = serde_json::json!({
@@ -285,10 +285,10 @@ mod serde_tests {
         });
         let actual: MediaTrackConstraintSet = serde_json::from_value(json).unwrap();
         let expected = MediaTrackConstraintSet::from_iter([
-            (DEVICE_ID, "device-id".into()),
-            (AUTO_GAIN_CONTROL, true.into()),
-            (CHANNEL_COUNT, 2.into()),
-            (LATENCY, 0.123.into()),
+            (&DEVICE_ID, "device-id".into()),
+            (&AUTO_GAIN_CONTROL, true.into()),
+            (&CHANNEL_COUNT, 2.into()),
+            (&LATENCY, 0.123.into()),
         ]);
 
         assert_eq!(actual, expected);

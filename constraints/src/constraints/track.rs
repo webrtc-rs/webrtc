@@ -260,15 +260,15 @@ mod serde_tests {
     fn customized() {
         let subject = Subject {
             mandatory: MandatoryMediaTrackConstraints::from_iter([(
-                DEVICE_ID,
+                &DEVICE_ID,
                 "microphone".into(),
             )]),
             advanced: AdvancedMediaTrackConstraints::new(vec![
                 MediaTrackConstraintSet::from_iter([
-                    (AUTO_GAIN_CONTROL, true.into()),
-                    (CHANNEL_COUNT, 2.into()),
+                    (&AUTO_GAIN_CONTROL, true.into()),
+                    (&CHANNEL_COUNT, 2.into()),
                 ]),
-                MediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
+                MediaTrackConstraintSet::from_iter([(&LATENCY, 0.123.into())]),
             ]),
         };
         let json = serde_json::json!({

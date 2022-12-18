@@ -18,62 +18,62 @@ use super::DeviceInformationExposureMode;
 
 lazy_static! {
     static ref VIDEO_IDEAL: MediaTrackSettings = MediaTrackSettings::from_iter([
-        (ASPECT_RATIO, 0.5625.into()),
-        (FACING_MODE, FacingMode::user().into()),
-        (FRAME_RATE, 60.0.into()),
-        (WIDTH, 1920.into()),
-        (HEIGHT, 1080.into()),
-        (RESIZE_MODE, ResizeMode::none().into()),
+        (&ASPECT_RATIO, 0.5625.into()),
+        (&FACING_MODE, FacingMode::user().into()),
+        (&FRAME_RATE, 60.0.into()),
+        (&WIDTH, 1920.into()),
+        (&HEIGHT, 1080.into()),
+        (&RESIZE_MODE, ResizeMode::none().into()),
     ]);
     static ref VIDEO_480P: MediaTrackSettings = MediaTrackSettings::from_iter([
-        (DEVICE_ID, "480p".into()),
-        (GROUP_ID, "builtin".into()),
-        (ASPECT_RATIO, 0.5625.into()),
-        (FACING_MODE, FacingMode::user().into()),
-        (FRAME_RATE, 240.into()),
-        (WIDTH, 720.into()),
-        (HEIGHT, 480.into()),
-        (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+        (&DEVICE_ID, "480p".into()),
+        (&GROUP_ID, "builtin".into()),
+        (&ASPECT_RATIO, 0.5625.into()),
+        (&FACING_MODE, FacingMode::user().into()),
+        (&FRAME_RATE, 240.into()),
+        (&WIDTH, 720.into()),
+        (&HEIGHT, 480.into()),
+        (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
     ]);
     static ref VIDEO_720P: MediaTrackSettings = MediaTrackSettings::from_iter([
-        (DEVICE_ID, "720p".into()),
-        (GROUP_ID, "builtin".into()),
-        (ASPECT_RATIO, 0.5625.into()),
-        (FACING_MODE, FacingMode::user().into()),
-        (FRAME_RATE, 120.into()),
-        (WIDTH, 1280.into()),
-        (HEIGHT, 720.into()),
-        (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+        (&DEVICE_ID, "720p".into()),
+        (&GROUP_ID, "builtin".into()),
+        (&ASPECT_RATIO, 0.5625.into()),
+        (&FACING_MODE, FacingMode::user().into()),
+        (&FRAME_RATE, 120.into()),
+        (&WIDTH, 1280.into()),
+        (&HEIGHT, 720.into()),
+        (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
     ]);
     static ref VIDEO_1080P: MediaTrackSettings = MediaTrackSettings::from_iter([
-        (DEVICE_ID, "1080p".into()),
-        (GROUP_ID, "builtin".into()),
-        (ASPECT_RATIO, 0.5625.into()),
-        (FACING_MODE, FacingMode::user().into()),
-        (FRAME_RATE, 60.into()),
-        (WIDTH, 1920.into()),
-        (HEIGHT, 1080.into()),
-        (RESIZE_MODE, ResizeMode::none().into()),
+        (&DEVICE_ID, "1080p".into()),
+        (&GROUP_ID, "builtin".into()),
+        (&ASPECT_RATIO, 0.5625.into()),
+        (&FACING_MODE, FacingMode::user().into()),
+        (&FRAME_RATE, 60.into()),
+        (&WIDTH, 1920.into()),
+        (&HEIGHT, 1080.into()),
+        (&RESIZE_MODE, ResizeMode::none().into()),
     ]);
     static ref VIDEO_1440P: MediaTrackSettings = MediaTrackSettings::from_iter([
-        (DEVICE_ID, "1440p".into()),
-        (GROUP_ID, "builtin".into()),
-        (ASPECT_RATIO, 0.5625.into()),
-        (FACING_MODE, FacingMode::user().into()),
-        (FRAME_RATE, 30.into()),
-        (WIDTH, 2560.into()),
-        (HEIGHT, 1440.into()),
-        (RESIZE_MODE, ResizeMode::none().into()),
+        (&DEVICE_ID, "1440p".into()),
+        (&GROUP_ID, "builtin".into()),
+        (&ASPECT_RATIO, 0.5625.into()),
+        (&FACING_MODE, FacingMode::user().into()),
+        (&FRAME_RATE, 30.into()),
+        (&WIDTH, 2560.into()),
+        (&HEIGHT, 1440.into()),
+        (&RESIZE_MODE, ResizeMode::none().into()),
     ]);
     static ref VIDEO_2160P: MediaTrackSettings = MediaTrackSettings::from_iter([
-        (DEVICE_ID, "2160p".into()),
-        (GROUP_ID, "builtin".into()),
-        (ASPECT_RATIO, 0.5625.into()),
-        (FACING_MODE, FacingMode::user().into()),
-        (FRAME_RATE, 15.into()),
-        (WIDTH, 3840.into()),
-        (HEIGHT, 2160.into()),
-        (RESIZE_MODE, ResizeMode::none().into()),
+        (&DEVICE_ID, "2160p".into()),
+        (&GROUP_ID, "builtin".into()),
+        (&ASPECT_RATIO, 0.5625.into()),
+        (&FACING_MODE, FacingMode::user().into()),
+        (&FRAME_RATE, 15.into()),
+        (&WIDTH, 3840.into()),
+        (&HEIGHT, 2160.into()),
+        (&RESIZE_MODE, ResizeMode::none().into()),
     ]);
 }
 
@@ -88,7 +88,7 @@ fn default_possible_settings() -> Vec<MediaTrackSettings> {
 }
 
 fn default_supported_constraints() -> MediaTrackSupportedConstraints {
-    MediaTrackSupportedConstraints::from_iter(all_properties())
+    MediaTrackSupportedConstraints::from_iter(all_properties().into_iter().cloned())
 }
 
 fn test_overconstrained(
@@ -167,6 +167,8 @@ mod unconstrained {
 }
 
 mod overconstrained {
+    use crate::MediaTrackProperty;
+
     use super::*;
 
     #[test]
@@ -174,7 +176,7 @@ mod overconstrained {
         let error = test_overconstrained(
             &default_possible_settings(),
             ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                GROUP_ID,
+                GROUP_ID.clone(),
                 ResolvedValueConstraint::default()
                     .exact("missing-group".to_owned())
                     .into(),
@@ -182,7 +184,7 @@ mod overconstrained {
             DeviceInformationExposureMode::Protected,
         );
 
-        assert_eq!(error.constraint, "");
+        assert_eq!(error.constraint, MediaTrackProperty::from(""));
         assert_eq!(error.message, None);
     }
 
@@ -194,7 +196,7 @@ mod overconstrained {
             let error = test_overconstrained(
                 &default_possible_settings(),
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    GROUP_ID,
+                    GROUP_ID.clone(),
                     ResolvedValueConstraint::default()
                         .exact("missing-group".to_owned())
                         .into(),
@@ -205,7 +207,7 @@ mod overconstrained {
             let constraint = &error.constraint;
             let err_message = error.message.as_ref().expect("Error message.");
 
-            assert_eq!(constraint, GROUP_ID);
+            assert_eq!(constraint, &GROUP_ID);
             assert_eq!(
                 err_message,
                 "Setting was a mismatch ([\"builtin\"] do not satisfy (x == \"missing-group\"))."
@@ -217,7 +219,7 @@ mod overconstrained {
             let error = test_overconstrained(
                 &default_possible_settings(),
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    DEVICE_ID,
+                    DEVICE_ID.clone(),
                     ResolvedValueConstraint::default()
                         .exact("mismatched-device".to_owned())
                         .into(),
@@ -228,7 +230,7 @@ mod overconstrained {
             let constraint = &error.constraint;
             let err_message = error.message.as_ref().expect("Error message.");
 
-            assert_eq!(constraint, DEVICE_ID);
+            assert_eq!(constraint, &DEVICE_ID);
             assert_eq!(
             err_message,
             "Setting was a mismatch ([\"1080p\", \"1440p\", \"2160p\", \"480p\", \"720p\"] do not satisfy (x == \"mismatched-device\"))."
@@ -240,7 +242,7 @@ mod overconstrained {
             let error = test_overconstrained(
                 &default_possible_settings(),
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    FRAME_RATE,
+                    FRAME_RATE.clone(),
                     ResolvedValueRangeConstraint::default().min(1000).into(),
                 )]),
                 DeviceInformationExposureMode::Exposed,
@@ -249,7 +251,7 @@ mod overconstrained {
             let constraint = &error.constraint;
             let err_message = error.message.as_ref().expect("Error message.");
 
-            assert_eq!(constraint, FRAME_RATE);
+            assert_eq!(constraint, &FRAME_RATE);
             assert_eq!(
                 err_message,
                 "Setting was too small ([120, 15, 240, 30, 60] do not satisfy (1000 <= x))."
@@ -261,7 +263,7 @@ mod overconstrained {
             let error = test_overconstrained(
                 &default_possible_settings(),
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    FRAME_RATE,
+                    FRAME_RATE.clone(),
                     ResolvedValueRangeConstraint::default().max(10).into(),
                 )]),
                 DeviceInformationExposureMode::Exposed,
@@ -270,7 +272,7 @@ mod overconstrained {
             let constraint = &error.constraint;
             let err_message = error.message.as_ref().expect("Error message.");
 
-            assert_eq!(constraint, FRAME_RATE);
+            assert_eq!(constraint, &FRAME_RATE);
             assert_eq!(
                 err_message,
                 "Setting was too large ([120, 15, 240, 30, 60] do not satisfy (x <= 10))."
@@ -287,7 +289,7 @@ mod constrained {
         let possible_settings = default_possible_settings();
 
         for target_settings in possible_settings.iter() {
-            let setting = match target_settings.get(DEVICE_ID) {
+            let setting = match target_settings.get(&DEVICE_ID) {
                 Some(setting) => setting,
                 None => continue,
             };
@@ -295,7 +297,7 @@ mod constrained {
             let actual = test_constrained(
                 &possible_settings,
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    DEVICE_ID,
+                    DEVICE_ID.clone(),
                     ResolvedMediaTrackConstraint::exact_from(setting.clone()),
                 )]),
                 ResolvedAdvancedMediaTrackConstraints::default(),
@@ -314,23 +316,23 @@ mod constrained {
         fn value() {
             let possible_settings = vec![
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "a".into()),
-                    (GROUP_ID, "group-0".into()),
+                    (&DEVICE_ID, "a".into()),
+                    (&GROUP_ID, "group-0".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "b".into()),
-                    (GROUP_ID, "group-1".into()),
+                    (&DEVICE_ID, "b".into()),
+                    (&GROUP_ID, "group-1".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "c".into()),
-                    (GROUP_ID, "group-2".into()),
+                    (&DEVICE_ID, "c".into()),
+                    (&GROUP_ID, "group-2".into()),
                 ]),
             ];
 
             let actual = test_constrained(
                 &possible_settings,
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    GROUP_ID,
+                    &GROUP_ID,
                     ResolvedValueConstraint::default()
                         .exact("group-1".to_owned())
                         .into(),
@@ -346,15 +348,15 @@ mod constrained {
         #[test]
         fn value_range() {
             let possible_settings = vec![
-                MediaTrackSettings::from_iter([(DEVICE_ID, "a".into()), (FRAME_RATE, 15.into())]),
-                MediaTrackSettings::from_iter([(DEVICE_ID, "b".into()), (FRAME_RATE, 30.into())]),
-                MediaTrackSettings::from_iter([(DEVICE_ID, "c".into()), (FRAME_RATE, 60.into())]),
+                MediaTrackSettings::from_iter([(&DEVICE_ID, "a".into()), (&FRAME_RATE, 15.into())]),
+                MediaTrackSettings::from_iter([(&DEVICE_ID, "b".into()), (&FRAME_RATE, 30.into())]),
+                MediaTrackSettings::from_iter([(&DEVICE_ID, "c".into()), (&FRAME_RATE, 60.into())]),
             ];
 
             let actual = test_constrained(
                 &possible_settings,
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint::default().exact(30).into(),
                 )]),
                 ResolvedAdvancedMediaTrackConstraints::default(),
@@ -369,23 +371,23 @@ mod constrained {
         fn value_sequence() {
             let possible_settings = vec![
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "a".into()),
-                    (GROUP_ID, "group-0".into()),
+                    (&DEVICE_ID, "a".into()),
+                    (&GROUP_ID, "group-0".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "b".into()),
-                    (GROUP_ID, "group-1".into()),
+                    (&DEVICE_ID, "b".into()),
+                    (&GROUP_ID, "group-1".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "c".into()),
-                    (GROUP_ID, "group-2".into()),
+                    (&DEVICE_ID, "c".into()),
+                    (&GROUP_ID, "group-2".into()),
                 ]),
             ];
 
             let actual = test_constrained(
                 &possible_settings,
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    GROUP_ID,
+                    &GROUP_ID,
                     ResolvedValueSequenceConstraint::default()
                         .exact(vec!["group-1".to_owned(), "group-3".to_owned()])
                         .into(),
@@ -406,23 +408,23 @@ mod constrained {
         fn value() {
             let possible_settings = vec![
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "a".into()),
-                    (GROUP_ID, "group-0".into()),
+                    (&DEVICE_ID, "a".into()),
+                    (&GROUP_ID, "group-0".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "b".into()),
-                    (GROUP_ID, "group-1".into()),
+                    (&DEVICE_ID, "b".into()),
+                    (&GROUP_ID, "group-1".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "c".into()),
-                    (GROUP_ID, "group-2".into()),
+                    (&DEVICE_ID, "c".into()),
+                    (&GROUP_ID, "group-2".into()),
                 ]),
             ];
 
             let actual = test_constrained(
                 &possible_settings,
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    GROUP_ID,
+                    &GROUP_ID,
                     ResolvedValueConstraint::default()
                         .ideal("group-1".to_owned())
                         .into(),
@@ -438,15 +440,15 @@ mod constrained {
         #[test]
         fn value_range() {
             let possible_settings = vec![
-                MediaTrackSettings::from_iter([(DEVICE_ID, "a".into()), (FRAME_RATE, 15.into())]),
-                MediaTrackSettings::from_iter([(DEVICE_ID, "b".into()), (FRAME_RATE, 30.into())]),
-                MediaTrackSettings::from_iter([(DEVICE_ID, "c".into()), (FRAME_RATE, 60.into())]),
+                MediaTrackSettings::from_iter([(&DEVICE_ID, "a".into()), (&FRAME_RATE, 15.into())]),
+                MediaTrackSettings::from_iter([(&DEVICE_ID, "b".into()), (&FRAME_RATE, 30.into())]),
+                MediaTrackSettings::from_iter([(&DEVICE_ID, "c".into()), (&FRAME_RATE, 60.into())]),
             ];
 
             let actual = test_constrained(
                 &possible_settings,
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint::default().ideal(32).into(),
                 )]),
                 ResolvedAdvancedMediaTrackConstraints::default(),
@@ -461,23 +463,23 @@ mod constrained {
         fn value_sequence() {
             let possible_settings = vec![
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "a".into()),
-                    (GROUP_ID, "group-0".into()),
+                    (&DEVICE_ID, "a".into()),
+                    (&GROUP_ID, "group-0".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "b".into()),
-                    (GROUP_ID, "group-1".into()),
+                    (&DEVICE_ID, "b".into()),
+                    (&GROUP_ID, "group-1".into()),
                 ]),
                 MediaTrackSettings::from_iter([
-                    (DEVICE_ID, "c".into()),
-                    (GROUP_ID, "group-2".into()),
+                    (&DEVICE_ID, "c".into()),
+                    (&GROUP_ID, "group-2".into()),
                 ]),
             ];
 
             let actual = test_constrained(
                 &possible_settings,
                 ResolvedMandatoryMediaTrackConstraints::from_iter([(
-                    GROUP_ID,
+                    &GROUP_ID,
                     ResolvedValueSequenceConstraint::default()
                         .ideal(vec!["group-1".to_owned(), "group-3".to_owned()])
                         .into(),
@@ -510,55 +512,59 @@ mod smoke {
 
     #[test]
     fn native() {
-        let supported_constraints =
-            MediaTrackSupportedConstraints::from_iter(vec![DEVICE_ID, HEIGHT, WIDTH, RESIZE_MODE]);
+        let supported_constraints = MediaTrackSupportedConstraints::from_iter(vec![
+            &DEVICE_ID,
+            &HEIGHT,
+            &WIDTH,
+            &RESIZE_MODE,
+        ]);
 
         let possible_settings = vec![
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "480p".into()),
-                (HEIGHT, 480.into()),
-                (WIDTH, 720.into()),
-                (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+                (&DEVICE_ID, "480p".into()),
+                (&HEIGHT, 480.into()),
+                (&WIDTH, 720.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "720p".into()),
-                (HEIGHT, 720.into()),
-                (WIDTH, 1280.into()),
-                (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+                (&DEVICE_ID, "720p".into()),
+                (&HEIGHT, 720.into()),
+                (&WIDTH, 1280.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "1080p".into()),
-                (HEIGHT, 1080.into()),
-                (WIDTH, 1920.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "1080p".into()),
+                (&HEIGHT, 1080.into()),
+                (&WIDTH, 1920.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "1440p".into()),
-                (HEIGHT, 1440.into()),
-                (WIDTH, 2560.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "1440p".into()),
+                (&HEIGHT, 1440.into()),
+                (&WIDTH, 2560.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "2160p".into()),
-                (HEIGHT, 2160.into()),
-                (WIDTH, 3840.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "2160p".into()),
+                (&HEIGHT, 2160.into()),
+                (&WIDTH, 3840.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
         ];
 
         let constraints: ResolvedMediaTrackConstraints = ResolvedMediaTrackConstraints {
             mandatory: ResolvedMandatoryMediaTrackConstraints::from_iter([
                 (
-                    WIDTH,
+                    &WIDTH,
                     ResolvedValueRangeConstraint::default().max(2560).into(),
                 ),
                 (
-                    HEIGHT,
+                    &HEIGHT,
                     ResolvedValueRangeConstraint::default().max(1440).into(),
                 ),
                 // Unsupported constraint, which should thus get ignored:
                 (
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint::default().exact(30.0).into(),
                 ),
             ]),
@@ -566,13 +572,13 @@ mod smoke {
                 // The first advanced constraint set of "exact 800p" does not match
                 // any candidate and should thus get ignored by the algorithm:
                 ResolvedMediaTrackConstraintSet::from_iter([(
-                    HEIGHT,
+                    &HEIGHT,
                     ResolvedValueRangeConstraint::default().exact(800).into(),
                 )]),
                 // The second advanced constraint set of "no resizing" does match
                 // candidates and should thus be applied by the algorithm:
                 ResolvedMediaTrackConstraintSet::from_iter([(
-                    RESIZE_MODE,
+                    &RESIZE_MODE,
                     ResolvedValueConstraint::default()
                         .exact(ResizeMode::none())
                         .into(),
@@ -597,8 +603,12 @@ mod smoke {
     #[cfg(feature = "serde")]
     #[test]
     fn json() {
-        let supported_constraints =
-            MediaTrackSupportedConstraints::from_iter(vec![DEVICE_ID, HEIGHT, WIDTH, RESIZE_MODE]);
+        let supported_constraints = MediaTrackSupportedConstraints::from_iter(vec![
+            &DEVICE_ID,
+            &HEIGHT,
+            &WIDTH,
+            &RESIZE_MODE,
+        ]);
 
         // Deserialize possible settings from JSON:
         let possible_settings: Vec<MediaTrackSettings> = {

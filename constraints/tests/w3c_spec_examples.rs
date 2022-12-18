@@ -27,9 +27,9 @@ fn w3c_spec_example_1() {
         audio: BoolOrMediaTrackConstraints::Bool(false),
         video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
             mandatory: MandatoryMediaTrackConstraints::from_iter([
-                (WIDTH, 1280.into()),
-                (HEIGHT, 720.into()),
-                (ASPECT_RATIO, 1.5.into()),
+                (&WIDTH, 1280.into()),
+                (&HEIGHT, 720.into()),
+                (&ASPECT_RATIO, 1.5.into()),
             ]),
             advanced: AdvancedMediaTrackConstraints::default(),
         }),
@@ -63,7 +63,7 @@ fn w3c_spec_example_2() {
         video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
             mandatory: MandatoryMediaTrackConstraints::from_iter([
                 (
-                    WIDTH,
+                    &WIDTH,
                     ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(640),
                         max: None,
@@ -73,7 +73,7 @@ fn w3c_spec_example_2() {
                     .into(),
                 ),
                 (
-                    HEIGHT,
+                    &HEIGHT,
                     ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(480),
                         max: None,
@@ -82,9 +82,9 @@ fn w3c_spec_example_2() {
                     })
                     .into(),
                 ),
-                (ASPECT_RATIO, ValueRangeConstraint::Bare(1.5).into()),
+                (&ASPECT_RATIO, ValueRangeConstraint::Bare(1.5).into()),
                 (
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint {
                         min: Some(20.0),
                         max: None,
@@ -131,7 +131,7 @@ fn w3c_spec_example_3() {
         video: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
             mandatory: MandatoryMediaTrackConstraints::from_iter([
                 (
-                    HEIGHT,
+                    &HEIGHT,
                     ResolvedValueRangeConstraint {
                         min: Some(480),
                         max: None,
@@ -141,7 +141,7 @@ fn w3c_spec_example_3() {
                     .into(),
                 ),
                 (
-                    WIDTH,
+                    &WIDTH,
                     ResolvedValueRangeConstraint {
                         min: Some(640),
                         max: None,
@@ -151,7 +151,7 @@ fn w3c_spec_example_3() {
                     .into(),
                 ),
                 (
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint {
                         min: Some(30.0),
                         max: None,
@@ -162,10 +162,10 @@ fn w3c_spec_example_3() {
                 ),
             ]),
             advanced: AdvancedMediaTrackConstraints::new(vec![
-                MediaTrackConstraintSet::from_iter([(WIDTH, 1920.into()), (HEIGHT, 1280.into())]),
-                MediaTrackConstraintSet::from_iter([(ASPECT_RATIO, 1.333.into())]),
+                MediaTrackConstraintSet::from_iter([(&WIDTH, 1920.into()), (&HEIGHT, 1280.into())]),
+                MediaTrackConstraintSet::from_iter([(&ASPECT_RATIO, 1.333.into())]),
                 MediaTrackConstraintSet::from_iter([(
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint {
                         min: Some(50.0),
                         max: None,
@@ -175,7 +175,7 @@ fn w3c_spec_example_3() {
                     .into(),
                 )]),
                 MediaTrackConstraintSet::from_iter([(
-                    FRAME_RATE,
+                    &FRAME_RATE,
                     ResolvedValueRangeConstraint {
                         min: Some(40.0),
                         max: None,
@@ -207,9 +207,9 @@ fn w3c_spec_example_4() {
     };
 
     let expected = MediaTrackConstraintSet::from_iter([
-        (WIDTH, ValueRangeConstraint::Bare(1920).into()),
-        (HEIGHT, ValueRangeConstraint::Bare(1080).into()),
-        (FRAME_RATE, ValueRangeConstraint::Bare(30).into()),
+        (&WIDTH, ValueRangeConstraint::Bare(1920).into()),
+        (&HEIGHT, ValueRangeConstraint::Bare(1080).into()),
+        (&FRAME_RATE, ValueRangeConstraint::Bare(30).into()),
     ]);
 
     assert_eq!(actual, expected);

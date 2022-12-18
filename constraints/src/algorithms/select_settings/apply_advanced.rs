@@ -68,12 +68,16 @@ mod tests {
     // candidates should just get ignored:
     #[test]
     fn overconstrained() {
-        let supported_constraints =
-            MediaTrackSupportedConstraints::from_iter(vec![DEVICE_ID, HEIGHT, WIDTH, RESIZE_MODE]);
+        let supported_constraints = MediaTrackSupportedConstraints::from_iter(vec![
+            &DEVICE_ID,
+            &HEIGHT,
+            &WIDTH,
+            &RESIZE_MODE,
+        ]);
 
         let settings = vec![
-            MediaTrackSettings::from_iter([(DEVICE_ID, "foo".into())]),
-            MediaTrackSettings::from_iter([(DEVICE_ID, "bar".into())]),
+            MediaTrackSettings::from_iter([(&DEVICE_ID, "foo".into())]),
+            MediaTrackSettings::from_iter([(&DEVICE_ID, "bar".into())]),
         ];
 
         let candidates: Vec<_> = settings
@@ -84,7 +88,7 @@ mod tests {
 
         let constraints = ResolvedAdvancedMediaTrackConstraints::from_iter([
             ResolvedMediaTrackConstraintSet::from_iter([(
-                DEVICE_ID,
+                &DEVICE_ID,
                 ResolvedValueConstraint::default()
                     .exact("bazblee".to_owned())
                     .into(),
@@ -106,39 +110,43 @@ mod tests {
 
     #[test]
     fn constrained() {
-        let supported_constraints =
-            MediaTrackSupportedConstraints::from_iter(vec![DEVICE_ID, HEIGHT, WIDTH, RESIZE_MODE]);
+        let supported_constraints = MediaTrackSupportedConstraints::from_iter(vec![
+            &DEVICE_ID,
+            &HEIGHT,
+            &WIDTH,
+            &RESIZE_MODE,
+        ]);
 
         let settings = vec![
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "480p".into()),
-                (HEIGHT, 480.into()),
-                (WIDTH, 720.into()),
-                (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+                (&DEVICE_ID, "480p".into()),
+                (&HEIGHT, 480.into()),
+                (&WIDTH, 720.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "720p".into()),
-                (HEIGHT, 720.into()),
-                (WIDTH, 1280.into()),
-                (RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+                (&DEVICE_ID, "720p".into()),
+                (&HEIGHT, 720.into()),
+                (&WIDTH, 1280.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "1080p".into()),
-                (HEIGHT, 1080.into()),
-                (WIDTH, 1920.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "1080p".into()),
+                (&HEIGHT, 1080.into()),
+                (&WIDTH, 1920.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "1440p".into()),
-                (HEIGHT, 1440.into()),
-                (WIDTH, 2560.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "1440p".into()),
+                (&HEIGHT, 1440.into()),
+                (&WIDTH, 2560.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
             MediaTrackSettings::from_iter([
-                (DEVICE_ID, "2160p".into()),
-                (HEIGHT, 2160.into()),
-                (WIDTH, 3840.into()),
-                (RESIZE_MODE, ResizeMode::none().into()),
+                (&DEVICE_ID, "2160p".into()),
+                (&HEIGHT, 2160.into()),
+                (&WIDTH, 3840.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
             ]),
         ];
 
@@ -148,13 +156,13 @@ mod tests {
             // The first advanced constraint set of "exact 800p" does not match
             // any candidate and should thus get ignored by the algorithm:
             ResolvedMediaTrackConstraintSet::from_iter([(
-                HEIGHT,
+                &HEIGHT,
                 ResolvedValueRangeConstraint::default().exact(800).into(),
             )]),
             // The second advanced constraint set of "no resizing" does match
             // candidates and should thus be applied by the algorithm:
             ResolvedMediaTrackConstraintSet::from_iter([(
-                RESIZE_MODE,
+                &RESIZE_MODE,
                 ResolvedValueConstraint::default()
                     .exact(ResizeMode::none())
                     .into(),
@@ -162,7 +170,7 @@ mod tests {
             // The second advanced constraint set of "max 1440p" does match
             // candidates and should thus be applied by the algorithm:
             ResolvedMediaTrackConstraintSet::from_iter([(
-                HEIGHT,
+                &HEIGHT,
                 ResolvedValueRangeConstraint::default().max(1440).into(),
             )]),
         ]);

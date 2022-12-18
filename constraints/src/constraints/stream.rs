@@ -104,11 +104,11 @@ mod tests {
         let subject = Subject {
             audio: BoolOrMediaTrackConstraints::Constraints(MediaTrackConstraints {
                 mandatory: MandatoryMediaTrackConstraints::from_iter([
-                    (DEVICE_ID, "microphone".into()),
-                    (CHANNEL_COUNT, 2.into()),
+                    (&DEVICE_ID, "microphone".into()),
+                    (&CHANNEL_COUNT, 2.into()),
                 ]),
                 advanced: AdvancedMediaTrackConstraints::new(vec![
-                    MediaTrackConstraintSet::from_iter([(LATENCY, 0.123.into())]),
+                    MediaTrackConstraintSet::from_iter([(&LATENCY, 0.123.into())]),
                 ]),
             }),
             video: BoolOrMediaTrackConstraints::Bool(true),
