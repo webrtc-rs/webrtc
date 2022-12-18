@@ -20,7 +20,6 @@ use crate::util::*;
 
 use crate::chunk::chunk_unknown::ChunkUnknown;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
 
 ///Packet represents an SCTP packet, defined in https://tools.ietf.org/html/rfc4960#section-3
@@ -170,8 +169,7 @@ impl Packet {
             }
         }
 
-        let hasher = Crc::<u32>::new(&CRC_32_ISCSI);
-        let mut digest = hasher.digest();
+        let mut digest = ISCSI_CRC.digest();
         digest.update(writer);
         let checksum = digest.finalize();
 
