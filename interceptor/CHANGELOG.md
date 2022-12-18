@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Add a `max_age` property to the NACK responder interceptor. When configured with `ResponderBuilder::with_max_packet_age` packets that were originally sent more than `max_packet_age` ago will not be resent, even when requested. [#313](https://github.com/webrtc-rs/webrtc/pull/313) by [@k0nserv](https://github.com/k0nserv).
+
 ## v0.8.1
 
 * Further extended stats interceptors to collect stats for `RemoteOutoundRTPStats` and improve `RemoteInboundRTPStats` collection. [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).
@@ -9,7 +11,7 @@
 * Don't generate empty TWCC packets that libWebRTC will ignore. [#324](https://github.com/webrtc-rs/webrtc/pull/324) by [@k0nserv](https://github.com/k0nserv).
 * Increased minimum support rust version to `1.60.0`.
 * Increased required `webrtc-util` version to `0.7.0`.
- 
+
 
 ## v0.8.0
 
