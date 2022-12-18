@@ -343,7 +343,7 @@ fn test_transport_layer_nack_pair_generation() {
                 },
                 NackPair {
                     packet_id: 99,
-                    lost_packets: 1,
+                    lost_packets: 0,
                 },
             ],
         ),
@@ -358,4 +358,24 @@ fn test_transport_layer_nack_pair_generation() {
             name, actual, expected
         )
     }
+}
+
+/// This test case reproduced a bug in the implementation
+#[test]
+fn test_lost_packets_is_reset_when_crossing_16_bit_boundary() {
+    let seq: Vec<_> = (0u16..=17u16).collect();
+    assert_eq!(
+        nack_pairs_from_sequence_numbers(&seq),
+        vec![
+            NackPair {
+                packet_id: 0,
+                lost_packets: 0b1111_1111_1111_1111,
+            },
+            NackPair {
+                packet_id: 17,
+                // Was 0xffff before fixing the bug
+                lost_packets: 0b0000_0000_0000_0000,
+            }
+        ],
+    )
 }
