@@ -36,6 +36,10 @@ use crate::MediaTrackProperty;
 pub struct MediaTrackSupportedConstraints(HashSet<MediaTrackProperty>);
 
 impl MediaTrackSupportedConstraints {
+    pub fn new(properties: HashSet<MediaTrackProperty>) -> Self {
+        Self(properties)
+    }
+
     pub fn into_inner(self) -> HashSet<MediaTrackProperty> {
         self.0
     }
@@ -133,6 +137,62 @@ impl<'de> Visitor<'de> for SerdeVisitor {
             }
         }
         Ok(MediaTrackSupportedConstraints(set))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::property::all::name::*;
+
+    use super::*;
+
+    type Subject = MediaTrackSupportedConstraints;
+
+    #[test]
+    fn into_inner() {
+        let hash_set = HashSet::from_iter([
+            DEVICE_ID.clone(),
+            AUTO_GAIN_CONTROL.clone(),
+            CHANNEL_COUNT.clone(),
+            LATENCY.clone(),
+        ]);
+
+        let subject = Subject::new(hash_set.clone());
+
+        let actual = subject.into_inner();
+
+        let expected = hash_set;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn into_iter() {
+        let hash_set = HashSet::from_iter([
+            DEVICE_ID.clone(),
+            AUTO_GAIN_CONTROL.clone(),
+            CHANNEL_COUNT.clone(),
+            LATENCY.clone(),
+        ]);
+
+        let subject = Subject::new(hash_set.clone());
+
+        let actual: HashSet<_, _> = subject.into_iter().collect();
+
+        let expected = hash_set;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn deref_and_deref_mut() {
+        let mut subject = Subject::default();
+
+        // Deref mut:
+        subject.insert(DEVICE_ID.clone());
+
+        // Deref:
+        assert!(subject.contains(&DEVICE_ID));
     }
 }
 
