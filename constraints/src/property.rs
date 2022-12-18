@@ -232,3 +232,68 @@ pub mod all {
         all
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Subject = MediaTrackProperty;
+
+    mod from {
+        use super::*;
+
+        #[test]
+        fn owned() {
+            let actuals = [Subject::from("string"), Subject::from("string".to_owned())];
+            let expected = MediaTrackProperty(Cow::Owned("string".to_owned()));
+
+            for actual in actuals {
+                assert_eq!(actual, expected);
+
+                // TODO: remove feature-gate, once stabilized:
+                #[cfg(feature = "cow_is_borrowed")]
+                assert!(actual.0.is_owned());
+            }
+        }
+
+        #[test]
+        fn borrowed() {
+            let actual = Subject::named("string");
+            let expected = MediaTrackProperty(Cow::Borrowed("string"));
+
+            assert_eq!(actual, expected);
+
+            // TODO: remove feature-gate, once stabilized:
+            #[cfg(feature = "cow_is_borrowed")]
+            assert!(actual.0.is_borrowed());
+        }
+    }
+
+    #[test]
+    fn name() {
+        assert_eq!(Subject::named("string").name(), "string");
+    }
+
+    #[test]
+    fn to_string() {
+        assert_eq!(Subject::named("string").to_string(), "string");
+    }
+}
+
+#[cfg(feature = "serde")]
+#[cfg(test)]
+mod serde_tests {
+    use crate::macros::test_serde_symmetry;
+
+    use super::*;
+
+    type Subject = MediaTrackProperty;
+
+    #[test]
+    fn is_symmetric() {
+        let subject = Subject::named("string");
+        let json = serde_json::json!("string");
+
+        test_serde_symmetry!(subject: subject, json: json);
+    }
+}
