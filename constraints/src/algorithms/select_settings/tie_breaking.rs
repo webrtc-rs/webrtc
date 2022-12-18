@@ -93,3 +93,92 @@ impl TieBreakingPolicy for ClosestToIdealPolicy {
             .expect("The `candidates` iterator should have produced at least one item.")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::iter::FromIterator;
+
+    use crate::{
+        property::all::name::*, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
+    };
+
+    #[test]
+    fn first() {
+        let settings = vec![
+            MediaTrackSettings::from_iter([(&DEVICE_ID, "device-id-0".into())]),
+            MediaTrackSettings::from_iter([(&DEVICE_ID, "device-id-1".into())]),
+            MediaTrackSettings::from_iter([(&DEVICE_ID, "device-id-2".into())]),
+        ];
+
+        let policy = FirstPolicy::default();
+
+        let actual = policy.select_candidate(&settings);
+
+        let expected = &settings[0];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn closest_to_ideal() {
+        let supported_constraints = MediaTrackSupportedConstraints::from_iter(vec![
+            &DEVICE_ID,
+            &HEIGHT,
+            &WIDTH,
+            &RESIZE_MODE,
+        ]);
+
+        let settings = vec![
+            MediaTrackSettings::from_iter([
+                (&DEVICE_ID, "480p".into()),
+                (&HEIGHT, 480.into()),
+                (&WIDTH, 720.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+            ]),
+            MediaTrackSettings::from_iter([
+                (&DEVICE_ID, "720p".into()),
+                (&HEIGHT, 720.into()),
+                (&WIDTH, 1280.into()),
+                (&RESIZE_MODE, ResizeMode::crop_and_scale().into()),
+            ]),
+            MediaTrackSettings::from_iter([
+                (&DEVICE_ID, "1080p".into()),
+                (&HEIGHT, 1080.into()),
+                (&WIDTH, 1920.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
+            ]),
+            MediaTrackSettings::from_iter([
+                (&DEVICE_ID, "1440p".into()),
+                (&HEIGHT, 1440.into()),
+                (&WIDTH, 2560.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
+            ]),
+            MediaTrackSettings::from_iter([
+                (&DEVICE_ID, "2160p".into()),
+                (&HEIGHT, 2160.into()),
+                (&WIDTH, 3840.into()),
+                (&RESIZE_MODE, ResizeMode::none().into()),
+            ]),
+        ];
+
+        let ideal_settings = vec![
+            MediaTrackSettings::from_iter([(&HEIGHT, 450.into()), (&WIDTH, 700.into())]),
+            MediaTrackSettings::from_iter([(&HEIGHT, 700.into()), (&WIDTH, 1250.into())]),
+            MediaTrackSettings::from_iter([(&HEIGHT, 1000.into()), (&WIDTH, 2000.into())]),
+            MediaTrackSettings::from_iter([(&HEIGHT, 1500.into()), (&WIDTH, 2500.into())]),
+            MediaTrackSettings::from_iter([(&HEIGHT, 2000.into()), (&WIDTH, 3750.into())]),
+        ];
+
+        for (index, ideal) in ideal_settings.iter().enumerate() {
+            let policy = ClosestToIdealPolicy::new(ideal.clone(), &supported_constraints);
+
+            let actual = policy.select_candidate(&settings);
+
+            let expected = &settings[index];
+
+            assert_eq!(actual, expected);
+        }
+    }
+}
