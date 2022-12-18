@@ -88,3 +88,38 @@ impl std::fmt::Display for ResizeMode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod facing_mode {
+        use super::*;
+
+        #[test]
+        fn to_string() {
+            assert_eq!(FacingMode::User.to_string(), "user");
+            assert_eq!(FacingMode::Environment.to_string(), "environment");
+            assert_eq!(FacingMode::Left.to_string(), "left");
+            assert_eq!(FacingMode::Right.to_string(), "right");
+
+            assert_eq!(FacingMode::user(), "user");
+            assert_eq!(FacingMode::environment(), "environment");
+            assert_eq!(FacingMode::left(), "left");
+            assert_eq!(FacingMode::right(), "right");
+        }
+    }
+
+    mod resize_mode {
+        use super::*;
+
+        #[test]
+        fn to_string() {
+            assert_eq!(ResizeMode::None.to_string(), "none");
+            assert_eq!(ResizeMode::CropAndScale.to_string(), "crop-and-scale");
+
+            assert_eq!(ResizeMode::none(), "none");
+            assert_eq!(ResizeMode::crop_and_scale(), "crop-and-scale");
+        }
+    }
+}
