@@ -39,55 +39,59 @@ impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for ResolvedMediaTrackCo
             }
         };
 
-        let result = match (setting, self) {
+        let result = match (self, setting) {
             // Empty constraint:
-            (_, ResolvedMediaTrackConstraint::Empty(_)) => Ok(0.0),
+            (ResolvedMediaTrackConstraint::Empty(constraint), setting) => {
+                constraint.fitness_distance(Some(setting))
+            }
 
-            // Boolean setting:
-            (Setting::Bool(_setting), Constraint::IntegerRange(_constraint)) => Ok(0.0),
-            (Setting::Bool(_setting), Constraint::FloatRange(_constraint)) => Ok(0.0),
-            (Setting::Bool(setting), Constraint::Bool(constraint)) => {
+            // Boolean constraint:
+            (Constraint::Bool(constraint), Setting::Bool(setting)) => {
                 constraint.fitness_distance(Some(setting))
             }
-            (Setting::Bool(_setting), Constraint::StringSequence(_constraint)) => Ok(0.0),
-            (Setting::Bool(_setting), Constraint::String(_constraint)) => Ok(0.0),
+            (Constraint::Bool(constraint), Setting::Integer(setting)) => {
+                constraint.fitness_distance(Some(setting))
+            }
+            (Constraint::Bool(constraint), Setting::Float(setting)) => {
+                constraint.fitness_distance(Some(setting))
+            }
+            (Constraint::Bool(constraint), Setting::String(setting)) => {
+                constraint.fitness_distance(Some(setting))
+            }
 
-            // Integer setting:
-            (Setting::Integer(setting), Constraint::IntegerRange(constraint)) => {
+            // Integer constraint:
+            (Constraint::IntegerRange(_constraint), Setting::Bool(_setting)) => Ok(0.0),
+            (Constraint::IntegerRange(constraint), Setting::Integer(setting)) => {
                 constraint.fitness_distance(Some(setting))
             }
-            (Setting::Integer(setting), Constraint::FloatRange(constraint)) => {
+            (Constraint::IntegerRange(constraint), Setting::Float(setting)) => {
                 constraint.fitness_distance(Some(setting))
             }
-            (Setting::Integer(setting), Constraint::Bool(constraint)) => {
-                constraint.fitness_distance(Some(setting))
-            }
-            (Setting::Integer(_setting), Constraint::StringSequence(_constraint)) => Ok(0.0),
-            (Setting::Integer(_setting), Constraint::String(_constraint)) => Ok(0.0),
+            (Constraint::IntegerRange(_constraint), Setting::String(_setting)) => Ok(0.0),
 
-            // Float setting:
-            (Setting::Float(setting), Constraint::IntegerRange(constraint)) => {
+            // Float constraint:
+            (Constraint::FloatRange(_constraint), Setting::Bool(_setting)) => Ok(0.0),
+            (Constraint::FloatRange(constraint), Setting::Integer(setting)) => {
                 constraint.fitness_distance(Some(setting))
             }
-            (Setting::Float(setting), Constraint::FloatRange(constraint)) => {
+            (Constraint::FloatRange(constraint), Setting::Float(setting)) => {
                 constraint.fitness_distance(Some(setting))
             }
-            (Setting::Float(setting), Constraint::Bool(constraint)) => {
-                constraint.fitness_distance(Some(setting))
-            }
-            (Setting::Float(_setting), Constraint::StringSequence(_constraint)) => Ok(0.0),
-            (Setting::Float(_setting), Constraint::String(_constraint)) => Ok(0.0),
+            (Constraint::FloatRange(_constraint), Setting::String(_setting)) => Ok(0.0),
 
-            // String setting:
-            (Setting::String(_setting), Constraint::IntegerRange(_constraint)) => Ok(0.0),
-            (Setting::String(_setting), Constraint::FloatRange(_constraint)) => Ok(0.0),
-            (Setting::String(setting), Constraint::Bool(constraint)) => {
+            // String constraint:
+            (Constraint::String(_constraint), Setting::Bool(_setting)) => Ok(0.0),
+            (Constraint::String(_constraint), Setting::Integer(_setting)) => Ok(0.0),
+            (Constraint::String(_constraint), Setting::Float(_setting)) => Ok(0.0),
+            (Constraint::String(constraint), Setting::String(setting)) => {
                 constraint.fitness_distance(Some(setting))
             }
-            (Setting::String(setting), Constraint::StringSequence(constraint)) => {
-                constraint.fitness_distance(Some(setting))
-            }
-            (Setting::String(setting), Constraint::String(constraint)) => {
+
+            // String sequence constraint:
+            (Constraint::StringSequence(_constraint), Setting::Bool(_setting)) => Ok(0.0),
+            (Constraint::StringSequence(_constraint), Setting::Integer(_setting)) => Ok(0.0),
+            (Constraint::StringSequence(_constraint), Setting::Float(_setting)) => Ok(0.0),
+            (Constraint::StringSequence(constraint), Setting::String(setting)) => {
                 constraint.fitness_distance(Some(setting))
             }
         };
