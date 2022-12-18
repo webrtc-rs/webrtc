@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    advanced::GenericAdvancedMediaTrackConstraints, constraint_set::GenericMediaTrackConstraintSet,
+    advanced::GenericAdvancedMediaTrackConstraints,
     mandatory::GenericMandatoryMediaTrackConstraints,
 };
 
@@ -150,34 +150,6 @@ impl<T> GenericMediaTrackConstraints<T> {
             mandatory,
             advanced,
         }
-    }
-}
-
-impl GenericMediaTrackConstraints<ResolvedMediaTrackConstraint> {
-    pub fn basic(&self) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
-        self.basic_or_required(false)
-    }
-
-    pub fn required(&self) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
-        self.basic_or_required(true)
-    }
-
-    fn basic_or_required(
-        &self,
-        required: bool,
-    ) -> GenericMediaTrackConstraintSet<ResolvedMediaTrackConstraint> {
-        GenericMediaTrackConstraintSet::new(
-            self.mandatory
-                .iter()
-                .filter_map(|(property, constraint)| {
-                    if constraint.is_required() == required {
-                        Some((property.clone(), constraint.clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-        )
     }
 }
 
