@@ -19,7 +19,8 @@ macro_rules! impl_value_range_constraint {
                     // > dictionary's constraintName member's value does not satisfy the
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
-                        Some(&actual) if (actual as f64) == (exact as f64) => {}
+                        Some(&actual) if super::is_nearly_equal_to(actual as f64, exact as f64) => {
+                        }
                         Some(setting) => {
                             return Err(SettingFitnessDistanceError {
                                 kind: SettingFitnessDistanceErrorKind::Mismatch,
@@ -46,7 +47,11 @@ macro_rules! impl_value_range_constraint {
                     // > dictionary's constraintName member's value does not satisfy the
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
-                        Some(&actual) if (actual as f64) >= (min as f64) => {}
+                        Some(&actual)
+                            if super::is_nearly_greater_than_or_equal_to(
+                                actual as f64,
+                                min as f64,
+                            ) => {}
                         Some(setting) => {
                             return Err(SettingFitnessDistanceError {
                                 kind: SettingFitnessDistanceErrorKind::TooSmall,
@@ -73,7 +78,11 @@ macro_rules! impl_value_range_constraint {
                     // > dictionary's constraintName member's value does not satisfy the
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
-                        Some(&actual) if (actual as f64) <= (max as f64) => {}
+                        Some(&actual)
+                            if super::is_nearly_less_than_or_equal_to(
+                                actual as f64,
+                                max as f64,
+                            ) => {}
                         Some(setting) => {
                             return Err(SettingFitnessDistanceError {
                                 kind: SettingFitnessDistanceErrorKind::TooLarge,

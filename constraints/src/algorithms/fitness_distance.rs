@@ -11,15 +11,50 @@ mod value_constraint;
 mod value_range_constraint;
 mod value_sequence_constraint;
 
+use std::cmp::Ordering;
+
 pub use self::{
     setting::{SettingFitnessDistanceError, SettingFitnessDistanceErrorKind},
     settings::SettingsFitnessDistanceError,
 };
 
-fn relative_fitness_distance(actual: f64, ideal: f64) -> f64 {
-    let actual: f64 = actual as f64;
-    let ideal: f64 = ideal as f64;
+fn nearly_cmp(lhs: f64, rhs: f64) -> Ordering {
+    // Based on: https://stackoverflow.com/a/32334103/227536
 
+    let epsilon: f64 = 128.0 * f64::EPSILON;
+    let abs_th: f64 = f64::MIN;
+
+    debug_assert!(epsilon < 1.0);
+
+    if lhs == rhs {
+        return Ordering::Equal;
+    }
+
+    let diff = (lhs - rhs).abs();
+    let norm = (lhs.abs() + rhs.abs()).min(f64::MAX);
+
+    if diff < (epsilon * norm).max(abs_th) {
+        Ordering::Equal
+    } else if lhs < rhs {
+        Ordering::Less
+    } else {
+        Ordering::Greater
+    }
+}
+
+fn is_nearly_greater_than_or_equal_to(actual: f64, min: f64) -> bool {
+    nearly_cmp(actual, min) != Ordering::Less
+}
+
+fn is_nearly_less_than_or_equal_to(actual: f64, max: f64) -> bool {
+    nearly_cmp(actual, max) != Ordering::Greater
+}
+
+fn is_nearly_equal_to(actual: f64, exact: f64) -> bool {
+    nearly_cmp(actual, exact) == Ordering::Equal
+}
+
+fn relative_fitness_distance(actual: f64, ideal: f64) -> f64 {
     // As specified in step 7 of the `fitness distance` algorithm:
     // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
     //
@@ -29,12 +64,12 @@ fn relative_fitness_distance(actual: f64, ideal: f64) -> f64 {
     // > ```
     // > (actual == ideal) ? 0 : |actual - ideal| / max(|actual|, |ideal|)
     // > ```
-    if actual == ideal {
+    if (actual - ideal).abs() < f64::EPSILON {
         0.0
     } else {
         let numerator = (actual - ideal).abs();
         let denominator = actual.abs().max(ideal.abs());
-        if denominator == 0.0 {
+        if denominator.abs() < f64::EPSILON {
             // Avoid division by zero crashes:
             0.0
         } else {
