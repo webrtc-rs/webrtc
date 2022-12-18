@@ -99,7 +99,8 @@ macro_rules! impl_numeric_value_constraint {
                     // > dictionary's constraintName member's value does not satisfy the
                     // > constraint or doesn't exist, the fitness distance is positive infinity.
                     match setting {
-                        Some(&actual) if (actual as f64) == (exact as f64) => {}
+                        Some(&actual) if super::is_nearly_equal_to(actual as f64, exact as f64) => {
+                        }
                         Some(setting) => {
                             return Err(SettingFitnessDistanceError {
                                 kind: SettingFitnessDistanceErrorKind::Mismatch,
