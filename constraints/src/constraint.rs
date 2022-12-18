@@ -421,46 +421,6 @@ impl SanitizedMediaTrackConstraint {
     pub fn into_inner(self) -> ResolvedMediaTrackConstraint {
         self.0
     }
-
-    pub fn integer_range(&self) -> Option<&ResolvedValueRangeConstraint<u64>> {
-        if let ResolvedMediaTrackConstraint::IntegerRange(constraint) = &self.0 {
-            Some(constraint)
-        } else {
-            None
-        }
-    }
-
-    pub fn float_range(&self) -> Option<&ResolvedValueRangeConstraint<f64>> {
-        if let ResolvedMediaTrackConstraint::FloatRange(constraint) = &self.0 {
-            Some(constraint)
-        } else {
-            None
-        }
-    }
-
-    pub fn bool(&self) -> Option<&ResolvedValueConstraint<bool>> {
-        if let ResolvedMediaTrackConstraint::Bool(constraint) = &self.0 {
-            Some(constraint)
-        } else {
-            None
-        }
-    }
-
-    pub fn string_sequence(&self) -> Option<&ResolvedValueSequenceConstraint<String>> {
-        if let ResolvedMediaTrackConstraint::StringSequence(constraint) = &self.0 {
-            Some(constraint)
-        } else {
-            None
-        }
-    }
-
-    pub fn string(&self) -> Option<&ResolvedValueConstraint<String>> {
-        if let ResolvedMediaTrackConstraint::String(constraint) = &self.0 {
-            Some(constraint)
-        } else {
-            None
-        }
-    }
 }
 
 #[cfg(test)]
