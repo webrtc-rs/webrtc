@@ -102,8 +102,10 @@ mod tests {
 
         let sanitized_constraints = constraints.to_sanitized(&supported_constraints);
 
+        // Exposed exposure mode:
+
         let error = apply_mandatory_constraints(
-            candidates,
+            candidates.clone(),
             &sanitized_constraints,
             DeviceInformationExposureMode::Exposed,
         )
@@ -116,6 +118,28 @@ mod tests {
         assert_eq!(
             err_message,
             "Setting was a mismatch ([\"bar\", \"foo\"] do not satisfy (x == \"mismatched-device\"))."
+        );
+
+        // Protected exposure mode:
+
+        let error = apply_mandatory_constraints(
+            candidates,
+            &sanitized_constraints,
+            DeviceInformationExposureMode::Protected,
+        )
+        .unwrap_err();
+
+        let constraint = &error.constraint;
+        let err_message = error.message;
+
+        assert_eq!(
+            constraint,
+            &MediaTrackProperty::from(""),
+            "Constraint should not have been exposed"
+        );
+        assert!(
+            err_message.is_none(),
+            "Error message should not have been exposed"
         );
     }
 
