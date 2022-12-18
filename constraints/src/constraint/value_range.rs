@@ -215,7 +215,7 @@ where
             if !is_first {
                 f.write_str(" && ")?;
             }
-            f.write_fmt(format_args!("x~={:?}", ideal))?;
+            f.write_fmt(format_args!("x ~= {:?}", ideal))?;
             is_first = false;
         }
         if is_first {
@@ -231,23 +231,123 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_to_advanced() {
-        let constraint = ValueRangeConstraint::Bare(42);
-        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        let actual: ResolvedValueRangeConstraint<u64> = constraint.into_resolved(strategy);
-        let expected = ResolvedValueRangeConstraint::default().exact(42);
+    fn to_string() {
+        let scenarios = [
+            (ResolvedValueRangeConstraint::default(), "(<empty>)"),
+            (ResolvedValueRangeConstraint::default().exact(1), "(x == 1)"),
+            (ResolvedValueRangeConstraint::default().ideal(2), "(x ~= 2)"),
+            (
+                ResolvedValueRangeConstraint::default().exact(1).ideal(2),
+                "(x == 1 && x ~= 2)",
+            ),
+        ];
 
-        assert_eq!(actual, expected);
+        for (constraint, expected) in scenarios {
+            let actual = constraint.to_string();
+
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
-    fn resolve_to_basic() {
-        let constraint = ValueRangeConstraint::Bare(42);
-        let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
-        let actual: ResolvedValueRangeConstraint<u64> = constraint.into_resolved(strategy);
+    fn is_required() {
+        for min in [false, true] {
+            for max in [false, true] {
+                for exact in [false, true] {
+                    for ideal in [false, true] {
+                        let constraint = ResolvedValueRangeConstraint::<u64> {
+                            min: min.then_some(42),
+                            max: max.then_some(42),
+                            exact: exact.then_some(42),
+                            ideal: ideal.then_some(42),
+                        };
+
+                        let actual = constraint.is_required();
+                        let expected = min || max || exact;
+
+                        assert_eq!(actual, expected);
+                    }
+                }
+            }
+        }
+    }
+
+    mod is_empty {
+        use super::*;
+
+        #[test]
+        fn bare() {
+            let constraint = ValueRangeConstraint::Bare(42);
+
+            assert!(!constraint.is_empty());
+        }
+
+        #[test]
+        fn constraint() {
+            for min in [false, true] {
+                for max in [false, true] {
+                    for exact in [false, true] {
+                        for ideal in [false, true] {
+                            let constraint = ResolvedValueRangeConstraint::<u64> {
+                                min: min.then_some(42),
+                                max: max.then_some(42),
+                                exact: exact.then_some(42),
+                                ideal: ideal.then_some(42),
+                            };
+
+                            let actual = constraint.is_empty();
+                            let expected = !(min || max || exact || ideal);
+
+                            assert_eq!(actual, expected);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn resolve_to_advanced() {
+    let constraints = [
+        ValueRangeConstraint::Bare(42),
+        ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint::default().exact(42)),
+    ];
+    let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
+
+    for constraint in constraints {
+        let actuals = [
+            constraint.to_resolved(strategy),
+            constraint.into_resolved(strategy),
+        ];
+
+        let expected = ResolvedValueRangeConstraint::default().exact(42);
+
+        for actual in actuals {
+            assert_eq!(actual, expected);
+        }
+    }
+}
+
+#[test]
+fn resolve_to_basic() {
+    let constraints = [
+        ValueRangeConstraint::Bare(42),
+        ValueRangeConstraint::Constraint(ResolvedValueRangeConstraint::default().ideal(42)),
+    ];
+    let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
+
+    for constraint in constraints {
+        let actuals = [
+            constraint.to_resolved(strategy),
+            constraint.into_resolved(strategy),
+        ];
+
         let expected = ResolvedValueRangeConstraint::default().ideal(42);
 
-        assert_eq!(actual, expected);
+        for actual in actuals {
+            assert_eq!(actual, expected);
+        }
     }
 }
 

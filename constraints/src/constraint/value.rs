@@ -196,23 +196,123 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_to_advanced() {
-        let constraint = ValueConstraint::Bare(true);
-        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        let actual: ResolvedValueConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ResolvedValueConstraint::default().exact(true);
+    fn to_string() {
+        let scenarios = [
+            (ResolvedValueConstraint::default(), "(<empty>)"),
+            (
+                ResolvedValueConstraint::default().exact(true),
+                "(x == true)",
+            ),
+            (
+                ResolvedValueConstraint::default().ideal(true),
+                "(x ~= true)",
+            ),
+            (
+                ResolvedValueConstraint::default().exact(true).ideal(true),
+                "(x == true && x ~= true)",
+            ),
+        ];
 
-        assert_eq!(actual, expected);
+        for (constraint, expected) in scenarios {
+            let actual = constraint.to_string();
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn is_required() {
+        let scenarios = [
+            (ResolvedValueConstraint::default(), false),
+            (ResolvedValueConstraint::default().exact(true), true),
+            (ResolvedValueConstraint::default().ideal(true), false),
+            (
+                ResolvedValueConstraint::default().exact(true).ideal(true),
+                true,
+            ),
+        ];
+
+        for (constraint, expected) in scenarios {
+            let actual = constraint.is_required();
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    mod is_empty {
+        use super::*;
+
+        #[test]
+        fn bare() {
+            let constraint = ValueConstraint::Bare(true);
+
+            assert!(!constraint.is_empty());
+        }
+
+        #[test]
+        fn constraint() {
+            let scenarios = [
+                (ResolvedValueConstraint::default(), true),
+                (ResolvedValueConstraint::default().exact(true), false),
+                (ResolvedValueConstraint::default().ideal(true), false),
+                (
+                    ResolvedValueConstraint::default().exact(true).ideal(true),
+                    false,
+                ),
+            ];
+
+            for (constraint, expected) in scenarios {
+                let constraint = ValueConstraint::<bool>::Constraint(constraint);
+
+                let actual = constraint.is_empty();
+
+                assert_eq!(actual, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_to_advanced() {
+        let constraints = [
+            ValueConstraint::Bare(true),
+            ValueConstraint::Constraint(ResolvedValueConstraint::default().exact(true)),
+        ];
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
+
+        for constraint in constraints {
+            let actuals = [
+                constraint.to_resolved(strategy),
+                constraint.into_resolved(strategy),
+            ];
+
+            let expected = ResolvedValueConstraint::default().exact(true);
+
+            for actual in actuals {
+                assert_eq!(actual, expected);
+            }
+        }
     }
 
     #[test]
     fn resolve_to_basic() {
-        let constraint = ValueConstraint::Bare(true);
+        let constraints = [
+            ValueConstraint::Bare(true),
+            ValueConstraint::Constraint(ResolvedValueConstraint::default().ideal(true)),
+        ];
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
-        let actual: ResolvedValueConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ResolvedValueConstraint::default().ideal(true);
 
-        assert_eq!(actual, expected);
+        for constraint in constraints {
+            let actuals = [
+                constraint.to_resolved(strategy),
+                constraint.into_resolved(strategy),
+            ];
+
+            let expected = ResolvedValueConstraint::default().ideal(true);
+
+            for actual in actuals {
+                assert_eq!(actual, expected);
+            }
+        }
     }
 }
 

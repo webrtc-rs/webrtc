@@ -204,23 +204,145 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_to_advanced() {
-        let constraint = ValueSequenceConstraint::Bare(vec![true]);
-        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
-        let actual: ResolvedValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ResolvedValueSequenceConstraint::default().exact(vec![true]);
+    fn to_string() {
+        let scenarios = [
+            (ResolvedValueSequenceConstraint::default(), "(<empty>)"),
+            (
+                ResolvedValueSequenceConstraint::default().exact(vec![1, 2]),
+                "(x == [1, 2])",
+            ),
+            (
+                ResolvedValueSequenceConstraint::default().ideal(vec![2, 3]),
+                "(x ~= [2, 3])",
+            ),
+            (
+                ResolvedValueSequenceConstraint::default()
+                    .exact(vec![1, 2])
+                    .ideal(vec![2, 3]),
+                "(x == [1, 2] && x ~= [2, 3])",
+            ),
+        ];
 
-        assert_eq!(actual, expected);
+        for (constraint, expected) in scenarios {
+            let actual = constraint.to_string();
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn is_required() {
+        let scenarios = [
+            (ResolvedValueSequenceConstraint::default(), false),
+            (
+                ResolvedValueSequenceConstraint::default().exact(vec![true]),
+                true,
+            ),
+            (
+                ResolvedValueSequenceConstraint::default().ideal(vec![true]),
+                false,
+            ),
+            (
+                ResolvedValueSequenceConstraint::default()
+                    .exact(vec![true])
+                    .ideal(vec![true]),
+                true,
+            ),
+        ];
+
+        for (constraint, expected) in scenarios {
+            let actual = constraint.is_required();
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    mod is_empty {
+        use super::*;
+
+        #[test]
+        fn bare() {
+            let constraint = ValueSequenceConstraint::Bare(vec![true]);
+
+            assert!(!constraint.is_empty());
+        }
+
+        #[test]
+        fn constraint() {
+            let scenarios = [
+                (ResolvedValueSequenceConstraint::default(), true),
+                (
+                    ResolvedValueSequenceConstraint::default().exact(vec![true]),
+                    false,
+                ),
+                (
+                    ResolvedValueSequenceConstraint::default().ideal(vec![true]),
+                    false,
+                ),
+                (
+                    ResolvedValueSequenceConstraint::default()
+                        .exact(vec![true])
+                        .ideal(vec![true]),
+                    false,
+                ),
+            ];
+
+            for (constraint, expected) in scenarios {
+                let constraint = ValueSequenceConstraint::<bool>::Constraint(constraint);
+
+                let actual = constraint.is_empty();
+
+                assert_eq!(actual, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_to_advanced() {
+        let constraints = [
+            ValueSequenceConstraint::Bare(vec![true]),
+            ValueSequenceConstraint::Constraint(
+                ResolvedValueSequenceConstraint::default().exact(vec![true]),
+            ),
+        ];
+        let strategy = MediaTrackConstraintResolutionStrategy::BareToExact;
+
+        for constraint in constraints {
+            let actuals = [
+                constraint.to_resolved(strategy),
+                constraint.into_resolved(strategy),
+            ];
+
+            let expected = ResolvedValueSequenceConstraint::default().exact(vec![true]);
+
+            for actual in actuals {
+                assert_eq!(actual, expected);
+            }
+        }
     }
 
     #[test]
     fn resolve_to_basic() {
-        let constraint = ValueSequenceConstraint::Bare(vec![true]);
+        let constraints = [
+            ValueSequenceConstraint::Bare(vec![true]),
+            ValueSequenceConstraint::Constraint(
+                ResolvedValueSequenceConstraint::default().ideal(vec![true]),
+            ),
+        ];
         let strategy = MediaTrackConstraintResolutionStrategy::BareToIdeal;
-        let actual: ResolvedValueSequenceConstraint<bool> = constraint.into_resolved(strategy);
-        let expected = ResolvedValueSequenceConstraint::default().ideal(vec![true]);
 
-        assert_eq!(actual, expected);
+        for constraint in constraints {
+            let actuals = [
+                constraint.to_resolved(strategy),
+                constraint.into_resolved(strategy),
+            ];
+
+            let expected = ResolvedValueSequenceConstraint::default().ideal(vec![true]);
+
+            for actual in actuals {
+                assert_eq!(actual, expected);
+            }
+        }
     }
 }
 
