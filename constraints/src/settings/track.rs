@@ -77,6 +77,62 @@ impl IntoIterator for MediaTrackSettings {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::property::all::name::*;
+
+    use super::*;
+
+    type Subject = MediaTrackSettings;
+
+    #[test]
+    fn into_inner() {
+        let hash_map = HashMap::from_iter([
+            (DEVICE_ID.clone(), "device-id".into()),
+            (AUTO_GAIN_CONTROL.clone(), true.into()),
+            (CHANNEL_COUNT.clone(), 20.into()),
+            (LATENCY.clone(), 2.0.into()),
+        ]);
+
+        let subject = Subject::new(hash_map.clone());
+
+        let actual = subject.into_inner();
+
+        let expected = hash_map;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn into_iter() {
+        let hash_map = HashMap::from_iter([
+            (DEVICE_ID.clone(), "device-id".into()),
+            (AUTO_GAIN_CONTROL.clone(), true.into()),
+            (CHANNEL_COUNT.clone(), 20.into()),
+            (LATENCY.clone(), 2.0.into()),
+        ]);
+
+        let subject = Subject::new(hash_map.clone());
+
+        let actual: HashMap<_, _> = subject.into_iter().collect();
+
+        let expected = hash_map;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn deref_and_deref_mut() {
+        let mut subject = Subject::default();
+
+        // Deref mut:
+        subject.insert(DEVICE_ID.clone(), "device-id".into());
+
+        // Deref:
+        assert!(subject.contains_key(&DEVICE_ID));
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
