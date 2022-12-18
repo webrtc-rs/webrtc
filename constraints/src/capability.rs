@@ -89,6 +89,65 @@ impl From<Vec<&str>> for MediaTrackCapability {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Subject = MediaTrackCapability;
+
+    mod from {
+        use super::*;
+
+        #[test]
+        fn bool_sequence() {
+            let actual = Subject::from(vec![false, true]);
+            let expected = Subject::BoolSequence(vec![false, true].into());
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn bool() {
+            let actual = Subject::from(true);
+            let expected = Subject::Bool(true.into());
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn integer_range() {
+            let actual = Subject::from(12..=34);
+            let expected = Subject::IntegerRange((12..=34).into());
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn float() {
+            let actual = Subject::from(1.2..=3.4);
+            let expected = Subject::FloatRange((1.2..=3.4).into());
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn string_sequence() {
+            let actual = Subject::from(vec!["foo".to_owned(), "bar".to_owned()]);
+            let expected = Subject::StringSequence(vec!["foo".to_owned(), "bar".to_owned()].into());
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn string() {
+            let actual = Subject::from("foo".to_owned());
+            let expected = Subject::String("foo".to_owned().into());
+
+            assert_eq!(actual, expected);
+        }
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
