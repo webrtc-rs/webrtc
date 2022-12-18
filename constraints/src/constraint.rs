@@ -469,6 +469,118 @@ impl SanitizedMediaTrackConstraint {
     }
 }
 
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    type Subject = MediaTrackConstraint;
+
+    #[test]
+    fn default() {
+        let subject = Subject::default();
+
+        let actual = subject.is_empty();
+        let expected = true;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn from_bool() {
+        let subjects = [
+            Subject::from(false),
+            Subject::from(ValueConstraint::<bool>::default()),
+            Subject::from(ResolvedValueConstraint::<bool>::default()),
+        ];
+
+        for subject in subjects {
+            // TODO: replace with `assert_matches!(…)`, once stabilized:
+            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+            assert!(matches!(subject, Subject::Bool(_)));
+        }
+    }
+
+    #[test]
+    fn from_u64() {
+        let subjects = [
+            Subject::from(42_u64),
+            Subject::from(ValueRangeConstraint::<u64>::default()),
+            Subject::from(ResolvedValueRangeConstraint::<u64>::default()),
+        ];
+
+        for subject in subjects {
+            // TODO: replace with `assert_matches!(…)`, once stabilized:
+            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+            assert!(matches!(subject, Subject::IntegerRange(_)));
+        }
+    }
+
+    #[test]
+    fn from_f64() {
+        let subjects = [
+            Subject::from(42.0_f64),
+            Subject::from(ValueRangeConstraint::<f64>::default()),
+            Subject::from(ResolvedValueRangeConstraint::<f64>::default()),
+        ];
+
+        for subject in subjects {
+            // TODO: replace with `assert_matches!(…)`, once stabilized:
+            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+            assert!(matches!(subject, Subject::FloatRange(_)));
+        }
+    }
+
+    #[test]
+    fn from_string() {
+        let subjects = [
+            Subject::from(String::new()),
+            Subject::from(ValueConstraint::<String>::default()),
+            Subject::from(ResolvedValueConstraint::<String>::default()),
+        ];
+
+        for subject in subjects {
+            // TODO: replace with `assert_matches!(…)`, once stabilized:
+            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+            assert!(matches!(subject, Subject::String(_)));
+        }
+    }
+
+    #[test]
+    fn from_string_sequence() {
+        let subjects = [
+            Subject::from(vec![String::new()]),
+            Subject::from(ValueSequenceConstraint::<String>::default()),
+            Subject::from(ResolvedValueSequenceConstraint::<String>::default()),
+        ];
+
+        for subject in subjects {
+            // TODO: replace with `assert_matches!(…)`, once stabilized:
+            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+            assert!(matches!(subject, Subject::StringSequence(_)));
+        }
+    }
+
+    #[test]
+    fn is_empty() {
+        let empty_subject = Subject::Empty(EmptyConstraint {});
+
+        assert!(empty_subject.is_empty());
+
+        let non_empty_subjects = [
+            Subject::Bool(ValueConstraint::Bare(true)),
+            Subject::FloatRange(ValueRangeConstraint::Bare(42.0)),
+            Subject::IntegerRange(ValueRangeConstraint::Bare(42)),
+            Subject::String(ValueConstraint::Bare(String::new())),
+            Subject::StringSequence(ValueSequenceConstraint::Bare(vec![String::new()])),
+        ];
+
+        for non_empty_subject in non_empty_subjects {
+            assert!(!non_empty_subject.is_empty());
+        }
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
