@@ -175,7 +175,8 @@ mod tests {
 
     use crate::{
         constraints::mandatory::MandatoryMediaTrackConstraints, property::all::name::*,
-        AdvancedMediaTrackConstraints,
+        AdvancedMediaTrackConstraints, ResolvedAdvancedMediaTrackConstraints,
+        ResolvedMandatoryMediaTrackConstraints, ResolvedValueConstraint,
     };
 
     use super::*;
@@ -260,6 +261,30 @@ mod tests {
 
             assert_eq!(actual, expected);
         }
+    }
+
+    #[test]
+    fn to_resolved() {
+        let subject = MediaTrackConstraints {
+            mandatory: MandatoryMediaTrackConstraints::from_iter([(
+                &DEVICE_ID,
+                "microphone".into(),
+            )]),
+            advanced: AdvancedMediaTrackConstraints::new(vec![]),
+        };
+
+        let actual = subject.to_resolved();
+        let expected = ResolvedMediaTrackConstraints {
+            mandatory: ResolvedMandatoryMediaTrackConstraints::from_iter([(
+                &DEVICE_ID,
+                ResolvedValueConstraint::default()
+                    .ideal("microphone".to_owned())
+                    .into(),
+            )]),
+            advanced: ResolvedAdvancedMediaTrackConstraints::new(vec![]),
+        };
+
+        assert_eq!(actual, expected);
     }
 }
 
