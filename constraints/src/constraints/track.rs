@@ -122,30 +122,12 @@ fn should_skip_advanced<T>(advanced: &GenericAdvancedMediaTrackConstraints<T>) -
     advanced.is_empty()
 }
 
-impl<T> GenericMediaTrackConstraints<T> {
-    pub fn new(
-        mandatory: GenericMandatoryMediaTrackConstraints<T>,
-        advanced: GenericAdvancedMediaTrackConstraints<T>,
-    ) -> Self {
-        Self {
-            mandatory,
-            advanced,
-        }
-    }
-}
-
 impl<T> Default for GenericMediaTrackConstraints<T> {
     fn default() -> Self {
         Self {
             mandatory: Default::default(),
             advanced: Default::default(),
         }
-    }
-}
-
-impl From<MediaTrackConstraints> for ResolvedMediaTrackConstraints {
-    fn from(constraints: MediaTrackConstraints) -> Self {
-        constraints.into_resolved()
     }
 }
 
