@@ -29,7 +29,7 @@ pub type BoolOrResolvedMediaTrackConstraints =
 ///
 /// | Rust                          | W3C                                                                                                |
 /// | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-/// | `BoolOrMediaTrackConstraints` | [`ResolvedMediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
+/// | `BoolOrMediaTrackConstraints` | [`MediaStreamConstraints`][media_stream_constraints]'s [`video`][video] / [`audio`][audio] members |
 ///
 /// [media_stream_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamconstraints-video
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
