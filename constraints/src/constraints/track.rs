@@ -187,6 +187,100 @@ impl ResolvedMediaTrackConstraints {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::iter::FromIterator;
+
+    use crate::{
+        constraints::mandatory::MandatoryMediaTrackConstraints, property::all::name::*,
+        AdvancedMediaTrackConstraints,
+    };
+
+    use super::*;
+
+    type Subject = BoolOrMediaTrackConstraints;
+
+    #[test]
+    fn default() {
+        let actual = Subject::default();
+        let expected = Subject::Bool(false);
+
+        assert_eq!(actual, expected);
+    }
+
+    mod from {
+        use super::*;
+
+        #[test]
+        fn bool() {
+            for value in [false, true] {
+                let actual = Subject::from(value);
+                let expected = Subject::Bool(value);
+
+                assert_eq!(actual, expected);
+            }
+        }
+
+        #[test]
+        fn constraints() {
+            let constraints = GenericMediaTrackConstraints {
+                mandatory: MandatoryMediaTrackConstraints::from_iter([(
+                    &DEVICE_ID,
+                    "microphone".into(),
+                )]),
+                advanced: AdvancedMediaTrackConstraints::new(vec![]),
+            };
+
+            let actual = Subject::from(constraints.clone());
+            let expected = Subject::Constraints(constraints);
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    mod to_constraints {
+        use super::*;
+
+        #[test]
+        fn bool_false() {
+            let subject = Subject::Bool(false);
+
+            let actual = subject.to_constraints();
+            let expected = None;
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn bool_true() {
+            let subject = Subject::Bool(true);
+
+            let actual = subject.to_constraints();
+            let expected = Some(GenericMediaTrackConstraints::default());
+
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn constraints() {
+            let constraints = GenericMediaTrackConstraints {
+                mandatory: MandatoryMediaTrackConstraints::from_iter([(
+                    &DEVICE_ID,
+                    "microphone".into(),
+                )]),
+                advanced: AdvancedMediaTrackConstraints::new(vec![]),
+            };
+
+            let subject = Subject::Constraints(constraints.clone());
+
+            let actual = subject.to_constraints();
+            let expected = Some(constraints);
+
+            assert_eq!(actual, expected);
+        }
+    }
+}
+
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
