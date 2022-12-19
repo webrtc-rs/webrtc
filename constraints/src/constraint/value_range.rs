@@ -251,19 +251,32 @@ mod tests {
 
     #[test]
     fn is_required() {
-        for min in [false, true] {
-            for max in [false, true] {
-                for exact in [false, true] {
-                    for ideal in [false, true] {
+        for min_is_some in [false, true] {
+            // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+            // once MSRV has passed 1.62.0:
+            let min = if min_is_some { Some(1) } else { None };
+            for max_is_some in [false, true] {
+                // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                // once MSRV has passed 1.62.0:
+                let max = if max_is_some { Some(2) } else { None };
+                for exact_is_some in [false, true] {
+                    // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                    // once MSRV has passed 1.62.0:
+                    let exact = if exact_is_some { Some(3) } else { None };
+                    for ideal_is_some in [false, true] {
+                        // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                        // once MSRV has passed 1.62.0:
+                        let ideal = if ideal_is_some { Some(4) } else { None };
+
                         let constraint = ResolvedValueRangeConstraint::<u64> {
-                            min: min.then_some(42),
-                            max: max.then_some(42),
-                            exact: exact.then_some(42),
-                            ideal: ideal.then_some(42),
+                            min,
+                            max,
+                            exact,
+                            ideal,
                         };
 
                         let actual = constraint.is_required();
-                        let expected = min || max || exact;
+                        let expected = min_is_some || max_is_some || exact_is_some;
 
                         assert_eq!(actual, expected);
                     }
@@ -284,19 +297,33 @@ mod tests {
 
         #[test]
         fn constraint() {
-            for min in [false, true] {
-                for max in [false, true] {
-                    for exact in [false, true] {
-                        for ideal in [false, true] {
+            for min_is_some in [false, true] {
+                // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                // once MSRV has passed 1.62.0:
+                let min = if min_is_some { Some(1) } else { None };
+                for max_is_some in [false, true] {
+                    // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                    // once MSRV has passed 1.62.0:
+                    let max = if max_is_some { Some(2) } else { None };
+                    for exact_is_some in [false, true] {
+                        // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                        // once MSRV has passed 1.62.0:
+                        let exact = if exact_is_some { Some(3) } else { None };
+                        for ideal_is_some in [false, true] {
+                            // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                            // once MSRV has passed 1.62.0:
+                            let ideal = if ideal_is_some { Some(4) } else { None };
+
                             let constraint = ResolvedValueRangeConstraint::<u64> {
-                                min: min.then_some(42),
-                                max: max.then_some(42),
-                                exact: exact.then_some(42),
-                                ideal: ideal.then_some(42),
+                                min,
+                                max,
+                                exact,
+                                ideal,
                             };
 
                             let actual = constraint.is_empty();
-                            let expected = !(min || max || exact || ideal);
+                            let expected =
+                                !(min_is_some || max_is_some || exact_is_some || ideal_is_some);
 
                             assert_eq!(actual, expected);
                         }
