@@ -1,6 +1,7 @@
 # interceptor changelog
 
 ## Unreleased
+- [#372 Fix over-NACK due not resetting lost_packets bitmask](https://github.com/webrtc-rs/webrtc/pull/372/)
 
 ## v0.8.1
 
@@ -9,7 +10,7 @@
 * Don't generate empty TWCC packets that libWebRTC will ignore. [#324](https://github.com/webrtc-rs/webrtc/pull/324) by [@k0nserv](https://github.com/k0nserv).
 * Increased minimum support rust version to `1.60.0`.
 * Increased required `webrtc-util` version to `0.7.0`.
- 
+
 
 ## v0.8.0
 
