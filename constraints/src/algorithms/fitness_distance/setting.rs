@@ -207,9 +207,10 @@ mod tests {
                 });
 
                 for setting in settings.iter() {
-                    let actual = constraint
-                        .fitness_distance(setting_value.then_some(setting))
-                        .unwrap();
+                    // TODO: Replace `if { Some(_) } else { None }` with `.then_some(_)`
+                    // once MSRV has passed 1.62.0:
+                    let setting = if setting_value { Some(setting) } else { None };
+                    let actual = constraint.fitness_distance(setting).unwrap();
 
                     let expected = if setting_value { 0.0 } else { 1.0 };
 
