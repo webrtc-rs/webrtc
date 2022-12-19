@@ -816,7 +816,7 @@ fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> Option<f64> {
     let rtt_seconds = rtt >> 16;
     let rtt_fraction = (rtt & (u16::MAX as u32)) as f64 / (u16::MAX as u32) as f64;
 
-    Some(rtt_seconds as f64 * 1000.0 + (rtt_fraction as f64) * 1000.0)
+    Some(rtt_seconds as f64 * 1000.0 + rtt_fraction * 1000.0)
 }
 
 #[cfg(test)]

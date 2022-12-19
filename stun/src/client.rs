@@ -412,7 +412,7 @@ impl Client {
         tokio::spawn(async move { Agent::run(agent, client_agent_rx).await });
 
         if self.settings.collector.is_none() {
-            self.settings.collector = Some(Box::new(TickerCollector::default()));
+            self.settings.collector = Some(Box::<TickerCollector>::default());
         }
         if let Some(collector) = &mut self.settings.collector {
             collector.start(self.settings.rto_rate, Arc::clone(&client_agent_tx))?;

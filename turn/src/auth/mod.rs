@@ -30,7 +30,7 @@ fn long_term_credentials(username: &str, shared_secret: &str) -> String {
         shared_secret.as_bytes(),
     );
     let password = hmac::sign(&mac, username.as_bytes()).as_ref().to_vec();
-    base64::encode(&password)
+    base64::encode(password)
 }
 
 // generate_auth_key is a convenience function to easily generate keys in the format used by AuthHandler

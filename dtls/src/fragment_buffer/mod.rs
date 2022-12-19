@@ -127,8 +127,8 @@ impl FragmentBuffer {
 
     fn size(&self) -> usize {
         self.cache
-            .iter()
-            .map(|(_, fragment)| fragment.iter().map(|f| f.data.len()).sum::<usize>())
+            .values()
+            .map(|fragment| fragment.iter().map(|f| f.data.len()).sum::<usize>())
             .sum()
     }
 }

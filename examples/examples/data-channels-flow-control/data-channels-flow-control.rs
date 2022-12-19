@@ -127,7 +127,7 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
                         let start = SystemTime::now();
 
                         tokio::time::sleep(Duration::from_secs(1)).await;
-                        println!("");
+                        println!();
 
                         loop {
                             let total_bytes_received =
@@ -246,7 +246,7 @@ async fn main() -> anyhow::Result<()> {
     requester.close().await?;
     responder.close().await?;
 
-    println!("");
+    println!();
 
     Ok(())
 }

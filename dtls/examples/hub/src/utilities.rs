@@ -88,7 +88,7 @@ pub fn load_key_and_certificate(
 
 /// load_key Load/read key from file
 pub fn load_key(path: PathBuf) -> Result<CryptoPrivateKey, Error> {
-    let f = File::open(&path)?;
+    let f = File::open(path)?;
     let mut reader = BufReader::new(f);
     let mut buf = vec![];
     reader.read_to_end(&mut buf)?;
@@ -102,7 +102,7 @@ pub fn load_key(path: PathBuf) -> Result<CryptoPrivateKey, Error> {
 
 /// load_certificate Load/read certificate(s) from file
 pub fn load_certificate(path: PathBuf) -> Result<Vec<rustls::Certificate>, Error> {
-    let f = File::open(&path)?;
+    let f = File::open(path)?;
 
     let mut reader = BufReader::new(f);
     match certs(&mut reader) {

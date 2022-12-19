@@ -28,7 +28,7 @@ impl ExtensionSupportedPointFormats {
         writer.write_u16::<BigEndian>(1 + self.point_formats.len() as u16)?;
         writer.write_u8(self.point_formats.len() as u8)?;
         for v in &self.point_formats {
-            writer.write_u8(*v as u8)?;
+            writer.write_u8(*v)?;
         }
 
         Ok(writer.flush()?)

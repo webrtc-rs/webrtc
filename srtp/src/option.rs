@@ -27,10 +27,10 @@ pub fn srtcp_replay_protection(window_size: usize) -> ContextOption {
 
 /// srtp_no_replay_protection disables SRTP replay protection.
 pub fn srtp_no_replay_protection() -> ContextOption {
-    Box::new(|| -> Box<dyn ReplayDetector + Send> { Box::new(NoOpReplayDetector::default()) })
+    Box::new(|| -> Box<dyn ReplayDetector + Send> { Box::<NoOpReplayDetector>::default() })
 }
 
 /// srtcp_no_replay_protection disables SRTCP replay protection.
 pub fn srtcp_no_replay_protection() -> ContextOption {
-    Box::new(|| -> Box<dyn ReplayDetector + Send> { Box::new(NoOpReplayDetector::default()) })
+    Box::new(|| -> Box<dyn ReplayDetector + Send> { Box::<NoOpReplayDetector>::default() })
 }

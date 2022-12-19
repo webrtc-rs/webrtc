@@ -395,7 +395,7 @@ async fn main() -> Result<(), Error> {
                 let _ = done_tx.send(());
             }
             _ = tokio::signal::ctrl_c() => {
-                println!("");
+                println!();
                 let _ = done_tx.send(());
             }
         };

@@ -175,7 +175,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
 
     let _ = m
         .create_allocation(
-            five_tuple.clone(),
+            five_tuple,
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
@@ -210,7 +210,7 @@ async fn test_delete_allocation() -> Result<()> {
 
     let _ = m
         .create_allocation(
-            five_tuple.clone(),
+            five_tuple,
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
@@ -348,7 +348,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
 
     let _ = m
         .create_allocation(
-            five_tuple1.clone(),
+            five_tuple1,
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
@@ -357,7 +357,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
         .await?;
     let _ = m
         .create_allocation(
-            five_tuple2.clone(),
+            five_tuple2,
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
@@ -366,7 +366,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
         .await?;
     let _ = m
         .create_allocation(
-            five_tuple3.clone(),
+            five_tuple3,
             Arc::clone(&turn_socket),
             0,
             DEFAULT_LIFETIME,
@@ -421,7 +421,7 @@ async fn create_server() -> Result<(Server, u16)> {
 async fn create_client(username: String, server_port: u16) -> Result<Client> {
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    Ok(Client::new(ClientConfig {
+    Client::new(ClientConfig {
         stun_serv_addr: format!("127.0.0.1:{}", server_port),
         turn_serv_addr: format!("127.0.0.1:{}", server_port),
         username,
@@ -432,7 +432,7 @@ async fn create_client(username: String, server_port: u16) -> Result<Client> {
         conn,
         vnet: None,
     })
-    .await?)
+    .await
 }
 
 #[cfg(feature = "metrics")]

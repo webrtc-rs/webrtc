@@ -175,7 +175,7 @@ async fn main() -> Result<()> {
             let mut h264 = H264Reader::new(reader);
 
             // Wait for connection established
-            let _ = notify_video.notified().await;
+            notify_video.notified().await;
 
             println!("play video from disk file {}", video_file_name);
 
@@ -252,7 +252,7 @@ async fn main() -> Result<()> {
             let (mut ogg, _) = OggReader::new(reader, true)?;
 
             // Wait for connection established
-            let _ = notify_audio.notified().await;
+            notify_audio.notified().await;
 
             println!("play audio from disk file output.ogg");
 
@@ -351,7 +351,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 

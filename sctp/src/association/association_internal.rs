@@ -155,7 +155,11 @@ impl AssociationInternal {
         //  o  The initial cwnd before DATA transmission or after a sufficiently
         //     long idle period MUST be set to min(4*MTU, max (2*MTU, 4380
         //     bytes)).
-        a.cwnd = std::cmp::min(4 * a.mtu, std::cmp::max(2 * a.mtu, 4380));
+        //     TODO: Consider whether this should use `clamp`
+        #[allow(clippy::manual_clamp)]
+        {
+            a.cwnd = std::cmp::min(4 * a.mtu, std::cmp::max(2 * a.mtu, 4380));
+        }
         log::trace!(
             "[{}] updated cwnd={} ssthresh={} inflight={} (INI)",
             a.name,
