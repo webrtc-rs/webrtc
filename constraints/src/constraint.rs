@@ -425,8 +425,9 @@ impl SanitizedMediaTrackConstraint {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+
+    use MediaTrackConstraintResolutionStrategy::*;
 
     type Subject = MediaTrackConstraint;
 
@@ -440,78 +441,107 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test]
-    fn from_bool() {
-        let subjects = [
-            Subject::from(false),
-            Subject::from(ValueConstraint::<bool>::default()),
-            Subject::from(ResolvedValueConstraint::<bool>::default()),
-        ];
+    mod from {
 
-        for subject in subjects {
-            // TODO: replace with `assert_matches!(…)`, once stabilized:
-            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
-            assert!(matches!(subject, Subject::Bool(_)));
+        use super::*;
+
+        #[test]
+        fn setting() {
+            use crate::MediaTrackSetting;
+
+            assert!(matches!(
+                Subject::from(MediaTrackSetting::Bool(true)),
+                Subject::Bool(ValueConstraint::Bare(_))
+            ));
+            assert!(matches!(
+                Subject::from(MediaTrackSetting::Integer(42)),
+                Subject::IntegerRange(ValueRangeConstraint::Bare(_))
+            ));
+            assert!(matches!(
+                Subject::from(MediaTrackSetting::Float(4.2)),
+                Subject::FloatRange(ValueRangeConstraint::Bare(_))
+            ));
+            assert!(matches!(
+                Subject::from(MediaTrackSetting::String("string".to_owned())),
+                Subject::String(ValueConstraint::Bare(_))
+            ));
         }
-    }
 
-    #[test]
-    fn from_u64() {
-        let subjects = [
-            Subject::from(42_u64),
-            Subject::from(ValueRangeConstraint::<u64>::default()),
-            Subject::from(ResolvedValueRangeConstraint::<u64>::default()),
-        ];
+        #[test]
+        fn bool() {
+            let subjects = [
+                Subject::from(false),
+                Subject::from(ValueConstraint::<bool>::default()),
+                Subject::from(ResolvedValueConstraint::<bool>::default()),
+            ];
 
-        for subject in subjects {
-            // TODO: replace with `assert_matches!(…)`, once stabilized:
-            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
-            assert!(matches!(subject, Subject::IntegerRange(_)));
+            for subject in subjects {
+                // TODO: replace with `assert_matches!(…)`, once stabilized:
+                // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+                assert!(matches!(subject, Subject::Bool(_)));
+            }
         }
-    }
 
-    #[test]
-    fn from_f64() {
-        let subjects = [
-            Subject::from(42.0_f64),
-            Subject::from(ValueRangeConstraint::<f64>::default()),
-            Subject::from(ResolvedValueRangeConstraint::<f64>::default()),
-        ];
+        #[test]
+        fn integer_range() {
+            let subjects = [
+                Subject::from(42_u64),
+                Subject::from(ValueRangeConstraint::<u64>::default()),
+                Subject::from(ResolvedValueRangeConstraint::<u64>::default()),
+            ];
 
-        for subject in subjects {
-            // TODO: replace with `assert_matches!(…)`, once stabilized:
-            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
-            assert!(matches!(subject, Subject::FloatRange(_)));
+            for subject in subjects {
+                // TODO: replace with `assert_matches!(…)`, once stabilized:
+                // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+                assert!(matches!(subject, Subject::IntegerRange(_)));
+            }
         }
-    }
 
-    #[test]
-    fn from_string() {
-        let subjects = [
-            Subject::from(String::new()),
-            Subject::from(ValueConstraint::<String>::default()),
-            Subject::from(ResolvedValueConstraint::<String>::default()),
-        ];
+        #[test]
+        fn float_range() {
+            let subjects = [
+                Subject::from(42.0_f64),
+                Subject::from(ValueRangeConstraint::<f64>::default()),
+                Subject::from(ResolvedValueRangeConstraint::<f64>::default()),
+            ];
 
-        for subject in subjects {
-            // TODO: replace with `assert_matches!(…)`, once stabilized:
-            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
-            assert!(matches!(subject, Subject::String(_)));
+            for subject in subjects {
+                // TODO: replace with `assert_matches!(…)`, once stabilized:
+                // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+                assert!(matches!(subject, Subject::FloatRange(_)));
+            }
         }
-    }
 
-    #[test]
-    fn from_string_sequence() {
-        let subjects = [
-            Subject::from(vec![String::new()]),
-            Subject::from(ValueSequenceConstraint::<String>::default()),
-            Subject::from(ResolvedValueSequenceConstraint::<String>::default()),
-        ];
+        #[test]
+        fn string() {
+            let subjects = [
+                Subject::from(""),
+                Subject::from(String::new()),
+                Subject::from(ValueConstraint::<String>::default()),
+                Subject::from(ResolvedValueConstraint::<String>::default()),
+            ];
 
-        for subject in subjects {
-            // TODO: replace with `assert_matches!(…)`, once stabilized:
-            // Tracking issue: https://github.com/rust-lang/rust/issues/82775
-            assert!(matches!(subject, Subject::StringSequence(_)));
+            for subject in subjects {
+                // TODO: replace with `assert_matches!(…)`, once stabilized:
+                // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+                assert!(matches!(subject, Subject::String(_)));
+            }
+        }
+
+        #[test]
+        fn string_sequence() {
+            let subjects = [
+                Subject::from(vec![""]),
+                Subject::from(vec![String::new()]),
+                Subject::from(ValueSequenceConstraint::<String>::default()),
+                Subject::from(ResolvedValueSequenceConstraint::<String>::default()),
+            ];
+
+            for subject in subjects {
+                // TODO: replace with `assert_matches!(…)`, once stabilized:
+                // Tracking issue: https://github.com/rust-lang/rust/issues/82775
+                assert!(matches!(subject, Subject::StringSequence(_)));
+            }
         }
     }
 
@@ -525,12 +555,97 @@ mod tests {
             Subject::Bool(ValueConstraint::Bare(true)),
             Subject::FloatRange(ValueRangeConstraint::Bare(42.0)),
             Subject::IntegerRange(ValueRangeConstraint::Bare(42)),
-            Subject::String(ValueConstraint::Bare(String::new())),
-            Subject::StringSequence(ValueSequenceConstraint::Bare(vec![String::new()])),
+            Subject::String(ValueConstraint::Bare("string".to_owned())),
+            Subject::StringSequence(ValueSequenceConstraint::Bare(vec!["string".to_owned()])),
         ];
 
         for non_empty_subject in non_empty_subjects {
             assert!(!non_empty_subject.is_empty());
+        }
+    }
+
+    #[test]
+    fn to_resolved() {
+        let subjects = [
+            (
+                Subject::Empty(EmptyConstraint {}),
+                ResolvedMediaTrackConstraint::Empty(EmptyConstraint {}),
+            ),
+            (
+                Subject::Bool(ValueConstraint::Bare(true)),
+                ResolvedMediaTrackConstraint::Bool(ResolvedValueConstraint::default().exact(true)),
+            ),
+            (
+                Subject::FloatRange(ValueRangeConstraint::Bare(42.0)),
+                ResolvedMediaTrackConstraint::FloatRange(
+                    ResolvedValueRangeConstraint::default().exact(42.0),
+                ),
+            ),
+            (
+                Subject::IntegerRange(ValueRangeConstraint::Bare(42)),
+                ResolvedMediaTrackConstraint::IntegerRange(
+                    ResolvedValueRangeConstraint::default().exact(42),
+                ),
+            ),
+            (
+                Subject::String(ValueConstraint::Bare("string".to_owned())),
+                ResolvedMediaTrackConstraint::String(
+                    ResolvedValueConstraint::default().exact("string".to_owned()),
+                ),
+            ),
+            (
+                Subject::StringSequence(ValueSequenceConstraint::Bare(vec!["string".to_owned()])),
+                ResolvedMediaTrackConstraint::StringSequence(
+                    ResolvedValueSequenceConstraint::default().exact(vec!["string".to_owned()]),
+                ),
+            ),
+        ];
+
+        for (subject, expected) in subjects {
+            let actual = subject.to_resolved(BareToExact);
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    mod resolved {
+        use super::*;
+
+        type Subject = ResolvedMediaTrackConstraint;
+
+        #[test]
+        fn to_string() {
+            let scenarios = [
+                (Subject::Empty(EmptyConstraint {}), "<empty>"),
+                (
+                    Subject::Bool(ResolvedValueConstraint::default().exact(true)),
+                    "(x == true)",
+                ),
+                (
+                    Subject::FloatRange(ResolvedValueRangeConstraint::default().exact(42.0)),
+                    "(x == 42.0)",
+                ),
+                (
+                    Subject::IntegerRange(ResolvedValueRangeConstraint::default().exact(42)),
+                    "(x == 42)",
+                ),
+                (
+                    Subject::String(ResolvedValueConstraint::default().exact("string".to_owned())),
+                    "(x == \"string\")",
+                ),
+                (
+                    Subject::StringSequence(
+                        ResolvedValueSequenceConstraint::default().exact(vec!["string".to_owned()]),
+                    ),
+                    "(x == [\"string\"])",
+                ),
+            ];
+
+            for (subject, expected) in scenarios {
+                let actual = subject.to_string();
+
+                assert_eq!(actual, expected);
+            }
         }
     }
 }
