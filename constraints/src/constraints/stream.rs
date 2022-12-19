@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{MediaTrackConstraint, ResolvedMediaTrackConstraint};
+use crate::MediaTrackConstraint;
 
 use super::track::GenericBoolOrMediaTrackConstraints;
 

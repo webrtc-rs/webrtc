@@ -15,10 +15,6 @@ use super::{
 pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
-pub type BoolOrResolvedMediaTrackConstraints =
-    GenericBoolOrMediaTrackConstraints<ResolvedMediaTrackConstraint>;
-
-/// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
 ///
 /// # W3C Spec Compliance
 ///
@@ -78,21 +74,6 @@ impl<T> From<bool> for GenericBoolOrMediaTrackConstraints<T> {
 impl<T> From<GenericMediaTrackConstraints<T>> for GenericBoolOrMediaTrackConstraints<T> {
     fn from(constraints: GenericMediaTrackConstraints<T>) -> Self {
         Self::Constraints(constraints)
-    }
-}
-
-impl BoolOrMediaTrackConstraints {
-    pub fn to_resolved(&self) -> BoolOrResolvedMediaTrackConstraints {
-        self.clone().into_resolved()
-    }
-
-    pub fn into_resolved(self) -> BoolOrResolvedMediaTrackConstraints {
-        match self {
-            Self::Bool(flag) => BoolOrResolvedMediaTrackConstraints::Bool(flag),
-            Self::Constraints(constraints) => {
-                BoolOrResolvedMediaTrackConstraints::Constraints(constraints.into_resolved())
-            }
-        }
     }
 }
 

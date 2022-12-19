@@ -18,7 +18,7 @@ pub use self::{
     },
     stream::MediaStreamConstraints,
     track::{
-        BoolOrMediaTrackConstraints, BoolOrResolvedMediaTrackConstraints, MediaTrackConstraints,
-        ResolvedMediaTrackConstraints, SanitizedMediaTrackConstraints,
+        BoolOrMediaTrackConstraints, MediaTrackConstraints, ResolvedMediaTrackConstraints,
+        SanitizedMediaTrackConstraints,
     },
 };
