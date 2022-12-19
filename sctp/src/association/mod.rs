@@ -47,7 +47,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 use util::Conn;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
@@ -500,6 +500,7 @@ impl Association {
         log::debug!("[{}] write_loop entered", name);
         let done = Arc::new(AtomicBool::new(false));
         let name = Arc::new(name);
+        let sem = Arc::new(Semaphore::new(8));
         while !done.load(Ordering::Relaxed) {
             //log::debug!("[{}] gather_outbound begin", name);
             let (packets, continue_loop) = {
@@ -516,6 +517,8 @@ impl Association {
             let bytes_sent = Arc::clone(&bytes_sent);
             let name2 = Arc::clone(&name);
             let done2 = Arc::clone(&done);
+            let sem = Arc::clone(&sem);
+            sem.acquire().await.unwrap().forget();
             tokio::task::spawn(async move {
                 let mut buf = BytesMut::with_capacity(16 * 1024);
                 for raw in packets {
@@ -533,6 +536,7 @@ impl Association {
                     }
                     //log::debug!("[{}] sending {} bytes done", name, raw.len());
                 }
+                sem.add_permits(1);
             });
 
             if !continue_loop {
