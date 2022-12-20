@@ -739,14 +739,26 @@ impl AsyncRead for PollStream {
 impl AsyncWrite for PollStream {
     fn poll_write(
         self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
         let bytes = Bytes::copy_from_slice(buf);
-        match self.stream.try_write(&bytes) {
-            Ok(n) => Poll::Ready(Ok(n)),
-            Err(e) => Poll::Ready(Err(e.into())),
-        }
+
+        // This future, when polled, either succeeds in writing to the stream or registers the waker with the ressource that would block this from succeeding
+        // e.g. the Semaphore in the pending queue.
+        let mut fut = self.stream.write(&bytes);
+
+        // SAFETY: fut is only polled here and then dropped. I don't think it can be moved in the meantime
+        let pin = unsafe { std::pin::Pin::new_unchecked(&mut fut) };
+
+        // Poll and convert the error into an io::Error if necessary
+        let poll = std::future::Future::poll(pin, cx).map_err(|e| e.into());
+
+        // We don't need this future anymore, even if the result was a Poll::Pending. The caller decides if he wants to provide the same data again. Right?
+        // The only annoying thing is that we re-allocate each time this polled even if it is the same date.
+        drop(fut);
+
+        poll
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
