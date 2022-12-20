@@ -346,7 +346,7 @@ impl PeerConnectionInternal {
         for incoming_track in filtered_tracks.iter() {
             let mut track_handled = false;
             for t in local_transceivers {
-                if t.mid().await != incoming_track.mid {
+                if t.mid().await.as_ref() != Some(&incoming_track.mid) {
                     continue;
                 }
 
@@ -684,7 +684,7 @@ impl PeerConnectionInternal {
                 sender.set_negotiated();
             }
             media_sections.push(MediaSection {
-                id: t.mid().await,
+                id: t.mid().await.unwrap(),
                 transceivers: vec![Arc::clone(t)],
                 ..Default::default()
             });
@@ -802,7 +802,7 @@ impl PeerConnectionInternal {
                     sender.set_negotiated();
                 }
                 media_sections.push(MediaSection {
-                    id: t.mid().await,
+                    id: t.mid().await.unwrap(),
                     transceivers: vec![Arc::clone(t)],
                     ..Default::default()
                 });
@@ -1011,7 +1011,8 @@ impl PeerConnectionInternal {
 
                         let transceivers = self.rtp_transceivers.lock().await;
                         for t in &*transceivers {
-                            if t.mid().await != mid || t.receiver().await.is_none() {
+                            if t.mid().await.as_ref() != Some(&mid) || t.receiver().await.is_none()
+                            {
                                 continue;
                             }
 
@@ -1182,7 +1183,7 @@ impl PeerConnectionInternal {
     pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
-            if let Some(m) = get_by_mid(t.mid().await.as_str(), desc) {
+            if let Some(m) = t.mid().await.and_then(|mid| get_by_mid(&mid, desc)) {
                 if get_peer_direction(m) != t.direction() {
                     return true;
                 }
@@ -1228,27 +1229,25 @@ impl PeerConnectionInternal {
                 Some(r) => r,
                 None => continue,
             };
-            let mid = match transeiver.mid().await {
-                m if !m.is_empty() => m,
-                _ => continue,
-            };
 
-            let tracks = receiver.tracks().await;
+            if let Some(mid) = transeiver.mid().await {
+                let tracks = receiver.tracks().await;
 
-            for track in tracks {
-                let track_id = track.id().await;
-                let kind = match track.kind() {
-                    RTPCodecType::Unspecified => continue,
-                    RTPCodecType::Audio => "audio",
-                    RTPCodecType::Video => "video",
-                };
+                for track in tracks {
+                    let track_id = track.id().await;
+                    let kind = match track.kind() {
+                        RTPCodecType::Unspecified => continue,
+                        RTPCodecType::Audio => "audio",
+                        RTPCodecType::Video => "video",
+                    };
 
-                track_infos.push(TrackInfo {
-                    ssrc: track.ssrc(),
-                    mid: mid.clone(),
-                    track_id,
-                    kind,
-                });
+                    track_infos.push(TrackInfo {
+                        ssrc: track.ssrc(),
+                        mid: mid.clone(),
+                        track_id,
+                        kind,
+                    });
+                }
             }
         }
 
@@ -1358,30 +1357,27 @@ impl PeerConnectionInternal {
                 Some(r) => r,
                 None => continue,
             };
-            let mid = match transeiver.mid().await {
-                m if !m.is_empty() => m,
-                _ => continue,
-            };
+            if let Some(mid) = transeiver.mid().await {
+                let track = match sender.track().await {
+                    Some(t) => t,
+                    None => continue,
+                };
 
-            let track = match sender.track().await {
-                Some(t) => t,
-                None => continue,
-            };
+                let track_id = track.id().to_string();
+                let kind = match track.kind() {
+                    RTPCodecType::Unspecified => continue,
+                    RTPCodecType::Audio => "audio",
+                    RTPCodecType::Video => "video",
+                };
 
-            let track_id = track.id().to_string();
-            let kind = match track.kind() {
-                RTPCodecType::Unspecified => continue,
-                RTPCodecType::Audio => "audio",
-                RTPCodecType::Video => "video",
-            };
-
-            track_infos.push(TrackInfo {
-                track_id,
-                ssrc: sender.ssrc,
-                mid: mid.clone(),
-                rid: None,
-                kind,
-            });
+                track_infos.push(TrackInfo {
+                    track_id,
+                    ssrc: sender.ssrc,
+                    mid: mid.clone(),
+                    rid: None,
+                    kind,
+                });
+            }
         }
 
         let stream_stats = self

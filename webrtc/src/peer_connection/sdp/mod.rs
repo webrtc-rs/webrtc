@@ -855,7 +855,7 @@ pub(crate) fn get_by_mid<'a, 'b>(
 ) -> Option<&'b MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
-            if let Some(mid) = m.attribute(ATTR_KEY_MID).and_then(|o| o) {
+            if let Some(mid) = m.attribute(ATTR_KEY_MID).flatten() {
                 if mid == search_mid {
                     return Some(m);
                 }
