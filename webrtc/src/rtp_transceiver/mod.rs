@@ -21,7 +21,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 use util::Unmarshal;
 
 pub(crate) mod fmtp;
@@ -172,7 +172,7 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: Mutex<Option<String>>,                   //atomic.Value here
+    mid: OnceCell<String>,                        //atomic.Value
     sender: Mutex<Option<Arc<RTCRtpSender>>>,     //atomic.Value
     receiver: Mutex<Option<Arc<RTCRtpReceiver>>>, //atomic.Value
 
@@ -200,7 +200,7 @@ impl RTCRtpTransceiver {
         trigger_negotiation_needed: TriggerNegotiationNeededFnOption,
     ) -> Arc<Self> {
         let t = Arc::new(RTCRtpTransceiver {
-            mid: Mutex::new(None),
+            mid: OnceCell::new(),
             sender: Mutex::new(None),
             receiver: Mutex::new(None),
 
@@ -299,20 +299,15 @@ impl RTCRtpTransceiver {
     }
 
     /// set_mid sets the RTPTransceiver's mid. If it was already set, will return an error.
-    pub(crate) async fn set_mid(&self, mid: String) -> Result<()> {
-        let mut m = self.mid.lock().await;
-        if m.is_some() {
-            return Err(Error::ErrRTPTransceiverCannotChangeMid);
-        }
-        *m = Some(mid);
-
-        Ok(())
+    pub(crate) fn set_mid(&self, mid: String) -> Result<()> {
+        self.mid
+            .set(mid)
+            .map_err(|_| Error::ErrRTPTransceiverCannotChangeMid)
     }
 
     /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or create_answer.
-    pub async fn mid(&self) -> Option<String> {
-        let mid = self.mid.lock().await;
-        mid.clone()
+    pub fn mid(&self) -> Option<String> {
+        self.mid.get().map(Clone::clone)
     }
 
     /// kind returns RTPTransceiver's kind.
@@ -394,7 +389,7 @@ impl RTCRtpTransceiver {
 
         let current_direction = self.current_direction();
         if previous_direction != current_direction {
-            let mid = self.mid().await;
+            let mid = self.mid();
             trace!(
                 "Processing transceiver({:?}) direction change from {} to {}",
                 mid,
@@ -498,7 +493,7 @@ pub(crate) async fn find_by_mid(
     local_transceivers: &mut Vec<Arc<RTCRtpTransceiver>>,
 ) -> Option<Arc<RTCRtpTransceiver>> {
     for (i, t) in local_transceivers.iter().enumerate() {
-        if t.mid().await.as_deref() == Some(mid) {
+        if t.mid().as_deref() == Some(mid) {
             return Some(local_transceivers.remove(i));
         }
     }
@@ -531,10 +526,7 @@ pub(crate) async fn satisfy_type_and_direction(
 
     for possible_direction in get_preferred_directions() {
         for (i, t) in local_transceivers.iter().enumerate() {
-            if t.mid().await.is_none()
-                && t.kind == remote_kind
-                && possible_direction == t.direction()
-            {
+            if t.mid().is_none() && t.kind == remote_kind && possible_direction == t.direction() {
                 return Some(local_transceivers.remove(i));
             }
         }

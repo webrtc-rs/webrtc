@@ -346,7 +346,7 @@ impl PeerConnectionInternal {
         for incoming_track in filtered_tracks.iter() {
             let mut track_handled = false;
             for t in local_transceivers {
-                if t.mid().await.as_ref() != Some(&incoming_track.mid) {
+                if t.mid().as_ref() != Some(&incoming_track.mid) {
                     continue;
                 }
 
@@ -684,7 +684,7 @@ impl PeerConnectionInternal {
                 sender.set_negotiated();
             }
             media_sections.push(MediaSection {
-                id: t.mid().await.unwrap(),
+                id: t.mid().unwrap(),
                 transceivers: vec![Arc::clone(t)],
                 ..Default::default()
             });
@@ -802,7 +802,7 @@ impl PeerConnectionInternal {
                     sender.set_negotiated();
                 }
                 media_sections.push(MediaSection {
-                    id: t.mid().await.unwrap(),
+                    id: t.mid().unwrap(),
                     transceivers: vec![Arc::clone(t)],
                     ..Default::default()
                 });
@@ -1011,8 +1011,7 @@ impl PeerConnectionInternal {
 
                         let transceivers = self.rtp_transceivers.lock().await;
                         for t in &*transceivers {
-                            if t.mid().await.as_ref() != Some(&mid) || t.receiver().await.is_none()
-                            {
+                            if t.mid().as_ref() != Some(&mid) || t.receiver().await.is_none() {
                                 continue;
                             }
 
@@ -1183,7 +1182,7 @@ impl PeerConnectionInternal {
     pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
-            if let Some(m) = t.mid().await.and_then(|mid| get_by_mid(&mid, desc)) {
+            if let Some(m) = t.mid().and_then(|mid| get_by_mid(&mid, desc)) {
                 if get_peer_direction(m) != t.direction() {
                     return true;
                 }
@@ -1230,7 +1229,7 @@ impl PeerConnectionInternal {
                 None => continue,
             };
 
-            if let Some(mid) = transeiver.mid().await {
+            if let Some(mid) = transeiver.mid() {
                 let tracks = receiver.tracks().await;
 
                 for track in tracks {
@@ -1357,7 +1356,7 @@ impl PeerConnectionInternal {
                 Some(r) => r,
                 None => continue,
             };
-            if let Some(mid) = transeiver.mid().await {
+            if let Some(mid) = transeiver.mid() {
                 let track = match sender.track().await {
                     Some(t) => t,
                     None => continue,
