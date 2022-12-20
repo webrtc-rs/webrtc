@@ -500,7 +500,19 @@ impl Association {
         log::debug!("[{}] write_loop entered", name);
         let done = Arc::new(AtomicBool::new(false));
         let name = Arc::new(name);
-        let sem = Arc::new(Semaphore::new(8));
+
+        let limit = {
+            #[cfg(test)]
+            {
+                1
+            }
+            #[cfg(not(test))]
+            {
+                8
+            }
+        };
+
+        let sem = Arc::new(Semaphore::new(limit));
         while !done.load(Ordering::Relaxed) {
             //log::debug!("[{}] gather_outbound begin", name);
             let (packets, continue_loop) = {
