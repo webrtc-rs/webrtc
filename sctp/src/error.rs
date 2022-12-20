@@ -3,7 +3,7 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum Error {
     #[error("raw is too small for a SCTP chunk")]
