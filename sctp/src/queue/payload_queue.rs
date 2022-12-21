@@ -39,7 +39,17 @@ impl PayloadQueue {
         } else if sna32lt(tsn, *self.sorted.front().unwrap()) {
             self.sorted.push_front(tsn);
         } else {
-            let pos = match self.sorted.binary_search(&tsn) {
+            fn compare_tsn(a: u32, b: u32) -> std::cmp::Ordering {
+                if sna32lt(a, b) {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Greater
+                }
+            }
+            let pos = match self
+                .sorted
+                .binary_search_by(|element| compare_tsn(*element, tsn))
+            {
                 Ok(pos) => pos,
                 Err(pos) => pos,
             };
