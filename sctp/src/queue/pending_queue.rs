@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 use util::sync::RwLock;
 
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
@@ -16,7 +16,15 @@ pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
 /// A queue for both ordered and unordered chunks.
 #[derive(Debug)]
 pub(crate) struct PendingQueue {
+    // These two fields limit appending bytes to the queue
+    // This two step process is necessary because
+    // A) We need backpressure which the semaphore applies by limiting the total amount of bytes via the permits
+    // B) The chunks of one fragmented message need to be put in direct sequence into the queue which the lock guarantees
+    //
+    // The semaphore is not inside the lock because the permits need to be returned without needing a lock on the semaphore
+    semaphore_lock: Mutex<()>,
     semaphore: Semaphore,
+
     unordered_queue: RwLock<PendingBaseQueue>,
     ordered_queue: RwLock<PendingBaseQueue>,
     queue_len: AtomicUsize,
@@ -31,10 +39,19 @@ impl Default for PendingQueue {
     }
 }
 
+// Some tests push a lot of data before starting to process any data...
+#[cfg(test)]
+const QUEUE_BYTES_LIMIT: usize = 128 * 1024 * 1024;
+#[cfg(not(test))]
+const QUEUE_BYTES_LIMIT: usize = 128 * 1024;
+
+const QUEUE_APPEND_LARGE: usize = (QUEUE_BYTES_LIMIT * 2) / 3;
+
 impl PendingQueue {
     pub(crate) fn new() -> Self {
         Self {
-            semaphore: Semaphore::new(128 * 1024),
+            semaphore_lock: Mutex::default(),
+            semaphore: Semaphore::new(QUEUE_BYTES_LIMIT),
             unordered_queue: Default::default(),
             ordered_queue: Default::default(),
             queue_len: Default::default(),
@@ -48,16 +65,20 @@ impl PendingQueue {
     pub(crate) async fn push(&self, c: ChunkPayloadData) {
         let user_data_len = c.user_data.len();
 
-        let permits = self.semaphore.acquire_many(user_data_len as u32).await;
-        // unwrap ok because we never close the semaphore unless we have dropped self
-        permits.unwrap().forget();
+        {
+            let sem_lock = self.semaphore_lock.lock().await;
+            let permits = self.semaphore.acquire_many(user_data_len as u32).await;
+            // unwrap ok because we never close the semaphore unless we have dropped self
+            permits.unwrap().forget();
 
-        if c.unordered {
-            let mut unordered_queue = self.unordered_queue.write();
-            unordered_queue.push_back(c);
-        } else {
-            let mut ordered_queue = self.ordered_queue.write();
-            ordered_queue.push_back(c);
+            if c.unordered {
+                let mut unordered_queue = self.unordered_queue.write();
+                unordered_queue.push_back(c);
+            } else {
+                let mut ordered_queue = self.ordered_queue.write();
+                ordered_queue.push_back(c);
+            }
+            drop(sem_lock);
         }
 
         self.n_bytes.fetch_add(user_data_len, Ordering::SeqCst);
@@ -76,16 +97,51 @@ impl PendingQueue {
 
         let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
 
-        let permits = self
-            .semaphore
-            .acquire_many(total_user_data_len as u32)
-            .await;
-        // unwrap ok because we never close the semaphore unless we have dropped self
-        permits.unwrap().forget();
-
-        self.append_unlimited(chunks, total_user_data_len);
+        if total_user_data_len >= QUEUE_APPEND_LARGE {
+            self.append_large(chunks).await
+        } else {
+            let sem_lock = self.semaphore_lock.lock().await;
+            let permits = self
+                .semaphore
+                .acquire_many(total_user_data_len as u32)
+                .await;
+            // unwrap ok because we never close the semaphore unless we have dropped self
+            permits.unwrap().forget();
+            self.append_unlimited(chunks, total_user_data_len);
+            drop(sem_lock);
+        }
     }
 
+    // If this is a very large message we append chunks one by one to allow progress while we are appending
+    async fn append_large(&self, chunks: Vec<ChunkPayloadData>) {
+        // lock this for the whole duration
+        let sem_lock = self.semaphore_lock.lock().await;
+
+        for chunk in chunks.into_iter() {
+            let user_data_len = chunk.user_data.len();
+            let permits = self.semaphore.acquire_many(user_data_len as u32).await;
+            // unwrap ok because we never close the semaphore unless we have dropped self
+            permits.unwrap().forget();
+
+            if chunk.unordered {
+                let mut unordered_queue = self.unordered_queue.write();
+                unordered_queue.push_back(chunk);
+            } else {
+                let mut ordered_queue = self.ordered_queue.write();
+                ordered_queue.push_back(chunk);
+            }
+            self.n_bytes.fetch_add(user_data_len, Ordering::SeqCst);
+            self.queue_len.fetch_add(1, Ordering::SeqCst);
+        }
+
+        drop(sem_lock);
+    }
+
+    /// Tries to append chunks to the back of the pending queue. If the chunks don't fit into the current pending queue limit this will return false
+    ///
+    /// # Panics
+    ///
+    /// If it's a mix of unordered and ordered chunks.
     pub(crate) fn try_append(&self, chunks: Vec<ChunkPayloadData>) -> bool {
         if chunks.is_empty() {
             return true;
@@ -93,17 +149,27 @@ impl PendingQueue {
 
         let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
 
-        match self.semaphore.try_acquire_many(total_user_data_len as u32) {
-            Ok(permits) => {
-                permits.forget();
+        {
+            let sem_lock = if let Ok(sem_lock) = self.semaphore_lock.try_lock() {
+                sem_lock
+            } else {
+                return false;
+            };
+            let r = match self.semaphore.try_acquire_many(total_user_data_len as u32) {
+                Ok(permits) => {
+                    permits.forget();
 
-                self.append_unlimited(chunks, total_user_data_len);
-                true
-            }
-            Err(_) => false,
+                    self.append_unlimited(chunks, total_user_data_len);
+                    true
+                }
+                Err(_) => false,
+            };
+            drop(sem_lock);
+            r
         }
     }
 
+    /// Assumes that A) enough permits have been acquired and forget from the semaphore and that the semaphore_lock is held
     fn append_unlimited(&self, chunks: Vec<ChunkPayloadData>, total_user_data_len: usize) {
         let chunks_len = chunks.len();
         let unordered = chunks
