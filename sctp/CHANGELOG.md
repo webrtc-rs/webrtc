@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-* Performance improvements
     * Limit the bytes in the PendingQueue to avoid packets accumulating there uncontrollably [367](https://github.com/webrtc-rs/webrtc/pull/367)
 
 ### Breaking
