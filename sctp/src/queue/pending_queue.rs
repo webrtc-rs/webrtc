@@ -34,7 +34,7 @@ impl Default for PendingQueue {
 impl PendingQueue {
     pub(crate) fn new() -> Self {
         Self {
-            semaphore: Semaphore::new(1_000_000_000),
+            semaphore: Semaphore::new(128 * 1024),
             unordered_queue: Default::default(),
             ordered_queue: Default::default(),
             queue_len: Default::default(),
