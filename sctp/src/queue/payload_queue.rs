@@ -74,7 +74,8 @@ impl PayloadQueue {
 
     /// pop pops only if the oldest chunk's TSN matches the given TSN.
     pub(crate) fn pop(&mut self, tsn: u32) -> Option<ChunkPayloadData> {
-        if Some(tsn) == self.sorted.pop_front() {
+        if Some(&tsn) == self.sorted.front() {
+            assert_eq!(Some(tsn), self.sorted.pop_front());
             if let Some(c) = self.chunk_map.remove(&tsn) {
                 self.length.fetch_sub(1, Ordering::SeqCst);
                 self.n_bytes -= c.user_data.len();
