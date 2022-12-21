@@ -572,6 +572,16 @@ enum ReadFut {
     RemainingData(Vec<u8>),
 }
 
+enum ShutdownFut {
+    /// Nothing in progress.
+    Idle,
+    /// Reading data from the underlying stream.
+    ShuttingDown(Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>>),
+    /// Shutdown future has run
+    Done,
+    Errored(crate::error::Error),
+}
+
 impl ReadFut {
     /// Gets a mutable reference to the future stored inside `Reading(future)`.
     ///
@@ -586,6 +596,22 @@ impl ReadFut {
     }
 }
 
+impl ShutdownFut {
+    /// Gets a mutable reference to the future stored inside `ShuttingDown(future)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ReadFut` variant is not `ShuttingDown`.
+    fn get_shutting_down_mut(
+        &mut self,
+    ) -> &mut Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>> {
+        match self {
+            ShutdownFut::ShuttingDown(ref mut fut) => fut,
+            _ => panic!("expected ReadFut to be Reading"),
+        }
+    }
+}
+
 /// A wrapper around around [`Stream`], which implements [`AsyncRead`] and
 /// [`AsyncWrite`].
 ///
@@ -595,8 +621,7 @@ pub struct PollStream {
     stream: Arc<Stream>,
 
     read_fut: ReadFut,
-    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send>>>,
-    shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send>>>,
+    shutdown_fut: ShutdownFut,
 
     read_buf_cap: usize,
 }
@@ -617,8 +642,7 @@ impl PollStream {
         Self {
             stream,
             read_fut: ReadFut::Idle,
-            write_fut: None,
-            shutdown_fut: None,
+            shutdown_fut: ShutdownFut::Idle,
             read_buf_cap: DEFAULT_READ_BUF_SIZE,
         }
     }
@@ -761,49 +785,41 @@ impl AsyncWrite for PollStream {
         poll
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.write_fut.as_mut() {
-            Some(fut) => match fut.as_mut().poll(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(Err(e)) => {
-                    self.write_fut = None;
-                    Poll::Ready(Err(e.into()))
-                }
-                Poll::Ready(Ok(_)) => {
-                    self.write_fut = None;
-                    Poll::Ready(Ok(()))
-                }
-            },
-            None => Poll::Ready(Ok(())),
-        }
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.as_mut().poll_flush(cx) {
-            Poll::Pending => return Poll::Pending,
-            Poll::Ready(_) => {}
-        }
-
-        let fut = match self.shutdown_fut.as_mut() {
-            Some(fut) => fut,
-            None => {
+        let fut = match self.shutdown_fut {
+            ShutdownFut::Done => None,
+            ShutdownFut::Errored(ref err) => return Poll::Ready(Err(err.clone().into())),
+            ShutdownFut::ShuttingDown(ref mut fut) => Some(fut),
+            ShutdownFut::Idle => {
                 let stream = self.stream.clone();
-                self.shutdown_fut.get_or_insert(Box::pin(async move {
+                self.shutdown_fut = ShutdownFut::ShuttingDown(Box::pin(async move {
                     stream.shutdown(Shutdown::Write).await
-                }))
+                }));
+                Some(self.shutdown_fut.get_shutting_down_mut())
             }
         };
 
-        match fut.as_mut().poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Err(e)) => {
-                self.shutdown_fut = None;
-                Poll::Ready(Err(e.into()))
+        if let Some(fut) = fut {
+            match fut.as_mut().poll(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    self.shutdown_fut = ShutdownFut::Errored(e.clone());
+                    return Poll::Ready(Err(e.into()));
+                }
+                Poll::Ready(Ok(_)) => {
+                    self.shutdown_fut = ShutdownFut::Done;
+                }
             }
-            Poll::Ready(Ok(_)) => {
-                self.shutdown_fut = None;
-                Poll::Ready(Ok(()))
-            }
+        }
+
+        // Just to be sure, a shutdown implies a flush even if it does nothing at the moment
+        match self.as_mut().poll_flush(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(_) => Poll::Ready(Ok(())),
         }
     }
 }
