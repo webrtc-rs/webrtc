@@ -621,6 +621,7 @@ pub struct PollStream {
     stream: Arc<Stream>,
 
     read_fut: ReadFut,
+    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
     shutdown_fut: ShutdownFut,
 
     read_buf_cap: usize,
@@ -642,6 +643,7 @@ impl PollStream {
         Self {
             stream,
             read_fut: ReadFut::Idle,
+            write_fut: None,
             shutdown_fut: ShutdownFut::Idle,
             read_buf_cap: DEFAULT_READ_BUF_SIZE,
         }
@@ -762,64 +764,107 @@ impl AsyncRead for PollStream {
 
 impl AsyncWrite for PollStream {
     fn poll_write(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        let bytes = Bytes::copy_from_slice(buf);
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
 
-        // This future, when polled, either succeeds in writing to the stream or registers the waker with the ressource that would block this from succeeding
-        // e.g. the Semaphore in the pending queue.
-        let mut fut = self.stream.write(&bytes);
+        if let Some(fut) = self.write_fut.as_mut() {
+            match fut.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    let stream = self.stream.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
+                    Poll::Ready(Err(e.into()))
+                }
+                // Given the data is buffered, it's okay to ignore the number of written bytes.
+                //
+                // TODO: In the long term, `stream.write` should be made sync. Then we could
+                // remove the whole `if` condition and just call `stream.write`.
+                Poll::Ready(Ok(_)) => {
+                    let stream = self.stream.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
+                    Poll::Ready(Ok(buf.len()))
+                }
+            }
+        } else {
+            let stream = self.stream.clone();
+            let bytes = Bytes::copy_from_slice(buf);
+            let fut = self
+                .write_fut
+                .insert(Box::pin(async move { stream.write(&bytes).await }));
 
-        // SAFETY: fut is only polled here and then dropped. I don't think it can be moved in the meantime
-        let pin = unsafe { std::pin::Pin::new_unchecked(&mut fut) };
-
-        // Poll and convert the error into an io::Error if necessary
-        let poll = std::future::Future::poll(pin, cx).map_err(|e| e.into());
-
-        // We don't need this future anymore, even if the result was a Poll::Pending. The caller decides if he wants to provide the same data again. Right?
-        // The only annoying thing is that we re-allocate each time this polled even if it is the same date.
-        drop(fut);
-
-        poll
+            match fut.as_mut().poll(cx) {
+                // If it's the first time we're polling the future, `Poll::Pending` can't be
+                // returned because that would mean the `PollStream` is not ready for writing. And
+                // this is not true since we've just created a future, which is going to write the
+                // buf to the underlying stream.
+                //
+                // It's okay to return `Poll::Ready` if the data is buffered (this is what the
+                // buffered writer and `File` do).
+                Poll::Pending => Poll::Ready(Ok(buf.len())),
+                Poll::Ready(Err(e)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Err(e.into()))
+                }
+                Poll::Ready(Ok(n)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Ok(n))
+                }
+            }
+        }
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Poll::Ready(Ok(()))
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.write_fut.as_mut() {
+            Some(fut) => match fut.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Err(e.into()))
+                }
+                Poll::Ready(Ok(_)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Ok(()))
+                }
+            },
+            None => Poll::Ready(Ok(())),
+        }
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.as_mut().poll_flush(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(_) => {}
+        }
         let fut = match self.shutdown_fut {
-            ShutdownFut::Done => None,
+            ShutdownFut::Done => return Poll::Ready(Ok(())),
             ShutdownFut::Errored(ref err) => return Poll::Ready(Err(err.clone().into())),
-            ShutdownFut::ShuttingDown(ref mut fut) => Some(fut),
+            ShutdownFut::ShuttingDown(ref mut fut) => fut,
             ShutdownFut::Idle => {
                 let stream = self.stream.clone();
                 self.shutdown_fut = ShutdownFut::ShuttingDown(Box::pin(async move {
                     stream.shutdown(Shutdown::Write).await
                 }));
-                Some(self.shutdown_fut.get_shutting_down_mut())
+                self.shutdown_fut.get_shutting_down_mut()
             }
         };
 
-        if let Some(fut) = fut {
-            match fut.as_mut().poll(cx) {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(Err(e)) => {
-                    self.shutdown_fut = ShutdownFut::Errored(e.clone());
-                    return Poll::Ready(Err(e.into()));
-                }
-                Poll::Ready(Ok(_)) => {
-                    self.shutdown_fut = ShutdownFut::Done;
-                }
-            }
-        }
-
-        // Just to be sure, a shutdown implies a flush even if it does nothing at the moment
-        match self.as_mut().poll_flush(cx) {
+        match fut.as_mut().poll(cx) {
             Poll::Pending => return Poll::Pending,
-            Poll::Ready(_) => Poll::Ready(Ok(())),
+            Poll::Ready(Err(e)) => {
+                self.shutdown_fut = ShutdownFut::Errored(e.clone());
+                Poll::Ready(Err(e.into()))
+            }
+            Poll::Ready(Ok(_)) => {
+                self.shutdown_fut = ShutdownFut::Done;
+                Poll::Ready(Ok(()))
+            }
         }
     }
 }
