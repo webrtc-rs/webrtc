@@ -172,9 +172,9 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: Mutex<String>,                           //atomic.Value
-    sender: Mutex<Option<Arc<RTCRtpSender>>>,     //atomic.Value
-    receiver: Mutex<Option<Arc<RTCRtpReceiver>>>, //atomic.Value
+    mid: Mutex<String>,                       //atomic.Value
+    sender: Mutex<Option<Arc<RTCRtpSender>>>, //atomic.Value
+    receiver: Mutex<Arc<RTCRtpReceiver>>,     //atomic.Value
 
     direction: AtomicU8,         //RTPTransceiverDirection
     current_direction: AtomicU8, //RTPTransceiverDirection
@@ -191,7 +191,7 @@ pub struct RTCRtpTransceiver {
 
 impl RTCRtpTransceiver {
     pub(crate) async fn new(
-        receiver: Option<Arc<RTCRtpReceiver>>,
+        receiver: Arc<RTCRtpReceiver>,
         sender: Option<Arc<RTCRtpSender>>,
         direction: RTCRtpTransceiverDirection,
         kind: RTPCodecType,
@@ -199,22 +199,27 @@ impl RTCRtpTransceiver {
         media_engine: Arc<MediaEngine>,
         trigger_negotiation_needed: TriggerNegotiationNeededFnOption,
     ) -> Arc<Self> {
+        let codecs = Arc::new(Mutex::new(codecs));
+        receiver
+            .set_transceiver_codecs(Some(Arc::clone(&codecs)))
+            .await;
+
         let t = Arc::new(RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
             sender: Mutex::new(None),
-            receiver: Mutex::new(None),
+            receiver: Mutex::new(receiver),
 
             direction: AtomicU8::new(direction as u8),
             current_direction: AtomicU8::new(RTCRtpTransceiverDirection::Unspecified as u8),
 
-            codecs: Arc::new(Mutex::new(codecs)),
+            codecs,
             stopped: AtomicBool::new(false),
             kind,
             media_engine,
             trigger_negotiation_needed: Mutex::new(trigger_negotiation_needed),
         });
 
-        t.set_receiver(receiver).await;
+        // t.set_receiver(receiver).await;
         t.set_sender(sender).await;
 
         t
@@ -276,23 +281,18 @@ impl RTCRtpTransceiver {
     }
 
     /// receiver returns the RTPTransceiver's RTPReceiver if it has one
-    pub async fn receiver(&self) -> Option<Arc<RTCRtpReceiver>> {
+    pub async fn receiver(&self) -> Arc<RTCRtpReceiver> {
         let receiver = self.receiver.lock().await;
         receiver.clone()
     }
 
-    pub(crate) async fn set_receiver(&self, r: Option<Arc<RTCRtpReceiver>>) {
-        if let Some(receiver) = &r {
-            receiver
-                .set_transceiver_codecs(Some(Arc::clone(&self.codecs)))
-                .await;
-        }
+    pub(crate) async fn set_receiver(&self, r: Arc<RTCRtpReceiver>) {
+        r.set_transceiver_codecs(Some(Arc::clone(&self.codecs)))
+            .await;
 
         {
             let mut receiver = self.receiver.lock().await;
-            if let Some(prev_receiver) = &*receiver {
-                prev_receiver.set_transceiver_codecs(None).await;
-            }
+            (*receiver).set_transceiver_codecs(None).await;
 
             *receiver = r;
         }
@@ -406,7 +406,8 @@ impl RTCRtpTransceiver {
             return Ok(());
         }
 
-        if let Some(receiver) = &*self.receiver.lock().await {
+        {
+            let receiver = self.receiver.lock().await;
             let pause_receiver = !current_direction.has_recv();
 
             if pause_receiver {
@@ -441,9 +442,7 @@ impl RTCRtpTransceiver {
         }
         {
             let r = self.receiver.lock().await;
-            if let Some(receiver) = &*r {
-                receiver.stop().await?;
-            }
+            r.stop().await?;
         }
 
         self.set_direction_internal(RTCRtpTransceiverDirection::Inactive);

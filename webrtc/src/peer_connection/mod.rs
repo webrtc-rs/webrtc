@@ -1386,7 +1386,7 @@ impl RTCPeerConnection {
                                 };
 
                             let t = RTCRtpTransceiver::new(
-                                Some(receiver),
+                                receiver,
                                 None,
                                 local_direction,
                                 kind,
@@ -1651,9 +1651,7 @@ impl RTCPeerConnection {
         let mut receivers = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            if let Some(receiver) = transceiver.receiver().await {
-                receivers.push(receiver);
-            }
+            receivers.push(transceiver.receiver().await);
         }
         receivers
     }

@@ -164,59 +164,57 @@ impl PeerConnectionInternal {
             self.undeclared_media_processor();
         } else {
             for t in &current_transceivers {
-                if let Some(receiver) = t.receiver().await {
-                    let tracks = receiver.tracks().await;
-                    if tracks.is_empty() {
-                        continue;
-                    }
-
-                    let mut receiver_needs_stopped = false;
-
-                    for t in tracks {
-                        if !t.rid().is_empty() {
-                            if let Some(details) =
-                                track_details_for_rid(&track_details, t.rid().to_owned())
-                            {
-                                t.set_id(details.id.clone()).await;
-                                t.set_stream_id(details.stream_id.clone()).await;
-                                continue;
-                            }
-                        } else if t.ssrc() != 0 {
-                            if let Some(details) = track_details_for_ssrc(&track_details, t.ssrc())
-                            {
-                                t.set_id(details.id.clone()).await;
-                                t.set_stream_id(details.stream_id.clone()).await;
-                                continue;
-                            }
-                        }
-
-                        receiver_needs_stopped = true;
-                    }
-
-                    if !receiver_needs_stopped {
-                        continue;
-                    }
-
-                    log::info!("Stopping receiver {:?}", receiver);
-                    if let Err(err) = receiver.stop().await {
-                        log::warn!("Failed to stop RtpReceiver: {}", err);
-                        continue;
-                    }
-
-                    let interceptor = self
-                        .interceptor
-                        .upgrade()
-                        .ok_or(Error::ErrInterceptorNotBind)?;
-
-                    let receiver = Arc::new(RTCRtpReceiver::new(
-                        self.setting_engine.get_receive_mtu(),
-                        receiver.kind(),
-                        Arc::clone(&self.dtls_transport),
-                        Arc::clone(&self.media_engine),
-                        interceptor,
-                    ));
-                    t.set_receiver(Some(receiver)).await;
+                let receiver = t.receiver().await;
+                let tracks = receiver.tracks().await;
+                if tracks.is_empty() {
+                    continue;
                 }
+
+                let mut receiver_needs_stopped = false;
+
+                for t in tracks {
+                    if !t.rid().is_empty() {
+                        if let Some(details) =
+                            track_details_for_rid(&track_details, t.rid().to_owned())
+                        {
+                            t.set_id(details.id.clone()).await;
+                            t.set_stream_id(details.stream_id.clone()).await;
+                            continue;
+                        }
+                    } else if t.ssrc() != 0 {
+                        if let Some(details) = track_details_for_ssrc(&track_details, t.ssrc()) {
+                            t.set_id(details.id.clone()).await;
+                            t.set_stream_id(details.stream_id.clone()).await;
+                            continue;
+                        }
+                    }
+
+                    receiver_needs_stopped = true;
+                }
+
+                if !receiver_needs_stopped {
+                    continue;
+                }
+
+                log::info!("Stopping receiver {:?}", receiver);
+                if let Err(err) = receiver.stop().await {
+                    log::warn!("Failed to stop RtpReceiver: {}", err);
+                    continue;
+                }
+
+                let interceptor = self
+                    .interceptor
+                    .upgrade()
+                    .ok_or(Error::ErrInterceptorNotBind)?;
+
+                let receiver = Arc::new(RTCRtpReceiver::new(
+                    self.setting_engine.get_receive_mtu(),
+                    receiver.kind(),
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    interceptor,
+                ));
+                t.set_receiver(receiver).await;
             }
         }
 
@@ -330,12 +328,11 @@ impl PeerConnectionInternal {
         for incoming_track in incoming_tracks {
             // If we already have a TrackRemote for a given SSRC don't handle it again
             for t in local_transceivers {
-                if let Some(receiver) = t.receiver().await {
-                    for track in receiver.tracks().await {
-                        for ssrc in &incoming_track.ssrcs {
-                            if *ssrc == track.ssrc() {
-                                filter_track_with_ssrc(&mut filtered_tracks, track.ssrc());
-                            }
+                let receiver = t.receiver().await;
+                for track in receiver.tracks().await {
+                    for ssrc in &incoming_track.ssrcs {
+                        if *ssrc == track.ssrc() {
+                            filter_track_with_ssrc(&mut filtered_tracks, track.ssrc());
                         }
                     }
                 }
@@ -357,20 +354,19 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                if let Some(receiver) = t.receiver().await {
-                    if receiver.have_received().await {
-                        continue;
-                    }
-                    PeerConnectionInternal::start_receiver(
-                        self.setting_engine.get_receive_mtu(),
-                        incoming_track,
-                        receiver,
-                        Arc::clone(t),
-                        Arc::clone(&self.on_track_handler),
-                    )
-                    .await;
-                    track_handled = true;
+                let receiver = t.receiver().await;
+                if receiver.have_received().await {
+                    continue;
                 }
+                PeerConnectionInternal::start_receiver(
+                    self.setting_engine.get_receive_mtu(),
+                    incoming_track,
+                    receiver,
+                    Arc::clone(t),
+                    Arc::clone(&self.on_track_handler),
+                )
+                .await;
+                track_handled = true;
             }
 
             if !track_handled {
@@ -465,7 +461,7 @@ impl PeerConnectionInternal {
                 ));
 
                 RTCRtpTransceiver::new(
-                    Some(receiver),
+                    receiver,
                     None,
                     RTCRtpTransceiverDirection::Recvonly,
                     kind,
@@ -494,14 +490,14 @@ impl PeerConnectionInternal {
             .ok_or(Error::ErrInterceptorNotBind)?;
 
         let (r, s) = match direction {
-            RTCRtpTransceiverDirection::Sendrecv => {
-                let r = Some(Arc::new(RTCRtpReceiver::new(
+            RTCRtpTransceiverDirection::Sendrecv | RTCRtpTransceiverDirection::Sendonly => {
+                let r = Arc::new(RTCRtpReceiver::new(
                     self.setting_engine.get_receive_mtu(),
                     track.kind(),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
                     Arc::clone(&interceptor),
-                )));
+                ));
                 let s = Some(Arc::new(
                     RTCRtpSender::new(
                         self.setting_engine.get_receive_mtu(),
@@ -514,20 +510,6 @@ impl PeerConnectionInternal {
                     .await,
                 ));
                 (r, s)
-            }
-            RTCRtpTransceiverDirection::Sendonly => {
-                let s = Some(Arc::new(
-                    RTCRtpSender::new(
-                        self.setting_engine.get_receive_mtu(),
-                        Arc::clone(&track),
-                        Arc::clone(&self.dtls_transport),
-                        Arc::clone(&self.media_engine),
-                        Arc::clone(&interceptor),
-                        false,
-                    )
-                    .await,
-                ));
-                (None, s)
             }
             _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport),
         };
@@ -906,16 +888,15 @@ impl PeerConnectionInternal {
             )
             .await?;
 
-        if let Some(receiver) = t.receiver().await {
-            PeerConnectionInternal::start_receiver(
-                self.setting_engine.get_receive_mtu(),
-                &incoming,
-                receiver,
-                t,
-                Arc::clone(&self.on_track_handler),
-            )
-            .await;
-        }
+        let receiver = t.receiver().await;
+        PeerConnectionInternal::start_receiver(
+            self.setting_engine.get_receive_mtu(),
+            &incoming,
+            receiver,
+            t,
+            Arc::clone(&self.on_track_handler),
+        )
+        .await;
         Ok(true)
     }
 
@@ -1011,31 +992,16 @@ impl PeerConnectionInternal {
 
                         let transceivers = self.rtp_transceivers.lock().await;
                         for t in &*transceivers {
-                            if t.mid().await != mid || t.receiver().await.is_none() {
+                            if t.mid().await != mid {
                                 continue;
                             }
 
-                            if let Some(receiver) = t.receiver().await {
-                                if !rsid.is_empty() {
-                                    return receiver
-                                        .receive_for_rtx(
-                                            0,
-                                            rsid,
-                                            TrackStream {
-                                                stream_info: Some(stream_info.clone()),
-                                                rtp_read_stream,
-                                                rtp_interceptor,
-                                                rtcp_read_stream,
-                                                rtcp_interceptor,
-                                            },
-                                        )
-                                        .await;
-                                }
-
-                                let track = receiver
-                                    .receive_for_rid(
-                                        rid,
-                                        params,
+                            let receiver = t.receiver().await;
+                            if !rsid.is_empty() {
+                                return receiver
+                                    .receive_for_rtx(
+                                        0,
+                                        rsid,
                                         TrackStream {
                                             stream_info: Some(stream_info.clone()),
                                             rtp_read_stream,
@@ -1044,15 +1010,29 @@ impl PeerConnectionInternal {
                                             rtcp_interceptor,
                                         },
                                     )
-                                    .await?;
-
-                                RTCPeerConnection::do_track(
-                                    Arc::clone(&self.on_track_handler),
-                                    track,
-                                    receiver,
-                                    Arc::clone(t),
-                                );
+                                    .await;
                             }
+
+                            let track = receiver
+                                .receive_for_rid(
+                                    rid,
+                                    params,
+                                    TrackStream {
+                                        stream_info: Some(stream_info.clone()),
+                                        rtp_read_stream,
+                                        rtp_interceptor,
+                                        rtcp_read_stream,
+                                        rtcp_interceptor,
+                                    },
+                                )
+                                .await?;
+
+                            RTCPeerConnection::do_track(
+                                Arc::clone(&self.on_track_handler),
+                                track,
+                                receiver,
+                                Arc::clone(t),
+                            );
                             return Ok(());
                         }
                     }
@@ -1224,10 +1204,7 @@ impl PeerConnectionInternal {
         }
         let mut track_infos = vec![];
         for transeiver in transceivers {
-            let receiver = match transeiver.receiver().await {
-                Some(r) => r,
-                None => continue,
-            };
+            let receiver = transeiver.receiver().await;
             let mid = match transeiver.mid().await {
                 m if !m.is_empty() => m,
                 _ => continue,
