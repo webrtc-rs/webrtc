@@ -96,42 +96,7 @@ async fn main() -> Result<()> {
     let sctp = Arc::new(api.new_sctp_transport(Arc::clone(&dtls))?);
 
     let done = Arc::new(Notify::new());
-    let done_answer = done.clone();
     let done_offer = done.clone();
-
-    // Handle incoming data channels
-    sctp.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        let d_label = d.label().to_owned();
-        let d_id = d.id();
-        println!("New DataChannel {} {}", d_label, d_id);
-
-        let done_answer1 = done_answer.clone();
-        // Register the handlers
-        Box::pin(async move {
-            // no need to downgrade this to Weak, since on_open is FnOnce callback
-            let d2 = Arc::clone(&d);
-            let done_answer2 = done_answer1.clone();
-            d.on_open(Box::new(move || {
-                Box::pin(async move {
-                    tokio::select! {
-                        _ = done_answer2.notified() => {
-                            println!("received done_answer signal!");
-                        }
-                        _ = handle_on_open(d2) => {}
-                    };
-
-                    println!("exit data answer");
-                })
-            }));
-
-            // Register text message handling
-            d.on_message(Box::new(move |msg: DataChannelMessage| {
-                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
-                Box::pin(async {})
-            }));
-        })
-    }));
 
     let (gather_finished_tx, mut gather_finished_rx) = tokio::sync::mpsc::channel::<()>(1);
     let mut gather_finished_tx = Some(gather_finished_tx);
@@ -165,7 +130,7 @@ async fn main() -> Result<()> {
     // Exchange the information
     let json_str = serde_json::to_string(&local_signal)?;
     let b64 = signal::encode(&json_str);
-    println!("{}", b64);
+    println!("Copy & paste following answer to the other terminal:\n{}", b64);
 
     let line = signal::must_read_stdin()?;
     let json_str = signal::decode(line.as_str())?;
@@ -190,8 +155,8 @@ async fn main() -> Result<()> {
     // Start the SCTP transport
     sctp.start(remote_signal.sctp_capabilities).await?;
 
-    // Construct the data channel as the offerer
-    if is_offer {
+    // Construct the data channel
+    {
         let id = 1u16;
 
         let dc_params = DataChannelParameters {
@@ -201,28 +166,23 @@ async fn main() -> Result<()> {
         };
 
         let d = Arc::new(api.new_data_channel(Arc::clone(&sctp), dc_params).await?);
-
-        // Register the handlers
-        // channel.OnOpen(handleOnOpen(channel)) // TODO: OnOpen on handle ChannelAck
-        // Temporary alternative
-
-        // no need to downgrade this to Weak
         let d2 = Arc::clone(&d);
-        tokio::spawn(async move {
-            tokio::select! {
-                _ = done_offer.notified() => {
-                    println!("received done_offer signal!");
-                }
-                _ = handle_on_open(d2) => {}
-            };
-
-            println!("exit data offer");
-        });
+        d.on_open(Box::new(move || {
+            Box::pin(async move {
+                tokio::select! {
+                    _ = done_offer.notified() => {
+                        println!("received done_offer signal!");
+                    }
+                    _ = handle_on_open(d2) => {}
+                };
+            })
+        }));
 
         let d_label = d.label().to_owned();
+        let d_id = d.id();
         d.on_message(Box::new(move |msg: DataChannelMessage| {
             let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-            println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+            println!("Message from DataChannel '{}-{}': '{}'", d_label, d_id, msg_str);
             Box::pin(async {})
         }));
     }
@@ -257,7 +217,7 @@ struct Signal {
 }
 
 async fn handle_on_open(d: Arc<RTCDataChannel>) -> Result<()> {
-    println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d.label(), d.id());
+    println!("Data channel '{}-{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d.label(), d.id());
 
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
