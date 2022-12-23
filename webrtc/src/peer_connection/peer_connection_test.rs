@@ -5,6 +5,7 @@ use crate::api::APIBuilder;
 use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use crate::stats::StatsReportType;
+use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use bytes::Bytes;
 use media::Sample;
 use std::sync::atomic::AtomicU32;

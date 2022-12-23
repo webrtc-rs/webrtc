@@ -172,9 +172,9 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: Mutex<String>,                       //atomic.Value
-    sender: Mutex<Option<Arc<RTCRtpSender>>>, //atomic.Value
-    receiver: Mutex<Arc<RTCRtpReceiver>>,     //atomic.Value
+    mid: Mutex<String>,                   //atomic.Value
+    sender: Mutex<Arc<RTCRtpSender>>,     //atomic.Value
+    receiver: Mutex<Arc<RTCRtpReceiver>>, //atomic.Value
 
     direction: AtomicU8,         //RTPTransceiverDirection
     current_direction: AtomicU8, //RTPTransceiverDirection
@@ -192,7 +192,7 @@ pub struct RTCRtpTransceiver {
 impl RTCRtpTransceiver {
     pub(crate) async fn new(
         receiver: Arc<RTCRtpReceiver>,
-        sender: Option<Arc<RTCRtpSender>>,
+        sender: Arc<RTCRtpSender>,
         direction: RTCRtpTransceiverDirection,
         kind: RTPCodecType,
         codecs: Vec<RTCRtpCodecParameters>,
@@ -206,7 +206,7 @@ impl RTCRtpTransceiver {
 
         let t = Arc::new(RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
-            sender: Mutex::new(None),
+            sender: Mutex::new(sender),
             receiver: Mutex::new(receiver),
 
             direction: AtomicU8::new(direction as u8),
@@ -218,9 +218,10 @@ impl RTCRtpTransceiver {
             media_engine,
             trigger_negotiation_needed: Mutex::new(trigger_negotiation_needed),
         });
-
-        // t.set_receiver(receiver).await;
-        t.set_sender(sender).await;
+        t.sender()
+            .await
+            .set_rtp_transceiver(Some(Arc::downgrade(&t)))
+            .await;
 
         t
     }
@@ -250,7 +251,7 @@ impl RTCRtpTransceiver {
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one
-    pub async fn sender(&self) -> Option<Arc<RTCRtpSender>> {
+    pub async fn sender(&self) -> Arc<RTCRtpSender> {
         let sender = self.sender.lock().await;
         sender.clone()
     }
@@ -258,21 +259,18 @@ impl RTCRtpTransceiver {
     /// set_sender_track sets the RTPSender and Track to current transceiver
     pub async fn set_sender_track(
         self: &Arc<Self>,
-        sender: Option<Arc<RTCRtpSender>>,
+        sender: Arc<RTCRtpSender>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         self.set_sender(sender).await;
         self.set_sending_track(track).await
     }
 
-    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTCRtpSender>>) {
-        if let Some(sender) = &s {
-            sender.set_rtp_transceiver(Some(Arc::downgrade(self))).await;
-        }
+    pub async fn set_sender(self: &Arc<Self>, s: Arc<RTCRtpSender>) {
+        s.set_rtp_transceiver(Some(Arc::downgrade(self))).await;
 
-        if let Some(prev_sender) = self.sender().await {
-            prev_sender.set_rtp_transceiver(None).await;
-        }
+        let prev_sender = self.sender().await;
+        prev_sender.set_rtp_transceiver(None).await;
 
         {
             let mut sender = self.sender.lock().await;
@@ -417,9 +415,9 @@ impl RTCRtpTransceiver {
             }
         }
 
-        if let Some(sender) = &*self.sender.lock().await {
-            let pause_sender = !current_direction.has_send();
-
+        let pause_sender = !current_direction.has_send();
+        {
+            let sender = &*self.sender.lock().await;
             sender.set_paused(pause_sender);
         }
 
@@ -435,10 +433,8 @@ impl RTCRtpTransceiver {
         self.stopped.store(true, Ordering::SeqCst);
 
         {
-            let s = self.sender.lock().await;
-            if let Some(sender) = &*s {
-                sender.stop().await?;
-            }
+            let sender = self.sender.lock().await;
+            sender.stop().await?;
         }
         {
             let r = self.receiver.lock().await;
@@ -456,13 +452,8 @@ impl RTCRtpTransceiver {
     ) -> Result<()> {
         let track_is_none = track.is_none();
         {
-            let mut s = self.sender.lock().await;
-            if let Some(sender) = &*s {
-                sender.replace_track(track).await?;
-            }
-            if track_is_none {
-                *s = None;
-            }
+            let sender = self.sender.lock().await;
+            sender.replace_track(track).await?;
         }
 
         let direction = self.direction();

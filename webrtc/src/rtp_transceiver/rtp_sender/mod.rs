@@ -127,7 +127,7 @@ impl std::fmt::Debug for RTCRtpSender {
 impl RTCRtpSender {
     pub async fn new(
         receive_mtu: usize,
-        track: Arc<dyn TrackLocal + Send + Sync>,
+        track: Option<Arc<dyn TrackLocal + Send + Sync>>,
         transport: Arc<RTCDtlsTransport>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
@@ -166,9 +166,12 @@ impl RTCRtpSender {
             *internal_rtcp_interceptor = Some(rtcp_interceptor);
         }
 
-        let stream_ids = vec![track.stream_id().to_string()];
+        let stream_ids = track
+            .as_ref()
+            .map(|track| vec![track.stream_id().to_string()])
+            .unwrap_or_default();
         RTCRtpSender {
-            track: Mutex::new(Some(track)),
+            track: Mutex::new(track),
 
             srtp_stream,
             stream_info: Mutex::new(StreamInfo::default()),

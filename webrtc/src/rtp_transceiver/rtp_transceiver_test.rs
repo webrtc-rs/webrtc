@@ -21,11 +21,20 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
     let interceptor = api.interceptor_registry.build("")?;
     let transport = Arc::new(RTCDtlsTransport::default());
-    let receiver = Arc::new(api.new_rtp_receiver(RTPCodecType::Video, transport, interceptor));
+    let receiver = Arc::new(api.new_rtp_receiver(
+        RTPCodecType::Video,
+        Arc::clone(&transport),
+        Arc::clone(&interceptor),
+    ));
+
+    let sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
 
     let tr = RTCRtpTransceiver::new(
         receiver,
-        None,
+        sender,
         RTCRtpTransceiverDirection::Unspecified,
         RTPCodecType::Video,
         media_video_codecs.clone(),
@@ -157,11 +166,11 @@ async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()>
     let answer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let _ = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let answer_transceiver = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     answer_transceiver
@@ -208,11 +217,11 @@ async fn test_rtp_transceiver_direction_change() -> Result<()> {
     let (offer_pc, answer_pc, _) = create_vnet_pair().await?;
 
     let offer_transceiver = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let _ = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = offer_pc.create_offer(None).await?;
@@ -261,11 +270,11 @@ async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> 
     }
 
     let offer_transceiver = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let _ = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = offer_pc.create_offer(None).await?;
@@ -308,11 +317,11 @@ async fn test_rtp_transceiver_stopping() -> Result<()> {
     let (offer_pc, answer_pc, _) = create_vnet_pair().await?;
 
     let offer_transceiver = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let _ = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = offer_pc.create_offer(None).await?;

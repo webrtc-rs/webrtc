@@ -588,13 +588,23 @@ async fn test_media_description_fingerprints() -> Result<()> {
         Arc::clone(&interceptor),
     ));
 
+    let video_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
+
+    let audio_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
+
     let media = vec![
         MediaSection {
             id: "video".to_owned(),
             transceivers: vec![
                 RTCRtpTransceiver::new(
                     video_receiver,
-                    None,
+                    video_sender,
                     RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Video,
                     api.media_engine
@@ -612,7 +622,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
             transceivers: vec![
                 RTCRtpTransceiver::new(
                     audio_receiver,
-                    None,
+                    audio_sender,
                     RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Audio,
                     api.media_engine
@@ -642,17 +652,17 @@ async fn test_media_description_fingerprints() -> Result<()> {
             "webrtc-rs".to_owned(),
         ));
         media[i].transceivers[0]
-            .set_sender(Some(Arc::new(
+            .set_sender(Arc::new(
                 RTCRtpSender::new(
                     api.setting_engine.get_receive_mtu(),
-                    track,
+                    Some(track),
                     Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),
                     Arc::clone(&interceptor),
                     false,
                 )
                 .await,
-            )))
+            ))
             .await;
         media[i].transceivers[0].set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
     }
@@ -678,11 +688,20 @@ async fn test_populate_sdp() -> Result<()> {
         let interceptor = api.interceptor_registry.build("")?;
         let transport = Arc::new(RTCDtlsTransport::default());
 
-        let receiver = Arc::new(api.new_rtp_receiver(RTPCodecType::Video, transport, interceptor));
+        let receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Video,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+
+        let sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
 
         let tr = RTCRtpTransceiver::new(
             receiver,
-            None,
+            sender,
             RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
             api.media_engine.video_codecs.clone(),
@@ -753,11 +772,20 @@ async fn test_populate_sdp() -> Result<()> {
         let api = APIBuilder::new().with_media_engine(me).build();
         let interceptor = api.interceptor_registry.build("")?;
         let transport = Arc::new(RTCDtlsTransport::default());
-        let receiver = Arc::new(api.new_rtp_receiver(RTPCodecType::Video, transport, interceptor));
+        let receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Video,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+
+        let sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
 
         let tr = RTCRtpTransceiver::new(
             receiver,
-            None,
+            sender,
             RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
             api.media_engine.video_codecs.clone(),
@@ -851,15 +879,20 @@ async fn test_populate_sdp_reject() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(me).build();
     let interceptor = api.interceptor_registry.build("")?;
     let transport = Arc::new(RTCDtlsTransport::default());
-    let receiver_video = Arc::new(api.new_rtp_receiver(
+    let video_receiver = Arc::new(api.new_rtp_receiver(
         RTPCodecType::Video,
         Arc::clone(&transport),
         Arc::clone(&interceptor),
     ));
 
+    let video_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
+
     let trv = RTCRtpTransceiver::new(
-        receiver_video,
-        None,
+        video_receiver,
+        video_sender,
         RTCRtpTransceiverDirection::Recvonly,
         RTPCodecType::Video,
         api.media_engine.video_codecs.clone(),
@@ -868,11 +901,20 @@ async fn test_populate_sdp_reject() -> Result<()> {
     )
     .await;
 
-    let receiver_audio =
-        Arc::new(api.new_rtp_receiver(RTPCodecType::Audio, transport, interceptor));
+    let audio_receiver = Arc::new(api.new_rtp_receiver(
+        RTPCodecType::Audio,
+        Arc::clone(&transport),
+        Arc::clone(&interceptor),
+    ));
+
+    let audio_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
+
     let tra = RTCRtpTransceiver::new(
-        receiver_audio,
-        None,
+        audio_receiver,
+        audio_sender,
         RTCRtpTransceiverDirection::Recvonly,
         RTPCodecType::Audio,
         api.media_engine.audio_codecs.clone(),
