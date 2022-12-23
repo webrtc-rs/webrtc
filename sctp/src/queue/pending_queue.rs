@@ -137,38 +137,6 @@ impl PendingQueue {
         drop(sem_lock);
     }
 
-    /// Tries to append chunks to the back of the pending queue. If the chunks don't fit into the current pending queue limit this will return false
-    ///
-    /// # Panics
-    ///
-    /// If it's a mix of unordered and ordered chunks.
-    pub(crate) fn try_append(&self, chunks: Vec<ChunkPayloadData>) -> bool {
-        if chunks.is_empty() {
-            return true;
-        }
-
-        let total_user_data_len = chunks.iter().fold(0, |acc, c| acc + c.user_data.len());
-
-        {
-            let sem_lock = if let Ok(sem_lock) = self.semaphore_lock.try_lock() {
-                sem_lock
-            } else {
-                return false;
-            };
-            let r = match self.semaphore.try_acquire_many(total_user_data_len as u32) {
-                Ok(permits) => {
-                    permits.forget();
-
-                    self.append_unlimited(chunks, total_user_data_len);
-                    true
-                }
-                Err(_) => false,
-            };
-            drop(sem_lock);
-            r
-        }
-    }
-
     /// Assumes that A) enough permits have been acquired and forget from the semaphore and that the semaphore_lock is held
     fn append_unlimited(&self, chunks: Vec<ChunkPayloadData>, total_user_data_len: usize) {
         let chunks_len = chunks.len();

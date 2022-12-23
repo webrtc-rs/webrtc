@@ -274,29 +274,12 @@ impl Stream {
             .await
     }
 
-    /// Tries nonblockingly to write `p` to the DTLS connection with the default Payload Protocol Identifier.
-    ///
-    /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub fn try_write(&self, p: &Bytes) -> Result<usize> {
-        self.try_write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
-    }
-
     /// Writes `p` to the DTLS connection with the given Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
     pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
         let chunks = self.prepare_write(p, ppi)?;
         self.send_payload_data(chunks).await?;
-
-        Ok(p.len())
-    }
-
-    /// Tries nonblockingly to write `p` to the DTLS connection with the given Payload Protocol Identifier.
-    ///
-    /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub fn try_write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
-        let chunks = self.prepare_write(p, ppi)?;
-        self.try_send_payload_data(chunks)?;
 
         Ok(p.len())
     }
@@ -522,20 +505,6 @@ impl Stream {
         Ok(())
     }
 
-    fn try_send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
-        let state = self.get_state();
-        if state != AssociationState::Established {
-            return Err(Error::ErrPayloadDataStateNotExist);
-        }
-
-        // NOTE: append is used here instead of push in order to prevent chunks interlacing.
-        if self.pending_queue.try_append(chunks) {
-            self.awake_write_loop();
-            Ok(())
-        } else {
-            Err(Error::ErrTryAgain)
-        }
-    }
     async fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
