@@ -181,6 +181,7 @@ impl RTCPReader for SrtpWriterFuture {
 #[async_trait]
 impl RTPWriter for SrtpWriterFuture {
     async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
+        log::error!("wrtpwriterfuture write()");
         Ok(self.write_rtp(pkt).await?)
     }
 }
