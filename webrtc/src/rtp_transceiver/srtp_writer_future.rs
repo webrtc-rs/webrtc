@@ -9,7 +9,7 @@ use srtp::stream::Stream;
 use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::{Attributes, RTCPReader, RTPWriter};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
@@ -22,6 +22,7 @@ pub(crate) struct SrtpWriterFuture {
     pub(crate) rtp_transport: Arc<RTCDtlsTransport>,
     pub(crate) rtcp_read_stream: Mutex<Option<Arc<Stream>>>, // atomic.Value // *
     pub(crate) rtp_write_session: Mutex<Option<Arc<Session>>>, // atomic.Value // *
+    pub(crate) next_sequence_nr: Arc<AtomicU16>,
 }
 
 impl SrtpWriterFuture {
@@ -181,7 +182,12 @@ impl RTCPReader for SrtpWriterFuture {
 #[async_trait]
 impl RTPWriter for SrtpWriterFuture {
     async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
+        let sequence_number = self.next_sequence_nr.fetch_add(1, Ordering::SeqCst);
+
+        let mut pkt = pkt.clone();
+        pkt.header.sequence_number = sequence_number;
+
         log::error!("wrtpwriterfuture write()");
-        Ok(self.write_rtp(pkt).await?)
+        Ok(self.write_rtp(&pkt).await?)
     }
 }
