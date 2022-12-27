@@ -187,7 +187,6 @@ impl RTPWriter for SrtpWriterFuture {
         let mut pkt = pkt.clone();
         pkt.header.sequence_number = sequence_number;
 
-        log::error!("wrtpwriterfuture write()");
         Ok(self.write_rtp(&pkt).await?)
     }
 }
