@@ -157,7 +157,7 @@ impl RTCRtpSender {
             rtp_transport: Arc::clone(&transport),
             rtcp_read_stream: Mutex::new(None),
             rtp_write_session: Mutex::new(None),
-            next_sequence_nr: Arc::new(AtomicU16::new(0)),
+            next_sequence_nr: Arc::new(AtomicU16::new(rand::random())),
         });
 
         let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
