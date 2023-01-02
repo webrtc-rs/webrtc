@@ -25,13 +25,13 @@ curve25519-dalek = "3.2"
 p256 = { version = "0.11.1", features = ["default", "ecdh", "ecdsa"] }
 p384 = "0.11.2"
 rand = "0.8.5"
-hmac = "0.10.1"
+hmac = "0.12.1"
 sec1 = { version = "0.3.0", features = [ "std" ] }
-sha-1 = "0.9.1"
-sha2 = "0.9.1"
+sha1 = "0.10.5"
+sha2 = "0.10.6"
 aes = "0.6.0"
 block-modes = "0.7.0"
-aes-gcm = "0.8.0"
+aes-gcm = "0.10.1"
 ccm = "0.3.0"
 tokio = { version = "1.19", features = ["full"] }
 async-trait = "0.1.56"

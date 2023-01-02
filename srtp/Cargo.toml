@@ -22,8 +22,8 @@ rtcp = { version = "0.7.0", path = "../rtcp" }
 byteorder = "1"
 bytes = "1"
 thiserror = "1.0"
-hmac = { version = "0.11.0", features = ["std"] }
-sha-1 = "0.9.8"
+hmac = { version = "0.12.1", features = ["std"] }
+sha1 = "0.10.5"
 ctr = "0.8.0"
 aes = "0.7.5"
 subtle = "2.4"
@@ -31,7 +31,7 @@ tokio = { version = "1.19", features = ["full"] }
 async-trait = "0.1.56"
 log = "0.4.16"
 aead = { version = "0.4.3", features = ["std"] }
-aes-gcm = "0.9.4"
+aes-gcm = { version = "0.10.1", features = ["std"] }
 
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above

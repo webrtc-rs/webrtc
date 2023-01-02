@@ -7,7 +7,7 @@ use aes::cipher::generic_array::GenericArray;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
 use ctr::cipher::{NewCipher, StreamCipher, StreamCipherSeek};
-use hmac::{Hmac, Mac, NewMac};
+use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use std::io::BufWriter;
 use subtle::ConstantTimeEq;
