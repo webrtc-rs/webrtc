@@ -11,10 +11,11 @@ pub(crate) fn get_padding_size(len: usize) -> usize {
 /// We need to use it for the checksum and don't want to allocate/clear each time.
 pub(crate) static FOUR_ZEROES: Bytes = Bytes::from_static(&[0, 0, 0, 0]);
 
+pub(crate) const ISCSI_CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
+
 /// Fastest way to do a crc32 without allocating.
 pub(crate) fn generate_packet_checksum(raw: &Bytes) -> u32 {
-    let hasher = Crc::<u32>::new(&CRC_32_ISCSI);
-    let mut digest = hasher.digest();
+    let mut digest = ISCSI_CRC.digest();
     digest.update(&raw[0..8]);
     digest.update(&FOUR_ZEROES[..]);
     digest.update(&raw[12..]);
