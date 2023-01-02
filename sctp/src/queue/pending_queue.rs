@@ -243,7 +243,7 @@ impl PendingQueue {
             let user_data_len = p.user_data.len();
             self.n_bytes.fetch_sub(user_data_len, Ordering::SeqCst);
             self.queue_len.fetch_sub(1, Ordering::SeqCst);
-            self.semaphore.add_permits(user_data_len as usize);
+            self.semaphore.add_permits(user_data_len);
         }
 
         popped

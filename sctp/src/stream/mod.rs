@@ -825,7 +825,7 @@ impl AsyncWrite for PollStream {
         };
 
         match fut.as_mut().poll(cx) {
-            Poll::Pending => return Poll::Pending,
+            Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => {
                 self.shutdown_fut = ShutdownFut::Errored(e.clone());
                 Poll::Ready(Err(e.into()))
