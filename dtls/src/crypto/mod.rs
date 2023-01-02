@@ -518,10 +518,11 @@ pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: 
 #[cfg(test)]
 mod test {
     #[cfg(feature = "pem")]
+    use super::*;
+
+    #[cfg(feature = "pem")]
     #[test]
     fn test_certificate_serialize_pem_and_from_pem() -> Result<()> {
-        use super::*;
-
         let cert = Certificate::generate_self_signed(vec!["webrtc.rs".to_owned()])?;
 
         let pem = cert.serialize_pem();
