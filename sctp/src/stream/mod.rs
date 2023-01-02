@@ -570,7 +570,7 @@ impl ShutdownFut {
     ///
     /// # Panics
     ///
-    /// Panics if `ReadFut` variant is not `ShuttingDown`.
+    /// Panics if `ShutdownFut` variant is not `ShuttingDown`.
     fn get_shutting_down_mut(
         &mut self,
     ) -> &mut Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>> {
