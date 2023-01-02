@@ -22,7 +22,7 @@ rtcp = { version = "0.7.0", path = "../rtcp" }
 byteorder = "1"
 bytes = "1"
 thiserror = "1.0"
-hmac = { version = "0.12.1", features = ["std"] }
+hmac = { version = "0.12.1", features = ["std", "reset"] }
 sha1 = "0.10.5"
 ctr = "0.8.0"
 aes = "0.7.5"
