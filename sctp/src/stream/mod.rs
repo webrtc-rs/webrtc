@@ -576,7 +576,7 @@ impl ShutdownFut {
     ) -> &mut Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>> {
         match self {
             ShutdownFut::ShuttingDown(ref mut fut) => fut,
-            _ => panic!("expected ReadFut to be Reading"),
+            _ => panic!("expected ShutdownFut to be ShuttingDown"),
         }
     }
 }
