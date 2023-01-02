@@ -1,17 +1,28 @@
+use tokio::sync::{Mutex, Semaphore};
+use util::sync::RwLock;
+
 use std::{
     collections::VecDeque,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use tokio::sync::{Mutex, Semaphore};
-use util::sync::RwLock;
-
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
+
+// TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<PendingQueueInternal>
+
+// Some tests push a lot of data before starting to process any data...
+#[cfg(test)]
+const QUEUE_BYTES_LIMIT: usize = 128 * 1024 * 1024;
+/// Maximum size of the pending queue, in bytes.
+#[cfg(not(test))]
+const QUEUE_BYTES_LIMIT: usize = 128 * 1024;
+/// Total user data size, beyound which the packet will be split into chunks. The chunks will be
+/// added to the pending queue one by one.
+const QUEUE_APPEND_LARGE: usize = (QUEUE_BYTES_LIMIT * 2) / 3;
+
 
 /// Basic queue for either ordered or unordered chunks.
 pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
-
-// TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<PendingQueueInternal>
 
 /// A queue for both ordered and unordered chunks.
 #[derive(Debug)]
@@ -38,14 +49,6 @@ impl Default for PendingQueue {
         PendingQueue::new()
     }
 }
-
-// Some tests push a lot of data before starting to process any data...
-#[cfg(test)]
-const QUEUE_BYTES_LIMIT: usize = 128 * 1024 * 1024;
-#[cfg(not(test))]
-const QUEUE_BYTES_LIMIT: usize = 128 * 1024;
-
-const QUEUE_APPEND_LARGE: usize = (QUEUE_BYTES_LIMIT * 2) / 3;
 
 impl PendingQueue {
     pub(crate) fn new() -> Self {
