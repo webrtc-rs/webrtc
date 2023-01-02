@@ -25,4 +25,4 @@ thiserror = "1.0"
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 env_logger = "0.9.0"
-chrono = "0.4.19"
+chrono = "0.4.23"

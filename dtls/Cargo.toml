@@ -54,7 +54,7 @@ pem = { version = "1", optional = true }
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 env_logger = "0.9.0"
-chrono = "0.4.19"
+chrono = "0.4.23"
 clap = "3.2.6"
 hub = {path = "examples/hub"}
 
