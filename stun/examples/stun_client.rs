@@ -48,10 +48,7 @@ async fn main() -> Result<(), Error> {
     let mut client = ClientBuilder::new().with_conn(Arc::new(conn)).build()?;
 
     let mut msg = Message::new();
-    msg.build(&[
-        Box::new(TransactionId::default()),
-        Box::new(BINDING_REQUEST),
-    ])?;
+    msg.build(&[Box::<TransactionId>::default(), Box::new(BINDING_REQUEST)])?;
 
     client.send(&msg, Some(Arc::new(handler_tx))).await?;
 

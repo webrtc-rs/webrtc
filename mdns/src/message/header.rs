@@ -33,7 +33,7 @@ impl fmt::Display for Header {
 impl Header {
     pub fn pack(&self) -> (u16, u16) {
         let id = self.id;
-        let mut bits = (self.op_code as u16) << 11 | self.rcode as u16;
+        let mut bits = self.op_code << 11 | self.rcode as u16;
         if self.recursion_available {
             bits |= HEADER_BIT_RA
         }

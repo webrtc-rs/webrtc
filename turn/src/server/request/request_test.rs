@@ -88,7 +88,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
 
     r.allocation_manager
         .create_allocation(
-            five_tuple.clone(),
+            five_tuple,
             Arc::clone(&r.conn),
             0,
             Duration::from_secs(3600),

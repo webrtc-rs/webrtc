@@ -51,10 +51,7 @@ impl RtoManager {
             self.srtt = ((RTO_BASE - RTO_ALPHA) * self.srtt + RTO_ALPHA * rtt) / RTO_BASE;
         }
 
-        self.rto = std::cmp::min(
-            std::cmp::max(self.srtt + (4.0 * self.rttvar) as u64, RTO_MIN),
-            RTO_MAX,
-        );
+        self.rto = (self.srtt + (4.0 * self.rttvar) as u64).clamp(RTO_MIN, RTO_MAX);
 
         self.srtt
     }

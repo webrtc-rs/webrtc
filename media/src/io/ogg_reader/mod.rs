@@ -132,7 +132,7 @@ impl<R: Read> OggReader<R> {
         }
 
         let mut payload = BytesMut::with_capacity(payload_size);
-        payload.resize(payload_size as usize, 0);
+        payload.resize(payload_size, 0);
         self.reader.read_exact(&mut payload)?;
 
         if self.do_checksum {

@@ -204,7 +204,7 @@ impl Unmarshal for RunLengthChunk {
         let b1 = raw_packet.get_u8();
 
         // get PacketStatusSymbol
-        let packet_status_symbol = (get_nbits_from_byte(b0, 1, 2) as u16).into();
+        let packet_status_symbol = get_nbits_from_byte(b0, 1, 2).into();
 
         // get RunLength
         let run_length = ((get_nbits_from_byte(b0, 3, 5) as usize) << 8) as u16 + (b1 as u16);

@@ -20,7 +20,6 @@ use crate::util::*;
 
 use crate::chunk::chunk_unknown::ChunkUnknown;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
 
 ///Packet represents an SCTP packet, defined in https://tools.ietf.org/html/rfc4960#section-3
@@ -155,30 +154,29 @@ impl Packet {
         writer.put_u16(self.destination_port);
         writer.put_u32(self.verification_tag);
 
-        // Populate chunks
-        let mut raw = BytesMut::new();
-        for c in &self.chunks {
-            let chunk_raw = c.marshal()?;
-            raw.extend(chunk_raw);
+        // This is where the checksum will be written
+        let checksum_pos = writer.len();
+        writer.extend_from_slice(&[0, 0, 0, 0]);
 
-            let padding_needed = get_padding_size(raw.len());
+        // Populate chunks
+        for c in &self.chunks {
+            c.marshal_to(writer)?;
+
+            let padding_needed = get_padding_size(writer.len());
             if padding_needed != 0 {
-                raw.extend(vec![0u8; padding_needed]);
+                // padding needed if < 4 because we pad to 4
+                writer.extend_from_slice(&[0u8; 16][..padding_needed]);
             }
         }
-        let raw = raw.freeze();
 
-        let hasher = Crc::<u32>::new(&CRC_32_ISCSI);
-        let mut digest = hasher.digest();
+        let mut digest = ISCSI_CRC.digest();
         digest.update(writer);
-        digest.update(&FOUR_ZEROES);
-        digest.update(&raw[..]);
         let checksum = digest.finalize();
 
         // Checksum is already in BigEndian
         // Using LittleEndian stops it from being flipped
-        writer.put_u32_le(checksum);
-        writer.extend(raw);
+        let checksum_place = &mut writer[checksum_pos..checksum_pos + 4];
+        checksum_place.copy_from_slice(&checksum.to_le_bytes());
 
         Ok(writer.len())
     }

@@ -1,6 +1,6 @@
 [package]
 name = "webrtc"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of WebRTC API"
@@ -17,7 +17,7 @@ rust-version = "1.60.0"
 data = { version = "0.6.0", path = "../data", package = "webrtc-data" }
 dtls = { version = "0.7.0", path = "../dtls", package = "webrtc-dtls" }
 ice = { version = "0.9.0", path = "../ice", package = "webrtc-ice" }
-interceptor = { version = "0.8.0", path = "../interceptor" }
+interceptor = { version = "0.8.2", path = "../interceptor" }
 mdns = { version = "0.5.0", path = "../mdns", package = "webrtc-mdns" }
 media = { version = "0.5.0", path = "../media", package = "webrtc-media" }
 rtcp = { version = "0.7.0", path = "../rtcp" }
