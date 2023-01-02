@@ -28,7 +28,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
     )
     .await;
 
-    let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
+    let dt = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap();
     mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
@@ -92,7 +92,7 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
             .await?;
     }
 
-    let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
+    let dt = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap();
     mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
@@ -194,7 +194,7 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
         })
         .await?;
 
-    let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
+    let dt = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap();
     mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();

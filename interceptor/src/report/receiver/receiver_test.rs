@@ -122,7 +122,7 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
 
 #[tokio::test]
 async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
-    let rtp_time: SystemTime = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0).into();
+    let rtp_time: SystemTime = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap().into();
 
     let mt = Arc::new(MockTime::default());
     let time_gen = {
@@ -157,7 +157,7 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
             .await;
     }
 
-    let now: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into();
+    let now: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into();
     let rt = 987654321u32.wrapping_add(
         (now.duration_since(rtp_time)
             .unwrap_or(Duration::from_secs(0))
@@ -376,7 +376,7 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
 
 #[tokio::test]
 async fn test_receiver_interceptor_packet_loss() -> Result<()> {
-    let rtp_time: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into();
+    let rtp_time: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into();
 
     let mt = Arc::new(MockTime::default());
     let time_gen = {
@@ -442,7 +442,7 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
         assert!(false);
     }
 
-    let now: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into();
+    let now: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into();
     let rt = 987654321u32.wrapping_add(
         (now.duration_since(rtp_time)
             .unwrap_or(Duration::from_secs(0))
@@ -642,7 +642,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
     )
     .await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into());
     stream
         .receive_rtp(rtp::packet::Packet {
             header: rtp::header::Header {
@@ -655,7 +655,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         .await;
     stream.read_rtp().await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into());
     stream
         .receive_rtp(rtp::packet::Packet {
             header: rtp::header::Header {
@@ -722,11 +722,11 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
     )
     .await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into());
     stream
         .receive_rtcp(vec![Box::new(rtcp::sender_report::SenderReport {
             ssrc: 123456,
-            ntp_time: unix2ntp(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into()),
+            ntp_time: unix2ntp(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into()),
             rtp_time: 987654321,
             packet_count: 0,
             octet_count: 0,
@@ -735,7 +735,7 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
         .await;
     stream.read_rtcp().await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into());
 
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
