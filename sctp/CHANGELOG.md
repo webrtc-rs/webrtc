@@ -4,6 +4,7 @@
 
 * Performance improvements
   * reuse as many allocations as possible when marshaling [#364](https://github.com/webrtc-rs/webrtc/pull/364)
+  * The lock for the internal association was contended badly because marshaling was done while still in a critical section and also tokio was scheduling tasks badly [#363](https://github.com/webrtc-rs/webrtc/pull/363)
 
 ## v0.7.0
 

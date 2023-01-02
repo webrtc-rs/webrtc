@@ -79,7 +79,7 @@ fn benchmark_agent(c: &mut Criterion) {
         }
 
         let mut m = Message::new();
-        m.build(&[Box::new(TransactionId::default())]).unwrap();
+        m.build(&[Box::<TransactionId>::default()]).unwrap();
         c.bench_function("BenchmarkAgent_Process", |b| {
             b.iter(|| {
                 a.process(m.clone()).unwrap();

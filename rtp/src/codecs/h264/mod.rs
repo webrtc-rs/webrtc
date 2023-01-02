@@ -255,7 +255,7 @@ impl Depacketizer for H264Packet {
                 Ok(payload.freeze())
             }
             FUA_NALU_TYPE => {
-                if packet.len() < FUA_HEADER_SIZE as usize {
+                if packet.len() < FUA_HEADER_SIZE {
                     return Err(Error::ErrShortPacket);
                 }
 
@@ -264,7 +264,7 @@ impl Depacketizer for H264Packet {
                 }
 
                 if let Some(fua_buffer) = &mut self.fua_buffer {
-                    fua_buffer.put(&*packet.slice(FUA_HEADER_SIZE as usize..));
+                    fua_buffer.put(&*packet.slice(FUA_HEADER_SIZE..));
                 }
 
                 let b1 = packet[1];

@@ -57,9 +57,9 @@ impl<W: Write + Seek> Writer for IVFWriter<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
         let mut depacketizer: Box<dyn Depacketizer> = if self.is_vp9 {
-            Box::new(rtp::codecs::vp9::Vp9Packet::default())
+            Box::<rtp::codecs::vp9::Vp9Packet>::default()
         } else {
-            Box::new(rtp::codecs::vp8::Vp8Packet::default())
+            Box::<rtp::codecs::vp8::Vp8Packet>::default()
         };
 
         let payload = depacketizer.depacketize(&packet.payload)?;

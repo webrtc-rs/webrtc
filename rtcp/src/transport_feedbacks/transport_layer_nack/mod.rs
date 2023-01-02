@@ -60,6 +60,13 @@ impl Iterator for NackIterator {
 }
 
 impl NackPair {
+    pub fn new(seq: u16) -> Self {
+        Self {
+            packet_id: seq,
+            lost_packets: Default::default(),
+        }
+    }
+
     /// PacketList returns a list of Nack'd packets that's referenced by a NackPair
     pub fn packet_list(&self) -> Vec<u16> {
         self.into_iter().collect()
@@ -243,11 +250,7 @@ pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
         return vec![];
     }
 
-    let mut nack_pair = NackPair {
-        packet_id: seq_nos[0],
-        ..Default::default()
-    };
-
+    let mut nack_pair = NackPair::new(seq_nos[0]);
     let mut pairs = vec![];
 
     for &seq in seq_nos.iter().skip(1) {
@@ -256,7 +259,7 @@ pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
         }
         if seq <= nack_pair.packet_id || seq > nack_pair.packet_id.saturating_add(16) {
             pairs.push(nack_pair);
-            nack_pair.packet_id = seq;
+            nack_pair = NackPair::new(seq);
             continue;
         }
 
