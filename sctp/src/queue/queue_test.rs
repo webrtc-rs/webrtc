@@ -272,14 +272,14 @@ fn test_pending_base_queue_out_of_bounce() -> Result<()> {
 
 // NOTE: TSN is not used in pendingQueue in the actual usage.
 //       Following tests use TSN field as a chunk ID.
-#[test]
-fn test_pending_queue_push_and_pop() -> Result<()> {
+#[tokio::test]
+async fn test_pending_queue_push_and_pop() -> Result<()> {
     let pq = PendingQueue::new();
-    pq.push(make_data_chunk(0, false, NO_FRAGMENT));
+    pq.push(make_data_chunk(0, false, NO_FRAGMENT)).await;
     assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
-    pq.push(make_data_chunk(1, false, NO_FRAGMENT));
+    pq.push(make_data_chunk(1, false, NO_FRAGMENT)).await;
     assert_eq!(20, pq.get_num_bytes(), "total bytes mismatch");
-    pq.push(make_data_chunk(2, false, NO_FRAGMENT));
+    pq.push(make_data_chunk(2, false, NO_FRAGMENT)).await;
     assert_eq!(30, pq.get_num_bytes(), "total bytes mismatch");
 
     for i in 0..3 {
@@ -295,9 +295,9 @@ fn test_pending_queue_push_and_pop() -> Result<()> {
 
     assert_eq!(0, pq.get_num_bytes(), "total bytes mismatch");
 
-    pq.push(make_data_chunk(3, false, NO_FRAGMENT));
+    pq.push(make_data_chunk(3, false, NO_FRAGMENT)).await;
     assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
-    pq.push(make_data_chunk(4, false, NO_FRAGMENT));
+    pq.push(make_data_chunk(4, false, NO_FRAGMENT)).await;
     assert_eq!(20, pq.get_num_bytes(), "total bytes mismatch");
 
     for i in 3..5 {
@@ -316,17 +316,17 @@ fn test_pending_queue_push_and_pop() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_pending_queue_unordered_wins() -> Result<()> {
+#[tokio::test]
+async fn test_pending_queue_unordered_wins() -> Result<()> {
     let pq = PendingQueue::new();
 
-    pq.push(make_data_chunk(0, false, NO_FRAGMENT));
+    pq.push(make_data_chunk(0, false, NO_FRAGMENT)).await;
     assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
-    pq.push(make_data_chunk(1, true, NO_FRAGMENT));
+    pq.push(make_data_chunk(1, true, NO_FRAGMENT)).await;
     assert_eq!(20, pq.get_num_bytes(), "total bytes mismatch");
-    pq.push(make_data_chunk(2, false, NO_FRAGMENT));
+    pq.push(make_data_chunk(2, false, NO_FRAGMENT)).await;
     assert_eq!(30, pq.get_num_bytes(), "total bytes mismatch");
-    pq.push(make_data_chunk(3, true, NO_FRAGMENT));
+    pq.push(make_data_chunk(3, true, NO_FRAGMENT)).await;
     assert_eq!(40, pq.get_num_bytes(), "total bytes mismatch");
 
     let c = pq.peek();
@@ -366,15 +366,15 @@ fn test_pending_queue_unordered_wins() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_pending_queue_fragments() -> Result<()> {
+#[tokio::test]
+async fn test_pending_queue_fragments() -> Result<()> {
     let pq = PendingQueue::new();
-    pq.push(make_data_chunk(0, false, FRAG_BEGIN));
-    pq.push(make_data_chunk(1, false, FRAG_MIDDLE));
-    pq.push(make_data_chunk(2, false, FRAG_END));
-    pq.push(make_data_chunk(3, true, FRAG_BEGIN));
-    pq.push(make_data_chunk(4, true, FRAG_MIDDLE));
-    pq.push(make_data_chunk(5, true, FRAG_END));
+    pq.push(make_data_chunk(0, false, FRAG_BEGIN)).await;
+    pq.push(make_data_chunk(1, false, FRAG_MIDDLE)).await;
+    pq.push(make_data_chunk(2, false, FRAG_END)).await;
+    pq.push(make_data_chunk(3, true, FRAG_BEGIN)).await;
+    pq.push(make_data_chunk(4, true, FRAG_MIDDLE)).await;
+    pq.push(make_data_chunk(5, true, FRAG_END)).await;
 
     let expects = vec![3, 4, 5, 0, 1, 2];
 
@@ -393,10 +393,10 @@ fn test_pending_queue_fragments() -> Result<()> {
 
 // Once decided ordered or unordered, the decision should persist until
 // it pops a chunk with ending_fragment flags set to true.
-#[test]
-fn test_pending_queue_selection_persistence() -> Result<()> {
+#[tokio::test]
+async fn test_pending_queue_selection_persistence() -> Result<()> {
     let pq = PendingQueue::new();
-    pq.push(make_data_chunk(0, false, FRAG_BEGIN));
+    pq.push(make_data_chunk(0, false, FRAG_BEGIN)).await;
 
     let c = pq.peek();
     assert!(c.is_some(), "peek error");
@@ -406,9 +406,9 @@ fn test_pending_queue_selection_persistence() -> Result<()> {
     let result = pq.pop(beginning_fragment, unordered);
     assert!(result.is_some(), "should not error: {}", 0);
 
-    pq.push(make_data_chunk(1, true, NO_FRAGMENT));
-    pq.push(make_data_chunk(2, false, FRAG_MIDDLE));
-    pq.push(make_data_chunk(3, false, FRAG_END));
+    pq.push(make_data_chunk(1, true, NO_FRAGMENT)).await;
+    pq.push(make_data_chunk(2, false, FRAG_MIDDLE)).await;
+    pq.push(make_data_chunk(3, false, FRAG_END)).await;
 
     let expects = vec![2, 3, 1];
 
@@ -432,7 +432,8 @@ async fn test_pending_queue_append() -> Result<()> {
         make_data_chunk(0, false, NO_FRAGMENT),
         make_data_chunk(1, false, NO_FRAGMENT),
         make_data_chunk(3, false, NO_FRAGMENT),
-    ]);
+    ])
+    .await;
     assert_eq!(30, pq.get_num_bytes(), "total bytes mismatch");
     assert_eq!(3, pq.len(), "len mismatch");
 

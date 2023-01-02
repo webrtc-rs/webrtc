@@ -83,7 +83,7 @@ async fn main() -> Result<(), Error> {
         while ping_seq_num < 10 {
             let ping_msg = format!("ping {}", ping_seq_num);
             println!("sent: {}", ping_msg);
-            stream_tx.write(&Bytes::from(ping_msg))?;
+            stream_tx.write(&Bytes::from(ping_msg)).await?;
 
             ping_seq_num += 1;
         }

@@ -347,7 +347,7 @@ impl AssociationInternal {
     ) -> Vec<Packet> {
         // Pop unsent data chunks from the pending queue to send as much as
         // cwnd and rwnd allow.
-        let (chunks, sis_to_reset) = self.pop_pending_data_chunks_to_send();
+        let (chunks, sis_to_reset) = self.pop_pending_data_chunks_to_send().await;
         if !chunks.is_empty() {
             // Start timer. (noop if already started)
             log::trace!("[{}] T3-rtx timer start (pt1)", self.name);
@@ -1717,7 +1717,7 @@ impl AssociationInternal {
         self.handle_peer_last_tsn_and_acknowledgement(false)
     }
 
-    fn send_reset_request(&mut self, stream_identifier: u16) -> Result<()> {
+    async fn send_reset_request(&mut self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrResetPacketInStateNotExist);
@@ -1733,7 +1733,7 @@ impl AssociationInternal {
             ..Default::default()
         };
 
-        self.pending_queue.push(c);
+        self.pending_queue.push(c).await;
         self.awake_write_loop();
 
         Ok(())
@@ -1798,7 +1798,7 @@ impl AssociationInternal {
     }
 
     /// Move the chunk peeked with self.pending_queue.peek() to the inflight_queue.
-    fn move_pending_data_chunk_to_inflight_queue(
+    async fn move_pending_data_chunk_to_inflight_queue(
         &mut self,
         beginning_fragment: bool,
         unordered: bool,
@@ -1840,7 +1840,7 @@ impl AssociationInternal {
 
     /// pop_pending_data_chunks_to_send pops chunks from the pending queues as many as
     /// the cwnd and rwnd allows to send.
-    fn pop_pending_data_chunks_to_send(&mut self) -> (Vec<ChunkPayloadData>, Vec<u16>) {
+    async fn pop_pending_data_chunks_to_send(&mut self) -> (Vec<ChunkPayloadData>, Vec<u16>) {
         let mut chunks = vec![];
         let mut sis_to_reset = vec![]; // stream identifiers to reset
 
@@ -1885,8 +1885,9 @@ impl AssociationInternal {
 
             self.rwnd -= data_len as u32;
 
-            if let Some(chunk) =
-                self.move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+            if let Some(chunk) = self
+                .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                .await
             {
                 chunks.push(chunk);
             }
@@ -1898,8 +1899,9 @@ impl AssociationInternal {
             if let Some(c) = self.pending_queue.peek() {
                 let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
-                if let Some(chunk) =
-                    self.move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                if let Some(chunk) = self
+                    .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                    .await
                 {
                     chunks.push(chunk);
                 }

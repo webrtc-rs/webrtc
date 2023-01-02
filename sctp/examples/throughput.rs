@@ -136,7 +136,7 @@ fn main() -> Result<(), Error> {
 
                 let mut now = tokio::time::Instant::now();
                 let mut pkt_num = 0;
-                while stream.write(&buf.clone().into()).is_ok() {
+                while stream.write(&buf.clone().into()).await.is_ok() {
                     pkt_num += 1;
                     if now.elapsed().as_secs() == 1 {
                         println!("Send {} pkts", pkt_num);
