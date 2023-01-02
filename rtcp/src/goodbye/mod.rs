@@ -158,7 +158,7 @@ impl Unmarshal for Goodbye {
             return Err(Error::PacketTooShort.into());
         }
 
-        let reason_offset = (HEADER_LENGTH + header.count as usize * SSRC_LENGTH) as usize;
+        let reason_offset = HEADER_LENGTH + header.count as usize * SSRC_LENGTH;
 
         if reason_offset > raw_packet_len {
             return Err(Error::PacketTooShort.into());

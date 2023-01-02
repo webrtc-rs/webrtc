@@ -254,16 +254,16 @@ pub fn unpack_resource_body(
     length: usize,
 ) -> Result<(Box<dyn ResourceBody>, usize)> {
     let mut rb: Box<dyn ResourceBody> = match typ {
-        DnsType::A => Box::new(AResource::default()),
-        DnsType::Ns => Box::new(NsResource::default()),
-        DnsType::Cname => Box::new(CnameResource::default()),
-        DnsType::Soa => Box::new(SoaResource::default()),
-        DnsType::Ptr => Box::new(PtrResource::default()),
-        DnsType::Mx => Box::new(MxResource::default()),
-        DnsType::Txt => Box::new(TxtResource::default()),
-        DnsType::Aaaa => Box::new(AaaaResource::default()),
-        DnsType::Srv => Box::new(SrvResource::default()),
-        DnsType::Opt => Box::new(OptResource::default()),
+        DnsType::A => Box::<AResource>::default(),
+        DnsType::Ns => Box::<NsResource>::default(),
+        DnsType::Cname => Box::<CnameResource>::default(),
+        DnsType::Soa => Box::<SoaResource>::default(),
+        DnsType::Ptr => Box::<PtrResource>::default(),
+        DnsType::Mx => Box::<MxResource>::default(),
+        DnsType::Txt => Box::<TxtResource>::default(),
+        DnsType::Aaaa => Box::<AaaaResource>::default(),
+        DnsType::Srv => Box::<SrvResource>::default(),
+        DnsType::Opt => Box::<OptResource>::default(),
         _ => return Err(Error::ErrNilResourceBody),
     };
 

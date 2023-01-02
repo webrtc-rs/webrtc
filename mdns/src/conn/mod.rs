@@ -267,7 +267,7 @@ impl DnsConn {
                         Ok((len, addr)) => {
                             n = len;
                             src = addr;
-                            log::info!("Received new connection from {:?}", addr);
+                            log::trace!("Received new connection from {:?}", addr);
                         },
 
                         Err(err) => {

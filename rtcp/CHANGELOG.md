@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.7.2
+
+* [#372 Fix over-NACK due not resetting lost_packets bitmask](https://github.com/webrtc-rs/webrtc/pull/372/)
+
 ## v0.7.1
 
 * Increased minimum support rust version to `1.60.0`.

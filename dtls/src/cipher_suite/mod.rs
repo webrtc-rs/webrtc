@@ -165,7 +165,7 @@ pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Se
             Ok(Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()))
         }
         CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
-            Ok(Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()))
+            Ok(Box::<CipherSuiteTlsPskWithAes128GcmSha256>::default())
         }
         _ => Err(Error::ErrInvalidCipherSuite),
     }
@@ -191,7 +191,7 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
         Box::new(CipherSuiteAes256CbcSha::new(true)),
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm()),
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()),
-        Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()),
+        Box::<CipherSuiteTlsPskWithAes128GcmSha256>::default(),
     ]
 }
 

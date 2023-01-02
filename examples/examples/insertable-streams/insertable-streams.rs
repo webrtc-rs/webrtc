@@ -155,7 +155,7 @@ async fn main() -> Result<()> {
         let (mut ivf, header) = IVFReader::new(reader)?;
 
         // Wait for connection established
-        let _ = notify_video.notified().await;
+        notify_video.notified().await;
 
         println!("play video from disk file output.ivf");
 
@@ -259,7 +259,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 

@@ -120,7 +120,7 @@ impl AgentInternal {
                         Box::new(BINDING_REQUEST),
                         Box::new(TransactionId::new()),
                         Box::new(Username::new(ATTR_USERNAME, username)),
-                        Box::new(UseCandidateAttr::default()),
+                        Box::<UseCandidateAttr>::default(),
                         Box::new(AttrControlling(self.tie_breaker.load(Ordering::SeqCst))),
                         Box::new(PriorityAttr(pair.local.priority())),
                         Box::new(MessageIntegrity::new_short_term_integrity(
