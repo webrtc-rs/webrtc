@@ -69,7 +69,7 @@ impl PendingQueue {
         let user_data_len = c.user_data.len();
 
         {
-            let sem_lock = self.semaphore_lock.lock().await;
+            self.semaphore_lock.lock().await;
             let permits = self.semaphore.acquire_many(user_data_len as u32).await;
             // unwrap ok because we never close the semaphore unless we have dropped self
             permits.unwrap().forget();
@@ -81,7 +81,6 @@ impl PendingQueue {
                 let mut ordered_queue = self.ordered_queue.write();
                 ordered_queue.push_back(c);
             }
-            drop(sem_lock);
         }
 
         self.n_bytes.fetch_add(user_data_len, Ordering::SeqCst);
@@ -103,7 +102,7 @@ impl PendingQueue {
         if total_user_data_len >= QUEUE_APPEND_LARGE {
             self.append_large(chunks).await
         } else {
-            let sem_lock = self.semaphore_lock.lock().await;
+            self.semaphore_lock.lock().await;
             let permits = self
                 .semaphore
                 .acquire_many(total_user_data_len as u32)
@@ -111,14 +110,13 @@ impl PendingQueue {
             // unwrap ok because we never close the semaphore unless we have dropped self
             permits.unwrap().forget();
             self.append_unlimited(chunks, total_user_data_len);
-            drop(sem_lock);
         }
     }
 
     // If this is a very large message we append chunks one by one to allow progress while we are appending
     async fn append_large(&self, chunks: Vec<ChunkPayloadData>) {
         // lock this for the whole duration
-        let sem_lock = self.semaphore_lock.lock().await;
+        self.semaphore_lock.lock().await;
 
         for chunk in chunks.into_iter() {
             let user_data_len = chunk.user_data.len();
@@ -136,8 +134,6 @@ impl PendingQueue {
             self.n_bytes.fetch_add(user_data_len, Ordering::SeqCst);
             self.queue_len.fetch_add(1, Ordering::SeqCst);
         }
-
-        drop(sem_lock);
     }
 
     /// Assumes that A) enough permits have been acquired and forget from the semaphore and that the semaphore_lock is held
