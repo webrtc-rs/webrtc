@@ -20,7 +20,6 @@ const QUEUE_BYTES_LIMIT: usize = 128 * 1024;
 /// added to the pending queue one by one.
 const QUEUE_APPEND_LARGE: usize = (QUEUE_BYTES_LIMIT * 2) / 3;
 
-
 /// Basic queue for either ordered or unordered chunks.
 pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
 
@@ -69,7 +68,7 @@ impl PendingQueue {
         let user_data_len = c.user_data.len();
 
         {
-            self.semaphore_lock.lock().await;
+            let _sem_lock = self.semaphore_lock.lock().await;
             let permits = self.semaphore.acquire_many(user_data_len as u32).await;
             // unwrap ok because we never close the semaphore unless we have dropped self
             permits.unwrap().forget();
@@ -102,7 +101,7 @@ impl PendingQueue {
         if total_user_data_len >= QUEUE_APPEND_LARGE {
             self.append_large(chunks).await
         } else {
-            self.semaphore_lock.lock().await;
+            let _sem_lock = self.semaphore_lock.lock().await;
             let permits = self
                 .semaphore
                 .acquire_many(total_user_data_len as u32)
@@ -116,7 +115,7 @@ impl PendingQueue {
     // If this is a very large message we append chunks one by one to allow progress while we are appending
     async fn append_large(&self, chunks: Vec<ChunkPayloadData>) {
         // lock this for the whole duration
-        self.semaphore_lock.lock().await;
+        let _sem_lock = self.semaphore_lock.lock().await;
 
         for chunk in chunks.into_iter() {
             let user_data_len = chunk.user_data.len();
