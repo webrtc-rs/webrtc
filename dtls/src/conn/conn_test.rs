@@ -2451,12 +2451,10 @@ async fn test_renegotation_info() -> Result<()> {
                 HandshakeMessage::HelloVerifyRequest(hvr) => hvr,
                 _ => {
                     panic!("unexpected handshake message");
-                    return Ok(());
                 }
             },
             _ => {
                 panic!("unexpected content");
-                return Ok(());
             }
         };
 
@@ -2478,12 +2476,10 @@ async fn test_renegotation_info() -> Result<()> {
                 HandshakeMessage::ServerHello(sh) => sh,
                 _ => {
                     panic!("unexpected handshake message");
-                    return Ok(());
                 }
             },
             _ => {
                 panic!("unexpected content");
-                return Ok(());
             }
         };
 
