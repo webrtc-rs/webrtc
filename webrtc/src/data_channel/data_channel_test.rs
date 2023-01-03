@@ -298,7 +298,7 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
                         })
                     }));
 
-                    if let Err(_) = dc1.send_text("Ping".to_owned()).await {
+                    if dc1.send_text("Ping".to_owned()).await.is_err() {
                         // wasm binding doesn't fire OnOpen (we probably already missed it)
                         let dc2 = Arc::clone(&dc1);
                         dc1.on_open(Box::new(move || {
@@ -869,7 +869,7 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
         let dc3 = Arc::clone(&dc2);
         Box::pin(async move {
             for _ in 0..10 {
-                if let Err(_) = dc3.send(&buf).await {
+                if dc3.send(&buf).await.is_err() {
                     panic!("Failed to send string on data channel");
                 }
                 assert_eq!(
