@@ -3,7 +3,7 @@ save-to-disk-h264 is a simple application that shows how to record your webcam/m
 
 ## Instructions
 ### Build save-to-disk-h264
-```
+```shell
 cargo build --example save-to-disk-h264
 ```
 

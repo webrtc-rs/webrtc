@@ -121,7 +121,7 @@ All webrtc dependent crates and examples are included in this repository at the 
 
 To build all webrtc examples:
 
-```
+```shell
 cd examples
 cargo test # build all examples (maybe very slow)
 #[ or just build single example (much faster)
@@ -133,7 +133,7 @@ cargo build --example play-from-disk-h264 # build play-from-disk-h264 example on
 
 To build webrtc crate:
 
-```
+```shell
 cargo build [or clippy or test or fmt]
 ```
 

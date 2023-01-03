@@ -3,7 +3,7 @@ reflect demonstrates how with one PeerConnection you can send video to webrtc-rs
 
 ## Instructions
 ### Build reflect
-```
+```shell
 cargo build --example reflect
 ```
 

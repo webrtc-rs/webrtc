@@ -3,7 +3,7 @@ rtp-forwarder is a simple application that shows how to forward your webcam/micr
 
 ## Instructions
 ### Build rtp-forwarder
-```
+```shell
 cargo build --example rtp-forwarder
 ```
 

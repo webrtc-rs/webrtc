@@ -4,12 +4,12 @@ ice-restart demonstrates WebRTC.rs ICE Restart abilities.
 ## Instructions
 
 ### Build ice-restart
-```
+```shell
 cargo build --example ice-restart
 ```
 
 ### Run ice-restart
-```
+```shell
 cargo run --example ice-restart
 ```
 

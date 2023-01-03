@@ -3,7 +3,7 @@ data-channels-create is a WebRTC.rs application that shows how you can send/recv
 
 ## Instructions
 ### Build data-channels-create
-```
+```shell
 cargo build --example data-channels-create
 ```
 
