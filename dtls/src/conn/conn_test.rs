@@ -2485,11 +2485,8 @@ async fn test_renegotation_info() -> Result<()> {
 
         let mut got_negotation_info = false;
         for v in &server_hello.extensions {
-            match v {
-                Extension::RenegotiationInfo(_) => {
-                    got_negotation_info = true;
-                }
-                _ => {}
+            if let Extension::RenegotiationInfo(_) = v {
+                got_negotation_info = true;
             }
         }
 
