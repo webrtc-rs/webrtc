@@ -184,7 +184,7 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     .await;
     //  2. read it
     let mut buf = [0; 5];
-    poll_stream.read(&mut buf).await?;
+    poll_stream.read_exact(&mut buf).await?;
     assert_eq!(buf, [0, 1, 2, 3, 4]);
 
     // shutdown write
@@ -202,7 +202,7 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     })
     .await;
     let mut buf = [0; 5];
-    poll_stream.read(&mut buf).await?;
+    poll_stream.read_exact(&mut buf).await?;
     assert_eq!(buf, [5, 6, 7, 8, 9]);
 
     // misc.
