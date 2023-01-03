@@ -126,7 +126,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
         assert!(transport.conn().await.is_none());
     }
 
-    close_pair_now(&mut pc_offer, &mut pc_answer).await;
+    close_pair_now(&pc_offer, &pc_answer).await;
 
     Ok(())
 }
