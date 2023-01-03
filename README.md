@@ -51,22 +51,18 @@
 <a href="https://avstack.io/?utm_medium=social&utm_source=github&utm_campaign=webrtc-rs-sponsorship" target="_blank"><img src="https://avstack.io/assets/logo-full-lightbg.b880ab9e.svg" alt="AVStack" style="width:12rem"></a>
 </p>
 
-#
-
 <details>
 <summary><b>Table of Content</b></summary>
 
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-  - [Toolchain(MSRV)](#toolchain)
+  - [Toolchain](#toolchain)
   - [Monorepo Setup](#monorepo-setup)
-  - [Testing with Local Dependencies](#testing-with-local-dependencies)
-- [Open Source License](#open-source-license) 
+- [Open Source License](#open-source-license)
 - [Contributing](#contributing)
-</details>
 
-#
+</details>
 
 ## Overview
 
