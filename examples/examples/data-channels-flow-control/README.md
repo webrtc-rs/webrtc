@@ -8,7 +8,7 @@ This example demonstrates how to use the following property / methods.
 * pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn)
 
 These methods are equivalent to that of JavaScript WebRTC API.
-See https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel for more details.
+See <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel> for more details.
 
 ## When do we need it?
 
