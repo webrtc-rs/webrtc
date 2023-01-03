@@ -3,7 +3,7 @@ data-channels is a WebRTC.rs application that shows how you can send/recv DataCh
 
 ## Instructions
 ### Build data-channels
-shell
+```shell
 cargo build --example data-channels
 ```
 
