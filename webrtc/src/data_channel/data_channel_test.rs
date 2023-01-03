@@ -329,7 +329,7 @@ async fn test_data_channel_close() -> Result<()> {
 
     // "Close after PeerConnection Closed"
     {
-        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+        let (offer_pc, answer_pc) = new_pair(&api).await?;
 
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
@@ -339,7 +339,7 @@ async fn test_data_channel_close() -> Result<()> {
 
     // "Close before connected"
     {
-        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+        let (offer_pc, answer_pc) = new_pair(&api).await?;
 
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
