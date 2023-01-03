@@ -50,22 +50,18 @@
 <a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a>
 </p>
 
-#
-
 <details>
 <summary><b>Table of Content</b></summary>
 
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-  - [Toolchain(MSRV)](#toolchain)
+  - [Toolchain](#toolchain)
   - [Monorepo Setup](#monorepo-setup)
-  - [Testing with Local Dependencies](#testing-with-local-dependencies)
-- [Open Source License](#open-source-license) 
+- [Open Source License](#open-source-license)
 - [Contributing](#contributing)
-</details>
 
-#
+</details>
 
 ## Overview
 
