@@ -336,7 +336,7 @@ async fn test_data_channel_close() -> Result<()> {
 
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
-        close_pair_now(&mut offer_pc, &mut answer_pc).await;
+        close_pair_now(&offer_pc, &answer_pc).await;
         dc.close().await?;
     }
 
@@ -347,7 +347,7 @@ async fn test_data_channel_close() -> Result<()> {
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
         dc.close().await?;
-        close_pair_now(&mut offer_pc, &mut answer_pc).await;
+        close_pair_now(&offer_pc, &answer_pc).await;
     }
 
     Ok(())

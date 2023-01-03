@@ -44,7 +44,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
     //"GetFrom"
     {
         let mut decoded = Message::new();
-        decoded.write(&mut m.raw)?;
+        decoded.write(&m.raw)?;
 
         let mut num_decoded = ChannelNumber::default();
         num_decoded.get_from(&decoded)?;

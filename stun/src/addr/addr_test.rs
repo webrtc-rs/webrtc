@@ -17,7 +17,7 @@ fn test_mapped_address() -> Result<()> {
         //"GetFrom"
         {
             let mut got = MappedAddress::default();
-            got.get_from(&mut m)?;
+            got.get_from(&m)?;
             assert_eq!(got.ip, addr.ip, "got bad IP: {}", got.ip);
 
             //"Not found"
