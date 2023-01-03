@@ -239,7 +239,7 @@ async fn test_assoc_reliable_simple() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -632,8 +632,8 @@ async fn test_assoc_reliable_retransmission() -> Result<()> {
     .init();*/
 
     const SI: u16 = 6;
-    const MSG1: Bytes = Bytes::from_static(b"ABC");
-    const MSG2: Bytes = Bytes::from_static(b"DEFG");
+    static MSG1: Bytes = Bytes::from_static(b"ABC");
+    static MSG2: Bytes = Bytes::from_static(b"DEFG");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -710,7 +710,7 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"Hello");
+    static MSG: Bytes = Bytes::from_static(b"Hello");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1806,7 +1806,7 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1905,7 +1905,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
