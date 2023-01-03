@@ -3,19 +3,19 @@
  <br>
 </h1>
 <p align="center">
- <a href="https://github.com/webrtc-rs/webrtc/actions"> 
+ <a href="https://github.com/webrtc-rs/webrtc/actions">
   <img src="https://github.com/webrtc-rs/webrtc/workflows/webrtc/badge.svg?branch=master">
- </a> 
- <a href="https://codecov.io/gh/webrtc-rs/webrtc"> 
+ </a>
+ <a href="https://codecov.io/gh/webrtc-rs/webrtc">
   <img src="https://codecov.io/gh/webrtc-rs/webrtc/branch/master/graph/badge.svg">
  </a>
- <a href="https://deps.rs/repo/github/webrtc-rs/webrtc"> 
+ <a href="https://deps.rs/repo/github/webrtc-rs/webrtc">
   <img src="https://deps.rs/repo/github/webrtc-rs/webrtc/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc"> 
+ <a href="https://crates.io/crates/webrtc">
   <img src="https://img.shields.io/crates/v/webrtc.svg">
- </a> 
- <a href="https://docs.rs/webrtc"> 
+ </a>
+ <a href="https://docs.rs/webrtc">
   <img src="https://docs.rs/webrtc/badge.svg">
  </a>
  <a href="https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license">
@@ -26,7 +26,7 @@
  </a>
  <a href="https://twitter.com/WebRTCrs">
   <img src="https://img.shields.io/twitter/url/https/twitter.com/webrtcrs.svg?style=social&label=%40WebRTCrs" alt="Twitter">
- </a>  
+ </a>
 </p>
 <p align="center">
  A pure Rust implementation of WebRTC stack. Rewrite <a href="http://Pion.ly">Pion</a> WebRTC stack in Rust
@@ -128,7 +128,7 @@ cargo test # build all examples (maybe very slow)
 cargo build --example play-from-disk-vpx # build play-from-disk-vpx example only
 cargo build --example play-from-disk-h264 # build play-from-disk-h264 example only
 #...
-#]   
+#]
 ```
 
 To build webrtc crate:
