@@ -414,93 +414,39 @@ fn test_resource_not_started() -> Result<()> {
     let tests: Vec<(&str, Box<dyn Fn(&mut Parser<'_>) -> Result<()>>)> = vec![
         (
             "CNAMEResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "MXResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "NSResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "PTRResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "SOAResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "TXTResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "SRVResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "AResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "AAAAResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
     ];
 
@@ -662,43 +608,19 @@ fn test_skip_after_read() -> Result<()> {
     let tests: Vec<(&str, Box<dyn Fn(&mut Parser<'_>) -> Result<()>>)> = vec![
         (
             "Question",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.question() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.question().map(|_| ()) }),
         ),
         (
             "Answer",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.answer() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.answer().map(|_| ()) }),
         ),
         (
             "Authority",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.authority() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.authority().map(|_| ()) }),
         ),
         (
             "Additional",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.additional() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.additional().map(|_| ()) }),
         ),
     ];
 
