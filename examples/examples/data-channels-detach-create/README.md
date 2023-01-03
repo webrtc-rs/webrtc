@@ -6,7 +6,7 @@ This allows direct access the the underlying [webrtc-rs/data](https://github.com
 The example mirrors the data-channels-create example.
 
 ## Install
-```
+```shell
 cargo build --example data-channels-detach-create
 ```
 

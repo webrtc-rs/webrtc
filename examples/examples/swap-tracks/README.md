@@ -3,7 +3,7 @@ swap-tracks demonstrates how to swap multiple incoming tracks on a single outgoi
 
 ## Instructions
 ### Build swap-tracks
-```
+```shell
 cargo build --example swap-tracks
 ```
 

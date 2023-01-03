@@ -8,7 +8,7 @@ In this example we have defined a simple JSON based signaling protocol.
 
 ## Instructions
 ### Build ortc
-```
+```shell
 cargo build --example ortc
 ```
 

@@ -8,12 +8,12 @@ E2E encyption, add metadata or insert a completely different video feed!
 
 ## Instructions
 ### Create IVF named `output.ivf` that contains a VP8 track
-```
+shell
 ffmpeg -i $INPUT_FILE -g 30 output.ivf
 ```
 
 ### Build insertable-streams
-```
+```shell
 cargo build --example insertable-streams
 ```
 

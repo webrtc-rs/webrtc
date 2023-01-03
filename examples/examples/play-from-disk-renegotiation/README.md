@@ -6,12 +6,12 @@ For a simpler example of playing a file from disk we also have [examples/play-fr
 ## Instructions
 
 ### Build play-from-disk-renegotiation
-```
+```shell
 cargo build --example play-from-disk-renegotiation
 ```
 
 ### Create IVF named `output.ivf` that contains a VP8 track
-```
+```shell
 ffmpeg -i $INPUT_FILE -g 30 output.ivf
 ```
 

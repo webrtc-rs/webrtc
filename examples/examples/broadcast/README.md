@@ -5,7 +5,7 @@ This could serve as the building block to building conferencing software, and ot
 
 ## Instructions
 ### Build broadcast
-```
+```shell
 cargo build --example broadcast
 ```
 

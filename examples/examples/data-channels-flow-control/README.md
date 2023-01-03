@@ -25,7 +25,7 @@ application to pace the amount of data to be pushed into the data channel.
 ## How to run the example code
 The demo code implements two endpoints (requester and responder) in it.
 
-```
+```plain
                         signaling messages
            +----------------------------------------+
            |                                        |
@@ -45,7 +45,7 @@ Once the data channel is successfully opened, requester will start sending a ser
 
 Here's how to run the code:
 
-```
+```shell
 $ cargo run --release --example data-channels-flow-control
     Finished release [optimized] target(s) in 0.36s
      Running `target\release\examples\data-channels-flow-control.exe`

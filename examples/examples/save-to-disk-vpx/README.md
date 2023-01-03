@@ -3,7 +3,7 @@ save-to-disk-vpx is a simple application that shows how to record your webcam/mi
 
 ## Instructions
 ### Build save-to-disk-vpx
-```
+```shell
 cargo build --example save-to-disk-vpx
 ```
 
