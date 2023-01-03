@@ -7,7 +7,7 @@ is selected.
 
 ## Instructions
 ### Build simulcast
-shell
+```shell
 cargo build --example simulcast
 ```
 
