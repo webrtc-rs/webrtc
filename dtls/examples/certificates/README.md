@@ -30,27 +30,26 @@ in pion/examples/util/util.go, convert ECPrivateKey to PKCS8PrivateKey
 func LoadKey(path string) (crypto.PrivateKey, error) {
     ....
     if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
-		b, err := x509.MarshalPKCS8PrivateKey(key)
-		if err != nil {
-			return nil, err
-		}
-		var pemPrivateBlock = &pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: b,
-		}
-		pemPrivateFile, err := os.Create(path+".private_key.pem")
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		err = pem.Encode(pemPrivateFile, pemPrivateBlock)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		pemPrivateFile.Close()
+```        b, err := x509.MarshalPKCS8PrivateKey(key)
+        if err != nil {
+            return nil, err
+        }
+        var pemPrivateBlock = &pem.Block{
+            Type:  "PRIVATE KEY",
+            Bytes: b,
+        }
+        pemPrivateFile, err := os.Create(path+".private_key.pem")
+        if err != nil {
+            fmt.Println(err)
+            os.Exit(1)
+        }
+        err = pem.Encode(pemPrivateFile, pemPrivateBlock)
+        if err != nil {
+            fmt.Println(err)
+            os.Exit(1)
+        }
+        pemPrivateFile.Close()
 
-		return key, nil
-	}
-	...
-```
+        return key, nil
+    }
+    ...
