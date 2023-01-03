@@ -172,7 +172,7 @@ fn test_marshal() -> Result<()> {
 
     let actual = sd.marshal();
     assert!(
-        &actual == CANONICAL_MARSHAL_SDP,
+        actual == CANONICAL_MARSHAL_SDP,
         "error:\n\nEXPECTED:\n{}\nACTUAL:\n{}!!!!\n",
         CANONICAL_MARSHAL_SDP,
         actual
