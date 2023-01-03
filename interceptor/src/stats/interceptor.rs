@@ -872,7 +872,7 @@ mod test {
         )
         .await;
 
-        let _ = recv_stream
+        recv_stream
             .receive_rtp(rtp::packet::Packet {
                 header: rtp::header::Header {
                     ssrc: 123456,
