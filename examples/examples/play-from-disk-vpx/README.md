@@ -22,7 +22,8 @@ The `output_vp8.ivf`/`output_vp9.ivf` you created should be in the same director
 
 #### Linux/macOS
 1. Run `echo $BROWSER_SDP | ./target/debug/examples/play-from-disk-vpx -v examples/test-data/output_vp8.ivf -a examples/test-data/output.ogg`
-2. Run `echo $BROWSER_SDP | ./target/debug/examples/play-from-disk-vpx -v examples/test-data/output_vp9.ivf -a examples/test-data/output.ogg --vp9` 
+2. Run `echo $BROWSER_SDP | ./target/debug/examples/play-from-disk-vpx -v examples/test-data/output_vp9.ivf -a examples/test-data/output.ogg --vp9`
+
 #### Windows
 1. Paste the SessionDescription into a file.
 2. Run `./target/debug/examples/play-from-disk-vpx -v examples/test-data/output_vp8.ivf -a examples/test-data/output.ogg < my_file`
