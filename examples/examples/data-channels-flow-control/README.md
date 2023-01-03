@@ -1,4 +1,5 @@
 # data-channels-flow-control
+
 This example demonstrates how to use the following property / methods.
 
 * pub async fn buffered_amount(&self) -> usize
@@ -10,6 +11,7 @@ These methods are equivalent to that of JavaScript WebRTC API.
 See https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel for more details.
 
 ## When do we need it?
+
 Send or SendText methods are called on DataChannel to send data to the connected peer.
 The methods return immediately, but it does not mean the data was actually sent onto
 the wire. Instead, it is queued in a buffer until it actually gets sent out to the wire.
@@ -23,6 +25,7 @@ actually send to the peer over the Internet. The above properties/methods help y
 application to pace the amount of data to be pushed into the data channel.
 
 ## How to run the example code
+
 The demo code implements two endpoints (requester and responder) in it.
 
 ```plain
