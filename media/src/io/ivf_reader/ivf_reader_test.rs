@@ -124,11 +124,8 @@ fn test_ivf_reader_parse_incomplete_frame_header() -> Result<()> {
     let (mut reader, _) = IVFReader::new(r)?;
 
     // Parse Frame #1
-    if let Err(err) = reader.parse_next_frame() {
-        assert!(true, "{}", err);
-    } else {
-        panic!();
-    }
+    let result = reader.parse_next_frame();
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     Ok(())
 }
@@ -146,11 +143,8 @@ fn test_ivf_reader_parse_incomplete_frame_payload() -> Result<()> {
     let (mut reader, _) = IVFReader::new(r)?;
 
     // Parse Frame #1
-    if let Err(err) = reader.parse_next_frame() {
-        assert!(true, "{}", err);
-    } else {
-        panic!();
-    }
+    let result = reader.parse_next_frame();
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     Ok(())
 }
@@ -161,11 +155,8 @@ fn test_ivf_reader_eof_when_no_frames_left() -> Result<()> {
     let r = BufReader::new(&ivf[..]);
     let (mut reader, _) = IVFReader::new(r)?;
 
-    if let Err(err) = reader.parse_next_frame() {
-        assert!(true, "{}", err);
-    } else {
-        panic!();
-    }
+    let result = reader.parse_next_frame();
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     Ok(())
 }

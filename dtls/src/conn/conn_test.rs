@@ -682,15 +682,7 @@ async fn test_client_timeout() -> Result<()> {
     // no server!
     let result = client_res_rx.recv().await;
     if let Some(client_timeout_result) = result {
-        if let Err(err) = client_timeout_result {
-            assert!(
-                true,
-                "Client error exp(Temporary network error) failed({})",
-                err
-            );
-        } else {
-            panic!("Expected Error but got Ok");
-        }
+        assert!(client_timeout_result.is_err(), "Expected Error but got Ok");
     }
 
     Ok(())
@@ -1969,15 +1961,7 @@ async fn test_server_timeout() -> Result<()> {
         create_test_server(Arc::new(cb), config, true),
     )
     .await;
-    if let Err(err) = result {
-        assert!(
-            true,
-            "Sever error exp(Temporary network error) failed({})",
-            err
-        );
-    } else {
-        panic!("Expected Error but got Ok");
-    }
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     // Wait a little longer to ensure no additional messages have been sent by the server
     //tokio::time::sleep(Duration::from_millis(300)).await;
