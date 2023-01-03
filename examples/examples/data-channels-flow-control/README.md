@@ -2,7 +2,7 @@
 This example demonstrates how to use the following property / methods.
 
 * pub async fn buffered_amount(&self) -> usize
-* pub async fn set_buffered_amount_low_threshold(&self, th: usize) 
+* pub async fn set_buffered_amount_low_threshold(&self, th: usize)
 * pub async fn buffered_amount_low_threshold(&self) -> usize
 * pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn)
 
