@@ -2476,7 +2476,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkAbort::default())],
+                chunks: vec![Box::<ChunkAbort>::default()],
             },
         ),
         (
@@ -2485,7 +2485,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkCookieEcho::default())],
+                chunks: vec![Box::<ChunkCookieEcho>::default()],
             },
         ),
         (
@@ -2494,7 +2494,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkHeartbeat::default())],
+                chunks: vec![Box::<ChunkHeartbeat>::default()],
             },
         ),
         (
@@ -2503,7 +2503,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkPayloadData::default())],
+                chunks: vec![Box::<ChunkPayloadData>::default()],
             },
         ),
         (
@@ -2530,8 +2530,8 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 destination_port: 1,
                 verification_tag: 0,
                 chunks: vec![Box::new(ChunkReconfig {
-                    param_a: Some(Box::new(ParamOutgoingResetRequest::default())),
-                    param_b: Some(Box::new(ParamReconfigResponse::default())),
+                    param_a: Some(Box::<ParamOutgoingResetRequest>::default()),
+                    param_b: Some(Box::<ParamReconfigResponse>::default()),
                 })],
             },
         ),
@@ -2553,7 +2553,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkError::default())],
+                chunks: vec![Box::<ChunkError>::default()],
             },
         ),
         (
@@ -2562,7 +2562,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdown::default())],
+                chunks: vec![Box::<ChunkShutdown>::default()],
             },
         ),
         (
@@ -2571,7 +2571,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdownAck::default())],
+                chunks: vec![Box::<ChunkShutdownAck>::default()],
             },
         ),
         (
@@ -2580,7 +2580,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdownComplete::default())],
+                chunks: vec![Box::<ChunkShutdownComplete>::default()],
             },
         ),
     ];
