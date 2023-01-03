@@ -43,7 +43,6 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
     pc_answer.on_data_channel(Box::new(|_: Arc<RTCDataChannel>| {
         panic!("A DataChannel must not be created when Fingerprint verification fails");
-        Box::pin(async {})
     }));
 
     let (offer_chan_tx, mut offer_chan_rx) = mpsc::channel::<()>(1);

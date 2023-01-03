@@ -529,14 +529,10 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
             return Box::pin(async {});
         }
         panic!("OnDataChannel must not be fired when negotiated == true");
-
-        Box::pin(async {})
     }));
 
     offer_pc.on_data_channel(Box::new(move |_d: Arc<RTCDataChannel>| {
         panic!("OnDataChannel must not be fired when negotiated == true");
-
-        Box::pin(async {})
     }));
 
     let seen_answer_message = Arc::new(AtomicBool::new(false));
@@ -1038,7 +1034,6 @@ async fn test_eof_detach() -> Result<()> {
                         Err(err) => {
                             log::debug!("Detach failed: {}", err);
                             panic!();
-                            return;
                         }
                     };
 

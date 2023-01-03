@@ -199,7 +199,6 @@ mod test {
             Ok(v) => v,
             Err(_) => {
                 panic!("timed out");
-                unreachable!()
             }
         }
     }
