@@ -404,7 +404,7 @@ fn marshal_all(pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>]) -> Result<(
 fn test_build_feedback_packet() -> Result<()> {
     let mut r = Recorder::new(5000);
 
-    let mut arrival_time = SCALE_FACTOR_REFERENCE_TIME as i64;
+    let mut arrival_time = SCALE_FACTOR_REFERENCE_TIME;
     add_run(
         &mut r,
         &[0, 1, 2, 3, 4, 5, 6, 7],
@@ -493,7 +493,7 @@ fn test_build_feedback_packet() -> Result<()> {
 fn test_build_feedback_packet_rolling() -> Result<()> {
     let mut r = Recorder::new(5000);
 
-    let mut arrival_time = SCALE_FACTOR_REFERENCE_TIME as i64;
+    let mut arrival_time = SCALE_FACTOR_REFERENCE_TIME;
     add_run(&mut r, &[3], &[arrival_time]);
 
     let rtcp_packets = r.build_feedback_packet();
