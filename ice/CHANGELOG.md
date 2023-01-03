@@ -6,7 +6,7 @@
 
 * Increased minimum support rust version to `1.60.0`.
 
-### Breaking changes  
+### Breaking changes
 
 * Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
     - `Agent`:
@@ -22,7 +22,7 @@
     - `CandidatePeerReflexiveConfig::new_candidate_peer_reflexive`;
     - `CandidateRelayConfig::new_candidate_relay`;
     - `CandidateServerReflexiveConfig::new_candidate_server_reflexive`;
-    - `Candidate`:  
+    - `Candidate`:
         - `addr`;
         - `set_ip`.
 
