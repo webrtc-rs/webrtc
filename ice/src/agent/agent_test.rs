@@ -41,7 +41,8 @@ async fn test_pair_search() -> Result<()> {
         assert!(cp.is_none(), "No Candidate pairs should exist");
     }
 
-    let _ = a.close().await?;
+    a.close().await?;
+
     Ok(())
 }
 

@@ -6,8 +6,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-const MSG1: Bytes = Bytes::from_static(b"ADC");
-const MSG2: Bytes = Bytes::from_static(b"DEFG");
+static MSG1: Bytes = Bytes::from_static(b"ADC");
+static MSG2: Bytes = Bytes::from_static(b"DEFG");
 
 #[tokio::test]
 async fn test_bridge_normal() -> Result<()> {
@@ -206,8 +206,8 @@ async fn test_bridge_reorder_packets_from_conn1() -> Result<()> {
 #[tokio::test]
 async fn test_bridge_inverse_error() -> Result<()> {
     let mut q = VecDeque::new();
-    q.push_back(MSG1);
-    assert_eq!(inverse(&mut q), false);
+    q.push_back(MSG1.clone());
+    assert!(!inverse(&mut q));
     Ok(())
 }
 
