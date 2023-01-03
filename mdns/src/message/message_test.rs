@@ -956,7 +956,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(CnameResource::default())),
+                    body: Some(Box::<CnameResource>::default()),
                 })
             }),
         ),
@@ -965,7 +965,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(MxResource::default())),
+                    body: Some(Box::<MxResource>::default()),
                 })
             }),
         ),
@@ -974,7 +974,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(NsResource::default())),
+                    body: Some(Box::<NsResource>::default()),
                 })
             }),
         ),
@@ -983,7 +983,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(PtrResource::default())),
+                    body: Some(Box::<PtrResource>::default()),
                 })
             }),
         ),
@@ -992,7 +992,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(SoaResource::default())),
+                    body: Some(Box::<SoaResource>::default()),
                 })
             }),
         ),
@@ -1001,7 +1001,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(TxtResource::default())),
+                    body: Some(Box::<TxtResource>::default()),
                 })
             }),
         ),
@@ -1010,7 +1010,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(SrvResource::default())),
+                    body: Some(Box::<SrvResource>::default()),
                 })
             }),
         ),
@@ -1019,7 +1019,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(AResource::default())),
+                    body: Some(Box::<AResource>::default()),
                 })
             }),
         ),
@@ -1028,7 +1028,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(AaaaResource::default())),
+                    body: Some(Box::<AaaaResource>::default()),
                 })
             }),
         ),
@@ -1037,7 +1037,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(OptResource::default())),
+                    body: Some(Box::<OptResource>::default()),
                 })
             }),
         ),
@@ -1184,7 +1184,7 @@ fn test_resource_pack() -> Result<()> {
                 }],
                 authorities: vec![Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(NsResource::default())),
+                    body: Some(Box::<NsResource>::default()),
                 }],
                 ..Default::default()
             },
@@ -1266,7 +1266,7 @@ fn test_option_pack_unpack() -> Result<()> {
                         0xfe0 | RCode::FormatError as u32,
                         true,
                     )?,
-                    body: Some(Box::new(OptResource::default())),
+                    body: Some(Box::<OptResource>::default()),
                 }],
                 ..Default::default()
             },
