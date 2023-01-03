@@ -87,7 +87,7 @@ async fn create_new_association_pair(
     }
 
     if !a0handshake_done || !a1handshake_done {
-        return Err(Error::Other("handshake failed".to_owned()).into());
+        return Err(Error::Other("handshake failed".to_owned()));
     }
 
     drop(closed_tx);
@@ -193,7 +193,7 @@ async fn establish_session_pair(
 
     let s1 = server.accept_stream().await.unwrap();
     if s0.stream_identifier != s1.stream_identifier {
-        return Err(Error::Other("SI should match".to_owned()).into());
+        return Err(Error::Other("SI should match".to_owned()));
     }
 
     br.process().await;
@@ -202,15 +202,15 @@ async fn establish_session_pair(
     let (n, ppi) = s1.read_sctp(&mut buf).await?;
 
     if n != hello_msg.len() {
-        return Err(Error::Other("received data must by 3 bytes".to_owned()).into());
+        return Err(Error::Other("received data must by 3 bytes".to_owned()));
     }
 
     if ppi != PayloadProtocolIdentifier::Dcep {
-        return Err(Error::Other("unexpected ppi".to_owned()).into());
+        return Err(Error::Other("unexpected ppi".to_owned()));
     }
 
     if &buf[..n] != &hello_msg {
-        return Err(Error::Other("received data mismatch".to_owned()).into());
+        return Err(Error::Other("received data mismatch".to_owned()));
     }
 
     flush_buffers(br, client, server).await;
