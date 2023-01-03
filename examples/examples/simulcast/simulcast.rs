@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
     m.register_default_codecs()?;
 
     // Enable Extension Headers needed for Simulcast
-    for extension in vec![
+    for extension in [
         "urn:ietf:params:rtp-hdrext:sdes:mid",
         "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
         "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
 
     // Create Track that we send video back to browser on
     let mut output_tracks = HashMap::new();
-    for s in vec!["q", "h", "f"] {
+    for s in ["q", "h", "f"] {
         let output_track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),

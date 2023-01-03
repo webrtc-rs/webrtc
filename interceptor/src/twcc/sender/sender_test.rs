@@ -36,7 +36,7 @@ async fn test_twcc_sender_interceptor() -> Result<()> {
                 .await;
 
                 let id = i + 1;
-                for seq_num in vec![id * 1, id * 2, id * 3, id * 4, id * 5] {
+                for seq_num in [id * 1, id * 2, id * 3, id * 4, id * 5] {
                     stream
                         .write_rtp(&rtp::packet::Packet {
                             header: rtp::header::Header {
