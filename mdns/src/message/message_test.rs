@@ -1,3 +1,6 @@
+// Silence warning on complex types:
+#![allow(clippy::type_complexity)]
+
 use super::builder::*;
 use super::header::*;
 use super::name::*;

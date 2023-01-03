@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicUsize;
 #[derive(Default)]
 struct DummyObserver {
     nclosed: Arc<AtomicUsize>,
+    #[allow(clippy::type_complexity)]
     read_ch_tx: Arc<Mutex<Option<mpsc::Sender<Box<dyn Chunk + Send + Sync>>>>>,
 }
 

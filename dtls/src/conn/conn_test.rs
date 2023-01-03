@@ -707,6 +707,7 @@ async fn test_srtp_configuration() -> Result<()> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
+    #[allow(clippy::type_complexity)]
     let tests: Vec<(
         &str,
         Vec<SrtpProtectionProfile>,
