@@ -756,7 +756,7 @@ fn test_rfc8285_one_byte_set_extension_should_enable_extension_when_adding() {
     let result = p.header.set_extension(1, extension.clone());
     assert!(result.is_ok(), "Error setting extension");
 
-    assert_eq!(p.header.extension, true, "Extension should be set to true");
+    assert!(p.header.extension, "Extension should be set to true");
     assert_eq!(
         p.header.extension_profile, 0xBEDE,
         "Extension profile should be set to 0xBEDE"
@@ -967,7 +967,7 @@ fn test_rfc8285_two_bytes_set_extension_should_enable_extension_when_adding() ->
 
     p.header.set_extension(1, extension.clone())?;
 
-    assert_eq!(p.header.extension, true, "Extension should be set to true");
+    assert!(p.header.extension, "Extension should be set to true");
     assert_eq!(
         p.header.extension_profile, 0x1000,
         "Extension profile should be set to 0xBEDE"
