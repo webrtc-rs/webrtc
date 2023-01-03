@@ -186,8 +186,11 @@ fn test_chrome_channel_data() -> Result<()> {
     // All hex streams decoded to raw binary format and stored in data slice.
     // Decoding packets to messages.
     for packet in data {
-        let mut m = ChannelData::default();
-        m.raw = packet;
+        let mut m = ChannelData {
+            raw: packet,
+            ..Default::default()
+        };
+
         m.decode()?;
         let mut encoded = ChannelData {
             data: m.data.clone(),
@@ -195,8 +198,12 @@ fn test_chrome_channel_data() -> Result<()> {
             ..Default::default()
         };
         encoded.encode();
-        let mut decoded = ChannelData::default();
-        decoded.raw = encoded.raw.clone();
+
+        let mut decoded = ChannelData {
+            raw: encoded.raw.clone(),
+            ..Default::default()
+        };
+
         decoded.decode()?;
         assert_eq!(decoded, m, "should be equal");
 

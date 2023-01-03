@@ -63,9 +63,11 @@ fn create_association_internal(config: Config) -> AssociationInternal {
 
 #[test]
 fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        cumulative_tsn_ack_point: 9,
+        ..Default::default()
+    };
 
-    a.cumulative_tsn_ack_point = 9;
     a.advanced_peer_tsn_ack_point = 10;
     a.inflight_queue.push_no_check(ChunkPayloadData {
         beginning_fragment: true,
@@ -91,9 +93,11 @@ fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
 
 #[test]
 fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        cumulative_tsn_ack_point: 9,
+        ..Default::default()
+    };
 
-    a.cumulative_tsn_ack_point = 9;
     a.advanced_peer_tsn_ack_point = 12;
     a.inflight_queue.push_no_check(ChunkPayloadData {
         beginning_fragment: true,
@@ -157,9 +161,11 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     let fwdtsn = ChunkForwardTsn {
@@ -191,9 +197,11 @@ async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     // this chunk is blocked by the missing chunk at tsn=1
@@ -239,9 +247,11 @@ async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     // this chunk is blocked by the missing chunk at tsn=1
@@ -285,9 +295,11 @@ async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     let fwdtsn = ChunkForwardTsn {
