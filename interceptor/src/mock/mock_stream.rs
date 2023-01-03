@@ -308,14 +308,15 @@ mod test {
     use super::*;
     use crate::noop::NoOp;
     use crate::test::timeout_or_fail;
-    use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
     use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_mock_stream() -> Result<()> {
+        use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+
         let s = MockStream::new(&StreamInfo::default(), Arc::new(NoOp)).await;
 
-        s.write_rtcp(&[Box::new(PictureLossIndication::default())])
+        s.write_rtcp(&[Box::<PictureLossIndication>::default()])
             .await?;
         timeout_or_fail(Duration::from_millis(10), s.written_rtcp()).await;
         let result = tokio::time::timeout(Duration::from_millis(10), s.written_rtcp()).await;
@@ -332,7 +333,7 @@ mod test {
             "single rtp packet written, but multiple found"
         );
 
-        s.receive_rtcp(vec![Box::new(PictureLossIndication::default())])
+        s.receive_rtcp(vec![Box::<PictureLossIndication>::default()])
             .await;
         assert!(
             timeout_or_fail(Duration::from_millis(10), s.read_rtcp())

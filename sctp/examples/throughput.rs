@@ -110,7 +110,7 @@ fn main() -> Result<(), Error> {
             .block_on(async move {
                 let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await.unwrap());
                 conn.connect(format!("127.0.0.1:{}", port2)).await.unwrap();
-                println!("connecting {}..", format!("127.0.0.1:{}", port2));
+                println!("connecting 127.0.0.1:{}..", port2);
 
                 let config = Config {
                     net_conn: conn,
@@ -129,14 +129,12 @@ fn main() -> Result<(), Error> {
 
                 //const LEN: usize = 1200;
                 const LEN: usize = 65535;
-                let mut buf = Vec::with_capacity(LEN);
-                unsafe {
-                    buf.set_len(LEN);
-                }
+                let buf = vec![0; LEN];
+                let bytes = bytes::Bytes::from(buf);
 
                 let mut now = tokio::time::Instant::now();
                 let mut pkt_num = 0;
-                while stream.write(&buf.clone().into()).await.is_ok() {
+                while stream.write(&bytes).await.is_ok() {
                     pkt_num += 1;
                     if now.elapsed().as_secs() == 1 {
                         println!("Send {} pkts", pkt_num);
