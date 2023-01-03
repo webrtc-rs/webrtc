@@ -269,13 +269,10 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
         })
     }));
 
-    let dc = match offer_pc.create_data_channel(EXPECTED_LABEL, None).await {
-        Ok(dc) => dc,
-        Err(_) => {
-            panic!("Failed to create a PC pair for testing");
-            return Ok(());
-        }
-    };
+    let dc = offer_pc
+        .create_data_channel(EXPECTED_LABEL, None)
+        .await
+        .expect("Failed to create a PC pair for testing");
 
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
@@ -972,7 +969,7 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
             .await;
 
             for _ in 0..10 {
-                if let Err(_) = dc3.send(&buf).await {
+                if dc3.send(&buf).await.is_err() {
                     panic!("Failed to send string on data channel");
                 }
                 assert_eq!(
