@@ -124,8 +124,8 @@ fn test_fragment_buffer() -> Result<()> {
         let mut fragment_buffer = FragmentBuffer::new();
         for frag in inputs {
             let status = fragment_buffer.push(&frag)?;
-            assert_eq!(
-                true, status,
+            assert!(
+                status,
                 "fragment_buffer didn't accept fragments for '{}'",
                 name
             );

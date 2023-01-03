@@ -713,7 +713,7 @@ async fn test_populate_sdp() -> Result<()> {
                 }
             }
         }
-        assert_eq!(true, found, "Rid key should be present");
+        assert!(found, "Rid key should be present");
     }
 
     //"SetCodecPreferences"
@@ -795,7 +795,7 @@ async fn test_populate_sdp() -> Result<()> {
                 }
             }
         }
-        assert_eq!(true, found_vp8, "vp8 should be present in sdp");
+        assert!(found_vp8, "vp8 should be present in sdp");
     }
 
     Ok(())
