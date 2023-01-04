@@ -137,21 +137,22 @@ pub(crate) fn create_stream_info(
     codec: RTCRtpCodecCapability,
     webrtc_header_extensions: &[RTCRtpHeaderExtensionParameters],
 ) -> StreamInfo {
-    let mut header_extensions = vec![];
-    for h in webrtc_header_extensions {
-        header_extensions.push(RTPHeaderExtension {
+    let header_extensions: Vec<RTPHeaderExtension> = webrtc_header_extensions
+        .iter()
+        .map(|h| RTPHeaderExtension {
             id: h.id,
             uri: h.uri.clone(),
-        });
-    }
+        })
+        .collect();
 
-    let mut feedbacks = vec![];
-    for f in &codec.rtcp_feedback {
-        feedbacks.push(interceptor::stream_info::RTCPFeedback {
+    let feedbacks: Vec<_> = codec
+        .rtcp_feedback
+        .iter()
+        .map(|f| interceptor::stream_info::RTCPFeedback {
             typ: f.typ.clone(),
             parameter: f.parameter.clone(),
-        });
-    }
+        })
+        .collect();
 
     StreamInfo {
         id,

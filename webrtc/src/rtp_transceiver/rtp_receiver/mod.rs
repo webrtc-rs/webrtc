@@ -540,10 +540,10 @@ impl RTCRtpReceiver {
 
                     (
                         Some(stream_info),
-                        rtp_read_stream,
-                        rtp_interceptor,
-                        rtcp_read_stream,
-                        rtcp_interceptor,
+                        Some(rtp_read_stream),
+                        Some(rtp_interceptor),
+                        Some(rtcp_read_stream),
+                        Some(rtcp_interceptor),
                     )
                 } else {
                     (None, None, None, None, None)
@@ -600,10 +600,10 @@ impl RTCRtpReceiver {
                     "".to_owned(),
                     TrackStream {
                         stream_info: Some(stream_info),
-                        rtp_read_stream,
-                        rtp_interceptor,
-                        rtcp_read_stream,
-                        rtcp_interceptor,
+                        rtp_read_stream: Some(rtp_read_stream),
+                        rtp_interceptor: Some(rtp_interceptor),
+                        rtcp_read_stream: Some(rtcp_read_stream),
+                        rtcp_interceptor: Some(rtcp_interceptor),
                     },
                 )
                 .await?;
