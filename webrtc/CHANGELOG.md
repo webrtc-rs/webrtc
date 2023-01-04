@@ -10,7 +10,7 @@
 
 * Change `RTCPeerConnection::on_track` callback signature to `|track: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>|` [#355](https://github.com/webrtc-rs/webrtc/pull/355).
 
-* Change `RTCPeerConnection::mid` signature to `Option<String>` [#375](https://github.com/webrtc-rs/webrtc/pull/375).
+* Change `RTCPeerConnection::mid` return signature to `Option<String>` [#375](https://github.com/webrtc-rs/webrtc/pull/375).
 
 ## v0.6.0
 
