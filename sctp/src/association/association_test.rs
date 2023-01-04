@@ -2107,7 +2107,13 @@ struct FakeEchoConn {
 }
 
 impl FakeEchoConn {
-    fn new() -> impl Conn + AsAny {
+    fn type_erased() -> impl Conn + AsAny {
+        Self::default()
+    }
+}
+
+impl Default for FakeEchoConn {
+    fn default() -> Self {
         let (wr_tx, rd_rx) = mpsc::channel(1);
         FakeEchoConn {
             wr_tx: Mutex::new(wr_tx),
@@ -2200,7 +2206,7 @@ async fn test_stats() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let conn = Arc::new(FakeEchoConn::new());
+    let conn = Arc::new(FakeEchoConn::type_erased());
     let a = Association::client(Config {
         net_conn: Arc::clone(&conn) as Arc<dyn Conn + Send + Sync>,
         max_receive_buffer_size: 0,
