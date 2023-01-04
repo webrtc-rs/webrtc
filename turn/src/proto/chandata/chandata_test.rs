@@ -125,7 +125,7 @@ fn test_channel_data_decode() -> Result<()> {
                 name, want_err, err
             );
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 

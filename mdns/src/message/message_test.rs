@@ -321,7 +321,7 @@ fn test_name_pack_unpack() -> Result<()> {
             if let Err(actual_err) = result {
                 assert_eq!(actual_err, want_err);
             } else {
-                assert!(false);
+                panic!();
             }
             continue;
         } else {
@@ -372,7 +372,7 @@ fn test_incompressible_name() -> Result<()> {
             Error::ErrCompressedSrv
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())
@@ -625,28 +625,28 @@ fn test_skip_each() -> Result<()> {
     if let Err(err) = p.skip_question() {
         assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     p.skip_answer()?;
     if let Err(err) = p.skip_answer() {
         assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     p.skip_authority()?;
     if let Err(err) = p.skip_authority() {
         assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     p.skip_additional()?;
     if let Err(err) = p.skip_additional() {
         assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -715,7 +715,7 @@ fn test_skip_after_read() -> Result<()> {
         if let Err(err) = result {
             assert_eq!(err, Error::ErrSectionDone);
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -748,7 +748,7 @@ fn test_skip_not_started() -> Result<()> {
         if let Err(err) = test_fn(&mut p) {
             assert_eq!(err, Error::ErrNotStarted);
         } else {
-            assert!(false, "{} expected error, but got ok", name);
+            panic!("{} expected error, but got ok", name);
         }
     }
 
@@ -819,7 +819,7 @@ fn test_too_many_records() -> Result<()> {
                 name, got, want
             )
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -880,7 +880,7 @@ fn test_too_long_txt() -> Result<()> {
     if let Err(err) = rb.pack(vec![], &mut Some(HashMap::new()), 0) {
         assert_eq!(err, Error::ErrStringTooLong);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -940,11 +940,7 @@ fn test_start_error() -> Result<()> {
                     env_name, test_name, got_err, env_err
                 );
             } else {
-                assert!(
-                    false,
-                    "{}.{}expected error, but got ok",
-                    env_name, test_name
-                );
+                panic!("{}.{}expected error, but got ok", env_name, test_name);
             }
         }
     }
@@ -1100,11 +1096,7 @@ fn test_builder_resource_error() -> Result<()> {
                     env_name, test_name, got_err, env_err
                 );
             } else {
-                assert!(
-                    false,
-                    "{}.{}expected error, but got ok",
-                    env_name, test_name
-                );
+                panic!("{}.{}expected error, but got ok", env_name, test_name);
             }
         }
     }
@@ -1119,7 +1111,7 @@ fn test_finish_error() -> Result<()> {
     if let Err(got) = b.finish() {
         assert_eq!(got, want, "got Builder.Finish() = {}, want = {}", got, want);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -1219,7 +1211,7 @@ fn test_resource_pack() -> Result<()> {
         if let Err(err) = m.pack() {
             assert_eq!(err, want_err);
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 

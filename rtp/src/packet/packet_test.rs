@@ -226,7 +226,7 @@ fn test_rfc_8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
     if let Some(ext1) = ext1 {
         assert_eq!(ext1, ext1_expect);
     } else {
-        assert!(false, "ext1 is none");
+        panic!("ext1 is none");
     }
 
     let ext2 = p.header.get_extension(2);
@@ -234,7 +234,7 @@ fn test_rfc_8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
     if let Some(ext2) = ext2 {
         assert_eq!(ext2, ext2_expect);
     } else {
-        assert!(false, "ext2 is none");
+        panic!("ext2 is none");
     }
 
     // Test Marshal

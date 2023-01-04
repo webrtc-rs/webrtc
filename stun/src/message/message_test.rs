@@ -288,7 +288,7 @@ fn test_message_class_string() -> Result<()> {
 
     for k in v {
         if k.to_string() == *"unknown message class" {
-            assert!(false, "bad stringer {}", k);
+            panic!("bad stringer {}", k);
         }
     }
 

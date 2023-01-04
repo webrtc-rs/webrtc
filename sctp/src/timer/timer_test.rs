@@ -210,7 +210,7 @@ mod test_rtx_timer {
                     let _ = done.send(elapsed).await;
                 }
             } else {
-                assert!(false, "timer should not fail");
+                panic!("timer should not fail");
             }
         }
     }

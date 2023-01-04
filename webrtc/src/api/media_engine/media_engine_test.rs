@@ -494,7 +494,7 @@ a=fmtp:97 apt=96
         if let Err(err) = m.get_codec_by_payload(97).await {
             assert_eq!(err, Error::ErrCodecNotFound);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 

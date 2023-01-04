@@ -246,9 +246,9 @@ fn test_h265_single_nalunit_packet() -> Result<()> {
         let result = parsed.depacketize(&cur.raw);
 
         if cur.expected_err.is_some() && result.is_ok() {
-            assert!(false, "should error");
+            panic!("should error");
         } else if cur.expected_err.is_none() && result.is_err() {
-            assert!(false, "should not error");
+            panic!("should not error");
         }
 
         if let Some(expected_packet) = cur.expected_packet {
@@ -397,9 +397,9 @@ fn test_h265_aggregation_packet() -> Result<()> {
         let result = parsed.depacketize(&cur.raw);
 
         if cur.expected_err.is_some() && result.is_ok() {
-            assert!(false, "should error");
+            panic!("should error");
         } else if cur.expected_err.is_none() && result.is_err() {
-            assert!(false, "should not error");
+            panic!("should not error");
         }
 
         if let Some(expected_packet) = cur.expected_packet {
@@ -541,9 +541,9 @@ fn test_h265_fragmentation_unit_packet() -> Result<()> {
         let result = parsed.depacketize(&cur.raw);
 
         if cur.expected_err.is_some() && result.is_ok() {
-            assert!(false, "should error");
+            panic!("should error");
         } else if cur.expected_err.is_none() && result.is_err() {
-            assert!(false, "should not error");
+            panic!("should not error");
         }
 
         if let Some(expected_fu) = &cur.expected_fu {
@@ -707,9 +707,9 @@ fn test_h265_paci_packet() -> Result<()> {
         let result = parsed.depacketize(&cur.raw);
 
         if cur.expected_err.is_some() && result.is_ok() {
-            assert!(false, "should error");
+            panic!("should error");
         } else if cur.expected_err.is_none() && result.is_err() {
-            assert!(false, "should not error");
+            panic!("should not error");
         }
 
         if let Some(expected_fu) = &cur.expected_fu {
@@ -832,9 +832,9 @@ fn test_h265_packet() -> Result<()> {
         let result = pck.depacketize(&cur.raw);
 
         if cur.expected_err.is_some() && result.is_ok() {
-            assert!(false, "should error");
+            panic!("should error");
         } else if cur.expected_err.is_none() && result.is_err() {
-            assert!(false, "should not error");
+            panic!("should not error");
         }
 
         if cur.expected_err.is_some() {
@@ -860,7 +860,7 @@ fn test_h265_packet() -> Result<()> {
                 (&H265Payload::H265PACIPacket(_), &H265Payload::H265PACIPacket(_)) => {
                     assert!(true)
                 }
-                _ => assert!(false),
+                _ => panic!(),
             };
         }
     }

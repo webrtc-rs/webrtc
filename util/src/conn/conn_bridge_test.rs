@@ -245,7 +245,7 @@ async fn test_bridge_drop_next_n_packets() -> Result<()> {
             if let Some(buf) = rx.recv().await {
                 assert_eq!(msgs[i + 3].as_bytes(), &buf);
             } else {
-                assert!(false, "{} unexpected number of packets", id);
+                panic!("{} unexpected number of packets", id);
             }
         }
     }

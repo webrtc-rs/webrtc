@@ -33,7 +33,7 @@ async fn pipe() -> Result<(
     if let Some(raddr) = raddr {
         assert_eq!(daddr, raddr, "remote address should be match");
     } else {
-        assert!(false, "expected Some, but got None, for remote_addr()");
+        panic!("expected Some, but got None, for remote_addr()");
     }
 
     let mut buf = vec![0u8; handshake.len()];

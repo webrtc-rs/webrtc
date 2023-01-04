@@ -49,7 +49,7 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -112,7 +112,7 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -195,7 +195,7 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -267,7 +267,7 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -367,7 +367,7 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -439,7 +439,7 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     let now: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into();
@@ -480,7 +480,7 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -550,7 +550,7 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -612,7 +612,7 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -692,7 +692,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -757,7 +757,7 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;

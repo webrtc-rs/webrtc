@@ -146,7 +146,7 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
                 assert_eq!(1, s.sequence, "ssn should be 1");
                 si2ok = true;
             }
-            _ => assert!(false, "unexpected stream indentifier"),
+            _ => panic!("unexpected stream indentifier"),
         }
     }
     assert!(si1ok, "si=1 should be present");
@@ -321,7 +321,7 @@ async fn test_assoc_create_new_stream() -> Result<()> {
             let result = a.streams.get(&s.stream_identifier);
             assert!(result.is_some(), "should be in a.streams map");
         } else {
-            assert!(false, "{} should success", i);
+            panic!("{} should success", i);
         }
     }
 
@@ -464,7 +464,7 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..65537), ppi).await {
@@ -474,7 +474,7 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
     }
 
@@ -510,7 +510,7 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..30001), ppi).await {
@@ -520,7 +520,7 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
     }
 

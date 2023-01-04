@@ -127,7 +127,7 @@ fn test_ivf_reader_parse_incomplete_frame_header() -> Result<()> {
     if let Err(err) = reader.parse_next_frame() {
         assert!(true, "{}", err);
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())
@@ -149,7 +149,7 @@ fn test_ivf_reader_parse_incomplete_frame_payload() -> Result<()> {
     if let Err(err) = reader.parse_next_frame() {
         assert!(true, "{}", err);
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())
@@ -164,7 +164,7 @@ fn test_ivf_reader_eof_when_no_frames_left() -> Result<()> {
     if let Err(err) = reader.parse_next_frame() {
         assert!(true, "{}", err);
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())

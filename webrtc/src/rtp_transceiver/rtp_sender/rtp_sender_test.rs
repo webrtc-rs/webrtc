@@ -80,7 +80,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
                 assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_H264);
                 let _ = seen_packet_b_tx2.send(()).await;
             } else {
-                assert!(false, "Unexpected RTP Data {:02x}", last);
+                panic!("Unexpected RTP Data {:02x}", last);
             }
         })
     }));
@@ -139,7 +139,7 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
         assert_eq!(parameters.encodings.len(), 1);
         assert_eq!(parameters.encodings[0].ssrc, sender.ssrc);
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&offerer, &answerer).await;
@@ -247,7 +247,7 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
         assert_eq!(err, Error::ErrRTPSenderNewTrackHasIncorrectKind);
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&sender, &receiver).await;
@@ -298,10 +298,10 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
                 }])
                 .await?;
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -329,7 +329,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
         assert_eq!(err, Error::ErrUnsupportedCodec);
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&sender, &receiver).await;

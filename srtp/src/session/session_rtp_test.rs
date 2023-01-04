@@ -187,7 +187,7 @@ async fn test_session_srtp_multi_ssrc() -> Result<()> {
                 &read_buffer[RTP_HEADER_SIZE..]
             );
         } else {
-            assert!(false, "ssrc {} not found", *ssrc);
+            panic!("ssrc {} not found", *ssrc);
         }
     }
 
@@ -279,7 +279,7 @@ async fn test_session_srtp_replay_protection() -> Result<()> {
                     i += 1;
                 }
                 Err(err) => {
-                    assert!(false, "{}", err);
+                    panic!("{}", err);
                     break;
                 }
             }

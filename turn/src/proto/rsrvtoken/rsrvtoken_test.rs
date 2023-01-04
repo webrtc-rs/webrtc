@@ -19,7 +19,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
                 "IsAttrSizeInvalid should be true"
             );
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -43,7 +43,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
                     err
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
             m.add(ATTR_RESERVATION_TOKEN, &[1, 2, 3]);
             if let Err(err) = handle.get_from(&m) {
@@ -52,7 +52,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
         }
     }

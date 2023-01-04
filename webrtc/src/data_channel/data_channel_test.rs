@@ -272,7 +272,7 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
     let dc = match offer_pc.create_data_channel(EXPECTED_LABEL, None).await {
         Ok(dc) => dc,
         Err(_) => {
-            assert!(false, "Failed to create a PC pair for testing");
+            panic!("Failed to create a PC pair for testing");
             return Ok(());
         }
     };
@@ -528,19 +528,13 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
         if d.label() == "initial_data_channel" {
             return Box::pin(async {});
         }
-        assert!(
-            false,
-            "OnDataChannel must not be fired when negotiated == true"
-        );
+        panic!("OnDataChannel must not be fired when negotiated == true");
 
         Box::pin(async {})
     }));
 
     offer_pc.on_data_channel(Box::new(move |_d: Arc<RTCDataChannel>| {
-        assert!(
-            false,
-            "OnDataChannel must not be fired when negotiated == true"
-        );
+        panic!("OnDataChannel must not be fired when negotiated == true");
 
         Box::pin(async {})
     }));
@@ -883,7 +877,7 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
         Box::pin(async move {
             for _ in 0..10 {
                 if let Err(_) = dc3.send(&buf).await {
-                    assert!(false, "Failed to send string on data channel");
+                    panic!("Failed to send string on data channel");
                 }
                 assert_eq!(
                     1500,
@@ -983,7 +977,7 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
 
             for _ in 0..10 {
                 if let Err(_) = dc3.send(&buf).await {
-                    assert!(false, "Failed to send string on data channel");
+                    panic!("Failed to send string on data channel");
                 }
                 assert_eq!(
                     1500,
@@ -1043,7 +1037,7 @@ async fn test_eof_detach() -> Result<()> {
                         Ok(detached) => detached,
                         Err(err) => {
                             log::debug!("Detach failed: {}", err);
-                            assert!(false);
+                            panic!();
                             return;
                         }
                     };
@@ -1486,7 +1480,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
             err
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     let result = channel_a.send_text("test".to_owned()).await;
@@ -1498,7 +1492,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
             err
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     let result = channel_a.ensure_open();
@@ -1510,7 +1504,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
             err
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())

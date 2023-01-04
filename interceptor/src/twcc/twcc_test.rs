@@ -23,7 +23,7 @@ fn test_chunk_add() -> Result<()> {
         let status_chunk = c.encode();
         match status_chunk {
             PacketStatusChunk::RunLengthChunk(_) => assert!(true),
-            _ => assert!(false),
+            _ => panic!(),
         };
 
         let buf = status_chunk.marshal()?;
@@ -52,7 +52,7 @@ fn test_chunk_add() -> Result<()> {
         let status_chunk = c.encode();
         match status_chunk {
             PacketStatusChunk::RunLengthChunk(_) => assert!(true),
-            _ => assert!(false),
+            _ => panic!(),
         };
 
         let buf = status_chunk.marshal()?;
@@ -82,7 +82,7 @@ fn test_chunk_add() -> Result<()> {
         let status_chunk = c.encode();
         match status_chunk {
             PacketStatusChunk::RunLengthChunk(_) => assert!(true),
-            _ => assert!(false),
+            _ => panic!(),
         };
 
         let buf = status_chunk.marshal()?;
@@ -114,7 +114,7 @@ fn test_chunk_add() -> Result<()> {
         let status_chunk = c.encode();
         match status_chunk {
             PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
-            _ => assert!(false),
+            _ => panic!(),
         };
 
         let buf = status_chunk.marshal()?;
@@ -147,7 +147,7 @@ fn test_chunk_add() -> Result<()> {
         let status_chunk1 = c.encode();
         match status_chunk1 {
             PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
-            _ => assert!(false),
+            _ => panic!(),
         };
         assert_eq!(c.deltas.len(), 1);
 
@@ -157,7 +157,7 @@ fn test_chunk_add() -> Result<()> {
         let status_chunk2 = c.encode();
         match status_chunk2 {
             PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
-            _ => assert!(false),
+            _ => panic!(),
         };
         assert_eq!(c.deltas.len(), 0);
 
@@ -481,7 +481,7 @@ fn test_build_feedback_packet() -> Result<()> {
     if let Some(tcc) = rtcp_packets[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(tcc, &expected);
     } else {
-        assert!(false);
+        panic!();
     }
 
     marshal_all(&rtcp_packets[..])?;
@@ -555,7 +555,7 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
     if let Some(tcc) = rtcp_packets[0].as_any().downcast_ref::<TransportLayerCc>() {
         assert_eq!(tcc, &expected);
     } else {
-        assert!(false);
+        panic!();
     }
 
     marshal_all(&rtcp_packets[..])?;

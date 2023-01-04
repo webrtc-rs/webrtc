@@ -542,7 +542,7 @@ fn test_round_trip() -> Result<()> {
                 assert_eq!(actual.as_str(), sdp_str, "{}\n{}", name, sdp_str);
             }
         } else {
-            assert!(false, "{}\n{}", name, sdp_str);
+            panic!("{}\n{}", name, sdp_str);
         }
     }
 
@@ -588,7 +588,7 @@ fn test_unmarshal_non_nil_address() -> Result<()> {
         let output = sdp.marshal();
         assert_eq!(output.as_str(), input);
     } else {
-        assert!(false, "{}", input);
+        panic!("{}", input);
     }
     Ok(())
 }

@@ -827,11 +827,7 @@ mod test {
         };
         ($left: expr, $right: expr, $eps: expr) => {
             if ($left - $right).abs() >= $eps {
-                assert!(
-                    false,
-                    "{:?} was not within {:?} of {:?}",
-                    $left, $eps, $right
-                );
+                panic!("{:?} was not within {:?} of {:?}", $left, $eps, $right);
             }
         };
     }

@@ -176,7 +176,7 @@ pub(crate) async fn close_pair(
 
     tokio::select! {
         _ = timeout.as_mut() =>{
-            assert!(false, "close_pair timed out waiting for done signal");
+            panic!("close_pair timed out waiting for done signal");
         }
         _ = done_rx.recv() =>{
             close_pair_now(pc1, pc2).await;

@@ -8,7 +8,7 @@ fn test_data_does_not_start_with_h264header() -> Result<()> {
         if let Err(err) = reader.next_nal() {
             assert_eq!(err, Error::ErrDataIsNotH264Stream);
         } else {
-            assert!(false);
+            panic!();
         }
     };
 
@@ -44,7 +44,7 @@ fn test_eof() -> Result<()> {
         if let Err(err) = reader.next_nal() {
             assert_eq!(Error::ErrIoEOF, err);
         } else {
-            assert!(false);
+            panic!();
         }
     };
 

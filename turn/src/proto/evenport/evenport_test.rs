@@ -72,7 +72,7 @@ fn test_even_port_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
         }
     }

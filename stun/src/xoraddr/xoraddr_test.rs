@@ -72,7 +72,7 @@ fn test_xormapped_address_get_from() -> Result<()> {
                 err
             );
         } else {
-            assert!(false, "expected error, got ok");
+            panic!("expected error, got ok");
         }
     }
     //"AttrOverflowErr"
@@ -95,7 +95,7 @@ fn test_xormapped_address_get_from() -> Result<()> {
                 err
             );
         } else {
-            assert!(false, "expected error, got ok");
+            panic!("expected error, got ok");
         }
     }
 
