@@ -1,3 +1,6 @@
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
+
 use bytes::{Bytes, BytesMut};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rtp::{header::*, packet::*};
