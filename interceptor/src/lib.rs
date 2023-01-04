@@ -197,6 +197,6 @@ mod test {
     {
         tokio::time::timeout(duration, future)
             .await
-            .expect("timed out")
+            .expect("should not time out")
     }
 }

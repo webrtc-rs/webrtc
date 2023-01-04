@@ -872,9 +872,10 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
         let dc3 = Arc::clone(&dc2);
         Box::pin(async move {
             for _ in 0..10 {
-                if dc3.send(&buf).await.is_err() {
-                    panic!("Failed to send string on data channel");
-                }
+                assert!(
+                    matches!(dc3.send(&buf).await, Ok(_)),
+                    "Failed to send string on data channel"
+                );
                 assert_eq!(
                     1500,
                     dc3.buffered_amount_low_threshold().await,
@@ -972,9 +973,10 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
             .await;
 
             for _ in 0..10 {
-                if dc3.send(&buf).await.is_err() {
-                    panic!("Failed to send string on data channel");
-                }
+                assert!(
+                    matches!(dc3.send(&buf).await, Ok(_)),
+                    "Failed to send string on data channel"
+                );
                 assert_eq!(
                     1500,
                     dc3.buffered_amount_low_threshold().await,
