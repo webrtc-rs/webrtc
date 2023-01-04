@@ -1182,8 +1182,9 @@ impl PeerConnectionInternal {
     pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
-            let Some(m) = t.mid().and_then(|mid| get_by_mid(&mid, desc)) else {
-                return true;
+            let m = match t.mid().and_then(|mid| get_by_mid(&mid, desc)) {
+                Some(m) => m,
+                None => return true,
             };
 
             if get_peer_direction(m) != t.direction() {
@@ -1357,12 +1358,14 @@ impl PeerConnectionInternal {
                 None => continue,
             };
 
-            let Some(mid) = transceiver.mid() else {
-                continue;
+            let mid = match transceiver.mid() {
+                Some(mid) => mid,
+                None => continue,
             };
 
-            let Some(track) = sender.track().await else {
-                continue;
+            let track = match sender.track().await {
+                Some(track) => track,
+                None => continue,
             };
 
             let track_id = track.id().to_string();
