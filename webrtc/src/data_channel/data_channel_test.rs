@@ -1,3 +1,6 @@
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::{APIBuilder, API};

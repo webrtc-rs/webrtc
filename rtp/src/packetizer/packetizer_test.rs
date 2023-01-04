@@ -17,6 +17,7 @@ async fn test_packetizer() -> Result<()> {
 
     if packets.len() != 2 {
         let mut packet_lengths = String::new();
+        #[allow(clippy::needless_range_loop)]
         for i in 0..packets.len() {
             packet_lengths +=
                 format!("Packet {} length {}\n", i, packets[i].payload.len()).as_str();
