@@ -1870,11 +1870,10 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s1. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -1973,11 +1972,10 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s1. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -1999,7 +1997,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
                     break;
                 }
                 Ok(_) => {
-                    assert!(false, "must be error");
+                    panic!("must be error");
                 }
                 Err(err) => {
                     log::debug!("s0.read_sctp err {:?}", err);
@@ -2021,13 +2019,12 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s0. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
-                    }else{
-                        assert!(false, "must be error");
+                    } else {
+                        panic!("must be error");
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -2216,7 +2213,7 @@ async fn test_stats() -> Result<()> {
         );
         assert_eq!(conn.bytes_sent.load(Ordering::SeqCst), a.bytes_sent());
     } else {
-        assert!(false, "must be FakeEchoConn");
+        panic!("must be FakeEchoConn");
     }
 
     Ok(())
@@ -2267,8 +2264,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     tokio::pin!(timer1);
     let a1 = tokio::select! {
         _ = timer1.as_mut() =>{
-            assert!(false,"timed out waiting for a1");
-            return Err(Error::Other("timed out waiting for a1".to_owned()).into());
+            panic!("timed out waiting for a1");
         },
         a1 = a1chan_rx.recv() => {
             a1.unwrap()
@@ -2279,8 +2275,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     tokio::pin!(timer2);
     let a2 = tokio::select! {
         _ = timer2.as_mut() =>{
-            assert!(false,"timed out waiting for a2");
-            return Err(Error::Other("timed out waiting for a2".to_owned()).into());
+            panic!("timed out waiting for a2");
         },
         a2 = a2chan_rx.recv() => {
             a2.unwrap()
@@ -2328,7 +2323,7 @@ async fn test_association_shutdown() -> Result<()> {
     if let Ok(result) = tokio::time::timeout(Duration::from_secs(1), a1.shutdown()).await {
         assert!(result.is_ok(), "shutdown should be ok");
     } else {
-        assert!(false, "shutdown timeout");
+        panic!("shutdown timeout");
     }
 
     {
@@ -2339,7 +2334,7 @@ async fn test_association_shutdown() -> Result<()> {
         tokio::pin!(timer2);
         tokio::select! {
             _ = timer2.as_mut() =>{
-                assert!(false,"timed out waiting for a2 read loop to close");
+                panic!("timed out waiting for a2 read loop to close");
             },
             _ = close_loop_ch_rx.recv() => {
                 log::debug!("recv a2.close_loop_ch_rx");
@@ -2410,7 +2405,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
                 if let Ok(result) = res {
                     assert!(result.is_ok(), "shutdown should be ok");
                 } else {
-                    assert!(false, "shutdown timeout");
+                    panic!("shutdown timeout");
                 }
             }
             _ = writing_done_rx.recv() => {
@@ -2428,7 +2423,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
         tokio::pin!(timer2);
         tokio::select! {
             _ = timer2.as_mut() =>{
-                assert!(false,"timed out waiting for a2 read loop to close");
+                panic!("timed out waiting for a2 read loop to close");
             },
             _ = close_loop_ch_rx.recv() => {
                 log::debug!("recv a2.close_loop_ch_rx");

@@ -30,7 +30,7 @@ fn test_change_cipher_spec_invalid() -> Result<()> {
     let result = ChangeCipherSpec::unmarshal(&mut reader);
 
     match result {
-        Ok(_) => assert!(false, "must be error"),
+        Ok(_) => panic!("must be error"),
         Err(err) => assert_eq!(err.to_string(), Error::ErrInvalidCipherSpec.to_string()),
     };
 

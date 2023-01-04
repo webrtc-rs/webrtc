@@ -99,7 +99,7 @@ async fn test_udp_conn_send_to_recv_from() -> Result<()> {
     let n = match conn.send_to(&data, dst_addr).await {
         Ok(n) => n,
         Err(err) => {
-            assert!(false, "should success, but got {}", err);
+            panic!("should success, but got {}", err);
             return Ok(());
         }
     };
@@ -191,7 +191,7 @@ async fn test_udp_conn_send_recv() -> Result<()> {
     let n = match conn.send(&data).await {
         Ok(n) => n,
         Err(err) => {
-            assert!(false, "should success, but got {}", err);
+            panic!("should success, but got {}", err);
             return Ok(());
         }
     };

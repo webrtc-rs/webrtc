@@ -60,14 +60,10 @@ async fn test_responder_interceptor() -> Result<()> {
             if let Some(p) = r {
                 assert_eq!(seq_num, p.header.sequence_number);
             } else {
-                assert!(
-                    false,
-                    "seq_num {} is not sent due to channel closed",
-                    seq_num
-                );
+                panic!("seq_num {} is not sent due to channel closed", seq_num);
             }
         } else {
-            assert!(false, "seq_num {} is not sent yet", seq_num);
+            panic!("seq_num {} is not sent yet", seq_num);
         }
     }
 

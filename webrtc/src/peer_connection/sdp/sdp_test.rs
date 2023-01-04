@@ -53,7 +53,7 @@ fn test_extract_fingerprint() -> Result<()> {
         if let Err(err) = extract_fingerprint(&s) {
             assert_eq!(Error::ErrSessionDescriptionNoFingerprint, err);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -70,7 +70,7 @@ fn test_extract_fingerprint() -> Result<()> {
         if let Err(err) = extract_fingerprint(&s) {
             assert_eq!(Error::ErrSessionDescriptionInvalidFingerprint, err);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -94,7 +94,7 @@ fn test_extract_fingerprint() -> Result<()> {
         if let Err(err) = extract_fingerprint(&s) {
             assert_eq!(Error::ErrSessionDescriptionConflictingFingerprints, err);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -122,7 +122,7 @@ async fn test_extract_ice_details() -> Result<()> {
         if let Err(err) = extract_ice_details(&s).await {
             assert_eq!(Error::ErrSessionDescriptionMissingIcePwd, err);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -142,7 +142,7 @@ async fn test_extract_ice_details() -> Result<()> {
         if let Err(err) = extract_ice_details(&s).await {
             assert_eq!(Error::ErrSessionDescriptionMissingIceUfrag, err);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -218,7 +218,7 @@ async fn test_extract_ice_details() -> Result<()> {
         if let Err(err) = extract_ice_details(&s).await {
             assert_eq!(Error::ErrSessionDescriptionConflictingIceUfrag, err);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -248,7 +248,7 @@ async fn test_extract_ice_details() -> Result<()> {
         if let Err(err) = extract_ice_details(&s).await {
             assert_eq!(Error::ErrSessionDescriptionConflictingIcePwd, err);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -381,30 +381,24 @@ fn test_track_details_from_sdp() -> Result<()> {
         let tracks = track_details_from_sdp(&s, true);
         assert_eq!(3, tracks.len());
         if track_details_for_ssrc(&tracks, 1000).is_some() {
-            assert!(
-                false,
-                "got the unknown track ssrc:1000 which should have been skipped"
-            );
+            panic!("got the unknown track ssrc:1000 which should have been skipped");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 2000) {
             assert_eq!(RTPCodecType::Audio, track.kind);
             assert_eq!(2000, track.ssrcs[0]);
             assert_eq!("audio_trk_label", track.stream_id);
         } else {
-            assert!(false, "missing audio track with ssrc:2000");
+            panic!("missing audio track with ssrc:2000");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 3000) {
             assert_eq!(RTPCodecType::Video, track.kind);
             assert_eq!(3000, track.ssrcs[0]);
             assert_eq!("video_trk_label", track.stream_id);
         } else {
-            assert!(false, "missing video track with ssrc:3000");
+            panic!("missing video track with ssrc:3000");
         }
         if track_details_for_ssrc(&tracks, 4000).is_some() {
-            assert!(
-                false,
-                "got the rtx track ssrc:3000 which should have been skipped"
-            );
+            panic!("got the rtx track ssrc:3000 which should have been skipped");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 5000) {
             assert_eq!(RTPCodecType::Video, track.kind);
@@ -412,7 +406,7 @@ fn test_track_details_from_sdp() -> Result<()> {
             assert_eq!("video_trk_id", track.id);
             assert_eq!("video_stream_id", track.stream_id);
         } else {
-            assert!(false, "missing video track with ssrc:5000");
+            panic!("missing video track with ssrc:5000");
         }
     }
 
@@ -793,7 +787,7 @@ async fn test_populate_sdp() -> Result<()> {
                 if a.key.contains("rtpmap") {
                     if let Some(value) = &a.value {
                         if value == "98 VP9/90000" {
-                            assert!(false, "vp9 should not be present in sdp");
+                            panic!("vp9 should not be present in sdp");
                         } else if value == "96 VP8/90000" {
                             found_vp8 = true;
                         }

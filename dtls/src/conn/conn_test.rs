@@ -205,7 +205,7 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<()> {
             Error::ErrSequenceNumberOverflow.to_string()
         );
     } else {
-        assert!(false, "Expected error but it is OK");
+        panic!("Expected error but it is OK");
     }
 
     cb.close().await?;
@@ -216,7 +216,7 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<()> {
             Error::ErrSequenceNumberOverflow.to_string()
         );
     } else {
-        assert!(false, "Expected error but it is OK");
+        panic!("Expected error but it is OK");
     }
 
     {
@@ -281,7 +281,7 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<()> {
             Error::ErrSequenceNumberOverflow.to_string()
         );
     } else {
-        assert!(false, "Expected error but it is OK");
+        panic!("Expected error but it is OK");
     }
 
     cb.close().await?;
@@ -369,11 +369,7 @@ async fn test_handshake_with_alert() -> Result<()> {
                 err
             );
         } else {
-            assert!(
-                false,
-                "{} expected error but create_test_server return OK",
-                name
-            );
+            panic!("{} expected error but create_test_server return OK", name);
         }
 
         let result_client = client_err_rx.recv().await;
@@ -388,11 +384,7 @@ async fn test_handshake_with_alert() -> Result<()> {
                     err
                 );
             } else {
-                assert!(
-                    false,
-                    "{} expected error but create_test_client return OK",
-                    name
-                );
+                panic!("{} expected error but create_test_client return OK", name);
             }
         }
     }
@@ -462,7 +454,7 @@ async fn test_export_keying_material() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expect error but export_keying_material returns OK");
+        panic!("expect error but export_keying_material returns OK");
     }
 
     c.set_local_epoch(1);
@@ -476,7 +468,7 @@ async fn test_export_keying_material() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expect error but export_keying_material returns OK");
+        panic!("expect error but export_keying_material returns OK");
     }
 
     for k in INVALID_KEYING_LABELS.iter() {
@@ -490,7 +482,7 @@ async fn test_export_keying_material() -> Result<()> {
                 err,
             );
         } else {
-            assert!(false, "expect error but export_keying_material returns OK");
+            panic!("expect error but export_keying_material returns OK");
         }
     }
 
@@ -576,8 +568,7 @@ async fn test_psk() -> Result<()> {
             if let Ok(client) = result {
                 client.close().await?;
             } else {
-                assert!(
-                    false,
+                panic!(
                     "{}: Expected create_test_client successfully, but got error",
                     name,
                 );
@@ -638,7 +629,7 @@ async fn test_psk_hint_fail() -> Result<()> {
             server_err,
         );
     } else {
-        assert!(false, "Expected server error, but got OK");
+        panic!("Expected server error, but got OK");
     }
 
     let result = client_res_rx.recv().await;
@@ -651,7 +642,7 @@ async fn test_psk_hint_fail() -> Result<()> {
                 client_err,
             );
         } else {
-            assert!(false, "Expected client error, but got OK");
+            panic!("Expected client error, but got OK");
         }
     }
 
@@ -698,7 +689,7 @@ async fn test_client_timeout() -> Result<()> {
                 err
             );
         } else {
-            assert!(false, "Expected Error but got Ok");
+            panic!("Expected Error but got Ok");
         }
     }
 
@@ -826,7 +817,7 @@ async fn test_srtp_configuration() -> Result<()> {
                     err,
                 );
             } else {
-                assert!(false, "{} expected error, but got ok", name);
+                panic!("{} expected error, but got ok", name);
             }
         } else {
             match result {
@@ -837,7 +828,7 @@ async fn test_srtp_configuration() -> Result<()> {
                                name, expected_profile, actual_server_srtp);
                 }
                 Err(err) => {
-                    assert!(false, "{} expected no error: {}", name, err);
+                    panic!("{} expected no error: {}", name, err);
                 }
             };
         }
@@ -854,7 +845,7 @@ async fn test_srtp_configuration() -> Result<()> {
                         err,
                     );
                 } else {
-                    assert!(false, "{} expected error, but got ok", name);
+                    panic!("{} expected error, but got ok", name);
                 }
             } else if let Ok(client) = result {
                 let actual_client_srtp = client.selected_srtpprotection_profile();
@@ -862,10 +853,10 @@ async fn test_srtp_configuration() -> Result<()> {
                            "test_srtp_configuration: Client SRTPProtectionProfile Mismatch '{}': expected({:?}) actual({:?})",
                            name, expected_profile, actual_client_srtp);
             } else {
-                assert!(false, "{} expected no error", name);
+                panic!("{} expected no error", name);
             }
         } else {
-            assert!(false, "{} expected client, but got none", name);
+            panic!("{} expected client, but got none", name);
         }
     }
 
@@ -1071,7 +1062,7 @@ async fn test_client_certificate() -> Result<()> {
             if result.is_err() {
                 continue;
             }
-            assert!(false, "{} Error expected", name);
+            panic!("{} Error expected", name);
         }
 
         assert!(
@@ -1309,7 +1300,7 @@ async fn test_extended_master_secret() -> Result<()> {
                     err,
                 );
             } else {
-                assert!(false, "{} expected err, but got ok", name);
+                panic!("{} expected err, but got ok", name);
             }
         } else {
             assert!(res.is_ok(), "{} expected ok, but got err", name);
@@ -1325,7 +1316,7 @@ async fn test_extended_master_secret() -> Result<()> {
                     err,
                 );
             } else {
-                assert!(false, "{} expected err, but got ok", name);
+                panic!("{} expected err, but got ok", name);
             }
         } else {
             assert!(result.is_ok(), "{} expected ok, but got err", name);
@@ -1509,15 +1500,10 @@ async fn test_server_certificate() -> Result<()> {
         let cli_result = DTLSConn::new(Arc::new(ca), client_cfg, true, None).await;
 
         if !want_err && cli_result.is_err() {
-            assert!(
-                false,
-                "{}: Client failed({})",
-                name,
-                cli_result.err().unwrap()
-            );
+            panic!("{}: Client failed({})", name, cli_result.err().unwrap());
         }
         if want_err && cli_result.is_ok() {
-            assert!(false, "{}: Error expected", name);
+            panic!("{}: Error expected", name);
         }
 
         let _ = res_rx.recv().await;
@@ -1642,7 +1628,7 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                     err,
                 );
             } else {
-                assert!(false, "{} expected error, but got ok", name);
+                panic!("{} expected error, but got ok", name);
             }
         } else {
             assert!(result.is_ok(), "{} expected ok, but got error", name)
@@ -1661,7 +1647,7 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                         err,
                     );
                 } else {
-                    assert!(false, "{} expected error, but got ok", name);
+                    panic!("{} expected error, but got ok", name);
                 }
             } else {
                 assert!(result.is_ok(), "{} expected ok, but got error", name);
@@ -1681,7 +1667,7 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                 }
             }
         } else {
-            assert!(false, "{} expected Some, but got None", name);
+            panic!("{} expected Some, but got None", name);
         }
     }
 
@@ -1807,7 +1793,7 @@ async fn test_psk_configuration() -> Result<()> {
                     err,
                 );
             } else {
-                assert!(false, "{} expected error, but got ok", name);
+                panic!("{} expected error, but got ok", name);
             }
         } else {
             assert!(result.is_ok(), "{} expected ok, but got error", name)
@@ -1826,13 +1812,13 @@ async fn test_psk_configuration() -> Result<()> {
                         err,
                     );
                 } else {
-                    assert!(false, "{} expected error, but got ok", name);
+                    panic!("{} expected error, but got ok", name);
                 }
             } else {
                 assert!(result.is_ok(), "{} expected ok, but got error", name);
             }
         } else {
-            assert!(false, "{} expected Some, but got None", name);
+            panic!("{} expected Some, but got None", name);
         }
     }
 
@@ -1990,7 +1976,7 @@ async fn test_server_timeout() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "Expected Error but got Ok");
+        panic!("Expected Error but got Ok");
     }
 
     // Wait a little longer to ensure no additional messages have been sent by the server
@@ -2134,11 +2120,11 @@ async fn test_protocol_version_validation() -> Result<()> {
                                 err,
                             );
                         } else {
-                            assert!(false, "{} expected error, but got ok", name);
+                            panic!("{} expected error, but got ok", name);
                         }
                     }
                     Err(err) => {
-                        assert!(false, "server timeout {}", err);
+                        panic!("server timeout {}", err);
                     }
                 };
             });
@@ -2274,11 +2260,11 @@ async fn test_protocol_version_validation() -> Result<()> {
                                 err,
                             );
                         } else {
-                            assert!(false, "{} expected error, but got ok", name);
+                            panic!("{} expected error, but got ok", name);
                         }
                     }
                     Err(err) => {
-                        assert!(false, "server timeout {}", err);
+                        panic!("server timeout {}", err);
                     }
                 };
             });
@@ -2390,9 +2376,9 @@ async fn test_multiple_hello_verify_request() -> Result<()> {
                         i, &client_hello.cookie, cookie
                     );
                 }
-                _ => assert!(false, "unexpected handshake message"),
+                _ => panic!("unexpected handshake message"),
             },
-            _ => assert!(false, "unexpected content"),
+            _ => panic!("unexpected content"),
         };
 
         if packets.len() <= i {
@@ -2480,12 +2466,12 @@ async fn test_renegotation_info() -> Result<()> {
             Content::Handshake(h) => match h.handshake_message {
                 HandshakeMessage::HelloVerifyRequest(hvr) => hvr,
                 _ => {
-                    assert!(false, "unexpected handshake message");
+                    panic!("unexpected handshake message");
                     return Ok(());
                 }
             },
             _ => {
-                assert!(false, "unexpected content");
+                panic!("unexpected content");
                 return Ok(());
             }
         };
@@ -2507,12 +2493,12 @@ async fn test_renegotation_info() -> Result<()> {
             Content::Handshake(h) => match h.handshake_message {
                 HandshakeMessage::ServerHello(sh) => sh,
                 _ => {
-                    assert!(false, "unexpected handshake message");
+                    panic!("unexpected handshake message");
                     return Ok(());
                 }
             },
             _ => {
-                assert!(false, "unexpected content");
+                panic!("unexpected content");
                 return Ok(());
             }
         };

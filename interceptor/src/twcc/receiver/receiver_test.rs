@@ -88,7 +88,7 @@ async fn test_twcc_receiver_interceptor_after_rtp_packets() -> Result<()> {
             cc.packet_chunks
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -160,7 +160,7 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
             cc.packet_chunks
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -267,7 +267,7 @@ async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
             cc.packet_chunks
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -348,7 +348,7 @@ async fn test_twcc_receiver_interceptor_overflow() -> Result<()> {
             cc.packet_chunks
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;

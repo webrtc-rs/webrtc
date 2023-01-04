@@ -221,7 +221,7 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
                     name, expected, actual
                 );
             } else {
-                assert!(false, "{}: expected error, but got passed", name);
+                panic!("{}: expected error, but got passed", name);
             }
         } else {
             let payload = p.depacketize(&b)?;
@@ -327,8 +327,7 @@ fn test_vp9_payloader_payload() -> Result<()> {
                         p.picture_id
                     );
                 } else if p_prev.picture_id + 1 != p.picture_id {
-                    assert!(
-                        false,
+                    panic!(
                         "Picture ID next must be incremented by 1: {} -> {}",
                         p_prev.picture_id, p.picture_id,
                     );

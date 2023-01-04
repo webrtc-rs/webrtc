@@ -57,11 +57,11 @@ async fn test_twcc_sender_interceptor() -> Result<()> {
                                 assert_eq!(seq_num, p.header.sequence_number);
                                 let _ = p_chan_tx2.send(p).await;
                             }else{
-                                assert!(false, "stream.written_rtp none");
+                                panic!("stream.written_rtp none");
                             }
                         }
                         _ = timeout.as_mut()=>{
-                            assert!(false, "written rtp packet not found");
+                            panic!("written rtp packet not found");
                         }
                     };
                 }

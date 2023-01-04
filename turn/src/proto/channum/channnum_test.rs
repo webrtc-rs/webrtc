@@ -62,7 +62,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
                     err
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
 
             m.add(ATTR_CHANNEL_NUMBER, &[1, 2, 3]);
@@ -73,7 +73,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
         }
     }

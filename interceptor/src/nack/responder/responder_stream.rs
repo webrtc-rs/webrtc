@@ -132,7 +132,7 @@ mod test {
                             seq, packet.header.sequence_number
                         );
                     } else {
-                        assert!(false, "packet not found: {}", seq);
+                        panic!("packet not found: {}", seq);
                     }
                 }
             };
@@ -141,8 +141,7 @@ mod test {
                 for n in nums {
                     let seq = start.wrapping_add(*n);
                     if let Some(packet) = sb.get(seq) {
-                        assert!(
-                            false,
+                        panic!(
                             "packet found for {}: {}",
                             seq, packet.header.sequence_number
                         );

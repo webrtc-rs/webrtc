@@ -42,10 +42,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     pc_answer.on_data_channel(Box::new(|_: Arc<RTCDataChannel>| {
-        assert!(
-            false,
-            "A DataChannel must not be created when Fingerprint verification fails"
-        );
+        panic!("A DataChannel must not be created when Fingerprint verification fails");
         Box::pin(async {})
     }));
 
@@ -107,7 +104,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
             pc_offer.set_remote_description(answer).await?;
         }
         _ = timeout.as_mut() =>{
-            assert!(false, "timed out waiting to receive offer");
+            panic!("timed out waiting to receive offer");
         }
     }
 

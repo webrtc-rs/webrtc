@@ -35,7 +35,7 @@ async fn test_channel_bind() -> Result<()> {
     if let Some(addr) = result {
         assert_eq!(addr.ip().to_string(), "0.0.0.0");
     } else {
-        assert!(false, "expected some, but got none");
+        panic!("expected some, but got none");
     }
 
     Ok(())

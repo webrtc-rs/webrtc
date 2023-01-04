@@ -198,7 +198,7 @@ mod test {
         match tokio::time::timeout(duration, future).await {
             Ok(v) => v,
             Err(_) => {
-                assert!(false, "timed out");
+                panic!("timed out");
                 unreachable!()
             }
         }

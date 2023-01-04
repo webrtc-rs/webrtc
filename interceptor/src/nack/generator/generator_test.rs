@@ -57,7 +57,7 @@ async fn test_generator_interceptor() -> Result<()> {
         assert_eq!(13, p.nacks[0].packet_id);
         assert_eq!(0b10, p.nacks[0].lost_packets); // we want packets: 13, 15 (not packet 17, because skipLastN is setReceived to 2)
     } else {
-        assert!(false, "single packet RTCP Compound Packet expected");
+        panic!("single packet RTCP Compound Packet expected");
     }
 
     stream.close().await?;

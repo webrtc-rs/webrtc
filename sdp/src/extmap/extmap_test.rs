@@ -67,7 +67,7 @@ fn test_transport_cc_extmap() -> Result<()> {
 
     let s = e.marshal();
     if s == "3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01" {
-        assert!(false, "TestTransportCC failed");
+        panic!("TestTransportCC failed");
     } else {
         assert_eq!(
             s,

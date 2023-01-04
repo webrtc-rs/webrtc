@@ -49,7 +49,7 @@ fn test_software_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = TextAttribute::get_from_as(&m, ATTR_SOFTWARE);
@@ -62,7 +62,7 @@ fn test_software_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -107,7 +107,7 @@ fn test_username() -> Result<()> {
                 err
             );
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
     //"add_to"
@@ -131,7 +131,7 @@ fn test_username() -> Result<()> {
                 if let Err(err) = result {
                     assert_eq!(Error::ErrAttributeNotFound, err, "Should error");
                 } else {
-                    assert!(false, "expected error, but got ok");
+                    panic!("expected error, but got ok");
                 }
             }
         }
@@ -175,7 +175,7 @@ fn test_realm_get_from() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "Expected error, but got ok");
+        panic!("Expected error, but got ok");
     }
 
     let mut reader = BufReader::new(m.raw.as_slice());
@@ -208,7 +208,7 @@ fn test_realm_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = TextAttribute::get_from_as(&m, ATTR_REALM);
@@ -221,7 +221,7 @@ fn test_realm_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -249,7 +249,7 @@ fn test_nonce_get_from() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "Expected error, but got ok");
+        panic!("Expected error, but got ok");
     }
 
     let mut reader = BufReader::new(m.raw.as_slice());
@@ -282,7 +282,7 @@ fn test_nonce_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = TextAttribute::get_from_as(&m, ATTR_NONCE);
@@ -295,7 +295,7 @@ fn test_nonce_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())

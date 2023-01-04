@@ -44,7 +44,7 @@ fn test_ntp_conversion() -> Result<()> {
             let expected = *n as i128;
             let diff = actual - expected;
             if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
-                assert!(false, "unix2ntp error, expected: {:?}, got: {:?}", ntp, *n,);
+                panic!("unix2ntp error, expected: {:?}, got: {:?}", ntp, *n,);
             }
         } else {
             assert_eq!(ntp, *n, "unix2ntp error");
@@ -58,8 +58,7 @@ fn test_ntp_conversion() -> Result<()> {
             .unwrap_or(UNIX_EPOCH);
         let diff = input.duration_since(output).unwrap().as_nanos() as i128;
         if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
-            assert!(
-                false,
+            panic!(
                 "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
                 input, output,
             );
@@ -112,8 +111,7 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
         let estimated = receive.estimate(ntp2unix(receive_ntp));
         let diff = estimated.duration_since(in_time).unwrap().as_nanos() as i128;
         if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
-            assert!(
-                false,
+            panic!(
                 "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
                 in_time, estimated,
             );

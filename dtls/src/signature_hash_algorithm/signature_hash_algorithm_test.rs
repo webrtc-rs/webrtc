@@ -127,7 +127,7 @@ fn test_parse_signature_schemes() -> Result<()> {
                     output_err
                 );
             } else {
-                assert!(false, "expect err, but got non-err for {}", name);
+                panic!("expect err, but got non-err for {}", name);
             }
         } else if let Ok(output_val) = output {
             assert_eq!(
@@ -136,7 +136,7 @@ fn test_parse_signature_schemes() -> Result<()> {
                 expected, output_val,
             );
         } else {
-            assert!(false, "expect non-err, but got err for {}", name);
+            panic!("expect non-err, but got err for {}", name);
         }
     }
 
