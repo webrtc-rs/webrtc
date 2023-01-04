@@ -59,7 +59,7 @@ mod test {
         ];
 
         for (role_string, expected_role) in tests {
-            assert_eq!(expected_role, RTCIceRole::from(role_string));
+            assert_eq!(RTCIceRole::from(role_string), expected_role);
         }
     }
 
@@ -72,7 +72,7 @@ mod test {
         ];
 
         for (proto, expected_string) in tests {
-            assert_eq!(expected_string, proto.to_string());
+            assert_eq!(proto.to_string(), expected_string);
         }
     }
 }

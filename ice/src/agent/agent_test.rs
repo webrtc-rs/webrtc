@@ -1579,7 +1579,7 @@ async fn test_binding_request_timeout() -> Result<()> {
         a.internal.invalidate_pending_binding_requests(now).await;
         {
             let pending_binding_requests = a.internal.pending_binding_requests.lock().await;
-            assert_eq!(EXPECTED_REMOVAL_COUNT, pending_binding_requests.len(), "Binding invalidation due to timeout did not remove the correct number of binding requests")
+            assert_eq!(pending_binding_requests.len(), EXPECTED_REMOVAL_COUNT, "Binding invalidation due to timeout did not remove the correct number of binding requests")
         }
     }
 

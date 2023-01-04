@@ -46,13 +46,13 @@ async fn test_udp_conn_map_insert_remove() -> Result<()> {
             "should match"
         );
         let port_map = conn_map.port_map.lock().await;
-        assert_eq!(1, port_map.len(), "should match");
+        assert_eq!(port_map.len(), 1, "should match");
     }
 
     conn_map.delete(&conn_in.local_addr()?).await?;
     {
         let port_map = conn_map.port_map.lock().await;
-        assert_eq!(0, port_map.len(), "should match");
+        assert_eq!(port_map.len(), 0, "should match");
     }
 
     let result = conn_map.delete(&conn_in.local_addr()?).await;
@@ -85,13 +85,13 @@ async fn test_udp_conn_map_insert_0_remove() -> Result<()> {
             "should match"
         );
         let port_map = conn_map.port_map.lock().await;
-        assert_eq!(1, port_map.len(), "should match");
+        assert_eq!(port_map.len(), 1, "should match");
     }
 
     conn_map.delete(&conn_in.local_addr()?).await?;
     {
         let port_map = conn_map.port_map.lock().await;
-        assert_eq!(0, port_map.len(), "should match");
+        assert_eq!(port_map.len(), 0, "should match");
     }
 
     let result = conn_map.delete(&conn_in.local_addr()?).await;
@@ -123,7 +123,7 @@ async fn test_udp_conn_map_find_0() -> Result<()> {
         let addr_out = conn_out.local_addr()?;
         assert_eq!(addr_in, addr_out, "should match");
         let port_map = conn_map.port_map.lock().await;
-        assert_eq!(1, port_map.len(), "should match");
+        assert_eq!(port_map.len(), 1, "should match");
     }
 
     Ok(())
@@ -159,7 +159,7 @@ async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<()> {
         let addr_out = conn_out1.local_addr()?;
         assert_eq!(addr_in, addr_out, "should match");
         let port_map = conn_map.port_map.lock().await;
-        assert_eq!(1, port_map.len(), "should match");
+        assert_eq!(port_map.len(), 1, "should match");
     }
 
     let addr2 = SocketAddr::from_str("10.1.2.2:5678")?;
@@ -170,7 +170,7 @@ async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<()> {
         let addr_out = conn_out2.local_addr()?;
         assert_eq!(addr_in, addr_out, "should match");
         let port_map = conn_map.port_map.lock().await;
-        assert_eq!(1, port_map.len(), "should match");
+        assert_eq!(port_map.len(), 1, "should match");
     }
 
     Ok(())

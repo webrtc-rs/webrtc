@@ -33,8 +33,8 @@ fn test_extmap() -> Result<()> {
         let mut reader = BufReader::new(u.1.as_bytes());
         let actual = ExtMap::unmarshal(&mut reader)?;
         assert_eq!(
-            u.1,
             actual.marshal(),
+            u.1,
             "{}: {} vs {}",
             i,
             u.1,

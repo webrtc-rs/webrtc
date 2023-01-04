@@ -239,7 +239,7 @@ mod test {
         ];
 
         for (state_string, expected_state) in tests {
-            assert_eq!(expected_state, RTCSignalingState::from(state_string));
+            assert_eq!(RTCSignalingState::from(state_string), expected_state);
         }
     }
 
@@ -259,7 +259,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string());
+            assert_eq!(state.to_string(), expected_string);
         }
     }
 
@@ -359,7 +359,7 @@ mod test {
                     assert_eq!(*got, next, "{} state mismatch", desc);
                 }
                 (Err(got), Some(err)) => {
-                    assert_eq!(err.to_string(), got.to_string(), "{} error mismatch", desc);
+                    assert_eq!(got.to_string(), err.to_string(), "{} error mismatch", desc);
                 }
                 _ => {
                     assert!(

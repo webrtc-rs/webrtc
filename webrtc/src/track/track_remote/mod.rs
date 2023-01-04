@@ -2,7 +2,6 @@ use crate::api::media_engine::MediaEngine;
 use crate::error::{Error, Result};
 use crate::rtp_transceiver::rtp_codec::{RTCRtpCodecParameters, RTCRtpParameters, RTPCodecType};
 use crate::rtp_transceiver::{PayloadType, SSRC};
-use crate::RECEIVE_MTU;
 
 use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
 
@@ -284,20 +283,6 @@ impl TrackRemote {
         let mut buf = &b[..n];
         let r = rtp::packet::Packet::unmarshal(&mut buf)?;
         Ok((r, attributes))
-    }
-
-    /// determine_payload_type blocks and reads a single packet to determine the PayloadType for this Track
-    /// this is useful because we can't announce it to the user until we know the payload_type
-    pub(crate) async fn determine_payload_type(&self) -> Result<()> {
-        let mut b = vec![0u8; RECEIVE_MTU];
-        let (n, _) = self.peek(&mut b).await?;
-
-        let mut buf = &b[..n];
-        let r = rtp::packet::Packet::unmarshal(&mut buf)?;
-        self.payload_type
-            .store(r.header.payload_type, Ordering::SeqCst);
-
-        Ok(())
     }
 
     /// peek is like Read, but it doesn't discard the packet read

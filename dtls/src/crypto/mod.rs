@@ -517,6 +517,7 @@ pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: 
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "pem")]
     use super::*;
 
     #[cfg(feature = "pem")]

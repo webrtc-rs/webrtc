@@ -109,7 +109,7 @@ mod test {
         ];
 
         for (role, expected_string) in tests {
-            assert_eq!(expected_string, role.to_string(),)
+            assert_eq!(role.to_string(), expected_string)
         }
     }
 
@@ -165,8 +165,8 @@ a=setup:";
             let mut reader = Cursor::new(session_description_str.as_bytes());
             let session_description = SessionDescription::unmarshal(&mut reader)?;
             assert_eq!(
-                expected_role,
                 DTLSRole::from(&session_description),
+                expected_role,
                 "{} failed",
                 name
             );

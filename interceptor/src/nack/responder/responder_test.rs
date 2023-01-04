@@ -38,7 +38,7 @@ async fn test_responder_interceptor() -> Result<()> {
         let p = timeout_or_fail(Duration::from_millis(10), stream.written_rtp())
             .await
             .expect("A packet");
-        assert_eq!(seq_num, p.header.sequence_number);
+        assert_eq!(p.header.sequence_number, seq_num);
     }
 
     stream
@@ -58,7 +58,7 @@ async fn test_responder_interceptor() -> Result<()> {
     for seq_num in [11, 12, 15] {
         if let Ok(r) = tokio::time::timeout(Duration::from_millis(50), stream.written_rtp()).await {
             if let Some(p) = r {
-                assert_eq!(seq_num, p.header.sequence_number);
+                assert_eq!(p.header.sequence_number, seq_num);
             } else {
                 assert!(
                     false,

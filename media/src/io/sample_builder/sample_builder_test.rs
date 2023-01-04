@@ -1254,13 +1254,13 @@ fn test_sample_builder_max_late() {
         payload: bytes!(0x01),
     });
     assert_eq!(
+        s.pop(),
         Some(Sample {
             data: bytes!(0x01),
             duration: Duration::from_secs(1),
             packet_timestamp: 1,
             ..Default::default()
         }),
-        s.pop(),
         "Failed to build samples before gap"
     );
 
@@ -1290,13 +1290,13 @@ fn test_sample_builder_max_late() {
     });
 
     assert_eq!(
+        s.pop(),
         Some(Sample {
             data: bytes!(0x01),
             duration: Duration::from_secs(1),
             packet_timestamp: 2,
             ..Default::default()
         }),
-        s.pop(),
         "Failed to build samples after large gap"
     );
     assert_eq!(None, s.pop(), "Failed to build samples after large gap");
@@ -1310,6 +1310,7 @@ fn test_sample_builder_max_late() {
         payload: bytes!(0x03),
     });
     assert_eq!(
+        s.pop(),
         Some(Sample {
             data: bytes!(0x02),
             duration: Duration::from_secs(1),
@@ -1317,17 +1318,16 @@ fn test_sample_builder_max_late() {
             prev_dropped_packets: 4998,
             ..Default::default()
         }),
-        s.pop(),
         "Failed to build samples after large gap"
     );
     assert_eq!(
+        s.pop(),
         Some(Sample {
             data: bytes!(0x02),
             duration: Duration::from_secs(1),
             packet_timestamp: 501,
             ..Default::default()
         }),
-        s.pop(),
         "Failed to build samples after large gap"
     );
 }
@@ -1434,15 +1434,15 @@ fn test_sample_builder_clean_reference() {
 
         for i in 0..3 {
             assert_eq!(
-                None,
                 s.buffer[seq_start.wrapping_add(i) as usize],
+                None,
                 "Old packet ({}) is not unreferenced (seq_start: {}, max_late: 10, pushed: 12)",
                 i,
                 seq_start
             );
         }
-        assert_eq!(Some(pkt4), s.buffer[seq_start.wrapping_add(14) as usize]);
-        assert_eq!(Some(pkt5), s.buffer[seq_start.wrapping_add(12) as usize]);
+        assert_eq!(s.buffer[seq_start.wrapping_add(14) as usize], Some(pkt4));
+        assert_eq!(s.buffer[seq_start.wrapping_add(12) as usize], Some(pkt5));
     }
 }
 
@@ -1469,7 +1469,7 @@ fn test_sample_builder_push_max_zero() {
 #[test]
 fn test_pop_with_timestamp() {
     let mut s = SampleBuilder::new(0, FakeDepacketizer::new(), 1);
-    assert_eq!(None, s.pop_with_timestamp());
+    assert_eq!(s.pop_with_timestamp(), None);
 }
 
 #[test]
@@ -1489,7 +1489,7 @@ fn test_sample_builder_data() {
         while let Some((sample, ts)) = s.pop_with_timestamp() {
             assert_eq!(ts, (j + 42) as u32, "timestamp");
             assert_eq!(sample.data.len(), 1, "data length");
-            assert_eq!(j as u8, sample.data[0], "timestamp");
+            assert_eq!(sample.data[0], j as u8, "timestamp");
             j += 1;
         }
     }

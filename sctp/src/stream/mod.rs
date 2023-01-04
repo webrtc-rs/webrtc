@@ -269,14 +269,27 @@ impl Stream {
     /// Writes `p` to the DTLS connection with the default Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub fn write(&self, p: &Bytes) -> Result<usize> {
+    pub async fn write(&self, p: &Bytes) -> Result<usize> {
         self.write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
+            .await
     }
 
     /// Writes `p` to the DTLS connection with the given Payload Protocol Identifier.
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
-    pub fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
+    pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
+        let chunks = self.prepare_write(p, ppi)?;
+        self.send_payload_data(chunks).await?;
+
+        Ok(p.len())
+    }
+
+    /// common stuff for write and try_write
+    fn prepare_write(
+        &self,
+        p: &Bytes,
+        ppi: PayloadProtocolIdentifier,
+    ) -> Result<Vec<ChunkPayloadData>> {
         if self.write_shutdown.load(Ordering::SeqCst) {
             return Err(Error::ErrStreamClosed);
         }
@@ -294,10 +307,7 @@ impl Stream {
             _ => {}
         };
 
-        let chunks = self.packetize(p, ppi);
-        self.send_payload_data(chunks)?;
-
-        Ok(p.len())
+        Ok(self.packetize(p, ppi))
     }
 
     fn packetize(&self, raw: &Bytes, ppi: PayloadProtocolIdentifier) -> Vec<ChunkPayloadData> {
@@ -390,7 +400,7 @@ impl Stream {
         {
             // Reset the stream
             // https://tools.ietf.org/html/rfc6525
-            self.send_reset_request(self.stream_identifier)?;
+            self.send_reset_request(self.stream_identifier).await?;
         }
 
         Ok(())
@@ -482,20 +492,20 @@ impl Stream {
         }
     }
 
-    fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
+    async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrPayloadDataStateNotExist);
         }
 
         // NOTE: append is used here instead of push in order to prevent chunks interlacing.
-        self.pending_queue.append(chunks);
+        self.pending_queue.append(chunks).await;
 
         self.awake_write_loop();
         Ok(())
     }
 
-    fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
+    async fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrResetPacketInStateNotExist);
@@ -511,7 +521,7 @@ impl Stream {
             ..Default::default()
         };
 
-        self.pending_queue.push(c);
+        self.pending_queue.push(c).await;
 
         self.awake_write_loop();
         Ok(())
@@ -531,6 +541,16 @@ enum ReadFut {
     RemainingData(Vec<u8>),
 }
 
+enum ShutdownFut {
+    /// Nothing in progress.
+    Idle,
+    /// Reading data from the underlying stream.
+    ShuttingDown(Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>>),
+    /// Shutdown future has run
+    Done,
+    Errored(crate::error::Error),
+}
+
 impl ReadFut {
     /// Gets a mutable reference to the future stored inside `Reading(future)`.
     ///
@@ -545,6 +565,22 @@ impl ReadFut {
     }
 }
 
+impl ShutdownFut {
+    /// Gets a mutable reference to the future stored inside `ShuttingDown(future)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ShutdownFut` variant is not `ShuttingDown`.
+    fn get_shutting_down_mut(
+        &mut self,
+    ) -> &mut Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>> {
+        match self {
+            ShutdownFut::ShuttingDown(ref mut fut) => fut,
+            _ => panic!("expected ShutdownFut to be ShuttingDown"),
+        }
+    }
+}
+
 /// A wrapper around around [`Stream`], which implements [`AsyncRead`] and
 /// [`AsyncWrite`].
 ///
@@ -554,8 +590,8 @@ pub struct PollStream {
     stream: Arc<Stream>,
 
     read_fut: ReadFut,
-    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send>>>,
-    shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send>>>,
+    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
+    shutdown_fut: ShutdownFut,
 
     read_buf_cap: usize,
 }
@@ -577,7 +613,7 @@ impl PollStream {
             stream,
             read_fut: ReadFut::Idle,
             write_fut: None,
-            shutdown_fut: None,
+            shutdown_fut: ShutdownFut::Idle,
             read_buf_cap: DEFAULT_READ_BUF_SIZE,
         }
     }
@@ -697,14 +733,59 @@ impl AsyncRead for PollStream {
 
 impl AsyncWrite for PollStream {
     fn poll_write(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        let bytes = Bytes::copy_from_slice(buf);
-        match self.stream.write(&bytes) {
-            Ok(n) => Poll::Ready(Ok(n)),
-            Err(e) => Poll::Ready(Err(e.into())),
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
+
+        if let Some(fut) = self.write_fut.as_mut() {
+            match fut.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(e)) => {
+                    let stream = self.stream.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
+                    Poll::Ready(Err(e.into()))
+                }
+                // Given the data is buffered, it's okay to ignore the number of written bytes.
+                //
+                // TODO: In the long term, `stream.write` should be made sync. Then we could
+                // remove the whole `if` condition and just call `stream.write`.
+                Poll::Ready(Ok(_)) => {
+                    let stream = self.stream.clone();
+                    let bytes = Bytes::copy_from_slice(buf);
+                    self.write_fut = Some(Box::pin(async move { stream.write(&bytes).await }));
+                    Poll::Ready(Ok(buf.len()))
+                }
+            }
+        } else {
+            let stream = self.stream.clone();
+            let bytes = Bytes::copy_from_slice(buf);
+            let fut = self
+                .write_fut
+                .insert(Box::pin(async move { stream.write(&bytes).await }));
+
+            match fut.as_mut().poll(cx) {
+                // If it's the first time we're polling the future, `Poll::Pending` can't be
+                // returned because that would mean the `PollStream` is not ready for writing. And
+                // this is not true since we've just created a future, which is going to write the
+                // buf to the underlying stream.
+                //
+                // It's okay to return `Poll::Ready` if the data is buffered (this is what the
+                // buffered writer and `File` do).
+                Poll::Pending => Poll::Ready(Ok(buf.len())),
+                Poll::Ready(Err(e)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Err(e.into()))
+                }
+                Poll::Ready(Ok(n)) => {
+                    self.write_fut = None;
+                    Poll::Ready(Ok(n))
+                }
+            }
         }
     }
 
@@ -730,25 +811,27 @@ impl AsyncWrite for PollStream {
             Poll::Pending => return Poll::Pending,
             Poll::Ready(_) => {}
         }
-
-        let fut = match self.shutdown_fut.as_mut() {
-            Some(fut) => fut,
-            None => {
+        let fut = match self.shutdown_fut {
+            ShutdownFut::Done => return Poll::Ready(Ok(())),
+            ShutdownFut::Errored(ref err) => return Poll::Ready(Err(err.clone().into())),
+            ShutdownFut::ShuttingDown(ref mut fut) => fut,
+            ShutdownFut::Idle => {
                 let stream = self.stream.clone();
-                self.shutdown_fut.get_or_insert(Box::pin(async move {
+                self.shutdown_fut = ShutdownFut::ShuttingDown(Box::pin(async move {
                     stream.shutdown(Shutdown::Write).await
-                }))
+                }));
+                self.shutdown_fut.get_shutting_down_mut()
             }
         };
 
         match fut.as_mut().poll(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => {
-                self.shutdown_fut = None;
+                self.shutdown_fut = ShutdownFut::Errored(e.clone());
                 Poll::Ready(Err(e.into()))
             }
             Poll::Ready(Ok(_)) => {
-                self.shutdown_fut = None;
+                self.shutdown_fut = ShutdownFut::Done;
                 Poll::Ready(Ok(()))
             }
         }

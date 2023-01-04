@@ -343,7 +343,7 @@ impl PeerConnectionInternal {
         for incoming_track in filtered_tracks.iter() {
             let mut track_handled = false;
             for t in local_transceivers {
-                if t.mid().await != incoming_track.mid {
+                if t.mid().as_ref() != Some(&incoming_track.mid) {
                     continue;
                 }
 
@@ -659,7 +659,7 @@ impl PeerConnectionInternal {
             // TODO: This is dubious because of rollbacks.
             t.sender().await.set_negotiated();
             media_sections.push(MediaSection {
-                id: t.mid().await,
+                id: t.mid().unwrap(),
                 transceivers: vec![Arc::clone(t)],
                 ..Default::default()
             });
@@ -773,7 +773,7 @@ impl PeerConnectionInternal {
             for t in &local_transceivers {
                 t.sender().await.set_negotiated();
                 media_sections.push(MediaSection {
-                    id: t.mid().await,
+                    id: t.mid().unwrap(),
                     transceivers: vec![Arc::clone(t)],
                     ..Default::default()
                 });
@@ -981,7 +981,7 @@ impl PeerConnectionInternal {
 
                         let transceivers = self.rtp_transceivers.lock().await;
                         for t in &*transceivers {
-                            if t.mid().await != mid {
+                            if t.mid().as_ref() != Some(&mid) {
                                 continue;
                             }
 
@@ -1151,11 +1151,12 @@ impl PeerConnectionInternal {
     pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
-            if let Some(m) = get_by_mid(t.mid().await.as_str(), desc) {
-                if get_peer_direction(m) != t.direction() {
-                    return true;
-                }
-            } else {
+            let m = match t.mid().and_then(|mid| get_by_mid(&mid, desc)) {
+                Some(m) => m,
+                None => return true,
+            };
+
+            if get_peer_direction(m) != t.direction() {
                 return true;
             }
         }
@@ -1194,27 +1195,25 @@ impl PeerConnectionInternal {
         let mut track_infos = vec![];
         for transeiver in transceivers {
             let receiver = transeiver.receiver().await;
-            let mid = match transeiver.mid().await {
-                m if !m.is_empty() => m,
-                _ => continue,
-            };
 
-            let tracks = receiver.tracks().await;
+            if let Some(mid) = transeiver.mid() {
+                let tracks = receiver.tracks().await;
 
-            for track in tracks {
-                let track_id = track.id().await;
-                let kind = match track.kind() {
-                    RTPCodecType::Unspecified => continue,
-                    RTPCodecType::Audio => "audio",
-                    RTPCodecType::Video => "video",
-                };
+                for track in tracks {
+                    let track_id = track.id().await;
+                    let kind = match track.kind() {
+                        RTPCodecType::Unspecified => continue,
+                        RTPCodecType::Audio => "audio",
+                        RTPCodecType::Video => "video",
+                    };
 
-                track_infos.push(TrackInfo {
-                    ssrc: track.ssrc(),
-                    mid: mid.clone(),
-                    track_id,
-                    kind,
-                });
+                    track_infos.push(TrackInfo {
+                        ssrc: track.ssrc(),
+                        mid: mid.clone(),
+                        track_id,
+                        kind,
+                    });
+                }
             }
         }
 
@@ -1319,15 +1318,16 @@ impl PeerConnectionInternal {
             kind: &'static str,
         }
         let mut track_infos = vec![];
-        for transeiver in transceivers {
-            let sender = transeiver.sender().await;
-            let mid = match transeiver.mid().await {
-                m if !m.is_empty() => m,
-                _ => continue,
+        for transceiver in transceivers {
+            let sender = transceiver.sender().await;
+
+            let mid = match transceiver.mid() {
+                Some(mid) => mid,
+                None => continue,
             };
 
             let track = match sender.track().await {
-                Some(t) => t,
+                Some(track) => track,
                 None => continue,
             };
 

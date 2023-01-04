@@ -59,7 +59,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
     let seen_packet_b_tx = Arc::new(seen_packet_b_tx);
     let on_track_count = Arc::new(AtomicU64::new(0));
     receiver.on_track(Box::new(move |track, _, _| {
-        assert_eq!(0, on_track_count.fetch_add(1, Ordering::SeqCst));
+        assert_eq!(on_track_count.fetch_add(1, Ordering::SeqCst), 0);
         let seen_packet_a_tx2 = Arc::clone(&seen_packet_a_tx);
         let seen_packet_b_tx2 = Arc::clone(&seen_packet_b_tx);
         Box::pin(async move {
@@ -242,7 +242,7 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
-        assert_eq!(Error::ErrRTPSenderNewTrackHasIncorrectKind, err);
+        assert_eq!(err, Error::ErrRTPSenderNewTrackHasIncorrectKind);
     } else {
         assert!(false);
     }
@@ -324,7 +324,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
-        assert_eq!(Error::ErrUnsupportedCodec, err);
+        assert_eq!(err, Error::ErrUnsupportedCodec);
     } else {
         assert!(false);
     }

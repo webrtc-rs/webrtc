@@ -4,7 +4,7 @@ mod prf_test;
 use std::convert::TryInto;
 use std::fmt;
 
-use hmac::{Hmac, Mac, NewMac};
+use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use sha2::Digest;
 use sha2::Sha256;
@@ -143,7 +143,7 @@ fn elliptic_curve_pre_master_secret(
 fn hmac_sha(h: CipherSuiteHash, key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     let mut mac = match h {
         CipherSuiteHash::Sha256 => {
-            HmacSha256::new_varkey(key).map_err(|e| Error::Other(e.to_string()))?
+            HmacSha256::new_from_slice(key).map_err(|e| Error::Other(e.to_string()))?
         }
     };
     mac.update(data);
@@ -298,7 +298,7 @@ pub(crate) fn prf_mac(
     payload: &[u8],
     key: &[u8],
 ) -> Result<Vec<u8>> {
-    let mut hmac = HmacSha1::new_varkey(key).map_err(|e| Error::Other(e.to_string()))?;
+    let mut hmac = HmacSha1::new_from_slice(key).map_err(|e| Error::Other(e.to_string()))?;
 
     let mut msg = vec![0u8; 13];
     msg[..2].copy_from_slice(&epoch.to_be_bytes());

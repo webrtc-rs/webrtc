@@ -97,7 +97,7 @@ fn test_generate_key_signature() -> Result<()> {
     )?;
 
     assert_eq!(
-        expected_signature, signature,
+        signature, expected_signature,
         "Signature generation failed \nexp {:?} \nactual {:?} ",
         expected_signature, signature
     );
@@ -134,8 +134,8 @@ fn test_ccm_encryption_and_decryption() -> Result<()> {
     let cipher_text = ccm.encrypt(&rlh, &raw)?;
 
     assert_eq!(
-        [0, 27],
         &cipher_text[RECORD_LAYER_HEADER_SIZE - 2..RECORD_LAYER_HEADER_SIZE],
+        [0, 27],
         "RecordLayer size updating failed \nexp: {:?} \nactual {:?} ",
         [0, 27],
         &cipher_text[RECORD_LAYER_HEADER_SIZE - 2..RECORD_LAYER_HEADER_SIZE]

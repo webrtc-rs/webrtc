@@ -727,7 +727,7 @@ async fn test_data_channel_messages_are_ordered() -> Result<()> {
     for i in 1..=m as usize {
         expected[i - 1] = i as u64;
     }
-    assert_eq!(expected, values);
+    assert_eq!(values, expected);
 
     Ok(())
 }
