@@ -1366,15 +1366,39 @@ impl RTCPeerConnection {
                                     RTCRtpTransceiverDirection::Recvonly
                                 };
 
-                            let t = self
-                                .add_transceiver_from_kind(
-                                    kind,
-                                    Some(RTCRtpTransceiverInit {
-                                        direction: local_direction,
-                                        send_encodings: vec![],
-                                    }),
+                            let receive_mtu = self.internal.setting_engine.get_receive_mtu();
+
+                            let receiver = Arc::new(RTCRtpReceiver::new(
+                                receive_mtu,
+                                kind,
+                                Arc::clone(&self.internal.dtls_transport),
+                                Arc::clone(&self.internal.media_engine),
+                                Arc::clone(&self.interceptor),
+                            ));
+
+                            let sender = Arc::new(
+                                RTCRtpSender::new(
+                                    receive_mtu,
+                                    None,
+                                    Arc::clone(&self.internal.dtls_transport),
+                                    Arc::clone(&self.internal.media_engine),
+                                    Arc::clone(&self.interceptor),
+                                    false,
                                 )
-                                .await?;
+                                .await,
+                            );
+
+                            let t = RTCRtpTransceiver::new(
+                                receiver,
+                                sender,
+                                local_direction,
+                                kind,
+                                vec![],
+                                Arc::clone(&self.internal.media_engine),
+                                Some(Box::new(self.internal.make_negotiation_needed_trigger())),
+                            )
+                            .await;
+
                             self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
                             if t.mid().await.is_empty() {
@@ -1664,6 +1688,7 @@ impl RTCPeerConnection {
                             t.direction().has_recv(),
                         ));
 
+                        self.internal.trigger_negotiation_needed().await;
                         return Ok(sender);
                     }
                 }

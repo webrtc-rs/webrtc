@@ -24,7 +24,7 @@
 
 * Change `RTCRtpTransceiver::set_receiver` signature to `|&self, r: Arc<RTCRtpReceiver>|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
 
-* Change `RTCPeerConnection::add_transceiver_from_kind` signature to `|&self, kind: RTPCodecType, init: Option<RTCRtpTransceiverInit>,|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+* Change `RTCPeerConnection::add_transceiver_from_kind` signature to `|&self, kind: RTPCodecType, init: Option<RTCRtpTransceiverInit>,|`, `RTCRtpTransceiver::RTCRtpSender` сreated without a track [#377](https://github.com/webrtc-rs/webrtc/pull/377).
 
 * Change `RTCPeerConnection::add_transceiver_from_track` signature to `|&self, track: Arc<dyn TrackLocal + Send + Sync>, init: Option<RTCRtpTransceiverInit>,|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
 

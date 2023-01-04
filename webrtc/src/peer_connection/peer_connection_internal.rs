@@ -431,47 +431,44 @@ impl PeerConnectionInternal {
             .map(|value| value.direction)
             .unwrap_or(RTCRtpTransceiverDirection::Sendrecv);
 
-        let t = match direction {
-            RTCRtpTransceiverDirection::Sendonly
-            | RTCRtpTransceiverDirection::Sendrecv
-            | RTCRtpTransceiverDirection::Recvonly => {
-                let interceptor = self
-                    .interceptor
-                    .upgrade()
-                    .ok_or(Error::ErrInterceptorNotBind)?;
-                let receiver = Arc::new(RTCRtpReceiver::new(
-                    self.setting_engine.get_receive_mtu(),
-                    kind,
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
-                    Arc::clone(&interceptor),
-                ));
+        if direction == RTCRtpTransceiverDirection::Unspecified {
+            return Err(Error::ErrPeerConnAddTransceiverFromKindSupport);
+        }
 
-                let sender = Arc::new(
-                    RTCRtpSender::new(
-                        self.setting_engine.get_receive_mtu(),
-                        None,
-                        Arc::clone(&self.dtls_transport),
-                        Arc::clone(&self.media_engine),
-                        interceptor,
-                        false,
-                    )
-                    .await,
-                );
+        let interceptor = self
+            .interceptor
+            .upgrade()
+            .ok_or(Error::ErrInterceptorNotBind)?;
+        let receiver = Arc::new(RTCRtpReceiver::new(
+            self.setting_engine.get_receive_mtu(),
+            kind,
+            Arc::clone(&self.dtls_transport),
+            Arc::clone(&self.media_engine),
+            Arc::clone(&interceptor),
+        ));
 
-                RTCRtpTransceiver::new(
-                    receiver,
-                    sender,
-                    direction,
-                    kind,
-                    vec![],
-                    Arc::clone(&self.media_engine),
-                    Some(Box::new(self.make_negotiation_needed_trigger())),
-                )
-                .await
-            }
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport),
-        };
+        let sender = Arc::new(
+            RTCRtpSender::new(
+                self.setting_engine.get_receive_mtu(),
+                None,
+                Arc::clone(&self.dtls_transport),
+                Arc::clone(&self.media_engine),
+                interceptor,
+                false,
+            )
+            .await,
+        );
+
+        let t = RTCRtpTransceiver::new(
+            receiver,
+            sender,
+            direction,
+            kind,
+            vec![],
+            Arc::clone(&self.media_engine),
+            Some(Box::new(self.make_negotiation_needed_trigger())),
+        )
+        .await;
 
         self.add_rtp_transceiver(Arc::clone(&t)).await;
 
@@ -488,32 +485,29 @@ impl PeerConnectionInternal {
             .upgrade()
             .ok_or(Error::ErrInterceptorNotBind)?;
 
-        let (r, s) = match direction {
-            RTCRtpTransceiverDirection::Sendrecv
-            | RTCRtpTransceiverDirection::Sendonly
-            | RTCRtpTransceiverDirection::Recvonly => {
-                let r = Arc::new(RTCRtpReceiver::new(
-                    self.setting_engine.get_receive_mtu(),
-                    track.kind(),
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
-                    Arc::clone(&interceptor),
-                ));
-                let s = Arc::new(
-                    RTCRtpSender::new(
-                        self.setting_engine.get_receive_mtu(),
-                        Some(Arc::clone(&track)),
-                        Arc::clone(&self.dtls_transport),
-                        Arc::clone(&self.media_engine),
-                        Arc::clone(&interceptor),
-                        false,
-                    )
-                    .await,
-                );
-                (r, s)
-            }
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport),
-        };
+        if direction == RTCRtpTransceiverDirection::Unspecified {
+            return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport);
+        }
+
+        let r = Arc::new(RTCRtpReceiver::new(
+            self.setting_engine.get_receive_mtu(),
+            track.kind(),
+            Arc::clone(&self.dtls_transport),
+            Arc::clone(&self.media_engine),
+            Arc::clone(&interceptor),
+        ));
+
+        let s = Arc::new(
+            RTCRtpSender::new(
+                self.setting_engine.get_receive_mtu(),
+                Some(Arc::clone(&track)),
+                Arc::clone(&self.dtls_transport),
+                Arc::clone(&self.media_engine),
+                Arc::clone(&interceptor),
+                false,
+            )
+            .await,
+        );
 
         Ok(RTCRtpTransceiver::new(
             r,
