@@ -549,17 +549,15 @@ impl RTCPeerConnection {
                 }
                 // Step 5.4
                 if t.stopped.load(Ordering::SeqCst) {
-                    if let Some(search_mid) = t.mid() {
-                        let current_remote_description =
-                            params.current_remote_description.lock().await;
-                        if let Some(remote_desc) = &*current_remote_description {
-                            if get_by_mid(&search_mid, local_desc).is_some()
-                                || get_by_mid(&search_mid, remote_desc).is_some()
-                            {
-                                return true;
-                            }
-                        }
-                    }
+                    let Some(search_mid) = t.mid() else {return false;};
+
+                    let Some(remote_desc) =
+                        &*params.current_remote_description.lock().await else {
+                            return false;
+                        };
+
+                    return get_by_mid(&search_mid, local_desc).is_some()
+                        || get_by_mid(&search_mid, remote_desc).is_some();
                 }
             }
             // Step 6
