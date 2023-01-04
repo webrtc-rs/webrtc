@@ -1351,32 +1351,34 @@ impl PeerConnectionInternal {
             kind: &'static str,
         }
         let mut track_infos = vec![];
-        for transeiver in transceivers {
-            let sender = match transeiver.sender().await {
+        for transceiver in transceivers {
+            let sender = match transceiver.sender().await {
                 Some(r) => r,
                 None => continue,
             };
-            if let Some(mid) = transeiver.mid() {
-                let track = match sender.track().await {
-                    Some(t) => t,
-                    None => continue,
-                };
 
-                let track_id = track.id().to_string();
-                let kind = match track.kind() {
-                    RTPCodecType::Unspecified => continue,
-                    RTPCodecType::Audio => "audio",
-                    RTPCodecType::Video => "video",
-                };
+            let Some(mid) = transceiver.mid() else {
+                continue;
+            };
 
-                track_infos.push(TrackInfo {
-                    track_id,
-                    ssrc: sender.ssrc,
-                    mid: mid.clone(),
-                    rid: None,
-                    kind,
-                });
-            }
+            let Some(track) = sender.track().await else {
+                continue;
+            };
+
+            let track_id = track.id().to_string();
+            let kind = match track.kind() {
+                RTPCodecType::Unspecified => continue,
+                RTPCodecType::Audio => "audio",
+                RTPCodecType::Video => "video",
+            };
+
+            track_infos.push(TrackInfo {
+                track_id,
+                ssrc: sender.ssrc,
+                mid: mid.clone(),
+                rid: None,
+                kind,
+            });
         }
 
         let stream_stats = self
