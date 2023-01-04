@@ -2484,12 +2484,10 @@ async fn test_renegotation_info() -> Result<()> {
             }
         };
 
-        let mut got_negotation_info = false;
-        for v in &server_hello.extensions {
-            if let Extension::RenegotiationInfo(_) = v {
-                got_negotation_info = true;
-            }
-        }
+        let got_negotation_info = server_hello
+            .extensions
+            .iter()
+            .any(|v| matches!(v, Extension::RenegotiationInfo(_)));
 
         assert!(
             got_negotation_info,
