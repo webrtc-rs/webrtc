@@ -60,3 +60,12 @@ impl PartialEq<util::Error> for Error {
         false
     }
 }
+
+impl PartialEq<Error> for util::Error {
+    fn eq(&self, other: &Error) -> bool {
+        if let Some(down) = self.downcast_ref::<Error>() {
+            return other == down;
+        }
+        false
+    }
+}
