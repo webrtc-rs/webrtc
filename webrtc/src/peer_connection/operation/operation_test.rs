@@ -30,8 +30,8 @@ async fn test_operations_enqueue() -> Result<()> {
         ];
         {
             let r = results.lock().await;
-            assert_eq!(expected.len(), r.len());
-            assert_eq!(&expected, &*r);
+            assert_eq!(r.len(), expected.len());
+            assert_eq!(&*r, &expected);
         }
     }
 

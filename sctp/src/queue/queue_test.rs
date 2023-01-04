@@ -26,44 +26,44 @@ fn test_payload_queue_push_no_check() -> Result<()> {
     let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     pq.push_no_check(make_payload(0, 10));
-    assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
-    assert_eq!(1, pq.len(), "item count mismatch");
+    assert_eq!(pq.get_num_bytes(), 10, "total bytes mismatch");
+    assert_eq!(pq.len(), 1, "item count mismatch");
     pq.push_no_check(make_payload(1, 11));
-    assert_eq!(21, pq.get_num_bytes(), "total bytes mismatch");
-    assert_eq!(2, pq.len(), "item count mismatch");
+    assert_eq!(pq.get_num_bytes(), 21, "total bytes mismatch");
+    assert_eq!(pq.len(), 2, "item count mismatch");
     pq.push_no_check(make_payload(2, 12));
-    assert_eq!(33, pq.get_num_bytes(), "total bytes mismatch");
-    assert_eq!(3, pq.len(), "item count mismatch");
+    assert_eq!(pq.get_num_bytes(), 33, "total bytes mismatch");
+    assert_eq!(pq.len(), 3, "item count mismatch");
 
     for i in 0..3 {
         assert!(!pq.sorted.is_empty(), "should not be empty");
         let c = pq.pop(i);
         assert!(c.is_some(), "pop should succeed");
         if let Some(c) = c {
-            assert_eq!(i, c.tsn, "TSN should match");
+            assert_eq!(c.tsn, i, "TSN should match");
         }
     }
 
-    assert_eq!(0, pq.get_num_bytes(), "total bytes mismatch");
-    assert_eq!(0, pq.len(), "item count mismatch");
+    assert_eq!(pq.get_num_bytes(), 0, "total bytes mismatch");
+    assert_eq!(pq.len(), 0, "item count mismatch");
 
     assert!(pq.sorted.is_empty(), "should be empty");
     pq.push_no_check(make_payload(3, 13));
-    assert_eq!(13, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 13, "total bytes mismatch");
     pq.push_no_check(make_payload(4, 14));
-    assert_eq!(27, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 27, "total bytes mismatch");
 
     for i in 3..5 {
         assert!(!pq.sorted.is_empty(), "should not be empty");
         let c = pq.pop(i);
         assert!(c.is_some(), "pop should succeed");
         if let Some(c) = c {
-            assert_eq!(i, c.tsn, "TSN should match");
+            assert_eq!(c.tsn, i, "TSN should match");
         }
     }
 
-    assert_eq!(0, pq.get_num_bytes(), "total bytes mismatch");
-    assert_eq!(0, pq.len(), "item count mismatch");
+    assert_eq!(pq.get_num_bytes(), 0, "total bytes mismatch");
+    assert_eq!(pq.len(), 0, "item count mismatch");
 
     Ok(())
 }
@@ -84,8 +84,8 @@ fn test_payload_queue_get_gap_ack_block() -> Result<()> {
     assert!(!gab2.is_empty());
     assert_eq!(gab2.len(), 1);
 
-    assert_eq!(gab1[0].start, gab2[0].start);
-    assert_eq!(gab1[0].end, gab2[0].end);
+    assert_eq!(gab2[0].start, gab1[0].start);
+    assert_eq!(gab2[0].end, gab1[0].end);
 
     pq.push(make_payload(8, 0), 0);
     pq.push(make_payload(9, 0), 0);
@@ -98,10 +98,10 @@ fn test_payload_queue_get_gap_ack_block() -> Result<()> {
     assert!(!gab2.is_empty());
     assert_eq!(gab2.len(), 2);
 
-    assert_eq!(gab1[0].start, gab2[0].start);
-    assert_eq!(gab1[0].end, gab2[0].end);
-    assert_eq!(gab1[1].start, gab2[1].start);
-    assert_eq!(gab1[1].end, gab2[1].end);
+    assert_eq!(gab2[0].start, gab1[0].start);
+    assert_eq!(gab2[0].end, gab1[0].end);
+    assert_eq!(gab2[1].start, gab1[1].start);
+    assert_eq!(gab2[1].end, gab1[1].end);
 
     Ok(())
 }
@@ -118,21 +118,21 @@ fn test_payload_queue_get_last_tsn_received() -> Result<()> {
     assert!(ok, "should be true");
     let tsn = pq.get_last_tsn_received();
     assert!(tsn.is_some(), "should be false");
-    assert_eq!(Some(&20), tsn, "should match");
+    assert_eq!(tsn, Some(&20), "should match");
 
     // append should work
     let ok = pq.push(make_payload(21, 0), 0);
     assert!(ok, "should be true");
     let tsn = pq.get_last_tsn_received();
     assert!(tsn.is_some(), "should be false");
-    assert_eq!(Some(&21), tsn, "should match");
+    assert_eq!(tsn, Some(&21), "should match");
 
     // check if sorting applied
     let ok = pq.push(make_payload(19, 0), 0);
     assert!(ok, "should be true");
     let tsn = pq.get_last_tsn_received();
     assert!(tsn.is_some(), "should be false");
-    assert_eq!(Some(&21), tsn, "should match");
+    assert_eq!(tsn, Some(&21), "should match");
 
     Ok(())
 }
@@ -238,13 +238,13 @@ fn test_pending_base_queue_push_and_pop() -> Result<()> {
     for i in 0..3 {
         let c = pq.get(i);
         assert!(c.is_some(), "should not be none");
-        assert_eq!(i as u32, c.unwrap().tsn, "TSN should match");
+        assert_eq!(c.unwrap().tsn, i as u32, "TSN should match");
     }
 
     for i in 0..3 {
         let c = pq.pop_front();
         assert!(c.is_some(), "should not be none");
-        assert_eq!(i, c.unwrap().tsn, "TSN should match");
+        assert_eq!(c.unwrap().tsn, i, "TSN should match");
     }
 
     pq.push_back(make_data_chunk(3, false, NO_FRAGMENT));
@@ -253,7 +253,7 @@ fn test_pending_base_queue_push_and_pop() -> Result<()> {
     for i in 3..5 {
         let c = pq.pop_front();
         assert!(c.is_some(), "should not be none");
-        assert_eq!(i, c.unwrap().tsn, "TSN should match");
+        assert_eq!(c.unwrap().tsn, i, "TSN should match");
     }
     Ok(())
 }
@@ -276,42 +276,42 @@ fn test_pending_base_queue_out_of_bounce() -> Result<()> {
 async fn test_pending_queue_push_and_pop() -> Result<()> {
     let pq = PendingQueue::new();
     pq.push(make_data_chunk(0, false, NO_FRAGMENT)).await;
-    assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 10, "total bytes mismatch");
     pq.push(make_data_chunk(1, false, NO_FRAGMENT)).await;
-    assert_eq!(20, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 20, "total bytes mismatch");
     pq.push(make_data_chunk(2, false, NO_FRAGMENT)).await;
-    assert_eq!(30, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 30, "total bytes mismatch");
 
     for i in 0..3 {
         let c = pq.peek();
         assert!(c.is_some(), "peek error");
         let c = c.unwrap();
-        assert_eq!(i, c.tsn, "TSN should match");
+        assert_eq!(c.tsn, i, "TSN should match");
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
         let result = pq.pop(beginning_fragment, unordered);
         assert!(result.is_some(), "should not error: {}", i);
     }
 
-    assert_eq!(0, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 0, "total bytes mismatch");
 
     pq.push(make_data_chunk(3, false, NO_FRAGMENT)).await;
-    assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 10, "total bytes mismatch");
     pq.push(make_data_chunk(4, false, NO_FRAGMENT)).await;
-    assert_eq!(20, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 20, "total bytes mismatch");
 
     for i in 3..5 {
         let c = pq.peek();
         assert!(c.is_some(), "peek error");
         let c = c.unwrap();
-        assert_eq!(i, c.tsn, "TSN should match");
+        assert_eq!(c.tsn, i, "TSN should match");
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
         let result = pq.pop(beginning_fragment, unordered);
         assert!(result.is_some(), "should not error: {}", i);
     }
 
-    assert_eq!(0, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 0, "total bytes mismatch");
 
     Ok(())
 }
@@ -332,7 +332,7 @@ async fn test_pending_queue_unordered_wins() -> Result<()> {
     let c = pq.peek();
     assert!(c.is_some(), "peek error");
     let c = c.unwrap();
-    assert_eq!(1, c.tsn, "TSN should match");
+    assert_eq!(c.tsn, 1, "TSN should match");
     let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
     let result = pq.pop(beginning_fragment, unordered);
     assert!(result.is_some(), "should not error");
@@ -340,7 +340,7 @@ async fn test_pending_queue_unordered_wins() -> Result<()> {
     let c = pq.peek();
     assert!(c.is_some(), "peek error");
     let c = c.unwrap();
-    assert_eq!(3, c.tsn, "TSN should match");
+    assert_eq!(c.tsn, 3, "TSN should match");
     let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
     let result = pq.pop(beginning_fragment, unordered);
     assert!(result.is_some(), "should not error");
@@ -348,7 +348,7 @@ async fn test_pending_queue_unordered_wins() -> Result<()> {
     let c = pq.peek();
     assert!(c.is_some(), "peek error");
     let c = c.unwrap();
-    assert_eq!(0, c.tsn, "TSN should match");
+    assert_eq!(c.tsn, 0, "TSN should match");
     let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
     let result = pq.pop(beginning_fragment, unordered);
     assert!(result.is_some(), "should not error");
@@ -356,12 +356,12 @@ async fn test_pending_queue_unordered_wins() -> Result<()> {
     let c = pq.peek();
     assert!(c.is_some(), "peek error");
     let c = c.unwrap();
-    assert_eq!(2, c.tsn, "TSN should match");
+    assert_eq!(c.tsn, 2, "TSN should match");
     let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
     let result = pq.pop(beginning_fragment, unordered);
     assert!(result.is_some(), "should not error");
 
-    assert_eq!(0, pq.get_num_bytes(), "total bytes mismatch");
+    assert_eq!(pq.get_num_bytes(), 0, "total bytes mismatch");
 
     Ok(())
 }
@@ -382,7 +382,7 @@ async fn test_pending_queue_fragments() -> Result<()> {
         let c = pq.peek();
         assert!(c.is_some(), "peek error");
         let c = c.unwrap();
-        assert_eq!(exp, c.tsn, "TSN should match");
+        assert_eq!(c.tsn, exp, "TSN should match");
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
         let result = pq.pop(beginning_fragment, unordered);
         assert!(result.is_some(), "should not error: {}", exp);
@@ -401,7 +401,7 @@ async fn test_pending_queue_selection_persistence() -> Result<()> {
     let c = pq.peek();
     assert!(c.is_some(), "peek error");
     let c = c.unwrap();
-    assert_eq!(0, c.tsn, "TSN should match");
+    assert_eq!(c.tsn, 0, "TSN should match");
     let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
     let result = pq.pop(beginning_fragment, unordered);
     assert!(result.is_some(), "should not error: {}", 0);
@@ -416,7 +416,7 @@ async fn test_pending_queue_selection_persistence() -> Result<()> {
         let c = pq.peek();
         assert!(c.is_some(), "peek error");
         let c = c.unwrap();
-        assert_eq!(exp, c.tsn, "TSN should match");
+        assert_eq!(c.tsn, exp, "TSN should match");
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
         let result = pq.pop(beginning_fragment, unordered);
         assert!(result.is_some(), "should not error: {}", exp);
@@ -434,8 +434,8 @@ async fn test_pending_queue_append() -> Result<()> {
         make_data_chunk(3, false, NO_FRAGMENT),
     ])
     .await;
-    assert_eq!(30, pq.get_num_bytes(), "total bytes mismatch");
-    assert_eq!(3, pq.len(), "len mismatch");
+    assert_eq!(pq.get_num_bytes(), 30, "total bytes mismatch");
+    assert_eq!(pq.len(), 3, "len mismatch");
 
     Ok(())
 }
@@ -464,7 +464,7 @@ fn test_reassembly_queue_ordered_fragments() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -482,8 +482,8 @@ fn test_reassembly_queue_ordered_fragments() -> Result<()> {
     let mut buf = vec![0u8; 16];
 
     let (n, ppi) = rq.read(&mut buf)?;
-    assert_eq!(7, n, "should received 7 bytes");
-    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(n, 7, "should received 7 bytes");
+    assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
     assert_eq!(ppi, org_ppi, "should have valid ppi");
     assert_eq!(&buf[..n], b"ABCDEFG", "data should match");
 
@@ -508,7 +508,7 @@ fn test_reassembly_queue_unordered_fragments() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -521,7 +521,7 @@ fn test_reassembly_queue_unordered_fragments() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(7, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 7, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -535,13 +535,13 @@ fn test_reassembly_queue_unordered_fragments() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(complete, "chunk set should be complete");
-    assert_eq!(8, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 8, "num bytes mismatch");
 
     let mut buf = vec![0u8; 16];
 
     let (n, ppi) = rq.read(&mut buf)?;
-    assert_eq!(8, n, "should received 8 bytes");
-    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(n, 8, "should received 8 bytes");
+    assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
     assert_eq!(ppi, org_ppi, "should have valid ppi");
     assert_eq!(&buf[..n], b"ABCDEFGH", "data should match");
 
@@ -564,7 +564,7 @@ fn test_reassembly_queue_ordered_and_unordered_fragments() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(complete, "chunk set should be complete");
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -579,7 +579,7 @@ fn test_reassembly_queue_ordered_and_unordered_fragments() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(complete, "chunk set should be complete");
-    assert_eq!(6, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 6, "num bytes mismatch");
 
     //
     // Now we have two complete chunks ready to read in the reassemblyQueue.
@@ -589,15 +589,15 @@ fn test_reassembly_queue_ordered_and_unordered_fragments() -> Result<()> {
 
     // Should read unordered chunks first
     let (n, ppi) = rq.read(&mut buf)?;
-    assert_eq!(3, n, "should received 3 bytes");
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(n, 3, "should received 3 bytes");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
     assert_eq!(ppi, org_ppi, "should have valid ppi");
     assert_eq!(&buf[..n], b"DEF", "data should match");
 
     // Next should read ordered chunks
     let (n, ppi) = rq.read(&mut buf)?;
-    assert_eq!(3, n, "should received 3 bytes");
-    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(n, 3, "should received 3 bytes");
+    assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
     assert_eq!(ppi, org_ppi, "should have valid ppi");
     assert_eq!(&buf[..n], b"ABC", "data should match");
 
@@ -636,7 +636,7 @@ fn test_reassembly_queue_unordered_complete_skips_incomplete() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 10, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -651,7 +651,7 @@ fn test_reassembly_queue_unordered_complete_skips_incomplete() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(complete, "chunk set should be complete");
-    assert_eq!(14, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 14, "num bytes mismatch");
 
     //
     // Now we have two complete chunks ready to read in the reassemblyQueue.
@@ -661,8 +661,8 @@ fn test_reassembly_queue_unordered_complete_skips_incomplete() -> Result<()> {
 
     // Should pick the one that has "GOOD"
     let (n, ppi) = rq.read(&mut buf)?;
-    assert_eq!(4, n, "should receive 4 bytes");
-    assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(n, 4, "should receive 4 bytes");
+    assert_eq!(rq.get_num_bytes(), 10, "num bytes mismatch");
     assert_eq!(ppi, org_ppi, "should have valid ppi");
     assert_eq!(&buf[..n], b"GOOD", "data should match");
 
@@ -688,7 +688,7 @@ fn test_reassembly_queue_ignores_chunk_with_wrong_si() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk should be ignored");
-    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
     Ok(())
 }
 
@@ -711,7 +711,7 @@ fn test_reassembly_queue_ignores_chunk_with_stale_ssn() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk should not be ignored");
-    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
 
     Ok(())
 }
@@ -733,12 +733,12 @@ fn test_reassembly_queue_should_fail_to_read_incomplete_chunk() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "the set should not be complete");
-    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 2, "num bytes mismatch");
 
     let mut buf = vec![0u8; 16];
     let result = rq.read(&mut buf);
     assert!(result.is_err(), "read() should not succeed");
-    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 2, "num bytes mismatch");
 
     Ok(())
 }
@@ -761,12 +761,12 @@ fn test_reassembly_queue_should_fail_to_read_if_the_nex_ssn_is_not_ready() -> Re
 
     let complete = rq.push(chunk);
     assert!(complete, "the set should be complete");
-    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 2, "num bytes mismatch");
 
     let mut buf = vec![0u8; 16];
     let result = rq.read(&mut buf);
     assert!(result.is_err(), "read() should not succeed");
-    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 2, "num bytes mismatch");
 
     Ok(())
 }
@@ -789,15 +789,15 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(complete, "the set should be complete");
-    assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 10, "num bytes mismatch");
 
     let mut buf = vec![0u8; 8]; // <- passing buffer too short
     let result = rq.read(&mut buf);
     assert!(result.is_err(), "read() should not succeed");
     if let Err(err) = result {
-        assert_eq!(Error::ErrShortBuffer, err, "read() should not succeed");
+        assert_eq!(err, Error::ErrShortBuffer, "read() should not succeed");
     }
-    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
 
     Ok(())
 }
@@ -823,7 +823,7 @@ fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(complete, "chunk set should be complete");
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -836,7 +836,7 @@ fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(6, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 6, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -848,12 +848,12 @@ fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(9, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 9, "num bytes mismatch");
 
     rq.forward_tsn_for_ordered(ssn_dropped);
 
-    assert_eq!(1, rq.ordered.len(), "there should be one chunk left");
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.ordered.len(), 1, "there should be one chunk left");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
 
     Ok(())
 }
@@ -879,7 +879,7 @@ fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -892,7 +892,7 @@ fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(6, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 6, "num bytes mismatch");
 
     let chunk = ChunkPayloadData {
         payload_type: org_ppi,
@@ -906,7 +906,7 @@ fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<()> {
 
     let complete = rq.push(chunk);
     assert!(!complete, "chunk set should not be complete yet");
-    assert_eq!(9, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 9, "num bytes mismatch");
 
     // At this point, there are 3 chunks in the rq.unorderedChunks.
     // This call should remove chunks with tsn equals to 13 or older.
@@ -914,11 +914,11 @@ fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<()> {
 
     // As a result, there should be one chunk (tsn=14)
     assert_eq!(
-        1,
         rq.unordered_chunks.len(),
+        1,
         "there should be one chunk kept"
     );
-    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(rq.get_num_bytes(), 3, "num bytes mismatch");
 
     Ok(())
 }
@@ -944,7 +944,7 @@ fn test_chunk_set_push_dup_chunks_to_chunk_set() -> Result<()> {
         ..Default::default()
     });
     assert!(!complete, "chunk with dup TSN is not complete");
-    assert_eq!(1, cset.chunks.len(), "chunk with dup TSN should be ignored");
+    assert_eq!(cset.chunks.len(), 1, "chunk with dup TSN should be ignored");
     Ok(())
 }
 

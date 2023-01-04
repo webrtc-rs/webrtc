@@ -93,8 +93,8 @@ mod test {
 
         for (state_string, expected_state) in tests {
             assert_eq!(
-                expected_state,
                 RTCDataChannelState::from(state_string),
+                expected_state,
                 "testCase: {}",
                 expected_state,
             );
@@ -112,7 +112,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string(),)
+            assert_eq!(state.to_string(), expected_string)
         }
     }
 }

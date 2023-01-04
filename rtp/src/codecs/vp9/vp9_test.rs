@@ -304,7 +304,7 @@ fn test_vp9_payloader_payload() -> Result<()> {
         for b in &bs {
             actual.extend(pck.payload(mtu, b)?);
         }
-        assert_eq!(expected, actual, "{}: Payloaded packet", name);
+        assert_eq!(actual, expected, "{}: Payloaded packet", name);
     }
 
     //"PictureIDOverflow"

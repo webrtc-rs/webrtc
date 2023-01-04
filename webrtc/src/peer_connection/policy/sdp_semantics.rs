@@ -82,7 +82,7 @@ mod test {
         ];
 
         for (value, expected_string) in tests {
-            assert_eq!(expected_string, value.to_string());
+            assert_eq!(value.to_string(), expected_string);
         }
     }
 

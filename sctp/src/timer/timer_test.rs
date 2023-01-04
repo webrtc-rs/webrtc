@@ -47,8 +47,8 @@ mod test_ack_timer {
         sleep(ACK_INTERVAL + Duration::from_millis(50)).await;
 
         assert_eq!(
-            0,
             ncbs.load(Ordering::SeqCst),
+            0,
             "should not be timed out (actual: {})",
             ncbs.load(Ordering::SeqCst)
         );
@@ -79,10 +79,10 @@ mod test_rto_manager {
     #[tokio::test]
     async fn test_rto_manager_initial_values() -> Result<()> {
         let m = RtoManager::new();
-        assert_eq!(RTO_INITIAL, m.rto, "should be rtoInitial");
-        assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
-        assert_eq!(0, m.srtt, "should be 0");
-        assert_eq!(0.0, m.rttvar, "should be 0.0");
+        assert_eq!(m.rto, RTO_INITIAL, "should be rtoInitial");
+        assert_eq!(m.get_rto(), RTO_INITIAL, "should be rtoInitial");
+        assert_eq!(m.srtt, 0, "should be 0");
+        assert_eq!(m.rttvar, 0.0, "should be 0.0");
 
         Ok(())
     }
@@ -97,7 +97,7 @@ mod test_rto_manager {
         for i in 0..5 {
             m.set_new_rtt(600);
             let rto = m.get_rto();
-            assert_eq!(exp[i], rto, "should be equal: {}", i);
+            assert_eq!(rto, exp[i], "should be equal: {}", i);
         }
 
         Ok(())
@@ -116,7 +116,7 @@ mod test_rto_manager {
         for i in 0..5 {
             m.set_new_rtt(30000);
             let rto = m.get_rto();
-            assert_eq!(exp[i], rto, "should be equal: {}", i);
+            assert_eq!(rto, exp[i], "should be equal: {}", i);
         }
 
         Ok(())
@@ -125,17 +125,17 @@ mod test_rto_manager {
     #[tokio::test]
     async fn test_rto_manager_calculate_next_timeout() -> Result<()> {
         let rto = calculate_next_timeout(1, 0);
-        assert_eq!(1, rto, "should match");
+        assert_eq!(rto, 1, "should match");
         let rto = calculate_next_timeout(1, 1);
-        assert_eq!(2, rto, "should match");
+        assert_eq!(rto, 2, "should match");
         let rto = calculate_next_timeout(1, 2);
-        assert_eq!(4, rto, "should match");
+        assert_eq!(rto, 4, "should match");
         let rto = calculate_next_timeout(1, 30);
-        assert_eq!(60000, rto, "should match");
+        assert_eq!(rto, 60000, "should match");
         let rto = calculate_next_timeout(1, 63);
-        assert_eq!(60000, rto, "should match");
+        assert_eq!(rto, 60000, "should match");
         let rto = calculate_next_timeout(1, 64);
-        assert_eq!(60000, rto, "should match");
+        assert_eq!(rto, 60000, "should match");
 
         Ok(())
     }
@@ -148,9 +148,9 @@ mod test_rto_manager {
         }
 
         m.reset();
-        assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
-        assert_eq!(0, m.srtt, "should be 0");
-        assert_eq!(0.0, m.rttvar, "should be 0");
+        assert_eq!(m.get_rto(), RTO_INITIAL, "should be rtoInitial");
+        assert_eq!(m.srtt, 0, "should be 0");
+        assert_eq!(m.rttvar, 0.0, "should be 0");
 
         Ok(())
     }
@@ -237,7 +237,7 @@ mod test_rtx_timer {
         rt.stop().await;
         assert!(!rt.is_running().await, "should not be running");
 
-        assert_eq!(4, ncbs.load(Ordering::SeqCst), "should be called 4 times");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 4, "should be called 4 times");
 
         Ok(())
     }
@@ -265,7 +265,7 @@ mod test_rtx_timer {
         rt.stop().await;
 
         assert!(!rt.is_running().await, "should not be running");
-        assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 1, "must be called once");
 
         Ok(())
     }
@@ -290,7 +290,7 @@ mod test_rtx_timer {
         rt.stop().await;
 
         assert!(!rt.is_running().await, "should not be running");
-        assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 0, "no callback should be made");
 
         Ok(())
     }
@@ -319,7 +319,7 @@ mod test_rtx_timer {
         rt.stop().await;
 
         assert!(!rt.is_running().await, "should NOT be running");
-        assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 1, "must be called once");
 
         Ok(())
     }
@@ -343,7 +343,7 @@ mod test_rtx_timer {
             assert!(!rt.is_running().await, "should NOT be running");
         }
 
-        assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 0, "no callback should be made");
 
         Ok(())
     }
@@ -380,7 +380,7 @@ mod test_rtx_timer {
         let elapsed = done_rx.recv().await;
 
         assert!(!rt.is_running().await, "should not be running");
-        assert_eq!(5, ncbs.load(Ordering::SeqCst), "should be called 5 times");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 5, "should be called 5 times");
 
         if let Some(elapsed) = elapsed {
             let diff = elapsed.duration_since(since).unwrap();
@@ -431,7 +431,7 @@ mod test_rtx_timer {
         let elapsed = done_rx.recv().await;
 
         assert!(rt.is_running().await, "should still be running");
-        assert_eq!(6, ncbs.load(Ordering::SeqCst), "should be called 6 times");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 6, "should be called 6 times");
 
         if let Some(elapsed) = elapsed {
             let diff = elapsed.duration_since(since).unwrap();
@@ -501,7 +501,7 @@ mod test_rtx_timer {
         assert!(!rt.is_running().await, "must not be running");
 
         sleep(Duration::from_millis(100)).await;
-        assert_eq!(0, ncbs.load(Ordering::SeqCst), "RTO should not occur");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 0, "RTO should not occur");
 
         Ok(())
     }

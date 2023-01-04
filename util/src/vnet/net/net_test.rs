@@ -44,8 +44,8 @@ async fn test_net_native_resolve_addr() -> Result<()> {
     assert!(!nw.is_virtual(), "should be false");
 
     let udp_addr = nw.resolve_addr(true, "localhost:1234").await?;
-    assert_eq!("127.0.0.1", udp_addr.ip().to_string(), "should match");
-    assert_eq!(1234, udp_addr.port(), "should match");
+    assert_eq!(udp_addr.ip().to_string(), "127.0.0.1", "should match");
+    assert_eq!(udp_addr.port(), 1234, "should match");
 
     let result = nw.resolve_addr(false, "127.0.0.1:1234").await;
     assert!(result.is_err(), "should not match");
@@ -104,8 +104,8 @@ async fn test_net_native_loopback() -> Result<()> {
     let (n, raddr) = conn.recv_from(&mut buf).await?;
     assert_eq!(n, msg.len(), "should match msg size {}", msg.len());
     assert_eq!(
-        msg.as_bytes(),
         &buf[..n],
+        msg.as_bytes(),
         "should match msg content {}",
         msg
     );
@@ -132,7 +132,7 @@ async fn test_net_native_unexpected_operations() -> Result<()> {
 
     if !lo_name.is_empty() {
         if let Some(ifc) = nw.get_interface(&lo_name).await {
-            assert_eq!(lo_name, ifc.name, "should match ifc name");
+            assert_eq!(ifc.name, lo_name, "should match ifc name");
         } else {
             assert!(false, "should succeed");
         }
@@ -159,7 +159,7 @@ async fn test_net_virtual_interfaces() -> Result<()> {
         match ifc.name.as_str() {
             LO0_STR => {
                 let addrs = ifc.addrs();
-                assert_eq!(1, addrs.len(), "should be one address");
+                assert_eq!(addrs.len(), 1, "should be one address");
             }
             "eth0" => {
                 let addrs = ifc.addrs();
@@ -185,15 +185,15 @@ async fn test_net_virtual_interface_by_name() -> Result<()> {
     let nic = nw.get_nic()?;
     let nic = nic.lock().await;
     if let Some(ifc) = nic.get_interface(LO0_STR).await {
-        assert_eq!(LO0_STR, ifc.name.as_str(), "should match");
+        assert_eq!(ifc.name.as_str(), LO0_STR, "should match");
         let addrs = ifc.addrs();
-        assert_eq!(1, addrs.len(), "should be one address");
+        assert_eq!(addrs.len(), 1, "should be one address");
     } else {
         assert!(false, "should got ifc");
     }
 
     if let Some(ifc) = nic.get_interface("eth0").await {
-        assert_eq!("eth0", ifc.name.as_str(), "should match");
+        assert_eq!(ifc.name.as_str(), "eth0", "should match");
         let addrs = ifc.addrs();
         assert!(addrs.is_empty(), "should empty");
     } else {
@@ -212,7 +212,7 @@ async fn test_net_virtual_has_ipaddr() -> Result<()> {
     assert!(nw.is_virtual(), "should be true");
 
     let interfaces = nw.get_interfaces().await;
-    assert_eq!(2, interfaces.len(), "should be one interface");
+    assert_eq!(interfaces.len(), 2, "should be one interface");
 
     {
         let nic = nw.get_nic()?;
@@ -246,7 +246,7 @@ async fn test_net_virtual_get_all_ipaddrs() -> Result<()> {
     assert!(nw.is_virtual(), "should be true");
 
     let interfaces = nw.get_interfaces().await;
-    assert_eq!(2, interfaces.len(), "should be one interface");
+    assert_eq!(interfaces.len(), 2, "should be one interface");
 
     {
         let nic = nw.get_nic()?;
@@ -263,7 +263,7 @@ async fn test_net_virtual_get_all_ipaddrs() -> Result<()> {
     if let Net::VNet(vnet) = &nw {
         let net = vnet.lock().await;
         let ips = net.get_all_ipaddrs(false);
-        assert_eq!(2, ips.len(), "ips should match size {} == 2", ips.len())
+        assert_eq!(ips.len(), 2, "ips should match size {} == 2", ips.len())
     }
 
     Ok(())
@@ -280,7 +280,7 @@ async fn test_net_virtual_assign_port() -> Result<()> {
     let space = end + 1 - start;
 
     let interfaces = nw.get_interfaces().await;
-    assert_eq!(2, interfaces.len(), "should be one interface");
+    assert_eq!(interfaces.len(), 2, "should be one interface");
 
     {
         let nic = nw.get_nic()?;
@@ -312,8 +312,8 @@ async fn test_net_virtual_assign_port() -> Result<()> {
         {
             let vi = vnet.vi.lock().await;
             assert_eq!(
-                space as usize,
                 vi.udp_conns.len().await,
+                space as usize,
                 "udp_conns should match"
             );
         }
@@ -332,7 +332,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<()> {
     assert!(nw.is_virtual(), "should be true");
 
     let interfaces = nw.get_interfaces().await;
-    assert_eq!(2, interfaces.len(), "should be one interface");
+    assert_eq!(interfaces.len(), 2, "should be one interface");
 
     {
         let nic = nw.get_nic()?;
@@ -393,14 +393,14 @@ async fn test_net_virtual_resolve_addr() -> Result<()> {
 
     let udp_addr = nw.resolve_addr(true, "localhost:1234").await?;
     assert_eq!(
-        "127.0.0.1",
         udp_addr.ip().to_string().as_str(),
+        "127.0.0.1",
         "udp addr {} should match 127.0.0.1",
         udp_addr.ip(),
     );
     assert_eq!(
-        1234,
         udp_addr.port(),
+        1234,
         "udp addr {} should match 1234",
         udp_addr.port()
     );
@@ -424,8 +424,8 @@ async fn test_net_virtual_loopback1() -> Result<()> {
     let (n, raddr) = conn.recv_from(&mut buf).await?;
     assert_eq!(n, msg.len(), "should match msg size {}", msg.len());
     assert_eq!(
-        msg.as_bytes(),
         &buf[..n],
+        msg.as_bytes(),
         "should match msg content {}",
         msg
     );
@@ -598,9 +598,9 @@ async fn test_net_virtual_loopback2() -> Result<()> {
                         }
                     };
 
-                    assert_eq!(6, n, "{} should match 6", n);
-                    assert_eq!("127.0.0.1:4000", addr.to_string(), "addr should match");
-                    assert_eq!(b"Hello!", &buf[..n], "buf should match");
+                    assert_eq!(n, 6, "{} should match 6", n);
+                    assert_eq!(addr.to_string(), "127.0.0.1:4000", "addr should match");
+                    assert_eq!(&buf[..n], b"Hello!", "buf should match");
 
                     let _ = recv_ch_tx.send(true).await;
                 }
@@ -771,7 +771,7 @@ async fn test_net_virtual_end2end() -> Result<()> {
 
     log::debug!("conn1: sending");
     let n = conn1.send_to(b"Hello!", conn2.local_addr()?).await?;
-    assert_eq!(6, n, "should match");
+    assert_eq!(n, 6, "should match");
 
     let _ = conn1_recv_ch_rx.recv().await;
     log::debug!("main recv conn1_recv_ch_rx");
@@ -887,7 +887,7 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<()> {
 
                     // echo back to conn1
                     let n = conn2_tr.send_to(b"Good-bye!", addr).await?;
-                    assert_eq!( 9, n, "should match");
+                    assert_eq!(n, 9, "should match");
                 }
                 _ = close_ch_rx2.recv() => {
                     log::debug!("conn1 received close_ch_rx2");
@@ -903,7 +903,7 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<()> {
 
     log::debug!("conn1: sending");
     let n = conn1.send_to(b"Hello!", conn2.local_addr()?).await?;
-    assert_eq!(6, n, "should match");
+    assert_eq!(n, 6, "should match");
 
     let _ = conn1_recv_ch_rx.recv().await;
     log::debug!("main recv conn1_recv_ch_rx");
