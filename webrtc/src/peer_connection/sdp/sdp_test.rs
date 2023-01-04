@@ -613,6 +613,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
         },
     ];
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..2 {
         let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
