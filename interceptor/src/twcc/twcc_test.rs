@@ -22,7 +22,7 @@ fn test_chunk_add() -> Result<()> {
 
         let status_chunk = c.encode();
         match status_chunk {
-            PacketStatusChunk::RunLengthChunk(_) => assert!(true),
+            PacketStatusChunk::RunLengthChunk(_) => {}
             _ => panic!(),
         };
 
@@ -51,7 +51,7 @@ fn test_chunk_add() -> Result<()> {
 
         let status_chunk = c.encode();
         match status_chunk {
-            PacketStatusChunk::RunLengthChunk(_) => assert!(true),
+            PacketStatusChunk::RunLengthChunk(_) => {}
             _ => panic!(),
         };
 
@@ -81,7 +81,7 @@ fn test_chunk_add() -> Result<()> {
 
         let status_chunk = c.encode();
         match status_chunk {
-            PacketStatusChunk::RunLengthChunk(_) => assert!(true),
+            PacketStatusChunk::RunLengthChunk(_) => {}
             _ => panic!(),
         };
 
@@ -113,7 +113,7 @@ fn test_chunk_add() -> Result<()> {
 
         let status_chunk = c.encode();
         match status_chunk {
-            PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
+            PacketStatusChunk::StatusVectorChunk(_) => {}
             _ => panic!(),
         };
 
@@ -146,7 +146,7 @@ fn test_chunk_add() -> Result<()> {
 
         let status_chunk1 = c.encode();
         match status_chunk1 {
-            PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
+            PacketStatusChunk::StatusVectorChunk(_) => {}
             _ => panic!(),
         };
         assert_eq!(c.deltas.len(), 1);
@@ -156,7 +156,7 @@ fn test_chunk_add() -> Result<()> {
 
         let status_chunk2 = c.encode();
         match status_chunk2 {
-            PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
+            PacketStatusChunk::StatusVectorChunk(_) => {}
             _ => panic!(),
         };
         assert_eq!(c.deltas.len(), 0);
