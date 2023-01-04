@@ -145,5 +145,6 @@ fn main() -> Result<(), Error> {
                 Result::<(), Error>::Ok(())
             })
     });
+    #[allow(clippy::empty_loop)]
     loop {}
 }
