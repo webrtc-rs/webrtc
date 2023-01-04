@@ -108,7 +108,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: --workspace --all-targets --all-features --all -- -D warnings
       - name: 💬 Check formatting
         uses: actions-rs/cargo@v1
         with:
