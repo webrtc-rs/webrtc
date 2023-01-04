@@ -36,6 +36,7 @@ async fn test_twcc_sender_interceptor() -> Result<()> {
                 .await;
 
                 let id = i + 1;
+                #[allow(clippy::identity_op)]
                 for seq_num in [id * 1, id * 2, id * 3, id * 4, id * 5] {
                     stream
                         .write_rtp(&rtp::packet::Packet {
