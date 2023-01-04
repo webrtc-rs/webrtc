@@ -1,3 +1,6 @@
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
+
 use super::*;
 use crate::error::Result;
 use bytes::{Bytes, BytesMut};

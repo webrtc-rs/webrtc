@@ -1,3 +1,8 @@
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
+
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};

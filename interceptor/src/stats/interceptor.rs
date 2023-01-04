@@ -821,6 +821,9 @@ fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> Option<f64> {
 
 #[cfg(test)]
 mod test {
+    // Silence warning on `..Default::default()` with no effect:
+    #![allow(clippy::needless_update)]
+
     macro_rules! assert_feq {
         ($left: expr, $right: expr) => {
             assert_feq!($left, $right, 0.01);
