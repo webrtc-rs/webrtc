@@ -2,27 +2,27 @@
 
 ## Unreleased
 
-* Limit the bytes in the PendingQueue to avoid packets accumulating there uncontrollably [367](https://github.com/webrtc-rs/webrtc/pull/367)
-* Improve algorithm used to push to pending queue from O(n*log(n)) to O(log(n)) [#365](https://github.com/webrtc-rs/webrtc/pull/365)
-* Reuse as many allocations as possible when marshaling [#364](https://github.com/webrtc-rs/webrtc/pull/364)
-* The lock for the internal association was contended badly because marshaling was done while still in a critical section and also tokio was scheduling tasks badly [#363](https://github.com/webrtc-rs/webrtc/pull/363)
+* Limit the bytes in the PendingQueue to avoid packets accumulating there uncontrollably [367](https://github.com/webrtc-rs/webrtc/pull/367).
+* Improve algorithm used to push to pending queue from O(n*log(n)) to O(log(n)) [#365](https://github.com/webrtc-rs/webrtc/pull/365).
+* Reuse as many allocations as possible when marshaling [#364](https://github.com/webrtc-rs/webrtc/pull/364).
+* The lock for the internal association was contended badly because marshaling was done while still in a critical section and also tokio was scheduling tasks badly [#363](https://github.com/webrtc-rs/webrtc/pull/363).
 
 ### Breaking
 
-* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` async again [367](https://github.com/webrtc-rs/webrtc/pull/367)
+* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` async again [#367](https://github.com/webrtc-rs/webrtc/pull/367).
 
 ## v0.7.0
 
 * Increased minimum support rust version to `1.60.0`.
 * Do not loose data in `PollStream::poll_write` [#341](https://github.com/webrtc-rs/webrtc/pull/341).
-* `PollStream::poll_shutdown`: make sure to flush any writes before shutting down [#340](https://github.com/webrtc-rs/webrtc/pull/340)
-* Fixed a possible bug when adding chunks to pending queue [#345](https://github.com/webrtc-rs/webrtc/pull/345)
+* `PollStream::poll_shutdown`: make sure to flush any writes before shutting down [#340](https://github.com/webrtc-rs/webrtc/pull/340).
+* Fixed a possible bug when adding chunks to pending queue [#345](https://github.com/webrtc-rs/webrtc/pull/345).
 * Increased required `webrtc-util` version to `0.7.0`.
 
 ### Breaking changes
 
 * Make `Stream::on_buffered_amount_low` function non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338).
-* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` sync [#344](https://github.com/webrtc-rs/webrtc/pull/344)
+* Make `sctp::Stream::write` & `sctp::Stream::write_sctp` sync [#344](https://github.com/webrtc-rs/webrtc/pull/344).
 
 ## v0.6.1
 
