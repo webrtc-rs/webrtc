@@ -848,18 +848,16 @@ fn test_h265_packet() -> Result<()> {
                 (
                     &H265Payload::H265SingleNALUnitPacket(_),
                     &H265Payload::H265SingleNALUnitPacket(_),
-                ) => assert!(true),
+                ) => {}
                 (
                     &H265Payload::H265FragmentationUnitPacket(_),
                     &H265Payload::H265FragmentationUnitPacket(_),
-                ) => assert!(true),
+                ) => {}
                 (
                     &H265Payload::H265AggregationPacket(_),
                     &H265Payload::H265AggregationPacket(_),
-                ) => assert!(true),
-                (&H265Payload::H265PACIPacket(_), &H265Payload::H265PACIPacket(_)) => {
-                    assert!(true)
-                }
+                ) => {}
+                (&H265Payload::H265PACIPacket(_), &H265Payload::H265PACIPacket(_)) => {}
                 _ => panic!(),
             };
         }
