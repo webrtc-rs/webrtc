@@ -89,7 +89,7 @@ async fn test_packetizer_abs_send_time() -> Result<()> {
         assert!(false, "Generated {} packets instead of 1", packets.len())
     }
 
-    assert_eq!(expected, packets[0]);
+    assert_eq!(packets[0], expected);
 
     Ok(())
 }

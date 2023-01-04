@@ -13,7 +13,7 @@ fn test_chunk_add() -> Result<()> {
             assert!(c.can_add(SymbolTypeTcc::PacketNotReceived as u16), "{}", i);
             c.add(SymbolTypeTcc::PacketNotReceived as u16);
         }
-        assert_eq!(vec![0u16; MAX_RUN_LENGTH_CAP], c.deltas);
+        assert_eq!(c.deltas, vec![0u16; MAX_RUN_LENGTH_CAP]);
         assert!(!c.has_different_types);
 
         assert!(!c.can_add(SymbolTypeTcc::PacketNotReceived as u16));
@@ -27,7 +27,7 @@ fn test_chunk_add() -> Result<()> {
         };
 
         let buf = status_chunk.marshal()?;
-        assert_eq!(&[0x1f, 0xff], &buf[..]);
+        assert_eq!(&buf[..], &[0x1f, 0xff]);
     }
 
     //"fill with small delta"
@@ -56,7 +56,7 @@ fn test_chunk_add() -> Result<()> {
         };
 
         let buf = status_chunk.marshal()?;
-        assert_eq!(&[0x20, 0xe], &buf[..]);
+        assert_eq!(&buf[..], &[0x20, 0xe]);
     }
 
     //"fill with large delta"
@@ -86,7 +86,7 @@ fn test_chunk_add() -> Result<()> {
         };
 
         let buf = status_chunk.marshal()?;
-        assert_eq!(&[0x40, 0x7], &buf[..]);
+        assert_eq!(&buf[..], &[0x40, 0x7]);
     }
 
     // "fill with different types"
@@ -118,7 +118,7 @@ fn test_chunk_add() -> Result<()> {
         };
 
         let buf = status_chunk.marshal()?;
-        assert_eq!(&[0xd5, 0x6a], &buf[..]);
+        assert_eq!(&buf[..], &[0xd5, 0x6a]);
     }
 
     //"overfill and encode"
@@ -149,7 +149,7 @@ fn test_chunk_add() -> Result<()> {
             PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
             _ => assert!(false),
         };
-        assert_eq!(1, c.deltas.len());
+        assert_eq!(c.deltas.len(), 1);
 
         assert!(c.can_add(SymbolTypeTcc::PacketReceivedLargeDelta as u16));
         c.add(SymbolTypeTcc::PacketReceivedLargeDelta as u16);
@@ -159,7 +159,7 @@ fn test_chunk_add() -> Result<()> {
             PacketStatusChunk::StatusVectorChunk(_) => assert!(true),
             _ => assert!(false),
         };
-        assert_eq!(0, c.deltas.len());
+        assert_eq!(c.deltas.len(), 0);
 
         assert_eq!(
             PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
@@ -201,16 +201,16 @@ fn test_feedback() -> Result<()> {
         let got = f.add_received(1, 1023 * 1000);
 
         assert!(got);
-        assert_eq!(2, f.next_sequence_number);
-        assert_eq!(15, f.ref_timestamp64ms);
+        assert_eq!(f.next_sequence_number, 2);
+        assert_eq!(f.ref_timestamp64ms, 15);
 
         let got = f.add_received(4, 1086 * 1000);
         assert!(got);
-        assert_eq!(5, f.next_sequence_number);
-        assert_eq!(15, f.ref_timestamp64ms);
+        assert_eq!(f.next_sequence_number, 5);
+        assert_eq!(f.ref_timestamp64ms, 15);
 
         assert!(f.last_chunk.has_different_types);
-        assert_eq!(4, f.last_chunk.deltas.len());
+        assert_eq!(f.last_chunk.deltas.len(), 4);
         assert!(!f
             .last_chunk
             .deltas
@@ -234,12 +234,12 @@ fn test_feedback() -> Result<()> {
         let pkt = f.get_rtcp();
 
         assert!(pkt.header().padding);
-        assert_eq!(7, pkt.header().length);
-        assert_eq!(5, pkt.base_sequence_number);
-        assert_eq!(7, pkt.packet_status_count);
-        assert_eq!(5, pkt.reference_time);
-        assert_eq!(0, pkt.fb_pkt_count);
-        assert_eq!(1, pkt.packet_chunks.len());
+        assert_eq!(pkt.header().length, 7);
+        assert_eq!(pkt.base_sequence_number, 5);
+        assert_eq!(pkt.packet_status_count, 7);
+        assert_eq!(pkt.reference_time, 5);
+        assert_eq!(pkt.fb_pkt_count, 0);
+        assert_eq!(pkt.packet_chunks.len(), 1);
 
         assert_eq!(
             vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
@@ -276,9 +276,9 @@ fn test_feedback() -> Result<()> {
                 delta: 0x0400 * TYPE_TCC_DELTA_SCALE_FACTOR,
             },
         ];
-        assert_eq!(expected_deltas.len(), pkt.recv_deltas.len());
-        for (i, d) in expected_deltas.iter().enumerate() {
-            assert_eq!(d, &pkt.recv_deltas[i]);
+        assert_eq!(pkt.recv_deltas.len(), expected_deltas.len());
+        for (i, expected) in expected_deltas.iter().enumerate() {
+            assert_eq!(&pkt.recv_deltas[i], expected);
         }
     }
 
@@ -299,12 +299,12 @@ fn test_feedback() -> Result<()> {
         let pkt = f.get_rtcp();
 
         assert!(pkt.header().padding);
-        assert_eq!(7, pkt.header().length);
-        assert_eq!(65535, pkt.base_sequence_number);
-        assert_eq!(13, pkt.packet_status_count);
-        assert_eq!(5, pkt.reference_time);
-        assert_eq!(0, pkt.fb_pkt_count);
-        assert_eq!(2, pkt.packet_chunks.len());
+        assert_eq!(pkt.header().length, 7);
+        assert_eq!(pkt.base_sequence_number, 65535);
+        assert_eq!(pkt.packet_status_count, 13);
+        assert_eq!(pkt.reference_time, 5);
+        assert_eq!(pkt.fb_pkt_count, 0);
+        assert_eq!(pkt.packet_chunks.len(), 2);
 
         assert_eq!(
             vec![
@@ -355,9 +355,9 @@ fn test_feedback() -> Result<()> {
                 delta: 0x0400 * TYPE_TCC_DELTA_SCALE_FACTOR,
             },
         ];
-        assert_eq!(expected_deltas.len(), pkt.recv_deltas.len());
-        for (i, d) in expected_deltas.iter().enumerate() {
-            assert_eq!(d, &pkt.recv_deltas[i]);
+        assert_eq!(pkt.recv_deltas.len(), expected_deltas.len());
+        for (i, expected) in expected_deltas.iter().enumerate() {
+            assert_eq!(&pkt.recv_deltas[i], expected);
         }
     }
 
@@ -369,8 +369,8 @@ fn test_feedback() -> Result<()> {
             f.set_base(sequence_number, arrival_ts * 1000);
 
             let got = f.get_rtcp();
-            assert_eq!(want_ref_time, got.reference_time);
-            assert_eq!(want_base_sequence_number, got.base_sequence_number);
+            assert_eq!(got.reference_time, want_ref_time);
+            assert_eq!(got.base_sequence_number, want_base_sequence_number);
         }
     }
 
@@ -510,7 +510,7 @@ fn test_build_feedback_packet_rolling() -> Result<()> {
     );
 
     let rtcp_packets = r.build_feedback_packet();
-    assert_eq!(1, rtcp_packets.len());
+    assert_eq!(rtcp_packets.len(), 1);
 
     let expected = TransportLayerCc {
         sender_ssrc: 5000,

@@ -30,7 +30,7 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
     )
     .await;
 
-    assert_eq!(&media_video_codecs, &tr.get_codecs().await);
+    assert_eq!(&tr.get_codecs().await, &media_video_codecs);
 
     let fail_test_cases = vec![
         vec![RTCRtpCodecParameters {
@@ -72,7 +72,7 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
 
     for test_case in fail_test_cases {
         if let Err(err) = tr.set_codec_preferences(test_case).await {
-            assert_eq!(Error::ErrRTPTransceiverCodecUnsupported, err);
+            assert_eq!(err, Error::ErrRTPTransceiverCodecUnsupported);
         } else {
             assert!(false);
         }

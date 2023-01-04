@@ -14,7 +14,7 @@ fn test_receiver_estimated_maximum_bitrate_marshal() {
     ]);
 
     let output = input.marshal().unwrap();
-    assert_eq!(expected, output);
+    assert_eq!(output, expected);
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn test_receiver_estimated_maximum_bitrate_unmarshal() {
     };
 
     let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut input).unwrap();
-    assert_eq!(expected, packet);
+    assert_eq!(packet, expected);
 }
 
 #[test]
@@ -52,11 +52,11 @@ fn test_receiver_estimated_maximum_bitrate_truncate() {
 
     let mut buf = input.clone();
     let mut packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut buf).unwrap();
-    assert_eq!(8927168.0, packet.bitrate);
+    assert_eq!(packet.bitrate, 8927168.0);
 
     // Just verify marshal produces the same input.
     let output = packet.marshal().unwrap();
-    assert_eq!(input, output);
+    assert_eq!(output, input);
 
     // If we subtract the bitrate by 1, we'll round down a lower mantissa
     packet.bitrate -= 1.0;
@@ -66,11 +66,11 @@ fn test_receiver_estimated_maximum_bitrate_truncate() {
     // exp = 6
 
     let mut output = packet.marshal().unwrap();
-    assert_ne!(input, output);
+    assert_ne!(output, input);
     let expected = Bytes::from_static(&[
         143, 206, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 82, 69, 77, 66, 1, 26, 32, 222, 72, 116, 237, 22,
     ]);
-    assert_eq!(expected, output);
+    assert_eq!(output, expected);
 
     // Which if we actually unmarshal again, we'll find that it's actually decreased by 63 (which is exp)
     // mantissa = 139486
@@ -97,7 +97,7 @@ fn test_receiver_estimated_maximum_bitrate_overflow() {
     ]);
 
     let output = packet.marshal().unwrap();
-    assert_eq!(expected, output);
+    assert_eq!(output, expected);
 
     // mantissa = 262143
     // exp = 63
@@ -105,16 +105,16 @@ fn test_receiver_estimated_maximum_bitrate_overflow() {
 
     let mut buf = output;
     let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut buf).unwrap();
-    assert_eq!(f32::from_bits(0x67FFFFC0), packet.bitrate);
+    assert_eq!(packet.bitrate, f32::from_bits(0x67FFFFC0));
 
     // Make sure we marshal to the same result again.
     let output = packet.marshal().unwrap();
-    assert_eq!(expected, output);
+    assert_eq!(output, expected);
 
     // Finally, try unmarshalling one number higher than we used to be able to handle.
     let mut input = Bytes::from_static(&[
         143, 206, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 82, 69, 77, 66, 0, 188, 0, 0,
     ]);
     let packet = ReceiverEstimatedMaximumBitrate::unmarshal(&mut input).unwrap();
-    assert_eq!(f32::from_bits(0x62800000), packet.bitrate);
+    assert_eq!(packet.bitrate, f32::from_bits(0x62800000));
 }

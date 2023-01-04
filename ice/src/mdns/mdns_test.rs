@@ -90,7 +90,7 @@ async fn test_multicast_dns_static_host_name() -> Result<()> {
         ..Default::default()
     };
     if let Err(err) = Agent::new(cfg0).await {
-        assert_eq!(Error::ErrInvalidMulticastDnshostName, err);
+        assert_eq!(err, Error::ErrInvalidMulticastDnshostName);
     } else {
         panic!("expected error, but got ok");
     }

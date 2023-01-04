@@ -35,8 +35,9 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0,
@@ -45,8 +46,7 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -98,8 +98,9 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 9,
@@ -108,8 +109,7 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -181,8 +181,9 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 9,
@@ -191,8 +192,7 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
                 total_lost: 0,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -253,8 +253,9 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: (1 << 16) | 0x0000,
@@ -263,8 +264,7 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
                 total_lost: 0,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -353,8 +353,9 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: (1 << 16) | 0x0001,
@@ -363,8 +364,7 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
                 total_lost: 0,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -425,8 +425,9 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x03,
@@ -435,8 +436,7 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
                 total_lost: 1,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -466,8 +466,9 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x03,
@@ -476,8 +477,7 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
                 total_lost: 1,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -536,8 +536,9 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 1 << 16 | 0x01,
@@ -546,8 +547,7 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
                 total_lost: 1,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -598,8 +598,9 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x04,
@@ -608,8 +609,7 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -678,8 +678,9 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x02,
@@ -688,8 +689,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 30000 / 16,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);
@@ -743,8 +743,9 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0,
@@ -753,8 +754,7 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
                 total_lost: 0,
                 delay: 65536,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
         assert!(false);

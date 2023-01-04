@@ -59,10 +59,10 @@ fn test_abort_chunk_one_error_cause() -> Result<()> {
     let b = abort1.marshal()?;
     let abort2 = ChunkAbort::unmarshal(&b)?;
 
-    assert_eq!(1, abort2.error_causes.len(), "should have only one cause");
+    assert_eq!(abort2.error_causes.len(), 1, "should have only one cause");
     assert_eq!(
-        abort1.error_causes[0].error_cause_code(),
         abort2.error_causes[0].error_cause_code(),
+        abort1.error_causes[0].error_cause_code(),
         "errorCause code should match"
     );
 
@@ -90,11 +90,11 @@ fn test_abort_chunk_many_error_causes() -> Result<()> {
 
     let b = abort1.marshal()?;
     let abort2 = ChunkAbort::unmarshal(&b)?;
-    assert_eq!(3, abort2.error_causes.len(), "should have only one cause");
+    assert_eq!(abort2.error_causes.len(), 3, "should have only one cause");
     for (i, error_cause) in abort1.error_causes.iter().enumerate() {
         assert_eq!(
-            error_cause.error_cause_code(),
             abort2.error_causes[i].error_cause_code(),
+            error_cause.error_cause_code(),
             "errorCause code should match"
         );
     }
@@ -127,13 +127,13 @@ lazy_static! {
 #[test]
 fn test_chunk_error_unrecognized_chunk_type_unmarshal() -> Result<()> {
     let c = ChunkError::unmarshal(&RAW_IN)?;
-    assert_eq!(CT_ERROR, c.header().typ, "chunk type should be ERROR");
-    assert_eq!(1, c.error_causes.len(), "there should be on errorCause");
+    assert_eq!(c.header().typ, CT_ERROR, "chunk type should be ERROR");
+    assert_eq!(c.error_causes.len(), 1, "there should be on errorCause");
 
     let ec = &c.error_causes[0];
     assert_eq!(
-        UNRECOGNIZED_CHUNK_TYPE,
         ec.error_cause_code(),
+        UNRECOGNIZED_CHUNK_TYPE,
         "cause code should be unrecognizedChunkType"
     );
     assert_eq!(
@@ -201,7 +201,7 @@ fn test_chunk_forward_tsn_success() -> Result<()> {
     for binary in tests {
         let actual = ChunkForwardTsn::unmarshal(&binary)?;
         let b = actual.marshal()?;
-        assert_eq!(binary, b, "test not equal");
+        assert_eq!(b, binary, "test not equal");
     }
 
     Ok(())
@@ -341,7 +341,7 @@ fn test_chunk_shutdown_success() -> Result<()> {
     for binary in tests {
         let actual = ChunkShutdown::unmarshal(&binary)?;
         let b = actual.marshal()?;
-        assert_eq!(binary, b, "test not equal");
+        assert_eq!(b, binary, "test not equal");
     }
 
     Ok(())
@@ -432,7 +432,7 @@ fn test_chunk_shutdown_complete_success() -> Result<()> {
     for binary in tests {
         let actual = ChunkShutdownComplete::unmarshal(&binary)?;
         let b = actual.marshal()?;
-        assert_eq!(binary, b, "test not equal");
+        assert_eq!(b, binary, "test not equal");
     }
 
     Ok(())
@@ -537,7 +537,7 @@ fn test_chrome_chunk1_init() -> Result<()> {
     ]);
     let pkt = Packet::unmarshal(&raw_pkt)?;
     let raw_pkt2 = pkt.marshal()?;
-    assert_eq!(raw_pkt, raw_pkt2);
+    assert_eq!(raw_pkt2, raw_pkt);
 
     Ok(())
 }
@@ -576,7 +576,7 @@ fn test_chrome_chunk2_init_ack() -> Result<()> {
     ]);
     let pkt = Packet::unmarshal(&raw_pkt)?;
     let raw_pkt2 = pkt.marshal()?;
-    assert_eq!(raw_pkt, raw_pkt2);
+    assert_eq!(raw_pkt2, raw_pkt);
 
     Ok(())
 }

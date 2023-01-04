@@ -87,7 +87,7 @@ mod test {
             };
 
             let parsed_urls = cfg.get_ice_servers();
-            assert_eq!(expected_server_str, parsed_urls[0].urls[0]);
+            assert_eq!(parsed_urls[0].urls[0], expected_server_str);
         }
 
         {
@@ -103,7 +103,7 @@ mod test {
             };
 
             let parsed_urls = cfg.get_ice_servers();
-            assert_eq!(expected_server_str, parsed_urls[0].urls[0]);
+            assert_eq!(parsed_urls[0].urls[0], expected_server_str);
         }
     }
 

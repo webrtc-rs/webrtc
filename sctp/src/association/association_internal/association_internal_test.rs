@@ -81,10 +81,10 @@ fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
 
     let fwdtsn = a.create_forward_tsn();
 
-    assert_eq!(10, fwdtsn.new_cumulative_tsn, "should be able to serialize");
-    assert_eq!(1, fwdtsn.streams.len(), "there should be one stream");
-    assert_eq!(1, fwdtsn.streams[0].identifier, "si should be 1");
-    assert_eq!(2, fwdtsn.streams[0].sequence, "ssn should be 2");
+    assert_eq!(fwdtsn.new_cumulative_tsn, 10, "should be able to serialize");
+    assert_eq!(fwdtsn.streams.len(), 1, "there should be one stream");
+    assert_eq!(fwdtsn.streams[0].identifier, 1, "si should be 1");
+    assert_eq!(fwdtsn.streams[0].sequence, 2, "ssn should be 2");
 
     Ok(())
 }
@@ -131,8 +131,8 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
 
     let fwdtsn = a.create_forward_tsn();
 
-    assert_eq!(12, fwdtsn.new_cumulative_tsn, "should be able to serialize");
-    assert_eq!(2, fwdtsn.streams.len(), "there should be two stream");
+    assert_eq!(fwdtsn.new_cumulative_tsn, 12, "should be able to serialize");
+    assert_eq!(fwdtsn.streams.len(), 2, "there should be two stream");
 
     let mut si1ok = false;
     let mut si2ok = false;
@@ -300,9 +300,8 @@ async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() ->
 
     let p = a.handle_forward_tsn(&fwdtsn).await?;
 
-    let ack_state = a.ack_state;
     assert_eq!(a.peer_last_tsn, prev_tsn, "peerLastTSN should not advance");
-    assert_eq!(AckState::Immediate, ack_state, "sack should be requested");
+    assert_eq!(a.ack_state, AckState::Immediate, "sack should be requested");
     assert!(p.is_empty(), "should return empty");
 
     Ok(())
@@ -378,20 +377,20 @@ async fn handle_init_test(name: &str, initial_state: AssociationState, expect_er
         assert!(result.is_ok(), "{} should be ok", name);
     }
     assert_eq!(
+        a.peer_last_tsn,
         if init.initial_tsn == 0 {
             u32::MAX
         } else {
             init.initial_tsn - 1
         },
-        a.peer_last_tsn,
         "{} should match",
         name
     );
-    assert_eq!(1001, a.my_max_num_outbound_streams, "{} should match", name);
-    assert_eq!(1002, a.my_max_num_inbound_streams, "{} should match", name);
-    assert_eq!(5678, a.peer_verification_tag, "{} should match", name);
-    assert_eq!(pkt.source_port, a.destination_port, "{} should match", name);
-    assert_eq!(pkt.destination_port, a.source_port, "{} should match", name);
+    assert_eq!(a.my_max_num_outbound_streams, 1001, "{} should match", name);
+    assert_eq!(a.my_max_num_inbound_streams, 1002, "{} should match", name);
+    assert_eq!(a.peer_verification_tag, 5678, "{} should match", name);
+    assert_eq!(a.destination_port, pkt.source_port, "{} should match", name);
+    assert_eq!(a.source_port, pkt.destination_port, "{} should match", name);
     assert!(a.use_forward_tsn, "{} should be set to true", name);
 }
 
@@ -446,8 +445,8 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
         name: "client".to_owned(),
     });
     assert_eq!(
-        65536,
         a.max_message_size.load(Ordering::SeqCst),
+        65536,
         "should match"
     );
 
@@ -460,8 +459,8 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
 
         if let Err(err) = s.write_sctp(&p.slice(..65536), ppi).await {
             assert_ne!(
-                Error::ErrOutboundPacketTooLarge,
                 err,
+                Error::ErrOutboundPacketTooLarge,
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -470,8 +469,8 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
 
         if let Err(err) = s.write_sctp(&p.slice(..65537), ppi).await {
             assert_eq!(
-                Error::ErrOutboundPacketTooLarge,
                 err,
+                Error::ErrOutboundPacketTooLarge,
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -492,8 +491,8 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
     });
 
     assert_eq!(
-        30000,
         a.max_message_size.load(Ordering::SeqCst),
+        30000,
         "should match"
     );
 
@@ -506,8 +505,8 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
 
         if let Err(err) = s.write_sctp(&p.slice(..30000), ppi).await {
             assert_ne!(
-                Error::ErrOutboundPacketTooLarge,
                 err,
+                Error::ErrOutboundPacketTooLarge,
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -516,8 +515,8 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
 
         if let Err(err) = s.write_sctp(&p.slice(..30001), ppi).await {
             assert_eq!(
-                Error::ErrOutboundPacketTooLarge,
                 err,
+                Error::ErrOutboundPacketTooLarge,
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {

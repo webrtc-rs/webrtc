@@ -26,7 +26,7 @@ fn test_is_key_frame() -> Result<()> {
 
     for (name, payload, want) in tests {
         let got = is_key_frame(&payload);
-        assert_eq!(want, got, "{} failed", name);
+        assert_eq!(got, want, "{} failed", name);
     }
 
     Ok(())
@@ -86,7 +86,7 @@ fn test_write_rtp() -> Result<()> {
             h264writer.close()?;
         }
 
-        assert_eq!(want_bytes, writer);
+        assert_eq!(writer, want_bytes);
     }
 
     Ok(())
@@ -119,7 +119,7 @@ fn test_write_rtp_fu() -> Result<()> {
         }
         h264writer.close()?;
     }
-    assert_eq!(want_bytes, writer);
+    assert_eq!(writer, want_bytes);
 
     Ok(())
 }

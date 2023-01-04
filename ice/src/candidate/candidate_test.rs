@@ -263,7 +263,7 @@ fn test_candidate_pair_state_to_string() {
     ];
 
     for (candidate_pair_state, expected_string) in tests {
-        assert_eq!(expected_string, candidate_pair_state.to_string());
+        assert_eq!(candidate_pair_state.to_string(), expected_string);
     }
 }
 
@@ -279,8 +279,8 @@ fn test_candidate_type_serialization() {
 
     for (candidate_type, expected_string) in tests {
         assert_eq!(
-            expected_string.to_string(),
-            serde_json::to_string(&candidate_type).unwrap()
+            serde_json::to_string(&candidate_type).unwrap(),
+            expected_string.to_string()
         );
     }
 }
@@ -296,7 +296,7 @@ fn test_candidate_type_to_string() {
     ];
 
     for (candidate_type, expected_string) in tests {
-        assert_eq!(expected_string, candidate_type.to_string());
+        assert_eq!(candidate_type.to_string(), expected_string);
     }
 }
 

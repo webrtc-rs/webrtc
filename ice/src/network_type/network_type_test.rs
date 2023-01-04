@@ -93,6 +93,6 @@ fn test_network_type_to_string() {
     ];
 
     for (network_type, expected_string) in tests {
-        assert_eq!(expected_string, network_type.to_string());
+        assert_eq!(network_type.to_string(), expected_string);
     }
 }

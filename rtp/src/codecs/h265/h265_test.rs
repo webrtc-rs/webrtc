@@ -253,15 +253,15 @@ fn test_h265_single_nalunit_packet() -> Result<()> {
 
         if let Some(expected_packet) = cur.expected_packet {
             assert_eq!(
-                expected_packet.payload_header(),
                 parsed.payload_header(),
+                expected_packet.payload_header(),
                 "invalid payload header"
             );
-            assert_eq!(expected_packet.donl(), parsed.donl(), "invalid DONL");
+            assert_eq!(parsed.donl(), expected_packet.donl(), "invalid DONL");
 
             assert_eq!(
-                expected_packet.payload(),
                 parsed.payload(),
+                expected_packet.payload(),
                 "invalid payload"
             );
         }
@@ -411,20 +411,20 @@ fn test_h265_aggregation_packet() -> Result<()> {
                     "invalid first unit NALUSize"
                 );
                 assert_eq!(
-                    first_unit.donl(),
                     parsed_first_unit.donl(),
+                    first_unit.donl(),
                     "invalid first unit DONL"
                 );
                 assert_eq!(
-                    first_unit.nal_unit(),
                     parsed_first_unit.nal_unit(),
+                    first_unit.nal_unit(),
                     "invalid first unit NalUnit"
                 );
             }
 
             assert_eq!(
-                expected_packet.other_units().len(),
                 parsed.other_units().len(),
+                expected_packet.other_units().len(),
                 "number of other units mismatch"
             );
 
@@ -436,21 +436,21 @@ fn test_h265_aggregation_packet() -> Result<()> {
                 );
 
                 assert_eq!(
-                    expected_packet.other_units()[ndx].dond(),
                     parsed.other_units()[ndx].dond(),
+                    expected_packet.other_units()[ndx].dond(),
                     "invalid unit DOND"
                 );
 
                 assert_eq!(
-                    expected_packet.other_units()[ndx].nal_unit(),
                     parsed.other_units()[ndx].nal_unit(),
+                    expected_packet.other_units()[ndx].nal_unit(),
                     "invalid first unit NalUnit"
                 );
             }
 
             assert_eq!(
-                expected_packet.other_units(),
                 parsed.other_units(),
+                expected_packet.other_units(),
                 "invalid payload"
             );
         }
@@ -714,20 +714,20 @@ fn test_h265_paci_packet() -> Result<()> {
 
         if let Some(expected_fu) = &cur.expected_fu {
             assert_eq!(
-                expected_fu.payload_header(),
                 parsed.payload_header(),
+                expected_fu.payload_header(),
                 "invalid PayloadHeader"
             );
-            assert_eq!(expected_fu.a(), parsed.a(), "invalid A");
-            assert_eq!(expected_fu.ctype(), parsed.ctype(), "invalid CType");
-            assert_eq!(expected_fu.phs_size(), parsed.phs_size(), "invalid PHSsize");
-            assert_eq!(expected_fu.f0(), parsed.f0(), "invalid F0");
-            assert_eq!(expected_fu.f1(), parsed.f1(), "invalid F1");
-            assert_eq!(expected_fu.f2(), parsed.f2(), "invalid F2");
-            assert_eq!(expected_fu.y(), parsed.y(), "invalid Y");
-            assert_eq!(expected_fu.phes(), parsed.phes(), "invalid PHES");
-            assert_eq!(expected_fu.payload(), parsed.payload(), "invalid Payload");
-            assert_eq!(expected_fu.tsci(), parsed.tsci(), "invalid TSCI");
+            assert_eq!(parsed.a(), expected_fu.a(), "invalid A");
+            assert_eq!(parsed.ctype(), expected_fu.ctype(), "invalid CType");
+            assert_eq!(parsed.phs_size(), expected_fu.phs_size(), "invalid PHSsize");
+            assert_eq!(parsed.f0(), expected_fu.f0(), "invalid F0");
+            assert_eq!(parsed.f1(), expected_fu.f1(), "invalid F1");
+            assert_eq!(parsed.f2(), expected_fu.f2(), "invalid F2");
+            assert_eq!(parsed.y(), expected_fu.y(), "invalid Y");
+            assert_eq!(parsed.phes(), expected_fu.phes(), "invalid PHES");
+            assert_eq!(parsed.payload(), expected_fu.payload(), "invalid Payload");
+            assert_eq!(parsed.tsci(), expected_fu.tsci(), "invalid TSCI");
         }
     }
 

@@ -51,7 +51,7 @@ fn test_extract_fingerprint() -> Result<()> {
         let s = SessionDescription::default();
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(Error::ErrSessionDescriptionNoFingerprint, err);
+            assert_eq!(err, Error::ErrSessionDescriptionNoFingerprint);
         } else {
             assert!(false);
         }
@@ -68,7 +68,7 @@ fn test_extract_fingerprint() -> Result<()> {
         };
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(Error::ErrSessionDescriptionInvalidFingerprint, err);
+            assert_eq!(err, Error::ErrSessionDescriptionInvalidFingerprint);
         } else {
             assert!(false);
         }
@@ -92,7 +92,7 @@ fn test_extract_fingerprint() -> Result<()> {
         };
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(Error::ErrSessionDescriptionConflictingFingerprints, err);
+            assert_eq!(err, Error::ErrSessionDescriptionConflictingFingerprints);
         } else {
             assert!(false);
         }
@@ -120,7 +120,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionMissingIcePwd, err);
+            assert_eq!(err, Error::ErrSessionDescriptionMissingIcePwd);
         } else {
             assert!(false);
         }
@@ -140,7 +140,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionMissingIceUfrag, err);
+            assert_eq!(err, Error::ErrSessionDescriptionMissingIceUfrag);
         } else {
             assert!(false);
         }
@@ -216,7 +216,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionConflictingIceUfrag, err);
+            assert_eq!(err, Error::ErrSessionDescriptionConflictingIceUfrag);
         } else {
             assert!(false);
         }
@@ -246,7 +246,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionConflictingIcePwd, err);
+            assert_eq!(err, Error::ErrSessionDescriptionConflictingIcePwd);
         } else {
             assert!(false);
         }
@@ -379,7 +379,7 @@ fn test_track_details_from_sdp() -> Result<()> {
         };
 
         let tracks = track_details_from_sdp(&s, true);
-        assert_eq!(3, tracks.len());
+        assert_eq!(tracks.len(), 3);
         if track_details_for_ssrc(&tracks, 1000).is_some() {
             assert!(
                 false,
@@ -387,16 +387,16 @@ fn test_track_details_from_sdp() -> Result<()> {
             );
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 2000) {
-            assert_eq!(RTPCodecType::Audio, track.kind);
-            assert_eq!(2000, track.ssrcs[0]);
-            assert_eq!("audio_trk_label", track.stream_id);
+            assert_eq!(track.kind, RTPCodecType::Audio);
+            assert_eq!(track.ssrcs[0], 2000);
+            assert_eq!(track.stream_id, "audio_trk_label");
         } else {
             assert!(false, "missing audio track with ssrc:2000");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 3000) {
-            assert_eq!(RTPCodecType::Video, track.kind);
-            assert_eq!(3000, track.ssrcs[0]);
-            assert_eq!("video_trk_label", track.stream_id);
+            assert_eq!(track.kind, RTPCodecType::Video);
+            assert_eq!(track.ssrcs[0], 3000);
+            assert_eq!(track.stream_id, "video_trk_label");
         } else {
             assert!(false, "missing video track with ssrc:3000");
         }
@@ -407,10 +407,10 @@ fn test_track_details_from_sdp() -> Result<()> {
             );
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 5000) {
-            assert_eq!(RTPCodecType::Video, track.kind);
-            assert_eq!(5000, track.ssrcs[0]);
-            assert_eq!("video_trk_id", track.id);
-            assert_eq!("video_stream_id", track.stream_id);
+            assert_eq!(track.kind, RTPCodecType::Video);
+            assert_eq!(track.ssrcs[0], 5000);
+            assert_eq!(track.id, "video_trk_id");
+            assert_eq!(track.stream_id, "video_stream_id");
         } else {
             assert!(false, "missing video track with ssrc:5000");
         }
@@ -465,13 +465,13 @@ fn test_track_details_from_sdp() -> Result<()> {
             ..Default::default()
         };
         assert_eq!(
-            0,
             track_details_from_sdp(&s, true).len(),
+            0,
             "inactive and recvonly tracks should be ignored when passing exclude_inactive: true"
         );
         assert_eq!(
-            1,
             track_details_from_sdp(&s, false).len(),
+            1,
             "Inactive tracks should not be ignored when passing exclude_inactive: false"
         );
     }

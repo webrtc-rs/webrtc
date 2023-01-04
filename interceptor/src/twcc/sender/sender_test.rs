@@ -54,7 +54,7 @@ async fn test_twcc_sender_interceptor() -> Result<()> {
                     tokio::select! {
                         p = stream.written_rtp() =>{
                             if let Some(p) = p {
-                                assert_eq!(seq_num, p.header.sequence_number);
+                                assert_eq!(p.header.sequence_number, seq_num);
                                 let _ = p_chan_tx2.send(p).await;
                             }else{
                                 assert!(false, "stream.written_rtp none");
