@@ -165,7 +165,7 @@ impl Packet {
             let padding_needed = get_padding_size(writer.len());
             if padding_needed != 0 {
                 // padding needed if < 4 because we pad to 4
-                writer.extend_from_slice(&[0u8; 16][..padding_needed]);
+                writer.extend_from_slice(&[0u8; PADDING_MULTIPLE][..padding_needed]);
             }
         }
 
