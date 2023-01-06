@@ -47,7 +47,8 @@
 </a><br>
 <strong>Bronze Sponsors:</strong><br>
 <a href="https://www.embark-studios.com/" target="_blank"><img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/embark.jpg" alt="embark"></a><br>
-<a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a>
+<a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a><br>
+<a href="https://avstack.io/" target="_blank"><img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/AVStack.jpg" alt="AVStack"></a>
 </p>
 
 #
