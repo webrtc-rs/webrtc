@@ -26,3 +26,8 @@ serde_json = { version = "1.0.91", features = ["preserve_order"] }
 [features]
 default = ["serde"]
 serde = ["dep:serde", "indexmap/serde"]
+
+[[example]]
+name = "json"
+path = "examples/json.rs"
+required-features = ["serde"]
