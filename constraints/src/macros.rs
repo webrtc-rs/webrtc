@@ -9,11 +9,11 @@ macro_rules! settings {
     };
 }
 
+pub use settings;
+
 #[macro_export]
-macro_rules! constraint {
-    (value: {
-        $($p:ident: $c:expr),+ $(,)?
-    }) => {
+macro_rules! value_constraint {
+    ($($p:ident: $c:expr),+ $(,)?) => {
         $crate::ValueConstraint::Constraint(
             #[allow(clippy::needless_update)]
             $crate::ResolvedValueConstraint {
@@ -22,12 +22,16 @@ macro_rules! constraint {
             }
         )
     };
-    (value: $c:expr) => {
+    ($c:expr) => {
         $crate::ValueConstraint::Bare($c)
     };
-    (range: {
-        $($p:ident: $c:expr),+ $(,)?
-    }) => {
+}
+
+pub use value_constraint;
+
+#[macro_export]
+macro_rules! value_range_constraint {
+    {$($p:ident: $c:expr),+ $(,)?} => {
         $crate::ValueRangeConstraint::Constraint(
             $crate::ResolvedValueRangeConstraint {
                 $($p: Some($c)),+,
@@ -35,12 +39,16 @@ macro_rules! constraint {
             }
         )
     };
-    (range: $c:expr) => {
+    ($c:expr) => {
         $crate::ValueRangeConstraint::Bare($c)
     };
-    (sequence: {
-        $($p:ident: $c:expr),+ $(,)?
-    }) => {
+}
+
+pub use value_range_constraint;
+
+#[macro_export]
+macro_rules! value_sequence_constraint {
+    {$($p:ident: $c:expr),+ $(,)?} => {
         $crate::ValueSequenceConstraint::Constraint(
             $crate::ResolvedValueSequenceConstraint {
                 $($p: Some($c)),*,
@@ -48,10 +56,12 @@ macro_rules! constraint {
             }
         )
     };
-    (sequence: $c:expr) => {
+    ($c:expr) => {
         $crate::ValueSequenceConstraint::Bare($c)
     };
 }
+
+pub use value_sequence_constraint;
 
 #[macro_export]
 macro_rules! constraint_set {
@@ -63,6 +73,8 @@ macro_rules! constraint_set {
         ])
     };
 }
+
+pub use constraint_set;
 
 #[macro_export]
 macro_rules! mandatory_constraints {
@@ -76,6 +88,8 @@ macro_rules! mandatory_constraints {
         )
     };
 }
+
+pub use mandatory_constraints;
 
 #[macro_export]
 macro_rules! advanced_constraints {
@@ -92,6 +106,8 @@ macro_rules! advanced_constraints {
     };
 }
 
+pub use advanced_constraints;
+
 #[macro_export]
 macro_rules! constraints {
     [
@@ -106,6 +122,8 @@ macro_rules! constraints {
         }
     };
 }
+
+pub use constraints;
 
 #[allow(unused_macros)]
 #[cfg(test)]
@@ -169,7 +187,7 @@ mod tests {
         fn value() {
             // Bare:
 
-            let actual = constraint!(value: "foobar".to_owned());
+            let actual = value_constraint!("foobar".to_owned());
 
             let expected = ValueConstraint::Bare("foobar".to_owned());
 
@@ -177,10 +195,10 @@ mod tests {
 
             // Constraint:
 
-            let actual = constraint!(value: {
+            let actual = value_constraint! {
                 exact: "foobar".to_owned(),
                 ideal: "bazblee".to_owned(),
-            });
+            };
 
             let expected = ValueConstraint::Constraint(
                 ResolvedValueConstraint::default()
@@ -195,7 +213,7 @@ mod tests {
         fn range() {
             // Bare:
 
-            let actual = constraint!(range: 42);
+            let actual = value_range_constraint!(42);
 
             let expected = ValueRangeConstraint::Bare(42);
 
@@ -203,10 +221,10 @@ mod tests {
 
             // Constraint:
 
-            let actual = constraint!(range: {
+            let actual = value_range_constraint! {
                 min: 30.0,
                 max: 60.0,
-            });
+            };
 
             let expected = ValueRangeConstraint::Constraint(
                 ResolvedValueRangeConstraint::default().min(30.0).max(60.0),
@@ -219,7 +237,7 @@ mod tests {
         fn sequence() {
             // Bare:
 
-            let actual = constraint!(sequence: vec![FacingMode::user()]);
+            let actual = value_sequence_constraint![vec![FacingMode::user()]];
 
             let expected = ValueSequenceConstraint::Bare(vec![FacingMode::user()]);
 
@@ -227,9 +245,9 @@ mod tests {
 
             // Constraint:
 
-            let actual = constraint!(sequence: {
+            let actual = value_sequence_constraint! {
                 ideal: vec![FacingMode::user()],
-            });
+            };
 
             let expected = ValueSequenceConstraint::Constraint(
                 ResolvedValueSequenceConstraint::default().ideal(vec![FacingMode::user()]),
@@ -242,17 +260,17 @@ mod tests {
     #[test]
     fn mandatory_constraints() {
         let actual = mandatory_constraints! {
-            &DEVICE_ID => constraint!(value: {
+            &DEVICE_ID => value_constraint! {
                 exact: "foobar".to_owned(),
                 ideal: "bazblee".to_owned(),
-            }),
-            &FRAME_RATE => constraint!(range: {
+            },
+            &FRAME_RATE => value_range_constraint! {
                 min: 30.0,
                 max: 60.0,
-            }),
-            &FACING_MODE => constraint!(sequence: {
+            },
+            &FACING_MODE => value_sequence_constraint! {
                 exact: vec![FacingMode::user(), FacingMode::environment()]
-            }),
+            },
         };
 
         let expected = <MandatoryMediaTrackConstraints as std::iter::FromIterator<_>>::from_iter([
@@ -289,21 +307,21 @@ mod tests {
     fn advanced_constraints() {
         let actual = advanced_constraints! [
             {
-                &DEVICE_ID => constraint!(value: {
+                &DEVICE_ID => value_constraint! {
                     exact: "foobar".to_owned(),
                     ideal: "bazblee".to_owned(),
-                }),
+                },
             },
             {
-                &FRAME_RATE => constraint!(range: {
+                &FRAME_RATE => value_range_constraint! {
                     min: 30.0,
                     max: 60.0,
-                }),
+                },
             },
             {
-                &FACING_MODE => constraint!(sequence: {
+                &FACING_MODE => value_sequence_constraint! {
                     exact: vec![FacingMode::user(), FacingMode::environment()]
-                }),
+                },
             },
         ];
 
@@ -337,35 +355,35 @@ mod tests {
     fn constraints() {
         let actual: MediaTrackConstraints = constraints!(
             mandatory: {
-                &DEVICE_ID => constraint!(value: {
+                &DEVICE_ID => value_constraint! {
                     exact: "foobar".to_owned(),
                     ideal: "bazblee".to_owned(),
-                }),
-                &FRAME_RATE => constraint!(range: {
+                },
+                &FRAME_RATE => value_range_constraint! {
                     min: 30.0,
                     max: 60.0,
-                }),
-                &FACING_MODE => constraint!(sequence: {
+                },
+                &FACING_MODE => value_sequence_constraint! {
                     exact: vec![FacingMode::user(), FacingMode::environment()]
-                }),
+                },
             },
             advanced: [
                 {
-                    &DEVICE_ID => constraint!(value: {
+                    &DEVICE_ID => value_constraint! {
                         exact: "foobar".to_owned(),
                         ideal: "bazblee".to_owned(),
-                    }),
+                    },
                 },
                 {
-                    &FRAME_RATE => constraint!(range: {
+                    &FRAME_RATE => value_range_constraint! {
                         min: 30.0,
                         max: 60.0,
-                    }),
+                    },
                 },
                 {
-                    &FACING_MODE => constraint!(sequence: {
+                    &FACING_MODE => value_sequence_constraint! {
                         exact: vec![FacingMode::user(), FacingMode::environment()]
-                    }),
+                    },
                 },
             ]
         );
