@@ -9,9 +9,8 @@ use crate::{
     AdvancedMediaTrackConstraints, FacingMode, MandatoryMediaTrackConstraints,
     MediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
     ResolvedAdvancedMediaTrackConstraints, ResolvedMandatoryMediaTrackConstraints,
-    ResolvedMediaTrackConstraint, ResolvedMediaTrackConstraintSet, ResolvedMediaTrackConstraints,
-    ResolvedValueConstraint, ResolvedValueRangeConstraint, ResolvedValueSequenceConstraint,
-    SanitizedMediaTrackConstraints,
+    ResolvedMediaTrackConstraint, ResolvedMediaTrackConstraints, ResolvedValueConstraint,
+    ResolvedValueRangeConstraint, ResolvedValueSequenceConstraint, SanitizedMediaTrackConstraints,
 };
 
 use super::DeviceInformationExposureMode;
@@ -503,6 +502,8 @@ mod constrained {
 //     selected settings: ─────────────────────────────────────────┘
 // ```
 mod smoke {
+    use crate::{MediaTrackConstraintSet, ValueConstraint, ValueRangeConstraint};
+
     use super::*;
 
     #[test]
@@ -547,41 +548,59 @@ mod smoke {
             ]),
         ];
 
-        let constraints: ResolvedMediaTrackConstraints = ResolvedMediaTrackConstraints {
-            mandatory: ResolvedMandatoryMediaTrackConstraints::from_iter([
+        let constraints = MediaTrackConstraints {
+            mandatory: MandatoryMediaTrackConstraints::from_iter([
                 (
                     &WIDTH,
-                    ResolvedValueRangeConstraint::default().max(2560).into(),
+                    ValueRangeConstraint::Constraint(
+                        ResolvedValueRangeConstraint::default().max(2560),
+                    )
+                    .into(),
                 ),
                 (
                     &HEIGHT,
-                    ResolvedValueRangeConstraint::default().max(1440).into(),
+                    ValueRangeConstraint::Constraint(
+                        ResolvedValueRangeConstraint::default().max(1440),
+                    )
+                    .into(),
                 ),
                 // Unsupported constraint, which should thus get ignored:
                 (
                     &FRAME_RATE,
-                    ResolvedValueRangeConstraint::default().exact(30.0).into(),
+                    ValueRangeConstraint::Constraint(
+                        ResolvedValueRangeConstraint::default().exact(30.0),
+                    )
+                    .into(),
+                ),
                 ),
             ]),
-            advanced: ResolvedAdvancedMediaTrackConstraints::from_iter([
+            advanced: AdvancedMediaTrackConstraints::from_iter([
                 // The first advanced constraint set of "exact 800p" does not match
                 // any candidate and should thus get ignored by the algorithm:
-                ResolvedMediaTrackConstraintSet::from_iter([(
+                MediaTrackConstraintSet::from_iter([(
                     &HEIGHT,
-                    ResolvedValueRangeConstraint::default().exact(800).into(),
+                    ValueRangeConstraint::Constraint(
+                        ResolvedValueRangeConstraint::default().exact(800),
+                    )
+                    .into(),
                 )]),
                 // The second advanced constraint set of "no resizing" does match
                 // candidates and should thus be applied by the algorithm:
-                ResolvedMediaTrackConstraintSet::from_iter([(
+                MediaTrackConstraintSet::from_iter([(
                     &RESIZE_MODE,
-                    ResolvedValueConstraint::default()
-                        .exact(ResizeMode::none())
-                        .into(),
+                    ValueConstraint::Constraint(
+                        ResolvedValueConstraint::default().exact(ResizeMode::none()),
+                    )
+                    .into(),
                 )]),
             ]),
         };
 
-        let sanitized_constraints = constraints.to_sanitized(&supported_constraints);
+        // Resolve bare values to proper constraints:
+        let resolved_constraints = constraints.into_resolved();
+
+        // Sanitize constraints, removing empty and unsupported constraints:
+        let sanitized_constraints = resolved_constraints.to_sanitized(&supported_constraints);
 
         let actual = select_settings_candidates(
             &possible_settings,
