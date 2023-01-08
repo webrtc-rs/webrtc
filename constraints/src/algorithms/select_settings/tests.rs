@@ -572,6 +572,10 @@ mod smoke {
                     )
                     .into(),
                 ),
+                // Ideal resize-mode:
+                (
+                    &RESIZE_MODE,
+                    ValueConstraint::Bare(ResizeMode::none()).into(),
                 ),
             ]),
             advanced: AdvancedMediaTrackConstraints::from_iter([
@@ -649,6 +653,8 @@ mod smoke {
                 "frameRate": {
                     "exact": 30.0
                 },
+                // Ideal resize-mode:
+                "resizeMode": "none",
                 "advanced": [
                     // The first advanced constraint set of "exact 800p" does not match
                     // any candidate and should thus get ignored by the algorithm:
