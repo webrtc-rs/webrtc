@@ -5,7 +5,7 @@ use webrtc_constraints::{
     ValueRangeConstraint,
 };
 
-// https://www.w3.org/TR/mediacapture-streams/#example-1
+// <https://www.w3.org/TR/mediacapture-streams/#example-1>
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_1() {
@@ -38,7 +38,7 @@ fn w3c_spec_example_1() {
     assert_eq!(actual, expected);
 }
 
-// https://www.w3.org/TR/mediacapture-streams/#example-2
+// <https://www.w3.org/TR/mediacapture-streams/#example-2>
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_2() {
@@ -101,7 +101,7 @@ fn w3c_spec_example_2() {
     assert_eq!(actual, expected);
 }
 
-// https://www.w3.org/TR/mediacapture-streams/#example-3
+// <https://www.w3.org/TR/mediacapture-streams/#example-3>
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_3() {
@@ -191,7 +191,7 @@ fn w3c_spec_example_3() {
     assert_eq!(actual, expected);
 }
 
-// https://www.w3.org/TR/mediacapture-streams/#example-4
+// <https://www.w3.org/TR/mediacapture-streams/#example-4>
 #[cfg(feature = "serde")]
 #[test]
 fn w3c_spec_example_4() {

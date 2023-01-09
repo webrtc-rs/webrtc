@@ -70,7 +70,7 @@ fn is_nearly_equal_to(actual: f64, exact: f64) -> bool {
 
 fn relative_fitness_distance(actual: f64, ideal: f64) -> f64 {
     // As specified in step 7 of the `fitness distance` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
     //
     // > For all positive numeric constraints […],
     // > the fitness distance is the result of the formula

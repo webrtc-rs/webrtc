@@ -13,7 +13,7 @@ use crate::{
 /// fitness distance is finite.
 ///
 /// Implements step 5 of the `SelectSettings` algorithm:
-/// https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+/// <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
 pub(super) fn apply_mandatory_constraints<'a, I>(
     candidates: I,
     mandatory_constraints: &SanitizedMediaTrackConstraintSet,
@@ -23,7 +23,7 @@ where
     I: IntoIterator<Item = &'a MediaTrackSettings>,
 {
     // As specified in step 3 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
     //
     // > For every possible settings dictionary of copy compute its fitness distance,
     // > treating bare values of properties as ideal values. Let candidates be the

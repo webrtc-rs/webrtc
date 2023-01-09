@@ -13,7 +13,7 @@ pub trait TieBreakingPolicy {
     /// Selects a preferred candidate from a non-empty selection of optimal candidates.
     ///
     /// As specified in step 6 of the `SelectSettings` algorithm:
-    /// https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    /// <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
     ///
     /// > Select one settings dictionary from candidates, and return it as the result
     /// > of the SelectSettings algorithm. The User Agent MUST use one with the

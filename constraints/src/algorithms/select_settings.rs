@@ -38,7 +38,7 @@ impl From<OverconstrainedError> for SelectSettingsError {
 
 /// This function implements steps 1-5 of the `SelectSettings` algorithm
 /// as defined by the W3C spec:
-/// https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+/// <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
 ///
 /// Step 6 (tie-breaking) is omitted by this implementation and expected to be performed
 /// manually on the returned candidates.
@@ -54,7 +54,7 @@ where
     let possible_settings = possible_settings.into_iter();
 
     // As specified in step 1 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
     //
     // > Each constraint specifies one or more values (or a range of values) for its property.
     // > A property MAY appear more than once in the list of 'advanced' ConstraintSets.
@@ -76,13 +76,13 @@ where
     // Obtain candidates by filtering possible settings, dropping those with infinite fitness distances:
     //
     // This function call corresponds to steps 3 & 4 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
 
     let candidates_and_fitness_distances =
         apply_mandatory_constraints(possible_settings, &constraints.mandatory, exposure_mode)?;
 
     // As specified in step 5 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
     //
     // > Iterate over the 'advanced' ConstraintSets in newConstraints in the order in which they were specified.
     // >
@@ -100,7 +100,7 @@ where
         apply_advanced_constraints(candidates_and_fitness_distances, &constraints.advanced);
 
     // As specified in step 6 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
     //
     // > Select one settings dictionary from candidates, and return it as the result of the `SelectSettings` algorithm.
     // > The User Agent MUST use one with the smallest fitness distance, as calculated in step 3.
