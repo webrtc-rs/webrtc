@@ -12,6 +12,8 @@ use super::{
 };
 
 /// A boolean on/off flag or bare value or constraints for a [`MediaStreamTrack`][media_stream_track] object.
+///
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
 pub type BoolOrMediaTrackConstraints = GenericBoolOrMediaTrackConstraints<MediaTrackConstraint>;
 
 /// A boolean on/off flag or constraints for a [`MediaStreamTrack`][media_stream_track] object.
