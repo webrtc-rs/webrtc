@@ -27,4 +27,6 @@
 </p>
 <p align="center">
  A pure Rust implementation of the <a href="https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings">SelectSettings</a> algorithm from the WebRTC/W3C <a href="https://www.w3.org/TR/mediacapture-streams/">"Media Capture and Streams"</a> spec.
+
+ (Last synced with the spec against commit <a href="https://github.com/w3c/mediacapture-main/commit/8cea879fbab58c457640392d5af6525b8f3a0569">8cea879</a> from 2023/01/09.)
 </p>
