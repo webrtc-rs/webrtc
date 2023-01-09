@@ -436,6 +436,9 @@ impl ResolvedMediaTrackConstraint {
 ///
 /// Further more `self.0` MUST NOT be exposed mutably,
 /// as otherwise it could become empty via mutation.
+///
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
+/// [media_track_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints
 #[derive(Debug, Clone, PartialEq)]
 pub struct SanitizedMediaTrackConstraint(ResolvedMediaTrackConstraint);
 
