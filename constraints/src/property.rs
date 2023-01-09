@@ -50,12 +50,13 @@ impl MediaTrackProperty {
         Self(Cow::Borrowed(name))
     }
 
+    /// The property's name.
     pub fn name(&self) -> &str {
         &self.0
     }
 }
 
-/// Properties that apply to all device types.
+/// Standard properties that apply to both, audio and video device types.
 pub mod common {
     use super::*;
 
@@ -84,7 +85,7 @@ pub mod common {
     }
 }
 
-/// Properties that apply only to audio device types.
+/// Standard properties that apply only to audio device types.
 pub mod audio_only {
     use super::*;
 
@@ -154,7 +155,7 @@ pub mod audio_only {
     }
 }
 
-/// Properties that apply only to video device types.
+/// Standard properties that apply only to video device types.
 pub mod video_only {
     use super::*;
 
@@ -213,6 +214,7 @@ pub mod video_only {
     }
 }
 
+/// The union of all standard properties (i.e. common + audio + video).
 pub mod all {
     use super::*;
 

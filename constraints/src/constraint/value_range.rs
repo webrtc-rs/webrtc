@@ -24,7 +24,9 @@ use crate::MediaTrackConstraintResolutionStrategy;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum ValueRangeConstraint<T> {
+    /// A bare-valued media track constraint.
     Bare(T),
+    /// A fully-qualified media track constraint.
     Constraint(ResolvedValueRangeConstraint<T>),
 }
 
@@ -50,6 +52,8 @@ impl<T> ValueRangeConstraint<T>
 where
     T: Clone,
 {
+    /// Returns a resolved representation of the constraint
+    /// with bare values resolved to fully-qualified constraints.
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -57,6 +61,8 @@ where
         self.clone().into_resolved(strategy)
     }
 
+    /// Consumes the constraint, returning a resolved representation of the
+    /// constraint with bare values resolved to fully-qualified constraints.
     pub fn into_resolved(
         self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -76,6 +82,7 @@ where
 }
 
 impl<T> ValueRangeConstraint<T> {
+    /// Returns `true` if `self` is empty, otherwise `false`.
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Bare(_) => false,
@@ -95,21 +102,33 @@ impl<T> ValueRangeConstraint<T> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ResolvedValueRangeConstraint<T> {
+    /// The minimum legal value of this property.
+    ///
+    /// This is a required value.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
     )]
     pub min: Option<T>,
+    /// The maximum legal value of this property.
+    ///
+    /// This is a required value.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
     )]
     pub max: Option<T>,
+    /// The exact required value for this property.
+    ///
+    /// This is a required value.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
     )]
     pub exact: Option<T>,
+    /// The ideal (target) value for this property.
+    ///
+    /// This is an optional value.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
@@ -118,6 +137,8 @@ pub struct ResolvedValueRangeConstraint<T> {
 }
 
 impl<T> ResolvedValueRangeConstraint<T> {
+    /// Consumes `self`, returning a corresponding constraint
+    /// with the exact required value set to `exact`.
     #[inline]
     pub fn exact<U>(mut self, exact: U) -> Self
     where
@@ -127,6 +148,8 @@ impl<T> ResolvedValueRangeConstraint<T> {
         self
     }
 
+    /// Consumes `self`, returning a corresponding constraint
+    /// with the ideal required value set to `ideal`.
     #[inline]
     pub fn ideal<U>(mut self, ideal: U) -> Self
     where
@@ -136,6 +159,8 @@ impl<T> ResolvedValueRangeConstraint<T> {
         self
     }
 
+    /// Consumes `self`, returning a corresponding constraint
+    /// with the minimum required value set to `min`.
     #[inline]
     pub fn min<U>(mut self, min: U) -> Self
     where
@@ -145,6 +170,8 @@ impl<T> ResolvedValueRangeConstraint<T> {
         self
     }
 
+    /// Consumes `self`, returning a corresponding constraint
+    /// with the maximum required value set to `max`.
     #[inline]
     pub fn max<U>(mut self, max: U) -> Self
     where
@@ -154,14 +181,19 @@ impl<T> ResolvedValueRangeConstraint<T> {
         self
     }
 
+    /// Returns `true` if `value.is_some()` is `true` for any of its required values,
+    /// otherwise `false`.
     pub fn is_required(&self) -> bool {
         self.min.is_some() || self.max.is_some() || self.exact.is_some()
     }
 
+    /// Returns `true` if `value.is_none()` is `true` for all of its values,
+    /// otherwise `false`.
     pub fn is_empty(&self) -> bool {
         self.min.is_none() && self.max.is_none() && self.exact.is_none() && self.ideal.is_none()
     }
 
+    /// Returns a corresponding constraint containing only required values.
     pub fn to_required_only(&self) -> Self
     where
         T: Clone,
@@ -169,6 +201,8 @@ impl<T> ResolvedValueRangeConstraint<T> {
         self.clone().into_required_only()
     }
 
+    /// Consumes `self, returning a corresponding constraint
+    /// containing only required values.
     pub fn into_required_only(self) -> Self {
         Self {
             min: self.min,

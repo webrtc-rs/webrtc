@@ -7,6 +7,8 @@ use crate::{
     MediaTrackSupportedConstraints, SanitizedMandatoryMediaTrackConstraints,
 };
 
+/// A tie-breaking policy used for selecting a single preferred candidate
+/// from a set list of equally optimal setting candidates.
 pub trait TieBreakingPolicy {
     /// Selects a preferred candidate from a non-empty selection of optimal candidates.
     ///
@@ -28,6 +30,7 @@ pub trait TieBreakingPolicy {
 pub struct FirstPolicy;
 
 impl FirstPolicy {
+    /// Creates a new policy.
     pub fn new() -> Self {
         Self
     }
@@ -58,6 +61,7 @@ pub struct ClosestToIdealPolicy {
 }
 
 impl ClosestToIdealPolicy {
+    /// Creates a new policy from the given ideal settings and supported constraints.
     pub fn new(
         ideal_settings: MediaTrackSettings,
         supported_constraints: &MediaTrackSupportedConstraints,

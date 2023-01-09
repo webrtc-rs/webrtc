@@ -4,8 +4,10 @@ use crate::{MediaTrackProperty, MediaTrackSettings, SanitizedMediaTrackConstrain
 
 use super::{setting::SettingFitnessDistanceError, FitnessDistance};
 
+/// A list of media track properties and their corresponding fitness distance errors.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SettingsFitnessDistanceError {
+    /// Setting errors per media track property.
     pub setting_errors: HashMap<MediaTrackProperty, SettingFitnessDistanceError>,
 }
 

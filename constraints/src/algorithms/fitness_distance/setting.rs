@@ -2,18 +2,28 @@ use crate::{MediaTrackSetting, ResolvedMediaTrackConstraint};
 
 use super::FitnessDistance;
 
+/// An error indicating a rejected fitness distance computation,
+/// likely caused by a mismatched yet required constraint.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SettingFitnessDistanceError {
+    /// The kind of the error (e.g. missing value, mismatching value, …).
     pub kind: SettingFitnessDistanceErrorKind,
+    /// The required constraint value.
     pub constraint: String,
+    /// The offending setting value.
     pub setting: Option<String>,
 }
 
+/// The kind of the error (e.g. missing value, mismatching value, …).
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum SettingFitnessDistanceErrorKind {
+    /// Settings value is missing.
     Missing,
+    /// Settings value is a mismatch.
     Mismatch,
+    /// Settings value is too small.
     TooSmall,
+    /// Settings value is too large.
     TooLarge,
 }
 

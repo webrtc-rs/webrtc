@@ -14,14 +14,19 @@ pub use self::tie_breaking::*;
 
 use self::{apply_advanced::*, apply_mandatory::*, select_optimal::*};
 
+/// A mode indicating whether device information may be exposed.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum DeviceInformationExposureMode {
+    /// Device information may be exposed.
     Exposed,
+    /// Device information may NOT be exposed.
     Protected,
 }
 
+/// An error type indicating a failure of the `SelectSettings` algorithm.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum SelectSettingsError {
+    /// An error caused by one or more over-constrained settings.
     Overconstrained(OverconstrainedError),
 }
 

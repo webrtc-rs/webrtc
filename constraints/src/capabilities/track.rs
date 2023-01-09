@@ -31,10 +31,12 @@ use crate::{MediaTrackCapability, MediaTrackProperty};
 pub struct MediaTrackCapabilities(HashMap<MediaTrackProperty, MediaTrackCapability>);
 
 impl MediaTrackCapabilities {
+    /// Creates a capabilities value from its inner hashmap.
     pub fn new(capabilities: HashMap<MediaTrackProperty, MediaTrackCapability>) -> Self {
         Self(capabilities)
     }
 
+    /// Consumes the value, returning its inner hashmap.
     pub fn into_inner(self) -> HashMap<MediaTrackProperty, MediaTrackCapability> {
         self.0
     }

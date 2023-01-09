@@ -1,3 +1,6 @@
+//! Convenience macros.
+
+/// A convenience macro for defining settings.
 #[macro_export]
 macro_rules! settings {
     [
@@ -11,6 +14,7 @@ macro_rules! settings {
 
 pub use settings;
 
+/// A convenience macro for defining individual "value" constraints.
 #[macro_export]
 macro_rules! value_constraint {
     ($($p:ident: $c:expr),+ $(,)?) => {
@@ -29,6 +33,7 @@ macro_rules! value_constraint {
 
 pub use value_constraint;
 
+/// A convenience macro for defining individual "value range" constraints.
 #[macro_export]
 macro_rules! value_range_constraint {
     {$($p:ident: $c:expr),+ $(,)?} => {
@@ -46,6 +51,7 @@ macro_rules! value_range_constraint {
 
 pub use value_range_constraint;
 
+/// A convenience macro for defining individual "value sequence" constraints.
 #[macro_export]
 macro_rules! value_sequence_constraint {
     {$($p:ident: $c:expr),+ $(,)?} => {
@@ -63,6 +69,7 @@ macro_rules! value_sequence_constraint {
 
 pub use value_sequence_constraint;
 
+/// A convenience macro for defining constraint sets.
 #[macro_export]
 macro_rules! constraint_set {
     {
@@ -76,6 +83,7 @@ macro_rules! constraint_set {
 
 pub use constraint_set;
 
+/// A convenience macro for defining "mandatory" constraints.
 #[macro_export]
 macro_rules! mandatory_constraints {
     {
@@ -91,6 +99,7 @@ macro_rules! mandatory_constraints {
 
 pub use mandatory_constraints;
 
+/// A convenience macro for defining "advanced" constraints.
 #[macro_export]
 macro_rules! advanced_constraints {
     [
@@ -108,6 +117,7 @@ macro_rules! advanced_constraints {
 
 pub use advanced_constraints;
 
+/// A convenience macro for defining constraints.
 #[macro_export]
 macro_rules! constraints {
     [
