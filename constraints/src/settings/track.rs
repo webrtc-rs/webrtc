@@ -33,10 +33,12 @@ use crate::{MediaTrackProperty, MediaTrackSetting};
 pub struct MediaTrackSettings(HashMap<MediaTrackProperty, MediaTrackSetting>);
 
 impl MediaTrackSettings {
+    /// Creates a settings value from its inner hashmap.
     pub fn new(settings: HashMap<MediaTrackProperty, MediaTrackSetting>) -> Self {
         Self(settings)
     }
 
+    /// Consumes the value, returning its inner hashmap.
     pub fn into_inner(self) -> HashMap<MediaTrackProperty, MediaTrackSetting> {
         self.0
     }

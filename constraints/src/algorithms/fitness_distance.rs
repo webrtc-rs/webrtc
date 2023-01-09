@@ -1,6 +1,20 @@
+/// The function used to compute the "fitness distance" of a [setting][media_track_settings] value of a [`MediaStreamTrack`][media_stream_track] object.
+///
+/// # W3C Spec Compliance
+///
+/// The trait corresponds to the ["fitness distance"][fitness_distance] function in the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
+///
+/// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
+/// [media_track_settings]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatracksettings
+/// [fitness_distance]: https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+/// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams
 pub trait FitnessDistance<Subject> {
+    /// The type returned in the event of a computation error.
     type Error;
 
+    /// Computes the fitness distance of the given `subject` in the range of `0.0..=1.0`.
+    ///
+    /// A distance of `0.0` denotes it maximally fit, one of `1.0` as maximally unfit.
     fn fitness_distance(&self, subject: Subject) -> Result<f64, Self::Error>;
 }
 

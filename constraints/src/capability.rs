@@ -25,17 +25,25 @@ pub use self::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum MediaTrackCapability {
+    // IMPORTANT:
     // `BoolSequence` must be ordered before `Bool(…)` in order for
     // `serde` to decode the correct variant.
+    /// A sequence of boolean-valued media track capabilities.
     BoolSequence(MediaTrackValueSequenceCapability<bool>),
+    /// A single boolean-valued media track capability.
     Bool(MediaTrackValueCapability<bool>),
     // `IntegerRange` must be ordered before `FloatRange(…)` in order for
     // `serde` to decode the correct variant.
+    /// A range of integer-valued media track capabilities.
     IntegerRange(MediaTrackValueRangeCapability<u64>),
+    /// A range of floating-point-valued media track capabilities.
     FloatRange(MediaTrackValueRangeCapability<f64>),
+    // IMPORTANT:
     // `StringSequence` must be ordered before `String(…)` in order for
     // `serde` to decode the correct variant.
+    /// A sequence of string-valued media track capabilities.
     StringSequence(MediaTrackValueSequenceCapability<String>),
+    /// A single string-valued media track capability.
     String(MediaTrackValueCapability<String>),
 }
 

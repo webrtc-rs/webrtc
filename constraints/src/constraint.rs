@@ -57,17 +57,23 @@ pub enum MediaTrackConstraintResolutionStrategy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum MediaTrackConstraint {
+    /// An empty constraint.
     Empty(EmptyConstraint),
     // `IntegerRange` must be ordered before `FloatRange(…)` in order for
     // `serde` to decode the correct variant.
+    /// An integer-valued media track range constraint.
     IntegerRange(ValueRangeConstraint<u64>),
+    /// An floating-point-valued media track range constraint.
     FloatRange(ValueRangeConstraint<f64>),
     // `Bool` must be ordered after `IntegerRange(…)`/`FloatRange(…)` in order for
     // `serde` to decode the correct variant.
+    /// A single boolean-valued media track constraint.
     Bool(ValueConstraint<bool>),
     // `StringSequence` must be ordered before `String(…)` in order for
     // `serde` to decode the correct variant.
+    /// A sequence of string-valued media track constraints.
     StringSequence(ValueSequenceConstraint<String>),
+    /// A single string-valued media track constraint.
     String(ValueConstraint<String>),
 }
 
@@ -207,6 +213,7 @@ impl From<MediaTrackSetting> for MediaTrackConstraint {
 }
 
 impl MediaTrackConstraint {
+    /// Returns `true` if `self` is empty, otherwise `false`.
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Empty(_) => true,
@@ -218,6 +225,8 @@ impl MediaTrackConstraint {
         }
     }
 
+    /// Returns a resolved representation of the constraint
+    /// with bare values resolved to fully-qualified constraints.
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -225,6 +234,8 @@ impl MediaTrackConstraint {
         self.clone().into_resolved(strategy)
     }
 
+    /// Consumes the constraint, returning a resolved representation of the
+    /// constraint with bare values resolved to fully-qualified constraints.
     pub fn into_resolved(
         self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -264,11 +275,17 @@ impl MediaTrackConstraint {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum ResolvedMediaTrackConstraint {
+    /// An empty constraint.
     Empty(EmptyConstraint),
+    /// An integer-valued media track range constraint.
     IntegerRange(ResolvedValueRangeConstraint<u64>),
+    /// An floating-point-valued media track range constraint.
     FloatRange(ResolvedValueRangeConstraint<f64>),
+    /// A single boolean-valued media track constraint.
     Bool(ResolvedValueConstraint<bool>),
+    /// A sequence of string-valued media track constraints.
     StringSequence(ResolvedValueSequenceConstraint<String>),
+    /// A single string-valued media track constraint.
     String(ResolvedValueConstraint<String>),
 }
 
@@ -332,16 +349,21 @@ impl From<ResolvedValueConstraint<String>> for ResolvedMediaTrackConstraint {
 }
 
 impl ResolvedMediaTrackConstraint {
+    /// Creates a resolved media track constraint by resolving
+    /// bare values to exact constraints: `{ exact: bare }`.
     pub fn exact_from(setting: MediaTrackSetting) -> Self {
         MediaTrackConstraint::from(setting)
             .into_resolved(MediaTrackConstraintResolutionStrategy::BareToExact)
     }
 
+    /// Creates a resolved media track constraint by resolving
+    /// bare values to ideal constraints: `{ ideal: bare }`.
     pub fn ideal_from(setting: MediaTrackSetting) -> Self {
         MediaTrackConstraint::from(setting)
             .into_resolved(MediaTrackConstraintResolutionStrategy::BareToIdeal)
     }
 
+    /// Returns `true` if `self` is required, otherwise `false`.
     pub fn is_required(&self) -> bool {
         match self {
             Self::Empty(_constraint) => false,
@@ -353,6 +375,7 @@ impl ResolvedMediaTrackConstraint {
         }
     }
 
+    /// Returns `true` if `self` is empty, otherwise `false`.
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Empty(_constraint) => true,
@@ -364,10 +387,13 @@ impl ResolvedMediaTrackConstraint {
         }
     }
 
+    /// Returns a corresponding constraint containing only required values.
     pub fn to_required_only(&self) -> Self {
         self.clone().into_required_only()
     }
 
+    /// Consumes `self, returning a corresponding constraint
+    /// containing only required values.
     pub fn into_required_only(self) -> Self {
         match self {
             Self::Empty(constraint) => Self::Empty(constraint),
@@ -381,10 +407,14 @@ impl ResolvedMediaTrackConstraint {
         }
     }
 
+    /// Returns a corresponding sanitized constraint
+    /// if `self` is non-empty, otherwise `None`.
     pub fn to_sanitized(&self) -> Option<SanitizedMediaTrackConstraint> {
         self.clone().into_sanitized()
     }
 
+    /// Consumes `self`, returning a corresponding sanitized constraint
+    /// if `self` is non-empty, otherwise `None`.
     pub fn into_sanitized(self) -> Option<SanitizedMediaTrackConstraint> {
         if self.is_empty() {
             return None;
@@ -418,6 +448,7 @@ impl Deref for SanitizedMediaTrackConstraint {
 }
 
 impl SanitizedMediaTrackConstraint {
+    /// Consumes `self` returning its inner resolved constraint.
     pub fn into_inner(self) -> ResolvedMediaTrackConstraint {
         self.0
     }

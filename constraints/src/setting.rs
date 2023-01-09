@@ -15,9 +15,13 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum MediaTrackSetting {
+    /// A boolean-valued track setting.
     Bool(bool),
+    /// An integer-valued track setting.
     Integer(i64),
+    /// A floating-point-valued track setting.
     Float(f64),
+    /// A string-valued track setting.
     String(String),
 }
 

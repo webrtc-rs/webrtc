@@ -18,18 +18,22 @@ pub enum FacingMode {
 }
 
 impl FacingMode {
+    /// Returns `"user"`, the string-value of the `User` facing mode.
     pub fn user() -> String {
         Self::User.to_string()
     }
 
+    /// Returns `"environment"`, the string-value of the `Environment` facing mode.
     pub fn environment() -> String {
         Self::Environment.to_string()
     }
 
+    /// Returns `"left"`, the string-value of the `Left` facing mode.
     pub fn left() -> String {
         Self::Left.to_string()
     }
 
+    /// Returns `"right"`, the string-value of the `Right` facing mode.
     pub fn right() -> String {
         Self::Right.to_string()
     }
@@ -71,10 +75,12 @@ pub enum ResizeMode {
 }
 
 impl ResizeMode {
+    /// Returns `"none"`, the string-value of the `None` resize mode.
     pub fn none() -> String {
         Self::None.to_string()
     }
 
+    /// Returns `"crop-and-scale"`, the string-value of the `CropAndScale` resize mode.
     pub fn crop_and_scale() -> String {
         Self::CropAndScale.to_string()
     }
