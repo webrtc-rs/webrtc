@@ -9,22 +9,22 @@
 ### Breaking changes
 
 * Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
-    - `Agent`:
-        - `get_bytes_received`;
-        - `get_bytes_sent`;
-        - `on_connection_state_change`;
-        - `on_selected_candidate_pair_change`;
-        - `on_candidate`;
-        - `add_remote_candidate`;
-        - `gather_candidates`.
-    - `unmarshal_candidate`;
-    - `CandidateHostConfig::new_candidate_host`;
-    - `CandidatePeerReflexiveConfig::new_candidate_peer_reflexive`;
-    - `CandidateRelayConfig::new_candidate_relay`;
-    - `CandidateServerReflexiveConfig::new_candidate_server_reflexive`;
-    - `Candidate`:
-        - `addr`;
-        - `set_ip`.
+  - `Agent`:
+    - `get_bytes_received`;
+    - `get_bytes_sent`;
+    - `on_connection_state_change`;
+    - `on_selected_candidate_pair_change`;
+    - `on_candidate`;
+    - `add_remote_candidate`;
+    - `gather_candidates`.
+  - `unmarshal_candidate`;
+  - `CandidateHostConfig::new_candidate_host`;
+  - `CandidatePeerReflexiveConfig::new_candidate_peer_reflexive`;
+  - `CandidateRelayConfig::new_candidate_relay`;
+  - `CandidateServerReflexiveConfig::new_candidate_server_reflexive`;
+  - `Candidate`:
+    - `addr`;
+    - `set_ip`.
 
 ## v0.8.2
 
