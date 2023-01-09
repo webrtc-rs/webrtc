@@ -1,6 +1,8 @@
 //! Pure Rust implementation of the constraint logic defined in the ["Media Capture and Streams"][mediacapture_streams] spec.
 //!
 //! [mediacapture_streams]: https://www.w3.org/TR/mediacapture-streams/
+#![warn(rust_2018_idioms)]
+#![allow(dead_code)]
 
 pub mod algorithms;
 pub mod errors;
