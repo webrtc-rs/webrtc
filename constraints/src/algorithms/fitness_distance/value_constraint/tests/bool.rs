@@ -155,7 +155,7 @@ mod required {
 
     // Required boolean constraints have specialized logic as per
     // rule 4 of the fitness distance algorithm specification:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
 
     mod specialization {
         use super::*;

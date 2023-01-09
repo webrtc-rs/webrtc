@@ -17,7 +17,7 @@ macro_rules! impl_non_numeric_value_constraint {
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
                 if let Some(exact) = self.exact.as_ref() {
                     // As specified in step 2 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint is required (constraintValue either contains
                     // > one or more members named […] 'exact' […]), and the settings
@@ -46,7 +46,7 @@ macro_rules! impl_non_numeric_value_constraint {
                     match setting {
                         Some(actual) if actual == ideal => {
                             // As specified in step 8 of the `fitness distance` algorithm:
-                            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                             //
                             // > For all string, enum and boolean constraints […],
                             // > the fitness distance is the result of the formula:
@@ -58,7 +58,7 @@ macro_rules! impl_non_numeric_value_constraint {
                         }
                         _ => {
                             // As specified in step 5 of the `fitness distance` algorithm:
-                            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                             //
                             // > If the settings dictionary's `constraintName` member
                             // > does not exist, the fitness distance is 1.
@@ -67,7 +67,7 @@ macro_rules! impl_non_numeric_value_constraint {
                     }
                 } else {
                     // As specified in step 6 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If no ideal value is specified (constraintValue either
                     // > contains no member named 'ideal', or, if bare values are to be
@@ -92,7 +92,7 @@ macro_rules! impl_numeric_value_constraint {
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
                 if let Some(exact) = self.exact {
                     // As specified in step 2 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint is required (constraintValue either contains
                     // > one or more members named […] 'exact' […]), and the settings
@@ -124,7 +124,7 @@ macro_rules! impl_numeric_value_constraint {
                             let actual: f64 = actual as f64;
                             let ideal: f64 = ideal as f64;
                             // As specified in step 7 of the `fitness distance` algorithm:
-                            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                             //
                             // > For all positive numeric constraints […],
                             // > the fitness distance is the result of the formula
@@ -136,7 +136,7 @@ macro_rules! impl_numeric_value_constraint {
                         }
                         None => {
                             // As specified in step 5 of the `fitness distance` algorithm:
-                            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                             //
                             // > If the settings dictionary's `constraintName` member
                             // > does not exist, the fitness distance is 1.
@@ -145,7 +145,7 @@ macro_rules! impl_numeric_value_constraint {
                     }
                 } else {
                     // As specified in step 6 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If no ideal value is specified (constraintValue either
                     // > contains no member named 'ideal', or, if bare values are to be
@@ -185,7 +185,7 @@ macro_rules! impl_exists_value_constraint {
                 // For all other configurations we just interpret it as an incompatible constraint.
                 match self.exact {
                     // As specified in step 4 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If constraintValue is a boolean, but the constrainable property is not,
                     // > then the fitness distance is based on whether the settings dictionary's
@@ -202,7 +202,7 @@ macro_rules! impl_exists_value_constraint {
                         }
                     }
                     // As specified in step 3 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint does not apply for this type of object,
                     // > the fitness distance is 0 (that is, the constraint does not

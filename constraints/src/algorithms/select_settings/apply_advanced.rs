@@ -7,7 +7,7 @@ use crate::{
 /// fitness distance is finite.
 ///
 /// Implements step 5 of the `SelectSettings` algorithm:
-/// https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+/// <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
 ///
 /// # Note:
 /// This may change the order of items in `feasible_candidates`.
@@ -18,7 +18,7 @@ pub(super) fn apply_advanced_constraints<'a>(
     advanced_constraints: &SanitizedAdvancedMediaTrackConstraints,
 ) -> Vec<(&'a MediaTrackSettings, f64)> {
     // As specified in step 5 of the `SelectSettings` algorithm:
-    // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+    // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
     //
     // > Iterate over the 'advanced' ConstraintSets in newConstraints in the order in which they were specified.
     // >

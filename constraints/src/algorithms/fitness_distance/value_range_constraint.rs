@@ -12,7 +12,7 @@ macro_rules! impl_value_range_constraint {
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
                 if let Some(exact) = self.exact {
                     // As specified in step 2 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint is required (constraintValue either contains
                     // > one or more members named […] 'exact' […]), and the settings
@@ -40,7 +40,7 @@ macro_rules! impl_value_range_constraint {
 
                 if let Some(min) = self.min {
                     // As specified in step 2 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint is required (constraintValue either contains
                     // > one or more members named […] 'min' […]), and the settings
@@ -71,7 +71,7 @@ macro_rules! impl_value_range_constraint {
 
                 if let Some(max) = self.max {
                     // As specified in step 2 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint is required (constraintValue either contains
                     // > one or more members named […] 'max' […]), and the settings
@@ -106,7 +106,7 @@ macro_rules! impl_value_range_constraint {
                             let actual: f64 = actual as f64;
                             let ideal: f64 = ideal as f64;
                             // As specified in step 7 of the `fitness distance` algorithm:
-                            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                             //
                             // > For all positive numeric constraints […],
                             // > the fitness distance is the result of the formula
@@ -118,7 +118,7 @@ macro_rules! impl_value_range_constraint {
                         }
                         None => {
                             // As specified in step 5 of the `fitness distance` algorithm:
-                            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                             //
                             // > If the settings dictionary's `constraintName` member
                             // > does not exist, the fitness distance is 1.
@@ -127,7 +127,7 @@ macro_rules! impl_value_range_constraint {
                     }
                 } else {
                     // As specified in step 6 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If no ideal value is specified (constraintValue either
                     // > contains no member named 'ideal', or, if bare values are to be
@@ -156,7 +156,7 @@ macro_rules! impl_ignored_value_range_constraint {
 
             fn fitness_distance(&self, _setting: Option<&'a $s>) -> Result<f64, Self::Error> {
                 // As specified in step 3 of the `fitness distance` algorithm:
-                // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                 //
                 // > If the constraint does not apply for this type of object,
                 // > the fitness distance is 0 (that is, the constraint does not
