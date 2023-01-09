@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use tokio::time::Instant;
 
 use super::*;
@@ -10,6 +11,7 @@ use crate::stats::{
 use crate::track::TrackStream;
 use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
 use arc_swap::ArcSwapOption;
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicIsize;
 use std::sync::Weak;
 
@@ -236,6 +238,8 @@ impl PeerConnectionInternal {
         let dtls_transport = Arc::clone(&self.dtls_transport);
         let is_closed = Arc::clone(&self.is_closed);
         let pci = Arc::clone(self);
+
+        // SRTP acceptor
         tokio::spawn(async move {
             let simulcast_routine_count = Arc::new(AtomicU64::new(0));
             loop {
@@ -270,53 +274,58 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                let dtls_transport2 = Arc::clone(&dtls_transport);
-                let simulcast_routine_count2 = Arc::clone(&simulcast_routine_count);
-                let pci2 = Arc::clone(&pci);
-                tokio::spawn(async move {
-                    let ssrc = stream.get_ssrc();
+                {
+                    let dtls_transport = Arc::clone(&dtls_transport);
+                    let simulcast_routine_count = Arc::clone(&simulcast_routine_count);
+                    let pci = Arc::clone(&pci);
+                    tokio::spawn(async move {
+                        let ssrc = stream.get_ssrc();
 
-                    dtls_transport2
-                        .store_simulcast_stream(ssrc, Arc::clone(&stream))
-                        .await;
+                        dtls_transport
+                            .store_simulcast_stream(ssrc, Arc::clone(&stream))
+                            .await;
 
-                    if let Err(err) = pci2.handle_incoming_ssrc(stream, ssrc).await {
-                        log::error!(
-                            "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
-                            ssrc,
-                            err
-                        );
-                    }
+                        if let Err(err) = pci.handle_incoming_ssrc(stream, ssrc).await {
+                            log::error!(
+                                "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
+                                ssrc,
+                                err
+                            );
+                        }
 
-                    simulcast_routine_count2.fetch_sub(1, Ordering::SeqCst);
-                });
+                        simulcast_routine_count.fetch_sub(1, Ordering::SeqCst);
+                    });
+                }
             }
         });
 
-        let dtls_transport = Arc::clone(&self.dtls_transport);
-        tokio::spawn(async move {
-            loop {
-                let srtcp_session = match dtls_transport.get_srtcp_session().await {
-                    Some(s) => s,
-                    None => {
-                        log::warn!("undeclared_media_processor failed to open SrtcpSession");
-                        return;
-                    }
-                };
+        // SRTCP acceptor
+        {
+            let dtls_transport = Arc::clone(&self.dtls_transport);
+            tokio::spawn(async move {
+                loop {
+                    let srtcp_session = match dtls_transport.get_srtcp_session().await {
+                        Some(s) => s,
+                        None => {
+                            log::warn!("undeclared_media_processor failed to open SrtcpSession");
+                            return;
+                        }
+                    };
 
-                let stream = match srtcp_session.accept().await {
-                    Ok(stream) => stream,
-                    Err(err) => {
-                        log::warn!("Failed to accept RTCP {}", err);
-                        return;
-                    }
-                };
-                log::warn!(
-                    "Incoming unhandled RTCP ssrc({}), on_track will not be fired",
-                    stream.get_ssrc()
-                );
-            }
-        });
+                    let stream = match srtcp_session.accept().await {
+                        Ok(stream) => stream,
+                        Err(err) => {
+                            log::warn!("Failed to accept RTCP {}", err);
+                            return;
+                        }
+                    };
+                    log::warn!(
+                        "Incoming unhandled RTCP ssrc({}), on_track will not be fired",
+                        stream.get_ssrc()
+                    );
+                }
+            });
+        }
     }
 
     /// start_rtp_receivers opens knows inbound SRTP streams from the remote_description
@@ -924,154 +933,156 @@ impl PeerConnectionInternal {
         rtp_stream: Arc<Stream>,
         ssrc: SSRC,
     ) -> Result<()> {
-        if let Some(rd) = self.remote_description().await {
-            if let Some(parsed) = &rd.parsed {
-                // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
-                let handled = self.handle_undeclared_ssrc(ssrc, parsed).await?;
-                if handled {
-                    return Ok(());
-                }
+        let parsed = match self.remote_description().await.and_then(|rd| rd.parsed) {
+            Some(r) => r,
+            None => return Err(Error::ErrPeerConnRemoteDescriptionNil),
+        };
+        // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
+        let handled = self.handle_undeclared_ssrc(ssrc, &parsed).await?;
+        if handled {
+            return Ok(());
+        }
 
-                let (mid_extension_id, audio_supported, video_supported) = self
-                    .media_engine
-                    .get_header_extension_id(RTCRtpHeaderExtensionCapability {
-                        uri: ::sdp::extmap::SDES_MID_URI.to_owned(),
-                    })
-                    .await;
-                if !audio_supported && !video_supported {
-                    return Err(Error::ErrPeerConnSimulcastMidRTPExtensionRequired);
-                }
+        // Get MID extension ID
+        let (mid_extension_id, audio_supported, video_supported) = self
+            .media_engine
+            .get_header_extension_id(RTCRtpHeaderExtensionCapability {
+                uri: ::sdp::extmap::SDES_MID_URI.to_owned(),
+            })
+            .await;
+        if !audio_supported && !video_supported {
+            return Err(Error::ErrPeerConnSimulcastMidRTPExtensionRequired);
+        }
 
-                let (sid_extension_id, audio_supported, video_supported) = self
-                    .media_engine
-                    .get_header_extension_id(RTCRtpHeaderExtensionCapability {
-                        uri: ::sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
-                    })
-                    .await;
-                if !audio_supported && !video_supported {
-                    return Err(Error::ErrPeerConnSimulcastStreamIDRTPExtensionRequired);
-                }
+        // Get RID extension ID
+        let (sid_extension_id, audio_supported, video_supported) = self
+            .media_engine
+            .get_header_extension_id(RTCRtpHeaderExtensionCapability {
+                uri: ::sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
+            })
+            .await;
+        if !audio_supported && !video_supported {
+            return Err(Error::ErrPeerConnSimulcastStreamIDRTPExtensionRequired);
+        }
 
-                let (rsid_extension_id, _, _) = self
-                    .media_engine
-                    .get_header_extension_id(RTCRtpHeaderExtensionCapability {
-                        uri: SDES_REPAIR_RTP_STREAM_ID_URI.to_owned(),
-                    })
-                    .await;
+        let (rsid_extension_id, _, _) = self
+            .media_engine
+            .get_header_extension_id(RTCRtpHeaderExtensionCapability {
+                uri: SDES_REPAIR_RTP_STREAM_ID_URI.to_owned(),
+            })
+            .await;
 
-                let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
+        let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
+        // Packets that we read as part of simulcast probing that we need to make available
+        // if we do find a track later.
+        let mut buffered_packets: VecDeque<(Bytes, Attributes)> = VecDeque::default();
 
-                let n = rtp_stream.read(&mut buf).await?;
+        let n = rtp_stream.read(&mut buf).await?;
 
-                let (mut mid, mut rid, mut rsid, payload_type) = handle_unknown_rtp_packet(
+        let (mut mid, mut rid, mut rsid, payload_type) = handle_unknown_rtp_packet(
+            &buf[..n],
+            mid_extension_id as u8,
+            sid_extension_id as u8,
+            rsid_extension_id as u8,
+        )?;
+        // TODO: Can we have attributes on the first packets?
+        buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), Attributes::new()));
+
+        let params = self
+            .media_engine
+            .get_rtp_parameters_by_payload_type(payload_type)
+            .await?;
+
+        let icpr = match self.interceptor.upgrade() {
+            Some(i) => i,
+            None => return Err(Error::ErrInterceptorNotBind),
+        };
+
+        let stream_info = create_stream_info(
+            "".to_owned(),
+            ssrc,
+            params.codecs[0].payload_type,
+            params.codecs[0].capability.clone(),
+            &params.header_extensions,
+        );
+        let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) = self
+            .dtls_transport
+            .streams_for_ssrc(ssrc, &stream_info, &icpr)
+            .await?;
+
+        let a = Attributes::new();
+        for _ in 0..=SIMULCAST_PROBE_COUNT {
+            if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
+                let (n, _) = rtp_interceptor.read(&mut buf, &a).await?;
+                let (m, r, rs, _) = handle_unknown_rtp_packet(
                     &buf[..n],
                     mid_extension_id as u8,
                     sid_extension_id as u8,
                     rsid_extension_id as u8,
                 )?;
+                mid = m;
+                rid = r;
+                rsid = rs;
 
-                let params = self
-                    .media_engine
-                    .get_rtp_parameters_by_payload_type(payload_type)
-                    .await?;
+                buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), a.clone()));
+                continue;
+            }
 
-                if let Some(icpr) = self.interceptor.upgrade() {
-                    let stream_info = create_stream_info(
-                        "".to_owned(),
-                        ssrc,
-                        params.codecs[0].payload_type,
-                        params.codecs[0].capability.clone(),
-                        &params.header_extensions,
-                    );
-                    let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                        self.dtls_transport
-                            .streams_for_ssrc(ssrc, &stream_info, &icpr)
-                            .await?;
-
-                    let a = Attributes::new();
-                    for _ in 0..=SIMULCAST_PROBE_COUNT {
-                        if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
-                            if let Some(icpr) = &rtp_interceptor {
-                                let (n, _) = icpr.read(&mut buf, &a).await?;
-                                let (m, r, rs, _) = handle_unknown_rtp_packet(
-                                    &buf[..n],
-                                    mid_extension_id as u8,
-                                    sid_extension_id as u8,
-                                    rsid_extension_id as u8,
-                                )?;
-                                mid = m;
-                                rid = r;
-                                rsid = rs;
-
-                                continue;
-                            } else {
-                                return Err(Error::ErrInterceptorNotBind);
-                            }
-                        }
-
-                        let transceivers = self.rtp_transceivers.lock().await;
-                        for t in &*transceivers {
-                            if t.mid().as_ref() != Some(&mid) || t.receiver().await.is_none() {
-                                continue;
-                            }
-
-                            if let Some(receiver) = t.receiver().await {
-                                if !rsid.is_empty() {
-                                    return receiver
-                                        .receive_for_rtx(
-                                            0,
-                                            rsid,
-                                            TrackStream {
-                                                stream_info: Some(stream_info.clone()),
-                                                rtp_read_stream,
-                                                rtp_interceptor,
-                                                rtcp_read_stream,
-                                                rtcp_interceptor,
-                                            },
-                                        )
-                                        .await;
-                                }
-
-                                let track = receiver
-                                    .receive_for_rid(
-                                        rid,
-                                        params,
-                                        TrackStream {
-                                            stream_info: Some(stream_info.clone()),
-                                            rtp_read_stream,
-                                            rtp_interceptor,
-                                            rtcp_read_stream,
-                                            rtcp_interceptor,
-                                        },
-                                    )
-                                    .await?;
-
-                                RTCPeerConnection::do_track(
-                                    Arc::clone(&self.on_track_handler),
-                                    track,
-                                    receiver,
-                                    Arc::clone(t),
-                                );
-                            }
-                            return Ok(());
-                        }
-                    }
-
-                    if let Some(rtp_read_stream) = rtp_read_stream {
-                        let _ = rtp_read_stream.close().await;
-                    }
-                    if let Some(rtcp_read_stream) = rtcp_read_stream {
-                        let _ = rtcp_read_stream.close().await;
-                    }
-                    icpr.unbind_remote_stream(&stream_info).await;
-                    self.dtls_transport.remove_simulcast_stream(ssrc).await;
+            let transceivers = self.rtp_transceivers.lock().await;
+            for t in &*transceivers {
+                if t.mid().as_ref() != Some(&mid) || t.receiver().await.is_none() {
+                    continue;
                 }
 
-                return Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed);
+                if let Some(receiver) = t.receiver().await {
+                    if !rsid.is_empty() {
+                        return receiver
+                            .receive_for_rtx(
+                                0,
+                                rsid,
+                                TrackStream {
+                                    stream_info: Some(stream_info.clone()),
+                                    rtp_read_stream: Some(rtp_read_stream),
+                                    rtp_interceptor: Some(rtp_interceptor),
+                                    rtcp_read_stream: Some(rtcp_read_stream),
+                                    rtcp_interceptor: Some(rtcp_interceptor),
+                                },
+                            )
+                            .await;
+                    }
+
+                    let track = receiver
+                        .receive_for_rid(
+                            rid,
+                            params,
+                            TrackStream {
+                                stream_info: Some(stream_info.clone()),
+                                rtp_read_stream: Some(rtp_read_stream),
+                                rtp_interceptor: Some(rtp_interceptor),
+                                rtcp_read_stream: Some(rtcp_read_stream),
+                                rtcp_interceptor: Some(rtcp_interceptor),
+                            },
+                        )
+                        .await?;
+                    track.prepopulate_peeked_data(buffered_packets).await;
+
+                    RTCPeerConnection::do_track(
+                        Arc::clone(&self.on_track_handler),
+                        track,
+                        receiver,
+                        Arc::clone(t),
+                    );
+                }
+                return Ok(());
             }
         }
 
-        Err(Error::ErrPeerConnRemoteDescriptionNil)
+        let _ = rtp_read_stream.close().await;
+        let _ = rtcp_read_stream.close().await;
+        icpr.unbind_remote_stream(&stream_info).await;
+        self.dtls_transport.remove_simulcast_stream(ssrc).await;
+
+        Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed)
     }
 
     async fn start_receiver(
