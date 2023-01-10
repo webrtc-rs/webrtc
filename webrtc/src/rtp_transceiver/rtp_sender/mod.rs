@@ -18,9 +18,11 @@ use crate::track::track_local::{
 use ice::rand::generate_crypto_random_string;
 use interceptor::stream_info::StreamInfo;
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::{mpsc, Mutex, Notify};
+
+use super::srtp_writer_future::SequenceTransformer;
 
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: Mutex<mpsc::Receiver<()>>,
@@ -81,6 +83,7 @@ pub struct RTCRtpSender {
 
     pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
     pub(crate) stream_info: Mutex<StreamInfo>,
+    seq_trans: Option<Arc<SequenceTransformer>>,
 
     pub(crate) context: Mutex<TrackLocalContext>,
 
@@ -132,6 +135,7 @@ impl RTCRtpSender {
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
         start_paused: bool,
+        custom_sequencer: bool,
     ) -> RTCRtpSender {
         let id = generate_crypto_random_string(
             32,
@@ -150,6 +154,7 @@ impl RTCRtpSender {
             rtcp_interceptor: Mutex::new(None),
         });
 
+        let seq_trans = custom_sequencer.then_some(Arc::new(SequenceTransformer::new()));
         let srtp_stream = Arc::new(SrtpWriterFuture {
             closed: AtomicBool::new(false),
             ssrc,
@@ -157,7 +162,7 @@ impl RTCRtpSender {
             rtp_transport: Arc::clone(&transport),
             rtcp_read_stream: Mutex::new(None),
             rtp_write_session: Mutex::new(None),
-            next_sequence_nr: Arc::new(AtomicU16::new(rand::random())),
+            seq_trans: seq_trans.clone(),
         });
 
         let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
@@ -173,6 +178,7 @@ impl RTCRtpSender {
 
             srtp_stream,
             stream_info: Mutex::new(StreamInfo::default()),
+            seq_trans,
 
             context: Mutex::new(TrackLocalContext::default()),
             transport,
@@ -325,6 +331,8 @@ impl RTCRtpSender {
         };
 
         let result = if let Some(t) = &track {
+            let _ = self.seq_trans.as_ref().map(|st| st.reset_offset());
+
             let new_context = TrackLocalContext {
                 id: context.id.clone(),
                 params: self

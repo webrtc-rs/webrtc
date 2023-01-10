@@ -13,6 +13,48 @@ use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
+pub struct SequenceTransformer {
+    offset: AtomicU16,
+    last_sq: AtomicU16,
+    reset_needed: AtomicBool,
+}
+
+impl SequenceTransformer {
+    pub fn new() -> Self {
+        Self {
+            offset: AtomicU16::new(0),
+            last_sq: AtomicU16::new(rand::random()),
+            reset_needed: AtomicBool::new(false),
+        }
+    }
+
+    pub fn reset_offset(&self) {
+        self.reset_needed.store(true, Ordering::SeqCst);
+    }
+
+    fn seq_number(&self, raw_sn: u16) -> u16 {
+        let offset = self
+            .reset_needed
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+            .then(|| {
+                let offset = self
+                    .last_sq
+                    .load(Ordering::SeqCst)
+                    .overflowing_sub(raw_sn)
+                    .0;
+                self.offset.store(offset, Ordering::SeqCst);
+
+                offset
+            })
+            .unwrap_or(self.offset.load(Ordering::SeqCst));
+        let next = raw_sn.overflowing_add(offset).0;
+        self.last_sq.store(next, Ordering::SeqCst);
+
+        next
+    }
+}
+
 /// SrtpWriterFuture blocks Read/Write calls until
 /// the SRTP Session is available
 pub(crate) struct SrtpWriterFuture {
@@ -22,7 +64,7 @@ pub(crate) struct SrtpWriterFuture {
     pub(crate) rtp_transport: Arc<RTCDtlsTransport>,
     pub(crate) rtcp_read_stream: Mutex<Option<Arc<Stream>>>, // atomic.Value // *
     pub(crate) rtp_write_session: Mutex<Option<Arc<Session>>>, // atomic.Value // *
-    pub(crate) next_sequence_nr: Arc<AtomicU16>,
+    pub(crate) seq_trans: Option<Arc<SequenceTransformer>>,
 }
 
 impl SrtpWriterFuture {
@@ -182,11 +224,15 @@ impl RTCPReader for SrtpWriterFuture {
 #[async_trait]
 impl RTPWriter for SrtpWriterFuture {
     async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
-        let sequence_number = self.next_sequence_nr.fetch_add(1, Ordering::SeqCst);
+        let res = if let Some(st) = &self.seq_trans {
+            let mut pkt = pkt.clone();
+            pkt.header.sequence_number = st.seq_number(pkt.header.sequence_number);
 
-        let mut pkt = pkt.clone();
-        pkt.header.sequence_number = sequence_number;
+            self.write_rtp(&pkt).await
+        } else {
+            self.write_rtp(pkt).await
+        };
 
-        Ok(self.write_rtp(&pkt).await?)
+        Ok(res?)
     }
 }
