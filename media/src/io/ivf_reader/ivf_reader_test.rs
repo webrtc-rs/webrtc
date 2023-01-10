@@ -35,21 +35,21 @@ fn test_ivf_reader_parse_valid_file_header() -> Result<()> {
     let r = BufReader::new(&ivf[..]);
     let (_, header) = IVFReader::new(r)?;
 
-    assert_eq!(b"DKIF", &header.signature, "signature is 'DKIF'");
-    assert_eq!(0, header.version, "version should be 0");
-    assert_eq!(b"VP80", &header.four_cc, "FourCC should be 'VP80'");
-    assert_eq!(176, header.width, "width should be 176");
-    assert_eq!(144, header.height, "height should be 144");
+    assert_eq!(&header.signature, b"DKIF", "signature is 'DKIF'");
+    assert_eq!(header.version, 0, "version should be 0");
+    assert_eq!(&header.four_cc, b"VP80", "FourCC should be 'VP80'");
+    assert_eq!(header.width, 176, "width should be 176");
+    assert_eq!(header.height, 144, "height should be 144");
     assert_eq!(
-        30000, header.timebase_denominator,
+        header.timebase_denominator, 30000,
         "timebase denominator should be 30000"
     );
     assert_eq!(
-        1000, header.timebase_numerator,
+        header.timebase_numerator, 1000,
         "timebase numerator should be 1000"
     );
-    assert_eq!(29, header.num_frames, "number of frames should be 29");
-    assert_eq!(0, header.unused, "bytes should be unused");
+    assert_eq!(header.num_frames, 29, "number of frames should be 29");
+    assert_eq!(header.unused, 0, "bytes should be unused");
 
     Ok(())
 }
@@ -79,24 +79,24 @@ fn test_ivf_reader_parse_valid_frames() -> Result<()> {
     // Parse Frame #1
     let (payload, header) = reader.parse_next_frame()?;
 
-    assert_eq!(4, header.frame_size, "Frame header frameSize should be 4");
-    assert_eq!(4, payload.len(), "Payload should be length 4");
+    assert_eq!(header.frame_size, 4, "Frame header frameSize should be 4");
+    assert_eq!(payload.len(), 4, "Payload should be length 4");
     assert_eq!(
         payload,
         Bytes::from_static(&[0xDE, 0xAD, 0xBE, 0xEF,]),
         "Payload value should be 0xDEADBEEF"
     );
     assert_eq!(
-        IVF_FILE_HEADER_SIZE + IVF_FRAME_HEADER_SIZE + header.frame_size as usize,
-        reader.bytes_read
+        reader.bytes_read,
+        IVF_FILE_HEADER_SIZE + IVF_FRAME_HEADER_SIZE + header.frame_size as usize
     );
     let previous_bytes_read = reader.bytes_read;
 
     // Parse Frame #2
     let (payload, header) = reader.parse_next_frame()?;
 
-    assert_eq!(12, header.frame_size, "Frame header frameSize should be 4");
-    assert_eq!(12, payload.len(), "Payload should be length 12");
+    assert_eq!(header.frame_size, 12, "Frame header frameSize should be 4");
+    assert_eq!(payload.len(), 12, "Payload should be length 12");
     assert_eq!(
         payload,
         Bytes::from_static(&[
@@ -105,8 +105,8 @@ fn test_ivf_reader_parse_valid_frames() -> Result<()> {
         "Payload value should be 0xDEADBEEFDEADBEEF"
     );
     assert_eq!(
-        previous_bytes_read + IVF_FRAME_HEADER_SIZE + header.frame_size as usize,
         reader.bytes_read,
+        previous_bytes_read + IVF_FRAME_HEADER_SIZE + header.frame_size as usize,
     );
 
     Ok(())
@@ -124,11 +124,8 @@ fn test_ivf_reader_parse_incomplete_frame_header() -> Result<()> {
     let (mut reader, _) = IVFReader::new(r)?;
 
     // Parse Frame #1
-    if let Err(err) = reader.parse_next_frame() {
-        assert!(true, "{}", err);
-    } else {
-        assert!(false);
-    }
+    let result = reader.parse_next_frame();
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     Ok(())
 }
@@ -146,11 +143,8 @@ fn test_ivf_reader_parse_incomplete_frame_payload() -> Result<()> {
     let (mut reader, _) = IVFReader::new(r)?;
 
     // Parse Frame #1
-    if let Err(err) = reader.parse_next_frame() {
-        assert!(true, "{}", err);
-    } else {
-        assert!(false);
-    }
+    let result = reader.parse_next_frame();
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     Ok(())
 }
@@ -161,11 +155,8 @@ fn test_ivf_reader_eof_when_no_frames_left() -> Result<()> {
     let r = BufReader::new(&ivf[..]);
     let (mut reader, _) = IVFReader::new(r)?;
 
-    if let Err(err) = reader.parse_next_frame() {
-        assert!(true, "{}", err);
-    } else {
-        assert!(false);
-    }
+    let result = reader.parse_next_frame();
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     Ok(())
 }

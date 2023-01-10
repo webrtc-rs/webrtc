@@ -241,12 +241,12 @@ mod test {
                 want_error
             );
 
-            if let Some(err) = want_error {
+            if let Some(want_error) = want_error {
                 let got_err = got.err().unwrap();
                 assert_eq!(
-                    err, got_err,
+                    want_error, got_err,
                     "Unmarshal {}: err = {:?}, want {:?}",
-                    name, got_err, err,
+                    name, got_err, want_error,
                 );
             } else {
                 let actual = got.unwrap();

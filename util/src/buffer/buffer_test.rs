@@ -17,12 +17,12 @@ async fn test_buffer() {
     // Read once
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(&[0, 1], &packet[..n]);
+    assert_eq!(&packet[..n], &[0, 1]);
 
     // Read deadline
     let result = buffer.read(&mut packet, Some(Duration::new(0, 1))).await;
     assert!(result.is_err());
-    assert_eq!(Error::ErrTimeout, result.unwrap_err());
+    assert_eq!(result.unwrap_err(), Error::ErrTimeout);
 
     // Write twice
     let n = assert_ok!(buffer.write(&[2, 3, 4]).await);
@@ -34,11 +34,11 @@ async fn test_buffer() {
     // Read twice
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 3, "n must be 3");
-    assert_eq!(&[2, 3, 4], &packet[..n]);
+    assert_eq!(&packet[..n], &[2, 3, 4]);
 
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 3, "n must be 3");
-    assert_eq!(&[5, 6, 7], &packet[..n]);
+    assert_eq!(&packet[..n], &[5, 6, 7]);
 
     // Write once prior to close.
     let n = assert_ok!(buffer.write(&[3]).await);
@@ -54,7 +54,7 @@ async fn test_buffer() {
     // But we can read the remaining data.
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 1, "n must be 1");
-    assert_eq!(&[3], &packet[..n]);
+    assert_eq!(&packet[..n], &[3]);
 
     // Until EOF
     let result = buffer.read(&mut packet, None).await;
@@ -135,11 +135,11 @@ async fn test_buffer_async() {
 
         let n = assert_ok!(buffer2.read(&mut packet, None).await);
         assert_eq!(n, 2, "n must be 2");
-        assert_eq!(&[0, 1], &packet[..n]);
+        assert_eq!(&packet[..n], &[0, 1]);
 
         let result = buffer2.read(&mut packet, None).await;
         assert!(result.is_err());
-        assert_eq!(Error::ErrBufferClosed, result.unwrap_err());
+        assert_eq!(result.unwrap_err(), Error::ErrBufferClosed);
 
         drop(done_tx);
     });
@@ -164,36 +164,36 @@ async fn test_buffer_async() {
 async fn test_buffer_limit_count() {
     let buffer = Buffer::new(2, 0);
 
-    assert_eq!(0, buffer.count().await);
+    assert_eq!(buffer.count().await, 0);
 
     // Write twice
     let n = assert_ok!(buffer.write(&[0, 1]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(1, buffer.count().await);
+    assert_eq!(buffer.count().await, 1);
 
     let n = assert_ok!(buffer.write(&[2, 3]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(2, buffer.count().await);
+    assert_eq!(buffer.count().await, 2);
 
     // Over capacity
     let result = buffer.write(&[4, 5]).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(Error::ErrBufferFull, err);
+        assert_eq!(err, Error::ErrBufferFull);
     }
-    assert_eq!(2, buffer.count().await);
+    assert_eq!(buffer.count().await, 2);
 
     // Read once
     let mut packet: Vec<u8> = vec![0; 4];
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(&[0, 1], &packet[..n]);
-    assert_eq!(1, buffer.count().await);
+    assert_eq!(&packet[..n], &[0, 1]);
+    assert_eq!(buffer.count().await, 1);
 
     // Write once
     let n = assert_ok!(buffer.write(&[6, 7]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(2, buffer.count().await);
+    assert_eq!(buffer.count().await, 2);
 
     // Over capacity
     let result = buffer.write(&[8, 9]).await;
@@ -201,18 +201,18 @@ async fn test_buffer_limit_count() {
     if let Err(err) = result {
         assert_eq!(Error::ErrBufferFull, err);
     }
-    assert_eq!(2, buffer.count().await);
+    assert_eq!(buffer.count().await, 2);
 
     // Read twice
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(&[2, 3], &packet[..n]);
-    assert_eq!(1, buffer.count().await);
+    assert_eq!(&packet[..n], &[2, 3]);
+    assert_eq!(buffer.count().await, 1);
 
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(&[6, 7], &packet[..n]);
-    assert_eq!(0, buffer.count().await);
+    assert_eq!(&packet[..n], &[6, 7]);
+    assert_eq!(buffer.count().await, 0);
 
     // Nothing left.
     buffer.close().await;
@@ -222,16 +222,16 @@ async fn test_buffer_limit_count() {
 async fn test_buffer_limit_size() {
     let buffer = Buffer::new(0, 11);
 
-    assert_eq!(0, buffer.size().await);
+    assert_eq!(buffer.size().await, 0);
 
     // Write twice
     let n = assert_ok!(buffer.write(&[0, 1]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(4, buffer.size().await);
+    assert_eq!(buffer.size().await, 4);
 
     let n = assert_ok!(buffer.write(&[2, 3]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(8, buffer.size().await);
+    assert_eq!(buffer.size().await, 8);
 
     // Over capacity
     let result = buffer.write(&[4, 5]).await;
@@ -239,24 +239,24 @@ async fn test_buffer_limit_size() {
     if let Err(err) = result {
         assert_eq!(Error::ErrBufferFull, err);
     }
-    assert_eq!(8, buffer.size().await);
+    assert_eq!(buffer.size().await, 8);
 
     // Cheeky write at exact size.
     let n = assert_ok!(buffer.write(&[6]).await);
     assert_eq!(n, 1, "n must be 1");
-    assert_eq!(11, buffer.size().await);
+    assert_eq!(buffer.size().await, 11);
 
     // Read once
     let mut packet: Vec<u8> = vec![0; 4];
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(&[0, 1], &packet[..n]);
-    assert_eq!(7, buffer.size().await);
+    assert_eq!(&packet[..n], &[0, 1]);
+    assert_eq!(buffer.size().await, 7);
 
     // Write once
     let n = assert_ok!(buffer.write(&[7, 8]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(11, buffer.size().await);
+    assert_eq!(buffer.size().await, 11);
 
     // Over capacity
     let result = buffer.write(&[9, 10]).await;
@@ -264,23 +264,23 @@ async fn test_buffer_limit_size() {
     if let Err(err) = result {
         assert_eq!(Error::ErrBufferFull, err);
     }
-    assert_eq!(11, buffer.size().await);
+    assert_eq!(buffer.size().await, 11);
 
     // Read everything
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(&[2, 3], &packet[..n]);
-    assert_eq!(7, buffer.size().await);
+    assert_eq!(&packet[..n], &[2, 3]);
+    assert_eq!(buffer.size().await, 7);
 
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 1, "n must be 1");
-    assert_eq!(&[6], &packet[..n]);
-    assert_eq!(4, buffer.size().await);
+    assert_eq!(&packet[..n], &[6]);
+    assert_eq!(buffer.size().await, 4);
 
     let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(&[7, 8], &packet[..n]);
-    assert_eq!(0, buffer.size().await);
+    assert_eq!(&packet[..n], &[7, 8]);
+    assert_eq!(buffer.size().await, 0);
 
     // Nothing left.
     buffer.close().await;
@@ -321,12 +321,12 @@ async fn test_buffer_limit_sizes() {
         // Next write is expected to be errored.
         let result = buffer.write(&pkt).await;
         assert!(result.is_err(), "{}", name);
-        assert_eq!(Error::ErrBufferFull, result.unwrap_err(), "{}", name);
+        assert_eq!(result.unwrap_err(), Error::ErrBufferFull, "{}", name);
 
         let mut packet = vec![0; size];
         for _ in 0..n_packets {
             let n = assert_ok!(buffer.read(&mut packet, Some(Duration::new(5, 0))).await);
-            assert_eq!(PACKET_SIZE, n, "{}", name);
+            assert_eq!(n, PACKET_SIZE, "{}", name);
         }
     }
 }
@@ -344,7 +344,7 @@ async fn test_buffer_misc() {
     let result = buffer.read(&mut packet, None).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(Error::ErrBufferShort, err);
+        assert_eq!(err, Error::ErrBufferShort);
     }
 
     // Close

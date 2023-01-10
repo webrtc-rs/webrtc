@@ -1,3 +1,6 @@
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::{APIBuilder, API};
@@ -269,13 +272,10 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
         })
     }));
 
-    let dc = match offer_pc.create_data_channel(EXPECTED_LABEL, None).await {
-        Ok(dc) => dc,
-        Err(_) => {
-            assert!(false, "Failed to create a PC pair for testing");
-            return Ok(());
-        }
-    };
+    let dc = offer_pc
+        .create_data_channel(EXPECTED_LABEL, None)
+        .await
+        .expect("Failed to create a PC pair for testing");
 
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
@@ -301,7 +301,7 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
                         })
                     }));
 
-                    if let Err(_) = dc1.send_text("Ping".to_owned()).await {
+                    if dc1.send_text("Ping".to_owned()).await.is_err() {
                         // wasm binding doesn't fire OnOpen (we probably already missed it)
                         let dc2 = Arc::clone(&dc1);
                         dc1.on_open(Box::new(move || {
@@ -332,22 +332,22 @@ async fn test_data_channel_close() -> Result<()> {
 
     // "Close after PeerConnection Closed"
     {
-        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+        let (offer_pc, answer_pc) = new_pair(&api).await?;
 
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
-        close_pair_now(&mut offer_pc, &mut answer_pc).await;
+        close_pair_now(&offer_pc, &answer_pc).await;
         dc.close().await?;
     }
 
     // "Close before connected"
     {
-        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+        let (offer_pc, answer_pc) = new_pair(&api).await?;
 
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
         dc.close().await?;
-        close_pair_now(&mut offer_pc, &mut answer_pc).await;
+        close_pair_now(&offer_pc, &answer_pc).await;
     }
 
     Ok(())
@@ -528,21 +528,11 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
         if d.label() == "initial_data_channel" {
             return Box::pin(async {});
         }
-        assert!(
-            false,
-            "OnDataChannel must not be fired when negotiated == true"
-        );
-
-        Box::pin(async {})
+        panic!("OnDataChannel must not be fired when negotiated == true");
     }));
 
     offer_pc.on_data_channel(Box::new(move |_d: Arc<RTCDataChannel>| {
-        assert!(
-            false,
-            "OnDataChannel must not be fired when negotiated == true"
-        );
-
-        Box::pin(async {})
+        panic!("OnDataChannel must not be fired when negotiated == true");
     }));
 
     let seen_answer_message = Arc::new(AtomicBool::new(false));
@@ -727,7 +717,7 @@ async fn test_data_channel_messages_are_ordered() -> Result<()> {
     for i in 1..=m as usize {
         expected[i - 1] = i as u64;
     }
-    assert_eq!(expected, values);
+    assert_eq!(values, expected);
 
     Ok(())
 }
@@ -882,9 +872,10 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
         let dc3 = Arc::clone(&dc2);
         Box::pin(async move {
             for _ in 0..10 {
-                if let Err(_) = dc3.send(&buf).await {
-                    assert!(false, "Failed to send string on data channel");
-                }
+                assert!(
+                    matches!(dc3.send(&buf).await, Ok(_)),
+                    "Failed to send string on data channel"
+                );
                 assert_eq!(
                     1500,
                     dc3.buffered_amount_low_threshold().await,
@@ -982,9 +973,10 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
             .await;
 
             for _ in 0..10 {
-                if let Err(_) = dc3.send(&buf).await {
-                    assert!(false, "Failed to send string on data channel");
-                }
+                assert!(
+                    matches!(dc3.send(&buf).await, Ok(_)),
+                    "Failed to send string on data channel"
+                );
                 assert_eq!(
                     1500,
                     dc3.buffered_amount_low_threshold().await,
@@ -1043,8 +1035,7 @@ async fn test_eof_detach() -> Result<()> {
                         Ok(detached) => detached,
                         Err(err) => {
                             log::debug!("Detach failed: {}", err);
-                            assert!(false);
-                            return;
+                            panic!();
                         }
                     };
 
@@ -1486,7 +1477,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
             err
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     let result = channel_a.send_text("test".to_owned()).await;
@@ -1498,7 +1489,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
             err
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     let result = channel_a.ensure_open();
@@ -1510,7 +1501,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
             err
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())

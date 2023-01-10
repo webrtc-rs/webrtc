@@ -212,7 +212,7 @@ mod test {
             let result = serde_json::from_str::<RTCIceCandidateInit>(&candidate_data);
             assert!(result.is_ok(), "testCase: unmarshal err: {:?}", result);
             if let Ok(actual_candidate_init) = result {
-                assert_eq!(candidate_init, actual_candidate_init);
+                assert_eq!(actual_candidate_init, candidate_init);
             }
         }
     }

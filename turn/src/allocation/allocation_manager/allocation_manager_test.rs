@@ -268,7 +268,7 @@ async fn test_allocation_timeout() -> Result<()> {
         count += 1;
 
         if count >= 10 {
-            assert!(false, "Allocations didn't timeout");
+            panic!("Allocations didn't timeout");
         }
 
         tokio::time::sleep(lifetime + Duration::from_millis(100)).await;

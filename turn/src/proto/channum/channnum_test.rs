@@ -44,7 +44,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
     //"GetFrom"
     {
         let mut decoded = Message::new();
-        decoded.write(&mut m.raw)?;
+        decoded.write(&m.raw)?;
 
         let mut num_decoded = ChannelNumber::default();
         num_decoded.get_from(&decoded)?;
@@ -62,7 +62,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
                     err
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
 
             m.add(ATTR_CHANNEL_NUMBER, &[1, 2, 3]);
@@ -73,7 +73,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
         }
     }

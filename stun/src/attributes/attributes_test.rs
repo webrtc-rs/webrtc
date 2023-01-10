@@ -74,12 +74,12 @@ fn test_attr_type_range() -> Result<()> {
         ATTR_REQUESTED_ADDRESS_FAMILY,
     ];
     for a in tests {
-        assert!(!(a.optional() || !a.required()), "should be required");
+        assert!(!a.optional() && a.required(), "should be required");
     }
 
     let tests = vec![ATTR_SOFTWARE, ATTR_ICE_CONTROLLED, ATTR_ORIGIN];
     for a in tests {
-        assert!(!(a.required() || !a.optional()), "should be optional");
+        assert!(!a.required() && a.optional(), "should be optional");
     }
 
     Ok(())

@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicUsize;
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::APIBuilder;
+use crate::dtls_transport::RTCDtlsTransport;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::peer_connection_test::{close_pair_now, create_vnet_pair};
 
@@ -18,10 +19,22 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
     let media_video_codecs = m.video_codecs.clone();
 
     let api = APIBuilder::new().with_media_engine(m).build();
+    let interceptor = api.interceptor_registry.build("")?;
+    let transport = Arc::new(RTCDtlsTransport::default());
+    let receiver = Arc::new(api.new_rtp_receiver(
+        RTPCodecType::Video,
+        Arc::clone(&transport),
+        Arc::clone(&interceptor),
+    ));
+
+    let sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
 
     let tr = RTCRtpTransceiver::new(
-        None,
-        None,
+        receiver,
+        sender,
         RTCRtpTransceiverDirection::Unspecified,
         RTPCodecType::Video,
         media_video_codecs.clone(),
@@ -30,7 +43,7 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
     )
     .await;
 
-    assert_eq!(&media_video_codecs, &tr.get_codecs().await);
+    assert_eq!(&tr.get_codecs().await, &media_video_codecs);
 
     let fail_test_cases = vec![
         vec![RTCRtpCodecParameters {
@@ -72,9 +85,9 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
 
     for test_case in fail_test_cases {
         if let Err(err) = tr.set_codec_preferences(test_case).await {
-            assert_eq!(Error::ErrRTPTransceiverCodecUnsupported, err);
+            assert_eq!(err, Error::ErrRTPTransceiverCodecUnsupported);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -153,11 +166,11 @@ async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()>
     let answer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let _ = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let answer_transceiver = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     answer_transceiver
@@ -204,11 +217,11 @@ async fn test_rtp_transceiver_direction_change() -> Result<()> {
     let (offer_pc, answer_pc, _) = create_vnet_pair().await?;
 
     let offer_transceiver = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let _ = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = offer_pc.create_offer(None).await?;
@@ -257,11 +270,11 @@ async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> 
     }
 
     let offer_transceiver = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let _ = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = offer_pc.create_offer(None).await?;
@@ -304,11 +317,11 @@ async fn test_rtp_transceiver_stopping() -> Result<()> {
     let (offer_pc, answer_pc, _) = create_vnet_pair().await?;
 
     let offer_transceiver = offer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let _ = answer_pc
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = offer_pc.create_offer(None).await?;
@@ -322,7 +335,7 @@ async fn test_rtp_transceiver_stopping() -> Result<()> {
     offer_pc.set_remote_description(answer).await?;
 
     assert!(
-        !offer_transceiver.mid().await.is_empty(),
+        offer_transceiver.mid().is_some(),
         "A mid should have been associated with the transceiver when applying the answer"
     );
     // Stop the transceiver

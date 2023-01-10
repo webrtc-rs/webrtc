@@ -59,7 +59,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
     let seen_packet_b_tx = Arc::new(seen_packet_b_tx);
     let on_track_count = Arc::new(AtomicU64::new(0));
     receiver.on_track(Box::new(move |track, _, _| {
-        assert_eq!(0, on_track_count.fetch_add(1, Ordering::SeqCst));
+        assert_eq!(on_track_count.fetch_add(1, Ordering::SeqCst), 0);
         let seen_packet_a_tx2 = Arc::clone(&seen_packet_a_tx);
         let seen_packet_b_tx2 = Arc::clone(&seen_packet_b_tx);
         Box::pin(async move {
@@ -80,7 +80,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
                 assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_H264);
                 let _ = seen_packet_b_tx2.send(()).await;
             } else {
-                assert!(false, "Unexpected RTP Data {:02x}", last);
+                panic!("Unexpected RTP Data {:02x}", last);
             }
         })
     }));
@@ -128,19 +128,16 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
     let (mut offerer, mut answerer) = new_pair(&api).await?;
 
     let rtp_transceiver = offerer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
-    if let Some(sender) = rtp_transceiver.sender().await {
-        let parameters = sender.get_parameters().await;
-        assert_ne!(0, parameters.rtp_parameters.codecs.len());
-        assert_eq!(1, parameters.encodings.len());
-        assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
-    } else {
-        assert!(false);
-    }
+    let sender = rtp_transceiver.sender().await;
+    let parameters = sender.get_parameters().await;
+    assert_ne!(0, parameters.rtp_parameters.codecs.len());
+    assert_eq!(1, parameters.encodings.len());
+    assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
 
     close_pair_now(&offerer, &answerer).await;
     Ok(())
@@ -245,9 +242,9 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
-        assert_eq!(Error::ErrRTPSenderNewTrackHasIncorrectKind, err);
+        assert_eq!(err, Error::ErrRTPSenderNewTrackHasIncorrectKind);
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&sender, &receiver).await;
@@ -298,10 +295,10 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
                 }])
                 .await?;
             } else {
-                assert!(false);
+                panic!();
             }
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -327,9 +324,9 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     });
 
     if let Err(err) = rtp_sender.replace_track(Some(track_b)).await {
-        assert_eq!(Error::ErrUnsupportedCodec, err);
+        assert_eq!(err, Error::ErrUnsupportedCodec);
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&sender, &receiver).await;

@@ -6,9 +6,9 @@ fn test_data_does_not_start_with_h264header() -> Result<()> {
     let test_function = |input: &[u8]| {
         let mut reader = H264Reader::new(Cursor::new(input));
         if let Err(err) = reader.next_nal() {
-            assert_eq!(Error::ErrDataIsNotH264Stream, err);
+            assert_eq!(err, Error::ErrDataIsNotH264Stream);
         } else {
-            assert!(false);
+            panic!();
         }
     };
 
@@ -28,10 +28,10 @@ fn test_parse_header() -> Result<()> {
 
     let nal = reader.next_nal()?;
 
-    assert_eq!(1, nal.data.len());
+    assert_eq!(nal.data.len(), 1);
     assert!(nal.forbidden_zero_bit);
-    assert_eq!(0, nal.picture_order_count);
-    assert_eq!(1, nal.ref_idc);
+    assert_eq!(nal.picture_order_count, 0);
+    assert_eq!(nal.ref_idc, 1);
     assert_eq!(NalUnitType::EndOfStream, nal.unit_type);
 
     Ok(())
@@ -44,7 +44,7 @@ fn test_eof() -> Result<()> {
         if let Err(err) = reader.next_nal() {
             assert_eq!(Error::ErrIoEOF, err);
         } else {
-            assert!(false);
+            panic!();
         }
     };
 
@@ -65,10 +65,10 @@ fn test_skip_sei() -> Result<()> {
     let mut reader = H264Reader::new(Cursor::new(h264bytes));
 
     let nal = reader.next_nal()?;
-    assert_eq!(0xAA, nal.data[0]);
+    assert_eq!(nal.data[0], 0xAA);
 
     let nal = reader.next_nal()?;
-    assert_eq!(0xAB, nal.data[0]);
+    assert_eq!(nal.data[0], 0xAB);
 
     Ok(())
 }

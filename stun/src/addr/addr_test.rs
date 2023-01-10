@@ -17,7 +17,7 @@ fn test_mapped_address() -> Result<()> {
         //"GetFrom"
         {
             let mut got = MappedAddress::default();
-            got.get_from(&mut m)?;
+            got.get_from(&m)?;
             assert_eq!(got.ip, addr.ip, "got bad IP: {}", got.ip);
 
             //"Not found"
@@ -32,7 +32,7 @@ fn test_mapped_address() -> Result<()> {
                         err
                     );
                 } else {
-                    assert!(false, "expected error, but got ok");
+                    panic!("expected error, but got ok");
                 }
             }
             //"Bad family"
@@ -55,7 +55,7 @@ fn test_mapped_address() -> Result<()> {
                         Error::ErrUnexpectedEof
                     );
                 } else {
-                    assert!(false, "expected error, but got ok");
+                    panic!("expected error, but got ok");
                 }
             }
         }
@@ -95,7 +95,7 @@ fn test_mapped_address_v6() -> Result<()> {
                         Error::ErrAttributeNotFound,
                     );
                 } else {
-                    assert!(false, "expected error, but got ok");
+                    panic!("expected error, but got ok");
                 }
             }
         }
@@ -134,7 +134,7 @@ fn test_alternate_server() -> Result<()> {
                         Error::ErrAttributeNotFound,
                     );
                 } else {
-                    assert!(false, "expected error, but got ok");
+                    panic!("expected error, but got ok");
                 }
             }
         }
@@ -174,7 +174,7 @@ fn test_other_address() -> Result<()> {
                         Error::ErrAttributeNotFound,
                     );
                 } else {
-                    assert!(false, "expected error, but got ok");
+                    panic!("expected error, but got ok");
                 }
             }
         }

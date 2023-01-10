@@ -102,7 +102,7 @@ mod test {
 
         for (type_string, expected_type) in tests {
             let actual = RTCIceCandidateType::from(type_string);
-            assert_eq!(expected_type, actual);
+            assert_eq!(actual, expected_type);
         }
     }
 
@@ -117,7 +117,7 @@ mod test {
         ];
 
         for (ctype, expected_string) in tests {
-            assert_eq!(expected_string, ctype.to_string());
+            assert_eq!(ctype.to_string(), expected_string);
         }
     }
 }

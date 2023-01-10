@@ -57,7 +57,7 @@ fn test_requested_transport_add_to() -> Result<(), stun::Error> {
                     err
                 );
             } else {
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
 
             m.add(ATTR_REQUESTED_TRANSPORT, &[1, 2, 3]);
@@ -67,7 +67,7 @@ fn test_requested_transport_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
         }
     }

@@ -28,7 +28,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
     )
     .await;
 
-    let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
+    let dt = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap();
     mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
@@ -38,6 +38,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
         .downcast_ref::<rtcp::sender_report::SenderReport>()
     {
         assert_eq!(
+            sr,
             &rtcp::sender_report::SenderReport {
                 ssrc: 123456,
                 ntp_time: unix2ntp(mt.now()),
@@ -45,11 +46,10 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
                 packet_count: 0,
                 octet_count: 0,
                 ..Default::default()
-            },
-            sr
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -92,7 +92,7 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
             .await?;
     }
 
-    let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
+    let dt = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap();
     mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
@@ -102,6 +102,7 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
         .downcast_ref::<rtcp::sender_report::SenderReport>()
     {
         assert_eq!(
+            sr,
             &rtcp::sender_report::SenderReport {
                 ssrc: 123456,
                 ntp_time: unix2ntp(mt.now()),
@@ -109,11 +110,10 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
                 packet_count: 10,
                 octet_count: 20,
                 ..Default::default()
-            },
-            sr
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -194,7 +194,7 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
         })
         .await?;
 
-    let dt = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0);
+    let dt = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap();
     mt.set_now(dt.into());
 
     let pkts = stream.written_rtcp().await.unwrap();
@@ -204,6 +204,7 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
         .downcast_ref::<rtcp::sender_report::SenderReport>()
     {
         assert_eq!(
+            sr,
             &rtcp::sender_report::SenderReport {
                 ssrc: 123456,
                 ntp_time: unix2ntp(mt.now()),
@@ -211,11 +212,10 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
                 packet_count: 5,
                 octet_count: 10,
                 ..Default::default()
-            },
-            sr
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -226,8 +226,8 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
 #[tokio::test]
 async fn test_stream_counters_initially_zero() -> Result<()> {
     let counters = sender_stream::Counters::default();
-    assert_eq!(0, counters.octet_count());
-    assert_eq!(0, counters.packet_count());
+    assert_eq!(counters.octet_count(), 0);
+    assert_eq!(counters.packet_count(), 0);
     Ok(())
 }
 
@@ -237,7 +237,7 @@ async fn test_stream_packet_counter_wraps_on_overflow() -> Result<()> {
     for _ in 0..3 {
         counters.increment_packets();
     }
-    assert_eq!(2, counters.packet_count());
+    assert_eq!(counters.packet_count(), 2);
     Ok(())
 }
 
@@ -246,7 +246,7 @@ async fn test_stream_octet_counter_wraps_on_overflow() -> Result<()> {
     let mut counters = sender_stream::Counters::default();
     counters.count_octets(u32::MAX as usize);
     counters.count_octets(3);
-    assert_eq!(2, counters.octet_count());
+    assert_eq!(counters.octet_count(), 2);
     Ok(())
 }
 
@@ -254,6 +254,6 @@ async fn test_stream_octet_counter_wraps_on_overflow() -> Result<()> {
 async fn test_stream_octet_counter_saturates_u32_from_usize() -> Result<()> {
     let mut counters = sender_stream::Counters::default();
     counters.count_octets(0xabcdef01234567_usize);
-    assert_eq!(0xffffffff_u32, counters.octet_count());
+    assert_eq!(counters.octet_count(), 0xffffffff_u32);
     Ok(())
 }

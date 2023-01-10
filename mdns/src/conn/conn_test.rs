@@ -13,9 +13,9 @@ mod test {
         server_a.close().await?;
 
         if let Err(err) = server_a.close().await {
-            assert_eq!(Error::ErrConnectionClosed, err);
+            assert_eq!(err, Error::ErrConnectionClosed);
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
 
         Ok(())

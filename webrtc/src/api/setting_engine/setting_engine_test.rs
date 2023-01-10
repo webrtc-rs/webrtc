@@ -161,7 +161,7 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         let (mut offerer, mut answerer) = new_pair(&api).await?;
 
         offerer
-            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .add_transceiver_from_kind(RTPCodecType::Video, None)
             .await?;
 
         signal_pair(&mut offerer, &mut answerer).await?;
@@ -244,7 +244,7 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         let (mut offerer, mut answerer) = new_pair(&api).await?;
 
         offerer
-            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .add_transceiver_from_kind(RTPCodecType::Video, None)
             .await?;
 
         signal_pair(&mut offerer, &mut answerer).await?;

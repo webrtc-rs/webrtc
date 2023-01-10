@@ -55,14 +55,14 @@ async fn test_agent_process() -> Result<()> {
     let result = a.process(m);
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrAgentClosed,
             err,
+            Error::ErrAgentClosed,
             "closed agent should return <{}>, but got <{}>",
             Error::ErrAgentClosed,
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -78,14 +78,14 @@ fn test_agent_start() -> Result<()> {
     let result = a.start(id, deadline);
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrTransactionExists,
             err,
+            Error::ErrTransactionExists,
             "duplicate start should return <{}>, got <{}>",
             Error::ErrTransactionExists,
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
     a.close()?;
 
@@ -93,27 +93,27 @@ fn test_agent_start() -> Result<()> {
     let result = a.start(id, deadline);
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrAgentClosed,
             err,
+            Error::ErrAgentClosed,
             "start on closed agent should return <{}>, got <{}>",
             Error::ErrAgentClosed,
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = a.set_handler(noop_handler());
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrAgentClosed,
             err,
+            Error::ErrAgentClosed,
             "SetHandler on closed agent should return <{}>, got <{}>",
             Error::ErrAgentClosed,
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -127,14 +127,14 @@ async fn test_agent_stop() -> Result<()> {
     let result = a.stop(TransactionId::default());
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrTransactionNotExists,
             err,
+            Error::ErrTransactionNotExists,
             "unexpected error: {}, should be {}",
             Error::ErrTransactionNotExists,
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let id = TransactionId::new();
@@ -148,14 +148,18 @@ async fn test_agent_stop() -> Result<()> {
     tokio::select! {
         evt = handler_rx.recv() => {
             if let Err(err) = evt.unwrap().event_body{
-                assert_eq!(Error::ErrTransactionStopped,err,
+                assert_eq!(
+                    err,
+                    Error::ErrTransactionStopped,
                     "unexpected error: {}, should be {}",
-                    err, Error::ErrTransactionStopped);
+                    err,
+                    Error::ErrTransactionStopped
+                );
             }else{
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
         }
-     _ = timeout.as_mut() => assert!(false, "timed out"),
+     _ = timeout.as_mut() => panic!("timed out"),
     }
 
     a.close()?;
@@ -163,27 +167,27 @@ async fn test_agent_stop() -> Result<()> {
     let result = a.close();
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrAgentClosed,
             err,
+            Error::ErrAgentClosed,
             "a.Close returned {} instead of {}",
             Error::ErrAgentClosed,
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = a.stop(TransactionId::default());
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrAgentClosed,
             err,
+            Error::ErrAgentClosed,
             "unexpected error: {}, should be {}",
             Error::ErrAgentClosed,
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())

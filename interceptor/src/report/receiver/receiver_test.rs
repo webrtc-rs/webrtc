@@ -35,8 +35,9 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0,
@@ -45,11 +46,10 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -98,8 +98,9 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 9,
@@ -108,11 +109,10 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -122,7 +122,7 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
 
 #[tokio::test]
 async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
-    let rtp_time: SystemTime = Utc.ymd(2009, 10, 23).and_hms(0, 0, 0).into();
+    let rtp_time: SystemTime = Utc.with_ymd_and_hms(2009, 10, 23, 0, 0, 0).unwrap().into();
 
     let mt = Arc::new(MockTime::default());
     let time_gen = {
@@ -157,7 +157,7 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
             .await;
     }
 
-    let now: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into();
+    let now: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into();
     let rt = 987654321u32.wrapping_add(
         (now.duration_since(rtp_time)
             .unwrap_or(Duration::from_secs(0))
@@ -181,8 +181,9 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 9,
@@ -191,11 +192,10 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
                 total_lost: 0,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -205,6 +205,8 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
 
 #[tokio::test]
 async fn test_receiver_interceptor_overflow() -> Result<()> {
+    #![allow(clippy::identity_op)]
+
     let mt = Arc::new(MockTime::default());
     let _mt2 = Arc::clone(&mt);
     let time_gen = {
@@ -253,21 +255,25 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
-                last_sequence_number: (1 << 16) | 0x0000,
+                last_sequence_number: {
+                    // most significant bits: 1 << 16
+                    // least significant bits: 0x0000
+                    (1 << 16) | 0x0000
+                },
                 last_sender_report: 0,
                 fraction_lost: 0,
                 total_lost: 0,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -353,8 +359,9 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: (1 << 16) | 0x0001,
@@ -363,11 +370,10 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
                 total_lost: 0,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -376,7 +382,7 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
 
 #[tokio::test]
 async fn test_receiver_interceptor_packet_loss() -> Result<()> {
-    let rtp_time: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into();
+    let rtp_time: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into();
 
     let mt = Arc::new(MockTime::default());
     let time_gen = {
@@ -425,24 +431,24 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x03,
                 last_sender_report: 0,
-                fraction_lost: (256u16 * 1 / 3) as u8,
+                fraction_lost: ((1u16 << 8) / 3) as u8,
                 total_lost: 1,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
-    let now: SystemTime = Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into();
+    let now: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into();
     let rt = 987654321u32.wrapping_add(
         (now.duration_since(rtp_time)
             .unwrap_or(Duration::from_secs(0))
@@ -466,8 +472,9 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x03,
@@ -476,11 +483,10 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
                 total_lost: 1,
                 delay: rr.reports[0].delay,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -536,21 +542,21 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 1 << 16 | 0x01,
                 last_sender_report: 0,
-                fraction_lost: (256u16 * 1 / 3) as u8,
+                fraction_lost: ((1u16 << 8) / 3) as u8,
                 total_lost: 1,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -598,8 +604,9 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x04,
@@ -608,11 +615,10 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -642,7 +648,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
     )
     .await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into());
     stream
         .receive_rtp(rtp::packet::Packet {
             header: rtp::header::Header {
@@ -655,7 +661,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         .await;
     stream.read_rtp().await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into());
     stream
         .receive_rtp(rtp::packet::Packet {
             header: rtp::header::Header {
@@ -678,8 +684,9 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0x02,
@@ -688,11 +695,10 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
                 total_lost: 0,
                 delay: 0,
                 jitter: 30000 / 16,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -722,11 +728,11 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
     )
     .await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into());
     stream
         .receive_rtcp(vec![Box::new(rtcp::sender_report::SenderReport {
             ssrc: 123456,
-            ntp_time: unix2ntp(Utc.ymd(2009, 11, 10).and_hms(23, 0, 0).into()),
+            ntp_time: unix2ntp(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 0).unwrap().into()),
             rtp_time: 987654321,
             packet_count: 0,
             octet_count: 0,
@@ -735,7 +741,7 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
         .await;
     stream.read_rtcp().await;
 
-    mt.set_now(Utc.ymd(2009, 11, 10).and_hms(23, 0, 1).into());
+    mt.set_now(Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into());
 
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
@@ -743,8 +749,9 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
         .as_any()
         .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
     {
-        assert_eq!(1, rr.reports.len());
+        assert_eq!(rr.reports.len(), 1);
         assert_eq!(
+            rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
                 last_sequence_number: 0,
@@ -753,11 +760,10 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
                 total_lost: 0,
                 delay: 65536,
                 jitter: 0,
-            },
-            rr.reports[0]
+            }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;

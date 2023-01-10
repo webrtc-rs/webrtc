@@ -12,7 +12,7 @@ async fn test_opus_case() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
-    pc.add_transceiver_from_kind(RTPCodecType::Audio, &[])
+    pc.add_transceiver_from_kind(RTPCodecType::Audio, None)
         .await?;
 
     let offer = pc.create_offer(None).await?;
@@ -32,7 +32,7 @@ async fn test_video_case() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
-    pc.add_transceiver_from_kind(RTPCodecType::Video, &[])
+    pc.add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = pc.create_offer(None).await?;
@@ -492,9 +492,9 @@ a=fmtp:97 apt=96
         assert!(m.negotiated_video.load(Ordering::SeqCst));
 
         if let Err(err) = m.get_codec_by_payload(97).await {
-            assert_eq!(Error::ErrCodecNotFound, err);
+            assert_eq!(err, Error::ErrCodecNotFound);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -536,7 +536,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
             .await;
 
-        assert_eq!(1, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 1);
     }
 
     //"Same Direction"
@@ -555,7 +555,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
             .await;
 
-        assert_eq!(1, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 1);
     }
 
     //"Different Direction"
@@ -574,7 +574,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
             .await;
 
-        assert_eq!(0, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 0);
     }
 
     //"No direction and inactive"
@@ -593,7 +593,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive)
             .await;
 
-        assert_eq!(1, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 1);
     }
 
     Ok(())
@@ -647,7 +647,7 @@ async fn validate(m: &MediaEngine) -> Result<()> {
             uri: "test-extension".to_owned(),
         })
         .await;
-    assert_eq!(2, id);
+    assert_eq!(id, 2);
     assert!(audio_negotiated);
     assert!(!video_negotiated);
 

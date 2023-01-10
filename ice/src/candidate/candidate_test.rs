@@ -8,7 +8,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             2130706431,
@@ -16,7 +16,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp4 as u8),
                 tcp_type: TcpType::Active,
                 ..Default::default()
@@ -26,7 +26,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp4 as u8),
                 tcp_type: TcpType::Passive,
                 ..Default::default()
@@ -36,7 +36,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp4 as u8),
                 tcp_type: TcpType::SimultaneousOpen,
                 ..Default::default()
@@ -46,7 +46,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             1862270975,
@@ -54,7 +54,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp6 as u8),
                 tcp_type: TcpType::SimultaneousOpen,
                 ..Default::default()
@@ -64,7 +64,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp6 as u8),
                 tcp_type: TcpType::Active,
                 ..Default::default()
@@ -74,7 +74,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp6 as u8),
                 tcp_type: TcpType::Passive,
                 ..Default::default()
@@ -84,7 +84,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::ServerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             1694498815,
@@ -92,7 +92,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Relay,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             16777215,
@@ -263,7 +263,7 @@ fn test_candidate_pair_state_to_string() {
     ];
 
     for (candidate_pair_state, expected_string) in tests {
-        assert_eq!(expected_string, candidate_pair_state.to_string());
+        assert_eq!(candidate_pair_state.to_string(), expected_string);
     }
 }
 
@@ -279,8 +279,8 @@ fn test_candidate_type_serialization() {
 
     for (candidate_type, expected_string) in tests {
         assert_eq!(
-            expected_string.to_string(),
-            serde_json::to_string(&candidate_type).unwrap()
+            serde_json::to_string(&candidate_type).unwrap(),
+            expected_string.to_string()
         );
     }
 }
@@ -296,7 +296,7 @@ fn test_candidate_type_to_string() {
     ];
 
     for (candidate_type, expected_string) in tests {
-        assert_eq!(expected_string, candidate_type.to_string());
+        assert_eq!(candidate_type.to_string(), expected_string);
     }
 }
 

@@ -9,18 +9,26 @@ const ABS_SEND_TIME_RESOLUTION: i128 = 1000;
 
 #[test]
 fn test_ntp_conversion() -> Result<()> {
-    let loc = FixedOffset::west(5 * 60 * 60); // UTC-5
+    let loc = FixedOffset::west_opt(5 * 60 * 60).unwrap(); // UTC-5
     let tests = vec![
         (
-            loc.ymd(1985, 6, 23).and_hms_nano(4, 0, 0, 0),
+            loc.with_ymd_and_hms(1985, 6, 23, 4, 0, 0).unwrap(),
             0xa0c65b1000000000_u64,
         ),
         (
-            loc.ymd(1999, 12, 31).and_hms_nano(23, 59, 59, 500000),
+            // TODO: fix this. MA: There's only so long I will stare at
+            // APIs that sacrifice convenience for correctness.
+            #[allow(deprecated)]
+            loc.ymd(1999, 12, 31)
+                .and_hms_nano_opt(23, 59, 59, 500000)
+                .unwrap(),
             0xbc18084f0020c49b_u64,
         ),
         (
-            loc.ymd(2019, 3, 27).and_hms_nano(13, 39, 30, 8675309),
+            #[allow(deprecated)]
+            loc.ymd(2019, 3, 27)
+                .and_hms_nano_opt(13, 39, 30, 8675309)
+                .unwrap(),
             0xe04641e202388b88_u64,
         ),
     ];
@@ -36,7 +44,7 @@ fn test_ntp_conversion() -> Result<()> {
             let expected = *n as i128;
             let diff = actual - expected;
             if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
-                assert!(false, "unix2ntp error, expected: {:?}, got: {:?}", ntp, *n,);
+                panic!("unix2ntp error, expected: {:?}, got: {:?}", ntp, *n,);
             }
         } else {
             assert_eq!(ntp, *n, "unix2ntp error");
@@ -50,8 +58,7 @@ fn test_ntp_conversion() -> Result<()> {
             .unwrap_or(UNIX_EPOCH);
         let diff = input.duration_since(output).unwrap().as_nanos() as i128;
         if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
-            assert!(
-                false,
+            panic!(
                 "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
                 input, output,
             );
@@ -104,8 +111,7 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
         let estimated = receive.estimate(ntp2unix(receive_ntp));
         let diff = estimated.duration_since(in_time).unwrap().as_nanos() as i128;
         if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
-            assert!(
-                false,
+            panic!(
                 "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
                 in_time, estimated,
             );

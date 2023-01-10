@@ -84,7 +84,7 @@ mod test {
         ];
 
         for (sdp_type_string, expected_sdp_type) in tests {
-            assert_eq!(expected_sdp_type, RTCSdpType::from(sdp_type_string));
+            assert_eq!(RTCSdpType::from(sdp_type_string), expected_sdp_type);
         }
     }
 
@@ -99,7 +99,7 @@ mod test {
         ];
 
         for (sdp_type, expected_string) in tests {
-            assert_eq!(expected_string, sdp_type.to_string());
+            assert_eq!(sdp_type.to_string(), expected_string);
         }
     }
 }

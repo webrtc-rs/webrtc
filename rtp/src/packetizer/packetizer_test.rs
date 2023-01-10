@@ -17,12 +17,12 @@ async fn test_packetizer() -> Result<()> {
 
     if packets.len() != 2 {
         let mut packet_lengths = String::new();
+        #[allow(clippy::needless_range_loop)]
         for i in 0..packets.len() {
             packet_lengths +=
                 format!("Packet {} length {}\n", i, packets[i].payload.len()).as_str();
         }
-        assert!(
-            false,
+        panic!(
             "Generated {} packets instead of 2\n{}",
             packets.len(),
             packet_lengths,
@@ -39,8 +39,8 @@ async fn test_packetizer_abs_send_time() -> Result<()> {
     let time_gen: Option<FnTimeGen> = Some(Arc::new(
         || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
             Box::pin(async move {
-                let loc = FixedOffset::west(5 * 60 * 60); // UTC-5
-                let t = loc.ymd(1985, 6, 23).and_hms_nano(4, 0, 0, 0);
+                let loc = FixedOffset::west_opt(5 * 60 * 60).unwrap(); // UTC-5
+                let t = loc.with_ymd_and_hms(1985, 6, 23, 4, 0, 0).unwrap();
                 UNIX_EPOCH
                     .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
                     .unwrap_or(UNIX_EPOCH)
@@ -86,10 +86,10 @@ async fn test_packetizer_abs_send_time() -> Result<()> {
     };
 
     if packets.len() != 1 {
-        assert!(false, "Generated {} packets instead of 1", packets.len())
+        panic!("Generated {} packets instead of 1", packets.len())
     }
 
-    assert_eq!(expected, packets[0]);
+    assert_eq!(packets[0], expected);
 
     Ok(())
 }

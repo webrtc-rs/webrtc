@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicUsize;
 #[derive(Default)]
 struct DummyObserver {
     nclosed: Arc<AtomicUsize>,
+    #[allow(clippy::type_complexity)]
     read_ch_tx: Arc<Mutex<Option<mpsc::Sender<Box<dyn Chunk + Send + Sync>>>>>,
 }
 
@@ -96,14 +97,7 @@ async fn test_udp_conn_send_to_recv_from() -> Result<()> {
         drop(done_ch_tx);
     });
 
-    let n = match conn.send_to(&data, dst_addr).await {
-        Ok(n) => n,
-        Err(err) => {
-            assert!(false, "should success, but got {}", err);
-            return Ok(());
-        }
-    };
-
+    let n = conn.send_to(&data, dst_addr).await.unwrap();
     assert_eq!(n, data.len(), "should match");
 
     loop {
@@ -188,14 +182,7 @@ async fn test_udp_conn_send_recv() -> Result<()> {
         drop(done_ch_tx);
     });
 
-    let n = match conn.send(&data).await {
-        Ok(n) => n,
-        Err(err) => {
-            assert!(false, "should success, but got {}", err);
-            return Ok(());
-        }
-    };
-
+    let n = conn.send(&data).await.unwrap();
     assert_eq!(n, data.len(), "should match");
 
     loop {

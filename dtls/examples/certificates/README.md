@@ -25,32 +25,36 @@ $ openssl x509 -req -in "${CLIENT_NAME}.csr" -extfile "${EXTFILE}" -days 365 -CA
 $ rm "${EXTFILE}" "${SERVER_NAME}.csr" "${CLIENT_NAME}.csr"
 ```
 
-in pion/examples/util/util.go, convert ECPrivateKey to PKCS8PrivateKey
-```
-func LoadKey(path string) (crypto.PrivateKey, error) {
-    ....
-    if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
-		b, err := x509.MarshalPKCS8PrivateKey(key)
-		if err != nil {
-			return nil, err
-		}
-		var pemPrivateBlock = &pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: b,
-		}
-		pemPrivateFile, err := os.Create(path+".private_key.pem")
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		err = pem.Encode(pemPrivateFile, pemPrivateBlock)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		pemPrivateFile.Close()
+## Converting EC private key to PKCS#8 in Rust
 
-		return key, nil
-	}
-	...
+`Cargo.toml`:
+
+```toml
+[dependencies]
+topk8 = "0.0.1"
+```
+
+`main.rs`:
+
+```rust
+fn main() {
+    let ec_pem = "
+-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIAL4r6d9lPq3XEDSZTL9l0D6thrPM7RiAhl3Fjuw9Ji2oAoGCCqGSM49
+AwEHoUQDQgAE4U64dviQRMujGK0g80dwzgjV7fnwLkj6RfvINMHvD6eiCsphWIlq
+cddTAoOjXVQDu3qMAS1Ghfyk1F377EW1Sw==
+-----END EC PRIVATE KEY-----
+";
+
+    let pkcs8_pem = topk8::from_sec1_pem(ec_pem).unwrap();
+
+    println!("{}", pkcs8_pem);
+
+    // -----BEGIN PRIVATE KEY-----
+    // MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgAvivp32U+rdcQNJl
+    // Mv2XQPq2Gs8ztGICGXcWO7D0mLagCgYIKoZIzj0DAQehRANCAAThTrh2+JBEy6MY
+    // rSDzR3DOCNXt+fAuSPpF+8g0we8Pp6IKymFYiWpx11MCg6NdVAO7eowBLUaF/KTU
+    // XfvsRbVL
+    // -----END PRIVATE KEY-----
+}
 ```

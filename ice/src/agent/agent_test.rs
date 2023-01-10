@@ -41,7 +41,8 @@ async fn test_pair_search() -> Result<()> {
         assert!(cp.is_none(), "No Candidate pairs should exist");
     }
 
-    let _ = a.close().await?;
+    a.close().await?;
+
     Ok(())
 }
 
@@ -160,7 +161,7 @@ async fn test_pair_priority() -> Result<()> {
         }
     }
 
-    let _ = a.close().await?;
+    a.close().await?;
     Ok(())
 }
 
@@ -236,7 +237,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<()> {
     // ensure that the callback fired on setting the pair
     let _ = callback_called_rx.recv().await;
 
-    let _ = a.close().await?;
+    a.close().await?;
     Ok(())
 }
 
@@ -318,7 +319,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
         }
     }
 
-    let _ = a.close().await?;
+    a.close().await?;
     Ok(())
 }
 
@@ -377,7 +378,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
         );
     }
 
-    let _ = a.close().await?;
+    a.close().await?;
     Ok(())
 }
 
@@ -1579,7 +1580,7 @@ async fn test_binding_request_timeout() -> Result<()> {
         a.internal.invalidate_pending_binding_requests(now).await;
         {
             let pending_binding_requests = a.internal.pending_binding_requests.lock().await;
-            assert_eq!(EXPECTED_REMOVAL_COUNT, pending_binding_requests.len(), "Binding invalidation due to timeout did not remove the correct number of binding requests")
+            assert_eq!(pending_binding_requests.len(), EXPECTED_REMOVAL_COUNT, "Binding invalidation due to timeout did not remove the correct number of binding requests")
         }
     }
 

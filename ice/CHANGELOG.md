@@ -6,25 +6,25 @@
 
 * Increased minimum support rust version to `1.60.0`.
 
-### Breaking changes  
+### Breaking changes
 
 * Make functions non-async [#338](https://github.com/webrtc-rs/webrtc/pull/338):
-    - `Agent`:
-        - `get_bytes_received`;
-        - `get_bytes_sent`;
-        - `on_connection_state_change`;
-        - `on_selected_candidate_pair_change`;
-        - `on_candidate`;
-        - `add_remote_candidate`;
-        - `gather_candidates`.
-    - `unmarshal_candidate`;
-    - `CandidateHostConfig::new_candidate_host`;
-    - `CandidatePeerReflexiveConfig::new_candidate_peer_reflexive`;
-    - `CandidateRelayConfig::new_candidate_relay`;
-    - `CandidateServerReflexiveConfig::new_candidate_server_reflexive`;
-    - `Candidate`:  
-        - `addr`;
-        - `set_ip`.
+  - `Agent`:
+    - `get_bytes_received`;
+    - `get_bytes_sent`;
+    - `on_connection_state_change`;
+    - `on_selected_candidate_pair_change`;
+    - `on_candidate`;
+    - `add_remote_candidate`;
+    - `gather_candidates`.
+  - `unmarshal_candidate`;
+  - `CandidateHostConfig::new_candidate_host`;
+  - `CandidatePeerReflexiveConfig::new_candidate_peer_reflexive`;
+  - `CandidateRelayConfig::new_candidate_relay`;
+  - `CandidateServerReflexiveConfig::new_candidate_server_reflexive`;
+  - `Candidate`:
+    - `addr`;
+    - `set_ip`.
 
 ## v0.8.2
 
@@ -40,8 +40,6 @@ This release was released in error and contains no changes from 0.8.0.
 * Increased min verison of `log` dependency to `0.4.16`. [#250 Fix log at ^0.4.16 to make tests compile](https://github.com/webrtc-rs/webrtc/pull/250) by [@k0nserv](https://github.com/k0nserv).
 * Incresed serde's minimum version to 1.0.102 [#243 Fixes for cargo minimal-versions](https://github.com/webrtc-rs/webrtc/pull/243) contributed by [algesten](https://github.com/algesten)
 
-
 ## Prior to 0.8.0
 
 Before 0.8.0 there was no changelog, previous changes are sometimes, but not always, available in the [GitHub Releases](https://github.com/webrtc-rs/ice/releases).
-

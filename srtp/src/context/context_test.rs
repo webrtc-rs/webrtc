@@ -28,7 +28,7 @@ fn test_context_roc() -> Result<()> {
     if let Some(r) = roc {
         assert_eq!(r, 100, "ROC is set to 100, but returned {}", r)
     } else {
-        assert!(false, "ROC must return value for used SSRC");
+        panic!("ROC must return value for used SSRC");
     }
 
     Ok(())
@@ -55,7 +55,7 @@ fn test_context_index() -> Result<()> {
     if let Some(i) = index {
         assert_eq!(i, 100, "Index is set to 100, but returned {}", i);
     } else {
-        assert!(false, "Index must return true for used SSRC")
+        panic!("Index must return true for used SSRC")
     }
 
     Ok(())

@@ -64,7 +64,6 @@ use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilitie
 use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::sctp_transport::RTCSctpTransport;
 use crate::stats::StatsReport;
-use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
 
@@ -454,13 +453,14 @@ impl RTCPeerConnection {
                 // if t.stopping && !t.stopped {
                 // 	return true
                 // }
-                let mid = t.mid().await;
-                let m = get_by_mid(&mid, local_desc);
+                let mid = t.mid();
+                let m = mid.as_ref().and_then(|mid| get_by_mid(mid, local_desc));
                 // Step 5.2
-                if !t.stopped.load(Ordering::SeqCst) && m.is_none() {
-                    return true;
-                }
                 if !t.stopped.load(Ordering::SeqCst) {
+                    if m.is_none() {
+                        return true;
+                    }
+
                     if let Some(m) = m {
                         // Step 5.3.1
                         if t.direction().has_send() {
@@ -469,17 +469,7 @@ impl RTCPeerConnection {
                                 None => return true, // doesn't contain a single a=msid line
                             };
 
-                            let sender = match t.sender().await {
-                                Some(s) => s.clone(),
-                                None => {
-                                    log::warn!(
-                                        "RtpSender missing for transeceiver with sending direction {} for mid {}",
-                                        t.direction(),
-                                        mid
-                                    );
-                                    continue;
-                                }
-                            };
+                            let sender = t.sender().await;
                             // (...)or the number of MSIDs from the a=msid lines in this m= section,
                             // or the MSID values themselves, differ from what is in
                             // transceiver.sender.[[AssociatedMediaStreamIds]], return true.
@@ -504,7 +494,7 @@ impl RTCPeerConnection {
                                 // Step 5.3.2
                                 if let Some(remote_desc) = &current_remote_description {
                                     if let Some(rm) =
-                                        get_by_mid(t.mid().await.as_str(), remote_desc)
+                                        t.mid().and_then(|mid| get_by_mid(&mid, remote_desc))
                                     {
                                         if get_peer_direction(m) != t.direction()
                                             && get_peer_direction(rm) != t.direction().reverse()
@@ -522,7 +512,7 @@ impl RTCPeerConnection {
                                     None => return true,
                                 };
                                 let offered_direction =
-                                    match get_by_mid(t.mid().await.as_str(), remote_desc) {
+                                    match t.mid().and_then(|mid| get_by_mid(&mid, remote_desc)) {
                                         Some(d) => {
                                             let dir = get_peer_direction(d);
                                             if dir == RTCRtpTransceiverDirection::Unspecified {
@@ -547,14 +537,15 @@ impl RTCPeerConnection {
                     }
                 }
                 // Step 5.4
-                if t.stopped.load(Ordering::SeqCst) && !t.mid().await.is_empty() {
-                    let current_remote_description = params.current_remote_description.lock().await;
-                    if let Some(remote_desc) = &*current_remote_description {
-                        if get_by_mid(t.mid().await.as_str(), local_desc).is_some()
-                            || get_by_mid(t.mid().await.as_str(), remote_desc).is_some()
-                        {
-                            return true;
-                        }
+                if t.stopped.load(Ordering::SeqCst) {
+                    let search_mid = match t.mid() {
+                        Some(mid) => mid,
+                        None => return false,
+                    };
+
+                    if let Some(remote_desc) = &*params.current_remote_description.lock().await {
+                        return get_by_mid(&search_mid, local_desc).is_some()
+                            || get_by_mid(&search_mid, remote_desc).is_some();
                     }
                 }
             }
@@ -787,7 +778,7 @@ impl RTCPeerConnection {
                 }
             }
             for t in &current_transceivers {
-                if !t.mid().await.is_empty() {
+                if t.mid().is_some() {
                     continue;
                 }
 
@@ -804,10 +795,10 @@ impl RTCPeerConnection {
                         }
                     }
 
-                    t.set_mid(mid).await?;
+                    t.set_mid(mid)?;
                 } else {
                     let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
-                    t.set_mid(format!("{}", greater_mid + 1)).await?;
+                    t.set_mid(format!("{}", greater_mid + 1))?;
                 }
             }
 
@@ -1366,18 +1357,10 @@ impl RTCPeerConnection {
                         };
 
                         if let Some(t) = t {
-                            if t.mid().await.is_empty() {
-                                t.set_mid(mid_value.to_owned()).await?;
+                            if t.mid().is_none() {
+                                t.set_mid(mid_value.to_owned())?;
                             }
                         } else {
-                            let receiver = Arc::new(RTCRtpReceiver::new(
-                                self.internal.setting_engine.get_receive_mtu(),
-                                kind,
-                                Arc::clone(&self.internal.dtls_transport),
-                                Arc::clone(&self.internal.media_engine),
-                                Arc::clone(&self.interceptor),
-                            ));
-
                             let local_direction =
                                 if direction == RTCRtpTransceiverDirection::Recvonly {
                                     RTCRtpTransceiverDirection::Sendonly
@@ -1385,9 +1368,32 @@ impl RTCPeerConnection {
                                     RTCRtpTransceiverDirection::Recvonly
                                 };
 
+                            let receive_mtu = self.internal.setting_engine.get_receive_mtu();
+
+                            let receiver = Arc::new(RTCRtpReceiver::new(
+                                receive_mtu,
+                                kind,
+                                Arc::clone(&self.internal.dtls_transport),
+                                Arc::clone(&self.internal.media_engine),
+                                Arc::clone(&self.interceptor),
+                            ));
+
+                            let sender = Arc::new(
+                                RTCRtpSender::new(
+                                    receive_mtu,
+                                    None,
+                                    Arc::clone(&self.internal.dtls_transport),
+                                    Arc::clone(&self.internal.media_engine),
+                                    Arc::clone(&self.interceptor),
+                                    false,
+                                    false,
+                                )
+                                .await,
+                            );
+
                             let t = RTCRtpTransceiver::new(
-                                Some(receiver),
-                                None,
+                                receiver,
+                                sender,
                                 local_direction,
                                 kind,
                                 vec![],
@@ -1398,8 +1404,8 @@ impl RTCPeerConnection {
 
                             self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
-                            if t.mid().await.is_empty() {
-                                t.set_mid(mid_value.to_owned()).await?;
+                            if t.mid().is_none() {
+                                t.set_mid(mid_value.to_owned())?;
                             }
                         }
                     }
@@ -1580,10 +1586,9 @@ impl RTCPeerConnection {
     pub(crate) async fn start_rtp_senders(&self) -> Result<()> {
         let current_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*current_transceivers {
-            if let Some(sender) = transceiver.sender().await {
-                if sender.is_negotiated() && !sender.has_sent().await {
-                    sender.send(&sender.get_parameters().await).await?;
-                }
+            let sender = transceiver.sender().await;
+            if sender.is_negotiated() && !sender.has_sent().await {
+                sender.send(&sender.get_parameters().await).await?;
             }
         }
 
@@ -1639,9 +1644,8 @@ impl RTCPeerConnection {
         let mut senders = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            if let Some(sender) = transceiver.sender().await {
-                senders.push(sender);
-            }
+            let sender = transceiver.sender().await;
+            senders.push(sender);
         }
         senders
     }
@@ -1651,9 +1655,7 @@ impl RTCPeerConnection {
         let mut receivers = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            if let Some(receiver) = transceiver.receiver().await {
-                receivers.push(receiver);
-            }
+            receivers.push(transceiver.receiver().await);
         }
         receivers
     }
@@ -1676,35 +1678,22 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if !t.stopped.load(Ordering::SeqCst)
-                    && t.kind == track.kind()
-                    && t.sender().await.is_none()
-                {
-                    let sender = Arc::new(
-                        RTCRtpSender::new(
-                            self.internal.setting_engine.get_receive_mtu(),
-                            Arc::clone(&track),
-                            Arc::clone(&self.internal.dtls_transport),
-                            Arc::clone(&self.internal.media_engine),
-                            Arc::clone(&self.interceptor),
-                            false, // adding a track sets a send direction.
-                            false,
-                        )
-                        .await,
-                    );
+                if !t.stopped.load(Ordering::SeqCst) && t.kind == track.kind() {
+                    let sender = t.sender().await;
+                    if sender.track().await.is_none() {
+                        if let Err(err) = sender.replace_track(Some(track)).await {
+                            let _ = sender.stop().await;
+                            return Err(err);
+                        }
 
-                    if let Err(err) = t
-                        .set_sender_track(Some(Arc::clone(&sender)), Some(Arc::clone(&track)))
-                        .await
-                    {
-                        let _ = sender.stop().await;
-                        t.set_sender(None).await;
-                        return Err(err);
+                        t.set_direction_internal(RTCRtpTransceiverDirection::from_send_recv(
+                            true,
+                            t.direction().has_recv(),
+                        ));
+
+                        self.internal.trigger_negotiation_needed().await;
+                        return Ok(sender);
                     }
-
-                    self.internal.trigger_negotiation_needed().await;
-
-                    return Ok(sender);
                 }
             }
         }
@@ -1717,10 +1706,7 @@ impl RTCPeerConnection {
             .add_rtp_transceiver(Arc::clone(&transceiver))
             .await;
 
-        match transceiver.sender().await {
-            Some(sender) => Ok(sender),
-            None => Err(Error::ErrRTPSenderNil),
-        }
+        Ok(transceiver.sender().await)
     }
 
     /// remove_track removes a Track from the PeerConnection
@@ -1733,11 +1719,12 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if let Some(s) = t.sender().await {
-                    if s.id == sender.id {
-                        transceiver = Some(t.clone());
-                        break;
+                if t.sender().await.id == sender.id {
+                    if sender.track().await.is_none() {
+                        return Ok(());
                     }
+                    transceiver = Some(t.clone());
+                    break;
                 }
             }
         }
@@ -1766,26 +1753,24 @@ impl RTCPeerConnection {
     pub async fn add_transceiver_from_kind(
         &self,
         kind: RTPCodecType,
-        init: &[RTCRtpTransceiverInit],
+        init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<RTCRtpTransceiver>> {
         self.internal.add_transceiver_from_kind(kind, init).await
     }
 
     /// add_transceiver_from_track Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
-    pub async fn add_transceiver_from_track<'a>(
-        &'a self,
+    pub async fn add_transceiver_from_track(
+        &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
-        init: &'a [RTCRtpTransceiverInit],
+        init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
         }
 
-        let direction = match init.len() {
-            0 => RTCRtpTransceiverDirection::Sendrecv,
-            1 => init[0].direction,
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackOnlyAcceptsOne),
-        };
+        let direction = init
+            .map(|init| init.direction)
+            .unwrap_or(RTCRtpTransceiverDirection::Sendrecv);
 
         let t = self
             .internal

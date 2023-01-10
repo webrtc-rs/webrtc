@@ -154,7 +154,7 @@ impl API {
     /// new_rtp_sender constructs a new RTPSender
     pub async fn new_rtp_sender(
         &self,
-        track: Arc<dyn TrackLocal + Send + Sync>,
+        track: Option<Arc<dyn TrackLocal + Send + Sync>>,
         transport: Arc<RTCDtlsTransport>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTCRtpSender {

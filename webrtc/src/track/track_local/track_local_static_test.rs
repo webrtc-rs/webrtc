@@ -37,9 +37,9 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         pc.add_track(Arc::clone(&track)).await?;
 
         if let Err(err) = signal_pair(&mut pc, &mut no_codec_pc).await {
-            assert_eq!(Error::ErrUnsupportedCodec, err);
+            assert_eq!(err, Error::ErrUnsupportedCodec);
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&no_codec_pc, &pc).await;
@@ -71,21 +71,21 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
             .await?;
 
         vp9only_pc
-            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .add_transceiver_from_kind(RTPCodecType::Video, None)
             .await?;
 
         pc.add_track(Arc::clone(&track)).await?;
 
         if let Err(err) = signal_pair(&mut vp9only_pc, &mut pc).await {
             assert_eq!(
-                Error::ErrUnsupportedCodec,
                 err,
+                Error::ErrUnsupportedCodec,
                 "expected {}, but got {}",
                 Error::ErrUnsupportedCodec,
                 err
             );
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&vp9only_pc, &pc).await;
@@ -107,9 +107,9 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         offerer.add_track(Arc::new(invalid_codec_track)).await?;
 
         if let Err(err) = signal_pair(&mut offerer, &mut answerer).await {
-            assert_eq!(Error::ErrUnsupportedCodec, err);
+            assert_eq!(err, Error::ErrUnsupportedCodec);
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&offerer, &answerer).await;
@@ -128,7 +128,7 @@ async fn test_track_local_static_closed() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     pc_answer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
@@ -150,7 +150,7 @@ async fn test_track_local_static_closed() -> Result<()> {
             "No binding should exist before signaling"
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
@@ -159,7 +159,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         let bindings = v.bindings.lock().await;
         assert_eq!(bindings.len(), 1, "binding should exist after signaling");
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&pc_offer, &pc_answer).await;
@@ -168,7 +168,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         let bindings = v.bindings.lock().await;
         assert_eq!(bindings.len(), 0, "No binding should exist after close");
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())
@@ -246,7 +246,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         "webrtc-rs".to_owned(),
     ));
     offerer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     answerer
@@ -332,7 +332,7 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
         v.write_rtp(&pkt).await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     assert_eq!(pkt.header.ssrc, 1);
@@ -372,7 +372,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     let (pc_offer, pc_answer) = new_pair(&api).await?;
 
     pc_offer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
@@ -395,7 +395,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
         v.write(&[0u8; 20]).await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&pc_offer, &pc_answer).await;

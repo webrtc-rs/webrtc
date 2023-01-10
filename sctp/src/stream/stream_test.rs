@@ -8,15 +8,15 @@ use tokio::io::AsyncWriteExt;
 fn test_stream_buffered_amount() -> Result<()> {
     let s = Stream::default();
 
-    assert_eq!(0, s.buffered_amount());
-    assert_eq!(0, s.buffered_amount_low_threshold());
+    assert_eq!(s.buffered_amount(), 0);
+    assert_eq!(s.buffered_amount_low_threshold(), 0);
 
     s.buffered_amount.store(8192, Ordering::SeqCst);
     s.set_buffered_amount_low_threshold(2048);
-    assert_eq!(8192, s.buffered_amount(), "unexpected bufferedAmount");
+    assert_eq!(s.buffered_amount(), 8192, "unexpected bufferedAmount");
     assert_eq!(
-        2048,
         s.buffered_amount_low_threshold(),
+        2048,
         "unexpected threshold"
     );
 
@@ -40,33 +40,33 @@ async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
 
     // Negative value should be ignored (by design)
     s.on_buffer_released(-32).await; // bufferedAmount = 3072
-    assert_eq!(4096, s.buffered_amount(), "unexpected bufferedAmount");
-    assert_eq!(0, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
+    assert_eq!(s.buffered_amount(), 4096, "unexpected bufferedAmount");
+    assert_eq!(n_cbs.load(Ordering::SeqCst), 0, "callback count mismatch");
 
     // Above to above, no callback
     s.on_buffer_released(1024).await; // bufferedAmount = 3072
-    assert_eq!(3072, s.buffered_amount(), "unexpected bufferedAmount");
-    assert_eq!(0, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
+    assert_eq!(s.buffered_amount(), 3072, "unexpected bufferedAmount");
+    assert_eq!(n_cbs.load(Ordering::SeqCst), 0, "callback count mismatch");
 
     // Above to equal, callback should be made
     s.on_buffer_released(1024).await; // bufferedAmount = 2048
-    assert_eq!(2048, s.buffered_amount(), "unexpected bufferedAmount");
-    assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
+    assert_eq!(s.buffered_amount(), 2048, "unexpected bufferedAmount");
+    assert_eq!(n_cbs.load(Ordering::SeqCst), 1, "callback count mismatch");
 
     // Eaual to below, no callback
     s.on_buffer_released(1024).await; // bufferedAmount = 1024
-    assert_eq!(1024, s.buffered_amount(), "unexpected bufferedAmount");
-    assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
+    assert_eq!(s.buffered_amount(), 1024, "unexpected bufferedAmount");
+    assert_eq!(n_cbs.load(Ordering::SeqCst), 1, "callback count mismatch");
 
     // Blow to below, no callback
     s.on_buffer_released(1024).await; // bufferedAmount = 0
-    assert_eq!(0, s.buffered_amount(), "unexpected bufferedAmount");
-    assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
+    assert_eq!(s.buffered_amount(), 0, "unexpected bufferedAmount");
+    assert_eq!(n_cbs.load(Ordering::SeqCst), 1, "callback count mismatch");
 
     // Capped at 0, no callback
     s.on_buffer_released(1024).await; // bufferedAmount = 0
-    assert_eq!(0, s.buffered_amount(), "unexpected bufferedAmount");
-    assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
+    assert_eq!(s.buffered_amount(), 0, "unexpected bufferedAmount");
+    assert_eq!(n_cbs.load(Ordering::SeqCst), 1, "callback count mismatch");
 
     Ok(())
 }
@@ -84,22 +84,24 @@ async fn test_stream() -> std::result::Result<(), io::Error> {
     );
 
     // getters
-    assert_eq!(0, s.stream_identifier());
-    assert_eq!(0, s.buffered_amount());
-    assert_eq!(0, s.buffered_amount_low_threshold());
-    assert_eq!(0, s.get_num_bytes_in_reassembly_queue().await);
+    assert_eq!(s.stream_identifier(), 0);
+    assert_eq!(s.buffered_amount(), 0);
+    assert_eq!(s.buffered_amount_low_threshold(), 0);
+    assert_eq!(s.get_num_bytes_in_reassembly_queue().await, 0);
 
     // setters
     s.set_default_payload_type(PayloadProtocolIdentifier::Binary);
     s.set_reliability_params(true, ReliabilityType::Reliable, 0);
 
     // write
-    let n = s.write(&Bytes::from("Hello "))?;
-    assert_eq!(6, n);
-    assert_eq!(6, s.buffered_amount());
-    let n = s.write_sctp(&Bytes::from("world"), PayloadProtocolIdentifier::Binary)?;
-    assert_eq!(5, n);
-    assert_eq!(11, s.buffered_amount());
+    let n = s.write(&Bytes::from("Hello ")).await?;
+    assert_eq!(n, 6);
+    assert_eq!(s.buffered_amount(), 6);
+    let n = s
+        .write_sctp(&Bytes::from("world"), PayloadProtocolIdentifier::Binary)
+        .await?;
+    assert_eq!(n, 5);
+    assert_eq!(s.buffered_amount(), 11);
 
     // async read
     //  1. pretend that we've received a chunk
@@ -120,7 +122,7 @@ async fn test_stream() -> std::result::Result<(), io::Error> {
     // shutdown write
     s.shutdown(Shutdown::Write).await?;
     // write must fail
-    assert!(s.write(&Bytes::from("error")).is_err());
+    assert!(s.write(&Bytes::from("error")).await.is_err());
     // read should continue working
     s.handle_data(ChunkPayloadData {
         unordered: true,
@@ -138,7 +140,7 @@ async fn test_stream() -> std::result::Result<(), io::Error> {
     // shutdown read
     s.shutdown(Shutdown::Read).await?;
     // read must return 0
-    assert_eq!(Ok(0), s.read(&mut buf).await);
+    assert_eq!(s.read(&mut buf).await, Ok(0));
 
     Ok(())
 }
@@ -157,16 +159,16 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     let mut poll_stream = PollStream::new(s.clone());
 
     // getters
-    assert_eq!(0, poll_stream.stream_identifier());
-    assert_eq!(0, poll_stream.buffered_amount());
-    assert_eq!(0, poll_stream.buffered_amount_low_threshold());
-    assert_eq!(0, poll_stream.get_num_bytes_in_reassembly_queue().await);
+    assert_eq!(poll_stream.stream_identifier(), 0);
+    assert_eq!(poll_stream.buffered_amount(), 0);
+    assert_eq!(poll_stream.buffered_amount_low_threshold(), 0);
+    assert_eq!(poll_stream.get_num_bytes_in_reassembly_queue().await, 0);
 
     // async write
     let n = poll_stream.write(&[1, 2, 3]).await?;
-    assert_eq!(3, n);
+    assert_eq!(n, 3);
     poll_stream.flush().await?;
-    assert_eq!(3, poll_stream.buffered_amount());
+    assert_eq!(poll_stream.buffered_amount(), 3);
 
     // async read
     //  1. pretend that we've received a chunk
@@ -182,7 +184,7 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     .await;
     //  2. read it
     let mut buf = [0; 5];
-    poll_stream.read(&mut buf).await?;
+    poll_stream.read_exact(&mut buf).await?;
     assert_eq!(buf, [0, 1, 2, 3, 4]);
 
     // shutdown write
@@ -200,7 +202,7 @@ async fn test_poll_stream() -> std::result::Result<(), io::Error> {
     })
     .await;
     let mut buf = [0; 5];
-    poll_stream.read(&mut buf).await?;
+    poll_stream.read_exact(&mut buf).await?;
     assert_eq!(buf, [5, 6, 7, 8, 9]);
 
     // misc.

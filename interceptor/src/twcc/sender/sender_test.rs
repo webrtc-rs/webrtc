@@ -36,7 +36,8 @@ async fn test_twcc_sender_interceptor() -> Result<()> {
                 .await;
 
                 let id = i + 1;
-                for seq_num in vec![id * 1, id * 2, id * 3, id * 4, id * 5] {
+                #[allow(clippy::identity_op)]
+                for seq_num in [id * 1, id * 2, id * 3, id * 4, id * 5] {
                     stream
                         .write_rtp(&rtp::packet::Packet {
                             header: rtp::header::Header {
@@ -54,14 +55,14 @@ async fn test_twcc_sender_interceptor() -> Result<()> {
                     tokio::select! {
                         p = stream.written_rtp() =>{
                             if let Some(p) = p {
-                                assert_eq!(seq_num, p.header.sequence_number);
+                                assert_eq!(p.header.sequence_number, seq_num);
                                 let _ = p_chan_tx2.send(p).await;
                             }else{
-                                assert!(false, "stream.written_rtp none");
+                                panic!("stream.written_rtp none");
                             }
                         }
                         _ = timeout.as_mut()=>{
-                            assert!(false, "written rtp packet not found");
+                            panic!("written rtp packet not found");
                         }
                     };
                 }

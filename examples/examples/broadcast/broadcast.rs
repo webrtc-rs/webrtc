@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
 
     // Allow us to receive 1 video track
     peer_connection
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let (local_track_chan_tx, mut local_track_chan_rx) =

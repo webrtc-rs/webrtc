@@ -67,7 +67,7 @@ fn test_fingerprint_check_bad() -> Result<()> {
             "IsAttrSizeInvalid should be true"
         );
     } else {
-        assert!(false, "Expected error, but got ok");
+        panic!("Expected error, but got ok");
     }
 
     Ok(())

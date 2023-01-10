@@ -118,7 +118,9 @@ impl DataChannel {
             })
             .marshal()?;
 
-            stream.write_sctp(&msg, PayloadProtocolIdentifier::Dcep)?;
+            stream
+                .write_sctp(&msg, PayloadProtocolIdentifier::Dcep)
+                .await?;
         }
         Ok(DataChannel::new(stream, config))
     }
@@ -284,10 +286,13 @@ impl DataChannel {
         };
 
         let n = if data_len == 0 {
-            let _ = self.stream.write_sctp(&Bytes::from_static(&[0]), ppi)?;
+            let _ = self
+                .stream
+                .write_sctp(&Bytes::from_static(&[0]), ppi)
+                .await?;
             0
         } else {
-            let n = self.stream.write_sctp(data, ppi)?;
+            let n = self.stream.write_sctp(data, ppi).await?;
             self.bytes_sent.fetch_add(n, Ordering::SeqCst);
             n
         };
@@ -300,7 +305,8 @@ impl DataChannel {
         let ack = Message::DataChannelAck(DataChannelAck {}).marshal()?;
         Ok(self
             .stream
-            .write_sctp(&ack, PayloadProtocolIdentifier::Dcep)?)
+            .write_sctp(&ack, PayloadProtocolIdentifier::Dcep)
+            .await?)
     }
 
     /// Close closes the DataChannel and the underlying SCTP stream.

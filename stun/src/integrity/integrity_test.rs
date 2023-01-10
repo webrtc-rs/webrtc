@@ -15,7 +15,7 @@ fn test_message_integrity_add_to_simple() -> Result<()> {
         0x84, 0x93, 0xfb, 0xc5, 0x3b, 0xa5, 0x82, 0xfb, 0x4c, 0x04, 0x4c, 0x45, 0x6b, 0xdc, 0x40,
         0xeb,
     ];
-    assert_eq!(expected, i.0, "{}", Error::ErrIntegrityMismatch);
+    assert_eq!(i.0, expected, "{}", Error::ErrIntegrityMismatch);
 
     //"Check"
     {

@@ -70,7 +70,7 @@ fn benchmark_chan(c: &mut Criterion) {
         c.bench_function("BenchmarkChannelNumber/GetFrom", |b| {
             b.iter(|| {
                 n.get_from(&m).unwrap();
-                assert_eq!(expected, n);
+                assert_eq!(n, expected);
             })
         });
     }

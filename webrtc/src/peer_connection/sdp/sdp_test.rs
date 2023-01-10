@@ -51,9 +51,9 @@ fn test_extract_fingerprint() -> Result<()> {
         let s = SessionDescription::default();
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(Error::ErrSessionDescriptionNoFingerprint, err);
+            assert_eq!(err, Error::ErrSessionDescriptionNoFingerprint);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -68,9 +68,9 @@ fn test_extract_fingerprint() -> Result<()> {
         };
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(Error::ErrSessionDescriptionInvalidFingerprint, err);
+            assert_eq!(err, Error::ErrSessionDescriptionInvalidFingerprint);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -92,9 +92,9 @@ fn test_extract_fingerprint() -> Result<()> {
         };
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(Error::ErrSessionDescriptionConflictingFingerprints, err);
+            assert_eq!(err, Error::ErrSessionDescriptionConflictingFingerprints);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -120,9 +120,9 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionMissingIcePwd, err);
+            assert_eq!(err, Error::ErrSessionDescriptionMissingIcePwd);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -140,9 +140,9 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionMissingIceUfrag, err);
+            assert_eq!(err, Error::ErrSessionDescriptionMissingIceUfrag);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -216,9 +216,9 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionConflictingIceUfrag, err);
+            assert_eq!(err, Error::ErrSessionDescriptionConflictingIceUfrag);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -246,9 +246,9 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(Error::ErrSessionDescriptionConflictingIcePwd, err);
+            assert_eq!(err, Error::ErrSessionDescriptionConflictingIcePwd);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -379,40 +379,34 @@ fn test_track_details_from_sdp() -> Result<()> {
         };
 
         let tracks = track_details_from_sdp(&s, true);
-        assert_eq!(3, tracks.len());
+        assert_eq!(tracks.len(), 3);
         if track_details_for_ssrc(&tracks, 1000).is_some() {
-            assert!(
-                false,
-                "got the unknown track ssrc:1000 which should have been skipped"
-            );
+            panic!("got the unknown track ssrc:1000 which should have been skipped");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 2000) {
-            assert_eq!(RTPCodecType::Audio, track.kind);
-            assert_eq!(2000, track.ssrcs[0]);
-            assert_eq!("audio_trk_label", track.stream_id);
+            assert_eq!(track.kind, RTPCodecType::Audio);
+            assert_eq!(track.ssrcs[0], 2000);
+            assert_eq!(track.stream_id, "audio_trk_label");
         } else {
-            assert!(false, "missing audio track with ssrc:2000");
+            panic!("missing audio track with ssrc:2000");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 3000) {
-            assert_eq!(RTPCodecType::Video, track.kind);
-            assert_eq!(3000, track.ssrcs[0]);
-            assert_eq!("video_trk_label", track.stream_id);
+            assert_eq!(track.kind, RTPCodecType::Video);
+            assert_eq!(track.ssrcs[0], 3000);
+            assert_eq!(track.stream_id, "video_trk_label");
         } else {
-            assert!(false, "missing video track with ssrc:3000");
+            panic!("missing video track with ssrc:3000");
         }
         if track_details_for_ssrc(&tracks, 4000).is_some() {
-            assert!(
-                false,
-                "got the rtx track ssrc:3000 which should have been skipped"
-            );
+            panic!("got the rtx track ssrc:3000 which should have been skipped");
         }
         if let Some(track) = track_details_for_ssrc(&tracks, 5000) {
-            assert_eq!(RTPCodecType::Video, track.kind);
-            assert_eq!(5000, track.ssrcs[0]);
-            assert_eq!("video_trk_id", track.id);
-            assert_eq!("video_stream_id", track.stream_id);
+            assert_eq!(track.kind, RTPCodecType::Video);
+            assert_eq!(track.ssrcs[0], 5000);
+            assert_eq!(track.id, "video_trk_id");
+            assert_eq!(track.stream_id, "video_stream_id");
         } else {
-            assert!(false, "missing video track with ssrc:5000");
+            panic!("missing video track with ssrc:5000");
         }
     }
 
@@ -465,13 +459,13 @@ fn test_track_details_from_sdp() -> Result<()> {
             ..Default::default()
         };
         assert_eq!(
-            0,
             track_details_from_sdp(&s, true).len(),
+            0,
             "inactive and recvonly tracks should be ignored when passing exclude_inactive: true"
         );
         assert_eq!(
-            1,
             track_details_from_sdp(&s, false).len(),
+            1,
             "Inactive tracks should not be ignored when passing exclude_inactive: false"
         );
     }
@@ -575,13 +569,36 @@ async fn test_media_description_fingerprints() -> Result<()> {
     let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
     let certificate = RTCCertificate::from_key_pair(kp)?;
 
+    let transport = Arc::new(RTCDtlsTransport::default());
+
+    let video_receiver = Arc::new(api.new_rtp_receiver(
+        RTPCodecType::Video,
+        Arc::clone(&transport),
+        Arc::clone(&interceptor),
+    ));
+    let audio_receiver = Arc::new(api.new_rtp_receiver(
+        RTPCodecType::Audio,
+        Arc::clone(&transport),
+        Arc::clone(&interceptor),
+    ));
+
+    let video_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
+
+    let audio_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
+
     let media = vec![
         MediaSection {
             id: "video".to_owned(),
             transceivers: vec![
                 RTCRtpTransceiver::new(
-                    None,
-                    None,
+                    video_receiver,
+                    video_sender,
                     RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Video,
                     api.media_engine
@@ -598,8 +615,8 @@ async fn test_media_description_fingerprints() -> Result<()> {
             id: "audio".to_owned(),
             transceivers: vec![
                 RTCRtpTransceiver::new(
-                    None,
-                    None,
+                    audio_receiver,
+                    audio_sender,
                     RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Audio,
                     api.media_engine
@@ -619,6 +636,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
         },
     ];
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..2 {
         let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
             RTCRtpCodecCapability {
@@ -629,10 +647,10 @@ async fn test_media_description_fingerprints() -> Result<()> {
             "webrtc-rs".to_owned(),
         ));
         media[i].transceivers[0]
-            .set_sender(Some(Arc::new(
+            .set_sender(Arc::new(
                 RTCRtpSender::new(
                     api.setting_engine.get_receive_mtu(),
-                    track,
+                    Some(track),
                     Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),
                     Arc::clone(&interceptor),
@@ -640,7 +658,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                     false,
                 )
                 .await,
-            )))
+            ))
             .await;
         media[i].transceivers[0].set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
     }
@@ -661,15 +679,29 @@ async fn test_populate_sdp() -> Result<()> {
         let se = SettingEngine::default();
         let mut me = MediaEngine::default();
         me.register_default_codecs()?;
-        let me = Arc::new(me);
+
+        let api = APIBuilder::new().with_media_engine(me).build();
+        let interceptor = api.interceptor_registry.build("")?;
+        let transport = Arc::new(RTCDtlsTransport::default());
+
+        let receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Video,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+
+        let sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
 
         let tr = RTCRtpTransceiver::new(
-            None,
-            None,
+            receiver,
+            sender,
             RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
-            me.video_codecs.clone(),
-            Arc::clone(&me),
+            api.media_engine.video_codecs.clone(),
+            Arc::clone(&api.media_engine),
             None,
         )
         .await;
@@ -695,7 +727,7 @@ async fn test_populate_sdp() -> Result<()> {
         let offer_sdp = populate_sdp(
             d,
             &[],
-            &me,
+            &api.media_engine,
             &[],
             &RTCIceParameters::default(),
             &media_sections,
@@ -720,7 +752,7 @@ async fn test_populate_sdp() -> Result<()> {
                 }
             }
         }
-        assert_eq!(true, found, "Rid key should be present");
+        assert!(found, "Rid key should be present");
     }
 
     //"SetCodecPreferences"
@@ -732,15 +764,28 @@ async fn test_populate_sdp() -> Result<()> {
             .await;
         me.push_codecs(me.audio_codecs.clone(), RTPCodecType::Audio)
             .await;
-        let me = Arc::new(me);
+
+        let api = APIBuilder::new().with_media_engine(me).build();
+        let interceptor = api.interceptor_registry.build("")?;
+        let transport = Arc::new(RTCDtlsTransport::default());
+        let receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Video,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+
+        let sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
 
         let tr = RTCRtpTransceiver::new(
-            None,
-            None,
+            receiver,
+            sender,
             RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
-            me.video_codecs.clone(),
-            Arc::clone(&me),
+            api.media_engine.video_codecs.clone(),
+            Arc::clone(&api.media_engine),
             None,
         )
         .await;
@@ -776,7 +821,7 @@ async fn test_populate_sdp() -> Result<()> {
         let offer_sdp = populate_sdp(
             d,
             &[],
-            &me,
+            &api.media_engine,
             &[],
             &RTCIceParameters::default(),
             &media_sections,
@@ -794,7 +839,7 @@ async fn test_populate_sdp() -> Result<()> {
                 if a.key.contains("rtpmap") {
                     if let Some(value) = &a.value {
                         if value == "98 VP9/90000" {
-                            assert!(false, "vp9 should not be present in sdp");
+                            panic!("vp9 should not be present in sdp");
                         } else if value == "96 VP8/90000" {
                             found_vp8 = true;
                         }
@@ -802,7 +847,7 @@ async fn test_populate_sdp() -> Result<()> {
                 }
             }
         }
-        assert_eq!(true, found_vp8, "vp8 should be present in sdp");
+        assert!(found_vp8, "vp8 should be present in sdp");
     }
 
     Ok(())
@@ -827,26 +872,49 @@ async fn test_populate_sdp_reject() -> Result<()> {
         RTPCodecType::Video,
     )?;
 
-    let me = Arc::new(me);
+    let api = APIBuilder::new().with_media_engine(me).build();
+    let interceptor = api.interceptor_registry.build("")?;
+    let transport = Arc::new(RTCDtlsTransport::default());
+    let video_receiver = Arc::new(api.new_rtp_receiver(
+        RTPCodecType::Video,
+        Arc::clone(&transport),
+        Arc::clone(&interceptor),
+    ));
+
+    let video_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
 
     let trv = RTCRtpTransceiver::new(
-        None,
-        None,
+        video_receiver,
+        video_sender,
         RTCRtpTransceiverDirection::Recvonly,
         RTPCodecType::Video,
-        me.video_codecs.clone(),
-        Arc::clone(&me),
+        api.media_engine.video_codecs.clone(),
+        Arc::clone(&api.media_engine),
         None,
     )
     .await;
 
+    let audio_receiver = Arc::new(api.new_rtp_receiver(
+        RTPCodecType::Audio,
+        Arc::clone(&transport),
+        Arc::clone(&interceptor),
+    ));
+
+    let audio_sender = Arc::new(
+        api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+            .await,
+    );
+
     let tra = RTCRtpTransceiver::new(
-        None,
-        None,
+        audio_receiver,
+        audio_sender,
         RTCRtpTransceiverDirection::Recvonly,
         RTPCodecType::Audio,
-        me.audio_codecs.clone(),
-        Arc::clone(&me),
+        api.media_engine.audio_codecs.clone(),
+        Arc::clone(&api.media_engine),
         None,
     )
     .await;
@@ -879,7 +947,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
     let offer_sdp = populate_sdp(
         d,
         &[],
-        &me,
+        &api.media_engine,
         &[],
         &RTCIceParameters::default(),
         &media_sections,

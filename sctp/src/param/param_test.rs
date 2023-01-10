@@ -14,7 +14,7 @@ fn test_parse_param_type_success() -> Result<()> {
 
     for (mut binary, expected) in tests {
         let pt: ParamType = binary.get_u16().into();
-        assert_eq!(expected, pt);
+        assert_eq!(pt, expected);
     }
 
     Ok(())
@@ -39,9 +39,9 @@ fn test_param_header_success() -> Result<()> {
 
     for (binary, parsed) in tests {
         let actual = ParamHeader::unmarshal(&binary)?;
-        assert_eq!(parsed, actual);
+        assert_eq!(actual, parsed);
         let b = actual.marshal()?;
-        assert_eq!(binary, b);
+        assert_eq!(b, binary);
     }
 
     Ok(())
@@ -83,9 +83,9 @@ fn test_param_forward_tsn_supported_success() -> Result<()> {
 
     for (binary, parsed) in tests {
         let actual = ParamForwardTsnSupported::unmarshal(&binary)?;
-        assert_eq!(parsed, actual);
+        assert_eq!(actual, parsed);
         let b = actual.marshal()?;
-        assert_eq!(binary, b);
+        assert_eq!(b, binary);
     }
 
     Ok(())
@@ -141,9 +141,9 @@ fn test_param_outgoing_reset_request_success() -> Result<()> {
 
     for (binary, parsed) in tests {
         let actual = ParamOutgoingResetRequest::unmarshal(&binary)?;
-        assert_eq!(parsed, actual);
+        assert_eq!(actual, parsed);
         let b = actual.marshal()?;
-        assert_eq!(binary, b);
+        assert_eq!(b, binary);
     }
 
     Ok(())
@@ -185,9 +185,9 @@ fn test_param_reconfig_response_success() -> Result<()> {
 
     for (binary, parsed) in tests {
         let actual = ParamReconfigResponse::unmarshal(&binary)?;
-        assert_eq!(parsed, actual);
+        assert_eq!(actual, parsed);
         let b = actual.marshal()?;
-        assert_eq!(binary, b);
+        assert_eq!(b, binary);
     }
 
     Ok(())
@@ -231,7 +231,7 @@ fn test_reconfig_result_stringer() -> Result<()> {
 
     for (result, expected) in tests {
         let actual = result.to_string();
-        assert_eq!(expected, actual, "Test case {}", expected);
+        assert_eq!(actual, expected, "Test case {}", expected);
     }
 
     Ok(())
@@ -248,7 +248,7 @@ fn test_build_param_success() -> Result<()> {
     for binary in tests {
         let p = build_param(&binary)?;
         let b = p.marshal()?;
-        assert_eq!(binary, b);
+        assert_eq!(b, binary);
     }
 
     Ok(())

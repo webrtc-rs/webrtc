@@ -41,8 +41,8 @@ fn test_handshake_message_client_hello() -> Result<()> {
         cipher_suites: vec![
             CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
             CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha,
-            //Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
-            //Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
+            //Box::<CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256>::default(),
+            //Box::<CipherSuiteTLSEcdheEcdsaWithAes256CbcSha>::default(),
         ],
         compression_methods: CompressionMethods {
             ids: vec![CompressionMethodId::Null],

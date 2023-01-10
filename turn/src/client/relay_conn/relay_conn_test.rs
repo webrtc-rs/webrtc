@@ -77,7 +77,7 @@ async fn test_relay_conn() -> Result<()> {
     {
         assert!(Error::ErrUnexpectedResponse != err);
     } else {
-        assert!(false, "should fail");
+        panic!("should fail");
     }
 
     Ok(())

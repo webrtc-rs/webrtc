@@ -187,7 +187,7 @@ async fn test_session_srtp_multi_ssrc() -> Result<()> {
                 &read_buffer[RTP_HEADER_SIZE..]
             );
         } else {
-            assert!(false, "ssrc {} not found", *ssrc);
+            panic!("ssrc {} not found", *ssrc);
         }
     }
 
@@ -271,18 +271,13 @@ async fn test_session_srtp_replay_protection() -> Result<()> {
     tokio::spawn(async move {
         let mut i = 0;
         while i < count {
-            match payload_srtp(&read_stream, RTP_HEADER_SIZE, &test_payload).await {
-                Ok(seq) => {
-                    let mut r = cloned_received_sequence_number.lock().await;
-                    r.push(seq);
+            let seq = payload_srtp(&read_stream, RTP_HEADER_SIZE, &test_payload)
+                .await
+                .unwrap();
+            let mut r = cloned_received_sequence_number.lock().await;
+            r.push(seq);
 
-                    i += 1;
-                }
-                Err(err) => {
-                    assert!(false, "{}", err);
-                    break;
-                }
-            }
+            i += 1;
         }
 
         drop(done_tx);
@@ -307,7 +302,7 @@ async fn test_session_srtp_replay_protection() -> Result<()> {
 
     {
         let received_sequence_number = received_sequence_number.lock().await;
-        assert_eq!(&expected_sequence_number[..], &received_sequence_number[..]);
+        assert_eq!(&received_sequence_number[..], &expected_sequence_number[..]);
     }
 
     Ok(())

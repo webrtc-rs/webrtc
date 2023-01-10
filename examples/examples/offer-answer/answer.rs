@@ -294,7 +294,7 @@ async fn main() -> Result<()> {
                         let mut cs = pending_candidates3.lock().await;
                         cs.push(c);
                     } else if let Err(err) = signal_candidate(&addr3, &c).await {
-                        assert!(false, "{}", err);
+                        panic!("{}", err);
                     }
                 }
             }

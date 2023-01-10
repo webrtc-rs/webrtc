@@ -42,7 +42,7 @@ async fn test_generator_interceptor() -> Result<()> {
             .await
             .expect("A read packet")
             .expect("Not an error");
-        assert_eq!(seq_num, r.header.sequence_number);
+        assert_eq!(r.header.sequence_number, seq_num);
     }
 
     tokio::time::sleep(INTERVAL * 2).await; // wait for at least 2 nack packets
@@ -54,10 +54,10 @@ async fn test_generator_interceptor() -> Result<()> {
         .await
         .expect("Write rtcp");
     if let Some(p) = r[0].as_any().downcast_ref::<TransportLayerNack>() {
-        assert_eq!(13, p.nacks[0].packet_id);
-        assert_eq!(0b10, p.nacks[0].lost_packets); // we want packets: 13, 15 (not packet 17, because skipLastN is setReceived to 2)
+        assert_eq!(p.nacks[0].packet_id, 13);
+        assert_eq!(p.nacks[0].lost_packets, 0b10); // we want packets: 13, 15 (not packet 17, because skipLastN is setReceived to 2)
     } else {
-        assert!(false, "single packet RTCP Compound Packet expected");
+        panic!("single packet RTCP Compound Packet expected");
     }
 
     stream.close().await?;

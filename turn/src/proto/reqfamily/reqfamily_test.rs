@@ -54,7 +54,7 @@ fn test_requested_address_family_add_to() -> Result<(), stun::Error> {
                     err
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
             m.add(ATTR_REQUESTED_ADDRESS_FAMILY, &[1, 2, 3]);
             if let Err(err) = handle.get_from(&m) {
@@ -63,7 +63,7 @@ fn test_requested_address_family_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
             m.reset();
             m.add(ATTR_REQUESTED_ADDRESS_FAMILY, &[5, 0, 0, 0]);

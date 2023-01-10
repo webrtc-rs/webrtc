@@ -1,3 +1,6 @@
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
+
 use super::*;
 use crate::error::Result;
 use bytes::{Bytes, BytesMut};
@@ -226,7 +229,7 @@ fn test_rfc_8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
     if let Some(ext1) = ext1 {
         assert_eq!(ext1, ext1_expect);
     } else {
-        assert!(false, "ext1 is none");
+        panic!("ext1 is none");
     }
 
     let ext2 = p.header.get_extension(2);
@@ -234,7 +237,7 @@ fn test_rfc_8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
     if let Some(ext2) = ext2 {
         assert_eq!(ext2, ext2_expect);
     } else {
-        assert!(false, "ext2 is none");
+        panic!("ext2 is none");
     }
 
     // Test Marshal
@@ -756,7 +759,7 @@ fn test_rfc8285_one_byte_set_extension_should_enable_extension_when_adding() {
     let result = p.header.set_extension(1, extension.clone());
     assert!(result.is_ok(), "Error setting extension");
 
-    assert_eq!(p.header.extension, true, "Extension should be set to true");
+    assert!(p.header.extension, "Extension should be set to true");
     assert_eq!(
         p.header.extension_profile, 0xBEDE,
         "Extension profile should be set to 0xBEDE"
@@ -967,7 +970,7 @@ fn test_rfc8285_two_bytes_set_extension_should_enable_extension_when_adding() ->
 
     p.header.set_extension(1, extension.clone())?;
 
-    assert_eq!(p.header.extension, true, "Extension should be set to true");
+    assert!(p.header.extension, "Extension should be set to true");
     assert_eq!(
         p.header.extension_profile, 0x1000,
         "Extension profile should be set to 0xBEDE"

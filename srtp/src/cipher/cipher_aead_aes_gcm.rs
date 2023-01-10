@@ -1,6 +1,6 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, NewAead, Payload},
-    Aes128Gcm, Nonce,
+    aead::{generic_array::GenericArray, Aead, Payload},
+    Aes128Gcm, KeyInit, Nonce,
 };
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Bytes, BytesMut};

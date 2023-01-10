@@ -5,10 +5,31 @@
 * Added support for insecure/deprecated signature verification algorithms, opt in via `SettingsEngine::allow_insecure_verification_algorithm` [#342](https://github.com/webrtc-rs/webrtc/pull/342).
 * Make RTCRtpCodecCapability::payloader_for_codec public API [#349](https://github.com/webrtc-rs/webrtc/pull/349).
 * Fixed a panic in `calculate_rtt_ms` [#350](https://github.com/webrtc-rs/webrtc/pull/350).
+* Fixed `TrackRemote` missing at least the first, sometimes more, RTP packet during probing. [#387](https://github.com/webrtc-rs/webrtc/pull/387)
 
 ### Breaking changes
 
 * Change `RTCPeerConnection::on_track` callback signature to `|track: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>|` [#355](https://github.com/webrtc-rs/webrtc/pull/355).
+
+* Change `RTCRtpSender::new` signature to `|receive_mtu: usize, track: Option<Arc<dyn TrackLocal + Send + Sync>>, transport: Arc<RTCDtlsTransport>, media_engine: Arc<MediaEngine>, interceptor: Arc<dyn Interceptor + Send + Sync>, start_paused: bool,|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `API::new_rtp_sender` signature to `|&self, track: Option<Arc<dyn TrackLocal + Send + Sync>>, transport: Arc<RTCDtlsTransport>, interceptor: Arc<dyn Interceptor + Send + Sync>,|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCRtpTransceiver::sender` signature to `|&self| -> Arc<RTCRtpSender>` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCRtpTransceiver::set_sender_track` signature to `|self: &Arc<Self>, sender: Arc<RTCRtpSender>, track: Option<Arc<dyn TrackLocal + Send + Sync>>,|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCRtpTransceiver::set_sender` signature to `|self: &Arc<Self>, s: Arc<RTCRtpSender>|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCRtpTransceiver::receiver` signature to `|&self| -> Arc<RTCRtpReceiver>` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCRtpTransceiver::set_receiver` signature to `|&self, r: Arc<RTCRtpReceiver>|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCPeerConnection::add_transceiver_from_kind` signature to `|&self, kind: RTPCodecType, init: Option<RTCRtpTransceiverInit>,|`, `RTCRtpTransceiver::RTCRtpSender` сreated without a track [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCPeerConnection::add_transceiver_from_track` signature to `|&self, track: Arc<dyn TrackLocal + Send + Sync>, init: Option<RTCRtpTransceiverInit>,|` [#377](https://github.com/webrtc-rs/webrtc/pull/377).
+
+* Change `RTCPeerConnection::mid` return signature to `Option<String>` [#375](https://github.com/webrtc-rs/webrtc/pull/375).
 
 ## v0.6.0
 
