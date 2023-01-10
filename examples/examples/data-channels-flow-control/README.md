@@ -1,15 +1,17 @@
 # data-channels-flow-control
+
 This example demonstrates how to use the following property / methods.
 
 * pub async fn buffered_amount(&self) -> usize
-* pub async fn set_buffered_amount_low_threshold(&self, th: usize) 
+* pub async fn set_buffered_amount_low_threshold(&self, th: usize)
 * pub async fn buffered_amount_low_threshold(&self) -> usize
 * pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn)
 
 These methods are equivalent to that of JavaScript WebRTC API.
-See https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel for more details.
+See <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel> for more details.
 
 ## When do we need it?
+
 Send or SendText methods are called on DataChannel to send data to the connected peer.
 The methods return immediately, but it does not mean the data was actually sent onto
 the wire. Instead, it is queued in a buffer until it actually gets sent out to the wire.
@@ -23,9 +25,10 @@ actually send to the peer over the Internet. The above properties/methods help y
 application to pace the amount of data to be pushed into the data channel.
 
 ## How to run the example code
+
 The demo code implements two endpoints (requester and responder) in it.
 
-```
+```plain
                         signaling messages
            +----------------------------------------+
            |                                        |
@@ -45,7 +48,7 @@ Once the data channel is successfully opened, requester will start sending a ser
 
 Here's how to run the code:
 
-```
+```shell
 $ cargo run --release --example data-channels-flow-control
     Finished release [optimized] target(s) in 0.36s
      Running `target\release\examples\data-channels-flow-control.exe`
@@ -58,5 +61,4 @@ Throughput is about 119.873 Mbps
 Throughput is about 118.890 Mbps
 Throughput is about 118.525 Mbps
 Throughput is about 118.614 Mbps
-
 ```

@@ -3,19 +3,19 @@
  <br>
 </h1>
 <p align="center">
- <a href="https://github.com/webrtc-rs/dtls/actions"> 
+ <a href="https://github.com/webrtc-rs/dtls/actions">
   <img src="https://github.com/webrtc-rs/dtls/workflows/cargo/badge.svg">
- </a> 
- <a href="https://codecov.io/gh/webrtc-rs/dtls"> 
+ </a>
+ <a href="https://codecov.io/gh/webrtc-rs/dtls">
   <img src="https://codecov.io/gh/webrtc-rs/dtls/branch/main/graph/badge.svg">
  </a>
- <a href="https://deps.rs/repo/github/webrtc-rs/dtls"> 
+ <a href="https://deps.rs/repo/github/webrtc-rs/dtls">
   <img src="https://deps.rs/repo/github/webrtc-rs/dtls/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-dtls"> 
+ <a href="https://crates.io/crates/webrtc-dtls">
   <img src="https://img.shields.io/crates/v/webrtc-dtls.svg">
  </a>
- <a href="https://docs.rs/webrtc-dtls"> 
+ <a href="https://docs.rs/webrtc-dtls">
   <img src="https://docs.rs/webrtc-dtls/badge.svg">
  </a>
  <a href="https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license">

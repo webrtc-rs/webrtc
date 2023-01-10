@@ -821,17 +821,16 @@ fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> Option<f64> {
 
 #[cfg(test)]
 mod test {
+    // Silence warning on `..Default::default()` with no effect:
+    #![allow(clippy::needless_update)]
+
     macro_rules! assert_feq {
         ($left: expr, $right: expr) => {
             assert_feq!($left, $right, 0.01);
         };
         ($left: expr, $right: expr, $eps: expr) => {
             if ($left - $right).abs() >= $eps {
-                assert!(
-                    false,
-                    "{:?} was not within {:?} of {:?}",
-                    $left, $eps, $right
-                );
+                panic!("{:?} was not within {:?} of {:?}", $left, $eps, $right);
             }
         };
     }
@@ -876,7 +875,7 @@ mod test {
         )
         .await;
 
-        let _ = recv_stream
+        recv_stream
             .receive_rtp(rtp::packet::Packet {
                 header: rtp::header::Header {
                     ssrc: 123456,

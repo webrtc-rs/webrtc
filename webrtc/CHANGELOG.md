@@ -5,6 +5,8 @@
 * Added support for insecure/deprecated signature verification algorithms, opt in via `SettingsEngine::allow_insecure_verification_algorithm` [#342](https://github.com/webrtc-rs/webrtc/pull/342).
 * Make RTCRtpCodecCapability::payloader_for_codec public API [#349](https://github.com/webrtc-rs/webrtc/pull/349).
 * Fixed a panic in `calculate_rtt_ms` [#350](https://github.com/webrtc-rs/webrtc/pull/350).
+* Fixed `TrackRemote` missing at least the first, sometimes more, RTP packet during probing. [#387](https://github.com/webrtc-rs/webrtc/pull/387)
+
 ### Breaking changes
 
 * Change `RTCPeerConnection::on_track` callback signature to `|track: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>|` [#355](https://github.com/webrtc-rs/webrtc/pull/355).

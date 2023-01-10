@@ -62,7 +62,7 @@ async fn test_agent_process() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -85,7 +85,7 @@ fn test_agent_start() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
     a.close()?;
 
@@ -100,7 +100,7 @@ fn test_agent_start() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = a.set_handler(noop_handler());
@@ -113,7 +113,7 @@ fn test_agent_start() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -134,7 +134,7 @@ async fn test_agent_stop() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let id = TransactionId::new();
@@ -156,10 +156,10 @@ async fn test_agent_stop() -> Result<()> {
                     Error::ErrTransactionStopped
                 );
             }else{
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
         }
-     _ = timeout.as_mut() => assert!(false, "timed out"),
+     _ = timeout.as_mut() => panic!("timed out"),
     }
 
     a.close()?;
@@ -174,7 +174,7 @@ async fn test_agent_stop() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = a.stop(TransactionId::default());
@@ -187,7 +187,7 @@ async fn test_agent_stop() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())

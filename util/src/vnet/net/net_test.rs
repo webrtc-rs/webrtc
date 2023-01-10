@@ -134,7 +134,7 @@ async fn test_net_native_unexpected_operations() -> Result<()> {
         if let Some(ifc) = nw.get_interface(&lo_name).await {
             assert_eq!(ifc.name, lo_name, "should match ifc name");
         } else {
-            assert!(false, "should succeed");
+            panic!("should succeed");
         }
     }
 
@@ -166,7 +166,7 @@ async fn test_net_virtual_interfaces() -> Result<()> {
                 assert!(addrs.is_empty(), "should empty");
             }
             _ => {
-                assert!(false, "unknown interface: {}", ifc.name);
+                panic!("unknown interface: {}", ifc.name);
             }
         }
     }
@@ -189,7 +189,7 @@ async fn test_net_virtual_interface_by_name() -> Result<()> {
         let addrs = ifc.addrs();
         assert_eq!(addrs.len(), 1, "should be one address");
     } else {
-        assert!(false, "should got ifc");
+        panic!("should got ifc");
     }
 
     if let Some(ifc) = nic.get_interface("eth0").await {
@@ -197,7 +197,7 @@ async fn test_net_virtual_interface_by_name() -> Result<()> {
         let addrs = ifc.addrs();
         assert!(addrs.is_empty(), "should empty");
     } else {
-        assert!(false, "should got ifc");
+        panic!("should got ifc");
     }
 
     let result = nic.get_interface("foo0").await;
@@ -617,7 +617,7 @@ async fn test_net_virtual_loopback2() -> Result<()> {
         let vnet = vnet.lock().await;
         vnet.on_inbound_chunk(Box::new(c)).await;
     } else {
-        assert!(false, "must be virtual net");
+        panic!("must be virtual net");
     }
 
     let _ = recv_ch_rx.recv().await;

@@ -2,18 +2,28 @@ use crate::{MediaTrackSetting, ResolvedMediaTrackConstraint};
 
 use super::FitnessDistance;
 
+/// An error indicating a rejected fitness distance computation,
+/// likely caused by a mismatched yet required constraint.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SettingFitnessDistanceError {
+    /// The kind of the error (e.g. missing value, mismatching value, …).
     pub kind: SettingFitnessDistanceErrorKind,
+    /// The required constraint value.
     pub constraint: String,
+    /// The offending setting value.
     pub setting: Option<String>,
 }
 
+/// The kind of the error (e.g. missing value, mismatching value, …).
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum SettingFitnessDistanceErrorKind {
+    /// Settings value is missing.
     Missing,
+    /// Settings value is a mismatch.
     Mismatch,
+    /// Settings value is too small.
     TooSmall,
+    /// Settings value is too large.
     TooLarge,
 }
 
@@ -114,7 +124,7 @@ mod tests {
     #[test]
     fn empty_constraint() {
         // As per step 1 of the `SelectSettings` algorithm from the W3C spec:
-        // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+        // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
         //
         // > Each constraint specifies one or more values (or a range of values) for its property.
         // > A property MAY appear more than once in the list of 'advanced' ConstraintSets.
@@ -147,7 +157,7 @@ mod tests {
         #[test]
         fn bool_setting() {
             // As per step 8 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > For all string, enum and boolean constraints
             // > (e.g. deviceId, groupId, facingMode, resizeMode, echoCancellation),
@@ -182,7 +192,7 @@ mod tests {
         #[test]
         fn non_bool_settings() {
             // As per step 4 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > If constraintValue is a boolean, but the constrainable property is not,
             // > then the fitness distance is based on whether the settings dictionary's
@@ -228,7 +238,7 @@ mod tests {
         #[test]
         fn missing_settings() {
             // As per step 5 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > If the settings dictionary's constraintName member does not exist,
             // > the fitness distance is 1.
@@ -260,7 +270,7 @@ mod tests {
         #[test]
         fn compatible_settings() {
             // As per step 7 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > For all positive numeric constraints
             // > (such as height, width, frameRate, aspectRatio, sampleRate and sampleSize),
@@ -304,7 +314,7 @@ mod tests {
         #[test]
         fn incompatible_settings() {
             // As per step 3 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > If the constraint does not apply for this type of object, the fitness distance is 0
             // > (that is, the constraint does not influence the fitness distance).
@@ -354,7 +364,7 @@ mod tests {
         #[test]
         fn missing_settings() {
             // As per step 5 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > If the settings dictionary's constraintName member does not exist,
             // > the fitness distance is 1.
@@ -374,7 +384,7 @@ mod tests {
         #[test]
         fn compatible_settings() {
             // As per step 8 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > For all string, enum and boolean constraints
             // > (e.g. deviceId, groupId, facingMode, resizeMode, echoCancellation),
@@ -403,7 +413,7 @@ mod tests {
         #[test]
         fn incompatible_settings() {
             // As per step 3 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > If the constraint does not apply for this type of object, the fitness distance is 0
             // > (that is, the constraint does not influence the fitness distance).
@@ -442,7 +452,7 @@ mod tests {
         #[test]
         fn missing_settings() {
             // As per step 5 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > If the settings dictionary's constraintName member does not exist,
             // > the fitness distance is 1.
@@ -463,7 +473,7 @@ mod tests {
         #[test]
         fn compatible_settings() {
             // As per step 8 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > For all string, enum and boolean constraints
             // > (e.g. deviceId, groupId, facingMode, resizeMode, echoCancellation),
@@ -498,7 +508,7 @@ mod tests {
         #[test]
         fn incompatible_settings() {
             // As per step 3 of the `fitness distance` function from the W3C spec:
-            // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+            // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
             //
             // > If the constraint does not apply for this type of object, the fitness distance is 0
             // > (that is, the constraint does not influence the fitness distance).

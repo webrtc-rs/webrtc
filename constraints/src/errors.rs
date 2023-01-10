@@ -9,11 +9,12 @@ use crate::{
     MediaTrackProperty,
 };
 
+/// An error indicating one or more over-constrained settings.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct OverconstrainedError {
     /// The offending constraint's name.
     pub constraint: MediaTrackProperty,
-    /// Error message.
+    /// An error message, or `None` if exposure-mode was `Protected`.
     pub message: Option<String>,
 }
 

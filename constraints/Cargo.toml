@@ -24,5 +24,10 @@ lazy_static = "1.4.0"
 serde_json = { version = "1.0.91", features = ["preserve_order"] }
 
 [features]
-default = []
+default = ["serde"]
 serde = ["dep:serde", "indexmap/serde"]
+
+[[example]]
+name = "json"
+path = "examples/json.rs"
+required-features = ["serde"]

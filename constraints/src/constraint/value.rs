@@ -22,7 +22,9 @@ use crate::MediaTrackConstraintResolutionStrategy;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum ValueConstraint<T> {
+    /// A bare-valued media track constraint.
     Bare(T),
+    /// A fully-qualified media track constraint.
     Constraint(ResolvedValueConstraint<T>),
 }
 
@@ -48,6 +50,8 @@ impl<T> ValueConstraint<T>
 where
     T: Clone,
 {
+    /// Returns a resolved representation of the constraint
+    /// with bare values resolved to fully-qualified constraints.
     pub fn to_resolved(
         &self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -55,6 +59,8 @@ where
         self.clone().into_resolved(strategy)
     }
 
+    /// Consumes the constraint, returning a resolved representation of the
+    /// constraint with bare values resolved to fully-qualified constraints.
     pub fn into_resolved(
         self,
         strategy: MediaTrackConstraintResolutionStrategy,
@@ -74,6 +80,7 @@ where
 }
 
 impl<T> ValueConstraint<T> {
+    /// Returns `true` if `self` is empty, otherwise `false`.
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Bare(_) => false,
@@ -101,11 +108,17 @@ impl<T> ValueConstraint<T> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ResolvedValueConstraint<T> {
+    /// The exact required value for this property.
+    ///
+    /// This is a required value.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
     )]
     pub exact: Option<T>,
+    /// The ideal (target) value for this property.
+    ///
+    /// This is an optional value.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "core::option::Option::is_none")
@@ -114,6 +127,8 @@ pub struct ResolvedValueConstraint<T> {
 }
 
 impl<T> ResolvedValueConstraint<T> {
+    /// Consumes `self`, returning a corresponding constraint
+    /// with the exact required value set to `exact`.
     #[inline]
     pub fn exact<U>(mut self, exact: U) -> Self
     where
@@ -123,6 +138,8 @@ impl<T> ResolvedValueConstraint<T> {
         self
     }
 
+    /// Consumes `self`, returning a corresponding constraint
+    /// with the ideal required value set to `ideal`.
     #[inline]
     pub fn ideal<U>(mut self, ideal: U) -> Self
     where
@@ -132,14 +149,19 @@ impl<T> ResolvedValueConstraint<T> {
         self
     }
 
+    /// Returns `true` if `value.is_some()` is `true` for any of its required values,
+    /// otherwise `false`.
     pub fn is_required(&self) -> bool {
         self.exact.is_some()
     }
 
+    /// Returns `true` if `value.is_none()` is `true` for all of its values,
+    /// otherwise `false`.
     pub fn is_empty(&self) -> bool {
         self.exact.is_none() && self.ideal.is_none()
     }
 
+    /// Returns a corresponding constraint containing only required values.
     pub fn to_required_only(&self) -> Self
     where
         T: Clone,
@@ -147,6 +169,8 @@ impl<T> ResolvedValueConstraint<T> {
         self.clone().into_required_only()
     }
 
+    /// Consumes `self, returning a corresponding constraint
+    /// containing only required values.
     pub fn into_required_only(self) -> Self {
         Self {
             exact: self.exact,

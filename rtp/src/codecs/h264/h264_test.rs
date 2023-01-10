@@ -1,3 +1,6 @@
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 
 #[test]

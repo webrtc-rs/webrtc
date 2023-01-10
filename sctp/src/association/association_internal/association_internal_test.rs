@@ -63,9 +63,11 @@ fn create_association_internal(config: Config) -> AssociationInternal {
 
 #[test]
 fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        cumulative_tsn_ack_point: 9,
+        ..Default::default()
+    };
 
-    a.cumulative_tsn_ack_point = 9;
     a.advanced_peer_tsn_ack_point = 10;
     a.inflight_queue.push_no_check(ChunkPayloadData {
         beginning_fragment: true,
@@ -91,9 +93,11 @@ fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
 
 #[test]
 fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        cumulative_tsn_ack_point: 9,
+        ..Default::default()
+    };
 
-    a.cumulative_tsn_ack_point = 9;
     a.advanced_peer_tsn_ack_point = 12;
     a.inflight_queue.push_no_check(ChunkPayloadData {
         beginning_fragment: true,
@@ -146,7 +150,7 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
                 assert_eq!(1, s.sequence, "ssn should be 1");
                 si2ok = true;
             }
-            _ => assert!(false, "unexpected stream indentifier"),
+            _ => panic!("unexpected stream indentifier"),
         }
     }
     assert!(si1ok, "si=1 should be present");
@@ -157,9 +161,11 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     let fwdtsn = ChunkForwardTsn {
@@ -191,9 +197,11 @@ async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     // this chunk is blocked by the missing chunk at tsn=1
@@ -239,9 +247,11 @@ async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     // this chunk is blocked by the missing chunk at tsn=1
@@ -285,9 +295,11 @@ async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() -> Result<()> {
-    let mut a = AssociationInternal::default();
+    let mut a = AssociationInternal {
+        use_forward_tsn: true,
+        ..Default::default()
+    };
 
-    a.use_forward_tsn = true;
     let prev_tsn = a.peer_last_tsn;
 
     let fwdtsn = ChunkForwardTsn {
@@ -321,7 +333,7 @@ async fn test_assoc_create_new_stream() -> Result<()> {
             let result = a.streams.get(&s.stream_identifier);
             assert!(result.is_some(), "should be in a.streams map");
         } else {
-            assert!(false, "{} should success", i);
+            panic!("{} should success", i);
         }
     }
 
@@ -464,7 +476,7 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..65537), ppi).await {
@@ -474,7 +486,7 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
     }
 
@@ -510,7 +522,7 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..30001), ppi).await {
@@ -520,7 +532,7 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {
-            assert!(false, "should be error");
+            panic!("should be error");
         }
     }
 

@@ -13,37 +13,38 @@ use crate::{
 
 use super::constraint_set::GenericMediaTrackConstraintSet;
 
-/// The list of advanced constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
+/// The list of mandatory constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
 ///
 /// # W3C Spec Compliance
 ///
-/// Corresponds to [`ResolvedMediaTrackConstraints.advanced`][media_track_constraints_advanced]
+/// Corresponds to [`ResolvedMediaTrackConstraints.mandatory`][media_track_constraints_mandatory]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
 /// Unlike `ResolvedMandatoryMediaTrackConstraints` this type may contain constraints with bare values.
 ///
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
-/// [media_track_constraints_advanced]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-advanced
+/// [media_track_constraints_mandatory]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-mandatory
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 pub type MandatoryMediaTrackConstraints =
     GenericMandatoryMediaTrackConstraints<MediaTrackConstraint>;
 
-/// The list of advanced constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
+/// The list of mandatory constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
 ///
 /// # W3C Spec Compliance
 ///
-/// Corresponds to [`ResolvedMediaTrackConstraintSet`][media_track_constraints_advanced]
+/// Corresponds to [`ResolvedMediaTrackConstraintSet`][media_track_constraints_mandatory]
 /// from the W3C ["Media Capture and Streams"][media_capture_and_streams_spec] spec.
 ///
 /// Unlike `MandatoryMediaTrackConstraints` this type does not contain constraints
 /// with bare values, but has them resolved to full constraints instead.
 ///
 /// [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#dom-mediastreamtrack
-/// [media_track_constraints_advanced]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-advanced
+/// [media_track_constraints_mandatory]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatrackconstraints-mandatory
 /// [media_capture_and_streams_spec]: https://www.w3.org/TR/mediacapture-streams/
 pub type ResolvedMandatoryMediaTrackConstraints =
     GenericMandatoryMediaTrackConstraints<ResolvedMediaTrackConstraint>;
 
+/// Set of mandatory media track constraints that contains only non-empty constraints.
 pub type SanitizedMandatoryMediaTrackConstraints =
     GenericMandatoryMediaTrackConstraints<SanitizedMediaTrackConstraint>;
 

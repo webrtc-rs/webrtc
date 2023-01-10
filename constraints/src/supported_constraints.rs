@@ -36,10 +36,12 @@ use crate::MediaTrackProperty;
 pub struct MediaTrackSupportedConstraints(HashSet<MediaTrackProperty>);
 
 impl MediaTrackSupportedConstraints {
+    /// Creates a supported constraints value from its inner hashmap.
     pub fn new(properties: HashSet<MediaTrackProperty>) -> Self {
         Self(properties)
     }
 
+    /// Consumes the value, returning its inner hashmap.
     pub fn into_inner(self) -> HashSet<MediaTrackProperty> {
         self.0
     }
@@ -122,7 +124,7 @@ struct SerdeVisitor;
 impl<'de> Visitor<'de> for SerdeVisitor {
     type Value = MediaTrackSupportedConstraints;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("an object with strings as keys and `true` as values")
     }
 

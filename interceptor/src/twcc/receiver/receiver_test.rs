@@ -1,3 +1,6 @@
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
+
 use super::*;
 use crate::mock::mock_stream::MockStream;
 use crate::stream_info::RTPHeaderExtension;
@@ -88,7 +91,7 @@ async fn test_twcc_receiver_interceptor_after_rtp_packets() -> Result<()> {
             })]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -160,7 +163,7 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
             })]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -267,7 +270,7 @@ async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
             ]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -348,7 +351,7 @@ async fn test_twcc_receiver_interceptor_overflow() -> Result<()> {
             ]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;

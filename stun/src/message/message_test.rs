@@ -288,7 +288,7 @@ fn test_message_class_string() -> Result<()> {
 
     for k in v {
         if k.to_string() == *"unknown message class" {
-            assert!(false, "bad stringer {}", k);
+            panic!("bad stringer {}", k);
         }
     }
 
@@ -737,6 +737,7 @@ fn test_message_marshal_binary() -> Result<()> {
     m.unmarshal_binary(&data)?;
 
     // Reset data to check retention.
+    #[allow(clippy::needless_range_loop)]
     for i in 0..data.len() {
         data[i] = 0;
     }

@@ -776,8 +776,10 @@ mod tests {
     // is missing.
     #[tokio::test]
     async fn test_flight4_process_certificateverify() {
-        let mut state = State::default();
-        state.cipher_suite = Arc::new(Mutex::new(Some(Box::new(MockCipherSuite {}))));
+        let mut state = State {
+            cipher_suite: Arc::new(Mutex::new(Some(Box::new(MockCipherSuite {})))),
+            ..Default::default()
+        };
 
         let raw_certificate = vec![
             0x0b, 0x00, 0x01, 0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x9b, 0x00, 0x01,

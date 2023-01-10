@@ -103,21 +103,21 @@ fn test_valid_packet() {
     let tests: Vec<(&str, CompoundPacket, Option<Error>)> = vec![
         (
             "no cname",
-            CompoundPacket(vec![Box::new(SenderReport::default())]),
+            CompoundPacket(vec![Box::<SenderReport>::default()]),
             Some(Error::MissingCname),
         ),
         (
             "SDES / no cname",
             CompoundPacket(vec![
-                Box::new(SenderReport::default()),
-                Box::new(SourceDescription::default()),
+                Box::<SenderReport>::default(),
+                Box::<SourceDescription>::default(),
             ]),
             Some(Error::MissingCname),
         ),
         (
             "just SR",
             CompoundPacket(vec![
-                Box::new(SenderReport::default()),
+                Box::<SenderReport>::default(),
                 Box::new(cname.to_owned()),
             ]),
             None,
@@ -125,8 +125,8 @@ fn test_valid_packet() {
         (
             "multiple SRs",
             CompoundPacket(vec![
-                Box::new(SenderReport::default()),
-                Box::new(SenderReport::default()),
+                Box::<SenderReport>::default(),
+                Box::<SenderReport>::default(),
                 Box::new(cname.clone()),
             ]),
             Some(Error::PacketBeforeCname),
@@ -134,7 +134,7 @@ fn test_valid_packet() {
         (
             "just RR",
             CompoundPacket(vec![
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
                 Box::new(cname.clone()),
             ]),
             None,
@@ -142,18 +142,18 @@ fn test_valid_packet() {
         (
             "multiple RRs",
             CompoundPacket(vec![
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
                 Box::new(cname.clone()),
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
             ]),
             None,
         ),
         (
             "goodbye",
             CompoundPacket(vec![
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
                 Box::new(cname),
-                Box::new(Goodbye::default()),
+                Box::<Goodbye>::default(),
             ]),
             None,
         ),
@@ -183,15 +183,15 @@ fn test_cname() {
     let tests: Vec<(&str, CompoundPacket, Option<Error>, &str)> = vec![
         (
             "no cname",
-            CompoundPacket(vec![Box::new(SenderReport::default())]),
+            CompoundPacket(vec![Box::<SenderReport>::default()]),
             Some(Error::MissingCname),
             "",
         ),
         (
             "SDES / no cname",
             CompoundPacket(vec![
-                Box::new(SenderReport::default()),
-                Box::new(SourceDescription::default()),
+                Box::<SenderReport>::default(),
+                Box::<SourceDescription>::default(),
             ]),
             Some(Error::MissingCname),
             "",
@@ -199,7 +199,7 @@ fn test_cname() {
         (
             "just SR",
             CompoundPacket(vec![
-                Box::new(SenderReport::default()),
+                Box::<SenderReport>::default(),
                 Box::new(cname.clone()),
             ]),
             None,
@@ -208,8 +208,8 @@ fn test_cname() {
         (
             "multiple SRs",
             CompoundPacket(vec![
-                Box::new(SenderReport::default()),
-                Box::new(SenderReport::default()),
+                Box::<SenderReport>::default(),
+                Box::<SenderReport>::default(),
                 Box::new(cname.clone()),
             ]),
             Some(Error::PacketBeforeCname),
@@ -218,7 +218,7 @@ fn test_cname() {
         (
             "just RR",
             CompoundPacket(vec![
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
                 Box::new(cname.clone()),
             ]),
             None,
@@ -227,8 +227,8 @@ fn test_cname() {
         (
             "multiple RRs",
             CompoundPacket(vec![
-                Box::new(ReceiverReport::default()),
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
+                Box::<ReceiverReport>::default(),
                 Box::new(cname.clone()),
             ]),
             None,
@@ -237,9 +237,9 @@ fn test_cname() {
         (
             "goodbye",
             CompoundPacket(vec![
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
                 Box::new(cname),
-                Box::new(Goodbye::default()),
+                Box::<Goodbye>::default(),
             ]),
             None,
             "cname",
@@ -286,7 +286,7 @@ fn test_compound_packet_roundtrip() {
         (
             "goodbye",
             CompoundPacket(vec![
-                Box::new(ReceiverReport::default()),
+                Box::<ReceiverReport>::default(),
                 Box::new(cname),
                 Box::new(Goodbye {
                     sources: vec![1234],
@@ -297,7 +297,7 @@ fn test_compound_packet_roundtrip() {
         ),
         (
             "no cname",
-            CompoundPacket(vec![Box::new(ReceiverReport::default())]),
+            CompoundPacket(vec![Box::<ReceiverReport>::default()]),
             Some(Error::MissingCname),
         ),
     ];

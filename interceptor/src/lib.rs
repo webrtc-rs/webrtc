@@ -195,12 +195,8 @@ mod test {
     where
         T: Future,
     {
-        match tokio::time::timeout(duration, future).await {
-            Ok(v) => v,
-            Err(_) => {
-                assert!(false, "timed out");
-                unreachable!()
-            }
-        }
+        tokio::time::timeout(duration, future)
+            .await
+            .expect("should not time out")
     }
 }

@@ -17,12 +17,12 @@ async fn test_packetizer() -> Result<()> {
 
     if packets.len() != 2 {
         let mut packet_lengths = String::new();
+        #[allow(clippy::needless_range_loop)]
         for i in 0..packets.len() {
             packet_lengths +=
                 format!("Packet {} length {}\n", i, packets[i].payload.len()).as_str();
         }
-        assert!(
-            false,
+        panic!(
             "Generated {} packets instead of 2\n{}",
             packets.len(),
             packet_lengths,
@@ -86,7 +86,7 @@ async fn test_packetizer_abs_send_time() -> Result<()> {
     };
 
     if packets.len() != 1 {
-        assert!(false, "Generated {} packets instead of 1", packets.len())
+        panic!("Generated {} packets instead of 1", packets.len())
     }
 
     assert_eq!(packets[0], expected);

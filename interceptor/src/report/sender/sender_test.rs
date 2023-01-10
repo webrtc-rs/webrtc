@@ -49,7 +49,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -113,7 +113,7 @@ async fn test_sender_interceptor_after_rtp_packets() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -215,7 +215,7 @@ async fn test_sender_interceptor_after_rtp_packets_overflow() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;

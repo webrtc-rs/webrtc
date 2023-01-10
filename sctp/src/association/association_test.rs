@@ -1,3 +1,6 @@
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use crate::stream::*;
 
@@ -87,7 +90,7 @@ async fn create_new_association_pair(
     }
 
     if !a0handshake_done || !a1handshake_done {
-        return Err(Error::Other("handshake failed".to_owned()).into());
+        return Err(Error::Other("handshake failed".to_owned()));
     }
 
     drop(closed_tx);
@@ -193,7 +196,7 @@ async fn establish_session_pair(
 
     let s1 = server.accept_stream().await.unwrap();
     if s0.stream_identifier != s1.stream_identifier {
-        return Err(Error::Other("SI should match".to_owned()).into());
+        return Err(Error::Other("SI should match".to_owned()));
     }
 
     br.process().await;
@@ -202,15 +205,15 @@ async fn establish_session_pair(
     let (n, ppi) = s1.read_sctp(&mut buf).await?;
 
     if n != hello_msg.len() {
-        return Err(Error::Other("received data must by 3 bytes".to_owned()).into());
+        return Err(Error::Other("received data must by 3 bytes".to_owned()));
     }
 
     if ppi != PayloadProtocolIdentifier::Dcep {
-        return Err(Error::Other("unexpected ppi".to_owned()).into());
+        return Err(Error::Other("unexpected ppi".to_owned()));
     }
 
-    if &buf[..n] != &hello_msg {
-        return Err(Error::Other("received data mismatch".to_owned()).into());
+    if buf[..n] != hello_msg {
+        return Err(Error::Other("received data mismatch".to_owned()));
     }
 
     flush_buffers(br, client, server).await;
@@ -239,7 +242,7 @@ async fn test_assoc_reliable_simple() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -632,8 +635,8 @@ async fn test_assoc_reliable_retransmission() -> Result<()> {
     .init();*/
 
     const SI: u16 = 6;
-    const MSG1: Bytes = Bytes::from_static(b"ABC");
-    const MSG2: Bytes = Bytes::from_static(b"DEFG");
+    static MSG1: Bytes = Bytes::from_static(b"ABC");
+    static MSG2: Bytes = Bytes::from_static(b"DEFG");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -710,7 +713,7 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"Hello");
+    static MSG: Bytes = Bytes::from_static(b"Hello");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1806,7 +1809,7 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1870,11 +1873,10 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s1. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -1906,7 +1908,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1973,11 +1975,10 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s1. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -1999,7 +2000,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
                     break;
                 }
                 Ok(_) => {
-                    assert!(false, "must be error");
+                    panic!("must be error");
                 }
                 Err(err) => {
                     log::debug!("s0.read_sctp err {:?}", err);
@@ -2021,13 +2022,12 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s0. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
-                    }else{
-                        assert!(false, "must be error");
+                    } else {
+                        panic!("must be error");
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -2107,7 +2107,13 @@ struct FakeEchoConn {
 }
 
 impl FakeEchoConn {
-    fn new() -> impl Conn + AsAny {
+    fn type_erased() -> impl Conn + AsAny {
+        Self::default()
+    }
+}
+
+impl Default for FakeEchoConn {
+    fn default() -> Self {
         let (wr_tx, rd_rx) = mpsc::channel(1);
         FakeEchoConn {
             wr_tx: Mutex::new(wr_tx),
@@ -2200,7 +2206,7 @@ async fn test_stats() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let conn = Arc::new(FakeEchoConn::new());
+    let conn = Arc::new(FakeEchoConn::type_erased());
     let a = Association::client(Config {
         net_conn: Arc::clone(&conn) as Arc<dyn Conn + Send + Sync>,
         max_receive_buffer_size: 0,
@@ -2216,7 +2222,7 @@ async fn test_stats() -> Result<()> {
         );
         assert_eq!(conn.bytes_sent.load(Ordering::SeqCst), a.bytes_sent());
     } else {
-        assert!(false, "must be FakeEchoConn");
+        panic!("must be FakeEchoConn");
     }
 
     Ok(())
@@ -2267,8 +2273,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     tokio::pin!(timer1);
     let a1 = tokio::select! {
         _ = timer1.as_mut() =>{
-            assert!(false,"timed out waiting for a1");
-            return Err(Error::Other("timed out waiting for a1".to_owned()).into());
+            panic!("timed out waiting for a1");
         },
         a1 = a1chan_rx.recv() => {
             a1.unwrap()
@@ -2279,8 +2284,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     tokio::pin!(timer2);
     let a2 = tokio::select! {
         _ = timer2.as_mut() =>{
-            assert!(false,"timed out waiting for a2");
-            return Err(Error::Other("timed out waiting for a2".to_owned()).into());
+            panic!("timed out waiting for a2");
         },
         a2 = a2chan_rx.recv() => {
             a2.unwrap()
@@ -2328,7 +2332,7 @@ async fn test_association_shutdown() -> Result<()> {
     if let Ok(result) = tokio::time::timeout(Duration::from_secs(1), a1.shutdown()).await {
         assert!(result.is_ok(), "shutdown should be ok");
     } else {
-        assert!(false, "shutdown timeout");
+        panic!("shutdown timeout");
     }
 
     {
@@ -2339,7 +2343,7 @@ async fn test_association_shutdown() -> Result<()> {
         tokio::pin!(timer2);
         tokio::select! {
             _ = timer2.as_mut() =>{
-                assert!(false,"timed out waiting for a2 read loop to close");
+                panic!("timed out waiting for a2 read loop to close");
             },
             _ = close_loop_ch_rx.recv() => {
                 log::debug!("recv a2.close_loop_ch_rx");
@@ -2410,7 +2414,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
                 if let Ok(result) = res {
                     assert!(result.is_ok(), "shutdown should be ok");
                 } else {
-                    assert!(false, "shutdown timeout");
+                    panic!("shutdown timeout");
                 }
             }
             _ = writing_done_rx.recv() => {
@@ -2428,7 +2432,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
         tokio::pin!(timer2);
         tokio::select! {
             _ = timer2.as_mut() =>{
-                assert!(false,"timed out waiting for a2 read loop to close");
+                panic!("timed out waiting for a2 read loop to close");
             },
             _ = close_loop_ch_rx.recv() => {
                 log::debug!("recv a2.close_loop_ch_rx");
@@ -2481,7 +2485,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkAbort::default())],
+                chunks: vec![Box::<ChunkAbort>::default()],
             },
         ),
         (
@@ -2490,7 +2494,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkCookieEcho::default())],
+                chunks: vec![Box::<ChunkCookieEcho>::default()],
             },
         ),
         (
@@ -2499,7 +2503,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkHeartbeat::default())],
+                chunks: vec![Box::<ChunkHeartbeat>::default()],
             },
         ),
         (
@@ -2508,7 +2512,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkPayloadData::default())],
+                chunks: vec![Box::<ChunkPayloadData>::default()],
             },
         ),
         (
@@ -2535,8 +2539,8 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 destination_port: 1,
                 verification_tag: 0,
                 chunks: vec![Box::new(ChunkReconfig {
-                    param_a: Some(Box::new(ParamOutgoingResetRequest::default())),
-                    param_b: Some(Box::new(ParamReconfigResponse::default())),
+                    param_a: Some(Box::<ParamOutgoingResetRequest>::default()),
+                    param_b: Some(Box::<ParamReconfigResponse>::default()),
                 })],
             },
         ),
@@ -2558,7 +2562,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkError::default())],
+                chunks: vec![Box::<ChunkError>::default()],
             },
         ),
         (
@@ -2567,7 +2571,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdown::default())],
+                chunks: vec![Box::<ChunkShutdown>::default()],
             },
         ),
         (
@@ -2576,7 +2580,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdownAck::default())],
+                chunks: vec![Box::<ChunkShutdownAck>::default()],
             },
         ),
         (
@@ -2585,7 +2589,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdownComplete::default())],
+                chunks: vec![Box::<ChunkShutdownComplete>::default()],
             },
         ),
     ];

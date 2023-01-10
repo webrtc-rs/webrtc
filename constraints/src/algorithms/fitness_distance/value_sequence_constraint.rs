@@ -15,7 +15,7 @@ macro_rules! impl_non_numeric_value_sequence_constraint {
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
                 if let Some(exact) = self.exact.as_ref() {
                     // As specified in step 2 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint is required (constraintValue either contains
                     // > one or more members named […] 'exact' […]), and the settings
@@ -42,7 +42,7 @@ macro_rules! impl_non_numeric_value_sequence_constraint {
 
                 if let Some(ideal) = self.ideal.as_ref() {
                     // As specified in step 8 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > For all string, enum and boolean constraints […],
                     // > the fitness distance is the result of the formula:
@@ -52,7 +52,7 @@ macro_rules! impl_non_numeric_value_sequence_constraint {
                     // > ```
                     //
                     // As well as step 5 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the settings dictionary's `constraintName` member
                     // > does not exist, the fitness distance is 1.
@@ -63,7 +63,7 @@ macro_rules! impl_non_numeric_value_sequence_constraint {
                     }
                 } else {
                     // As specified in step 6 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If no ideal value is specified (constraintValue either
                     // > contains no member named 'ideal', or, if bare values are to be
@@ -86,7 +86,7 @@ macro_rules! impl_numeric_value_sequence_constraint {
             fn fitness_distance(&self, setting: Option<&'a $s>) -> Result<f64, Self::Error> {
                 if let Some(exact) = &self.exact {
                     // As specified in step 2 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the constraint is required (constraintValue either contains
                     // > one or more members named […] 'exact' […]), and the settings
@@ -113,7 +113,7 @@ macro_rules! impl_numeric_value_sequence_constraint {
 
                 if let Some(ideal) = &self.ideal {
                     // As specified in step 8 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > For all string, enum and boolean constraints […],
                     // > the fitness distance is the result of the formula:
@@ -123,7 +123,7 @@ macro_rules! impl_numeric_value_sequence_constraint {
                     // > ```
                     //
                     // As well as step 5 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If the settings dictionary's `constraintName` member
                     // > does not exist, the fitness distance is 1.
@@ -134,7 +134,7 @@ macro_rules! impl_numeric_value_sequence_constraint {
                             for ideal in ideal.into_iter() {
                                 let ideal: f64 = (*ideal) as f64;
                                 // As specified in step 7 of the `fitness distance` algorithm:
-                                // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                                // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                                 //
                                 // > For all positive numeric constraints […],
                                 // > the fitness distance is the result of the formula
@@ -154,7 +154,7 @@ macro_rules! impl_numeric_value_sequence_constraint {
                     }
                 } else {
                     // As specified in step 6 of the `fitness distance` algorithm:
-                    // https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance
+                    // <https://www.w3.org/TR/mediacapture-streams/#dfn-fitness-distance>
                     //
                     // > If no ideal value is specified (constraintValue either
                     // > contains no member named 'ideal', or, if bare values are to be

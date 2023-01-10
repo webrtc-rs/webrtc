@@ -66,6 +66,7 @@ impl Depacketizer for FakeDepacketizer {
 
 #[test]
 pub fn test_sample_builder() {
+    #![allow(clippy::needless_update)]
     let test_data: Vec<SampleBuilderTest> = vec![
         SampleBuilderTest {
             #[rustfmt::skip]
@@ -1463,7 +1464,7 @@ fn test_sample_builder_push_max_zero() {
     };
     let mut s = SampleBuilder::new(0, d, 1);
     s.push(pkts[0].clone());
-    assert_eq!(s.pop().is_some(), true, "Should expect a popped sample.")
+    assert!(s.pop().is_some(), "Should expect a popped sample.")
 }
 
 #[test]

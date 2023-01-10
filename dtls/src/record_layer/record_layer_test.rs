@@ -57,11 +57,7 @@ fn test_udp_decode() -> Result<()> {
             if let Err(dtls) = dtls_pkts {
                 assert_eq!(err.to_string(), dtls.to_string());
             } else {
-                assert!(
-                    false,
-                    "something wrong for {} when wanted_err is Some",
-                    name
-                );
+                panic!("something wrong for {} when wanted_err is Some", name);
             }
         } else if let Ok(pkts) = dtls_pkts {
             assert_eq!(
@@ -70,11 +66,7 @@ fn test_udp_decode() -> Result<()> {
                 name, pkts, wanted,
             );
         } else {
-            assert!(
-                false,
-                "something wrong for {} when wanted_err is None",
-                name
-            );
+            panic!("something wrong for {} when wanted_err is None", name);
         }
     }
 

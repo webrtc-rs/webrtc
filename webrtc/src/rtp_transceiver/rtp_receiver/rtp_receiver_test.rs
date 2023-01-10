@@ -145,7 +145,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
         })
         .await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     let _ = seen_packet_rx.recv().await;
@@ -216,7 +216,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
         })
         .await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     let _ = seen_packet_rx.recv().await;

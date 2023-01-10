@@ -39,7 +39,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         if let Err(err) = signal_pair(&mut pc, &mut no_codec_pc).await {
             assert_eq!(err, Error::ErrUnsupportedCodec);
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&no_codec_pc, &pc).await;
@@ -85,7 +85,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
                 err
             );
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&vp9only_pc, &pc).await;
@@ -109,7 +109,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         if let Err(err) = signal_pair(&mut offerer, &mut answerer).await {
             assert_eq!(err, Error::ErrUnsupportedCodec);
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&offerer, &answerer).await;
@@ -150,7 +150,7 @@ async fn test_track_local_static_closed() -> Result<()> {
             "No binding should exist before signaling"
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
@@ -159,7 +159,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         let bindings = v.bindings.lock().await;
         assert_eq!(bindings.len(), 1, "binding should exist after signaling");
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&pc_offer, &pc_answer).await;
@@ -168,7 +168,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         let bindings = v.bindings.lock().await;
         assert_eq!(bindings.len(), 0, "No binding should exist after close");
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())
@@ -332,7 +332,7 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
         v.write_rtp(&pkt).await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     assert_eq!(pkt.header.ssrc, 1);
@@ -395,7 +395,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
         v.write(&[0u8; 20]).await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&pc_offer, &pc_answer).await;

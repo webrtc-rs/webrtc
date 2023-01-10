@@ -14,7 +14,7 @@ async fn test_resolver_standalone() -> Result<()> {
     if let Some(resolved) = r.lookup(name.to_owned()).await {
         assert_eq!(resolved, ip, "should match");
     } else {
-        assert!(false, "should Some, but got None");
+        panic!("should Some, but got None");
     }
 
     let name = "abc.com";
@@ -27,7 +27,7 @@ async fn test_resolver_standalone() -> Result<()> {
     if let Some(resolved) = r.lookup(name.to_owned()).await {
         assert_eq!(resolved, ip, "should match");
     } else {
-        assert!(false, "should Some, but got None");
+        panic!("should Some, but got None");
     }
 
     Ok(())
@@ -54,13 +54,13 @@ async fn test_resolver_cascaded() -> Result<()> {
     if let Some(resolved) = r1.lookup(name0.to_owned()).await {
         assert_eq!(resolved, ip0, "should match");
     } else {
-        assert!(false, "should Some, but got None");
+        panic!("should Some, but got None");
     }
 
     if let Some(resolved) = r1.lookup(name1.to_owned()).await {
         assert_eq!(resolved, ip1, "should match");
     } else {
-        assert!(false, "should Some, but got None");
+        panic!("should Some, but got None");
     }
 
     // should fail if the name does not exist

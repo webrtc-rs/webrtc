@@ -190,7 +190,7 @@ mod test {
             let join = |parts: &[&[u16]]| -> Vec<u16> {
                 let mut result = vec![];
                 for p in parts {
-                    result.extend_from_slice(*p);
+                    result.extend_from_slice(p);
                 }
                 result
             };

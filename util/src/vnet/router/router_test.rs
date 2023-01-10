@@ -649,7 +649,7 @@ fn test_router_static_ips_static_ip_local_ip_mapping() -> Result<()> {
         if let Some(loc_ip) = lan.static_local_ips.get(ext_ipstr) {
             assert_eq!(local_ips[i], loc_ip.to_string(), "should match");
         } else {
-            assert!(false, "should have the external IP");
+            panic!("should have the external IP");
         }
     }
 

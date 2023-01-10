@@ -7,7 +7,7 @@ impl<'a, T> FitnessDistance<Option<&'a T>> for EmptyConstraint {
 
     fn fitness_distance(&self, _setting: Option<&'a T>) -> Result<f64, Self::Error> {
         // As specified in step 1 of the `SelectSettings` algorithm:
-        // https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings
+        // <https://www.w3.org/TR/mediacapture-streams/#dfn-selectsettings>
         //
         // > If an empty list has been given as the value for a constraint,
         // > it MUST be interpreted as if the constraint were not specified

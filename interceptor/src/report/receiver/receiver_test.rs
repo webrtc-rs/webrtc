@@ -49,7 +49,7 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -112,7 +112,7 @@ async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -195,7 +195,7 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -205,6 +205,8 @@ async fn test_receiver_interceptor_after_rtp_and_rtcp_packets() -> Result<()> {
 
 #[tokio::test]
 async fn test_receiver_interceptor_overflow() -> Result<()> {
+    #![allow(clippy::identity_op)]
+
     let mt = Arc::new(MockTime::default());
     let _mt2 = Arc::clone(&mt);
     let time_gen = {
@@ -258,7 +260,11 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
             rr.reports[0],
             rtcp::reception_report::ReceptionReport {
                 ssrc: 123456,
-                last_sequence_number: (1 << 16) | 0x0000,
+                last_sequence_number: {
+                    // most significant bits: 1 << 16
+                    // least significant bits: 0x0000
+                    (1 << 16) | 0x0000
+                },
                 last_sender_report: 0,
                 fraction_lost: 0,
                 total_lost: 0,
@@ -267,7 +273,7 @@ async fn test_receiver_interceptor_overflow() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -367,7 +373,7 @@ async fn test_receiver_interceptor_overflow_five_pkts() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -432,14 +438,14 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
                 ssrc: 123456,
                 last_sequence_number: 0x03,
                 last_sender_report: 0,
-                fraction_lost: (256u16 * 1 / 3) as u8,
+                fraction_lost: ((1u16 << 8) / 3) as u8,
                 total_lost: 1,
                 delay: 0,
                 jitter: 0,
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     let now: SystemTime = Utc.with_ymd_and_hms(2009, 11, 10, 23, 0, 1).unwrap().into();
@@ -480,7 +486,7 @@ async fn test_receiver_interceptor_packet_loss() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -543,14 +549,14 @@ async fn test_receiver_interceptor_overflow_and_packet_loss() -> Result<()> {
                 ssrc: 123456,
                 last_sequence_number: 1 << 16 | 0x01,
                 last_sender_report: 0,
-                fraction_lost: (256u16 * 1 / 3) as u8,
+                fraction_lost: ((1u16 << 8) / 3) as u8,
                 total_lost: 1,
                 delay: 0,
                 jitter: 0,
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -612,7 +618,7 @@ async fn test_receiver_interceptor_reordered_packets() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -692,7 +698,7 @@ async fn test_receiver_interceptor_jitter() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -757,7 +763,7 @@ async fn test_receiver_interceptor_delay() -> Result<()> {
             }
         )
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;

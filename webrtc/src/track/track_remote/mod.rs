@@ -8,6 +8,7 @@ use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
 use crate::track::RTP_PAYLOAD_TYPE_BITMASK;
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
@@ -30,8 +31,7 @@ struct Handlers {
 
 #[derive(Default)]
 struct TrackRemoteInternal {
-    peeked: Option<Bytes>,
-    peeked_attributes: Option<Attributes>,
+    peeked: VecDeque<(Bytes, Attributes)>,
 }
 
 /// TrackRemote represents a single inbound source of media
@@ -207,40 +207,37 @@ impl TrackRemote {
         handlers.on_unmute = Some(Box::new(handler));
     }
 
-    /// Read reads data from the track.
+    /// Reads data from the track.
+    ///
+    /// **Cancel Safety:** This method is not cancel safe. Dropping the resulting [`Future`] before
+    /// it returns [`Poll::Ready`] will cause data loss.
     pub async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
-        let (peeked, peeked_attributes) = {
+        {
+            // Internal lock scope
             let mut internal = self.internal.lock().await;
-            (internal.peeked.take(), internal.peeked_attributes.take())
+            if let Some((data, attributes)) = internal.peeked.pop_front() {
+                let n = std::cmp::min(b.len(), data.len());
+                b[..n].copy_from_slice(&data[..n]);
+                self.check_and_update_track(&b[..n]).await?;
+
+                return Ok((n, attributes));
+            }
         };
 
-        if let (Some(data), Some(attributes)) = (peeked, peeked_attributes) {
-            // someone else may have stolen our packet when we
-            // released the lock.  Deal with it.
-            let n = std::cmp::min(b.len(), data.len());
-            b[..n].copy_from_slice(&data[..n]);
-            self.check_and_update_track(&b[..n]).await?;
-            Ok((n, attributes))
-        } else {
-            let (n, attributes) = {
-                if let Some(receiver) = &self.receiver {
-                    if let Some(receiver) = receiver.upgrade() {
-                        receiver.read_rtp(b, self.tid).await?
-                    } else {
-                        return Err(Error::ErrRTPReceiverNil);
-                    }
-                } else {
-                    return Err(Error::ErrRTPReceiverNil);
-                }
-            };
-            self.check_and_update_track(&b[..n]).await?;
-            Ok((n, attributes))
-        }
+        let receiver = match self.receiver.as_ref().and_then(|r| r.upgrade()) {
+            Some(r) => r,
+            None => return Err(Error::ErrRTPReceiverNil),
+        };
+
+        let (n, attributes) = receiver.read_rtp(b, self.tid).await?;
+        self.check_and_update_track(&b[..n]).await?;
+        Ok((n, attributes))
     }
 
     /// check_and_update_track checks payloadType for every incoming packet
     /// once a different payloadType is detected the track will be updated
     pub(crate) async fn check_and_update_track(&self, b: &[u8]) -> Result<()> {
+        // NOTE: This method MUST not attempt to lock `Self::internal`, doing so will deadlock.
         if b.len() < 2 {
             return Err(Error::ErrRTPTooShort);
         }
@@ -296,10 +293,19 @@ impl TrackRemote {
         data.extend(b[..n].to_vec());
         {
             let mut internal = self.internal.lock().await;
-            internal.peeked = Some(data.freeze());
-            internal.peeked_attributes = Some(a.clone());
+            internal.peeked.push_back((data.freeze(), a.clone()));
         }
         Ok((n, a))
+    }
+
+    /// Set the initially peeked data for this track.
+    ///
+    /// This is useful when a track is first created to populate data read from the track in the
+    /// process of identifying the track as part of simulcast probing. Using this during other
+    /// parts of the track's lifecycle is probably an error.
+    pub(crate) async fn prepopulate_peeked_data(&self, data: VecDeque<(Bytes, Attributes)>) {
+        let mut internal = self.internal.lock().await;
+        internal.peeked = data;
     }
 
     pub(crate) async fn fire_onmute(&self) {
