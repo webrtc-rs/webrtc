@@ -71,7 +71,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
             .await?;
 
         vp9only_pc
-            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .add_transceiver_from_kind(RTPCodecType::Video, None)
             .await?;
 
         pc.add_track(Arc::clone(&track)).await?;
@@ -128,7 +128,7 @@ async fn test_track_local_static_closed() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     pc_answer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
@@ -246,7 +246,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         "webrtc-rs".to_owned(),
     ));
     offerer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     answerer
@@ -372,7 +372,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     let (pc_offer, pc_answer) = new_pair(&api).await?;
 
     pc_offer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(

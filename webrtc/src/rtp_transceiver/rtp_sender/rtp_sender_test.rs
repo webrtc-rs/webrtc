@@ -128,19 +128,16 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
     let (mut offerer, mut answerer) = new_pair(&api).await?;
 
     let rtp_transceiver = offerer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
-    if let Some(sender) = rtp_transceiver.sender().await {
-        let parameters = sender.get_parameters().await;
-        assert_ne!(parameters.rtp_parameters.codecs.len(), 0);
-        assert_eq!(parameters.encodings.len(), 1);
-        assert_eq!(parameters.encodings[0].ssrc, sender.ssrc);
-    } else {
-        panic!();
-    }
+    let sender = rtp_transceiver.sender().await;
+    let parameters = sender.get_parameters().await;
+    assert_ne!(0, parameters.rtp_parameters.codecs.len());
+    assert_eq!(1, parameters.encodings.len());
+    assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
 
     close_pair_now(&offerer, &answerer).await;
     Ok(())

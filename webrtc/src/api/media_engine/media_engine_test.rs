@@ -12,7 +12,7 @@ async fn test_opus_case() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
-    pc.add_transceiver_from_kind(RTPCodecType::Audio, &[])
+    pc.add_transceiver_from_kind(RTPCodecType::Audio, None)
         .await?;
 
     let offer = pc.create_offer(None).await?;
@@ -32,7 +32,7 @@ async fn test_video_case() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
-    pc.add_transceiver_from_kind(RTPCodecType::Video, &[])
+    pc.add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = pc.create_offer(None).await?;
