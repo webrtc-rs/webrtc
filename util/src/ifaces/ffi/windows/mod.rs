@@ -1,5 +1,6 @@
 #![allow(unused, non_upper_case_globals)]
 
+use winapi::ctypes::wchar_t;
 use winapi::shared::basetsd::{UINT32, UINT8, ULONG64};
 use winapi::shared::guiddef::GUID;
 use winapi::shared::minwindef::{BYTE, DWORD, PULONG, ULONG};
@@ -14,9 +15,11 @@ const MAX_DNS_SUFFIX_STRING_LENGTH: usize = 256;
 pub const IP_ADAPTER_IPV4_ENABLED: DWORD = 0x0080;
 pub const IP_ADAPTER_IPV6_ENABLED: DWORD = 0x0100;
 
+use std::ffi::OsString;
 use std::io;
 use std::mem;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::os::windows::prelude::OsStringExt;
 use std::ptr;
 
 use winapi::shared::winerror::{
@@ -316,6 +319,28 @@ unsafe fn local_ifaces_with_buffer(buffer: &mut Vec<u8>) -> io::Result<()> {
     }
 }
 
+// In windows, wchar_t is 16bit, in GUN Libc it is 32bit,
+// So in Windows, the length of both wchar_t and WCHAR is equal.
+// See https://learn.microsoft.com/en-us/cpp/cpp/char-wchar-t-char16-t-char32-t
+fn windows_pwchar_to_string(ptr: *const wchar_t) -> OsString {
+    if ptr.is_null() {
+        return OsString::new();
+    }
+
+    extern "C" {
+        /// Provided by libc or compiler_builtins.
+        /// Returns the length of a wide string.
+        fn wcslen(buf: *const wchar_t) -> usize;
+    }
+
+    let slice = unsafe {
+        let str_len = wcslen(ptr);
+        std::slice::from_raw_parts(ptr, str_len)
+    };
+
+    OsString::from_wide(slice)
+}
+
 unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> Vec<Interface> {
     let mut adapter_addresses = Vec::new();
 
@@ -331,7 +356,10 @@ unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> 
             if curr_unicast_addr.dad_state != IpDadState::IpDadStateDeprecated {
                 if is_ipv4_enabled(&curr_unicast_addr) {
                     adapter_addresses.push(Interface {
-                        name: "".to_string(),
+                        name: windows_pwchar_to_string(curr_adapter_addr.all.friendly_name)
+                            .to_str()
+                            .unwrap_or("")
+                            .to_string(),
                         kind: Kind::Ipv4,
                         addr: Some(SocketAddr::V4(v4_socket_from_adapter(&curr_unicast_addr))),
                         mask: None,
@@ -342,7 +370,10 @@ unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> 
                     // Make sure the scope id is set for ALL interfaces, not just link-local
                     v6_sock.set_scope_id(curr_adapter_addr.xp.ipv6_if_index);
                     adapter_addresses.push(Interface {
-                        name: "".to_string(),
+                        name: windows_pwchar_to_string(curr_adapter_addr.all.friendly_name)
+                            .to_str()
+                            .unwrap_or("")
+                            .to_string(),
                         kind: Kind::Ipv6,
                         addr: Some(SocketAddr::V6(v6_sock)),
                         mask: None,
