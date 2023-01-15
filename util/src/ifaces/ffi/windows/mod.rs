@@ -319,7 +319,7 @@ unsafe fn local_ifaces_with_buffer(buffer: &mut Vec<u8>) -> io::Result<()> {
     }
 }
 
-// In windows, wchar_t is 16bit, in GUN Libc it is 32bit,
+// In windows, wchar_t is 16bit, in GNU LibC it is 32bit,
 // So in Windows, the length of both wchar_t and WCHAR is equal.
 // See https://learn.microsoft.com/en-us/cpp/cpp/char-wchar-t-char16-t-char32-t
 fn windows_pwchar_to_string(ptr: *const wchar_t) -> OsString {
