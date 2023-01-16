@@ -6,6 +6,7 @@ use winapi::shared::guiddef::GUID;
 use winapi::shared::minwindef::{BYTE, DWORD, PULONG, ULONG};
 use winapi::shared::ws2def::SOCKET_ADDRESS;
 use winapi::um::winnt::{PCHAR, PVOID, PWCHAR, WCHAR};
+use winapi::vc::vcruntime::size_t;
 
 const MAX_ADAPTER_ADDRESS_LENGTH: usize = 8;
 const ZONE_INDICES_LENGTH: usize = 16;
@@ -319,22 +320,38 @@ unsafe fn local_ifaces_with_buffer(buffer: &mut Vec<u8>) -> io::Result<()> {
     }
 }
 
-// In windows, wchar_t is 16bit, in GNU LibC it is 32bit,
-// So in Windows, the length of both wchar_t and WCHAR is equal.
-// See https://learn.microsoft.com/en-us/cpp/cpp/char-wchar-t-char16-t-char32-t
-fn windows_pwchar_to_string(ptr: *const wchar_t) -> OsString {
-    if ptr.is_null() {
+/// Convert wide-char(16bit) pointer to OsString.
+/// Note: When the string length exceeds buffer_size, it will return empty.
+fn windows_pwchar_to_string(ptr: *const wchar_t, buffer_size: usize) -> OsString {
+    if ptr.is_null() || buffer_size == 0 {
         return OsString::new();
     }
 
     extern "C" {
         /// Provided by libc or compiler_builtins.
-        /// Returns the length of a wide string.
-        fn wcslen(buf: *const wchar_t) -> usize;
+        /// determine the length of a fixed-size wide-character string.
+        ///
+        /// In windows, wchar_t is 16bit, in GNU LibC it is 32bit,
+        /// So in Windows, the length of both wchar_t and WCHAR is equal.
+        /// See https://learn.microsoft.com/en-us/cpp/cpp/char-wchar-t-char16-t-char32-t
+        fn wcsnlen(buf: *const wchar_t, size: size_t) -> usize;
     }
 
+    // # SAFETY
+    // Caller has provided a pointer of valid C String, And confirm the maximum length of the buffer.
+    // When the wcsnlen's length is equal to the buffer_size, it is considered an error, and returns empty.
+    // See https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/strnlen-strnlen-s?view=msvc-170#return-value
+    //
+    // e.g.
+    // In the code below, this function is used to process Windows' network adapter FriendlyName.
+    // In Windows, FriendlyName is the same as ifAlias ​​in rfc2863, ifAlias ​​does not exceed 256 characters.
+    // When the pointer is out of bounds, it will return empty. So it's safe.
     let slice = unsafe {
-        let str_len = wcslen(ptr);
+        let str_len = wcsnlen(ptr, buffer_size);
+        if str_len == buffer_size {
+            return OsString::new();
+        }
+
         std::slice::from_raw_parts(ptr, str_len)
     };
 
@@ -356,7 +373,7 @@ unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> 
             if curr_unicast_addr.dad_state != IpDadState::IpDadStateDeprecated {
                 if is_ipv4_enabled(&curr_unicast_addr) {
                     adapter_addresses.push(Interface {
-                        name: windows_pwchar_to_string(curr_adapter_addr.all.friendly_name)
+                        name: windows_pwchar_to_string(curr_adapter_addr.all.friendly_name, 257)
                             .to_str()
                             .unwrap_or("")
                             .to_string(),
@@ -370,7 +387,7 @@ unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> 
                     // Make sure the scope id is set for ALL interfaces, not just link-local
                     v6_sock.set_scope_id(curr_adapter_addr.xp.ipv6_if_index);
                     adapter_addresses.push(Interface {
-                        name: windows_pwchar_to_string(curr_adapter_addr.all.friendly_name)
+                        name: windows_pwchar_to_string(curr_adapter_addr.all.friendly_name, 257)
                             .to_str()
                             .unwrap_or("")
                             .to_string(),
