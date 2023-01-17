@@ -192,7 +192,7 @@ pub struct RTCRtpTransceiver {
 }
 
 impl RTCRtpTransceiver {
-    pub(crate) async fn new(
+    pub async fn new(
         receiver: Arc<RTCRtpReceiver>,
         sender: Arc<RTCRtpSender>,
         direction: RTCRtpTransceiverDirection,
