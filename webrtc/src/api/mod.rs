@@ -168,6 +168,14 @@ impl API {
         )
         .await
     }
+
+    pub fn setting_engine(&self) -> Arc<SettingEngine> {
+        Arc::clone(&self.setting_engine)
+    }
+
+    pub fn media_engine(&self) -> Arc<MediaEngine> {
+        Arc::clone(&self.media_engine)
+    }
 }
 
 #[derive(Default)]
