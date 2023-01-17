@@ -321,8 +321,8 @@ unsafe fn local_ifaces_with_buffer(buffer: &mut Vec<u8>) -> io::Result<()> {
 }
 
 /// Convert wide-char(16bit) pointer to OsString.
-/// Note: When the string length exceeds buffer_size, it will return empty.
-fn windows_pwchar_to_string(ptr: *const wchar_t, buffer_size: usize) -> OsString {
+/// Note: When the string length exceeds buffer_size or the null wide char is not found, it will return empty.
+unsafe fn windows_pwchar_to_string(ptr: *const wchar_t, buffer_size: usize) -> OsString {
     if ptr.is_null() || buffer_size == 0 {
         return OsString::new();
     }
@@ -339,6 +339,7 @@ fn windows_pwchar_to_string(ptr: *const wchar_t, buffer_size: usize) -> OsString
 
     // # SAFETY
     // Caller has provided a pointer of valid C String, And confirm the maximum length of the buffer.
+    // If the provided c string pointer is invalid, its behavior is undefined!
     // When the wcsnlen's length is equal to the buffer_size, it is considered an error, and returns empty.
     // See https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/strnlen-strnlen-s?view=msvc-170#return-value
     //
