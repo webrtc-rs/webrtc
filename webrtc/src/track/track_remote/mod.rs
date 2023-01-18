@@ -6,6 +6,7 @@ use crate::rtp_transceiver::{PayloadType, SSRC};
 use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
 
 use crate::track::RTP_PAYLOAD_TYPE_BITMASK;
+use arc_swap::ArcSwapOption;
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
 use std::collections::VecDeque;
@@ -27,8 +28,8 @@ pub type OnMuteHdlrFn = Box<
 
 #[derive(Default)]
 struct Handlers {
-    on_mute: Option<OnMuteHdlrFn>,
-    on_unmute: Option<OnMuteHdlrFn>,
+    on_mute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
+    on_unmute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
 }
 
 #[derive(Default)]
@@ -54,7 +55,7 @@ pub struct TrackRemote {
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
 
-    handlers: Mutex<Handlers>,
+    handlers: Arc<Handlers>,
 
     receiver: Option<Weak<RTPReceiverInternal>>,
     internal: Mutex<TrackRemoteInternal>,
@@ -193,20 +194,22 @@ impl TrackRemote {
         *p = params;
     }
 
-    pub async fn onmute<F>(&self, handler: F)
+    pub fn onmute<F>(&self, handler: F)
     where
         F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
     {
-        let mut handlers = self.handlers.lock().await;
-        handlers.on_mute = Some(Box::new(handler));
+        self.handlers
+            .on_mute
+            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
     }
 
-    pub async fn onunmute<F>(&self, handler: F)
+    pub fn onunmute<F>(&self, handler: F)
     where
         F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
     {
-        let mut handlers = self.handlers.lock().await;
-        handlers.on_unmute = Some(Box::new(handler));
+        self.handlers
+            .on_unmute
+            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
     }
 
     /// Reads data from the track.
@@ -311,20 +314,18 @@ impl TrackRemote {
     }
 
     pub(crate) async fn fire_onmute(&self) {
-        let mut handlers = self.handlers.lock().await;
+        let on_mute = self.handlers.on_mute.load();
 
-        match &mut handlers.on_mute {
-            Some(f) => f().await,
-            None => {}
+        if let Some(f) = on_mute.as_ref() {
+            (f.lock().await)().await
         };
     }
 
     pub(crate) async fn fire_onunmute(&self) {
-        let mut handlers = self.handlers.lock().await;
+        let on_unmute = self.handlers.on_unmute.load();
 
-        match &mut handlers.on_unmute {
-            Some(f) => f().await,
-            None => {}
+        if let Some(f) = on_unmute.as_ref() {
+            (f.lock().await)().await
         };
     }
 }
