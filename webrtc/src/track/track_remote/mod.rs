@@ -48,7 +48,7 @@ pub struct TrackRemote {
     kind: AtomicU8,         //RTPCodecType,
     ssrc: AtomicU32,        //SSRC,
     codec: SyncMutex<RTCRtpCodecParameters>,
-    pub(crate) params: Mutex<RTCRtpParameters>,
+    pub(crate) params: SyncMutex<RTCRtpParameters>,
     rid: String,
 
     media_engine: Arc<MediaEngine>,
@@ -173,23 +173,23 @@ impl TrackRemote {
     }
 
     /// codec gets the Codec of the track
-    pub async fn codec(&self) -> RTCRtpCodecParameters {
+    pub fn codec(&self) -> RTCRtpCodecParameters {
         let codec = self.codec.lock();
         codec.clone()
     }
 
-    pub async fn set_codec(&self, codec: RTCRtpCodecParameters) {
+    pub fn set_codec(&self, codec: RTCRtpCodecParameters) {
         let mut c = self.codec.lock();
         *c = codec;
     }
 
     pub async fn params(&self) -> RTCRtpParameters {
-        let p = self.params.lock().await;
+        let p = self.params.lock();
         p.clone()
     }
 
     pub async fn set_params(&self, params: RTCRtpParameters) {
-        let mut p = self.params.lock().await;
+        let mut p = self.params.lock();
         *p = params;
     }
 
@@ -266,7 +266,7 @@ impl TrackRemote {
                 };
             }
             {
-                let mut params = self.params.lock().await;
+                let mut params = self.params.lock();
                 *params = p;
             }
         }

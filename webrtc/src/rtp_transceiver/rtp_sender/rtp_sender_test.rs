@@ -74,10 +74,10 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
 
             let last = pkt.payload[pkt.payload.len() - 1];
             if last == 0xAA {
-                assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_VP8);
+                assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
                 let _ = seen_packet_a_tx2.send(()).await;
             } else if last == 0xBB {
-                assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_H264);
+                assert_eq!(track.codec().capability.mime_type, MIME_TYPE_H264);
                 let _ = seen_packet_b_tx2.send(()).await;
             } else {
                 panic!("Unexpected RTP Data {last:02x}");

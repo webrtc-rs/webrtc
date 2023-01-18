@@ -153,7 +153,7 @@ async fn main() -> Result<()> {
             println!(
                 "Track has started, of type {}: {}",
                 track.payload_type(),
-                track.codec().await.capability.mime_type
+                track.codec().capability.mime_type
             );
 
             let mut last_timestamp = 0;
@@ -196,7 +196,7 @@ async fn main() -> Result<()> {
             println!(
                 "Track has ended, of type {}: {}",
                 track.payload_type(),
-                track.codec().await.capability.mime_type
+                track.codec().capability.mime_type
             );
         });
 

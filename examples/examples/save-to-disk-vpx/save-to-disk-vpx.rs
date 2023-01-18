@@ -258,7 +258,7 @@ async fn main() -> Result<()> {
         let ivf_writer2 = Arc::clone(&ivf_writer);
         let ogg_writer2 = Arc::clone(&ogg_writer);
         Box::pin(async move {
-            let codec = track.codec().await;
+            let codec = track.codec();
             let mime_type = codec.capability.mime_type.to_lowercase();
             if mime_type == MIME_TYPE_OPUS.to_lowercase() {
                 println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");

@@ -259,7 +259,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         let on_track_fired_tx2 = Arc::clone(&on_track_fired_tx);
         Box::pin(async move {
             assert_eq!(track.payload_type(), 100);
-            assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_VP8);
+            assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
             {
                 log::debug!("onTrackFiredFunc!!!");
                 let mut done = on_track_fired_tx2.lock().await;
