@@ -478,7 +478,7 @@ impl RTCRtpReceiver {
 
             let current_track = &t.track;
             current_track.set_codec(codec.clone());
-            current_track.set_params(params.clone()).await;
+            current_track.set_params(params.clone());
         }
     }
 
@@ -754,7 +754,7 @@ impl RTCRtpReceiver {
                 if let Some(codec) = params.codecs.first() {
                     t.track.set_codec(codec.clone());
                 }
-                t.track.set_params(params.clone()).await;
+                t.track.set_params(params.clone());
                 t.track
                     .set_ssrc(stream.stream_info.as_ref().map_or(0, |s| s.ssrc));
                 t.stream = stream;
