@@ -179,14 +179,14 @@ impl PeerConnectionInternal {
                         if let Some(details) =
                             track_details_for_rid(&track_details, t.rid().to_owned())
                         {
-                            t.set_id(details.id.clone()).await;
-                            t.set_stream_id(details.stream_id.clone()).await;
+                            t.set_id(details.id.clone());
+                            t.set_stream_id(details.stream_id.clone());
                             continue;
                         }
                     } else if t.ssrc() != 0 {
                         if let Some(details) = track_details_for_ssrc(&track_details, t.ssrc()) {
-                            t.set_id(details.id.clone()).await;
-                            t.set_stream_id(details.stream_id.clone()).await;
+                            t.set_id(details.id.clone());
+                            t.set_stream_id(details.stream_id.clone());
                             continue;
                         }
                     }
@@ -1212,7 +1212,7 @@ impl PeerConnectionInternal {
                 let tracks = receiver.tracks().await;
 
                 for track in tracks {
-                    let track_id = track.id().await;
+                    let track_id = track.id();
                     let kind = match track.kind() {
                         RTPCodecType::Unspecified => continue,
                         RTPCodecType::Audio => "audio",

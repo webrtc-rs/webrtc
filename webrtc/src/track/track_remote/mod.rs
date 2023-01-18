@@ -14,6 +14,8 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
+use util::sync::Mutex as SyncMutex;
+
 use util::Unmarshal;
 
 lazy_static! {
@@ -38,14 +40,14 @@ struct TrackRemoteInternal {
 pub struct TrackRemote {
     tid: usize,
 
-    id: Mutex<String>,
-    stream_id: Mutex<String>,
+    id: SyncMutex<String>,
+    stream_id: SyncMutex<String>,
 
     receive_mtu: usize,
     payload_type: AtomicU8, //PayloadType,
     kind: AtomicU8,         //RTPCodecType,
     ssrc: AtomicU32,        //SSRC,
-    codec: Mutex<RTCRtpCodecParameters>,
+    codec: SyncMutex<RTCRtpCodecParameters>,
     pub(crate) params: Mutex<RTCRtpParameters>,
     rid: String,
 
@@ -110,24 +112,24 @@ impl TrackRemote {
     /// id is the unique identifier for this Track. This should be unique for the
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
     /// and StreamID would be 'desktop' or 'webcam'
-    pub async fn id(&self) -> String {
-        let id = self.id.lock().await;
+    pub fn id(&self) -> String {
+        let id = self.id.lock();
         id.clone()
     }
 
-    pub async fn set_id(&self, s: String) {
-        let mut id = self.id.lock().await;
+    pub fn set_id(&self, s: String) {
+        let mut id = self.id.lock();
         *id = s;
     }
 
     /// stream_id is the group this track belongs too. This must be unique
-    pub async fn stream_id(&self) -> String {
-        let stream_id = self.stream_id.lock().await;
+    pub fn stream_id(&self) -> String {
+        let stream_id = self.stream_id.lock();
         stream_id.clone()
     }
 
-    pub async fn set_stream_id(&self, s: String) {
-        let mut stream_id = self.stream_id.lock().await;
+    pub fn set_stream_id(&self, s: String) {
+        let mut stream_id = self.stream_id.lock();
         *stream_id = s;
     }
 
@@ -166,18 +168,18 @@ impl TrackRemote {
     }
 
     /// msid gets the Msid of the track
-    pub async fn msid(&self) -> String {
-        self.stream_id().await + " " + self.id().await.as_str()
+    pub fn msid(&self) -> String {
+        format!("{} {}", self.stream_id(), self.id())
     }
 
     /// codec gets the Codec of the track
     pub async fn codec(&self) -> RTCRtpCodecParameters {
-        let codec = self.codec.lock().await;
+        let codec = self.codec.lock();
         codec.clone()
     }
 
     pub async fn set_codec(&self, codec: RTCRtpCodecParameters) {
-        let mut c = self.codec.lock().await;
+        let mut c = self.codec.lock();
         *c = codec;
     }
 
@@ -256,7 +258,7 @@ impl TrackRemote {
             }
             self.payload_type.store(payload_type, Ordering::SeqCst);
             {
-                let mut codec = self.codec.lock().await;
+                let mut codec = self.codec.lock();
                 *codec = if let Some(codec) = p.codecs.first() {
                     codec.clone()
                 } else {

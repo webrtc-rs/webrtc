@@ -672,8 +672,8 @@ impl RTCRtpReceiver {
         // is received from the SDP.
         let is_unpaused = self.current_state() == State::Started;
         for track_remote in &self.tracks().await {
-            track_remote.set_id(incoming.id.clone()).await;
-            track_remote.set_stream_id(incoming.stream_id.clone()).await;
+            track_remote.set_id(incoming.id.clone());
+            track_remote.set_stream_id(incoming.stream_id.clone());
 
             if is_unpaused {
                 track_remote.fire_onunmute().await;
