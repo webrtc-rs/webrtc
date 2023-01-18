@@ -242,7 +242,7 @@ async fn main() -> Result<()> {
             println!(
                 "Track has started, of type {}: {}",
                 track.payload_type(),
-                track.codec().await.capability.mime_type
+                track.codec().capability.mime_type
             );
             // Read RTP packets being sent to webrtc-rs
             while let Ok((rtp, _)) = track.read_rtp().await {
@@ -255,7 +255,7 @@ async fn main() -> Result<()> {
             println!(
                 "on_track finished, of type {}: {}",
                 track.payload_type(),
-                track.codec().await.capability.mime_type
+                track.codec().capability.mime_type
             );
         });
 

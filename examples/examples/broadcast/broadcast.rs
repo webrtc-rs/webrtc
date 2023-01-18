@@ -155,7 +155,7 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             // Create Track that we send video back to browser on
             let local_track = Arc::new(TrackLocalStaticRTP::new(
-                track.codec().await.capability,
+                track.codec().capability,
                 "video".to_owned(),
                 "webrtc-rs".to_owned(),
             ));
