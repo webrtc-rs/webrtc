@@ -183,12 +183,12 @@ impl TrackRemote {
         *c = codec;
     }
 
-    pub async fn params(&self) -> RTCRtpParameters {
+    pub fn params(&self) -> RTCRtpParameters {
         let p = self.params.lock();
         p.clone()
     }
 
-    pub async fn set_params(&self, params: RTCRtpParameters) {
+    pub fn set_params(&self, params: RTCRtpParameters) {
         let mut p = self.params.lock();
         *p = params;
     }

@@ -94,7 +94,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
             if let Some(t) = receiver.track().await {
                 let incoming_track_codecs = t.codec();
 
-                assert_eq!(P.header_extensions, t.params().await.header_extensions);
+                assert_eq!(P.header_extensions, t.params().header_extensions);
                 assert_eq!(
                     P.codecs[0].capability.mime_type,
                     incoming_track_codecs.capability.mime_type
