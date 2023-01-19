@@ -1654,7 +1654,7 @@ impl RTCPeerConnection {
         let mut receivers = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            receivers.push(transceiver.receiver().await);
+            receivers.push(transceiver.receiver());
         }
         receivers
     }

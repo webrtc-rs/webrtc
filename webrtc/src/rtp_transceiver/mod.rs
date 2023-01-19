@@ -174,9 +174,9 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: OnceCell<String>,                //atomic.Value
-    sender: SyncMutex<Arc<RTCRtpSender>>, //atomic.Value
-    receiver: Mutex<Arc<RTCRtpReceiver>>, //atomic.Value
+    mid: OnceCell<String>,                    //atomic.Value
+    sender: SyncMutex<Arc<RTCRtpSender>>,     //atomic.Value
+    receiver: SyncMutex<Arc<RTCRtpReceiver>>, //atomic.Value
 
     direction: AtomicU8,         //RTPTransceiverDirection
     current_direction: AtomicU8, //RTPTransceiverDirection
@@ -203,13 +203,12 @@ impl RTCRtpTransceiver {
     ) -> Arc<Self> {
         let codecs = Arc::new(Mutex::new(codecs));
         receiver
-            .set_transceiver_codecs(Some(Arc::clone(&codecs)))
-            .await;
+            .set_transceiver_codecs(Some(Arc::clone(&codecs)));
 
         let t = Arc::new(RTCRtpTransceiver {
             mid: OnceCell::new(),
             sender: SyncMutex::new(sender),
-            receiver: Mutex::new(receiver),
+            receiver: SyncMutex::new(receiver),
 
             direction: AtomicU8::new(direction as u8),
             current_direction: AtomicU8::new(RTCRtpTransceiverDirection::Unspecified as u8),
@@ -278,18 +277,17 @@ impl RTCRtpTransceiver {
     }
 
     /// receiver returns the RTPTransceiver's RTPReceiver if it has one
-    pub async fn receiver(&self) -> Arc<RTCRtpReceiver> {
-        let receiver = self.receiver.lock().await;
+    pub fn receiver(&self) -> Arc<RTCRtpReceiver> {
+        let receiver = self.receiver.lock();
         receiver.clone()
     }
 
-    pub(crate) async fn set_receiver(&self, r: Arc<RTCRtpReceiver>) {
-        r.set_transceiver_codecs(Some(Arc::clone(&self.codecs)))
-            .await;
+    pub(crate) fn set_receiver(&self, r: Arc<RTCRtpReceiver>) {
+        r.set_transceiver_codecs(Some(Arc::clone(&self.codecs)));
 
         {
-            let mut receiver = self.receiver.lock().await;
-            (*receiver).set_transceiver_codecs(None).await;
+            let mut receiver = self.receiver.lock();
+            (*receiver).set_transceiver_codecs(None);
 
             *receiver = r;
         }
@@ -399,7 +397,7 @@ impl RTCRtpTransceiver {
         }
 
         {
-            let receiver = self.receiver.lock().await;
+            let receiver = self.receiver.lock().clone();
             let pause_receiver = !current_direction.has_recv();
 
             if pause_receiver {
@@ -431,7 +429,7 @@ impl RTCRtpTransceiver {
             sender.stop().await?;
         }
         {
-            let r = self.receiver.lock().await;
+            let r = self.receiver.lock();
             r.stop().await?;
         }
 
