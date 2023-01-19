@@ -461,7 +461,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
     if codecs.is_empty() {
         // If we are sender and we have no codecs throw an error early
-        if t.sender().await.track().await.is_some() {
+        if t.sender().track().await.is_some() {
             return Err(Error::ErrSenderWithNoCodecs);
         }
 
@@ -503,8 +503,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
 
     let parameters = media_engine
-        .get_rtp_parameters_by_kind(t.kind, t.direction())
-        .await;
+        .get_rtp_parameters_by_kind(t.kind, t.direction());
     for rtp_extension in &parameters.header_extensions {
         let ext_url = Url::parse(rtp_extension.uri.as_str())?;
         media = media.with_extmap(sdp::extmap::ExtMap {
@@ -530,7 +529,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
 
     for mt in transceivers {
-        let sender = mt.sender().await;
+        let sender = mt.sender();
         if let Some(track) = sender.track().await {
             media = media.with_media_source(
                 sender.ssrc,

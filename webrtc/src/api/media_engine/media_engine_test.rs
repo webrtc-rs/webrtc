@@ -533,8 +533,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         )?;
 
         let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
         assert_eq!(params.header_extensions.len(), 1);
     }
@@ -552,8 +551,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         )?;
 
         let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
         assert_eq!(params.header_extensions.len(), 1);
     }
@@ -571,8 +569,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         )?;
 
         let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
         assert_eq!(params.header_extensions.len(), 0);
     }
@@ -590,8 +587,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         )?;
 
         let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive)
-            .await;
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive);
 
         assert_eq!(params.header_extensions.len(), 1);
     }
@@ -766,8 +762,7 @@ a=rtpmap:111 opus/48000/2
     assert!(!mid_video_enabled);
 
     let params = m
-        .get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly)
-        .await;
+        .get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly);
     dbg!(&params);
 
     let orientation = params
