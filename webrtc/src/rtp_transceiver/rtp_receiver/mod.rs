@@ -16,6 +16,7 @@ use crate::rtp_transceiver::{
 use crate::track::track_remote::TrackRemote;
 use crate::track::{TrackStream, TrackStreams};
 
+use arc_swap::ArcSwapOption;
 use interceptor::stream_info::RTPHeaderExtension;
 use interceptor::{Attributes, Interceptor};
 use log::trace;
@@ -151,7 +152,7 @@ pub struct RTPReceiverInternal {
 
     tracks: RwLock<Vec<TrackStreams>>,
 
-    transceiver_codecs: Mutex<Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>>,
+    transceiver_codecs: ArcSwapOption<Mutex<Vec<RTCRtpCodecParameters>>>,
 
     transport: Arc<RTCDtlsTransport>,
     media_engine: Arc<MediaEngine>,
@@ -314,7 +315,7 @@ impl RTPReceiverInternal {
             .media_engine
             .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly);
 
-        let transceiver_codecs = self.transceiver_codecs.lock().await;
+        let transceiver_codecs = self.transceiver_codecs.load();
         if let Some(codecs) = &*transceiver_codecs {
             let mut c = codecs.lock().await;
             parameters.codecs =
@@ -426,7 +427,7 @@ impl RTCRtpReceiver {
                 state_tx,
                 state_rx,
 
-                transceiver_codecs: Mutex::new(None),
+                transceiver_codecs: ArcSwapOption::new(None),
             }),
         }
     }
@@ -435,12 +436,11 @@ impl RTCRtpReceiver {
         self.kind
     }
 
-    pub(crate) async fn set_transceiver_codecs(
+    pub(crate) fn set_transceiver_codecs(
         &self,
         codecs: Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>,
     ) {
-        let mut transceiver_codecs = self.internal.transceiver_codecs.lock().await;
-        *transceiver_codecs = codecs;
+        self.internal.transceiver_codecs.store(codecs);
     }
 
     /// transport returns the currently-configured *DTLSTransport or nil
