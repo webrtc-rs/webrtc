@@ -219,10 +219,7 @@ impl RTCRtpSender {
         self.negotiated.store(true, Ordering::SeqCst);
     }
 
-    pub(crate) fn set_rtp_transceiver(
-        &self,
-        rtp_transceiver: Option<Weak<RTCRtpTransceiver>>,
-    ) {
+    pub(crate) fn set_rtp_transceiver(&self, rtp_transceiver: Option<Weak<RTCRtpTransceiver>>) {
         if let Some(t) = rtp_transceiver.as_ref().and_then(|t| t.upgrade()) {
             self.set_paused(!t.direction().has_send());
         }
@@ -388,16 +385,14 @@ impl RTCRtpSender {
             let track = self.track.lock().await;
             let mut context = TrackLocalContext {
                 id: self.id.clone(),
-                params: self
-                    .media_engine
-                    .get_rtp_parameters_by_kind(
-                        if let Some(t) = &*track {
-                            t.kind()
-                        } else {
-                            RTPCodecType::default()
-                        },
-                        RTCRtpTransceiverDirection::Sendonly,
-                    ),
+                params: self.media_engine.get_rtp_parameters_by_kind(
+                    if let Some(t) = &*track {
+                        t.kind()
+                    } else {
+                        RTPCodecType::default()
+                    },
+                    RTCRtpTransceiverDirection::Sendonly,
+                ),
                 ssrc: parameters.encodings[0].ssrc,
                 write_stream: Some(
                     Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>

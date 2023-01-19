@@ -180,11 +180,8 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
             .negotiated_video
             .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer
-                .internal
-                .media_engine
-                .negotiated_video_codecs
-                .lock();
+            let negotiated_video_codecs =
+                offerer.internal.media_engine.negotiated_video_codecs.lock();
             assert!(!negotiated_video_codecs.is_empty());
         }
 
@@ -199,11 +196,8 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
             .negotiated_video
             .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer
-                .internal
-                .media_engine
-                .negotiated_video_codecs
-                .lock();
+            let negotiated_video_codecs =
+                offerer.internal.media_engine.negotiated_video_codecs.lock();
             assert!(!negotiated_video_codecs.is_empty());
         }
 
@@ -264,11 +258,8 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
             .negotiated_video
             .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer
-                .internal
-                .media_engine
-                .negotiated_video_codecs
-                .lock();
+            let negotiated_video_codecs =
+                offerer.internal.media_engine.negotiated_video_codecs.lock();
             assert!(!negotiated_video_codecs.is_empty());
         }
 

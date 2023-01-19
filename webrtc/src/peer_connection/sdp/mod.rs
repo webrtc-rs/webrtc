@@ -502,8 +502,7 @@ pub(crate) async fn add_transceiver_sdp(
         return Ok((d, false));
     }
 
-    let parameters = media_engine
-        .get_rtp_parameters_by_kind(t.kind, t.direction());
+    let parameters = media_engine.get_rtp_parameters_by_kind(t.kind, t.direction());
     for rtp_extension in &parameters.header_extensions {
         let ext_url = Url::parse(rtp_extension.uri.as_str())?;
         media = media.with_extmap(sdp::extmap::ExtMap {
