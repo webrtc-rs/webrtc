@@ -666,7 +666,7 @@ impl PeerConnectionInternal {
             }
 
             // TODO: This is dubious because of rollbacks.
-            t.sender().await.set_negotiated();
+            t.sender().set_negotiated();
             media_sections.push(MediaSection {
                 id: t.mid().unwrap(),
                 transceivers: vec![Arc::clone(t)],
@@ -755,7 +755,7 @@ impl PeerConnectionInternal {
                         }
 
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
-                            t.sender().await.set_negotiated();
+                            t.sender().set_negotiated();
                             let media_transceivers = vec![t];
 
                             // NB: The below could use `then_some`, but with our current MSRV
@@ -780,7 +780,7 @@ impl PeerConnectionInternal {
         // If we are offering also include unmatched local transceivers
         if include_unmatched {
             for t in &local_transceivers {
-                t.sender().await.set_negotiated();
+                t.sender().set_negotiated();
                 media_sections.push(MediaSection {
                     id: t.mid().unwrap(),
                     transceivers: vec![Arc::clone(t)],
@@ -1331,7 +1331,7 @@ impl PeerConnectionInternal {
         }
         let mut track_infos = vec![];
         for transceiver in transceivers {
-            let sender = transceiver.sender().await;
+            let sender = transceiver.sender();
 
             let mid = match transceiver.mid() {
                 Some(mid) => mid,

@@ -21,6 +21,7 @@ use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::{mpsc, Mutex, Notify};
+use util::sync::Mutex as SyncMutex;
 
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: Mutex<mpsc::Receiver<()>>,
@@ -105,9 +106,9 @@ pub struct RTCRtpSender {
     /// AssociatedMediaStreamIds from the WebRTC specifcations
     pub(crate) associated_media_stream_ids: std::sync::Mutex<Vec<String>>,
 
-    rtp_transceiver: Mutex<Option<Weak<RTCRtpTransceiver>>>,
+    rtp_transceiver: SyncMutex<Option<Weak<RTCRtpTransceiver>>>,
 
-    send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
+    send_called_tx: SyncMutex<Option<mpsc::Sender<()>>>,
     stop_called_tx: Arc<Notify>,
     stop_called_signal: Arc<AtomicBool>,
 
@@ -192,9 +193,9 @@ impl RTCRtpSender {
             initial_track_id: std::sync::Mutex::new(None),
             associated_media_stream_ids: std::sync::Mutex::new(stream_ids),
 
-            rtp_transceiver: Mutex::new(None),
+            rtp_transceiver: SyncMutex::new(None),
 
-            send_called_tx: Mutex::new(Some(send_called_tx)),
+            send_called_tx: SyncMutex::new(Some(send_called_tx)),
             stop_called_tx,
             stop_called_signal,
 
@@ -212,14 +213,14 @@ impl RTCRtpSender {
         self.negotiated.store(true, Ordering::SeqCst);
     }
 
-    pub(crate) async fn set_rtp_transceiver(
+    pub(crate) fn set_rtp_transceiver(
         &self,
         rtp_transceiver: Option<Weak<RTCRtpTransceiver>>,
     ) {
         if let Some(t) = rtp_transceiver.as_ref().and_then(|t| t.upgrade()) {
             self.set_paused(!t.direction().has_send());
         }
-        let mut tr = self.rtp_transceiver.lock().await;
+        let mut tr = self.rtp_transceiver.lock();
         *tr = rtp_transceiver;
     }
 
@@ -249,8 +250,7 @@ impl RTCRtpSender {
             RTCRtpSendParameters {
                 rtp_parameters: self
                     .media_engine
-                    .get_rtp_parameters_by_kind(kind, RTCRtpTransceiverDirection::Sendonly)
-                    .await,
+                    .get_rtp_parameters_by_kind(kind, RTCRtpTransceiverDirection::Sendonly),
                 encodings: vec![RTCRtpEncodingParameters {
                     ssrc: self.ssrc,
                     payload_type: self.payload_type,
@@ -260,15 +260,15 @@ impl RTCRtpSender {
         };
 
         let codecs = {
-            let tr = self.rtp_transceiver.lock().await;
-            if let Some(t) = &*tr {
+            let tr = self.rtp_transceiver.lock().clone();
+            if let Some(t) = &tr {
                 if let Some(t) = t.upgrade() {
                     t.get_codecs().await
                 } else {
-                    self.media_engine.get_codecs_by_kind(kind).await
+                    self.media_engine.get_codecs_by_kind(kind)
                 }
             } else {
-                self.media_engine.get_codecs_by_kind(kind).await
+                self.media_engine.get_codecs_by_kind(kind)
             }
         };
         send_parameters.rtp_parameters.codecs = codecs;
@@ -290,7 +290,7 @@ impl RTCRtpSender {
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         if let Some(t) = &track {
-            let tr = self.rtp_transceiver.lock().await;
+            let tr = self.rtp_transceiver.lock();
             if let Some(r) = &*tr {
                 if let Some(r) = r.upgrade() {
                     if r.kind != t.kind() {
@@ -304,7 +304,7 @@ impl RTCRtpSender {
             }
         }
 
-        if self.has_sent().await {
+        if self.has_sent() {
             let t = {
                 let t = self.track.lock().await;
                 t.clone()
@@ -315,7 +315,7 @@ impl RTCRtpSender {
             }
         }
 
-        if !self.has_sent().await || track.is_none() {
+        if !self.has_sent() || track.is_none() {
             let mut t = self.track.lock().await;
             *t = track;
             return Ok(());
@@ -331,8 +331,7 @@ impl RTCRtpSender {
                 id: context.id.clone(),
                 params: self
                     .media_engine
-                    .get_rtp_parameters_by_kind(t.kind(), RTCRtpTransceiverDirection::Sendonly)
-                    .await,
+                    .get_rtp_parameters_by_kind(t.kind(), RTCRtpTransceiverDirection::Sendonly),
                 ssrc: context.ssrc,
                 write_stream: context.write_stream.clone(),
                 paused: self.paused.clone(),
@@ -372,7 +371,7 @@ impl RTCRtpSender {
 
     /// send Attempts to set the parameters controlling the sending of media.
     pub async fn send(&self, parameters: &RTCRtpSendParameters) -> Result<()> {
-        if self.has_sent().await {
+        if self.has_sent() {
             return Err(Error::ErrRTPSenderSendAlreadyCalled);
         }
 
@@ -390,8 +389,7 @@ impl RTCRtpSender {
                             RTPCodecType::default()
                         },
                         RTCRtpTransceiverDirection::Sendonly,
-                    )
-                    .await,
+                    ),
                 ssrc: parameters.encodings[0].ssrc,
                 write_stream: Some(
                     Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>
@@ -438,7 +436,7 @@ impl RTCRtpSender {
         }
 
         {
-            let mut send_called_tx = self.send_called_tx.lock().await;
+            let mut send_called_tx = self.send_called_tx.lock();
             send_called_tx.take();
         }
 
@@ -453,7 +451,7 @@ impl RTCRtpSender {
         self.stop_called_signal.store(true, Ordering::SeqCst);
         self.stop_called_tx.notify_waiters();
 
-        if !self.has_sent().await {
+        if !self.has_sent() {
             return Ok(());
         }
 
@@ -480,8 +478,8 @@ impl RTCRtpSender {
     }
 
     /// has_sent tells if data has been ever sent for this instance
-    pub(crate) async fn has_sent(&self) -> bool {
-        let send_called_tx = self.send_called_tx.lock().await;
+    pub(crate) fn has_sent(&self) -> bool {
+        let send_called_tx = self.send_called_tx.lock();
         send_called_tx.is_none()
     }
 

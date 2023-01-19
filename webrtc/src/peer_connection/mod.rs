@@ -469,7 +469,7 @@ impl RTCPeerConnection {
                                 None => return true, // doesn't contain a single a=msid line
                             };
 
-                            let sender = t.sender().await;
+                            let sender = t.sender();
                             // (...)or the number of MSIDs from the a=msid lines in this m= section,
                             // or the MSID values themselves, differ from what is in
                             // transceiver.sender.[[AssociatedMediaStreamIds]], return true.
@@ -1585,8 +1585,8 @@ impl RTCPeerConnection {
     pub(crate) async fn start_rtp_senders(&self) -> Result<()> {
         let current_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*current_transceivers {
-            let sender = transceiver.sender().await;
-            if sender.is_negotiated() && !sender.has_sent().await {
+            let sender = transceiver.sender();
+            if sender.is_negotiated() && !sender.has_sent() {
                 sender.send(&sender.get_parameters().await).await?;
             }
         }
@@ -1643,7 +1643,7 @@ impl RTCPeerConnection {
         let mut senders = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            let sender = transceiver.sender().await;
+            let sender = transceiver.sender();
             senders.push(sender);
         }
         senders
@@ -1678,7 +1678,7 @@ impl RTCPeerConnection {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if !t.stopped.load(Ordering::SeqCst) && t.kind == track.kind() {
-                    let sender = t.sender().await;
+                    let sender = t.sender();
                     if sender.track().await.is_none() {
                         if let Err(err) = sender.replace_track(Some(track)).await {
                             let _ = sender.stop().await;
@@ -1705,7 +1705,7 @@ impl RTCPeerConnection {
             .add_rtp_transceiver(Arc::clone(&transceiver))
             .await;
 
-        Ok(transceiver.sender().await)
+        Ok(transceiver.sender())
     }
 
     /// remove_track removes a Track from the PeerConnection
@@ -1718,7 +1718,7 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if t.sender().await.id == sender.id {
+                if t.sender().id == sender.id {
                     if sender.track().await.is_none() {
                         return Ok(());
                     }

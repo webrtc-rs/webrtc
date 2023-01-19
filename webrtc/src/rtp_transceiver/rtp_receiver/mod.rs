@@ -312,25 +312,24 @@ impl RTPReceiverInternal {
     async fn get_parameters(&self) -> RTCRtpParameters {
         let mut parameters = self
             .media_engine
-            .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+            .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly);
 
         let transceiver_codecs = self.transceiver_codecs.lock().await;
         if let Some(codecs) = &*transceiver_codecs {
             let mut c = codecs.lock().await;
             parameters.codecs =
-                RTPReceiverInternal::get_codecs(&mut c, self.kind, &self.media_engine).await;
+                RTPReceiverInternal::get_codecs(&mut c, self.kind, &self.media_engine);
         }
 
         parameters
     }
 
-    pub(crate) async fn get_codecs(
+    pub(crate) fn get_codecs(
         codecs: &mut [RTCRtpCodecParameters],
         kind: RTPCodecType,
         media_engine: &Arc<MediaEngine>,
     ) -> Vec<RTCRtpCodecParameters> {
-        let media_engine_codecs = media_engine.get_codecs_by_kind(kind).await;
+        let media_engine_codecs = media_engine.get_codecs_by_kind(kind);
         if codecs.is_empty() {
             return media_engine_codecs;
         }

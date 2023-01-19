@@ -602,8 +602,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                     RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Video,
                     api.media_engine
-                        .get_codecs_by_kind(RTPCodecType::Video)
-                        .await,
+                        .get_codecs_by_kind(RTPCodecType::Video),
                     Arc::clone(&api.media_engine),
                     None,
                 )
@@ -620,8 +619,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                     RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Audio,
                     api.media_engine
-                        .get_codecs_by_kind(RTPCodecType::Audio)
-                        .await,
+                        .get_codecs_by_kind(RTPCodecType::Audio),
                     Arc::clone(&api.media_engine),
                     None,
                 )
@@ -657,8 +655,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                     false,
                 )
                 .await,
-            ))
-            .await;
+            ));
         media[i].transceivers[0].set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
     }
 
