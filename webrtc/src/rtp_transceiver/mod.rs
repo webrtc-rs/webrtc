@@ -174,9 +174,9 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: OnceCell<String>,                    //atomic.Value
-    sender: SyncMutex<Arc<RTCRtpSender>>,     //atomic.Value
-    receiver: Mutex<Arc<RTCRtpReceiver>>,     //atomic.Value
+    mid: OnceCell<String>,                //atomic.Value
+    sender: SyncMutex<Arc<RTCRtpSender>>, //atomic.Value
+    receiver: Mutex<Arc<RTCRtpReceiver>>, //atomic.Value
 
     direction: AtomicU8,         //RTPTransceiverDirection
     current_direction: AtomicU8, //RTPTransceiverDirection
@@ -220,8 +220,7 @@ impl RTCRtpTransceiver {
             media_engine,
             trigger_negotiation_needed: Mutex::new(trigger_negotiation_needed),
         });
-        t.sender()
-            .set_rtp_transceiver(Some(Arc::downgrade(&t)));
+        t.sender().set_rtp_transceiver(Some(Arc::downgrade(&t)));
 
         t
     }
