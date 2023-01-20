@@ -1386,7 +1386,6 @@ impl RTCPeerConnection {
                                     Arc::clone(&self.internal.media_engine),
                                     Arc::clone(&self.interceptor),
                                     false,
-                                    false,
                                 )
                                 .await,
                             );

@@ -83,7 +83,7 @@ pub struct RTCRtpSender {
 
     pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
     pub(crate) stream_info: Mutex<StreamInfo>,
-    seq_trans: Option<Arc<SequenceTransformer>>,
+    seq_trans: Arc<SequenceTransformer>,
 
     pub(crate) context: Mutex<TrackLocalContext>,
 
@@ -135,8 +135,7 @@ impl RTCRtpSender {
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
         start_paused: bool,
-        custom_sequencer: bool,
-    ) -> RTCRtpSender {
+    ) -> Self {
         let id = generate_crypto_random_string(
             32,
             b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -154,7 +153,7 @@ impl RTCRtpSender {
             rtcp_interceptor: Mutex::new(None),
         });
 
-        let seq_trans = custom_sequencer.then_some(Arc::new(SequenceTransformer::new()));
+        let seq_trans = Arc::new(SequenceTransformer::new());
         let srtp_stream = Arc::new(SrtpWriterFuture {
             closed: AtomicBool::new(false),
             ssrc,
@@ -162,7 +161,7 @@ impl RTCRtpSender {
             rtp_transport: Arc::clone(&transport),
             rtcp_read_stream: Mutex::new(None),
             rtp_write_session: Mutex::new(None),
-            seq_trans: seq_trans.clone(),
+            seq_trans: Arc::clone(&seq_trans),
         });
 
         let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
@@ -176,7 +175,7 @@ impl RTCRtpSender {
             .as_ref()
             .map(|track| vec![track.stream_id().to_string()])
             .unwrap_or_default();
-        RTCRtpSender {
+        Self {
             track: Mutex::new(track),
 
             srtp_stream,
@@ -334,7 +333,7 @@ impl RTCRtpSender {
         };
 
         let result = if let Some(t) = &track {
-            let _ = self.seq_trans.as_ref().map(|st| st.reset_offset());
+            let _ = self.seq_trans.reset_offset();
 
             let new_context = TrackLocalContext {
                 id: context.id.clone(),
@@ -533,5 +532,9 @@ impl RTCRtpSender {
         let lock = self.associated_media_stream_ids.lock().unwrap();
 
         lock.clone()
+    }
+
+    pub fn enable_seq_transformer(&self) -> Result<()> {
+        self.seq_trans.enable()
     }
 }

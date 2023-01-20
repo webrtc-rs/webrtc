@@ -464,7 +464,6 @@ impl PeerConnectionInternal {
                 Arc::clone(&self.media_engine),
                 interceptor,
                 false,
-                false,
             )
             .await,
         );
@@ -515,7 +514,6 @@ impl PeerConnectionInternal {
                 Arc::clone(&self.media_engine),
                 Arc::clone(&interceptor),
                 false,
-                false
             )
             .await,
         );
