@@ -31,7 +31,7 @@
 
 * Change `RTCPeerConnection::mid` return signature to `Option<String>` [#375](https://github.com/webrtc-rs/webrtc/pull/375).
 
-* Make functions non-async [](TODO):
+* Make functions non-async [#402](https://github.com/webrtc-rs/webrtc/pull/402):
     - `MediaEngine`:
         - `get_codecs_by_kind`;
         - `get_rtp_parameters_by_kind`.
