@@ -202,8 +202,7 @@ impl RTCRtpTransceiver {
         trigger_negotiation_needed: TriggerNegotiationNeededFnOption,
     ) -> Arc<Self> {
         let codecs = Arc::new(Mutex::new(codecs));
-        receiver
-            .set_transceiver_codecs(Some(Arc::clone(&codecs)));
+        receiver.set_transceiver_codecs(Some(Arc::clone(&codecs)));
 
         let t = Arc::new(RTCRtpTransceiver {
             mid: OnceCell::new(),
