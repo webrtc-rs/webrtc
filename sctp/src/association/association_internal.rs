@@ -182,7 +182,7 @@ impl AssociationInternal {
             let outbound = Packet {
                 source_port: self.source_port,
                 destination_port: self.destination_port,
-                verification_tag: self.peer_verification_tag,
+                verification_tag: 0,
                 chunks: vec![Box::new(stored_init)],
             };
 
