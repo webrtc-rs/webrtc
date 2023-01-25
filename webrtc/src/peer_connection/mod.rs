@@ -2074,10 +2074,12 @@ impl RTCPeerConnection {
         gathering_complete_rx
     }
 
+    /// Returns the internal [`RTCDtlsTransport`].
     pub fn dtls_transport(&self) -> Arc<RTCDtlsTransport> {
         Arc::clone(&self.internal.dtls_transport)
     }
 
+    /// Adds the specified [`RTCRtpTransceiver`] to this [`RTCPeerConnection`].
     pub async fn add_transceiver(&self, t: Arc<RTCRtpTransceiver>) {
         self.internal.add_rtp_transceiver(t).await
     }
