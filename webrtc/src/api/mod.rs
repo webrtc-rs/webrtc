@@ -169,10 +169,12 @@ impl API {
         .await
     }
 
+    /// Returns the internal [`SettingEngine`].
     pub fn setting_engine(&self) -> Arc<SettingEngine> {
         Arc::clone(&self.setting_engine)
     }
 
+    /// Returns the internal [`MediaEngine`].
     pub fn media_engine(&self) -> Arc<MediaEngine> {
         Arc::clone(&self.media_engine)
     }
