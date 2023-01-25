@@ -63,7 +63,8 @@ impl SequenceTransformer {
         let offset = guard
             .reset_needed
             .then(|| {
-                let offset = guard.last_sq.overflowing_sub(raw_sn).0;
+                guard.reset_needed = false;
+                let offset = guard.last_sq.overflowing_sub(raw_sn.overflowing_sub(1).0).0;
                 guard.offset = offset;
                 offset
             })
