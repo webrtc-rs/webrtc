@@ -9,62 +9,69 @@ use srtp::stream::Stream;
 use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::{Attributes, RTCPReader, RTPWriter};
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
-pub(crate) struct SequenceTransformer {
-    offset: AtomicU16,
-    last_sq: AtomicU16,
-    reset_needed: AtomicBool,
-    enabled: AtomicBool,
-    data_sent: AtomicBool,
+/// RTP packet sequence number manager.
+pub(crate) struct SequenceTransformer(Mutex<SequenceTransformerInner>);
+
+struct SequenceTransformerInner {
+    offset: u16,
+    last_sq: u16,
+    reset_needed: bool,
+    enabled: bool,
+    data_sent: bool,
 }
 
 impl SequenceTransformer {
     pub(crate) fn new() -> Self {
-        Self {
-            offset: AtomicU16::new(0),
-            last_sq: AtomicU16::new(rand::random()),
-            reset_needed: AtomicBool::new(false),
-            enabled: AtomicBool::new(false),
-            data_sent: AtomicBool::new(false),
-        }
+        Self(Mutex::new(SequenceTransformerInner {
+            offset: 0,
+            last_sq: rand::random(),
+            reset_needed: false,
+            enabled: false,
+            data_sent: false,
+        }))
     }
 
-    pub(crate) fn enable(&self) -> Result<()> {
-        self.data_sent
-            .load(Ordering::SeqCst)
+    pub(crate) async fn enable(&self) -> Result<()> {
+        let mut guard = self.0.lock().await;
+
+        if guard.enabled {
+            return Err(Error::ErrRTPSenderSeqTransEnabled);
+        }
+
+        (!guard.data_sent)
             .then(|| {
-                self.enabled.store(true, Ordering::SeqCst);
+                guard.enabled = true;
             })
             .ok_or(Error::ErrRTPSenderDataSent)
     }
 
-    pub(crate) fn reset_offset(&self) {
-        self.reset_needed.store(true, Ordering::SeqCst);
+    pub(crate) async fn reset_offset(&self) {
+        self.0.lock().await.reset_needed = true;
     }
 
-    fn seq_number(&self, raw_sn: u16) -> u16 {
-        let offset = self
-            .reset_needed
-            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-            .then(|| {
-                let offset = self
-                    .last_sq
-                    .load(Ordering::SeqCst)
-                    .overflowing_sub(raw_sn)
-                    .0;
-                self.offset.store(offset, Ordering::SeqCst);
+    async fn seq_number(&self, raw_sn: u16) -> Option<u16> {
+        let mut guard = self.0.lock().await;
 
+        if !guard.enabled {
+            return None;
+        }
+
+        let offset = guard
+            .reset_needed
+            .then(|| {
+                let offset = guard.last_sq.overflowing_sub(raw_sn).0;
+                guard.offset = offset;
                 offset
             })
-            .unwrap_or(self.offset.load(Ordering::SeqCst));
+            .unwrap_or(guard.offset);
         let next = raw_sn.overflowing_add(offset).0;
-        self.last_sq.store(next, Ordering::SeqCst);
+        guard.last_sq = next;
 
-        next
+        Some(next)
     }
 }
 
@@ -237,20 +244,15 @@ impl RTCPReader for SrtpWriterFuture {
 #[async_trait]
 impl RTPWriter for SrtpWriterFuture {
     async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
-        let _ = self.seq_trans.data_sent.compare_exchange(
-            false,
-            true,
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-        );
-
-        Ok(if self.seq_trans.enabled.load(Ordering::SeqCst) {
-            let mut pkt = pkt.clone();
-            pkt.header.sequence_number = self.seq_trans.seq_number(pkt.header.sequence_number);
-
-            self.write_rtp(&pkt).await
-        } else {
-            self.write_rtp(pkt).await
-        }?)
+        Ok(
+            match self.seq_trans.seq_number(pkt.header.sequence_number).await {
+                Some(seq_num) => {
+                    let mut new_pkt = pkt.clone();
+                    new_pkt.header.sequence_number = seq_num;
+                    self.write_rtp(&new_pkt).await?
+                }
+                None => self.write_rtp(pkt).await?,
+            },
+        )
     }
 }

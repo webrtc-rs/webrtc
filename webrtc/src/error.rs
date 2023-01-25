@@ -201,6 +201,10 @@ pub enum Error {
     #[error("Sequence number transformer must be enabled before sending data")]
     ErrRTPSenderDataSent,
 
+    /// ErrRTPSenderSeqTransEnabled indicates that the sequence number transformer has been already enabled
+    #[error("Sequence number transformer has been already enabled")]
+    ErrRTPSenderSeqTransEnabled,
+
     /// ErrUnbindFailed indicates that a TrackLocal was not able to be unbind
     #[error("failed to unbind TrackLocal from PeerConnection")]
     ErrUnbindFailed,

@@ -333,7 +333,7 @@ impl RTCRtpSender {
         };
 
         let result = if let Some(t) = &track {
-            let _ = self.seq_trans.reset_offset();
+            self.seq_trans.reset_offset().await;
 
             let new_context = TrackLocalContext {
                 id: context.id.clone(),
@@ -487,6 +487,18 @@ impl RTCRtpSender {
         self.internal.read_rtcp(self.receive_mtu).await
     }
 
+    /// Enables overriding outcoming `RTP` packets' `sequence number`s.
+    ///
+    /// Must be called once before any data sent or never called at all.
+    ///
+    /// # Errors
+    ///
+    /// Errors if this [`RTCRtpSender`] has started to send data or sequence
+    /// transforming has been already enabled.
+    pub async fn enable_seq_transformer(&self) -> Result<()> {
+        self.seq_trans.enable().await
+    }
+
     /// has_sent tells if data has been ever sent for this instance
     pub(crate) async fn has_sent(&self) -> bool {
         let send_called_tx = self.send_called_tx.lock().await;
@@ -532,9 +544,5 @@ impl RTCRtpSender {
         let lock = self.associated_media_stream_ids.lock().unwrap();
 
         lock.clone()
-    }
-
-    pub fn enable_seq_transformer(&self) -> Result<()> {
-        self.seq_trans.enable()
     }
 }
