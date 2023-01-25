@@ -14,8 +14,6 @@ use uuid::Uuid;
 /// Represents the different Multicast modes that ICE can run.
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum MulticastDnsMode {
-    Unspecified,
-
     /// Means remote mDNS candidates will be discarded, and local host candidates will use IPs.
     Disabled,
 
@@ -28,7 +26,7 @@ pub enum MulticastDnsMode {
 
 impl Default for MulticastDnsMode {
     fn default() -> Self {
-        Self::Unspecified
+        Self::QueryOnly
     }
 }
 
@@ -44,9 +42,11 @@ pub(crate) fn create_multicast_dns(
     mdns_name: &str,
     dest_addr: &str,
 ) -> Result<Option<Arc<DnsConn>>> {
-    if mdns_mode == MulticastDnsMode::Disabled {
-        return Ok(None);
-    }
+    let local_names = match mdns_mode {
+        MulticastDnsMode::QueryOnly => vec![],
+        MulticastDnsMode::QueryAndGather => vec![mdns_name.to_owned()],
+        MulticastDnsMode::Disabled => return Ok(None),
+    };
 
     let addr = if dest_addr.is_empty() {
         //TODO: why DEFAULT_DEST_ADDR doesn't work on Mac/Win?
@@ -60,21 +60,12 @@ pub(crate) fn create_multicast_dns(
     };
     log::info!("mDNS is using {} as dest_addr", addr);
 
-    match mdns_mode {
-        MulticastDnsMode::QueryOnly => {
-            let conn = DnsConn::server(addr, Config::default())?;
-            Ok(Some(Arc::new(conn)))
-        }
-        MulticastDnsMode::QueryAndGather => {
-            let conn = DnsConn::server(
-                addr,
-                Config {
-                    local_names: vec![mdns_name.to_owned()],
-                    ..Config::default()
-                },
-            )?;
-            Ok(Some(Arc::new(conn)))
-        }
-        _ => Ok(None),
-    }
+    let conn = DnsConn::server(
+        addr,
+        Config {
+            local_names,
+            ..Config::default()
+        },
+    )?;
+    Ok(Some(Arc::new(conn)))
 }

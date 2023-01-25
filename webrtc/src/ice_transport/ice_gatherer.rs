@@ -103,13 +103,7 @@ impl RTCIceGatherer {
             _ => CandidateType::Unspecified,
         };
 
-        let mut mdns_mode = self.setting_engine.candidates.multicast_dns_mode;
-        if mdns_mode != ice::mdns::MulticastDnsMode::Disabled
-            && mdns_mode != ice::mdns::MulticastDnsMode::QueryAndGather
-        {
-            // If enum is in state we don't recognized default to MulticastDNSModeQueryOnly
-            mdns_mode = ice::mdns::MulticastDnsMode::QueryOnly;
-        }
+        let mdns_mode = self.setting_engine.candidates.multicast_dns_mode;
 
         let mut config = ice::agent::agent_config::AgentConfig {
             udp_network: self.setting_engine.udp_network.clone(),
