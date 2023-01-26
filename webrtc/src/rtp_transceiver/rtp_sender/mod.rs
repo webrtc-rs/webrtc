@@ -333,7 +333,7 @@ impl RTCRtpSender {
         };
 
         let result = if let Some(t) = &track {
-            self.seq_trans.reset_offset().await;
+            self.seq_trans.reset_offset();
 
             let new_context = TrackLocalContext {
                 id: context.id.clone(),
@@ -495,8 +495,8 @@ impl RTCRtpSender {
     ///
     /// Errors if this [`RTCRtpSender`] has started to send data or sequence
     /// transforming has been already enabled.
-    pub async fn enable_seq_transformer(&self) -> Result<()> {
-        self.seq_trans.enable().await
+    pub fn enable_seq_transformer(&self) -> Result<()> {
+        self.seq_trans.enable()
     }
 
     /// has_sent tells if data has been ever sent for this instance

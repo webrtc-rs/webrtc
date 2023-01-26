@@ -12,9 +12,10 @@ use interceptor::{Attributes, RTCPReader, RTPWriter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
+use util;
 
 /// RTP packet sequence number manager.
-pub(crate) struct SequenceTransformer(Mutex<SequenceTransformerInner>);
+pub(crate) struct SequenceTransformer(util::sync::Mutex<SequenceTransformerInner>);
 
 struct SequenceTransformerInner {
     offset: u16,
@@ -26,7 +27,7 @@ struct SequenceTransformerInner {
 
 impl SequenceTransformer {
     pub(crate) fn new() -> Self {
-        Self(Mutex::new(SequenceTransformerInner {
+        Self(util::sync::Mutex::new(SequenceTransformerInner {
             offset: 0,
             last_sq: rand::random(),
             reset_needed: false,
@@ -35,8 +36,8 @@ impl SequenceTransformer {
         }))
     }
 
-    pub(crate) async fn enable(&self) -> Result<()> {
-        let mut guard = self.0.lock().await;
+    pub(crate) fn enable(&self) -> Result<()> {
+        let mut guard = self.0.lock();
 
         if guard.enabled {
             return Err(Error::ErrRTPSenderSeqTransEnabled);
@@ -49,12 +50,12 @@ impl SequenceTransformer {
             .ok_or(Error::ErrRTPSenderDataSent)
     }
 
-    pub(crate) async fn reset_offset(&self) {
-        self.0.lock().await.reset_needed = true;
+    pub(crate) fn reset_offset(&self) {
+        self.0.lock().reset_needed = true;
     }
 
-    async fn seq_number(&self, raw_sn: u16) -> Option<u16> {
-        let mut guard = self.0.lock().await;
+    fn seq_number(&self, raw_sn: u16) -> Option<u16> {
+        let mut guard = self.0.lock();
 
         if !guard.enabled {
             return None;
@@ -246,7 +247,7 @@ impl RTCPReader for SrtpWriterFuture {
 impl RTPWriter for SrtpWriterFuture {
     async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
         Ok(
-            match self.seq_trans.seq_number(pkt.header.sequence_number).await {
+            match self.seq_trans.seq_number(pkt.header.sequence_number) {
                 Some(seq_num) => {
                     let mut new_pkt = pkt.clone();
                     new_pkt.header.sequence_number = seq_num;
