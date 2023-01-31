@@ -487,7 +487,7 @@ impl RTCRtpSender {
         self.internal.read_rtcp(self.receive_mtu).await
     }
 
-    /// Enables overriding outcoming `RTP` packets' `sequence number`s.
+    /// Enables overriding outgoing `RTP` packets' `sequence number`s.
     ///
     /// Must be called once before any data sent or never called at all.
     ///

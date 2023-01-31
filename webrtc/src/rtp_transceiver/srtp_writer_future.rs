@@ -14,9 +14,14 @@ use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 use util;
 
-/// RTP packet sequence number manager.
+/// `RTP` packet sequence number manager.
+///
+/// Used to override outgoing `RTP` packets' sequence numbers. On creating it is
+/// unabled and can be enabled before sending data begining. Once data sending
+/// began it can not be enabled any more.
 pub(crate) struct SequenceTransformer(util::sync::Mutex<SequenceTransformerInner>);
 
+/// [`SequenceTransformer`] inner.
 struct SequenceTransformerInner {
     offset: u16,
     last_sq: u16,
@@ -26,6 +31,7 @@ struct SequenceTransformerInner {
 }
 
 impl SequenceTransformer {
+    /// Creates a new [`SequenceTransformer`].
     pub(crate) fn new() -> Self {
         Self(util::sync::Mutex::new(SequenceTransformerInner {
             offset: 0,
@@ -36,6 +42,15 @@ impl SequenceTransformer {
         }))
     }
 
+    /// Enables this [`SequenceTransformer`].
+    ///
+    /// # Errors
+    ///
+    /// With [`Error::ErrRTPSenderSeqTransEnabled`] on trying to enable already
+    /// enabled [`SequenceTransformer`].
+    ///
+    /// With [`Error::ErrRTPSenderSeqTransEnabled`] on trying to enable
+    /// [`SequenceTransformer`] after data sending began.
     pub(crate) fn enable(&self) -> Result<()> {
         let mut guard = self.0.lock();
 
@@ -50,12 +65,19 @@ impl SequenceTransformer {
             .ok_or(Error::ErrRTPSenderDataSent)
     }
 
+    /// Indicates [`SequenceTransformer`] about necessity of recalculating
+    /// `offset`.
     pub(crate) fn reset_offset(&self) {
         self.0.lock().reset_needed = true;
     }
 
+    /// Gets [`Some`] consistent `sequence number` if this [`SequenceTransformer`] is
+    /// enabled or [`None`] if it is not.
+    ///
+    /// Once this method is called, considers data sending began.
     fn seq_number(&self, raw_sn: u16) -> Option<u16> {
         let mut guard = self.0.lock();
+        guard.data_sent = true;
 
         if !guard.enabled {
             return None;
