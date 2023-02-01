@@ -230,8 +230,8 @@ fn test_receiver_report_roundtrip() {
             );
         } else {
             let mut data = got.ok().unwrap();
-            let actual = ReceiverReport::unmarshal(&mut data)
-                .unwrap_or_else(|_| panic!("Unmarshal {name}"));
+            let actual =
+                ReceiverReport::unmarshal(&mut data).unwrap_or_else(|_| panic!("Unmarshal {name}"));
 
             assert_eq!(
                 actual, want,

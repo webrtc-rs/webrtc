@@ -167,10 +167,7 @@ fn test_vp8_payload() -> Result<()> {
     for (name, mut pck, mtu, payloads, expected) in tests {
         for (i, payload) in payloads.iter().enumerate() {
             let actual = pck.payload(mtu, payload)?;
-            assert_eq!(
-                expected[i], actual,
-                "{name}: Generated packet[{i}] differs"
-            );
+            assert_eq!(expected[i], actual, "{name}: Generated packet[{i}] differs");
         }
     }
 

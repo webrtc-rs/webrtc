@@ -31,9 +31,7 @@ fn benchmark_packet(c: &mut Criterion) {
     let buf = &mut raw.clone();
     let p = Packet::unmarshal(buf).unwrap();
     if pkt != p {
-        panic!(
-            "marshal or unmarshal not correct: \npkt: {pkt:?} \nvs \np: {p:?}"
-        );
+        panic!("marshal or unmarshal not correct: \npkt: {pkt:?} \nvs \np: {p:?}");
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////

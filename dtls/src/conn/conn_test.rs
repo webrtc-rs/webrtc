@@ -561,9 +561,7 @@ async fn test_psk() -> Result<()> {
             if let Ok(client) = result {
                 client.close().await?;
             } else {
-                panic!(
-                    "{name}: Expected create_test_client successfully, but got error",
-                );
+                panic!("{name}: Expected create_test_client successfully, but got error",);
             }
         }
 
@@ -1614,10 +1612,7 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                 let client = result.unwrap();
                 if let Some(want_cs) = want_selected_cipher_suite {
                     let cipher_suite = client.state.cipher_suite.lock().await;
-                    assert!(
-                        cipher_suite.is_some(),
-                        "{name} expected some, but got none"
-                    );
+                    assert!(cipher_suite.is_some(), "{name} expected some, but got none");
                     if let Some(cs) = &*cipher_suite {
                         assert_eq!(cs.id(), want_cs,
                                    "test_cipher_suite_configuration: Server Selected Bad Cipher Suite '{}': expected({}) actual({})", 

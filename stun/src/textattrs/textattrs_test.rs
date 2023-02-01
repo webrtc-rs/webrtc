@@ -25,10 +25,7 @@ fn test_software_get_from() -> Result<()> {
     assert!(ok, "sowfware attribute should be found");
 
     let s = s_attr.to_string();
-    assert!(
-        s.starts_with("SOFTWARE:"),
-        "bad string representation {s}"
-    );
+    assert!(s.starts_with("SOFTWARE:"), "bad string representation {s}");
 
     Ok(())
 }

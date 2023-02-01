@@ -169,9 +169,7 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             let mut result = Result::<usize>::Ok(0);
             while result.is_ok() {
-                println!(
-                    "Sending pli for stream with rid: {rid}, ssrc: {media_ssrc}"
-                );
+                println!("Sending pli for stream with rid: {rid}, ssrc: {media_ssrc}");
 
                 let timeout = tokio::time::sleep(Duration::from_secs(3));
                 tokio::pin!(timeout);

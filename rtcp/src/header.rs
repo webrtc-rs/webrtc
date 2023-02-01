@@ -307,8 +307,7 @@ mod test {
             } else {
                 let data = got.ok().unwrap();
                 let buf = &mut data.clone();
-                let actual =
-                    Header::unmarshal(buf).unwrap_or_else(|_| panic!("Unmarshal {name}"));
+                let actual = Header::unmarshal(buf).unwrap_or_else(|_| panic!("Unmarshal {name}"));
 
                 assert_eq!(
                     actual, want,

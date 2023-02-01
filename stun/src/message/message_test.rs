@@ -127,10 +127,7 @@ fn test_message_type_read_write_value() -> Result<()> {
         let mut m = MessageType::default();
         let v = test.value();
         m.read_value(v);
-        assert_eq!(
-            m, test,
-            "ReadValue({test} -> {v}) = {m}, should be {test}"
-        );
+        assert_eq!(m, test, "ReadValue({test} -> {v}) = {m}, should be {test}");
     }
 
     Ok(())

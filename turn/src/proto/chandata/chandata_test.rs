@@ -119,10 +119,7 @@ fn test_channel_data_decode() -> Result<()> {
             ..Default::default()
         };
         if let Err(err) = m.decode() {
-            assert_eq!(
-                want_err, err,
-                "unexpected: ({name}) {want_err} != {err}"
-            );
+            assert_eq!(want_err, err, "unexpected: ({name}) {want_err} != {err}");
         } else {
             panic!("expected error, but got ok");
         }

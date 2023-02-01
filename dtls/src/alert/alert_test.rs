@@ -33,20 +33,14 @@ fn test_alert() -> Result<()> {
         if let Some(err) = unmarshal_error {
             assert!(result.is_err(), "{name} expected error: {err}");
         } else if let Ok(alert) = result {
-            assert_eq!(
-                wanted, alert,
-                "{name} expected {wanted}, but got {alert}"
-            );
+            assert_eq!(wanted, alert, "{name} expected {wanted}, but got {alert}");
 
             let mut data2: Vec<u8> = vec![];
             {
                 let mut writer = BufWriter::<&mut Vec<u8>>::new(data2.as_mut());
                 alert.marshal(&mut writer)?;
             }
-            assert_eq!(
-                data, data2,
-                "{name} expected {data:?}, but got {data2:?}"
-            );
+            assert_eq!(data, data2, "{name} expected {data:?}, but got {data2:?}");
         } else {
             assert!(result.is_ok(), "{name} expected Ok, but has error");
         }

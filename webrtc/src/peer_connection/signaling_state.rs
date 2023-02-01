@@ -362,9 +362,7 @@ mod test {
                     assert_eq!(got.to_string(), err.to_string(), "{desc} error mismatch");
                 }
                 _ => {
-                    panic!(
-                        "{desc}: expected {expected_err:?}, but got {result:?}"
-                    );
+                    panic!("{desc}: expected {expected_err:?}, but got {result:?}");
                 }
             };
         }

@@ -304,10 +304,7 @@ fn test_compound_packet_roundtrip() {
         let result = packet.marshal();
         if let Some(err) = marshal_error {
             if let Err(got) = result {
-                assert_eq!(
-                    err, got,
-                    "marshal {name} header: err = {got}, want {err}"
-                );
+                assert_eq!(err, got, "marshal {name} header: err = {got}, want {err}");
             } else {
                 panic!("want error in test {name}");
             }

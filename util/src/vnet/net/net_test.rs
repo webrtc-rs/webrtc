@@ -103,11 +103,7 @@ async fn test_net_native_loopback() -> Result<()> {
     let mut buf = vec![0u8; 1000];
     let (n, raddr) = conn.recv_from(&mut buf).await?;
     assert_eq!(n, msg.len(), "should match msg size {}", msg.len());
-    assert_eq!(
-        &buf[..n],
-        msg.as_bytes(),
-        "should match msg content {msg}"
-    );
+    assert_eq!(&buf[..n], msg.as_bytes(), "should match msg content {msg}");
     assert_eq!(laddr, raddr, "should match addr {laddr}");
 
     Ok(())
@@ -422,11 +418,7 @@ async fn test_net_virtual_loopback1() -> Result<()> {
     let mut buf = vec![0u8; 1000];
     let (n, raddr) = conn.recv_from(&mut buf).await?;
     assert_eq!(n, msg.len(), "should match msg size {}", msg.len());
-    assert_eq!(
-        &buf[..n],
-        msg.as_bytes(),
-        "should match msg content {msg}"
-    );
+    assert_eq!(&buf[..n], msg.as_bytes(), "should match msg content {msg}");
     assert_eq!(laddr, raddr, "should match addr {laddr}");
 
     Ok(())

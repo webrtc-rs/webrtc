@@ -57,9 +57,7 @@ fn main() -> Result<(), Error> {
             .unwrap()
             .block_on(async move {
                 let conn = DisconnectedPacketConn::new(Arc::new(
-                    UdpSocket::bind(format!("127.0.0.1:{port1}"))
-                        .await
-                        .unwrap(),
+                    UdpSocket::bind(format!("127.0.0.1:{port1}")).await.unwrap(),
                 ));
                 println!("listening {}...", conn.local_addr().unwrap());
 
@@ -90,9 +88,7 @@ fn main() -> Result<(), Error> {
                     }
                     loop_num += 1;
                     if now.elapsed().as_secs() == 1 {
-                        println!(
-                            "Throughput: {recv} Bytes/s, {pkt_num} pkts, {loop_num} loops"
-                        );
+                        println!("Throughput: {recv} Bytes/s, {pkt_num} pkts, {loop_num} loops");
                         now = tokio::time::Instant::now();
                         recv = 0;
                         loop_num = 0;
