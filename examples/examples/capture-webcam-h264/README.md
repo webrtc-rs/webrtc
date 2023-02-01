@@ -4,7 +4,7 @@ capture-webcam-h264 demonstrates how to send h264 video to your browser from a w
 ## Instructions
 ### Build capture-webcam-h264
 ```
-cargo build --example capture-webcam-h264
+cargo build --release --example capture-webcam-h264
 ```
 
 ### Open capture-webcam-h264 example page
@@ -14,7 +14,7 @@ cargo build --example capture-webcam-h264
 In the jsfiddle the top textarea is your browser, copy that and:
 
 #### Linux
-Run `echo $BROWSER_SDP | ./target/debug/examples/capture-webcam-h264 -- -v /dev/video0`
+Run `echo $BROWSER_SDP | ./target/release/examples/capture-webcam-h264 -v /dev/video0`
 
 ### MacOS & Windows
 MacOS and Windows are not supported by the h264_webcam_stream crate used in this example at this time.

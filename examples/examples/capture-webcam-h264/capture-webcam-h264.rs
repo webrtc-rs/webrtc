@@ -8,9 +8,7 @@ use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264};
-use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
-use webrtc::ice::udp_network::{EphemeralUDP, UDPNetwork};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
@@ -111,35 +109,25 @@ async fn main() -> Result<()> {
 
     let pool = tokio_util::task::LocalPoolHandle::new(1);
 
-    pool.spawn_pinned(move || {
+    let video_task = pool.spawn_pinned(move || {
         async move {
             // Connect to the webcam
             let mut device = h264_webcam_stream::get_device(&device_path_clone).unwrap();
             let mut stream = h264_webcam_stream::stream(&mut device, max_fps).unwrap();
 
-            // It is important to use a time.Ticker instead of time.Sleep because
-            // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
-            // * works around latency issues with Sleep
-            let mut ticker = tokio::time::interval(Duration::from_millis(33));
-
             loop {
                 let (h264_bitstream, _) = stream.next(false).unwrap();
 
-                // Convert the video bitstream into WebRTC's format
-                let samples = h264_webcam_stream::openh264::nal_units(&h264_bitstream[..])
-                    .map(|nal| Sample {
+                // Send the webcam video to WebRTC clients
+                for nal in h264_webcam_stream::openh264::nal_units(&h264_bitstream[..]) {
+                    let sample = Sample {
                         data: Bytes::copy_from_slice(nal),
-                        duration: Duration::from_secs(1),
+                        duration: Duration::from_millis(1000 / 30), // 30 FPS
                         ..Default::default()
-                    })
-                    .collect::<Vec<_>>();
+                    };
 
-                // Send the video to WebRTC clients
-                for sample in samples {
                     video_track_clone.write_sample(&sample).await?;
                 }
-
-                let _ = ticker.tick().await;
             }
 
             #[allow(unreachable_code)]
@@ -161,17 +149,10 @@ async fn main() -> Result<()> {
     // Use the default set of Interceptors
     registry = register_default_interceptors(registry, &mut m)?;
 
-    let mut ephemeral_udp = EphemeralUDP::default();
-    ephemeral_udp.set_ports(4300, 4500)?;
-
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_udp_network(UDPNetwork::Ephemeral(ephemeral_udp));
-
     // Create the API object with the MediaEngine
     let api = APIBuilder::new()
         .with_media_engine(m)
         .with_interceptor_registry(registry)
-        .with_setting_engine(setting_engine)
         .build();
 
     // Prepare the configuration
@@ -187,7 +168,6 @@ async fn main() -> Result<()> {
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
     let notify_tx = Arc::new(Notify::new());
-    // let notify_video = notify_tx.clone();
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
@@ -235,7 +215,7 @@ async fn main() -> Result<()> {
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;
-    let desc_data = signal::decode(dbg!(line).as_str())?;
+    let desc_data = signal::decode(line.as_str())?;
     let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
 
     // Set the remote SessionDescription
@@ -271,6 +251,9 @@ async fn main() -> Result<()> {
         }
         _ = tokio::signal::ctrl_c() => {
             println!("");
+        }
+        res = video_task => {
+            println!("Video Capture failure: {:?}", res);
         }
     };
 
