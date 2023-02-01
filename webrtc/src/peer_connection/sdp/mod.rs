@@ -844,10 +844,10 @@ pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool 
     false
 }
 
-pub(crate) fn get_by_mid<'a, 'b>(
-    search_mid: &'a str,
-    desc: &'b session_description::RTCSessionDescription,
-) -> Option<&'b MediaDescription> {
+pub(crate) fn get_by_mid<'a>(
+    search_mid: &str,
+    desc: &'a session_description::RTCSessionDescription,
+) -> Option<&'a MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
             if let Some(mid) = m.attribute(ATTR_KEY_MID).flatten() {
