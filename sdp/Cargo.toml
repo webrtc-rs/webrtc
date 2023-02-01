@@ -2,7 +2,7 @@
 name = "sdp"
 version = "0.5.3"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2018"
+edition = "2021"
 description = "A pure Rust implementation of SDP"
 license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/sdp"

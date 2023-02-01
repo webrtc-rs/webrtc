@@ -2,7 +2,7 @@
 name = "interceptor"
 version = "0.8.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2018"
+edition = "2021"
 description = "A pure Rust implementation of Pluggable RTP/RTCP processors"
 license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/interceptor"

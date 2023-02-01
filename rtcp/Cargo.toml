@@ -2,7 +2,7 @@
 name = "rtcp"
 version = "0.7.2"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "A pure Rust implementation of RTCP"
 license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/rtcp"
