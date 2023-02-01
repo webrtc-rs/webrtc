@@ -473,11 +473,11 @@ impl fmt::Display for TransportLayerCc {
         out += "\tpacket_chunks ";
         out += "\n\trecv_deltas ";
         for delta in &self.recv_deltas {
-            out += format!("{:?} ", delta).as_str();
+            out += format!("{delta:?} ").as_str();
         }
         out += "\n";
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

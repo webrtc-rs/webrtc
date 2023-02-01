@@ -53,8 +53,7 @@ fn test_handshake_message_certificate() -> Result<()> {
     }
     assert_eq!(
         raw, raw_certificate,
-        "handshakeMessageCertificate marshal: got {:?}, want {:?}",
-        raw, raw_certificate
+        "handshakeMessageCertificate marshal: got {raw:?}, want {raw_certificate:?}"
     );
 
     Ok(())
@@ -73,8 +72,7 @@ fn test_empty_handshake_message_certificate() -> Result<()> {
 
     assert_eq!(
         c, expected_certificate,
-        "handshakeMessageCertificate unmarshal: got {:?}, want {:?}",
-        c, expected_certificate,
+        "handshakeMessageCertificate unmarshal: got {c:?}, want {expected_certificate:?}",
     );
 
     Ok(())

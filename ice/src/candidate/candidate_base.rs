@@ -130,7 +130,7 @@ impl Candidate for CandidateBase {
 
         let checksum = Crc::<u32>::new(&CRC_32_ISCSI).checksum(&buf);
 
-        format!("{}", checksum)
+        format!("{checksum}")
     }
 
     /// Returns Candidate ID.

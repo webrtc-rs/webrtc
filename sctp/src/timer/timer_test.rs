@@ -102,7 +102,7 @@ mod test_rto_manager {
         for i in 0..5 {
             m.set_new_rtt(600);
             let rto = m.get_rto();
-            assert_eq!(rto, exp[i], "should be equal: {}", i);
+            assert_eq!(rto, exp[i], "should be equal: {i}");
         }
 
         Ok(())
@@ -121,7 +121,7 @@ mod test_rto_manager {
         for i in 0..5 {
             m.set_new_rtt(30000);
             let rto = m.get_rto();
-            assert_eq!(rto, exp[i], "should be equal: {}", i);
+            assert_eq!(rto, exp[i], "should be equal: {i}");
         }
 
         Ok(())
@@ -197,7 +197,7 @@ mod test_rtx_timer {
             // 60 : 2 (90)
             // 120: 3 (210)
             // 240: 4 (550) <== expected in 650 msec
-            assert_eq!(self.timer_id, timer_id, "unexpected timer ID: {}", timer_id);
+            assert_eq!(self.timer_id, timer_id, "unexpected timer ID: {timer_id}");
             if (self.max_rtos > 0 && n_rtos == self.max_rtos) || self.max_rtos == usize::MAX {
                 if let Some(done) = &self.done_tx {
                     let elapsed = SystemTime::now();
@@ -209,7 +209,7 @@ mod test_rtx_timer {
         async fn on_retransmission_failure(&mut self, timer_id: RtxTimerId) {
             if self.max_rtos == 0 {
                 if let Some(done) = &self.done_tx {
-                    assert_eq!(self.timer_id, timer_id, "unexpted timer ID: {}", timer_id);
+                    assert_eq!(self.timer_id, timer_id, "unexpted timer ID: {timer_id}");
                     let elapsed = SystemTime::now();
                     //t.Logf("onRtxFailure: elapsed=%.03f\n", elapsed)
                     let _ = done.send(elapsed).await;

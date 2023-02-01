@@ -59,13 +59,13 @@ impl From<u8> for RTCIceGathererState {
 impl fmt::Display for RTCIceGathererState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceGathererState::New => write!(f, "{}", ICE_GATHERED_STATE_NEW_STR),
-            RTCIceGathererState::Gathering => write!(f, "{}", ICE_GATHERED_STATE_GATHERING_STR),
+            RTCIceGathererState::New => write!(f, "{ICE_GATHERED_STATE_NEW_STR}"),
+            RTCIceGathererState::Gathering => write!(f, "{ICE_GATHERED_STATE_GATHERING_STR}"),
             RTCIceGathererState::Complete => {
-                write!(f, "{}", ICE_GATHERED_STATE_COMPLETE_STR)
+                write!(f, "{ICE_GATHERED_STATE_COMPLETE_STR}")
             }
             RTCIceGathererState::Closed => {
-                write!(f, "{}", ICE_GATHERED_STATE_CLOSED_STR)
+                write!(f, "{ICE_GATHERED_STATE_CLOSED_STR}")
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }

@@ -65,10 +65,10 @@ impl fmt::Display for ChunkSelectiveAck {
         );
 
         for gap in &self.gap_ack_blocks {
-            res += format!("\n gap ack: {}", gap).as_str();
+            res += format!("\n gap ack: {gap}").as_str();
         }
 
-        write!(f, "{}", res)
+        write!(f, "{res}")
     }
 }
 

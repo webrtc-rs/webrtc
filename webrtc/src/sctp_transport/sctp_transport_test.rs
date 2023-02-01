@@ -34,7 +34,7 @@ async fn test_generate_data_channel_id() -> Result<()> {
     for (role, s, expected) in tests {
         match s.generate_and_set_data_channel_id(role).await {
             Ok(actual) => assert_eq!(actual, expected),
-            Err(err) => panic!("failed to generate id: {}", err),
+            Err(err) => panic!("failed to generate id: {err}"),
         };
     }
 

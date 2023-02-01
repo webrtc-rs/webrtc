@@ -33,8 +33,7 @@ fn test_handshake_message_server_key_exchange() -> Result<()> {
     let c = HandshakeMessageServerKeyExchange::unmarshal(&mut reader)?;
     assert_eq!(
         c, parsed_server_key_exchange,
-        "handshakeMessageServerKeyExchange unmarshal: got {:?}, want {:?}",
-        c, parsed_server_key_exchange
+        "handshakeMessageServerKeyExchange unmarshal: got {c:?}, want {parsed_server_key_exchange:?}"
     );
 
     let mut raw = vec![];
@@ -44,8 +43,7 @@ fn test_handshake_message_server_key_exchange() -> Result<()> {
     }
     assert_eq!(
         raw, raw_server_key_exchange,
-        "handshakeMessageServerKeyExchange marshal: got {:?}, want {:?}",
-        raw, raw_server_key_exchange
+        "handshakeMessageServerKeyExchange marshal: got {raw:?}, want {raw_server_key_exchange:?}"
     );
 
     Ok(())

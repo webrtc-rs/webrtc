@@ -47,7 +47,7 @@ impl fmt::Display for RTCIceTransportPolicy {
             RTCIceTransportPolicy::All => ICE_TRANSPORT_POLICY_ALL_STR,
             RTCIceTransportPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

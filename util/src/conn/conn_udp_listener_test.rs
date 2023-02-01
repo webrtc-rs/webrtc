@@ -42,8 +42,7 @@ async fn pipe() -> Result<(
     let result = String::from_utf8(buf[..n].to_vec())?;
     if handshake != result {
         Err(Error::Other(format!(
-            "errHandshakeFailed: {} != {}",
-            handshake, result
+            "errHandshakeFailed: {handshake} != {result}"
         )))
     } else {
         Ok((listener, l_conn, d_conn))
@@ -145,8 +144,8 @@ async fn test_listener_accept_filter() -> Result<()> {
             }
         }
 
-        assert_eq!(accepted, expected, "{}: unexpected result", name);
-        assert_eq!(!timeout, expected, "{}: unexpected result", name);
+        assert_eq!(accepted, expected, "{name}: unexpected result");
+        assert_eq!(!timeout, expected, "{name}: unexpected result");
 
         conn.close().await?;
         listener.close().await?;

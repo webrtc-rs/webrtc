@@ -31,7 +31,7 @@ impl std::fmt::Display for OverconstrainedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Overconstrained property {:?}", self.constraint)?;
         if let Some(message) = self.message.as_ref() {
-            write!(f, ": {}", message)?;
+            write!(f, ": {message}")?;
         }
         Ok(())
     }
@@ -100,10 +100,10 @@ impl OverconstrainedError {
             [reason] => reason.clone(),
             [reasons @ .., reason] => {
                 let reasons = reasons.join(", ");
-                format!("either {}, or {}", reasons, reason)
+                format!("either {reasons}, or {reason}")
             }
         };
-        let message = Some(format!("Setting was {}.", formatted_reason));
+        let message = Some(format!("Setting was {formatted_reason}."));
 
         Self {
             constraint,

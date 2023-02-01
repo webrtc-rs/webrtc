@@ -169,8 +169,7 @@ fn test_vp8_payload() -> Result<()> {
             let actual = pck.payload(mtu, payload)?;
             assert_eq!(
                 expected[i], actual,
-                "{}: Generated packet[{}] differs",
-                name, i
+                "{name}: Generated packet[{i}] differs"
             );
         }
     }

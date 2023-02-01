@@ -36,7 +36,7 @@ impl fmt::Display for ChunkError {
         let mut res = vec![self.header().to_string()];
 
         for cause in &self.error_causes {
-            res.push(format!(" - {}", cause));
+            res.push(format!(" - {cause}"));
         }
 
         write!(f, "{}", res.join("\n"))

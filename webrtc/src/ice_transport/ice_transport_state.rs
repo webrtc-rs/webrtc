@@ -90,20 +90,20 @@ impl From<u8> for RTCIceTransportState {
 impl fmt::Display for RTCIceTransportState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceTransportState::New => write!(f, "{}", ICE_TRANSPORT_STATE_NEW_STR),
-            RTCIceTransportState::Checking => write!(f, "{}", ICE_TRANSPORT_STATE_CHECKING_STR),
+            RTCIceTransportState::New => write!(f, "{ICE_TRANSPORT_STATE_NEW_STR}"),
+            RTCIceTransportState::Checking => write!(f, "{ICE_TRANSPORT_STATE_CHECKING_STR}"),
             RTCIceTransportState::Connected => {
-                write!(f, "{}", ICE_TRANSPORT_STATE_CONNECTED_STR)
+                write!(f, "{ICE_TRANSPORT_STATE_CONNECTED_STR}")
             }
-            RTCIceTransportState::Completed => write!(f, "{}", ICE_TRANSPORT_STATE_COMPLETED_STR),
+            RTCIceTransportState::Completed => write!(f, "{ICE_TRANSPORT_STATE_COMPLETED_STR}"),
             RTCIceTransportState::Failed => {
-                write!(f, "{}", ICE_TRANSPORT_STATE_FAILED_STR)
+                write!(f, "{ICE_TRANSPORT_STATE_FAILED_STR}")
             }
             RTCIceTransportState::Disconnected => {
-                write!(f, "{}", ICE_TRANSPORT_STATE_DISCONNECTED_STR)
+                write!(f, "{ICE_TRANSPORT_STATE_DISCONNECTED_STR}")
             }
             RTCIceTransportState::Closed => {
-                write!(f, "{}", ICE_TRANSPORT_STATE_CLOSED_STR)
+                write!(f, "{ICE_TRANSPORT_STATE_CLOSED_STR}")
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }

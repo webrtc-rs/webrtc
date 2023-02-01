@@ -39,8 +39,8 @@ impl From<&str> for RTCIceRole {
 impl fmt::Display for RTCIceRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceRole::Controlling => write!(f, "{}", ICE_ROLE_CONTROLLING_STR),
-            RTCIceRole::Controlled => write!(f, "{}", ICE_ROLE_CONTROLLED_STR),
+            RTCIceRole::Controlling => write!(f, "{ICE_ROLE_CONTROLLING_STR}"),
+            RTCIceRole::Controlled => write!(f, "{ICE_ROLE_CONTROLLED_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }

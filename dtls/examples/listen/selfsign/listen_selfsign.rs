@@ -63,7 +63,7 @@ async fn main() -> Result<(), Error> {
         ..Default::default()
     };
 
-    println!("listening {}...\ntype 'exit' to shutdown gracefully", host);
+    println!("listening {host}...\ntype 'exit' to shutdown gracefully");
 
     let listener = Arc::new(listen(host, cfg).await?);
 

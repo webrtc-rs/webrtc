@@ -86,7 +86,7 @@ fn test_channel_data_equal() -> Result<()> {
 
     for (name, a, b, r) in tests {
         let v = a == b;
-        assert_eq!(v, r, "unexpected: ({}) {} != {}", name, r, r);
+        assert_eq!(v, r, "unexpected: ({name}) {r} != {r}");
     }
 
     Ok(())
@@ -121,8 +121,7 @@ fn test_channel_data_decode() -> Result<()> {
         if let Err(err) = m.decode() {
             assert_eq!(
                 want_err, err,
-                "unexpected: ({}) {} != {}",
-                name, want_err, err
+                "unexpected: ({name}) {want_err} != {err}"
             );
         } else {
             panic!("expected error, but got ok");
@@ -158,7 +157,7 @@ fn test_is_channel_data() -> Result<()> {
 
     for (name, buf, r) in tests {
         let v = ChannelData::is_channel_data(&buf);
-        assert_eq!(v, r, "unexpected: ({}) {} != {}", name, r, v);
+        assert_eq!(v, r, "unexpected: ({name}) {r} != {v}");
     }
 
     Ok(())

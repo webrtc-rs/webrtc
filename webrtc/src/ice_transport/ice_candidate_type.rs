@@ -77,10 +77,10 @@ impl From<CandidateType> for RTCIceCandidateType {
 impl fmt::Display for RTCIceCandidateType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceCandidateType::Host => write!(f, "{}", ICE_CANDIDATE_TYPE_HOST_STR),
-            RTCIceCandidateType::Srflx => write!(f, "{}", ICE_CANDIDATE_TYPE_SRFLX_STR),
-            RTCIceCandidateType::Prflx => write!(f, "{}", ICE_CANDIDATE_TYPE_PRFLX_STR),
-            RTCIceCandidateType::Relay => write!(f, "{}", ICE_CANDIDATE_TYPE_RELAY_STR),
+            RTCIceCandidateType::Host => write!(f, "{ICE_CANDIDATE_TYPE_HOST_STR}"),
+            RTCIceCandidateType::Srflx => write!(f, "{ICE_CANDIDATE_TYPE_SRFLX_STR}"),
+            RTCIceCandidateType::Prflx => write!(f, "{ICE_CANDIDATE_TYPE_PRFLX_STR}"),
+            RTCIceCandidateType::Relay => write!(f, "{ICE_CANDIDATE_TYPE_RELAY_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }

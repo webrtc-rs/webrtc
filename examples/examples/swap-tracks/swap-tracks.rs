@@ -181,7 +181,7 @@ async fn main() -> Result<()> {
                                 })])
                                 .await
                             {
-                                println!("write_rtcp err: {}", err);
+                                println!("write_rtcp err: {err}");
                             }
                         } else {
                             break;
@@ -209,7 +209,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
         if s == RTCPeerConnectionState::Connected {
             let _ = connected_tx.try_send(());
         } else if s == RTCPeerConnectionState::Failed {
@@ -239,7 +239,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

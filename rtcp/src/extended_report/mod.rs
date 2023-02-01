@@ -78,7 +78,7 @@ impl fmt::Display for BlockType {
             BlockType::VoIPMetrics => "VoIPMetricsReportBlockType",
             _ => "UnknownReportBlockType",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -166,7 +166,7 @@ pub struct ExtendedReport {
 
 impl fmt::Display for ExtendedReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

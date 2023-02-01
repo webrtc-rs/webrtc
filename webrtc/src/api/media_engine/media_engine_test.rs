@@ -708,7 +708,8 @@ a=rtpmap:111 opus/48000/2
 
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
-    for extension in ["urn:3gpp:video-orientation"] {
+    {
+        let extension = "urn:3gpp:video-orientation";
         m.register_header_extension(
             RTCRtpHeaderExtensionCapability {
                 uri: extension.to_owned(),

@@ -57,7 +57,7 @@ impl fmt::Display for RTCSdpSemantics {
             RTCSdpSemantics::PlanB => SDP_SEMANTICS_PLAN_B,
             RTCSdpSemantics::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

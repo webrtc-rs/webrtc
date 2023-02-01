@@ -156,8 +156,8 @@ async fn test_client_nonce_expiration() -> Result<()> {
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
     let client = Client::new(ClientConfig {
-        stun_serv_addr: format!("127.0.0.1:{}", server_port),
-        turn_serv_addr: format!("127.0.0.1:{}", server_port),
+        stun_serv_addr: format!("127.0.0.1:{server_port}"),
+        turn_serv_addr: format!("127.0.0.1:{server_port}"),
         username: "foo".to_owned(),
         password: "pass".to_owned(),
         realm: String::new(),

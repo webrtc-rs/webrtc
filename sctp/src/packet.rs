@@ -72,9 +72,9 @@ impl fmt::Display for Packet {
             self.source_port, self.destination_port, self.verification_tag,
         );
         for chunk in &self.chunks {
-            res += format!("Chunk: {}", chunk).as_str();
+            res += format!("Chunk: {chunk}").as_str();
         }
-        write!(f, "{}", res)
+        write!(f, "{res}")
     }
 }
 
@@ -289,7 +289,7 @@ mod test {
         ]);
         let pkt = Packet::unmarshal(&header_only)?;
         let header_only_marshaled = pkt.marshal()?;
-        assert_eq!(header_only, header_only_marshaled, "Unmarshal/Marshaled header only packet did not match \nheaderOnly: {:?} \nheader_only_marshaled {:?}", header_only, header_only_marshaled);
+        assert_eq!(header_only, header_only_marshaled, "Unmarshal/Marshaled header only packet did not match \nheaderOnly: {header_only:?} \nheader_only_marshaled {header_only_marshaled:?}");
 
         Ok(())
     }

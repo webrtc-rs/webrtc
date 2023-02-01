@@ -76,7 +76,7 @@ impl fmt::Display for RTCDtlsTransportState {
             RTCDtlsTransportState::Failed => DTLS_TRANSPORT_STATE_FAILED_STR,
             RTCDtlsTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -99,8 +99,7 @@ mod test {
             assert_eq!(
                 RTCDtlsTransportState::from(state_string),
                 expected_state,
-                "testCase: {}",
-                expected_state,
+                "testCase: {expected_state}",
             );
         }
     }

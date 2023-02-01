@@ -61,7 +61,7 @@ fn test_param_header_unmarshal_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ParamHeader::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -97,7 +97,7 @@ fn test_param_forward_tsn_supported_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ParamForwardTsnSupported::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -158,7 +158,7 @@ fn test_param_outgoing_reset_request_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ParamOutgoingResetRequest::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -205,7 +205,7 @@ fn test_param_reconfig_response_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ParamReconfigResponse::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -231,7 +231,7 @@ fn test_reconfig_result_stringer() -> Result<()> {
 
     for (result, expected) in tests {
         let actual = result.to_string();
-        assert_eq!(actual, expected, "Test case {}", expected);
+        assert_eq!(actual, expected, "Test case {expected}");
     }
 
     Ok(())
@@ -263,7 +263,7 @@ fn test_build_param_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = build_param(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())

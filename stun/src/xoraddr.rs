@@ -142,7 +142,7 @@ impl XorMappedAddress {
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::Other(format!("bad value {}", family)));
+            return Err(Error::Other(format!("bad value {family}")));
         }
 
         check_overflow(

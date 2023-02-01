@@ -42,7 +42,7 @@ impl fmt::Display for PayloadProtocolIdentifier {
             PayloadProtocolIdentifier::BinaryEmpty => "WebRTC Binary (Empty)",
             _ => "Unknown Payload Protocol Identifier",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

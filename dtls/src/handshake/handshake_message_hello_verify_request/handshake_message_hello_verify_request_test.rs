@@ -23,8 +23,7 @@ fn test_handshake_message_hello_verify_request() -> Result<()> {
     let c = HandshakeMessageHelloVerifyRequest::unmarshal(&mut reader)?;
     assert_eq!(
         c, parsed_hello_verify_request,
-        "parsed_hello_verify_request unmarshal: got {:?}, want {:?}",
-        c, parsed_hello_verify_request
+        "parsed_hello_verify_request unmarshal: got {c:?}, want {parsed_hello_verify_request:?}"
     );
 
     let mut raw = vec![];
@@ -34,8 +33,7 @@ fn test_handshake_message_hello_verify_request() -> Result<()> {
     }
     assert_eq!(
         raw, raw_hello_verify_request,
-        "parsed_hello_verify_request marshal: got {:?}, want {:?}",
-        raw, raw_hello_verify_request
+        "parsed_hello_verify_request marshal: got {raw:?}, want {raw_hello_verify_request:?}"
     );
 
     Ok(())

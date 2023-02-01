@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
 
     let video_file = matches.value_of("video").unwrap();
     if !Path::new(video_file).exists() {
-        return Err(Error::new(format!("video file: '{}' not exist", video_file)).into());
+        return Err(Error::new(format!("video file: '{video_file}' not exist")).into());
     }
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
@@ -168,7 +168,7 @@ async fn main() -> Result<()> {
             let mut frame = match ivf.parse_next_frame() {
                 Ok((frame, _)) => frame,
                 Err(err) => {
-                    println!("All video frames parsed and sent: {}", err);
+                    println!("All video frames parsed and sent: {err}");
                     break;
                 }
             };
@@ -198,7 +198,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_ice_connection_state_change(Box::new(
         move |connection_state: RTCIceConnectionState| {
-            println!("Connection State has changed {}", connection_state);
+            println!("Connection State has changed {connection_state}");
             if connection_state == RTCIceConnectionState::Connected {
                 notify_tx.notify_waiters();
             }
@@ -209,7 +209,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -248,7 +248,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

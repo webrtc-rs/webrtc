@@ -48,7 +48,7 @@ impl fmt::Display for ConnectionState {
             Self::Disconnected => "Disconnected",
             Self::Closed => "Closed",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -107,6 +107,6 @@ impl fmt::Display for GatheringState {
             Self::Complete => "complete",
             Self::Unspecified => "unspecified",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }

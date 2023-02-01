@@ -106,10 +106,9 @@ async fn test_net_native_loopback() -> Result<()> {
     assert_eq!(
         &buf[..n],
         msg.as_bytes(),
-        "should match msg content {}",
-        msg
+        "should match msg content {msg}"
     );
-    assert_eq!(laddr, raddr, "should match addr {}", laddr);
+    assert_eq!(laddr, raddr, "should match addr {laddr}");
 
     Ok(())
 }
@@ -229,13 +228,13 @@ async fn test_net_virtual_has_ipaddr() -> Result<()> {
     if let Net::VNet(vnet) = &nw {
         let net = vnet.lock().await;
         let ip = Ipv4Addr::from_str("127.0.0.1")?.into();
-        assert!(net.has_ipaddr(ip), "the IP addr {} should exist", ip);
+        assert!(net.has_ipaddr(ip), "the IP addr {ip} should exist");
 
         let ip = Ipv4Addr::from_str("10.1.2.3")?.into();
-        assert!(net.has_ipaddr(ip), "the IP addr {} should exist", ip);
+        assert!(net.has_ipaddr(ip), "the IP addr {ip} should exist");
 
         let ip = Ipv4Addr::from_str("192.168.1.1")?.into();
-        assert!(!net.has_ipaddr(ip), "the IP addr {} should exist", ip);
+        assert!(!net.has_ipaddr(ip), "the IP addr {ip} should exist");
     }
     Ok(())
 }
@@ -285,7 +284,7 @@ async fn test_net_virtual_assign_port() -> Result<()> {
     {
         let nic = nw.get_nic()?;
         let mut nic = nic.lock().await;
-        let ipnet = IpNet::from_str(&format!("{}/24", addr))?;
+        let ipnet = IpNet::from_str(&format!("{addr}/24"))?;
         nic.add_addrs_to_interface("eth0", &[ipnet]).await?;
     }
 
@@ -337,7 +336,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<()> {
     {
         let nic = nw.get_nic()?;
         let mut nic = nic.lock().await;
-        let ipnet = IpNet::from_str(&format!("{}/24", DEMO_IP))?;
+        let ipnet = IpNet::from_str(&format!("{DEMO_IP}/24"))?;
         nic.add_addrs_to_interface("eth0", &[ipnet]).await?;
     }
 
@@ -426,10 +425,9 @@ async fn test_net_virtual_loopback1() -> Result<()> {
     assert_eq!(
         &buf[..n],
         msg.as_bytes(),
-        "should match msg content {}",
-        msg
+        "should match msg content {msg}"
     );
-    assert_eq!(laddr, raddr, "should match addr {}", laddr);
+    assert_eq!(laddr, raddr, "should match addr {laddr}");
 
     Ok(())
 }
@@ -547,8 +545,7 @@ async fn test_net_virtual_resolver() -> Result<()> {
         assert_eq!(
             raddr.to_string(),
             "30.31.32.33:1234",
-            "{} should match 30.31.32.33:1234",
-            raddr
+            "{raddr} should match 30.31.32.33:1234"
         );
 
         drop(done_tx);
@@ -570,8 +567,7 @@ async fn test_net_virtual_loopback2() -> Result<()> {
     assert_eq!(
         laddr.to_string().as_str(),
         "127.0.0.1:50916",
-        "{} should match 127.0.0.1:50916",
-        laddr
+        "{laddr} should match 127.0.0.1:50916"
     );
 
     let mut c = ChunkUdp::new(
@@ -598,7 +594,7 @@ async fn test_net_virtual_loopback2() -> Result<()> {
                         }
                     };
 
-                    assert_eq!(n, 6, "{} should match 6", n);
+                    assert_eq!(n, 6, "{n} should match 6");
                     assert_eq!(addr.to_string(), "127.0.0.1:4000", "addr should match");
                     assert_eq!(&buf[..n], b"Hello!", "buf should match");
 

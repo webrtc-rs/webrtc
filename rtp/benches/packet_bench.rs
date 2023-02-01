@@ -32,8 +32,7 @@ fn benchmark_packet(c: &mut Criterion) {
     let p = Packet::unmarshal(buf).unwrap();
     if pkt != p {
         panic!(
-            "marshal or unmarshal not correct: \npkt: {:?} \nvs \np: {:?}",
-            pkt, p
+            "marshal or unmarshal not correct: \npkt: {pkt:?} \nvs \np: {p:?}"
         );
     }
 

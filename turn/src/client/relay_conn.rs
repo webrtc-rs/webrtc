@@ -185,7 +185,7 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
         let _ = relay_conn
             .close()
             .await
-            .map_err(|err| util::Error::Other(format!("{}", err)));
+            .map_err(|err| util::Error::Other(format!("{err}")));
         Ok(())
     }
 }

@@ -566,7 +566,7 @@ pub(crate) async fn add_transceiver_sdp(
             // description, "a=msid" line(s) MUST be generated according to the
             // same rules as for an initial offer.
             for stream_id in sender.associated_media_stream_ids() {
-                media = media.with_property_attribute(format!("msid:{} {}", stream_id, track_id));
+                media = media.with_property_attribute(format!("msid:{stream_id} {track_id}"));
             }
 
             break;

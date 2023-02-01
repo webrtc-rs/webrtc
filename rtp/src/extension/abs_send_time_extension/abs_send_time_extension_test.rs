@@ -59,8 +59,7 @@ fn test_ntp_conversion() -> Result<()> {
         let diff = input.duration_since(output).unwrap().as_nanos() as i128;
         if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
             panic!(
-                "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
-                input, output,
+                "Converted time.Time from NTP time differs, expected: {input:?}, got: {output:?}",
             );
         }
     }
@@ -112,8 +111,7 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
         let diff = estimated.duration_since(in_time).unwrap().as_nanos() as i128;
         if !(-ABS_SEND_TIME_RESOLUTION..=ABS_SEND_TIME_RESOLUTION).contains(&diff) {
             panic!(
-                "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
-                in_time, estimated,
+                "Converted time.Time from NTP time differs, expected: {in_time:?}, got: {estimated:?}",
             );
         }
     }

@@ -36,7 +36,7 @@ pub(crate) fn generate_multicast_dns_name() -> String {
     // https://tools.ietf.org/id/draft-ietf-rtcweb-mdns-ice-candidates-02.html#gathering
     // The unique name MUST consist of a version 4 UUID as defined in [RFC4122], followed by “.local”.
     let u = Uuid::new_v4();
-    format!("{}.local", u)
+    format!("{u}.local")
 }
 
 pub(crate) fn create_multicast_dns(

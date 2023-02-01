@@ -41,12 +41,12 @@ impl fmt::Display for ChunkReconfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut res = String::new();
         if let Some(param_a) = &self.param_a {
-            res += format!("Param A:\n {}", param_a).as_str();
+            res += format!("Param A:\n {param_a}").as_str();
         }
         if let Some(param_b) = &self.param_b {
-            res += format!("Param B:\n {}", param_b).as_str()
+            res += format!("Param B:\n {param_b}").as_str()
         }
-        write!(f, "{}", res)
+        write!(f, "{res}")
     }
 }
 

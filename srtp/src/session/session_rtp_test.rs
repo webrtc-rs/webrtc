@@ -97,8 +97,7 @@ async fn test_session_srtp_accept() -> Result<()> {
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,
-        "SSRC mismatch during accept exp({}) actual({})",
-        TEST_SSRC, ssrc
+        "SSRC mismatch during accept exp({TEST_SSRC}) actual({ssrc})"
     );
 
     read_stream.read(&mut read_buffer).await?;

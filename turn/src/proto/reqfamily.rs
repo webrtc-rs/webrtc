@@ -23,7 +23,7 @@ impl fmt::Display for RequestedAddressFamily {
             REQUESTED_FAMILY_IPV6 => "IPv6",
             _ => "unknown",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

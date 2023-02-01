@@ -80,7 +80,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
                 assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_H264);
                 let _ = seen_packet_b_tx2.send(()).await;
             } else {
-                panic!("Unexpected RTP Data {:02x}", last);
+                panic!("Unexpected RTP Data {last:02x}");
             }
         })
     }));

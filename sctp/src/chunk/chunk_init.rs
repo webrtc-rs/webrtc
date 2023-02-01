@@ -110,7 +110,7 @@ impl fmt::Display for ChunkInit {
         );
 
         for (i, param) in self.params.iter().enumerate() {
-            res += format!("Param {}:\n {}", i, param).as_str();
+            res += format!("Param {i}:\n {param}").as_str();
         }
         write!(f, "{} {}", self.header(), res)
     }

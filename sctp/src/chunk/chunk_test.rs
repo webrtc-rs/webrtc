@@ -32,9 +32,7 @@ fn test_chunk_type_string() -> Result<()> {
         assert_eq!(
             ct.to_string(),
             expected,
-            "failed to stringify chunkType {}, expected {}",
-            ct,
-            expected
+            "failed to stringify chunkType {ct}, expected {expected}"
         );
     }
 
@@ -225,7 +223,7 @@ fn test_chunk_forward_tsn_unmarshal_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkForwardTsn::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -321,7 +319,7 @@ fn test_chunk_reconfig_unmarshal_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkReconfig::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -374,7 +372,7 @@ fn test_chunk_shutdown_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkShutdown::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -414,7 +412,7 @@ fn test_chunk_shutdown_ack_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkShutdownAck::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -454,7 +452,7 @@ fn test_chunk_shutdown_complete_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkShutdownComplete::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())

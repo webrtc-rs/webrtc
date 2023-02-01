@@ -31,12 +31,11 @@ fn test_alert() -> Result<()> {
         let result = Alert::unmarshal(&mut reader);
 
         if let Some(err) = unmarshal_error {
-            assert!(result.is_err(), "{} expected error: {}", name, err);
+            assert!(result.is_err(), "{name} expected error: {err}");
         } else if let Ok(alert) = result {
             assert_eq!(
                 wanted, alert,
-                "{} expected {}, but got {}",
-                name, wanted, alert
+                "{name} expected {wanted}, but got {alert}"
             );
 
             let mut data2: Vec<u8> = vec![];
@@ -46,11 +45,10 @@ fn test_alert() -> Result<()> {
             }
             assert_eq!(
                 data, data2,
-                "{} expected {:?}, but got {:?}",
-                name, data, data2
+                "{name} expected {data:?}, but got {data2:?}"
             );
         } else {
-            assert!(result.is_ok(), "{} expected Ok, but has error", name);
+            assert!(result.is_ok(), "{name} expected Ok, but has error");
         }
     }
 

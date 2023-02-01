@@ -37,7 +37,7 @@ impl fmt::Display for TcpType {
             Self::SimultaneousOpen => "so",
             Self::Unspecified => "unspecified",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

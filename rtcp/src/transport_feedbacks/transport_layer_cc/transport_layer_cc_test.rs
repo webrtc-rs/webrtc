@@ -28,7 +28,7 @@ fn test_transport_layer_cc_run_length_chunk_unmarshal() -> Result<()> {
 
     for (name, mut data, want) in tests {
         let got = RunLengthChunk::unmarshal(&mut data)?;
-        assert_eq!(got, want, "Unmarshal {} : err", name,);
+        assert_eq!(got, want, "Unmarshal {name} : err",);
     }
 
     Ok(())
@@ -61,7 +61,7 @@ fn test_transport_layer_cc_run_length_chunk_marshal() -> Result<()> {
 
     for (name, chunk, want) in tests {
         let got = chunk.marshal()?;
-        assert_eq!(got, want, "Marshal {}: err", name,);
+        assert_eq!(got, want, "Marshal {name}: err",);
     }
 
     Ok(())
@@ -117,7 +117,7 @@ fn test_transport_layer_cc_status_vector_chunk_unmarshal() -> Result<()> {
 
     for (name, mut data, want) in tests {
         let got = StatusVectorChunk::unmarshal(&mut data)?;
-        assert_eq!(got, want, "Unmarshal {} : err", name,);
+        assert_eq!(got, want, "Unmarshal {name} : err",);
     }
 
     Ok(())
@@ -173,7 +173,7 @@ fn test_transport_layer_cc_status_vector_chunk_marshal() -> Result<()> {
 
     for (name, chunk, want) in tests {
         let got = chunk.marshal()?;
-        assert_eq!(got, want, "Marshal {}: err", name,);
+        assert_eq!(got, want, "Marshal {name}: err",);
     }
 
     Ok(())
@@ -213,7 +213,7 @@ fn test_transport_layer_cc_recv_delta_unmarshal() -> Result<()> {
 
     for (name, mut data, want) in tests {
         let got = RecvDelta::unmarshal(&mut data)?;
-        assert_eq!(got, want, "Unmarshal {} : err", name,);
+        assert_eq!(got, want, "Unmarshal {name} : err",);
     }
 
     Ok(())
@@ -253,7 +253,7 @@ fn test_transport_layer_cc_recv_delta_marshal() -> Result<()> {
 
     for (name, chunk, want) in tests {
         let got = chunk.marshal()?;
-        assert_eq!(got, want, "Marshal {}: err", name,);
+        assert_eq!(got, want, "Marshal {name}: err",);
     }
 
     Ok(())
@@ -604,7 +604,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
 
     for (name, mut data, want) in tests {
         let got = TransportLayerCc::unmarshal(&mut data)?;
-        assert!(got == want, "Unmarshal {} : err", name,);
+        assert!(got == want, "Unmarshal {name} : err",);
     }
 
     Ok(())
@@ -919,7 +919,7 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
 
     for (name, chunk, want) in tests {
         let got = chunk.marshal()?;
-        assert_eq!(got, want, "Marshal {}: err", name);
+        assert_eq!(got, want, "Marshal {name}: err");
     }
 
     Ok(())

@@ -130,8 +130,7 @@ fn test_candidate_pair_priority() -> Result<()> {
         let got = pair.priority();
         assert_eq!(
             got, want,
-            "CandidatePair({}).Priority() = {}, want {}",
-            pair, got, want
+            "CandidatePair({pair}).Priority() = {got}, want {want}"
         );
     }
 
@@ -151,7 +150,7 @@ fn test_candidate_pair_equality() -> Result<()> {
         false,
     );
 
-    assert_eq!(pair_a, pair_b, "Expected {} to equal {}", pair_a, pair_b);
+    assert_eq!(pair_a, pair_b, "Expected {pair_a} to equal {pair_b}");
 
     Ok(())
 }

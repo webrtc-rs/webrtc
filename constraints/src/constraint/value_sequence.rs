@@ -204,14 +204,14 @@ where
         let mut is_first = true;
         f.write_str("(")?;
         if let Some(ref exact) = &self.exact {
-            f.write_fmt(format_args!("x == {:?}", exact))?;
+            f.write_fmt(format_args!("x == {exact:?}"))?;
             is_first = false;
         }
         if let Some(ref ideal) = &self.ideal {
             if !is_first {
                 f.write_str(" && ")?;
             }
-            f.write_fmt(format_args!("x ~= {:?}", ideal))?;
+            f.write_fmt(format_args!("x ~= {ideal:?}"))?;
             is_first = false;
         }
         if is_first {

@@ -98,8 +98,7 @@ fn test_generate_key_signature() -> Result<()> {
 
     assert_eq!(
         signature, expected_signature,
-        "Signature generation failed \nexp {:?} \nactual {:?} ",
-        expected_signature, signature
+        "Signature generation failed \nexp {expected_signature:?} \nactual {signature:?} "
     );
 
     Ok(())

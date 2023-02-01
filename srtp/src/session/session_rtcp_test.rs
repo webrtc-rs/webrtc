@@ -88,8 +88,7 @@ async fn test_session_srtcp_accept() -> Result<()> {
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,
-        "SSRC mismatch during accept exp({}) actual({})",
-        TEST_SSRC, ssrc
+        "SSRC mismatch during accept exp({TEST_SSRC}) actual({ssrc})"
     );
 
     let mut read_buffer = BytesMut::with_capacity(test_payload.len());

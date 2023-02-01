@@ -217,15 +217,14 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
             if let Err(actual) = p.depacketize(&b) {
                 assert_eq!(
                     expected, actual,
-                    "{}: expected {}, but got {}",
-                    name, expected, actual
+                    "{name}: expected {expected}, but got {actual}"
                 );
             } else {
-                panic!("{}: expected error, but got passed", name);
+                panic!("{name}: expected error, but got passed");
             }
         } else {
             let payload = p.depacketize(&b)?;
-            assert_eq!(pkt, p, "{}: expected {:?}, but got {:?}", name, pkt, p);
+            assert_eq!(pkt, p, "{name}: expected {pkt:?}, but got {p:?}");
             assert_eq!(payload, expected);
         }
     }
@@ -304,7 +303,7 @@ fn test_vp9_payloader_payload() -> Result<()> {
         for b in &bs {
             actual.extend(pck.payload(mtu, b)?);
         }
-        assert_eq!(actual, expected, "{}: Payloaded packet", name);
+        assert_eq!(actual, expected, "{name}: Payloaded packet");
     }
 
     //"PictureIDOverflow"

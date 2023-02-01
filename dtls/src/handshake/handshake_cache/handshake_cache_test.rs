@@ -328,8 +328,7 @@ async fn test_handshake_cache_single_push() -> Result<()> {
         let verify_data = h.pull_and_merge(&rules).await;
         assert_eq!(
             verify_data, expected,
-            "handshakeCache '{}' exp:{:?} actual {:?}",
-            name, expected, verify_data,
+            "handshakeCache '{name}' exp:{expected:?} actual {verify_data:?}",
         );
     }
 
@@ -651,8 +650,7 @@ async fn test_handshake_cache_session_hash() -> Result<()> {
 
         assert_eq!(
             verify_data, expected,
-            "handshakeCacheSesssionHassh '{}' exp: {:?} actual {:?}",
-            name, expected, verify_data
+            "handshakeCacheSesssionHassh '{name}' exp: {expected:?} actual {verify_data:?}"
         );
     }
 

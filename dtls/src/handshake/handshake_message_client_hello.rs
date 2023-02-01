@@ -62,7 +62,7 @@ impl fmt::Debug for HandshakeMessageClientHello {
         let s = vec![
             format!("version: {:?} random: {:?}", self.version, self.random),
             format!("cookie: {:?}", self.cookie),
-            format!("cipher_suites: {:?}", cipher_suites_str),
+            format!("cipher_suites: {cipher_suites_str:?}"),
             format!("compression_methods: {:?}", self.compression_methods),
             format!("extensions: {:?}", self.extensions),
         ];
