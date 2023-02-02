@@ -272,7 +272,7 @@ fn test_replay_detector() {
                 }
             }
 
-            assert_eq!(&out, exp, "{} failed", name);
+            assert_eq!(&out, exp, "{name} failed");
         }
     }
 }

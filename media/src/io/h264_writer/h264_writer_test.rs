@@ -26,7 +26,7 @@ fn test_is_key_frame() -> Result<()> {
 
     for (name, payload, want) in tests {
         let got = is_key_frame(&payload);
-        assert_eq!(got, want, "{} failed", name);
+        assert_eq!(got, want, "{name} failed");
     }
 
     Ok(())

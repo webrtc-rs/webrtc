@@ -1473,8 +1473,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
         assert_eq!(
             Error::ErrClosedPipe,
             err,
-            "expected ErrClosedPipe, but got {}",
-            err
+            "expected ErrClosedPipe, but got {err}"
         );
     } else {
         panic!();
@@ -1485,8 +1484,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
         assert_eq!(
             Error::ErrClosedPipe,
             err,
-            "expected ErrClosedPipe, but got {}",
-            err
+            "expected ErrClosedPipe, but got {err}"
         );
     } else {
         panic!();
@@ -1497,8 +1495,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
         assert_eq!(
             Error::ErrClosedPipe,
             err,
-            "expected ErrClosedPipe, but got {}",
-            err
+            "expected ErrClosedPipe, but got {err}"
         );
     } else {
         panic!();

@@ -566,7 +566,7 @@ pub(crate) async fn add_transceiver_sdp(
             // description, "a=msid" line(s) MUST be generated according to the
             // same rules as for an initial offer.
             for stream_id in sender.associated_media_stream_ids() {
-                media = media.with_property_attribute(format!("msid:{} {}", stream_id, track_id));
+                media = media.with_property_attribute(format!("msid:{stream_id} {track_id}"));
             }
 
             break;
@@ -844,10 +844,10 @@ pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool 
     false
 }
 
-pub(crate) fn get_by_mid<'a, 'b>(
-    search_mid: &'a str,
-    desc: &'b session_description::RTCSessionDescription,
-) -> Option<&'b MediaDescription> {
+pub(crate) fn get_by_mid<'a>(
+    search_mid: &str,
+    desc: &'a session_description::RTCSessionDescription,
+) -> Option<&'a MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
             if let Some(mid) = m.attribute(ATTR_KEY_MID).flatten() {

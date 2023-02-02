@@ -69,7 +69,7 @@ impl fmt::Display for AttrType {
             _ => other.as_str(),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

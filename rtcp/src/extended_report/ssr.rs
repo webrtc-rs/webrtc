@@ -54,7 +54,7 @@ pub struct StatisticsSummaryReportBlock {
 
 impl fmt::Display for StatisticsSummaryReportBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -90,7 +90,7 @@ impl fmt::Display for TTLorHopLimitType {
             TTLorHopLimitType::IPv4 => "[ToH = IPv4]",
             TTLorHopLimitType::IPv6 => "[ToH = IPv6]",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

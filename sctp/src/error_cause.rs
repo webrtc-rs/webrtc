@@ -42,7 +42,7 @@ impl fmt::Display for ErrorCauseCode {
             PROTOCOL_VIOLATION => "Protocol Violation",
             _ => others.as_str(),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

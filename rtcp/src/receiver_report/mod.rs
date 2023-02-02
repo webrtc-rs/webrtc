@@ -41,7 +41,7 @@ impl fmt::Display for ReceiverReport {
         }
         out += format!("\tProfile Extension Data: {:?}\n", self.profile_extensions).as_str();
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

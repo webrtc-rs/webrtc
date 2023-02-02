@@ -64,7 +64,7 @@ impl fmt::Display for NetworkType {
             Self::Tcp6 => "tcp6",
             Self::Unspecified => "unspecified",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

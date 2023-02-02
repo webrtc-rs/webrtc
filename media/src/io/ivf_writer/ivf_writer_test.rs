@@ -166,7 +166,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             assert!(result.is_ok(), "{}", msg1);
         }
 
-        assert_eq!(seen_key_frame, writer.seen_key_frame, "{} failed", msg1);
+        assert_eq!(seen_key_frame, writer.seen_key_frame, "{msg1} failed");
         if count == 1 {
             assert_eq!(writer.count, 0);
         } else if count == 2 {

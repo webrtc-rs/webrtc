@@ -97,7 +97,7 @@ impl fmt::Display for RTCIceConnectionState {
             RTCIceConnectionState::Closed => ICE_CONNECTION_STATE_CLOSED_STR,
             RTCIceConnectionState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -122,8 +122,7 @@ mod test {
             assert_eq!(
                 RTCIceConnectionState::from(state_string),
                 expected_state,
-                "testCase: {}",
-                expected_state,
+                "testCase: {expected_state}",
             );
         }
     }

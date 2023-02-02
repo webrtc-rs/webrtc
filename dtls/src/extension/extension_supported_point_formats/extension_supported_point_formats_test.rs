@@ -17,8 +17,7 @@ fn test_extension_supported_point_formats() -> Result<()> {
 
     assert_eq!(
         raw, raw_extension_supported_point_formats,
-        "extensionSupportedPointFormats marshal: got {:?}, want {:?}",
-        raw, raw_extension_supported_point_formats
+        "extensionSupportedPointFormats marshal: got {raw:?}, want {raw_extension_supported_point_formats:?}"
     );
 
     let mut reader = BufReader::new(raw.as_slice());
@@ -27,8 +26,7 @@ fn test_extension_supported_point_formats() -> Result<()> {
 
     assert_eq!(
         new_extension_supported_point_formats, parsed_extension_supported_point_formats,
-        "extensionSupportedPointFormats unmarshal: got {:?}, want {:?}",
-        new_extension_supported_point_formats, parsed_extension_supported_point_formats
+        "extensionSupportedPointFormats unmarshal: got {new_extension_supported_point_formats:?}, want {parsed_extension_supported_point_formats:?}"
     );
 
     Ok(())

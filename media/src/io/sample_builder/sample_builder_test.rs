@@ -1437,9 +1437,7 @@ fn test_sample_builder_clean_reference() {
             assert_eq!(
                 s.buffer[seq_start.wrapping_add(i) as usize],
                 None,
-                "Old packet ({}) is not unreferenced (seq_start: {}, max_late: 10, pushed: 12)",
-                i,
-                seq_start
+                "Old packet ({i}) is not unreferenced (seq_start: {seq_start}, max_late: 10, pushed: 12)"
             );
         }
         assert_eq!(s.buffer[seq_start.wrapping_add(14) as usize], Some(pkt4));

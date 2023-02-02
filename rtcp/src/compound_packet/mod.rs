@@ -30,7 +30,7 @@ pub struct CompoundPacket(pub Vec<Box<dyn Packet + Send + Sync>>);
 
 impl fmt::Display for CompoundPacket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

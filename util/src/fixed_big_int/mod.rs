@@ -17,7 +17,7 @@ impl fmt::Display for FixedBigInt {
             out += format!("{:016X}", self.bits[i]).as_str();
         }
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

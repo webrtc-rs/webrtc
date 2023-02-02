@@ -58,7 +58,7 @@ fn test_padding() -> Result<()> {
 
     for (i, o) in tt {
         let got = nearest_padded_value_length(i);
-        assert_eq!(got, o, "padd({}) {} (got) != {} (expected)", i, got, o,);
+        assert_eq!(got, o, "padd({i}) {got} (got) != {o} (expected)",);
     }
 
     Ok(())

@@ -48,7 +48,7 @@ impl fmt::Display for ReliabilityType {
             ReliabilityType::Rexmit => "Rexmit",
             ReliabilityType::Timed => "Timed",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

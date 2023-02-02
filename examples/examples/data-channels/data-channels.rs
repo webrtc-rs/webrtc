@@ -100,7 +100,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -118,7 +118,7 @@ async fn main() -> Result<()> {
         .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             let d_label = d.label().to_owned();
             let d_id = d.id();
-            println!("New DataChannel {} {}", d_label, d_id);
+            println!("New DataChannel {d_label} {d_id}");
 
             // Register channel opening handling
             Box::pin(async move {
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
                 let d_label2 = d_label.clone();
                 let d_id2 = d_id;
                 d.on_open(Box::new(move || {
-                    println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
+                    println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
 
                     Box::pin(async move {
                         let mut result = Result::<usize>::Ok(0);
@@ -137,7 +137,7 @@ async fn main() -> Result<()> {
                             tokio::select! {
                                 _ = timeout.as_mut() =>{
                                     let message = math_rand_alpha(15);
-                                    println!("Sending '{}'", message);
+                                    println!("Sending '{message}'");
                                     result = d2.send_text(message).await.map_err(Into::into);
                                 }
                             };
@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
                 // Register text message handling
                 d.on_message(Box::new(move |msg: DataChannelMessage| {
                     let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                    println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+                    println!("Message from DataChannel '{d_label}': '{msg_str}'");
                     Box::pin(async {})
                 }));
             })
@@ -180,7 +180,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

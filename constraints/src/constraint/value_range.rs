@@ -233,23 +233,23 @@ where
         let mut is_first = true;
         f.write_str("(")?;
         if let Some(exact) = &self.exact {
-            f.write_fmt(format_args!("x == {:?}", exact))?;
+            f.write_fmt(format_args!("x == {exact:?}"))?;
             is_first = false;
         } else if let (Some(min), Some(max)) = (&self.min, &self.max) {
-            f.write_fmt(format_args!("{:?} <= x <= {:?}", min, max))?;
+            f.write_fmt(format_args!("{min:?} <= x <= {max:?}"))?;
             is_first = false;
         } else if let Some(min) = &self.min {
-            f.write_fmt(format_args!("{:?} <= x", min))?;
+            f.write_fmt(format_args!("{min:?} <= x"))?;
             is_first = false;
         } else if let Some(max) = &self.max {
-            f.write_fmt(format_args!("x <= {:?}", max))?;
+            f.write_fmt(format_args!("x <= {max:?}"))?;
             is_first = false;
         }
         if let Some(ideal) = &self.ideal {
             if !is_first {
                 f.write_str(" && ")?;
             }
-            f.write_fmt(format_args!("x ~= {:?}", ideal))?;
+            f.write_fmt(format_args!("x ~= {ideal:?}"))?;
             is_first = false;
         }
         if is_first {

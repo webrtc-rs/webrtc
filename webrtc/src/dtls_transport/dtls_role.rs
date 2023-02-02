@@ -167,8 +167,7 @@ a=setup:";
             assert_eq!(
                 DTLSRole::from(&session_description),
                 expected_role,
-                "{} failed",
-                name
+                "{name} failed"
             );
         }
 

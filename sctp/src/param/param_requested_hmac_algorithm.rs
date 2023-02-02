@@ -22,7 +22,7 @@ impl fmt::Display for HmacAlgorithm {
             HmacAlgorithm::HmacSha256 => "HMAC SHA-256",
             _ => "Unknown HMAC Algorithm",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

@@ -35,7 +35,7 @@ impl fmt::Display for FullIntraRequest {
         for e in &self.fir {
             out += format!(" ({} {})", e.ssrc, e.sequence_number).as_str();
         }
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

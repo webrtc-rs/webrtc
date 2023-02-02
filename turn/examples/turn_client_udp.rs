@@ -76,7 +76,7 @@ async fn main() -> Result<(), Error> {
     // TURN client won't create a local listening socket by itself.
     let conn = UdpSocket::bind("0.0.0.0:0").await?;
 
-    let turn_server_addr = format!("{}:{}", host, port);
+    let turn_server_addr = format!("{host}:{port}");
 
     let cfg = ClientConfig {
         stun_serv_addr: turn_server_addr.clone(),
@@ -150,7 +150,7 @@ async fn do_ping_test(
                 Err(_) => break,
             };
 
-            println!("pingerConn read-loop: {} from {}", msg, from);
+            println!("pingerConn read-loop: {msg} from {from}");
             /*if sentAt, pingerErr := time.Parse(time.RFC3339Nano, msg); pingerErr == nil {
                 rtt := time.Since(sentAt)
                 log.Printf("%d bytes from from %s time=%d ms\n", n, from.String(), int(rtt.Seconds()*1000))

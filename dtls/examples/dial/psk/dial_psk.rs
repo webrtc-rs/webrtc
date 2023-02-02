@@ -57,7 +57,7 @@ async fn main() -> Result<(), Error> {
 
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     conn.connect(server).await?;
-    println!("connecting {}..", server);
+    println!("connecting {server}..");
 
     let config = Config {
         psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>, Error> {

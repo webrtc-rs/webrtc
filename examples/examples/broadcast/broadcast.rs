@@ -165,10 +165,10 @@ async fn main() -> Result<()> {
             while let Ok((rtp, _)) = track.read_rtp().await {
                 if let Err(err) = local_track.write_rtp(&rtp).await {
                     if Error::ErrClosedPipe != err {
-                        print!("output track write_rtp got error: {} and break", err);
+                        print!("output track write_rtp got error: {err} and break");
                         break;
                     } else {
-                        print!("output track write_rtp got error: {}", err);
+                        print!("output track write_rtp got error: {err}");
                     }
                 }
             }
@@ -180,7 +180,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
         Box::pin(async {})
     }));
 
@@ -205,7 +205,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -267,7 +267,7 @@ async fn main() -> Result<()> {
             // This will notify you when the peer has connected/disconnected
             peer_connection.on_peer_connection_state_change(Box::new(
                 move |s: RTCPeerConnectionState| {
-                    println!("Peer Connection State has changed: {}", s);
+                    println!("Peer Connection State has changed: {s}");
                     Box::pin(async {})
                 },
             ));
@@ -294,7 +294,7 @@ async fn main() -> Result<()> {
             if let Some(local_desc) = peer_connection.local_description().await {
                 let json_str = serde_json::to_string(&local_desc)?;
                 let b64 = signal::encode(&json_str);
-                println!("{}", b64);
+                println!("{b64}");
             } else {
                 println!("generate local_description failed!");
             }

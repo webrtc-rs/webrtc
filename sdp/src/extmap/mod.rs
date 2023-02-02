@@ -40,14 +40,14 @@ impl fmt::Display for ExtMap {
         }
 
         if let Some(uri) = &self.uri {
-            output += format!(" {}", uri).as_str();
+            output += format!(" {uri}").as_str();
         }
 
         if let Some(ext_attr) = &self.ext_attr {
-            output += format!(" {}", ext_attr).as_str();
+            output += format!(" {ext_attr}").as_str();
         }
 
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 

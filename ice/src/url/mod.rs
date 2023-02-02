@@ -55,7 +55,7 @@ impl fmt::Display for SchemeType {
             SchemeType::Turns => "turns",
             SchemeType::Unknown => "unknown",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -98,7 +98,7 @@ impl fmt::Display for ProtoType {
             Self::Tcp => "tcp",
             Self::Unknown => "unknown",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

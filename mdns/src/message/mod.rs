@@ -98,7 +98,7 @@ impl fmt::Display for DnsType {
             DnsType::All => "ALL",
             _ => "Unsupported",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -142,7 +142,7 @@ impl fmt::Display for DnsClass {
             DNSCLASS_ANY => "ClassANY",
             _ => other.as_str(),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -210,7 +210,7 @@ impl fmt::Display for RCode {
             RCode::Refused => "RCodeRefused",
             RCode::Unsupported => "RCodeUnsupported",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -271,7 +271,7 @@ impl fmt::Display for Message {
         let v: Vec<String> = self.additionals.iter().map(|q| q.to_string()).collect();
         s += &v.join(", ");
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

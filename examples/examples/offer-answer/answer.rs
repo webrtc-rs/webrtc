@@ -40,13 +40,13 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     let payload = c.to_json()?.candidate;
     let req = match Request::builder()
         .method(Method::POST)
-        .uri(format!("http://{}/candidate", addr))
+        .uri(format!("http://{addr}/candidate"))
         .header("content-type", "application/json; charset=utf-8")
         .body(Body::from(payload))
     {
         Ok(req) => req,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };
@@ -54,7 +54,7 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     let _resp = match Client::new().request(req).await {
         Ok(resp) => resp,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };
@@ -137,7 +137,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
             let req = match Request::builder()
                 .method(Method::POST)
-                .uri(format!("http://{}/sdp", addr))
+                .uri(format!("http://{addr}/sdp"))
                 .header("content-type", "application/json; charset=utf-8")
                 .body(Body::from(payload))
             {
@@ -148,7 +148,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             let _resp = match Client::new().request(req).await {
                 Ok(resp) => resp,
                 Err(err) => {
-                    println!("{}", err);
+                    println!("{err}");
                     return Err(err);
                 }
             };
@@ -301,7 +301,7 @@ async fn main() -> Result<()> {
         })
     }));
 
-    println!("Listening on http://{}", answer_addr);
+    println!("Listening on http://{answer_addr}");
     {
         let mut pcm = PEER_CONNECTION_MUTEX.lock().await;
         *pcm = Some(Arc::clone(&peer_connection));
@@ -314,7 +314,7 @@ async fn main() -> Result<()> {
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 
@@ -323,7 +323,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -340,7 +340,7 @@ async fn main() -> Result<()> {
     peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
-        println!("New DataChannel {} {}", d_label, d_id);
+        println!("New DataChannel {d_label} {d_id}");
 
         Box::pin(async move{
             // Register channel opening handling
@@ -348,7 +348,7 @@ async fn main() -> Result<()> {
             let d_label2 = d_label.clone();
             let d_id2 = d_id;
             d.on_open(Box::new(move || {
-                println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
+                println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
                 Box::pin(async move {
                     let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
@@ -358,7 +358,7 @@ async fn main() -> Result<()> {
                         tokio::select! {
                             _ = timeout.as_mut() =>{
                                 let message = math_rand_alpha(15);
-                                println!("Sending '{}'", message);
+                                println!("Sending '{message}'");
                                 result = d2.send_text(message).await.map_err(Into::into);
                             }
                         };
@@ -369,7 +369,7 @@ async fn main() -> Result<()> {
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-               println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+               println!("Message from DataChannel '{d_label}': '{msg_str}'");
                Box::pin(async{})
            }));
         })

@@ -60,10 +60,10 @@ impl From<&str> for RTCSdpType {
 impl fmt::Display for RTCSdpType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCSdpType::Offer => write!(f, "{}", SDP_TYPE_OFFER_STR),
-            RTCSdpType::Pranswer => write!(f, "{}", SDP_TYPE_PRANSWER_STR),
-            RTCSdpType::Answer => write!(f, "{}", SDP_TYPE_ANSWER_STR),
-            RTCSdpType::Rollback => write!(f, "{}", SDP_TYPE_ROLLBACK_STR),
+            RTCSdpType::Offer => write!(f, "{SDP_TYPE_OFFER_STR}"),
+            RTCSdpType::Pranswer => write!(f, "{SDP_TYPE_PRANSWER_STR}"),
+            RTCSdpType::Answer => write!(f, "{SDP_TYPE_ANSWER_STR}"),
+            RTCSdpType::Rollback => write!(f, "{SDP_TYPE_ROLLBACK_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }

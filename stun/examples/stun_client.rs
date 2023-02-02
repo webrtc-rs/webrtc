@@ -42,7 +42,7 @@ async fn main() -> Result<(), Error> {
     let conn = UdpSocket::bind("0:0").await?;
     println!("Local address: {}", conn.local_addr()?);
 
-    println!("Connecting to: {}", server);
+    println!("Connecting to: {server}");
     conn.connect(server).await?;
 
     let mut client = ClientBuilder::new().with_conn(Arc::new(conn)).build()?;
@@ -56,7 +56,7 @@ async fn main() -> Result<(), Error> {
         let msg = event.event_body?;
         let mut xor_addr = XorMappedAddress::default();
         xor_addr.get_from(&msg)?;
-        println!("Got response: {}", xor_addr);
+        println!("Got response: {xor_addr}");
     }
 
     client.close().await?;

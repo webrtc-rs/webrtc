@@ -1,7 +1,7 @@
 [package]
 name = "hub"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 util = { path = "../../../util", package = "webrtc-util", default-features = false, features = [

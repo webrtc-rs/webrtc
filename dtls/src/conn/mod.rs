@@ -1052,7 +1052,7 @@ impl DTLSConn {
                 return (
                     false,
                     Some(a),
-                    Some(Error::Other(format!("Error of Alert {}", a))),
+                    Some(Error::Other(format!("Error of Alert {a}"))),
                 );
             }
             Content::ChangeCipherSpec(_) => {

@@ -45,7 +45,7 @@ pub async fn chat(conn: Arc<dyn Conn + Send + Sync>) -> Result<(), Error> {
 
         while let Ok(n) = conn_rx.recv(&mut b).await {
             let msg = String::from_utf8(b[..n].to_vec()).expect("utf8");
-            print!("Got message: {}", msg);
+            print!("Got message: {msg}");
         }
 
         Result::<(), Error>::Ok(())
@@ -58,7 +58,7 @@ pub async fn chat(conn: Arc<dyn Conn + Send + Sync>) -> Result<(), Error> {
         match reader.read_line(&mut msg) {
             Ok(0) => return Ok(()),
             Err(err) => {
-                println!("stdin read err: {}", err);
+                println!("stdin read err: {err}");
                 return Ok(());
             }
             _ => {}

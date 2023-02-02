@@ -50,7 +50,7 @@ impl fmt::Display for RTPCodecType {
             RTPCodecType::Video => "video",
             RTPCodecType::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

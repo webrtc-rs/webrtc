@@ -61,9 +61,7 @@ fn test_bad_compound() {
             assert_eq!(
                 Error::BadFirstPacket,
                 err,
-                "Unmarshal(badcompound) err={:?}, want {:?}",
-                err,
-                a,
+                "Unmarshal(badcompound) err={err:?}, want {a:?}",
             );
         }
     };
@@ -163,7 +161,7 @@ fn test_valid_packet() {
         let result = packet.validate();
         assert_eq!(result.is_ok(), error.is_none());
         if let (Some(err), Err(got)) = (error, result) {
-            assert_eq!(err, got, "Valid({}) = {:?}, want {:?}", name, got, err);
+            assert_eq!(err, got, "Valid({name}) = {got:?}, want {err:?}");
         }
     }
 }
@@ -250,7 +248,7 @@ fn test_cname() {
         let err = compound_packet.validate();
         assert_eq!(err.is_err(), want_error.is_some());
         if let (Some(want), Err(err)) = (&want_error, err) {
-            assert_eq!(*want, err, "Valid({}) = {:?}, want {:?}", name, err, want);
+            assert_eq!(*want, err, "Valid({name}) = {err:?}, want {want:?}");
         }
 
         let name_result = compound_packet.cname();
@@ -258,12 +256,12 @@ fn test_cname() {
 
         match name_result {
             Ok(e) => {
-                assert_eq!(e, text, "CNAME({}) = {:?}, want {}", name, e, text,);
+                assert_eq!(e, text, "CNAME({name}) = {e:?}, want {text}",);
             }
 
             Err(err) => {
                 if let Some(want) = &want_error {
-                    assert_eq!(*want, err, "CNAME({}) = {:?}, want {:?}", name, err, want);
+                    assert_eq!(*want, err, "CNAME({name}) = {err:?}, want {want:?}");
                 }
             }
         }
@@ -306,31 +304,26 @@ fn test_compound_packet_roundtrip() {
         let result = packet.marshal();
         if let Some(err) = marshal_error {
             if let Err(got) = result {
-                assert_eq!(
-                    err, got,
-                    "marshal {} header: err = {}, want {}",
-                    name, got, err
-                );
+                assert_eq!(err, got, "marshal {name} header: err = {got}, want {err}");
             } else {
-                panic!("want error in test {}", name);
+                panic!("want error in test {name}");
             }
             continue;
         } else {
-            assert!(result.is_ok(), "must no error in test {}", name);
+            assert!(result.is_ok(), "must no error in test {name}");
         }
 
         let data1 = result.unwrap();
         let c = CompoundPacket::unmarshal(&mut data1.clone())
-            .unwrap_or_else(|_| panic!("unmarshal {} error", name));
+            .unwrap_or_else(|_| panic!("unmarshal {name} error"));
 
         let data2 = c
             .marshal()
-            .unwrap_or_else(|_| panic!("marshal {} error", name));
+            .unwrap_or_else(|_| panic!("marshal {name} error"));
 
         assert_eq!(
             data1, data2,
-            "Unmarshal(Marshal({:?})) = {:?}, want {:?}",
-            name, data1, data2
+            "Unmarshal(Marshal({name:?})) = {data1:?}, want {data2:?}"
         )
     }
 }

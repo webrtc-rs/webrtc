@@ -84,7 +84,7 @@ async fn test_server_simple() -> Result<()> {
     client.listen().await?;
 
     client
-        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .send_binding_request_to(format!("127.0.0.1:{server_port}").as_str())
         .await?;
 
     client.close().await?;

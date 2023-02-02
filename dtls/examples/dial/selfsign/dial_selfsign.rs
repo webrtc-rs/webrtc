@@ -56,7 +56,7 @@ async fn main() -> Result<(), Error> {
 
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     conn.connect(server).await?;
-    println!("connecting {}..", server);
+    println!("connecting {server}..");
 
     // Generate a certificate and private key to secure the connection
     let certificate = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;

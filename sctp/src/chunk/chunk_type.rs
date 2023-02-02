@@ -47,7 +47,7 @@ impl fmt::Display for ChunkType {
             CT_FORWARD_TSN => "FORWARD-TSN",
             _ => others.as_str(),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -82,9 +82,7 @@ mod test {
             assert_eq!(
                 ct.to_string(),
                 expected,
-                "failed to stringify chunkType {}, expected {}",
-                ct,
-                expected
+                "failed to stringify chunkType {ct}, expected {expected}"
             );
         }
     }

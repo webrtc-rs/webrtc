@@ -37,7 +37,7 @@ impl fmt::Display for Protocol {
             _ => others.as_str(),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

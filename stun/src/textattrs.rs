@@ -85,7 +85,7 @@ impl TextAttribute {
             ATTR_REALM => {}
             ATTR_SOFTWARE => {}
             ATTR_NONCE => {}
-            _ => return Err(Error::Other(format!("Unsupported AttrType {}", attr))),
+            _ => return Err(Error::Other(format!("Unsupported AttrType {attr}"))),
         };
 
         let a = m.get(attr)?;

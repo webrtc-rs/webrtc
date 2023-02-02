@@ -32,7 +32,7 @@ lazy_static! {
 // Generate a unique router name
 fn assign_router_name() -> String {
     let n = ROUTER_ID_CTR.fetch_add(1, Ordering::SeqCst);
-    format!("router{}", n)
+    format!("router{n}")
 }
 
 // RouterConfig ...

@@ -57,7 +57,7 @@ fn test_generic_fmtp_parse() {
 
     for (name, input, expected) in tests {
         let f = parse("generic", input);
-        assert_eq!(&f, &expected, "{} failed", name);
+        assert_eq!(&f, &expected, "{name} failed");
 
         assert_eq!(f.mime_type(), "generic");
     }

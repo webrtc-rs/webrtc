@@ -46,7 +46,7 @@ impl fmt::Display for ConnectionRole {
             ConnectionRole::Holdconn => CONNECTION_ROLE_HOLDCONN_STR,
             _ => "Unspecified",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

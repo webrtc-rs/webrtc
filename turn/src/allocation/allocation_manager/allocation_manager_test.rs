@@ -97,7 +97,7 @@ async fn test_packet_handler() -> Result<()> {
         a.relay_socket.local_addr()?.port()
     };
 
-    let relay_addr_with_host_str = format!("127.0.0.1:{}", port);
+    let relay_addr_with_host_str = format!("127.0.0.1:{port}");
     let relay_addr_with_host = SocketAddr::from_str(&relay_addr_with_host_str)?;
 
     // test for permission and data message
@@ -227,8 +227,7 @@ async fn test_delete_allocation() -> Result<()> {
 
     assert!(
         m.get_allocation(&five_tuple).await.is_none(),
-        "Get allocation with {} should be nil after delete",
-        five_tuple
+        "Get allocation with {five_tuple} should be nil after delete"
     );
 
     Ok(())
@@ -422,8 +421,8 @@ async fn create_client(username: String, server_port: u16) -> Result<Client> {
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
     Client::new(ClientConfig {
-        stun_serv_addr: format!("127.0.0.1:{}", server_port),
-        turn_serv_addr: format!("127.0.0.1:{}", server_port),
+        stun_serv_addr: format!("127.0.0.1:{server_port}"),
+        turn_serv_addr: format!("127.0.0.1:{server_port}"),
         username,
         password: "pass".to_owned(),
         realm: String::new(),
@@ -458,13 +457,13 @@ async fn test_get_allocations_info() -> Result<()> {
     assert_eq!(server.get_allocations_info(None).await?.len(), 3);
 
     let addr1 = client1
-        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .send_binding_request_to(format!("127.0.0.1:{server_port}").as_str())
         .await?;
     let addr2 = client2
-        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .send_binding_request_to(format!("127.0.0.1:{server_port}").as_str())
         .await?;
     let addr3 = client3
-        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .send_binding_request_to(format!("127.0.0.1:{server_port}").as_str())
         .await?;
 
     user1.send_to(b"1", addr1).await?;
@@ -500,7 +499,7 @@ async fn test_get_allocations_info_bytes_count() -> Result<()> {
 
     let conn = client.allocate().await?;
     let addr = client
-        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .send_binding_request_to(format!("127.0.0.1:{server_port}").as_str())
         .await?;
 
     assert!(!server.get_allocations_info(None).await?.is_empty());
