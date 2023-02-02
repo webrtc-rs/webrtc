@@ -235,7 +235,7 @@ impl NetworkAddressTranslator {
                             proto: "udp".to_owned(),
                             local: from.source_addr().to_string(),
                             bound,
-                            mapped: format!("{}:{}", mapped_ips_first, mapped_port),
+                            mapped: format!("{mapped_ips_first}:{mapped_port}"),
                             filters: Arc::new(Mutex::new(HashSet::new())),
                             expires: Arc::new(Mutex::new(
                                 SystemTime::now().add(self.nat_type.mapping_life_time),
@@ -306,7 +306,7 @@ impl NetworkAddressTranslator {
                 let dst_addr = from.destination_addr();
                 if let Some(dst_ip) = self.get_paired_local_ip(&dst_addr.ip()) {
                     let dst_port = from.destination_addr().port();
-                    to.set_destination_addr(&format!("{}:{}", dst_ip, dst_port))?;
+                    to.set_destination_addr(&format!("{dst_ip}:{dst_port}"))?;
                 } else {
                     return Err(Error::Other(format!(
                         "drop {} as {:?}",

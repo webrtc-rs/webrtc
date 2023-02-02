@@ -1588,7 +1588,7 @@ impl AssociationInternal {
 
         let mut stream_str = String::new();
         for (si, ssn) in &stream_map {
-            stream_str += format!("(si={} ssn={})", si, ssn).as_str();
+            stream_str += format!("(si={si} ssn={ssn})").as_str();
             fwd_tsn.streams.push(ChunkForwardTsnStream {
                 identifier: *si,
                 sequence: *ssn,

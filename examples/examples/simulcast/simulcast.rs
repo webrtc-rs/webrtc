@@ -121,8 +121,8 @@ async fn main() -> Result<()> {
                 mime_type: MIME_TYPE_VP8.to_owned(),
                 ..Default::default()
             },
-            format!("video_{}", s),
-            format!("webrtc-rs_{}", s),
+            format!("video_{s}"),
+            format!("webrtc-rs_{s}"),
         ));
 
         // Add this newly created track to the PeerConnection
@@ -159,7 +159,7 @@ async fn main() -> Result<()> {
         let output_track = if let Some(output_track) = output_tracks.get(&rid) {
             Arc::clone(output_track)
         } else {
-            println!("output_track not found for rid = {}", rid);
+            println!("output_track not found for rid = {rid}");
             return Box::pin(async {});
         };
 
@@ -169,10 +169,7 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             let mut result = Result::<usize>::Ok(0);
             while result.is_ok() {
-                println!(
-                    "Sending pli for stream with rid: {}, ssrc: {}",
-                    rid, media_ssrc
-                );
+                println!("Sending pli for stream with rid: {rid}, ssrc: {media_ssrc}");
 
                 let timeout = tokio::time::sleep(Duration::from_secs(3));
                 tokio::pin!(timeout);
@@ -198,10 +195,10 @@ async fn main() -> Result<()> {
             while let Ok((rtp, _)) = track.read_rtp().await {
                 if let Err(err) = output_track.write_rtp(&rtp).await {
                     if Error::ErrClosedPipe != err {
-                        println!("output track write_rtp got error: {} and break", err);
+                        println!("output track write_rtp got error: {err} and break");
                         break;
                     } else {
-                        println!("output track write_rtp got error: {}", err);
+                        println!("output track write_rtp got error: {err}");
                     }
                 }
             }
@@ -216,7 +213,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -247,7 +244,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

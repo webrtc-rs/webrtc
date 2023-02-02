@@ -83,7 +83,7 @@ async fn main() -> Result<(), Error> {
 
     let (answer, src) = server.query(local_name, b).await.unwrap();
     log::info!("dns queried");
-    println!("answer = {}, src = {}", answer, src);
+    println!("answer = {answer}, src = {src}");
 
     server.close().await.unwrap();
     Ok(())

@@ -59,7 +59,7 @@ async fn test_vnet_gather_dynamic_ip_address() -> Result<()> {
             panic!("should not return loopback IP");
         }
         if !ipnet.contains(ip) {
-            panic!("{} should be contained in the CIDR {}", ip, ipnet);
+            panic!("{ip} should be contained in the CIDR {ipnet}");
         }
     }
 
@@ -101,8 +101,7 @@ async fn test_vnet_gather_listen_udp() -> Result<()> {
         let port = conn.local_addr()?.port();
         assert_eq!(
             port, 5000,
-            "listenUDP with port restriction of 5000 listened on incorrect port ({})",
-            port
+            "listenUDP with port restriction of 5000 listened on incorrect port ({port})"
         );
     }
 
@@ -117,8 +116,8 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
     let external_ip1 = "1.2.3.5";
     let local_ip0 = "10.0.0.1";
     let local_ip1 = "10.0.0.2";
-    let map0 = format!("{}/{}", external_ip0, local_ip0);
-    let map1 = format!("{}/{}", external_ip1, local_ip1);
+    let map0 = format!("{external_ip0}/{local_ip0}");
+    let map1 = format!("{external_ip1}/{local_ip1}");
 
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "1.2.3.0/24".to_owned(),

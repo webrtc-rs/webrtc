@@ -547,7 +547,7 @@ impl RTCDtlsTransport {
             let mut h = Sha256::new();
             h.update(remote_cert);
             let hashed = h.finalize();
-            let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
+            let values: Vec<String> = hashed.iter().map(|x| format! {"{x:02x}"}).collect();
             let remote_value = values.join(":").to_lowercase();
 
             if remote_value == fp.value.to_lowercase() {

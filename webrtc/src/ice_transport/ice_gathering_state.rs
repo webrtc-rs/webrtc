@@ -44,10 +44,10 @@ impl From<&str> for RTCIceGatheringState {
 impl fmt::Display for RTCIceGatheringState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceGatheringState::New => write!(f, "{}", ICE_GATHERING_STATE_NEW_STR),
-            RTCIceGatheringState::Gathering => write!(f, "{}", ICE_GATHERING_STATE_GATHERING_STR),
+            RTCIceGatheringState::New => write!(f, "{ICE_GATHERING_STATE_NEW_STR}"),
+            RTCIceGatheringState::Gathering => write!(f, "{ICE_GATHERING_STATE_GATHERING_STR}"),
             RTCIceGatheringState::Complete => {
-                write!(f, "{}", ICE_GATHERING_STATE_COMPLETE_STR)
+                write!(f, "{ICE_GATHERING_STATE_COMPLETE_STR}")
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }

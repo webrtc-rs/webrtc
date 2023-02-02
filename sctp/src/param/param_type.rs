@@ -92,7 +92,7 @@ impl fmt::Display for ParamType {
             ParamType::AdaptLayerInd => "Adaptation Layer Indication",
             _ => "Unknown ParamType",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

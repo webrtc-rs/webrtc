@@ -290,7 +290,7 @@ async fn test_pending_queue_push_and_pop() -> Result<()> {
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
         let result = pq.pop(beginning_fragment, unordered);
-        assert!(result.is_some(), "should not error: {}", i);
+        assert!(result.is_some(), "should not error: {i}");
     }
 
     assert_eq!(pq.get_num_bytes(), 0, "total bytes mismatch");
@@ -308,7 +308,7 @@ async fn test_pending_queue_push_and_pop() -> Result<()> {
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
         let result = pq.pop(beginning_fragment, unordered);
-        assert!(result.is_some(), "should not error: {}", i);
+        assert!(result.is_some(), "should not error: {i}");
     }
 
     assert_eq!(pq.get_num_bytes(), 0, "total bytes mismatch");
@@ -385,7 +385,7 @@ async fn test_pending_queue_fragments() -> Result<()> {
         assert_eq!(c.tsn, exp, "TSN should match");
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
         let result = pq.pop(beginning_fragment, unordered);
-        assert!(result.is_some(), "should not error: {}", exp);
+        assert!(result.is_some(), "should not error: {exp}");
     }
 
     Ok(())
@@ -419,7 +419,7 @@ async fn test_pending_queue_selection_persistence() -> Result<()> {
         assert_eq!(c.tsn, exp, "TSN should match");
         let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
         let result = pq.pop(beginning_fragment, unordered);
-        assert!(result.is_some(), "should not error: {}", exp);
+        assert!(result.is_some(), "should not error: {exp}");
     }
 
     Ok(())

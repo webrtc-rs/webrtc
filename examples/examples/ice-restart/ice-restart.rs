@@ -111,7 +111,7 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
             // This will notify you when the peer has connected/disconnected
             pc.on_ice_connection_state_change(Box::new(
                 |connection_state: RTCIceConnectionState| {
-                    println!("ICE Connection State has changed: {}", connection_state);
+                    println!("ICE Connection State has changed: {connection_state}");
                     Box::pin(async {})
                 },
             ));
@@ -246,7 +246,7 @@ async fn main() -> Result<()> {
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 

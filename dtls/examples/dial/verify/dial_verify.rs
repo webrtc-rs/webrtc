@@ -57,7 +57,7 @@ async fn main() -> Result<(), Error> {
 
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     conn.connect(server).await?;
-    println!("connecting {}..", server);
+    println!("connecting {server}..");
 
     let certificate = hub::utilities::load_key_and_certificate(
         "examples/certificates/client.pem.private_key.pem".into(),

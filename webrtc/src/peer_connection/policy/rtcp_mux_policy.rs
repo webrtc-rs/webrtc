@@ -47,7 +47,7 @@ impl fmt::Display for RTCRtcpMuxPolicy {
             RTCRtcpMuxPolicy::Require => RTCP_MUX_POLICY_REQUIRE_STR,
             RTCRtcpMuxPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

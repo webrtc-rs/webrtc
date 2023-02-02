@@ -132,7 +132,7 @@ impl PayloadQueue {
     }
 
     pub(crate) fn get_gap_ack_blocks_string(&self, cumulative_tsn: u32) -> String {
-        let mut s = format!("cumTSN={}", cumulative_tsn);
+        let mut s = format!("cumTSN={cumulative_tsn}");
         for b in self.get_gap_ack_blocks(cumulative_tsn) {
             s += format!(",{}-{}", b.start, b.end).as_str();
         }

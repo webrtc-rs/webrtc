@@ -77,7 +77,7 @@ impl Certificate {
         }
 
         let keypair = rcgen::KeyPair::from_der(&pems[0].contents)
-            .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {}", e)))?;
+            .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {e}")))?;
 
         let mut rustls_certs = Vec::new();
         for p in pems.drain(1..) {

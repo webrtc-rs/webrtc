@@ -273,8 +273,7 @@ fn test_question_pack_unpack() -> Result<()> {
     );
     assert_eq!(
         got, want,
-        "got from Parser.Question() = {}, want = {}",
-        got, want
+        "got from Parser.Question() = {got}, want = {want}"
     );
 
     Ok(())
@@ -297,7 +296,7 @@ fn test_name() -> Result<()> {
     for test in tests {
         let name = Name::new(test)?;
         let ns = name.to_string();
-        assert_eq!(ns, test, "got {} = {}, want = {}", name, ns, test);
+        assert_eq!(ns, test, "got {name} = {ns}, want = {test}");
     }
 
     Ok(())
@@ -348,8 +347,7 @@ fn test_name_pack_unpack() -> Result<()> {
 
         assert_eq!(
             got, want,
-            "unpacking packing of {}: got = {}, want = {}",
-            input, got, want
+            "unpacking packing of {input}: got = {got}, want = {want}"
         );
     }
 
@@ -456,7 +454,7 @@ fn test_resource_not_started() -> Result<()> {
     for (name, test_fn) in tests {
         let mut p = Parser::default();
         if let Err(err) = test_fn(&mut p) {
-            assert_eq!(err, Error::ErrNotStarted, "{}", name);
+            assert_eq!(err, Error::ErrNotStarted, "{name}");
         }
     }
 
@@ -673,7 +671,7 @@ fn test_skip_not_started() -> Result<()> {
         if let Err(err) = test_fn(&mut p) {
             assert_eq!(err, Error::ErrNotStarted);
         } else {
-            panic!("{} expected error, but got ok", name);
+            panic!("{name} expected error, but got ok");
         }
     }
 
@@ -740,8 +738,7 @@ fn test_too_many_records() -> Result<()> {
         if let Err(got) = msg.pack() {
             assert_eq!(
                 got, want,
-                "got Message.Pack() for {} = {}, want = {}",
-                name, got, want
+                "got Message.Pack() for {name} = {got}, want = {want}"
             )
         } else {
             panic!("expected error, but got ok");
@@ -861,11 +858,10 @@ fn test_start_error() -> Result<()> {
             if let Err(got_err) = test_fn(&mut b) {
                 assert_eq!(
                     got_err, *env_err,
-                    "got Builder{}.{} = {}, want = {}",
-                    env_name, test_name, got_err, env_err
+                    "got Builder{env_name}.{test_name} = {got_err}, want = {env_err}"
                 );
             } else {
-                panic!("{}.{}expected error, but got ok", env_name, test_name);
+                panic!("{env_name}.{test_name}expected error, but got ok");
             }
         }
     }
@@ -1017,11 +1013,10 @@ fn test_builder_resource_error() -> Result<()> {
             if let Err(got_err) = test_fn(&mut b) {
                 assert_eq!(
                     got_err, *env_err,
-                    "got Builder{}.{} = {}, want = {}",
-                    env_name, test_name, got_err, env_err
+                    "got Builder{env_name}.{test_name} = {got_err}, want = {env_err}"
                 );
             } else {
-                panic!("{}.{}expected error, but got ok", env_name, test_name);
+                panic!("{env_name}.{test_name}expected error, but got ok");
             }
         }
     }
@@ -1034,7 +1029,7 @@ fn test_finish_error() -> Result<()> {
     let mut b = Builder::default();
     let want = Error::ErrNotStarted;
     if let Err(got) = b.finish() {
-        assert_eq!(got, want, "got Builder.Finish() = {}, want = {}", got, want);
+        assert_eq!(got, want, "got Builder.Finish() = {got}, want = {want}");
     } else {
         panic!("expected error, but got ok");
     }
@@ -1162,7 +1157,7 @@ fn test_resource_pack_length() -> Result<()> {
     hdr.unpack(&buf, 0, 0)?;
 
     let (got, want) = (hdr.length as usize, buf.len() - hb.len());
-    assert_eq!(got, want, "got hdr.Length = {}, want = {}", got, want);
+    assert_eq!(got, want, "got hdr.Length = {got}, want = {want}");
 
     Ok(())
 }

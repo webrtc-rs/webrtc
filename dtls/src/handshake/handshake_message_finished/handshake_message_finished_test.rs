@@ -15,8 +15,7 @@ fn test_handshake_message_finished() -> Result<()> {
     let c = HandshakeMessageFinished::unmarshal(&mut reader)?;
     assert_eq!(
         c, parsed_finished,
-        "handshakeMessageFinished unmarshal: got {:?}, want {:?}",
-        c, parsed_finished
+        "handshakeMessageFinished unmarshal: got {c:?}, want {parsed_finished:?}"
     );
 
     let mut raw = vec![];
@@ -26,8 +25,7 @@ fn test_handshake_message_finished() -> Result<()> {
     }
     assert_eq!(
         raw, raw_finished,
-        "handshakeMessageFinished marshal: got {:?}, want {:?}",
-        raw, raw_finished
+        "handshakeMessageFinished marshal: got {raw:?}, want {raw_finished:?}"
     );
 
     Ok(())

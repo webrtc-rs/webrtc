@@ -129,8 +129,7 @@ mod test {
         )?;
         assert_eq!(
             session_key, expected_session_key,
-            "Session Key:\n{:?} \ndoes not match expected:\n{:?}\nMaster Key:\n{:?}\nMaster Salt:\n{:?}\n",
-            session_key, expected_session_key, master_key, master_salt,
+            "Session Key:\n{session_key:?} \ndoes not match expected:\n{expected_session_key:?}\nMaster Key:\n{master_key:?}\nMaster Salt:\n{master_salt:?}\n",
         );
 
         let session_salt = aes_cm_key_derivation(
@@ -142,8 +141,7 @@ mod test {
         )?;
         assert_eq!(
             session_salt, expected_session_salt,
-            "Session Salt {:?} does not match expected {:?}",
-            session_salt, expected_session_salt
+            "Session Salt {session_salt:?} does not match expected {expected_session_salt:?}"
         );
 
         let auth_key_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_key_len();
@@ -157,8 +155,7 @@ mod test {
         )?;
         assert_eq!(
             session_auth_tag, expected_session_auth_tag,
-            "Session Auth Tag {:?} does not match expected {:?}",
-            session_auth_tag, expected_session_auth_tag,
+            "Session Auth Tag {session_auth_tag:?} does not match expected {expected_session_auth_tag:?}",
         );
 
         Ok(())

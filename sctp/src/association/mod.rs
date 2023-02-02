@@ -102,7 +102,7 @@ impl fmt::Display for AssociationState {
             AssociationState::ShutdownReceived => "ShutdownReceived",
             AssociationState::ShutdownAckSent => "ShutdownAckSent",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -131,7 +131,7 @@ impl fmt::Display for RtxTimerId {
             RtxTimerId::T3RTX => "T3RTX",
             RtxTimerId::Reconfig => "Reconfig",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -155,7 +155,7 @@ impl fmt::Display for AckMode {
             AckMode::NoDelay => "NoDelay",
             AckMode::AlwaysDelay => "AlwaysDelay",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -180,7 +180,7 @@ impl fmt::Display for AckState {
             AckState::Immediate => "Immediate",
             AckState::Delay => "Delay",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

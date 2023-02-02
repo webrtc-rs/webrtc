@@ -71,7 +71,7 @@ impl SampleSequenceLocation {
         Comparison::After
     }
 
-    pub(crate) fn range<'s, 'a, T>(&'s self, data: &'a [Option<T>]) -> Iterator<'a, T> {
+    pub(crate) fn range<'a, T>(&self, data: &'a [Option<T>]) -> Iterator<'a, T> {
         Iterator {
             data,
             sample: *self,

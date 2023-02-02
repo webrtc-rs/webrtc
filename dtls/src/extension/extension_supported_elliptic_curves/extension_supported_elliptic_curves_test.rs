@@ -17,8 +17,7 @@ fn test_extension_supported_groups() -> Result<()> {
 
     assert_eq!(
         raw, raw_supported_groups,
-        "extensionSupportedGroups marshal: got {:?}, want {:?}",
-        raw, raw_supported_groups
+        "extensionSupportedGroups marshal: got {raw:?}, want {raw_supported_groups:?}"
     );
 
     let mut reader = BufReader::new(raw.as_slice());
@@ -26,8 +25,7 @@ fn test_extension_supported_groups() -> Result<()> {
 
     assert_eq!(
         new_supported_groups, parsed_supported_groups,
-        "extensionSupportedGroups unmarshal: got {:?}, want {:?}",
-        new_supported_groups, parsed_supported_groups
+        "extensionSupportedGroups unmarshal: got {new_supported_groups:?}, want {parsed_supported_groups:?}"
     );
 
     Ok(())

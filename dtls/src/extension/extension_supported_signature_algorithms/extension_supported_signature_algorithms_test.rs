@@ -31,8 +31,7 @@ fn test_extension_supported_signature_algorithms() -> Result<()> {
 
     assert_eq!(
         raw, raw_extension_supported_signature_algorithms,
-        "extensionSupportedSignatureAlgorithms marshal: got {:?}, want {:?}",
-        raw, raw_extension_supported_signature_algorithms
+        "extensionSupportedSignatureAlgorithms marshal: got {raw:?}, want {raw_extension_supported_signature_algorithms:?}"
     );
 
     let mut reader = BufReader::new(raw.as_slice());
@@ -42,9 +41,7 @@ fn test_extension_supported_signature_algorithms() -> Result<()> {
     assert_eq!(
         new_extension_supported_signature_algorithms,
         parsed_extension_supported_signature_algorithms,
-        "extensionSupportedSignatureAlgorithms unmarshal: got {:?}, want {:?}",
-        new_extension_supported_signature_algorithms,
-        parsed_extension_supported_signature_algorithms
+        "extensionSupportedSignatureAlgorithms unmarshal: got {new_extension_supported_signature_algorithms:?}, want {parsed_extension_supported_signature_algorithms:?}"
     );
 
     Ok(())

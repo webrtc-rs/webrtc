@@ -102,7 +102,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
                 tokio::select! {
                     _ = timeout.as_mut() =>{
                         let message = math_rand_alpha(15);
-                        println!("Sending '{}'", message);
+                        println!("Sending '{message}'");
                         result = d2.send_text(message).await.map_err(Into::into);
                     }
                 };
@@ -142,7 +142,7 @@ async fn main() -> Result<()> {
     let d_label = data_channel.label().to_owned();
     data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
         let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-        println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+        println!("Message from DataChannel '{d_label}': '{msg_str}'");
         Box::pin(async {})
     }));
 
@@ -164,7 +164,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

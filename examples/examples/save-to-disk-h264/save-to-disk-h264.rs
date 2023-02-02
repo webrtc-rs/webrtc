@@ -36,7 +36,7 @@ async fn save_to_disk(
                     println!("file closing begin after read_rtp error");
                     let mut w = writer.lock().await;
                     if let Err(err) = w.close() {
-                        println!("file close err: {}", err);
+                        println!("file close err: {err}");
                     }
                     println!("file closing end after read_rtp error");
                     return Ok(());
@@ -46,7 +46,7 @@ async fn save_to_disk(
                 println!("file closing begin after notified");
                 let mut w = writer.lock().await;
                 if let Err(err) = w.close() {
-                    println!("file close err: {}", err);
+                    println!("file close err: {err}");
                 }
                 println!("file closing end after notified");
                 return Ok(());
@@ -255,7 +255,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_ice_connection_state_change(Box::new(
         move |connection_state: RTCIceConnectionState| {
-            println!("Connection State has changed {}", connection_state);
+            println!("Connection State has changed {connection_state}");
 
             if connection_state == RTCIceConnectionState::Connected {
                 println!("Ctrl+C the remote client to stop the demo");
@@ -296,7 +296,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

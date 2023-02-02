@@ -47,8 +47,7 @@ fn test_handshake_message_certificate_request() -> Result<()> {
     let c = HandshakeMessageCertificateRequest::unmarshal(&mut reader)?;
     assert_eq!(
         c, parsed_certificate_request,
-        "parsedCertificateRequest unmarshal: got {:?}, want {:?}",
-        c, parsed_certificate_request
+        "parsedCertificateRequest unmarshal: got {c:?}, want {parsed_certificate_request:?}"
     );
 
     let mut raw = vec![];
@@ -58,8 +57,7 @@ fn test_handshake_message_certificate_request() -> Result<()> {
     }
     assert_eq!(
         raw, raw_certificate_request,
-        "parsedCertificateRequest marshal: got {:?}, want {:?}",
-        raw, raw_certificate_request
+        "parsedCertificateRequest marshal: got {raw:?}, want {raw_certificate_request:?}"
     );
 
     Ok(())

@@ -19,8 +19,7 @@ fn test_extension_server_name() -> Result<()> {
 
     assert_eq!(
         new_extension, extension,
-        "extensionServerName marshal: got {:?} expected {:?}",
-        new_extension, extension,
+        "extensionServerName marshal: got {new_extension:?} expected {extension:?}",
     );
 
     Ok(())

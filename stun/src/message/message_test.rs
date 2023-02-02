@@ -21,7 +21,7 @@ fn test_message_buffer() -> Result<()> {
     let mut reader = BufReader::new(m.raw.as_slice());
     m_decoded.read_from(&mut reader)?;
 
-    assert_eq!(m_decoded, m, "{} != {}", m_decoded, m);
+    assert_eq!(m_decoded, m, "{m_decoded} != {m}");
 
     Ok(())
 }
@@ -61,7 +61,7 @@ fn test_message_type_value() -> Result<()> {
 
     for (input, output) in tests {
         let b = input.value();
-        assert_eq!(b, output, "Value({}) -> {}, want {}", input, b, output);
+        assert_eq!(b, output, "Value({input}) -> {b}, want {output}");
     }
 
     Ok(())
@@ -96,7 +96,7 @@ fn test_message_type_read_value() -> Result<()> {
     for (input, output) in tests {
         let mut m = MessageType::default();
         m.read_value(input);
-        assert_eq!(m, output, "ReadValue({}) -> {}, want {}", input, m, output);
+        assert_eq!(m, output, "ReadValue({input}) -> {m}, want {output}");
     }
 
     Ok(())
@@ -127,11 +127,7 @@ fn test_message_type_read_write_value() -> Result<()> {
         let mut m = MessageType::default();
         let v = test.value();
         m.read_value(v);
-        assert_eq!(
-            m, test,
-            "ReadValue({} -> {}) = {}, should be {}",
-            test, v, m, test
-        );
+        assert_eq!(m, test, "ReadValue({test} -> {v}) = {m}, should be {test}");
     }
 
     Ok(())
@@ -156,7 +152,7 @@ fn test_message_write_to() -> Result<()> {
     let mut m_decoded = Message::new();
     let mut reader = BufReader::new(buf.as_slice());
     m_decoded.read_from(&mut reader)?;
-    assert_eq!(m_decoded, m, "{} != {}", m_decoded, m);
+    assert_eq!(m_decoded, m, "{m_decoded} != {m}");
 
     Ok(())
 }
@@ -288,13 +284,13 @@ fn test_message_class_string() -> Result<()> {
 
     for k in v {
         if k.to_string() == *"unknown message class" {
-            panic!("bad stringer {}", k);
+            panic!("bad stringer {k}");
         }
     }
 
     // should panic
     let p = MessageClass(0x05).to_string();
-    assert_eq!(p, "unknown message class", "should be error {}", p);
+    assert_eq!(p, "unknown message class", "should be error {p}");
 
     Ok(())
 }
@@ -600,7 +596,7 @@ fn test_is_message() -> Result<()> {
 
     for (input, output) in tests {
         let got = is_message(&input);
-        assert_eq!(got, output, "IsMessage({:?}) {} != {}", input, got, output);
+        assert_eq!(got, output, "IsMessage({input:?}) {got} != {output}");
     }
 
     Ok(())

@@ -2,7 +2,7 @@
 name = "webrtc-media"
 version = "0.5.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2018"
+edition = "2021"
 description = "A pure Rust implementation of WebRTC Media API"
 license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/webrtc-media"

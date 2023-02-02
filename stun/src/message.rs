@@ -283,8 +283,7 @@ impl Message {
 
         if cookie != MAGIC_COOKIE {
             return Err(Error::Other(format!(
-                "{:x} is invalid magic cookie (should be {:x})",
-                cookie, MAGIC_COOKIE
+                "{cookie:x} is invalid magic cookie (should be {MAGIC_COOKIE:x})"
             )));
         }
         if buf.len() < full_size {
@@ -465,7 +464,7 @@ impl fmt::Display for MessageClass {
             _ => "unknown message class",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -507,7 +506,7 @@ impl fmt::Display for Method {
             _ => unknown.as_str(),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

@@ -162,7 +162,7 @@ async fn main() -> Result<()> {
                 },
                 ..Default::default()
             },
-            format!("track-{}", s),
+            format!("track-{s}"),
             "webrtc-rs".to_owned(),
         ));
 
@@ -178,7 +178,7 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             let mut rtcp_buf = vec![0u8; 1500];
             while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-            println!("{} rtp_sender.read loop exit", m);
+            println!("{m} rtp_sender.read loop exit");
             Result::<()>::Ok(())
         });
 
@@ -233,7 +233,7 @@ async fn main() -> Result<()> {
         let output_track = if let Some(output_track) = output_tracks.get(kind) {
             Arc::clone(output_track)
         } else {
-            println!("output_track not found for type = {}", kind);
+            println!("output_track not found for type = {kind}");
             return Box::pin(async {});
         };
 
@@ -247,7 +247,7 @@ async fn main() -> Result<()> {
             // Read RTP packets being sent to webrtc-rs
             while let Ok((rtp, _)) = track.read_rtp().await {
                 if let Err(err) = output_track2.write_rtp(&rtp).await {
-                    println!("output track write_rtp got error: {}", err);
+                    println!("output track write_rtp got error: {err}");
                     break;
                 }
             }
@@ -267,7 +267,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -298,7 +298,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

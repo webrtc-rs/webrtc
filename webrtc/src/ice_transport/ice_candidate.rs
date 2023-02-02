@@ -205,12 +205,12 @@ mod test {
 
         for (candidate_init, expected_string) in tests {
             let result = serde_json::to_string(&candidate_init);
-            assert!(result.is_ok(), "testCase: marshal err: {:?}", result);
+            assert!(result.is_ok(), "testCase: marshal err: {result:?}");
             let candidate_data = result.unwrap();
             assert_eq!(candidate_data, expected_string, "string is not expected");
 
             let result = serde_json::from_str::<RTCIceCandidateInit>(&candidate_data);
-            assert!(result.is_ok(), "testCase: unmarshal err: {:?}", result);
+            assert!(result.is_ok(), "testCase: unmarshal err: {result:?}");
             if let Ok(actual_candidate_init) = result {
                 assert_eq!(actual_candidate_init, candidate_init);
             }

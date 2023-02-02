@@ -96,7 +96,7 @@ impl fmt::Display for Section {
             Section::Additionals => "additional",
             Section::Done => "Done",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

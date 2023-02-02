@@ -55,16 +55,16 @@ impl fmt::Display for RTCRtpTransceiverDirection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             RTCRtpTransceiverDirection::Sendrecv => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR}")
             }
             RTCRtpTransceiverDirection::Sendonly => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR}")
             }
             RTCRtpTransceiverDirection::Recvonly => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR}")
             }
             RTCRtpTransceiverDirection::Inactive => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR}")
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }

@@ -442,12 +442,10 @@ async fn delay_sub_test(title: String, min_delay: Duration, max_jitter: Duration
             log::info!("min delay : {:?}", min_delay);
             log::info!("max jitter: {:?}", max_jitter);
             log::info!("actual delay: {:?}", d);
-            assert!(*d >= min_delay, "{} should delay {:?} >= 20ms", title, d);
+            assert!(*d >= min_delay, "{title} should delay {d:?} >= 20ms");
             assert!(
                 *d <= (min_delay + max_jitter + MARGIN),
-                "{} should delay {:?} <= minDelay + maxJitter",
-                title,
-                d,
+                "{title} should delay {d:?} <= minDelay + maxJitter",
             );
             // Note: actual delay should be within 30ms but giving a 8ms
             // MARGIN for possible extra delay

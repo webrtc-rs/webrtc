@@ -106,8 +106,7 @@ impl TryFrom<u8> for CameraDirection {
             0 => Ok(CameraDirection::Front),
             1 => Ok(CameraDirection::Back),
             _ => Err(util::Error::Other(format!(
-                "Unhandled camera direction: {}",
-                value
+                "Unhandled camera direction: {value}"
             ))),
         }
     }
@@ -123,8 +122,7 @@ impl TryFrom<u8> for VideoRotation {
             2 => Ok(VideoRotation::Degree180),
             3 => Ok(VideoRotation::Degree270),
             _ => Err(util::Error::Other(format!(
-                "Unhandled video rotation: {}",
-                value
+                "Unhandled video rotation: {value}"
             ))),
         }
     }

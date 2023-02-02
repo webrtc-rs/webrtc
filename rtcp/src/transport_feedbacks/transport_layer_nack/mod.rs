@@ -120,7 +120,7 @@ impl fmt::Display for TransportLayerNack {
         for nack in &self.nacks {
             out += format!("\t{}\t{:b}\n", nack.packet_id, nack.lost_packets).as_str();
         }
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

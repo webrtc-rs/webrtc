@@ -136,14 +136,14 @@ impl MediaDescription {
         fmtp: String,
     ) -> Self {
         self.media_name.formats.push(payload_type.to_string());
-        let mut rtpmap = format!("{} {}/{}", payload_type, name, clockrate);
+        let mut rtpmap = format!("{payload_type} {name}/{clockrate}");
         if channels > 0 {
-            rtpmap += format!("/{}", channels).as_str();
+            rtpmap += format!("/{channels}").as_str();
         }
 
         if !fmtp.is_empty() {
             self.with_value_attribute("rtpmap".to_string(), rtpmap)
-                .with_value_attribute("fmtp".to_string(), format!("{} {}", payload_type, fmtp))
+                .with_value_attribute("fmtp".to_string(), format!("{payload_type} {fmtp}"))
         } else {
             self.with_value_attribute("rtpmap".to_string(), rtpmap)
         }
@@ -158,10 +158,10 @@ impl MediaDescription {
         label: String,
     ) -> Self {
         self.
-            with_value_attribute("ssrc".to_string(), format!("{} cname:{}", ssrc, cname)). // Deprecated but not phased out?
-            with_value_attribute("ssrc".to_string(), format!("{} msid:{} {}", ssrc, stream_label, label)).
-            with_value_attribute("ssrc".to_string(), format!("{} mslabel:{}", ssrc, stream_label)). // Deprecated but not phased out?
-            with_value_attribute("ssrc".to_string(), format!("{} label:{}", ssrc, label))
+            with_value_attribute("ssrc".to_string(), format!("{ssrc} cname:{cname}")). // Deprecated but not phased out?
+            with_value_attribute("ssrc".to_string(), format!("{ssrc} msid:{stream_label} {label}")).
+            with_value_attribute("ssrc".to_string(), format!("{ssrc} mslabel:{stream_label}")). // Deprecated but not phased out?
+            with_value_attribute("ssrc".to_string(), format!("{ssrc} label:{label}"))
         // Deprecated but not phased out?
     }
 

@@ -58,7 +58,7 @@ async fn test_random_generator_collision() -> Result<()> {
             wg.wait().await;
 
             let rs = rands.lock().await;
-            assert_eq!(rs.len(), N, "{} Failed to generate randoms", name);
+            assert_eq!(rs.len(), N, "{name} Failed to generate randoms");
 
             for i in 0..N {
                 for j in i + 1..N {

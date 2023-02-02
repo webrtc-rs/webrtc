@@ -97,12 +97,12 @@ async fn main() -> Result<()> {
 
     if let Some(video_path) = &video_file {
         if !Path::new(video_path).exists() {
-            return Err(Error::new(format!("video file: '{}' not exist", video_path)).into());
+            return Err(Error::new(format!("video file: '{video_path}' not exist")).into());
         }
     }
     if let Some(audio_path) = &audio_file {
         if !Path::new(audio_path).exists() {
-            return Err(Error::new(format!("audio file: '{}' not exist", audio_path)).into());
+            return Err(Error::new(format!("audio file: '{audio_path}' not exist")).into());
         }
     }
 
@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
             // Wait for connection established
             notify_video.notified().await;
 
-            println!("play video from disk file {}", video_file_name);
+            println!("play video from disk file {video_file_name}");
 
             // It is important to use a time.Ticker instead of time.Sleep because
             // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
@@ -202,7 +202,7 @@ async fn main() -> Result<()> {
                 let frame = match ivf.parse_next_frame() {
                     Ok((frame, _)) => frame,
                     Err(err) => {
-                        println!("All video frames parsed and sent: {}", err);
+                        println!("All video frames parsed and sent: {err}");
                         break;
                     }
                 };
@@ -258,7 +258,7 @@ async fn main() -> Result<()> {
             let (mut ogg, _) = match OggReader::new(reader, true) {
                 Ok(tup) => tup,
                 Err(err) => {
-                    println!("error while opening audio file output.ogg: {}", err);
+                    println!("error while opening audio file output.ogg: {err}");
                     return Err(err.into());
                 }
             };
@@ -301,7 +301,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_ice_connection_state_change(Box::new(
         move |connection_state: RTCIceConnectionState| {
-            println!("Connection State has changed {}", connection_state);
+            println!("Connection State has changed {connection_state}");
             if connection_state == RTCIceConnectionState::Connected {
                 notify_tx.notify_waiters();
             }
@@ -312,7 +312,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -351,7 +351,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }

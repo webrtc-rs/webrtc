@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_ice_connection_state_change(Box::new(
         move |connection_state: RTCIceConnectionState| {
-            println!("Connection State has changed {}", connection_state);
+            println!("Connection State has changed {connection_state}");
             if connection_state == RTCIceConnectionState::Failed {
                 let _ = done_tx1.try_send(());
             }
@@ -139,7 +139,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -178,7 +178,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -195,7 +195,7 @@ async fn main() -> Result<()> {
                 if Error::ErrClosedPipe == err {
                     // The peerConnection has been closed.
                 } else {
-                    println!("video_track write err: {}", err);
+                    println!("video_track write err: {err}");
                 }
                 let _ = done_tx3.try_send(());
                 return;
