@@ -4,7 +4,7 @@
 
 ### Breaking changes
 
-* remove non used `MulticastDnsMode::Unspecified` variant [#XXX](https://github.com/webrtc-rs/webrtc/pull/XXX):
+* remove non used `MulticastDnsMode::Unspecified` variant [#404](https://github.com/webrtc-rs/webrtc/pull/404):
 
 ## v0.9.0
 
