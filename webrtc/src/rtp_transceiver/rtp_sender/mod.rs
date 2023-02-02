@@ -22,6 +22,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::{mpsc, Mutex, Notify};
 
+use super::srtp_writer_future::SequenceTransformer;
+
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: Mutex<mpsc::Receiver<()>>,
     pub(crate) stop_called_rx: Arc<Notify>,
@@ -81,6 +83,7 @@ pub struct RTCRtpSender {
 
     pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
     pub(crate) stream_info: Mutex<StreamInfo>,
+    seq_trans: Arc<SequenceTransformer>,
 
     pub(crate) context: Mutex<TrackLocalContext>,
 
@@ -132,7 +135,7 @@ impl RTCRtpSender {
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
         start_paused: bool,
-    ) -> RTCRtpSender {
+    ) -> Self {
         let id = generate_crypto_random_string(
             32,
             b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -150,6 +153,7 @@ impl RTCRtpSender {
             rtcp_interceptor: Mutex::new(None),
         });
 
+        let seq_trans = Arc::new(SequenceTransformer::new());
         let srtp_stream = Arc::new(SrtpWriterFuture {
             closed: AtomicBool::new(false),
             ssrc,
@@ -157,6 +161,7 @@ impl RTCRtpSender {
             rtp_transport: Arc::clone(&transport),
             rtcp_read_stream: Mutex::new(None),
             rtp_write_session: Mutex::new(None),
+            seq_trans: Arc::clone(&seq_trans),
         });
 
         let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
@@ -170,11 +175,12 @@ impl RTCRtpSender {
             .as_ref()
             .map(|track| vec![track.stream_id().to_string()])
             .unwrap_or_default();
-        RTCRtpSender {
+        Self {
             track: Mutex::new(track),
 
             srtp_stream,
             stream_info: Mutex::new(StreamInfo::default()),
+            seq_trans,
 
             context: Mutex::new(TrackLocalContext::default()),
             transport,
@@ -327,6 +333,8 @@ impl RTCRtpSender {
         };
 
         let result = if let Some(t) = &track {
+            self.seq_trans.reset_offset();
+
             let new_context = TrackLocalContext {
                 id: context.id.clone(),
                 params: self
@@ -477,6 +485,18 @@ impl RTCRtpSender {
         &self,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read_rtcp(self.receive_mtu).await
+    }
+
+    /// Enables overriding outgoing `RTP` packets' `sequence number`s.
+    ///
+    /// Must be called once before any data sent or never called at all.
+    ///
+    /// # Errors
+    ///
+    /// Errors if this [`RTCRtpSender`] has started to send data or sequence
+    /// transforming has been already enabled.
+    pub fn enable_seq_transformer(&self) -> Result<()> {
+        self.seq_trans.enable()
     }
 
     /// has_sent tells if data has been ever sent for this instance
