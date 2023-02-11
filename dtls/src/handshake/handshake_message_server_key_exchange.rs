@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod handshake_message_server_key_exchange_test;
 
+use std::io::{Read, Write};
+
+use byteorder::{BigEndian, WriteBytesExt};
+
 use super::*;
 use crate::curve::named_curve::*;
 use crate::curve::*;
 use crate::signature_hash_algorithm::*;
-
-use byteorder::{BigEndian, WriteBytesExt};
-use std::io::{Read, Write};
 
 // Structure supports ECDH and PSK
 #[derive(Clone, Debug, PartialEq, Eq)]

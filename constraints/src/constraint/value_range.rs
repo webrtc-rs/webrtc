@@ -415,9 +415,8 @@ fn resolve_to_basic() {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::macros::test_serde_symmetry;
-
     use super::*;
+    use crate::macros::test_serde_symmetry;
 
     macro_rules! test_serde {
         ($t:ty => {

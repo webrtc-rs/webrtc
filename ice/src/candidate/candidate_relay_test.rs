@@ -1,15 +1,15 @@
-use super::*;
+use std::result::Result;
+use std::time::Duration;
 
+use tokio::net::UdpSocket;
+use turn::auth::AuthHandler;
+
+use super::*;
 use crate::agent::agent_config::AgentConfig;
 use crate::agent::agent_vnet_test::{connect_with_vnet, on_connected};
 use crate::agent::Agent;
 use crate::error::Error;
 use crate::url::{ProtoType, SchemeType, Url};
-
-use std::result::Result;
-use std::time::Duration;
-use tokio::net::UdpSocket;
-use turn::auth::AuthHandler;
 
 pub(crate) struct OptimisticAuthHandler;
 

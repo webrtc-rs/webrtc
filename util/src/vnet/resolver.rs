@@ -1,15 +1,16 @@
 #[cfg(test)]
 mod resolver_test;
 
-use crate::error::*;
-
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::IpAddr;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+
 use tokio::sync::Mutex;
+
+use crate::error::*;
 
 #[derive(Default)]
 pub(crate) struct Resolver {

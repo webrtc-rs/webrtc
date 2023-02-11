@@ -1,10 +1,11 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
 use std::io::Cursor;
 use std::net::Ipv4Addr;
 use std::ops::{Add, Sub};
 use std::time::Duration;
+
+use criterion::{criterion_group, criterion_main, Criterion};
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use stun::addr::{AlternateServer, MappedAddress};
 use stun::agent::{noop_handler, Agent, TransactionId};
 use stun::attributes::{

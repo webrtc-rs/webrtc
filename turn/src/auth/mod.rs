@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod auth_test;
 
-use crate::error::*;
-
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use md5::{Digest, Md5};
 use ring::hmac;
+
+use crate::error::*;
 
 pub trait AuthHandler {
     fn auth_handle(&self, username: &str, realm: &str, src_addr: SocketAddr) -> Result<Vec<u8>>;

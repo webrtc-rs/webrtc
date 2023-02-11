@@ -4,15 +4,16 @@ mod mux_test;
 pub mod endpoint;
 pub mod mux_func;
 
-use crate::error::Result;
-use crate::mux::endpoint::Endpoint;
-use crate::mux::mux_func::MatchFunc;
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
 use tokio::sync::{mpsc, Mutex};
 use util::{Buffer, Conn};
+
+use crate::error::Result;
+use crate::mux::endpoint::Endpoint;
+use crate::mux::mux_func::MatchFunc;
 
 /// mux multiplexes packets on a single socket (RFC7983)
 

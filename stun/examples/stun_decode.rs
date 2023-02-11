@@ -1,5 +1,4 @@
 use clap::{App, Arg};
-
 use stun::message::Message;
 
 fn main() {

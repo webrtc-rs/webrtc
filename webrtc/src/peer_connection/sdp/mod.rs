@@ -12,14 +12,16 @@ use crate::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
 };
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
-use crate::rtp_transceiver::RTCRtpTransceiver;
-use crate::rtp_transceiver::{PayloadType, RTCPFeedback, SSRC};
+use crate::rtp_transceiver::{PayloadType, RTCPFeedback, RTCRtpTransceiver, SSRC};
 
 pub mod sdp_type;
 pub mod session_description;
 
-use crate::peer_connection::MEDIA_SECTION_APPLICATION;
-use crate::SDP_ATTRIBUTE_RID;
+use std::collections::HashMap;
+use std::convert::From;
+use std::io::BufReader;
+use std::sync::Arc;
+
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::description::common::{Address, ConnectionInformation};
@@ -27,11 +29,10 @@ use sdp::description::media::{MediaDescription, MediaName, RangedPort};
 use sdp::description::session::*;
 use sdp::extmap::ExtMap;
 use sdp::util::ConnectionRole;
-use std::collections::HashMap;
-use std::convert::From;
-use std::io::BufReader;
-use std::sync::Arc;
 use url::Url;
+
+use crate::peer_connection::MEDIA_SECTION_APPLICATION;
+use crate::SDP_ATTRIBUTE_RID;
 
 /// TrackDetails represents any media source that can be represented in a SDP
 /// This isn't keyed by SSRC because it also needs to support rid based sources

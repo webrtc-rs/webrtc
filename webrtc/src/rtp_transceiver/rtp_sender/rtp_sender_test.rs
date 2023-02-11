@@ -1,3 +1,9 @@
+use std::sync::atomic::AtomicU64;
+
+use bytes::Bytes;
+use tokio::time::Duration;
+use waitgroup::WaitGroup;
+
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::setting_engine::SettingEngine;
@@ -10,10 +16,6 @@ use crate::peer_connection::peer_connection_test::{
 };
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
-use bytes::Bytes;
-use std::sync::atomic::AtomicU64;
-use tokio::time::Duration;
-use waitgroup::WaitGroup;
 
 #[tokio::test]
 async fn test_rtp_sender_replace_track() -> Result<()> {

@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod message_test;
 
+use std::fmt;
+use std::io::{Read, Write};
+
+use rand::Rng;
+
 use crate::agent::*;
 use crate::attributes::*;
 use crate::error::*;
-
-use rand::Rng;
-use std::fmt;
-use std::io::{Read, Write};
 
 // MAGIC_COOKIE is fixed value that aids in distinguishing STUN packets
 // from packets of other protocols when STUN is multiplexed with those

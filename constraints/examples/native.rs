@@ -1,11 +1,11 @@
 use std::iter::FromIterator;
 
+use webrtc_constraints::algorithms::{
+    select_settings_candidates, ClosestToIdealPolicy, DeviceInformationExposureMode,
+    TieBreakingPolicy,
+};
+use webrtc_constraints::property::all::name::*;
 use webrtc_constraints::{
-    algorithms::{
-        select_settings_candidates, ClosestToIdealPolicy, DeviceInformationExposureMode,
-        TieBreakingPolicy,
-    },
-    property::all::name::*,
     AdvancedMediaTrackConstraints, MandatoryMediaTrackConstraints, MediaTrackConstraintSet,
     MediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
     ResolvedValueConstraint, ResolvedValueRangeConstraint, ValueConstraint, ValueRangeConstraint,

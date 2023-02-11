@@ -1,8 +1,7 @@
-use thiserror::Error;
-
-use std::io;
-use std::net;
 use std::string::FromUtf8Error;
+use std::{io, net};
+
+use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

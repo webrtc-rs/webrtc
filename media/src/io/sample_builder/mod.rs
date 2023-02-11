@@ -8,11 +8,11 @@ pub mod sample_sequence_location;
 use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
-use rtp::{packet::Packet, packetizer::Depacketizer};
-
-use crate::Sample;
+use rtp::packet::Packet;
+use rtp::packetizer::Depacketizer;
 
 use self::sample_sequence_location::{Comparison, SampleSequenceLocation};
+use crate::Sample;
 
 /// SampleBuilder buffers packets until media frames are complete.
 pub struct SampleBuilder<T: Depacketizer> {

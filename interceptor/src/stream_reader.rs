@@ -1,8 +1,8 @@
-use crate::error::Result;
-use crate::{Attributes, RTCPReader, RTPReader};
-
 use async_trait::async_trait;
 use srtp::stream::Stream;
+
+use crate::error::Result;
+use crate::{Attributes, RTCPReader, RTPReader};
 
 #[async_trait]
 impl RTPReader for Stream {

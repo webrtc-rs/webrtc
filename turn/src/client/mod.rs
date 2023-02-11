@@ -7,17 +7,13 @@ pub mod permission;
 pub mod relay_conn;
 pub mod transaction;
 
-use crate::error::*;
-use crate::proto::{
-    chandata::*, data::*, lifetime::*, peeraddr::*, relayaddr::*, reqtrans::*, PROTO_UDP,
-};
-use binding::*;
-use relay_conn::*;
-use transaction::*;
-
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use binding::*;
+use relay_conn::*;
 use stun::agent::*;
 use stun::attributes::*;
 use stun::error_code::*;
@@ -27,9 +23,18 @@ use stun::message::*;
 use stun::textattrs::*;
 use stun::xoraddr::*;
 use tokio::sync::{mpsc, Mutex};
-use util::{conn::*, vnet::net::*};
+use transaction::*;
+use util::conn::*;
+use util::vnet::net::*;
 
-use async_trait::async_trait;
+use crate::error::*;
+use crate::proto::chandata::*;
+use crate::proto::data::*;
+use crate::proto::lifetime::*;
+use crate::proto::peeraddr::*;
+use crate::proto::relayaddr::*;
+use crate::proto::reqtrans::*;
+use crate::proto::PROTO_UDP;
 
 const DEFAULT_RTO_IN_MS: u16 = 200;
 const MAX_DATA_BUFFER_SIZE: usize = u16::MAX as usize; // message size limit for Chromium

@@ -1,5 +1,6 @@
-use super::*;
 use bytes::Bytes;
+
+use super::*;
 
 #[test]
 fn test_picture_loss_indication_unmarshal() {

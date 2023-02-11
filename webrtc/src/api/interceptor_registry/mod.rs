@@ -1,15 +1,18 @@
 #[cfg(test)]
 mod interceptor_registry_test;
 
+use interceptor::nack::generator::Generator;
+use interceptor::nack::responder::Responder;
+use interceptor::registry::Registry;
+use interceptor::report::receiver::ReceiverReport;
+use interceptor::report::sender::SenderReport;
+use interceptor::twcc::receiver::Receiver;
+use interceptor::twcc::sender::Sender;
+
 use crate::api::media_engine::MediaEngine;
 use crate::error::Result;
-use crate::rtp_transceiver::rtp_codec::RTCRtpHeaderExtensionCapability;
-use crate::rtp_transceiver::{rtp_codec::RTPCodecType, RTCPFeedback, TYPE_RTCP_FB_TRANSPORT_CC};
-
-use interceptor::nack::{generator::Generator, responder::Responder};
-use interceptor::registry::Registry;
-use interceptor::report::{receiver::ReceiverReport, sender::SenderReport};
-use interceptor::twcc::{receiver::Receiver, sender::Sender};
+use crate::rtp_transceiver::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
+use crate::rtp_transceiver::{RTCPFeedback, TYPE_RTCP_FB_TRANSPORT_CC};
 
 /// register_default_interceptors will register some useful interceptors.
 /// If you want to customize which interceptors are loaded, you should copy the

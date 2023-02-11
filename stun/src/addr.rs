@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod addr_test;
 
+use std::fmt;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
 use crate::attributes::*;
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 pub(crate) const FAMILY_IPV4: u16 = 0x01;
 pub(crate) const FAMILY_IPV6: u16 = 0x02;

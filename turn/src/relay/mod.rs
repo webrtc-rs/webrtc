@@ -2,13 +2,13 @@ pub mod relay_none;
 pub mod relay_range;
 pub mod relay_static;
 
-use crate::error::Result;
-
-use util::Conn;
-
-use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use util::Conn;
+
+use crate::error::Result;
 
 // RelayAddressGenerator is used to generate a RelayAddress when creating an allocation.
 // You can use one of the provided ones or provide your own.

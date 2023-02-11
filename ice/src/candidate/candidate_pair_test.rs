@@ -1,5 +1,4 @@
 use super::*;
-
 use crate::candidate::candidate_host::CandidateHostConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::candidate::candidate_relay::CandidateRelayConfig;

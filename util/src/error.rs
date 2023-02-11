@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use std::io;
-use std::net;
 use std::num::ParseIntError;
 use std::string::FromUtf8Error;
+use std::{io, net};
+
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;

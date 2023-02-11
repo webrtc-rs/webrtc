@@ -1,14 +1,15 @@
-use super::*;
-use crate::error::Error;
-use crate::Buffer;
-
 use core::sync::atomic::Ordering;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
+
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch, Mutex};
+
+use super::*;
+use crate::error::Error;
+use crate::Buffer;
 
 const RECEIVE_MTU: usize = 8192;
 const DEFAULT_LISTEN_BACKLOG: usize = 128; // same as Linux default

@@ -19,6 +19,8 @@ mod settings;
 mod supported_constraints;
 
 #[allow(unused_imports)]
+pub(crate) use self::{capabilities::MediaStreamCapabilities, settings::MediaStreamSettings};
+#[allow(unused_imports)]
 pub use self::{
     capabilities::MediaTrackCapabilities,
     capability::MediaTrackCapability,
@@ -42,6 +44,3 @@ pub use self::{
     settings::MediaTrackSettings,
     supported_constraints::MediaTrackSupportedConstraints,
 };
-
-#[allow(unused_imports)]
-pub(crate) use self::{capabilities::MediaStreamCapabilities, settings::MediaStreamSettings};

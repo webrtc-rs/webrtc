@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod uri_test;
 
-use crate::error::*;
-
 use std::fmt;
+
+use crate::error::*;
 
 // SCHEME definitions from RFC 7064 Section 3.2.
 

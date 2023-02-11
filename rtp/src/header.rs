@@ -1,7 +1,7 @@
-use crate::error::Error;
+use bytes::{Buf, BufMut, Bytes};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use bytes::{Buf, BufMut, Bytes};
+use crate::error::Error;
 
 pub const HEADER_LENGTH: usize = 4;
 pub const VERSION_SHIFT: u8 = 6;

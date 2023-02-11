@@ -1,3 +1,9 @@
+use std::time::SystemTime;
+
+use rand::Rng;
+use util::conn::conn_pipe::*;
+use util::KeyingMaterialExporter;
+
 use super::*;
 use crate::cipher_suite::cipher_suite_aes_128_gcm_sha256::*;
 use crate::cipher_suite::*;
@@ -8,6 +14,7 @@ use crate::error::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_supported_signature_algorithms::*;
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use crate::extension::*;
 use crate::handshake::handshake_message_certificate::*;
 use crate::handshake::handshake_message_client_hello::*;
@@ -17,12 +24,6 @@ use crate::handshake::handshake_message_server_hello_done::*;
 use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
-
-use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
-use rand::Rng;
-use std::time::SystemTime;
-use util::conn::conn_pipe::*;
-use util::KeyingMaterialExporter;
 
 const ERR_TEST_PSK_INVALID_IDENTITY: &str = "TestPSK: Server got invalid identity";
 const ERR_PSK_REJECTED: &str = "PSK Rejected";

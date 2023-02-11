@@ -1,5 +1,6 @@
-use super::*;
 use std::sync::atomic::{AtomicI32, AtomicUsize};
+
+use super::*;
 
 const MARGIN: Duration = Duration::from_millis(18);
 const DEMO_IP: &str = "1.2.3.4";

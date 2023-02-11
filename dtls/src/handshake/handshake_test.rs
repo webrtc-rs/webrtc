@@ -1,12 +1,11 @@
+use std::io::{BufReader, BufWriter};
+use std::time::{Duration, SystemTime};
+
 use super::*;
 use crate::compression_methods::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_random::HandshakeRandom;
 use crate::record_layer::record_layer_header::ProtocolVersion;
-
-use std::time::{Duration, SystemTime};
-
-use std::io::{BufReader, BufWriter};
 
 #[test]
 fn test_handshake_message() -> Result<()> {

@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod mdns_test;
 
-use crate::error::Result;
-
-use mdns::config::*;
-use mdns::conn::*;
-
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use mdns::config::*;
+use mdns::conn::*;
 use uuid::Uuid;
+
+use crate::error::Result;
 
 /// Represents the different Multicast modes that ICE can run.
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]

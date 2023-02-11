@@ -1,7 +1,7 @@
+use std::io::BufReader;
+
 use super::*;
 use crate::checks::*;
-
-use std::io::BufReader;
 
 #[test]
 fn test_xor_safe() -> Result<()> {

@@ -1,8 +1,6 @@
-use std::{
-    collections::HashSet,
-    iter::FromIterator,
-    ops::{Deref, DerefMut},
-};
+use std::collections::HashSet;
+use std::iter::FromIterator;
+use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "serde")]
 use serde::{
@@ -144,9 +142,8 @@ impl<'de> Visitor<'de> for SerdeVisitor {
 
 #[cfg(test)]
 mod tests {
-    use crate::property::all::name::*;
-
     use super::*;
+    use crate::property::all::name::*;
 
     type Subject = MediaTrackSupportedConstraints;
 
@@ -201,9 +198,9 @@ mod tests {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{macros::test_serde_symmetry, property::all::name::*};
-
     use super::*;
+    use crate::macros::test_serde_symmetry;
+    use crate::property::all::name::*;
 
     type Subject = MediaTrackSupportedConstraints;
 

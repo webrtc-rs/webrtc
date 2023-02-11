@@ -1,5 +1,6 @@
-use super::*;
 use std::io::Cursor;
+
+use super::*;
 
 #[test]
 fn test_data_does_not_start_with_h264header() -> Result<()> {

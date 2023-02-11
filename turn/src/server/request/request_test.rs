@@ -1,12 +1,12 @@
+use std::net::IpAddr;
+use std::str::FromStr;
+
+use tokio::net::UdpSocket;
+use tokio::time::{Duration, Instant};
+use util::vnet::net::*;
+
 use super::*;
 use crate::relay::relay_none::*;
-
-use std::{net::IpAddr, str::FromStr};
-use tokio::{
-    net::UdpSocket,
-    time::{Duration, Instant},
-};
-use util::vnet::net::*;
 
 const STATIC_KEY: &str = "ABC";
 

@@ -1,11 +1,11 @@
-use super::track_local_static_rtp::TrackLocalStaticRTP;
-use super::*;
-use crate::error::flatten_errs;
-
-use crate::track::RTP_OUTBOUND_MTU;
 use log::warn;
 use media::Sample;
 use tokio::sync::Mutex;
+
+use super::track_local_static_rtp::TrackLocalStaticRTP;
+use super::*;
+use crate::error::flatten_errs;
+use crate::track::RTP_OUTBOUND_MTU;
 
 #[derive(Debug, Clone)]
 struct TrackLocalStaticSampleInternal {
@@ -237,12 +237,13 @@ impl TrackLocal for TrackLocalStaticSample {
 }
 
 mod sample_writer {
-    use super::TrackLocalStaticSample;
-    use crate::error::Result;
     use media::Sample;
     use rtp::extension::audio_level_extension::AudioLevelExtension;
     use rtp::extension::video_orientation_extension::VideoOrientationExtension;
     use rtp::extension::HeaderExtension;
+
+    use super::TrackLocalStaticSample;
+    use crate::error::Result;
 
     /// Helper for writing Samples via [`TrackLocalStaticSample`] that carry extra RTP data.
     ///

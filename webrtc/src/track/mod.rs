@@ -1,11 +1,11 @@
 pub mod track_local;
 pub mod track_remote;
 
-use track_remote::*;
+use std::sync::Arc;
 
 use interceptor::stream_info::StreamInfo;
 use interceptor::{RTCPReader, RTPReader};
-use std::sync::Arc;
+use track_remote::*;
 
 pub(crate) const RTP_OUTBOUND_MTU: usize = 1200;
 pub(crate) const RTP_PAYLOAD_TYPE_BITMASK: u8 = 0x7F;

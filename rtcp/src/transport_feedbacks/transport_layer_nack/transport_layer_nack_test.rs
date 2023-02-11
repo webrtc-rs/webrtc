@@ -1,7 +1,9 @@
-use super::*;
-use bytes::Bytes;
 use std::sync::Arc;
+
+use bytes::Bytes;
 use tokio::sync::Mutex;
+
+use super::*;
 
 #[test]
 fn test_transport_layer_nack_unmarshal() {

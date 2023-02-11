@@ -1,15 +1,14 @@
 #[cfg(test)]
 mod xoraddr_test;
 
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::{fmt, mem};
+
 use crate::addr::*;
 use crate::attributes::*;
 use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
-use std::mem;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 const WORD_SIZE: usize = mem::size_of::<usize>();
 

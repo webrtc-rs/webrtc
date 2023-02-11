@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod alert_test;
 
-use super::content::*;
-use crate::error::Result;
-
-use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::fmt;
 use std::io::{Read, Write};
+
+use byteorder::{ReadBytesExt, WriteBytesExt};
+
+use super::content::*;
+use crate::error::Result;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) enum AlertLevel {

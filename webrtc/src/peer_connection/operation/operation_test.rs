@@ -1,7 +1,7 @@
-use crate::error::Result;
+use tokio::sync::Mutex;
 
 use super::*;
-use tokio::sync::Mutex;
+use crate::error::Result;
 
 #[tokio::test]
 async fn test_operations_enqueue() -> Result<()> {

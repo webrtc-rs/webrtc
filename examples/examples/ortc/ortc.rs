@@ -1,8 +1,9 @@
+use std::io::Write;
+use std::sync::Arc;
+
 use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::APIBuilder;

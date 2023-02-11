@@ -1,10 +1,11 @@
-use super::*;
-use crate::{Attributes, RTPReader};
+use std::time::SystemTime;
 
 use async_trait::async_trait;
-use std::time::SystemTime;
 use util::sync::Mutex;
 use util::Unmarshal;
+
+use super::*;
+use crate::{Attributes, RTPReader};
 
 struct ReceiverStreamInternal {
     ssrc: u32,

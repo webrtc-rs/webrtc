@@ -2,9 +2,10 @@ use std::iter::FromIterator;
 
 use ordered_float::NotNan;
 
+use crate::algorithms::FitnessDistance;
 use crate::{
-    algorithms::FitnessDistance, MandatoryMediaTrackConstraints, MediaTrackSettings,
-    MediaTrackSupportedConstraints, SanitizedMandatoryMediaTrackConstraints,
+    MandatoryMediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints,
+    SanitizedMandatoryMediaTrackConstraints,
 };
 
 /// A tie-breaking policy used for selecting a single preferred candidate
@@ -100,13 +101,11 @@ impl TieBreakingPolicy for ClosestToIdealPolicy {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::iter::FromIterator;
 
-    use crate::{
-        property::all::name::*, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
-    };
+    use super::*;
+    use crate::property::all::name::*;
+    use crate::{MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode};
 
     #[test]
     fn first() {

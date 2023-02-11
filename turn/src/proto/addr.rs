@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod addr_test;
 
-use super::*;
-
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+use super::*;
 
 // Addr is ip:port.
 #[derive(PartialEq, Eq, Debug)]

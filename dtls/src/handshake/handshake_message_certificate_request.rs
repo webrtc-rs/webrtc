@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod handshake_message_certificate_request_test;
 
+use std::io::{Read, Write};
+
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
 use super::*;
 use crate::client_certificate_type::*;
 use crate::signature_hash_algorithm::*;
-
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
 
 /*
 A non-anonymous server can optionally request a certificate from

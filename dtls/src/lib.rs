@@ -24,9 +24,8 @@ pub mod record_layer;
 pub mod signature_hash_algorithm;
 pub mod state;
 
-pub use error::Error;
-
 use cipher_suite::*;
+pub use error::Error;
 use extension::extension_use_srtp::SrtpProtectionProfile;
 
 pub(crate) fn find_matching_srtp_profile(

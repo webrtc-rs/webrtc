@@ -1,17 +1,14 @@
-use std::{
-    iter::FromIterator,
-    ops::{Deref, DerefMut},
-};
+use std::iter::FromIterator;
+use std::ops::{Deref, DerefMut};
 
 use indexmap::IndexMap;
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::constraint::SanitizedMediaTrackConstraint;
 use crate::{
-    constraint::SanitizedMediaTrackConstraint, MediaTrackConstraint,
-    MediaTrackConstraintResolutionStrategy, MediaTrackProperty, MediaTrackSupportedConstraints,
-    ResolvedMediaTrackConstraint,
+    MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackProperty,
+    MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint,
 };
 
 /// Media track constraint set that contains either bare values or constraints.
@@ -142,9 +139,8 @@ impl ResolvedMediaTrackConstraintSet {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::property::all::name::*;
-
     use super::*;
+    use crate::property::all::name::*;
 
     #[test]
     fn serialize_default() {

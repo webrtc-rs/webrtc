@@ -1,12 +1,10 @@
 #[cfg(test)]
 mod opus_test;
 
-use crate::{
-    error::{Error, Result},
-    packetizer::{Depacketizer, Payloader},
-};
-
 use bytes::Bytes;
+
+use crate::error::{Error, Result};
+use crate::packetizer::{Depacketizer, Payloader};
 
 #[derive(Default, Debug, Copy, Clone)]
 pub struct OpusPayloader;

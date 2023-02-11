@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use super::*;
-
-use crate::error::flatten_errs;
 use bytes::BytesMut;
 use tokio::sync::Mutex;
 use util::{Marshal, MarshalSize};
+
+use super::*;
+use crate::error::flatten_errs;
 
 /// TrackLocalStaticRTP  is a TrackLocal that has a pre-set codec and accepts RTP Packets.
 /// If you wish to send a media.Sample use TrackLocalStaticSample

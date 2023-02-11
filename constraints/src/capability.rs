@@ -7,10 +7,9 @@ use std::ops::RangeInclusive;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use self::{
-    value::MediaTrackValueCapability, value_range::MediaTrackValueRangeCapability,
-    value_sequence::MediaTrackValueSequenceCapability,
-};
+pub use self::value::MediaTrackValueCapability;
+pub use self::value_range::MediaTrackValueRangeCapability;
+pub use self::value_sequence::MediaTrackValueSequenceCapability;
 
 /// A single [capability][media_track_capabilities] value of a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -159,9 +158,8 @@ mod tests {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::macros::test_serde_symmetry;
-
     use super::*;
+    use crate::macros::test_serde_symmetry;
 
     type Subject = MediaTrackCapability;
 

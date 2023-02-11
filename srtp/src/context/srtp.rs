@@ -1,8 +1,8 @@
-use super::*;
-use crate::error::Result;
+use bytes::Bytes;
 use util::marshal::*;
 
-use bytes::Bytes;
+use super::*;
+use crate::error::Result;
 
 impl Context {
     pub fn decrypt_rtp_with_header(

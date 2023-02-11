@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod test {
-    use crate::{config::Config, conn::*};
     use tokio::time::timeout;
+
+    use crate::config::Config;
+    use crate::conn::*;
 
     #[tokio::test]
     async fn test_multiple_close() -> Result<()> {

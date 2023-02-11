@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod change_cipher_spec_test;
 
-use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
+
+use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use super::content::*;
 use super::error::*;

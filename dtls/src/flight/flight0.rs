@@ -1,3 +1,9 @@
+use std::fmt;
+use std::sync::atomic::Ordering;
+
+use async_trait::async_trait;
+use rand::Rng;
+
 use super::flight2::*;
 use super::*;
 use crate::config::*;
@@ -7,11 +13,6 @@ use crate::extension::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 use crate::*;
-
-use async_trait::async_trait;
-use rand::Rng;
-use std::fmt;
-use std::sync::atomic::Ordering;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Flight0;

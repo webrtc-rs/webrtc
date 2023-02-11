@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use super::StatsReportType;
-
 use util::sync::Mutex;
+
+use super::StatsReportType;
 
 #[derive(Debug, Default)]
 pub struct StatsCollector {

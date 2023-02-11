@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// ICEProtocol indicates the transport protocol type that is used in the
 /// ice.URL structure.

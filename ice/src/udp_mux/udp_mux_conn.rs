@@ -1,10 +1,13 @@
+use std::collections::HashSet;
 use std::convert::TryInto;
-use std::{collections::HashSet, io, net::SocketAddr, sync::Arc, sync::Weak};
+use std::io;
+use std::net::SocketAddr;
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use tokio::sync::watch;
-
-use util::{sync::Mutex, Buffer, Conn, Error};
+use util::sync::Mutex;
+use util::{Buffer, Conn, Error};
 
 use super::socket_addr_ext::{SocketAddrExt, MAX_ADDR_SIZE};
 use super::{normalize_socket_addr, RECEIVE_MTU};

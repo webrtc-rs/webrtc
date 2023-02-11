@@ -1,3 +1,8 @@
+use std::collections::VecDeque;
+use std::sync::atomic::AtomicIsize;
+use std::sync::Weak;
+
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use tokio::time::Instant;
 
@@ -10,10 +15,6 @@ use crate::stats::{
 };
 use crate::track::TrackStream;
 use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
-use arc_swap::ArcSwapOption;
-use std::collections::VecDeque;
-use std::sync::atomic::AtomicIsize;
-use std::sync::Weak;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value

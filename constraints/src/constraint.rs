@@ -3,13 +3,10 @@ use std::ops::Deref;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+pub use self::value::{ResolvedValueConstraint, ValueConstraint};
+pub use self::value_range::{ResolvedValueRangeConstraint, ValueRangeConstraint};
+pub use self::value_sequence::{ResolvedValueSequenceConstraint, ValueSequenceConstraint};
 use crate::MediaTrackSetting;
-
-pub use self::{
-    value::{ResolvedValueConstraint, ValueConstraint},
-    value_range::{ResolvedValueRangeConstraint, ValueRangeConstraint},
-    value_sequence::{ResolvedValueSequenceConstraint, ValueSequenceConstraint},
-};
 
 mod value;
 mod value_range;
@@ -459,9 +456,9 @@ impl SanitizedMediaTrackConstraint {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use MediaTrackConstraintResolutionStrategy::*;
+
+    use super::*;
 
     type Subject = MediaTrackConstraint;
 
@@ -687,9 +684,8 @@ mod tests {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::macros::test_serde_symmetry;
-
     use super::*;
+    use crate::macros::test_serde_symmetry;
 
     type Subject = MediaTrackConstraint;
 

@@ -1,12 +1,13 @@
+use std::str::FromStr;
+
+use ipnet::IpNet;
+use tokio::net::UdpSocket;
+use util::vnet::*;
+
 use super::agent_vnet_test::*;
 use super::*;
 use crate::udp_mux::{UDPMuxDefault, UDPMuxParams};
 use crate::util::*;
-
-use ipnet::IpNet;
-use std::str::FromStr;
-use tokio::net::UdpSocket;
-use util::vnet::*;
 
 #[tokio::test]
 async fn test_vnet_gather_no_local_ip_address() -> Result<()> {

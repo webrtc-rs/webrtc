@@ -1,14 +1,17 @@
-use super::*;
-
-use crate::candidate::candidate_base::unmarshal_candidate;
-use async_trait::async_trait;
 use std::net::{IpAddr, Ipv4Addr};
 use std::result::Result;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU64;
+
+use async_trait::async_trait;
 use util::vnet::chunk::Chunk;
-use util::{vnet::router::Nic, vnet::*, Conn};
+use util::vnet::router::Nic;
+use util::vnet::*;
+use util::Conn;
 use waitgroup::WaitGroup;
+
+use super::*;
+use crate::candidate::candidate_base::unmarshal_candidate;
 
 pub(crate) struct MockConn;
 

@@ -1,13 +1,13 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
-use async_trait::async_trait;
-use error::Result;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use error::Result;
 use stream_info::StreamInfo;
 
 pub mod chain;

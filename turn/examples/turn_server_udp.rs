@@ -1,16 +1,17 @@
-use turn::auth::*;
-use turn::relay::relay_static::*;
-use turn::server::{config::*, *};
-use turn::Error;
-
-use clap::{App, AppSettings, Arg};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
+
+use clap::{App, AppSettings, Arg};
 use tokio::net::UdpSocket;
 use tokio::signal;
 use tokio::time::Duration;
+use turn::auth::*;
+use turn::relay::relay_static::*;
+use turn::server::config::*;
+use turn::server::*;
+use turn::Error;
 use util::vnet::net::*;
 
 struct MyAuthHandler {

@@ -1,9 +1,8 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::MediaTrackConstraint;
-
 use super::track::GenericBoolOrMediaTrackConstraints;
+use crate::MediaTrackConstraint;
 
 /// The constraints for a [`MediaStream`][media_stream] object.
 ///
@@ -42,18 +41,13 @@ pub struct GenericMediaStreamConstraints<T> {
 mod tests {
     use std::iter::FromIterator;
 
-    use crate::{
-        constraints::{
-            advanced::AdvancedMediaTrackConstraints,
-            mandatory::MandatoryMediaTrackConstraints,
-            track::{BoolOrMediaTrackConstraints, MediaTrackConstraints},
-        },
-        macros::test_serde_symmetry,
-        property::all::name::*,
-        MediaTrackConstraintSet,
-    };
-
     use super::*;
+    use crate::constraints::advanced::AdvancedMediaTrackConstraints;
+    use crate::constraints::mandatory::MandatoryMediaTrackConstraints;
+    use crate::constraints::track::{BoolOrMediaTrackConstraints, MediaTrackConstraints};
+    use crate::macros::test_serde_symmetry;
+    use crate::property::all::name::*;
+    use crate::MediaTrackConstraintSet;
 
     type Subject = MediaStreamConstraints;
 

@@ -1,8 +1,6 @@
-use std::{
-    collections::HashMap,
-    iter::FromIterator,
-    ops::{Deref, DerefMut},
-};
+use std::collections::HashMap;
+use std::iter::FromIterator;
+use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -79,9 +77,8 @@ impl IntoIterator for MediaTrackCapabilities {
 
 #[cfg(test)]
 mod tests {
-    use crate::property::all::name::*;
-
     use super::*;
+    use crate::property::all::name::*;
 
     type Subject = MediaTrackCapabilities;
 
@@ -136,9 +133,9 @@ mod tests {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{macros::test_serde_symmetry, property::all::name::*};
-
     use super::*;
+    use crate::macros::test_serde_symmetry;
+    use crate::property::all::name::*;
 
     type Subject = MediaTrackCapabilities;
 

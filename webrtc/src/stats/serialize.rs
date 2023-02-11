@@ -5,8 +5,9 @@ pub mod instant_to_epoch_seconds {
     //
     // Note that an `Instant` is not connected to real world time, so this conversion is
     // approximate.
-    use serde::{Serialize, Serializer};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    use serde::{Serialize, Serializer};
     use tokio::time::Instant;
 
     pub fn serialize<S>(instant: &Instant, serializer: S) -> Result<S::Ok, S::Error>

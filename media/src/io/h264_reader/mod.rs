@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod h264_reader_test;
 
-use crate::error::{Error, Result};
-
-use bytes::{BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::io::Read;
+
+use bytes::{BufMut, Bytes, BytesMut};
+
+use crate::error::{Error, Result};
 
 /// NalUnitType is the type of a NAL
 /// Enums for NalUnitTypes

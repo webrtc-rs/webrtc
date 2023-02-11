@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// BundlePolicy affects which media tracks are negotiated if the remote
 /// endpoint is not bundle-aware, and what ICE candidates are gathered. If the

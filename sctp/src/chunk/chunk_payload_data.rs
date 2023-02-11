@@ -1,10 +1,13 @@
-use super::{chunk_header::*, chunk_type::*, *};
-
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+use super::chunk_header::*;
+use super::chunk_type::*;
+use super::*;
 
 pub(crate) const PAYLOAD_DATA_ENDING_FRAGMENT_BITMASK: u8 = 1;
 pub(crate) const PAYLOAD_DATA_BEGINING_FRAGMENT_BITMASK: u8 = 2;

@@ -1,8 +1,8 @@
-use super::*;
-use crate::error::*;
-
 use async_trait::async_trait;
 use util::vnet::net::*;
+
+use super::*;
+use crate::error::*;
 
 // RelayAddressGeneratorNone returns the listener with no modifications
 pub struct RelayAddressGeneratorNone {

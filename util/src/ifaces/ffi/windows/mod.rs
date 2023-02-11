@@ -14,10 +14,8 @@ const MAX_DNS_SUFFIX_STRING_LENGTH: usize = 256;
 pub const IP_ADAPTER_IPV4_ENABLED: DWORD = 0x0080;
 pub const IP_ADAPTER_IPV6_ENABLED: DWORD = 0x0100;
 
-use std::io;
-use std::mem;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
-use std::ptr;
+use std::{io, mem, ptr};
 
 use winapi::shared::winerror::{
     ERROR_ADDRESS_NOT_ASSOCIATED, ERROR_BUFFER_OVERFLOW, ERROR_INVALID_PARAMETER,

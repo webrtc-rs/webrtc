@@ -1,11 +1,13 @@
+use regex::Regex;
+use tokio::sync::{mpsc, Mutex};
+
 use super::*;
-use crate::agent::{agent_config::*, agent_vnet_test::*, *};
+use crate::agent::agent_config::*;
+use crate::agent::agent_vnet_test::*;
+use crate::agent::*;
 use crate::candidate::*;
 use crate::error::Error;
 use crate::network_type::*;
-
-use regex::Regex;
-use tokio::sync::{mpsc, Mutex};
 
 #[tokio::test]
 // This test is disabled on Windows for now because it gets stuck and never finishes.

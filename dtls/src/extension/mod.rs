@@ -6,6 +6,9 @@ pub mod extension_use_extended_master_secret;
 pub mod extension_use_srtp;
 pub mod renegotiation_info;
 
+use std::io::{Read, Write};
+
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use extension_server_name::*;
 use extension_supported_elliptic_curves::*;
 use extension_supported_point_formats::*;
@@ -14,10 +17,7 @@ use extension_use_extended_master_secret::*;
 use extension_use_srtp::*;
 
 use crate::error::*;
-
 use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
 
 // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
 #[derive(Clone, Debug, PartialEq, Eq)]
