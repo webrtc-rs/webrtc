@@ -17,6 +17,6 @@ pub mod udp_mux;
 pub mod udp_network;
 pub mod url;
 pub mod use_candidate;
-mod util;
+pub mod util;
 
 pub use error::Error;
