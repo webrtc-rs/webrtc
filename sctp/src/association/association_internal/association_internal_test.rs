@@ -333,7 +333,7 @@ async fn test_assoc_create_new_stream() -> Result<()> {
             let result = a.streams.get(&s.stream_identifier);
             assert!(result.is_some(), "should be in a.streams map");
         } else {
-            panic!("{} should success", i);
+            panic!("{i} should success");
         }
     }
 
@@ -383,10 +383,10 @@ async fn handle_init_test(name: &str, initial_state: AssociationState, expect_er
 
     let result = a.handle_init(&pkt, &init).await;
     if expect_err {
-        assert!(result.is_err(), "{} should fail", name);
+        assert!(result.is_err(), "{name} should fail");
         return;
     } else {
-        assert!(result.is_ok(), "{} should be ok", name);
+        assert!(result.is_ok(), "{name} should be ok");
     }
     assert_eq!(
         a.peer_last_tsn,
@@ -395,15 +395,14 @@ async fn handle_init_test(name: &str, initial_state: AssociationState, expect_er
         } else {
             init.initial_tsn - 1
         },
-        "{} should match",
-        name
+        "{name} should match"
     );
-    assert_eq!(a.my_max_num_outbound_streams, 1001, "{} should match", name);
-    assert_eq!(a.my_max_num_inbound_streams, 1002, "{} should match", name);
-    assert_eq!(a.peer_verification_tag, 5678, "{} should match", name);
-    assert_eq!(a.destination_port, pkt.source_port, "{} should match", name);
-    assert_eq!(a.source_port, pkt.destination_port, "{} should match", name);
-    assert!(a.use_forward_tsn, "{} should be set to true", name);
+    assert_eq!(a.my_max_num_outbound_streams, 1001, "{name} should match");
+    assert_eq!(a.my_max_num_inbound_streams, 1002, "{name} should match");
+    assert_eq!(a.peer_verification_tag, 5678, "{name} should match");
+    assert_eq!(a.destination_port, pkt.source_port, "{name} should match");
+    assert_eq!(a.source_port, pkt.destination_port, "{name} should match");
+    assert!(a.use_forward_tsn, "{name} should be set to true");
 }
 
 #[tokio::test]

@@ -2,7 +2,7 @@
 name = "stun"
 version = "0.4.4"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
-edition = "2018"
+edition = "2021"
 description = "A pure Rust implementation of STUN"
 license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/stun"

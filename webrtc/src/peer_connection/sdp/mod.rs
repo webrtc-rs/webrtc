@@ -461,7 +461,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
     if codecs.is_empty() {
         // If we are sender and we have no codecs throw an error early
-        if t.sender().await.track().await.is_some() {
+        if t.sender().track().await.is_some() {
             return Err(Error::ErrSenderWithNoCodecs);
         }
 
@@ -502,9 +502,7 @@ pub(crate) async fn add_transceiver_sdp(
         return Ok((d, false));
     }
 
-    let parameters = media_engine
-        .get_rtp_parameters_by_kind(t.kind, t.direction())
-        .await;
+    let parameters = media_engine.get_rtp_parameters_by_kind(t.kind, t.direction());
     for rtp_extension in &parameters.header_extensions {
         let ext_url = Url::parse(rtp_extension.uri.as_str())?;
         media = media.with_extmap(sdp::extmap::ExtMap {
@@ -530,7 +528,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
 
     for mt in transceivers {
-        let sender = mt.sender().await;
+        let sender = mt.sender();
         if let Some(track) = sender.track().await {
             media = media.with_media_source(
                 sender.ssrc,
@@ -566,7 +564,7 @@ pub(crate) async fn add_transceiver_sdp(
             // description, "a=msid" line(s) MUST be generated according to the
             // same rules as for an initial offer.
             for stream_id in sender.associated_media_stream_ids() {
-                media = media.with_property_attribute(format!("msid:{} {}", stream_id, track_id));
+                media = media.with_property_attribute(format!("msid:{stream_id} {track_id}"));
             }
 
             break;
@@ -844,10 +842,10 @@ pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool 
     false
 }
 
-pub(crate) fn get_by_mid<'b>(
+pub(crate) fn get_by_mid<'a>(
     search_mid: &str,
-    desc: &'b session_description::RTCSessionDescription,
-) -> Option<&'b MediaDescription> {
+    desc: &'a session_description::RTCSessionDescription,
+) -> Option<&'a MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
             if let Some(mid) = m.attribute(ATTR_KEY_MID).flatten() {

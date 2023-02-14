@@ -87,20 +87,20 @@ impl From<&str> for RTCSignalingState {
 impl fmt::Display for RTCSignalingState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCSignalingState::Stable => write!(f, "{}", SIGNALING_STATE_STABLE_STR),
+            RTCSignalingState::Stable => write!(f, "{SIGNALING_STATE_STABLE_STR}"),
             RTCSignalingState::HaveLocalOffer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_LOCAL_OFFER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_LOCAL_OFFER_STR}")
             }
             RTCSignalingState::HaveRemoteOffer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_REMOTE_OFFER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_REMOTE_OFFER_STR}")
             }
             RTCSignalingState::HaveLocalPranswer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR}")
             }
             RTCSignalingState::HaveRemotePranswer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR}")
             }
-            RTCSignalingState::Closed => write!(f, "{}", SIGNALING_STATE_CLOSED_STR),
+            RTCSignalingState::Closed => write!(f, "{SIGNALING_STATE_CLOSED_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -356,16 +356,13 @@ mod test {
             let result = check_next_signaling_state(cur, next, op, sdp_type);
             match (&result, &expected_err) {
                 (Ok(got), None) => {
-                    assert_eq!(*got, next, "{} state mismatch", desc);
+                    assert_eq!(*got, next, "{desc} state mismatch");
                 }
                 (Err(got), Some(err)) => {
-                    assert_eq!(got.to_string(), err.to_string(), "{} error mismatch", desc);
+                    assert_eq!(got.to_string(), err.to_string(), "{desc} error mismatch");
                 }
                 _ => {
-                    panic!(
-                        "{}: expected {:?}, but got {:?}",
-                        desc, expected_err, result
-                    );
+                    panic!("{desc}: expected {expected_err:?}, but got {result:?}");
                 }
             };
         }

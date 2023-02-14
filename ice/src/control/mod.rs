@@ -138,6 +138,6 @@ impl fmt::Display for Role {
             Self::Controlled => "controlled",
             Self::Unspecified => "unspecified",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }

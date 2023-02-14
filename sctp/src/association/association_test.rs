@@ -2613,7 +2613,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
 
         let packet = packet.marshal()?;
         let result = charlie_conn.send(&packet).await;
-        assert!(result.is_ok(), "{} charlie_conn.send should be ok", name);
+        assert!(result.is_ok(), "{name} charlie_conn.send should be ok");
 
         // Should not panic.
         tokio::time::sleep(Duration::from_millis(100)).await;

@@ -18,7 +18,7 @@ impl fmt::Display for RTCIceCandidatePair {
 
 impl RTCIceCandidatePair {
     fn stats_id(local_id: &str, remote_id: &str) -> String {
-        format!("{}-{}", local_id, remote_id)
+        format!("{local_id}-{remote_id}")
     }
 
     /// returns an initialized ICECandidatePair

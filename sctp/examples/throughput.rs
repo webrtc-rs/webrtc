@@ -57,9 +57,7 @@ fn main() -> Result<(), Error> {
             .unwrap()
             .block_on(async move {
                 let conn = DisconnectedPacketConn::new(Arc::new(
-                    UdpSocket::bind(format!("127.0.0.1:{}", port1))
-                        .await
-                        .unwrap(),
+                    UdpSocket::bind(format!("127.0.0.1:{port1}")).await.unwrap(),
                 ));
                 println!("listening {}...", conn.local_addr().unwrap());
 
@@ -90,10 +88,7 @@ fn main() -> Result<(), Error> {
                     }
                     loop_num += 1;
                     if now.elapsed().as_secs() == 1 {
-                        println!(
-                            "Throughput: {} Bytes/s, {} pkts, {} loops",
-                            recv, pkt_num, loop_num
-                        );
+                        println!("Throughput: {recv} Bytes/s, {pkt_num} pkts, {loop_num} loops");
                         now = tokio::time::Instant::now();
                         recv = 0;
                         loop_num = 0;
@@ -109,8 +104,8 @@ fn main() -> Result<(), Error> {
             .unwrap()
             .block_on(async move {
                 let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await.unwrap());
-                conn.connect(format!("127.0.0.1:{}", port2)).await.unwrap();
-                println!("connecting 127.0.0.1:{}..", port2);
+                conn.connect(format!("127.0.0.1:{port2}")).await.unwrap();
+                println!("connecting 127.0.0.1:{port2}..");
 
                 let config = Config {
                     net_conn: conn,
@@ -137,7 +132,7 @@ fn main() -> Result<(), Error> {
                 while stream.write(&bytes).await.is_ok() {
                     pkt_num += 1;
                     if now.elapsed().as_secs() == 1 {
-                        println!("Send {} pkts", pkt_num);
+                        println!("Send {pkt_num} pkts");
                         now = tokio::time::Instant::now();
                         pkt_num = 0;
                     }

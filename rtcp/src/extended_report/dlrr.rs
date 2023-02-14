@@ -12,7 +12,7 @@ pub struct DLRRReport {
 
 impl fmt::Display for DLRRReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -41,7 +41,7 @@ pub struct DLRRReportBlock {
 
 impl fmt::Display for DLRRReportBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

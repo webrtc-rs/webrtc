@@ -47,7 +47,7 @@ pub struct ReceptionReport {
 
 impl fmt::Display for ReceptionReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

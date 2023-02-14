@@ -30,14 +30,14 @@ fn main() {
     let encoded_data = matches.value_of("data").unwrap();
     let decoded_data = match base64::decode(encoded_data) {
         Ok(d) => d,
-        Err(e) => panic!("Unable to decode base64 value: {}", e),
+        Err(e) => panic!("Unable to decode base64 value: {e}"),
     };
 
     let mut message = Message::new();
     message.raw = decoded_data;
 
     match message.decode() {
-        Ok(_) => println!("{}", message),
-        Err(e) => panic!("Unable to decode message: {}", e),
+        Ok(_) => println!("{message}"),
+        Err(e) => panic!("Unable to decode message: {e}"),
     }
 }

@@ -125,10 +125,7 @@ impl Agent {
             return Err(Error::ErrInvalidMulticastDnshostName);
         }
 
-        let mut mdns_mode = config.multicast_dns_mode;
-        if mdns_mode == MulticastDnsMode::Unspecified {
-            mdns_mode = MulticastDnsMode::QueryOnly;
-        }
+        let mdns_mode = config.multicast_dns_mode;
 
         let mdns_conn =
             match create_multicast_dns(mdns_mode, &mdns_name, &config.multicast_dns_dest_addr) {

@@ -279,7 +279,7 @@ async fn main() -> Result<()> {
 
     if let Some(video_file) = video_file {
         if !Path::new(video_file).exists() {
-            return Err(Error::new(format!("video file: '{}' not exist", video_file)).into());
+            return Err(Error::new(format!("video file: '{video_file}' not exist")).into());
         }
         let mut vf = VIDEO_FILE.lock().await;
         *vf = Some(video_file.to_owned());
@@ -324,7 +324,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -351,7 +351,7 @@ async fn main() -> Result<()> {
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 
@@ -373,7 +373,7 @@ async fn main() -> Result<()> {
 // Read a video file from disk and write it to a webrtc.Track
 // When the video has been completely read this exits without error
 async fn write_video_to_track(video_file: String, t: Arc<TrackLocalStaticSample>) -> Result<()> {
-    println!("play video from disk file {}", video_file);
+    println!("play video from disk file {video_file}");
 
     // Open a IVF file and start reading using our IVFReader
     let file = File::open(video_file)?;
@@ -393,7 +393,7 @@ async fn write_video_to_track(video_file: String, t: Arc<TrackLocalStaticSample>
         let frame = match ivf.parse_next_frame() {
             Ok((frame, _)) => frame,
             Err(err) => {
-                println!("All video frames parsed and sent: {}", err);
+                println!("All video frames parsed and sent: {err}");
                 return Err(err.into());
             }
         };

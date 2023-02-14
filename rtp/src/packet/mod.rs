@@ -27,7 +27,7 @@ impl fmt::Display for Packet {
         out += format!("\tSSRC: {} ({:x})\n", self.header.ssrc, self.header.ssrc).as_str();
         out += format!("\tPayload Length: {}\n", self.payload.len()).as_str();
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

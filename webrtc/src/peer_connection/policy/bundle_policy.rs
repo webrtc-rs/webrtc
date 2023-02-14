@@ -56,9 +56,9 @@ impl From<&str> for RTCBundlePolicy {
 impl fmt::Display for RTCBundlePolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCBundlePolicy::Balanced => write!(f, "{}", BUNDLE_POLICY_BALANCED_STR),
-            RTCBundlePolicy::MaxCompat => write!(f, "{}", BUNDLE_POLICY_MAX_COMPAT_STR),
-            RTCBundlePolicy::MaxBundle => write!(f, "{}", BUNDLE_POLICY_MAX_BUNDLE_STR),
+            RTCBundlePolicy::Balanced => write!(f, "{BUNDLE_POLICY_BALANCED_STR}"),
+            RTCBundlePolicy::MaxCompat => write!(f, "{BUNDLE_POLICY_MAX_COMPAT_STR}"),
+            RTCBundlePolicy::MaxBundle => write!(f, "{BUNDLE_POLICY_MAX_BUNDLE_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }

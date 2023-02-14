@@ -62,7 +62,7 @@ impl fmt::Display for RTCSctpTransportState {
             RTCSctpTransportState::Closed => SCTP_TRANSPORT_STATE_CLOSED_STR,
             RTCSctpTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -83,8 +83,7 @@ mod test {
             assert_eq!(
                 RTCSctpTransportState::from(state_string),
                 expected_state,
-                "testCase: {}",
-                expected_state,
+                "testCase: {expected_state}",
             );
         }
     }

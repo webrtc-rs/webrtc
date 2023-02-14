@@ -111,7 +111,7 @@ impl fmt::Display for CandidateType {
             CandidateType::Relay => "relay",
             CandidateType::Unspecified => "Unknown candidate type",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -220,7 +220,7 @@ impl fmt::Display for CandidatePairState {
             Self::Unspecified => "unspecified",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

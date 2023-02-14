@@ -141,7 +141,7 @@ mod test {
 
         for (ice_server, expected_err) in tests {
             if let Err(err) = ice_server.urls() {
-                assert_eq!(err, expected_err, "{:?} with err {:?}", ice_server, err);
+                assert_eq!(err, expected_err, "{ice_server:?} with err {err:?}");
             } else {
                 panic!("expected error, but got ok");
             }
@@ -162,7 +162,7 @@ mod test {
 
         for (ice_server, expected_err) in tests {
             if let Err(err) = ice_server.urls() {
-                assert_eq!(err, expected_err, "{:?} with err {:?}", ice_server, err);
+                assert_eq!(err, expected_err, "{ice_server:?} with err {err:?}");
             } else {
                 panic!("expected error, but got ok");
             }

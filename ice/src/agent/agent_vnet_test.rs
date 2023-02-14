@@ -84,7 +84,7 @@ pub(crate) async fn build_simple_vnet(
 
     // LAN
     let lan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
-        cidr: format!("{}/{}", VNET_LOCAL_IPA, VNET_LOCAL_SUBNET_MASK_A),
+        cidr: format!("{VNET_LOCAL_IPA}/{VNET_LOCAL_SUBNET_MASK_A}"),
         ..Default::default()
     })?));
 
@@ -134,11 +134,11 @@ pub(crate) async fn build_vnet(
     // LAN 0
     let lan0 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         static_ips: if nat_type0.mode == nat::NatMode::Nat1To1 {
-            vec![format!("{}/{}", VNET_GLOBAL_IPA, VNET_LOCAL_IPA)]
+            vec![format!("{VNET_GLOBAL_IPA}/{VNET_LOCAL_IPA}")]
         } else {
             vec![VNET_GLOBAL_IPA.to_owned()]
         },
-        cidr: format!("{}/{}", VNET_LOCAL_IPA, VNET_LOCAL_SUBNET_MASK_A),
+        cidr: format!("{VNET_LOCAL_IPA}/{VNET_LOCAL_SUBNET_MASK_A}"),
         nat_type: Some(nat_type0),
         ..Default::default()
     })?));
@@ -154,11 +154,11 @@ pub(crate) async fn build_vnet(
     // LAN 1
     let lan1 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         static_ips: if nat_type1.mode == nat::NatMode::Nat1To1 {
-            vec![format!("{}/{}", VNET_GLOBAL_IPB, VNET_LOCAL_IPB)]
+            vec![format!("{VNET_GLOBAL_IPB}/{VNET_LOCAL_IPB}")]
         } else {
             vec![VNET_GLOBAL_IPB.to_owned()]
         },
-        cidr: format!("{}/{}", VNET_LOCAL_IPB, VNET_LOCAL_SUBNET_MASK_B),
+        cidr: format!("{VNET_LOCAL_IPB}/{VNET_LOCAL_SUBNET_MASK_B}"),
         nat_type: Some(nat_type1),
         ..Default::default()
     })?));
@@ -219,8 +219,7 @@ pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server
     // Run TURN(STUN) server
     let conn = wan_net
         .bind(SocketAddr::from_str(&format!(
-            "{}:{}",
-            VNET_STUN_SERVER_IP, VNET_STUN_SERVER_PORT
+            "{VNET_STUN_SERVER_IP}:{VNET_STUN_SERVER_PORT}"
         ))?)
         .await?;
 

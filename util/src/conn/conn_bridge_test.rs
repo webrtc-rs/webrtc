@@ -234,9 +234,9 @@ async fn test_bridge_drop_next_n_packets() -> Result<()> {
 
         let mut msgs = vec![];
         for i in 0..5u8 {
-            let msg = format!("msg{}", i);
+            let msg = format!("msg{i}");
             let n = src_conn.send(msg.as_bytes()).await?;
-            assert_eq!(n, msg.len(), "[{}] unexpected length", id);
+            assert_eq!(n, msg.len(), "[{id}] unexpected length");
             msgs.push(msg);
             br.process().await;
         }
@@ -245,7 +245,7 @@ async fn test_bridge_drop_next_n_packets() -> Result<()> {
             if let Some(buf) = rx.recv().await {
                 assert_eq!(msgs[i + 3].as_bytes(), &buf);
             } else {
-                panic!("{} unexpected number of packets", id);
+                panic!("{id} unexpected number of packets");
             }
         }
     }

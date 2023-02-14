@@ -110,7 +110,7 @@ async fn main() -> Result<(), Error> {
     // Create a UDP listener to pass into pion/turn
     // turn itself doesn't allocate any UDP sockets, but lets the user pass them in
     // this allows us to add logging, storage or modify inbound/outbound traffic
-    let conn = Arc::new(UdpSocket::bind(format!("0.0.0.0:{}", port)).await?);
+    let conn = Arc::new(UdpSocket::bind(format!("0.0.0.0:{port}")).await?);
     println!("listening {}...", conn.local_addr()?);
 
     let server = Server::new(ServerConfig {

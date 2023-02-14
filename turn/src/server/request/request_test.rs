@@ -27,8 +27,7 @@ async fn test_allocation_lifetime_parsing() -> Result<()> {
     let lifetime_duration = allocation_lifetime(&m);
     assert_eq!(
         lifetime_duration, lifetime.0,
-        "Expect lifetime_duration is {}, but {:?}",
-        lifetime, lifetime_duration
+        "Expect lifetime_duration is {lifetime}, but {lifetime_duration:?}"
     );
 
     Ok(())
@@ -44,8 +43,7 @@ async fn test_allocation_lifetime_overflow() -> Result<()> {
     let lifetime_duration = allocation_lifetime(&m2);
     assert_eq!(
         lifetime_duration, DEFAULT_LIFETIME,
-        "Expect lifetime_duration is {:?}, but {:?}",
-        DEFAULT_LIFETIME, lifetime_duration
+        "Expect lifetime_duration is {DEFAULT_LIFETIME:?}, but {lifetime_duration:?}"
     );
 
     Ok(())

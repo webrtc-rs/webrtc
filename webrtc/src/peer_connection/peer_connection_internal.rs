@@ -166,7 +166,7 @@ impl PeerConnectionInternal {
             self.undeclared_media_processor();
         } else {
             for t in &current_transceivers {
-                let receiver = t.receiver().await;
+                let receiver = t.receiver();
                 let tracks = receiver.tracks().await;
                 if tracks.is_empty() {
                     continue;
@@ -179,14 +179,14 @@ impl PeerConnectionInternal {
                         if let Some(details) =
                             track_details_for_rid(&track_details, t.rid().to_owned())
                         {
-                            t.set_id(details.id.clone()).await;
-                            t.set_stream_id(details.stream_id.clone()).await;
+                            t.set_id(details.id.clone());
+                            t.set_stream_id(details.stream_id.clone());
                             continue;
                         }
                     } else if t.ssrc() != 0 {
                         if let Some(details) = track_details_for_ssrc(&track_details, t.ssrc()) {
-                            t.set_id(details.id.clone()).await;
-                            t.set_stream_id(details.stream_id.clone()).await;
+                            t.set_id(details.id.clone());
+                            t.set_stream_id(details.stream_id.clone());
                             continue;
                         }
                     }
@@ -216,7 +216,7 @@ impl PeerConnectionInternal {
                     Arc::clone(&self.media_engine),
                     interceptor,
                 ));
-                t.set_receiver(receiver).await;
+                t.set_receiver(receiver);
             }
         }
 
@@ -337,7 +337,7 @@ impl PeerConnectionInternal {
         for incoming_track in incoming_tracks {
             // If we already have a TrackRemote for a given SSRC don't handle it again
             for t in local_transceivers {
-                let receiver = t.receiver().await;
+                let receiver = t.receiver();
                 for track in receiver.tracks().await {
                     for ssrc in &incoming_track.ssrcs {
                         if *ssrc == track.ssrc() {
@@ -363,7 +363,7 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                let receiver = t.receiver().await;
+                let receiver = t.receiver();
                 if receiver.have_received().await {
                     continue;
                 }
@@ -666,7 +666,7 @@ impl PeerConnectionInternal {
             }
 
             // TODO: This is dubious because of rollbacks.
-            t.sender().await.set_negotiated();
+            t.sender().set_negotiated();
             media_sections.push(MediaSection {
                 id: t.mid().unwrap(),
                 transceivers: vec![Arc::clone(t)],
@@ -755,7 +755,7 @@ impl PeerConnectionInternal {
                         }
 
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
-                            t.sender().await.set_negotiated();
+                            t.sender().set_negotiated();
                             let media_transceivers = vec![t];
 
                             // NB: The below could use `then_some`, but with our current MSRV
@@ -780,7 +780,7 @@ impl PeerConnectionInternal {
         // If we are offering also include unmatched local transceivers
         if include_unmatched {
             for t in &local_transceivers {
-                t.sender().await.set_negotiated();
+                t.sender().set_negotiated();
                 media_sections.push(MediaSection {
                     id: t.mid().unwrap(),
                     transceivers: vec![Arc::clone(t)],
@@ -886,7 +886,7 @@ impl PeerConnectionInternal {
             )
             .await?;
 
-        let receiver = t.receiver().await;
+        let receiver = t.receiver();
         PeerConnectionInternal::start_receiver(
             self.setting_engine.get_receive_mtu(),
             &incoming,
@@ -1004,7 +1004,7 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                let receiver = t.receiver().await;
+                let receiver = t.receiver();
 
                 if !rsid.is_empty() {
                     return receiver
@@ -1206,13 +1206,13 @@ impl PeerConnectionInternal {
         }
         let mut track_infos = vec![];
         for transeiver in transceivers {
-            let receiver = transeiver.receiver().await;
+            let receiver = transeiver.receiver();
 
             if let Some(mid) = transeiver.mid() {
                 let tracks = receiver.tracks().await;
 
                 for track in tracks {
-                    let track_id = track.id().await;
+                    let track_id = track.id();
                     let kind = match track.kind() {
                         RTPCodecType::Unspecified => continue,
                         RTPCodecType::Audio => "audio",
@@ -1331,7 +1331,7 @@ impl PeerConnectionInternal {
         }
         let mut track_infos = vec![];
         for transceiver in transceivers {
-            let sender = transceiver.sender().await;
+            let sender = transceiver.sender();
 
             let mid = match transceiver.mid() {
                 Some(mid) => mid,

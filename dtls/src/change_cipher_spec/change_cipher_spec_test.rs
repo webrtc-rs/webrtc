@@ -15,8 +15,7 @@ fn test_change_cipher_spec_round_trip() -> Result<()> {
     let cnew = ChangeCipherSpec::unmarshal(&mut reader)?;
     assert_eq!(
         c, cnew,
-        "ChangeCipherSpec round trip: got {:?}, want {:?}",
-        cnew, c
+        "ChangeCipherSpec round trip: got {cnew:?}, want {c:?}"
     );
 
     Ok(())

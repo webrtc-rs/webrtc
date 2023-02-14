@@ -345,10 +345,10 @@ mod tests {
 
                     let expected = 0.0;
 
-                    println!("constraint: {:?}", constraint);
-                    println!("setting: {:?}", setting);
-                    println!("actual: {:?}", actual);
-                    println!("expected: {:?}", expected);
+                    println!("constraint: {constraint:?}");
+                    println!("setting: {setting:?}");
+                    println!("actual: {actual:?}");
+                    println!("expected: {expected:?}");
 
                     assert_eq!(actual, expected);
                 }
@@ -434,10 +434,10 @@ mod tests {
 
                 let expected = 0.0;
 
-                println!("constraint: {:?}", constraint);
-                println!("setting: {:?}", setting);
-                println!("actual: {:?}", actual);
-                println!("expected: {:?}", expected);
+                println!("constraint: {constraint:?}");
+                println!("setting: {setting:?}");
+                println!("actual: {actual:?}");
+                println!("expected: {expected:?}");
 
                 assert_eq!(actual, expected);
             }

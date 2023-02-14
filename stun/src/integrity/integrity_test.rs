@@ -55,7 +55,7 @@ fn test_message_integrity_with_fingerprint() -> Result<()> {
     a.add_to(&mut m)?;
 
     let i = MessageIntegrity::new_short_term_integrity("pwd".to_owned());
-    assert_eq!(i.to_string(), "KEY: 0x[70, 77, 64]", "bad string {}", i);
+    assert_eq!(i.to_string(), "KEY: 0x[70, 77, 64]", "bad string {i}");
     let result = i.check(&mut m);
     assert!(result.is_err(), "should error");
 

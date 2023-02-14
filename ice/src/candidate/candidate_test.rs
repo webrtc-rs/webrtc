@@ -103,8 +103,7 @@ fn test_candidate_priority() -> Result<()> {
         let got = candidate.priority();
         assert_eq!(
             got, want,
-            "Candidate({}).Priority() = {}, want {}",
-            candidate, got, want
+            "Candidate({candidate}).Priority() = {got}, want {want}"
         );
     }
 

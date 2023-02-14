@@ -58,13 +58,13 @@ pub async fn http_sdp_server(port: u16) -> mpsc::Receiver<String> {
     }
 
     tokio::spawn(async move {
-        let addr = SocketAddr::from_str(&format!("0.0.0.0:{}", port)).unwrap();
+        let addr = SocketAddr::from_str(&format!("0.0.0.0:{port}")).unwrap();
         let service =
             make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(remote_handler)) });
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 

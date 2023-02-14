@@ -39,13 +39,13 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     let payload = c.to_json()?.candidate;
     let req = match Request::builder()
         .method(Method::POST)
-        .uri(format!("http://{}/candidate", addr))
+        .uri(format!("http://{addr}/candidate"))
         .header("content-type", "application/json; charset=utf-8")
         .body(Body::from(payload))
     {
         Ok(req) => req,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };
@@ -53,7 +53,7 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     let _resp = match Client::new().request(req).await {
         Ok(resp) => resp,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };
@@ -259,7 +259,7 @@ async fn main() -> Result<()> {
         })
     }));
 
-    println!("Listening on http://{}", offer_addr);
+    println!("Listening on http://{offer_addr}");
     {
         let mut pcm = PEER_CONNECTION_MUTEX.lock().await;
         *pcm = Some(Arc::clone(&peer_connection));
@@ -272,7 +272,7 @@ async fn main() -> Result<()> {
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 
@@ -284,7 +284,7 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {}", s);
+        println!("Peer Connection State has changed: {s}");
 
         if s == RTCPeerConnectionState::Failed {
             // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -312,7 +312,7 @@ async fn main() -> Result<()> {
                 tokio::select! {
                     _ = timeout.as_mut() =>{
                         let message = math_rand_alpha(15);
-                        println!("Sending '{}'", message);
+                        println!("Sending '{message}'");
                         result = d2.send_text(message).await.map_err(Into::into);
                     }
                 };
@@ -324,7 +324,7 @@ async fn main() -> Result<()> {
     let d_label = data_channel.label().to_owned();
     data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
         let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-        println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+        println!("Message from DataChannel '{d_label}': '{msg_str}'");
         Box::pin(async {})
     }));
 
@@ -344,7 +344,7 @@ async fn main() -> Result<()> {
     //println!("Post: {}", format!("http://{}/sdp", answer_addr));
     let req = match Request::builder()
         .method(Method::POST)
-        .uri(format!("http://{}/sdp", answer_addr))
+        .uri(format!("http://{answer_addr}/sdp"))
         .header("content-type", "application/json; charset=utf-8")
         .body(Body::from(payload))
     {
@@ -355,7 +355,7 @@ async fn main() -> Result<()> {
     let _resp = match Client::new().request(req).await {
         Ok(resp) => resp,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };

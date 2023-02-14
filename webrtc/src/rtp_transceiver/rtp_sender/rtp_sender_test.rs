@@ -74,13 +74,13 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
 
             let last = pkt.payload[pkt.payload.len() - 1];
             if last == 0xAA {
-                assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_VP8);
+                assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
                 let _ = seen_packet_a_tx2.send(()).await;
             } else if last == 0xBB {
-                assert_eq!(track.codec().await.capability.mime_type, MIME_TYPE_H264);
+                assert_eq!(track.codec().capability.mime_type, MIME_TYPE_H264);
                 let _ = seen_packet_b_tx2.send(()).await;
             } else {
-                panic!("Unexpected RTP Data {:02x}", last);
+                panic!("Unexpected RTP Data {last:02x}");
             }
         })
     }));
@@ -133,7 +133,7 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
-    let sender = rtp_transceiver.sender().await;
+    let sender = rtp_transceiver.sender();
     let parameters = sender.get_parameters().await;
     assert_ne!(0, parameters.rtp_parameters.codecs.len());
     assert_eq!(1, parameters.encodings.len());
@@ -282,7 +282,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
         .await?;
 
     {
-        let tr = rtp_sender.rtp_transceiver.lock().await;
+        let tr = rtp_sender.rtp_transceiver.lock();
         if let Some(t) = &*tr {
             if let Some(t) = t.upgrade() {
                 t.set_codec_preferences(vec![RTCRtpCodecParameters {

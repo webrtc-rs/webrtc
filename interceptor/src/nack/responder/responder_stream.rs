@@ -132,7 +132,7 @@ mod test {
                             seq, packet.header.sequence_number
                         );
                     } else {
-                        panic!("packet not found: {}", seq);
+                        panic!("packet not found: {seq}");
                     }
                 }
             };

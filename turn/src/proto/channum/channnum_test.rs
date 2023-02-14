@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn test_channel_number_string() -> Result<(), stun::Error> {
     let n = ChannelNumber(112);
-    assert_eq!(n.to_string(), "112", "bad string {}, expected 112", n);
+    assert_eq!(n.to_string(), "112", "bad string {n}, expected 112");
     Ok(())
 }
 
@@ -48,7 +48,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
 
         let mut num_decoded = ChannelNumber::default();
         num_decoded.get_from(&decoded)?;
-        assert_eq!(num_decoded, n, "Decoded {}, expected {}", num_decoded, n);
+        assert_eq!(num_decoded, n, "Decoded {num_decoded}, expected {n}");
 
         //"HandleErr"
         {
@@ -58,8 +58,7 @@ fn test_channel_number_add_to() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             } else {
                 panic!("expected error, but got ok");

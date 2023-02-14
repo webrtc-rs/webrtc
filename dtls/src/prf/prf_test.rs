@@ -26,8 +26,7 @@ fn test_pre_master_secret() -> Result<()> {
 
     assert_eq!(
         expected_pre_master_secret, pre_master_secret,
-        "PremasterSecret exp: {:?} actual: {:?}",
-        expected_pre_master_secret, pre_master_secret
+        "PremasterSecret exp: {expected_pre_master_secret:?} actual: {pre_master_secret:?}"
     );
 
     Ok(())
@@ -66,8 +65,7 @@ fn test_master_secret() -> Result<()> {
 
     assert_eq!(
         expected_master_secret, master_secret,
-        "master_secret exp: {:?} actual: {:?}",
-        expected_master_secret, master_secret
+        "master_secret exp: {expected_master_secret:?} actual: {master_secret:?}"
     );
 
     Ok(())
@@ -120,8 +118,7 @@ fn test_encryption_keys() -> Result<()> {
 
     assert_eq!(
         expected_encryption_keys, keys,
-        "master_secret exp: {:?} actual: {:?}",
-        expected_encryption_keys, keys,
+        "master_secret exp: {expected_encryption_keys:?} actual: {keys:?}",
     );
 
     Ok(())
@@ -257,8 +254,7 @@ fn test_verify_data() -> Result<()> {
 
     assert_eq!(
         expected_verify_data, verify_data,
-        "verify_data exp: {:?} actual: {:?}",
-        expected_verify_data, verify_data
+        "verify_data exp: {expected_verify_data:?} actual: {verify_data:?}"
     );
 
     Ok(())

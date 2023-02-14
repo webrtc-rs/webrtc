@@ -27,7 +27,7 @@ impl fmt::Display for Goodbye {
         }
         out += format!("\tReason: {:?}\n", self.reason).as_str();
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

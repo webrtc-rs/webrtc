@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking changes
+
+* remove non used `MulticastDnsMode::Unspecified` variant [#404](https://github.com/webrtc-rs/webrtc/pull/404):
+
 ## v0.9.0
 
 * Increased minimum support rust version to `1.60.0`.

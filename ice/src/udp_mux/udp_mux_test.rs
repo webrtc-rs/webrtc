@@ -30,8 +30,8 @@ impl Network {
     /// Connnect ip from the "remote".
     fn connect_ip(self, port: u16) -> String {
         match self {
-            Network::Ipv4 => format!("127.0.0.1:{}", port),
-            Network::Ipv6 => format!("[::1]:{}", port),
+            Network::Ipv4 => format!("127.0.0.1:{port}"),
+            Network::Ipv6 => format!("[::1]:{port}"),
         }
     }
 }
@@ -114,18 +114,18 @@ async fn test_udp_mux() -> Result<()> {
         // Timeout error
         match timeout_result {
             Err(timeout_err) => {
-                panic!("Mux test timedout: {:?}", timeout_err);
+                panic!("Mux test timedout: {timeout_err:?}");
             }
 
             // Join error
             Ok(join_result) => match join_result {
                 Err(err) => {
-                    panic!("Mux test failed with join error: {:?}", err);
+                    panic!("Mux test failed with join error: {err:?}");
                 }
                 // Actual error
                 Ok(mux_result) => {
                     if let Err(err) = mux_result {
-                        panic!("Mux test failed with error: {:?}", err);
+                        panic!("Mux test failed with error: {err:?}");
                     }
                 }
             },
@@ -135,8 +135,7 @@ async fn test_udp_mux() -> Result<()> {
     let timeout = all_results.iter().find_map(|r| r.as_ref().err());
     assert!(
         timeout.is_none(),
-        "At least one of the muxed tasks timedout {:?}",
-        all_results
+        "At least one of the muxed tasks timedout {all_results:?}"
     );
 
     let res = udp_mux.close().await;
@@ -186,7 +185,7 @@ async fn test_mux_connection(
             ..Message::default()
         };
 
-        m.add(ATTR_USERNAME, format!("{}:otherufrag", ufrag).as_bytes());
+        m.add(ATTR_USERNAME, format!("{ufrag}:otherufrag").as_bytes());
 
         m.marshal_binary().unwrap()
     };
@@ -273,7 +272,7 @@ async fn test_mux_connection(
     assert!(r1.is_ok() && r2.is_ok());
 
     let res = conn.close().await;
-    assert!(res.is_ok(), "Failed to close Conn: {:?}", res);
+    assert!(res.is_ok(), "Failed to close Conn: {res:?}");
 
     Ok(())
 }

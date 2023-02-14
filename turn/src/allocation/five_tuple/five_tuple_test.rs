@@ -8,13 +8,11 @@ fn test_five_tuple_protocol() -> Result<()> {
 
     assert_eq!(
         udp_expect, PROTO_UDP,
-        "Invalid UDP Protocol value, expect {} but {}",
-        udp_expect, PROTO_UDP
+        "Invalid UDP Protocol value, expect {udp_expect} but {PROTO_UDP}"
     );
     assert_eq!(
         tcp_expect, PROTO_TCP,
-        "Invalid TCP Protocol value, expect {} but {}",
-        tcp_expect, PROTO_TCP
+        "Invalid TCP Protocol value, expect {tcp_expect} but {PROTO_TCP}"
     );
 
     assert_eq!(udp_expect.to_string(), "UDP");
@@ -94,8 +92,7 @@ fn test_five_tuple_equal() -> Result<()> {
         let fact = a == b;
         assert_eq!(
             expect, fact,
-            "{}: {}, {} equal check should be {}, but {}",
-            name, a, b, expect, fact
+            "{name}: {a}, {b} equal check should be {expect}, but {fact}"
         );
     }
 

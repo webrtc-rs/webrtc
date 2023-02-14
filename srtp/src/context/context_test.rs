@@ -26,7 +26,7 @@ fn test_context_roc() -> Result<()> {
     c.set_roc(123, 100);
     let roc = c.get_roc(123);
     if let Some(r) = roc {
-        assert_eq!(r, 100, "ROC is set to 100, but returned {}", r)
+        assert_eq!(r, 100, "ROC is set to 100, but returned {r}")
     } else {
         panic!("ROC must return value for used SSRC");
     }
@@ -53,7 +53,7 @@ fn test_context_index() -> Result<()> {
     c.set_index(123, 100);
     let index = c.get_index(123);
     if let Some(i) = index {
-        assert_eq!(i, 100, "Index is set to 100, but returned {}", i);
+        assert_eq!(i, 100, "Index is set to 100, but returned {i}");
     } else {
         panic!("Index must return true for used SSRC")
     }
@@ -116,8 +116,7 @@ fn test_valid_packet_counter() -> Result<()> {
     let counter = generate_counter(32846, s.rollover_counter, s.ssrc, &srtp_session_salt)?;
     assert_eq!(
         counter, expected_counter,
-        "Session Key {:?} does not match expected {:?}",
-        counter, expected_counter,
+        "Session Key {counter:?} does not match expected {expected_counter:?}",
     );
 
     Ok(())
@@ -199,8 +198,7 @@ fn test_rollover_count() -> Result<()> {
     let roc = s.next_rollover_count(0);
     assert_eq!(
         roc, 2,
-        "rolloverCounter must be incremented after wrapping, got {}",
-        roc
+        "rolloverCounter must be incremented after wrapping, got {roc}"
     );
 
     Ok(())

@@ -53,7 +53,7 @@ impl fmt::Display for SdesType {
             SdesType::SdesNote => "NOTE",
             SdesType::SdesPrivate => "PRIV",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -285,10 +285,10 @@ impl fmt::Display for SourceDescription {
         for c in &self.chunks {
             out += format!("\t{:x}\n", c.source).as_str();
             for it in &c.items {
-                out += format!("\t\t{:?}\n", it).as_str();
+                out += format!("\t\t{it:?}\n").as_str();
             }
         }
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

@@ -139,8 +139,7 @@ fn test_generate_multicast_dnsname() -> Result<()> {
     if let Ok(re) = re {
         assert!(
             re.is_match(&name),
-            "mDNS name must be UUID v4 + \".local\" suffix, got {}",
-            name
+            "mDNS name must be UUID v4 + \".local\" suffix, got {name}"
         );
     } else {
         panic!("expected ok, but got err");

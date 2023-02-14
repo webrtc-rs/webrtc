@@ -36,7 +36,7 @@ impl fmt::Display for ReconfigResult {
             ReconfigResult::InProgress => "6: In progress",
             _ => "Unknown ReconfigResult",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

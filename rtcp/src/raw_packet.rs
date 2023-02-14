@@ -13,7 +13,7 @@ pub struct RawPacket(pub Bytes);
 
 impl fmt::Display for RawPacket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RawPacket: {:?}", self)
+        write!(f, "RawPacket: {self:?}")
     }
 }
 
@@ -131,10 +131,7 @@ mod test {
             assert_eq!(
                 result.is_err(),
                 unmarshal_error.is_some(),
-                "Unmarshal {}: err = {:?}, want {:?}",
-                name,
-                result,
-                unmarshal_error
+                "Unmarshal {name}: err = {result:?}, want {unmarshal_error:?}"
             );
 
             if result.is_err() {
@@ -148,10 +145,7 @@ mod test {
             assert_eq!(
                 result.is_err(),
                 unmarshal_error.is_some(),
-                "Unmarshal {}: err = {:?}, want {:?}",
-                name,
-                result,
-                unmarshal_error
+                "Unmarshal {name}: err = {result:?}, want {unmarshal_error:?}"
             );
 
             if result.is_err() {
@@ -162,8 +156,7 @@ mod test {
 
             assert_eq!(
                 decoded, pkt,
-                "{} raw round trip: got {:?}, want {:?}",
-                name, decoded, pkt
+                "{name} raw round trip: got {decoded:?}, want {pkt:?}"
             )
         }
 

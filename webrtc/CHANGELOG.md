@@ -31,6 +31,33 @@
 
 * Change `RTCPeerConnection::mid` return signature to `Option<String>` [#375](https://github.com/webrtc-rs/webrtc/pull/375).
 
+* Make functions non-async [#402](https://github.com/webrtc-rs/webrtc/pull/402):
+    - `MediaEngine`:
+        - `get_codecs_by_kind`;
+        - `get_rtp_parameters_by_kind`.
+    - `RTCRtpTransceiver`:
+        - `sender`;
+        - `set_sender`;
+        - `receiver`.
+    - `RTPReceiverInternal`:
+        - `set_transceiver_codecs`;
+        - `get_codecs`.
+    - `RTCRtpSender`:
+        - `set_rtp_transceiver`;
+        - `has_sent`.
+    - `TrackRemote`:
+        - `id`;
+        - `set_id`;
+        - `stream_id`;
+        - `set_stream_id`;
+        - `msid`;
+        - `codec`;
+        - `set_codec`;
+        - `params`;
+        - `set_params`;
+        - `onmute`;
+        - `onunmute`.
+
 ## v0.6.0
 
 * Added more stats to `RemoteInboundRTPStats` and `RemoteOutboundRTPStats` [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).

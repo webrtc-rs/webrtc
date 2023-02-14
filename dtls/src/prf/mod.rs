@@ -47,7 +47,7 @@ impl fmt::Display for EncryptionKeys {
         out += format!("- client_write_iv: {:?}\n", self.client_write_iv).as_str();
         out += format!("- server_write_iv: {:?}\n", self.server_write_iv).as_str();
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

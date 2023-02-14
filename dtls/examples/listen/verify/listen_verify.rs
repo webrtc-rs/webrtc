@@ -75,7 +75,7 @@ async fn main() -> Result<(), Error> {
         ..Default::default()
     };
 
-    println!("listening {}...\ntype 'exit' to shutdown gracefully", host);
+    println!("listening {host}...\ntype 'exit' to shutdown gracefully");
 
     let listener = Arc::new(listen(host, cfg).await?);
 
@@ -100,7 +100,7 @@ async fn main() -> Result<(), Error> {
                             h2.register(dtls_conn).await;
                         }
                         Err(err) => {
-                            println!("connecting failed with error: {}", err);
+                            println!("connecting failed with error: {err}");
                         }
                     }
                 }

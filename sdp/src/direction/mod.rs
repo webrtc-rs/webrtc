@@ -32,7 +32,7 @@ impl fmt::Display for Direction {
             Direction::Inactive => DIRECTION_INACTIVE_STR,
             _ => DIRECTION_UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

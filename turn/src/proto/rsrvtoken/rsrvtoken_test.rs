@@ -29,7 +29,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
         decoded.write(&m.raw)?;
         let mut tok = ReservationToken::default();
         tok.get_from(&decoded)?;
-        assert_eq!(tok, tk, "Decoded {:?}, expected {:?}", tok, tk);
+        assert_eq!(tok, tk, "Decoded {tok:?}, expected {tk:?}");
 
         //"HandleErr"
         {
@@ -39,8 +39,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             } else {
                 panic!("expected error, but got ok");

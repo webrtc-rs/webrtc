@@ -532,9 +532,8 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             None,
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
         assert_eq!(params.header_extensions.len(), 1);
     }
@@ -551,9 +550,8 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             Some(RTCRtpTransceiverDirection::Recvonly),
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
         assert_eq!(params.header_extensions.len(), 1);
     }
@@ -570,9 +568,8 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             Some(RTCRtpTransceiverDirection::Sendonly),
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
         assert_eq!(params.header_extensions.len(), 0);
     }
@@ -589,9 +586,8 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             None,
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive);
 
         assert_eq!(params.header_extensions.len(), 1);
     }
@@ -708,7 +704,8 @@ a=rtpmap:111 opus/48000/2
 
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
-    for extension in ["urn:3gpp:video-orientation"] {
+    {
+        let extension = "urn:3gpp:video-orientation";
         m.register_header_extension(
             RTCRtpHeaderExtensionCapability {
                 uri: extension.to_owned(),
@@ -764,9 +761,8 @@ a=rtpmap:111 opus/48000/2
     assert!(mid_audio_enabled);
     assert!(!mid_video_enabled);
 
-    let params = m
-        .get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly)
-        .await;
+    let params =
+        m.get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly);
     dbg!(&params);
 
     let orientation = params

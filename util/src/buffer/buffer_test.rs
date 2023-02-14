@@ -321,12 +321,12 @@ async fn test_buffer_limit_sizes() {
         // Next write is expected to be errored.
         let result = buffer.write(&pkt).await;
         assert!(result.is_err(), "{}", name);
-        assert_eq!(result.unwrap_err(), Error::ErrBufferFull, "{}", name);
+        assert_eq!(result.unwrap_err(), Error::ErrBufferFull, "{name}");
 
         let mut packet = vec![0; size];
         for _ in 0..n_packets {
             let n = assert_ok!(buffer.read(&mut packet, Some(Duration::new(5, 0))).await);
-            assert_eq!(n, PACKET_SIZE, "{}", name);
+            assert_eq!(n, PACKET_SIZE, "{name}");
         }
     }
 }

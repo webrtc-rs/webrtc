@@ -12,6 +12,92 @@ use interceptor::{Attributes, RTCPReader, RTPWriter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
+use util;
+
+/// `RTP` packet sequence number manager.
+///
+/// Used to override outgoing `RTP` packets' sequence numbers. On creating it is
+/// unabled and can be enabled before sending data begining. Once data sending
+/// began it can not be enabled any more.
+pub(crate) struct SequenceTransformer(util::sync::Mutex<SequenceTransformerInner>);
+
+/// [`SequenceTransformer`] inner.
+struct SequenceTransformerInner {
+    offset: u16,
+    last_sq: u16,
+    reset_needed: bool,
+    enabled: bool,
+    data_sent: bool,
+}
+
+impl SequenceTransformer {
+    /// Creates a new [`SequenceTransformer`].
+    pub(crate) fn new() -> Self {
+        Self(util::sync::Mutex::new(SequenceTransformerInner {
+            offset: 0,
+            last_sq: rand::random(),
+            reset_needed: false,
+            enabled: false,
+            data_sent: false,
+        }))
+    }
+
+    /// Enables this [`SequenceTransformer`].
+    ///
+    /// # Errors
+    ///
+    /// With [`Error::ErrRTPSenderSeqTransEnabled`] on trying to enable already
+    /// enabled [`SequenceTransformer`].
+    ///
+    /// With [`Error::ErrRTPSenderSeqTransEnabled`] on trying to enable
+    /// [`SequenceTransformer`] after data sending began.
+    pub(crate) fn enable(&self) -> Result<()> {
+        let mut guard = self.0.lock();
+
+        if guard.enabled {
+            return Err(Error::ErrRTPSenderSeqTransEnabled);
+        }
+
+        (!guard.data_sent)
+            .then(|| {
+                guard.enabled = true;
+            })
+            .ok_or(Error::ErrRTPSenderDataSent)
+    }
+
+    /// Indicates [`SequenceTransformer`] about necessity of recalculating
+    /// `offset`.
+    pub(crate) fn reset_offset(&self) {
+        self.0.lock().reset_needed = true;
+    }
+
+    /// Gets [`Some`] consistent `sequence number` if this [`SequenceTransformer`] is
+    /// enabled or [`None`] if it is not.
+    ///
+    /// Once this method is called, considers data sending began.
+    fn seq_number(&self, raw_sn: u16) -> Option<u16> {
+        let mut guard = self.0.lock();
+        guard.data_sent = true;
+
+        if !guard.enabled {
+            return None;
+        }
+
+        let offset = guard
+            .reset_needed
+            .then(|| {
+                guard.reset_needed = false;
+                let offset = guard.last_sq.overflowing_sub(raw_sn.overflowing_sub(1).0).0;
+                guard.offset = offset;
+                offset
+            })
+            .unwrap_or(guard.offset);
+        let next = raw_sn.overflowing_add(offset).0;
+        guard.last_sq = next;
+
+        Some(next)
+    }
+}
 
 /// SrtpWriterFuture blocks Read/Write calls until
 /// the SRTP Session is available
@@ -22,6 +108,7 @@ pub(crate) struct SrtpWriterFuture {
     pub(crate) rtp_transport: Arc<RTCDtlsTransport>,
     pub(crate) rtcp_read_stream: Mutex<Option<Arc<Stream>>>, // atomic.Value // *
     pub(crate) rtp_write_session: Mutex<Option<Arc<Session>>>, // atomic.Value // *
+    pub(crate) seq_trans: Arc<SequenceTransformer>,
 }
 
 impl SrtpWriterFuture {
@@ -181,6 +268,15 @@ impl RTCPReader for SrtpWriterFuture {
 #[async_trait]
 impl RTPWriter for SrtpWriterFuture {
     async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
-        Ok(self.write_rtp(pkt).await?)
+        Ok(
+            match self.seq_trans.seq_number(pkt.header.sequence_number) {
+                Some(seq_num) => {
+                    let mut new_pkt = pkt.clone();
+                    new_pkt.header.sequence_number = seq_num;
+                    self.write_rtp(&new_pkt).await?
+                }
+                None => self.write_rtp(pkt).await?,
+            },
+        )
     }
 }

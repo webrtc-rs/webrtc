@@ -121,7 +121,7 @@ impl RTCCertificate {
             return Err(Error::InvalidPEM("empty PEM".into()));
         };
         let expires_pem =
-            pem::parse(first_block).map_err(|e| Error::new(format!("can't parse PEM: {}", e)))?;
+            pem::parse(first_block).map_err(|e| Error::new(format!("can't parse PEM: {e}")))?;
         if expires_pem.tag != "EXPIRES" {
             return Err(Error::InvalidPEM(format!(
                 "invalid tag (expected: 'EXPIRES', got '{}')",
@@ -192,7 +192,7 @@ impl RTCCertificate {
             let mut h = Sha256::new();
             h.update(c.as_ref());
             let hashed = h.finalize();
-            let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
+            let values: Vec<String> = hashed.iter().map(|x| format! {"{x:02x}"}).collect();
 
             fingerprints.push(RTCDtlsFingerprint {
                 algorithm: "sha-256".to_owned(),

@@ -157,7 +157,7 @@ fn test_new_session_id() -> Result<()> {
         let r = new_session_id();
 
         if r > (1 << 63) - 1 {
-            panic!("Session ID must be less than 2**64-1, got {}", r)
+            panic!("Session ID must be less than 2**64-1, got {r}")
         }
         if r < min {
             min = r

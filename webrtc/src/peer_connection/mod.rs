@@ -469,7 +469,7 @@ impl RTCPeerConnection {
                                 None => return true, // doesn't contain a single a=msid line
                             };
 
-                            let sender = t.sender().await;
+                            let sender = t.sender();
                             // (...)or the number of MSIDs from the a=msid lines in this m= section,
                             // or the MSID values themselves, differ from what is in
                             // transceiver.sender.[[AssociatedMediaStreamIds]], return true.
@@ -1585,8 +1585,8 @@ impl RTCPeerConnection {
     pub(crate) async fn start_rtp_senders(&self) -> Result<()> {
         let current_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*current_transceivers {
-            let sender = transceiver.sender().await;
-            if sender.is_negotiated() && !sender.has_sent().await {
+            let sender = transceiver.sender();
+            if sender.is_negotiated() && !sender.has_sent() {
                 sender.send(&sender.get_parameters().await).await?;
             }
         }
@@ -1643,7 +1643,7 @@ impl RTCPeerConnection {
         let mut senders = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            let sender = transceiver.sender().await;
+            let sender = transceiver.sender();
             senders.push(sender);
         }
         senders
@@ -1654,7 +1654,7 @@ impl RTCPeerConnection {
         let mut receivers = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            receivers.push(transceiver.receiver().await);
+            receivers.push(transceiver.receiver());
         }
         receivers
     }
@@ -1678,7 +1678,7 @@ impl RTCPeerConnection {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if !t.stopped.load(Ordering::SeqCst) && t.kind == track.kind() {
-                    let sender = t.sender().await;
+                    let sender = t.sender();
                     if sender.track().await.is_none() {
                         if let Err(err) = sender.replace_track(Some(track)).await {
                             let _ = sender.stop().await;
@@ -1705,7 +1705,7 @@ impl RTCPeerConnection {
             .add_rtp_transceiver(Arc::clone(&transceiver))
             .await;
 
-        Ok(transceiver.sender().await)
+        Ok(transceiver.sender())
     }
 
     /// remove_track removes a Track from the PeerConnection
@@ -1718,7 +1718,7 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if t.sender().await.id == sender.id {
+                if t.sender().id == sender.id {
                     if sender.track().await.is_none() {
                         return Ok(());
                     }
@@ -1901,7 +1901,7 @@ impl RTCPeerConnection {
         let mut close_errs = vec![];
 
         if let Err(err) = self.interceptor.close().await {
-            close_errs.push(Error::new(format!("interceptor: {}", err)));
+            close_errs.push(Error::new(format!("interceptor: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)
@@ -1909,7 +1909,7 @@ impl RTCPeerConnection {
             let mut rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if let Err(err) = t.stop().await {
-                    close_errs.push(Error::new(format!("rtp_transceivers: {}", err)));
+                    close_errs.push(Error::new(format!("rtp_transceivers: {err}")));
                 }
             }
             rtp_transceivers.clear();
@@ -1920,7 +1920,7 @@ impl RTCPeerConnection {
             let mut data_channels = self.internal.sctp_transport.data_channels.lock().await;
             for d in &*data_channels {
                 if let Err(err) = d.close().await {
-                    close_errs.push(Error::new(format!("data_channels: {}", err)));
+                    close_errs.push(Error::new(format!("data_channels: {err}")));
                 }
             }
             data_channels.clear();
@@ -1928,17 +1928,17 @@ impl RTCPeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)
         if let Err(err) = self.internal.sctp_transport.stop().await {
-            close_errs.push(Error::new(format!("sctp_transport: {}", err)));
+            close_errs.push(Error::new(format!("sctp_transport: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #7)
         if let Err(err) = self.internal.dtls_transport.stop().await {
-            close_errs.push(Error::new(format!("dtls_transport: {}", err)));
+            close_errs.push(Error::new(format!("dtls_transport: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #8, #9, #10)
         if let Err(err) = self.internal.ice_transport.stop().await {
-            close_errs.push(Error::new(format!("dtls_transport: {}", err)));
+            close_errs.push(Error::new(format!("dtls_transport: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
@@ -1952,7 +1952,7 @@ impl RTCPeerConnection {
         .await;
 
         if let Err(err) = self.internal.ops.close().await {
-            close_errs.push(Error::new(format!("ops: {}", err)));
+            close_errs.push(Error::new(format!("ops: {err}")));
         }
 
         flatten_errs(close_errs)
@@ -2072,5 +2072,15 @@ impl RTCPeerConnection {
         }
 
         gathering_complete_rx
+    }
+
+    /// Returns the internal [`RTCDtlsTransport`].
+    pub fn dtls_transport(&self) -> Arc<RTCDtlsTransport> {
+        Arc::clone(&self.internal.dtls_transport)
+    }
+
+    /// Adds the specified [`RTCRtpTransceiver`] to this [`RTCPeerConnection`].
+    pub async fn add_transceiver(&self, t: Arc<RTCRtpTransceiver>) {
+        self.internal.add_rtp_transceiver(t).await
     }
 }

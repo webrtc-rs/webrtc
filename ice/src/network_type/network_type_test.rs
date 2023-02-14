@@ -18,8 +18,7 @@ fn test_network_type_parsing_success() -> Result<()> {
 
         assert_eq!(
             actual, expected,
-            "NetworkTypeParsing: '{}' -- input:{} expected:{} actual:{}",
-            name, in_network, expected, actual
+            "NetworkTypeParsing: '{name}' -- input:{in_network} expected:{expected} actual:{actual}"
         );
     }
 
@@ -35,9 +34,7 @@ fn test_network_type_parsing_failure() -> Result<()> {
         let result = determine_network_type(in_network, &in_ip);
         assert!(
             result.is_err(),
-            "NetworkTypeParsing should fail: '{}' -- input:{}",
-            name,
-            in_network,
+            "NetworkTypeParsing should fail: '{name}' -- input:{in_network}",
         );
     }
 

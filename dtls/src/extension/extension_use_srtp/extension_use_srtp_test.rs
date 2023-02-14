@@ -17,8 +17,7 @@ fn test_extension_use_srtp() -> Result<()> {
 
     assert_eq!(
         raw, raw_use_srtp,
-        "extensionUseSRTP marshal: got {:?}, want {:?}",
-        raw, raw_use_srtp
+        "extensionUseSRTP marshal: got {raw:?}, want {raw_use_srtp:?}"
     );
 
     let mut reader = BufReader::new(raw.as_slice());
@@ -26,8 +25,7 @@ fn test_extension_use_srtp() -> Result<()> {
 
     assert_eq!(
         new_use_srtp, parsed_use_srtp,
-        "extensionUseSRTP unmarshal: got {:?}, want {:?}",
-        new_use_srtp, parsed_use_srtp
+        "extensionUseSRTP unmarshal: got {new_use_srtp:?}, want {parsed_use_srtp:?}"
     );
 
     Ok(())

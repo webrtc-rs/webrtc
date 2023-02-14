@@ -43,7 +43,7 @@ fn test_requested_transport_add_to() -> Result<(), stun::Error> {
             protocol: PROTO_UDP,
         };
         req.get_from(&decoded)?;
-        assert_eq!(req, r, "Decoded {}, expected {}", req, r);
+        assert_eq!(req, r, "Decoded {req}, expected {r}");
 
         //"HandleErr"
         {
@@ -53,8 +53,7 @@ fn test_requested_transport_add_to() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             } else {
                 panic!("expected error, got ok");

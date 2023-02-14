@@ -16,6 +16,7 @@ use crate::rtp_transceiver::{
 use crate::track::track_remote::TrackRemote;
 use crate::track::{TrackStream, TrackStreams};
 
+use arc_swap::ArcSwapOption;
 use interceptor::stream_info::RTPHeaderExtension;
 use interceptor::{Attributes, Interceptor};
 use log::trace;
@@ -151,7 +152,7 @@ pub struct RTPReceiverInternal {
 
     tracks: RwLock<Vec<TrackStreams>>,
 
-    transceiver_codecs: Mutex<Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>>,
+    transceiver_codecs: ArcSwapOption<Mutex<Vec<RTCRtpCodecParameters>>>,
 
     transport: Arc<RTCDtlsTransport>,
     media_engine: Arc<MediaEngine>,
@@ -312,25 +313,24 @@ impl RTPReceiverInternal {
     async fn get_parameters(&self) -> RTCRtpParameters {
         let mut parameters = self
             .media_engine
-            .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+            .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly);
 
-        let transceiver_codecs = self.transceiver_codecs.lock().await;
+        let transceiver_codecs = self.transceiver_codecs.load();
         if let Some(codecs) = &*transceiver_codecs {
             let mut c = codecs.lock().await;
             parameters.codecs =
-                RTPReceiverInternal::get_codecs(&mut c, self.kind, &self.media_engine).await;
+                RTPReceiverInternal::get_codecs(&mut c, self.kind, &self.media_engine);
         }
 
         parameters
     }
 
-    pub(crate) async fn get_codecs(
+    pub(crate) fn get_codecs(
         codecs: &mut [RTCRtpCodecParameters],
         kind: RTPCodecType,
         media_engine: &Arc<MediaEngine>,
     ) -> Vec<RTCRtpCodecParameters> {
-        let media_engine_codecs = media_engine.get_codecs_by_kind(kind).await;
+        let media_engine_codecs = media_engine.get_codecs_by_kind(kind);
         if codecs.is_empty() {
             return media_engine_codecs;
         }
@@ -427,7 +427,7 @@ impl RTCRtpReceiver {
                 state_tx,
                 state_rx,
 
-                transceiver_codecs: Mutex::new(None),
+                transceiver_codecs: ArcSwapOption::new(None),
             }),
         }
     }
@@ -436,12 +436,11 @@ impl RTCRtpReceiver {
         self.kind
     }
 
-    pub(crate) async fn set_transceiver_codecs(
+    pub(crate) fn set_transceiver_codecs(
         &self,
         codecs: Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>,
     ) {
-        let mut transceiver_codecs = self.internal.transceiver_codecs.lock().await;
-        *transceiver_codecs = codecs;
+        self.internal.transceiver_codecs.store(codecs);
     }
 
     /// transport returns the currently-configured *DTLSTransport or nil
@@ -477,8 +476,8 @@ impl RTCRtpReceiver {
             }
 
             let current_track = &t.track;
-            current_track.set_codec(codec.clone()).await;
-            current_track.set_params(params.clone()).await;
+            current_track.set_codec(codec.clone());
+            current_track.set_params(params.clone());
         }
     }
 
@@ -672,8 +671,8 @@ impl RTCRtpReceiver {
         // is received from the SDP.
         let is_unpaused = self.current_state() == State::Started;
         for track_remote in &self.tracks().await {
-            track_remote.set_id(incoming.id.clone()).await;
-            track_remote.set_stream_id(incoming.stream_id.clone()).await;
+            track_remote.set_id(incoming.id.clone());
+            track_remote.set_stream_id(incoming.stream_id.clone());
 
             if is_unpaused {
                 track_remote.fire_onunmute().await;
@@ -752,9 +751,9 @@ impl RTCRtpReceiver {
             if t.track.rid() == rid {
                 t.track.set_kind(self.kind);
                 if let Some(codec) = params.codecs.first() {
-                    t.track.set_codec(codec.clone()).await;
+                    t.track.set_codec(codec.clone());
                 }
-                t.track.set_params(params.clone()).await;
+                t.track.set_params(params.clone());
                 t.track
                     .set_ssrc(stream.stream_info.as_ref().map_or(0, |s| s.ssrc));
                 t.stream = stream;

@@ -6,6 +6,7 @@ use crate::rtp_transceiver::{PayloadType, SSRC};
 use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
 
 use crate::track::RTP_PAYLOAD_TYPE_BITMASK;
+use arc_swap::ArcSwapOption;
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
 use std::collections::VecDeque;
@@ -14,6 +15,8 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
+use util::sync::Mutex as SyncMutex;
+
 use util::Unmarshal;
 
 lazy_static! {
@@ -25,8 +28,8 @@ pub type OnMuteHdlrFn = Box<
 
 #[derive(Default)]
 struct Handlers {
-    on_mute: Option<OnMuteHdlrFn>,
-    on_unmute: Option<OnMuteHdlrFn>,
+    on_mute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
+    on_unmute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
 }
 
 #[derive(Default)]
@@ -38,21 +41,21 @@ struct TrackRemoteInternal {
 pub struct TrackRemote {
     tid: usize,
 
-    id: Mutex<String>,
-    stream_id: Mutex<String>,
+    id: SyncMutex<String>,
+    stream_id: SyncMutex<String>,
 
     receive_mtu: usize,
     payload_type: AtomicU8, //PayloadType,
     kind: AtomicU8,         //RTPCodecType,
     ssrc: AtomicU32,        //SSRC,
-    codec: Mutex<RTCRtpCodecParameters>,
-    pub(crate) params: Mutex<RTCRtpParameters>,
+    codec: SyncMutex<RTCRtpCodecParameters>,
+    pub(crate) params: SyncMutex<RTCRtpParameters>,
     rid: String,
 
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
 
-    handlers: Mutex<Handlers>,
+    handlers: Arc<Handlers>,
 
     receiver: Option<Weak<RTPReceiverInternal>>,
     internal: Mutex<TrackRemoteInternal>,
@@ -110,24 +113,24 @@ impl TrackRemote {
     /// id is the unique identifier for this Track. This should be unique for the
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
     /// and StreamID would be 'desktop' or 'webcam'
-    pub async fn id(&self) -> String {
-        let id = self.id.lock().await;
+    pub fn id(&self) -> String {
+        let id = self.id.lock();
         id.clone()
     }
 
-    pub async fn set_id(&self, s: String) {
-        let mut id = self.id.lock().await;
+    pub fn set_id(&self, s: String) {
+        let mut id = self.id.lock();
         *id = s;
     }
 
     /// stream_id is the group this track belongs too. This must be unique
-    pub async fn stream_id(&self) -> String {
-        let stream_id = self.stream_id.lock().await;
+    pub fn stream_id(&self) -> String {
+        let stream_id = self.stream_id.lock();
         stream_id.clone()
     }
 
-    pub async fn set_stream_id(&self, s: String) {
-        let mut stream_id = self.stream_id.lock().await;
+    pub fn set_stream_id(&self, s: String) {
+        let mut stream_id = self.stream_id.lock();
         *stream_id = s;
     }
 
@@ -166,45 +169,47 @@ impl TrackRemote {
     }
 
     /// msid gets the Msid of the track
-    pub async fn msid(&self) -> String {
-        self.stream_id().await + " " + self.id().await.as_str()
+    pub fn msid(&self) -> String {
+        format!("{} {}", self.stream_id(), self.id())
     }
 
     /// codec gets the Codec of the track
-    pub async fn codec(&self) -> RTCRtpCodecParameters {
-        let codec = self.codec.lock().await;
+    pub fn codec(&self) -> RTCRtpCodecParameters {
+        let codec = self.codec.lock();
         codec.clone()
     }
 
-    pub async fn set_codec(&self, codec: RTCRtpCodecParameters) {
-        let mut c = self.codec.lock().await;
+    pub fn set_codec(&self, codec: RTCRtpCodecParameters) {
+        let mut c = self.codec.lock();
         *c = codec;
     }
 
-    pub async fn params(&self) -> RTCRtpParameters {
-        let p = self.params.lock().await;
+    pub fn params(&self) -> RTCRtpParameters {
+        let p = self.params.lock();
         p.clone()
     }
 
-    pub async fn set_params(&self, params: RTCRtpParameters) {
-        let mut p = self.params.lock().await;
+    pub fn set_params(&self, params: RTCRtpParameters) {
+        let mut p = self.params.lock();
         *p = params;
     }
 
-    pub async fn onmute<F>(&self, handler: F)
+    pub fn onmute<F>(&self, handler: F)
     where
         F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
     {
-        let mut handlers = self.handlers.lock().await;
-        handlers.on_mute = Some(Box::new(handler));
+        self.handlers
+            .on_mute
+            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
     }
 
-    pub async fn onunmute<F>(&self, handler: F)
+    pub fn onunmute<F>(&self, handler: F)
     where
         F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
     {
-        let mut handlers = self.handlers.lock().await;
-        handlers.on_unmute = Some(Box::new(handler));
+        self.handlers
+            .on_unmute
+            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
     }
 
     /// Reads data from the track.
@@ -256,7 +261,7 @@ impl TrackRemote {
             }
             self.payload_type.store(payload_type, Ordering::SeqCst);
             {
-                let mut codec = self.codec.lock().await;
+                let mut codec = self.codec.lock();
                 *codec = if let Some(codec) = p.codecs.first() {
                     codec.clone()
                 } else {
@@ -264,7 +269,7 @@ impl TrackRemote {
                 };
             }
             {
-                let mut params = self.params.lock().await;
+                let mut params = self.params.lock();
                 *params = p;
             }
         }
@@ -309,20 +314,18 @@ impl TrackRemote {
     }
 
     pub(crate) async fn fire_onmute(&self) {
-        let mut handlers = self.handlers.lock().await;
+        let on_mute = self.handlers.on_mute.load();
 
-        match &mut handlers.on_mute {
-            Some(f) => f().await,
-            None => {}
+        if let Some(f) = on_mute.as_ref() {
+            (f.lock().await)().await
         };
     }
 
     pub(crate) async fn fire_onunmute(&self) {
-        let mut handlers = self.handlers.lock().await;
+        let on_unmute = self.handlers.on_unmute.load();
 
-        match &mut handlers.on_unmute {
-            Some(f) => f().await,
-            None => {}
+        if let Some(f) = on_unmute.as_ref() {
+            (f.lock().await)().await
         };
     }
 }
