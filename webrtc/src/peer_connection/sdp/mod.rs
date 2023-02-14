@@ -844,8 +844,8 @@ pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool 
     false
 }
 
-pub(crate) fn get_by_mid<'a, 'b>(
-    search_mid: &'a str,
+pub(crate) fn get_by_mid<'b>(
+    search_mid: &str,
     desc: &'b session_description::RTCSessionDescription,
 ) -> Option<&'b MediaDescription> {
     if let Some(parsed) = &desc.parsed {
