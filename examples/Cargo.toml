@@ -23,7 +23,7 @@ env_logger = "0.9"
 clap = "3.0"
 hyper = { version = "0.14", features = ["full"] }
 signal = { path = "examples/signal" }
-tokio-util = { version="0.6", features = ["codec"] }
+tokio-util = { version = "0.7", features = ["codec"] }
 anyhow = "1.0"
 chrono = "0.4.23"
 log = "0.4.16"

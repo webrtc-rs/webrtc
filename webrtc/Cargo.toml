@@ -42,7 +42,7 @@ waitgroup = "0.1.2"
 regex = "1"
 url = "2.2"
 rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
-rcgen = { version = "0.9.2", features = ["pem", "x509-parser"]}
+rcgen = { version = "0.10.0", features = ["pem", "x509-parser"]}
 ring = "0.16.20"
 sha2 = "0.10.6"
 lazy_static = "1.4"

@@ -31,7 +31,7 @@ thiserror = "1.0"
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 clap = "3.2.6"
-criterion = "0.3.5"
+criterion = "0.4.0"
 
 
 [[bench]]

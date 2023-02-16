@@ -32,7 +32,7 @@ env_logger = "0.9.0"
 chrono = "0.4.23"
 hex = "0.4.3"
 clap = "3.2.6"
-criterion = "0.3.5"
+criterion = "0.4.0"
 
 [features]
 metrics = []

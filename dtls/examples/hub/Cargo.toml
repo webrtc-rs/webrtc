@@ -10,9 +10,6 @@ util = { path = "../../../util", package = "webrtc-util", default-features = fal
 dtls = { package = "webrtc-dtls", path = "../../" }
 
 tokio = { version = "1", features = ["full"] }
-x509-parser = "0.13"
-rcgen = { version = "0.9", features = ["pem", "x509-parser"] }
-ring = "0.16"
+rcgen = { version = "0.10", features = ["pem", "x509-parser"] }
 rustls = "0.19"
-log = "0.4.16"
 thiserror = "1"

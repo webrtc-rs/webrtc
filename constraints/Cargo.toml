@@ -14,7 +14,6 @@ rust-version = "1.60.0"
 
 [dependencies]
 indexmap = "1.9.1"
-log = "0.4.17"
 serde = { version = "1.0.137", features = ["derive"], optional = true }
 ordered-float = { version = "3.0.0", default-features = false }
 
