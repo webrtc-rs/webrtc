@@ -845,6 +845,15 @@ impl PeerConnectionInternal {
         }
 
         let only_media_section = &remote_description.media_descriptions[0];
+        if only_media_section
+            .attributes
+            .iter()
+            .any(|a| a.key.as_str() == ATTR_KEY_MID)
+        {
+            // It has a MID declared, so use MIDs instead
+            return Ok(false);
+        }
+
         let mut stream_id = "";
         let mut id = "";
 
@@ -925,15 +934,12 @@ impl PeerConnectionInternal {
         }
 
         // Get RID extension ID
-        let (sid_extension_id, audio_supported, video_supported) = self
+        let (sid_extension_id, _, _) = self
             .media_engine
             .get_header_extension_id(RTCRtpHeaderExtensionCapability {
                 uri: ::sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
             })
             .await;
-        if !audio_supported && !video_supported {
-            return Err(Error::ErrPeerConnSimulcastStreamIDRTPExtensionRequired);
-        }
 
         let (rsid_extension_id, _, _) = self
             .media_engine
@@ -982,69 +988,128 @@ impl PeerConnectionInternal {
 
         let a = Attributes::new();
         for _ in 0..=SIMULCAST_PROBE_COUNT {
-            if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
-                let (n, _) = rtp_interceptor.read(&mut buf, &a).await?;
-                let (m, r, rs, _) = handle_unknown_rtp_packet(
-                    &buf[..n],
-                    mid_extension_id as u8,
-                    sid_extension_id as u8,
-                    rsid_extension_id as u8,
-                )?;
+            let (n, _) = rtp_interceptor.read(&mut buf, &a).await?;
+            let (m, r, rs, _) = handle_unknown_rtp_packet(
+                &buf[..n],
+                mid_extension_id as u8,
+                sid_extension_id as u8,
+                rsid_extension_id as u8,
+            )?;
+            if mid.is_empty() {
                 mid = m;
+            }
+            if rid.is_empty() {
                 rid = r;
+            }
+            if rsid.is_empty() {
                 rsid = rs;
-
-                buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), a.clone()));
-                continue;
             }
 
-            let transceivers = self.rtp_transceivers.lock().await;
-            for t in &*transceivers {
-                if t.mid().as_ref() != Some(&mid) {
-                    continue;
-                }
+            if !mid.is_empty() {
+                let transceivers = self.rtp_transceivers.lock().await;
+                for t in &*transceivers {
+                    if t.mid().as_ref() != Some(&mid) {
+                        continue;
+                    }
 
-                let receiver = t.receiver();
+                    let receiver = t.receiver();
 
-                if !rsid.is_empty() {
-                    return receiver
-                        .receive_for_rtx(
-                            0,
-                            rsid,
-                            TrackStream {
-                                stream_info: Some(stream_info.clone()),
-                                rtp_read_stream: Some(rtp_read_stream),
-                                rtp_interceptor: Some(rtp_interceptor),
-                                rtcp_read_stream: Some(rtcp_read_stream),
-                                rtcp_interceptor: Some(rtcp_interceptor),
-                            },
+                    if !rsid.is_empty() {
+                        return receiver
+                            .receive_for_rtx(
+                                0,
+                                rsid,
+                                TrackStream {
+                                    stream_info: Some(stream_info.clone()),
+                                    rtp_read_stream: Some(rtp_read_stream),
+                                    rtp_interceptor: Some(rtp_interceptor),
+                                    rtcp_read_stream: Some(rtcp_read_stream),
+                                    rtcp_interceptor: Some(rtcp_interceptor),
+                                },
+                            )
+                            .await;
+                    } else if !rid.is_empty() {
+                        let track = receiver
+                            .receive_for_rid(
+                                rid,
+                                params,
+                                TrackStream {
+                                    stream_info: Some(stream_info.clone()),
+                                    rtp_read_stream: Some(rtp_read_stream),
+                                    rtp_interceptor: Some(rtp_interceptor),
+                                    rtcp_read_stream: Some(rtcp_read_stream),
+                                    rtcp_interceptor: Some(rtcp_interceptor),
+                                },
+                            )
+                            .await?;
+                        track.prepopulate_peeked_data(buffered_packets).await;
+
+                        RTCPeerConnection::do_track(
+                            Arc::clone(&self.on_track_handler),
+                            track,
+                            receiver,
+                            Arc::clone(t),
+                        );
+                        return Ok(());
+                    } else {
+                        let mid = Some(mid);
+                        // Grab the latest description, since we may have added it since
+                        // the first RTP packet.
+                        let remote_description =
+                            match self.remote_description().await.and_then(|rd| rd.parsed) {
+                                Some(r) => r,
+                                None => return Err(Error::ErrPeerConnRemoteDescriptionNil),
+                            };
+                        let (stream_id, id) = &remote_description
+                            .media_descriptions
+                            .iter()
+                            // Find media section for mid.
+                            .find(|m| {
+                                m.attributes
+                                    .iter()
+                                    .any(|a| a.key.as_str() == ATTR_KEY_MID && a.value == mid)
+                            })
+                            // Find msid for transceiver.
+                            .and_then(|s| {
+                                s.attributes
+                                    .iter()
+                                    .find(|a| a.key.as_str() == ATTR_KEY_MSID)
+                                    .and_then(|a| a.value.clone())
+                            })
+                            // Parse msid
+                            .and_then(|msid| {
+                                let split: Vec<&str> = msid.split(' ').collect();
+                                if split.len() == 2 {
+                                    Some((split[0].to_string(), split[1].to_string()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(("".to_string(), "".to_string()));
+
+                        let incoming = TrackDetails {
+                            ssrcs: vec![ssrc],
+                            kind: t.kind,
+                            stream_id: stream_id.to_string(),
+                            id: id.to_string(),
+                            ..Default::default()
+                        };
+
+                        let receiver = t.receiver();
+                        PeerConnectionInternal::start_receiver(
+                            self.setting_engine.get_receive_mtu(),
+                            &incoming,
+                            receiver,
+                            t.clone(),
+                            Arc::clone(&self.on_track_handler),
                         )
                         .await;
+                        return Ok(());
+                    }
                 }
-
-                let track = receiver
-                    .receive_for_rid(
-                        rid,
-                        params,
-                        TrackStream {
-                            stream_info: Some(stream_info.clone()),
-                            rtp_read_stream: Some(rtp_read_stream),
-                            rtp_interceptor: Some(rtp_interceptor),
-                            rtcp_read_stream: Some(rtcp_read_stream),
-                            rtcp_interceptor: Some(rtcp_interceptor),
-                        },
-                    )
-                    .await?;
-                track.prepopulate_peeked_data(buffered_packets).await;
-
-                RTCPeerConnection::do_track(
-                    Arc::clone(&self.on_track_handler),
-                    track,
-                    receiver,
-                    Arc::clone(t),
-                );
-                return Ok(());
             }
+            // No match yet, push the buffer in, and read another.
+            buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), a.clone()));
         }
 
         let _ = rtp_read_stream.close().await;
