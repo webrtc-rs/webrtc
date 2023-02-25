@@ -20,7 +20,7 @@ jobs:
       matrix:
         os: ["ubuntu-latest", "macos-latest"]
         toolchain:
-          - 1.60.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
+          - 1.63.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
           - stable
     runs-on: ${{ matrix.os }}
     steps:
@@ -54,7 +54,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - 1.60.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
+          - 1.63.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
           - stable
     runs-on: windows-latest
     steps:
