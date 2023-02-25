@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.8.0
+
 * Fix 'attempt to add with overflow' panic in dev profile [#393](https://github.com/webrtc-rs/webrtc/pull/393)
 * Limit the bytes in the PendingQueue to avoid packets accumulating there uncontrollably [#367](https://github.com/webrtc-rs/webrtc/pull/367).
 * Improve algorithm used to push to pending queue from O(n*log(n)) to O(log(n)) [#365](https://github.com/webrtc-rs/webrtc/pull/365).
