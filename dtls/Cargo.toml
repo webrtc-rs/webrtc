@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-dtls"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of DTLS"
