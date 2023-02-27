@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-data"
-version = "0.6.1"
+version = "0.7.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of WebRTC DataChannel API"
