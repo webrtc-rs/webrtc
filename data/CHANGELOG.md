@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Remove builder pattern from `data_channel::Config`.
+* Remove builder pattern from `data_channel::Config` [#411](https://github.com/webrtc-rs/webrtc/pull/411).
 
 ## v0.6.0
 
