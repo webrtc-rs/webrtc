@@ -18,7 +18,6 @@ sctp = { version = "0.8.0", path = "../sctp", package = "webrtc-sctp" }
 
 tokio = { version = "1.19", features = ["full"] }
 bytes = "1"
-derive_builder = "0.11.2"
 log = "0.4.16"
 thiserror = "1.0"
 

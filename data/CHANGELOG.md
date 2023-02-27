@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Remove builder pattern from `data_channel::Config`.
+
 ## v0.6.0
 
 * Increased minimum support rust version to `1.60.0`.
