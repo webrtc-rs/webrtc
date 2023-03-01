@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/webrtc-constraints"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/constraints"
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
