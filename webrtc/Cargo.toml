@@ -9,7 +9,7 @@ documentation = "https://docs.rs/webrtc"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/webrtc"
 readme = "../README.md"
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -39,10 +39,10 @@ rand = "0.8.5"
 bytes = "1"
 thiserror = "1.0"
 waitgroup = "0.1.2"
-regex = "1"
+regex = "1.7.1"
 url = "2.2"
 rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
-rcgen = { version = "0.9.2", features = ["pem", "x509-parser"]}
+rcgen = { version = "0.10.0", features = ["pem", "x509-parser"]}
 ring = "0.16.20"
 sha2 = "0.10.6"
 lazy_static = "1.4"

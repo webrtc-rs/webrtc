@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/rtp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtp"
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 
 [dependencies]
 util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal", "sync"] }
@@ -21,7 +21,7 @@ serde = { version = "1.0.102", features = ["derive"] }
 
 [dev-dependencies]
 chrono = "0.4.23"
-criterion = "0.3.5"
+criterion = "0.4.0"
 tokio = { version = "1.19", features = ["full"] }
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 
