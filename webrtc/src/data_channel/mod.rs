@@ -376,12 +376,12 @@ impl RTCDataChannel {
     }
 
     /// send_text sends the text message to the DataChannel peer
-    pub async fn send_text(&self, s: String) -> Result<usize> {
+    pub async fn send_text(&self, s: impl Into<String>) -> Result<usize> {
         self.ensure_open()?;
 
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
-            Ok(dc.write_data_channel(&Bytes::from(s), true).await?)
+            Ok(dc.write_data_channel(&Bytes::from(s.into()), true).await?)
         } else {
             Err(Error::ErrClosedPipe)
         }
