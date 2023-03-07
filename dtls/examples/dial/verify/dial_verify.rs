@@ -60,12 +60,12 @@ async fn main() -> Result<(), Error> {
     println!("connecting {server}..");
 
     let certificate = hub::utilities::load_key_and_certificate(
-        "examples/certificates/client.pem.private_key.pem".into(),
-        "examples/certificates/client.pub.pem".into(),
+        "dtls/examples/certificates/client.pem.private_key.pem".into(),
+        "dtls/examples/certificates/client.pub.pem".into(),
     )?;
 
     let mut cert_pool = rustls::RootCertStore::empty();
-    let f = File::open("examples/certificates/server.pub.pem")?;
+    let f = File::open("dtls/examples/certificates/server.pub.pem")?;
     let mut reader = BufReader::new(f);
     if cert_pool.add_pem_file(&mut reader).is_err() {
         return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
