@@ -125,6 +125,7 @@ async fn main() -> Result<(), Error> {
         realm: realm.to_owned(),
         auth_handler: Arc::new(MyAuthHandler::new(cred_map)),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 

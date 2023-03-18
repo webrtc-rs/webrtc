@@ -83,6 +83,7 @@ pub struct Allocation {
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
     pub(crate) relayed_bytes: AtomicUsize,
     drop_tx: Option<Sender<u32>>,
+    alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -97,6 +98,7 @@ impl Allocation {
         relay_addr: SocketAddr,
         five_tuple: FiveTuple,
         username: Username,
+        alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
     ) -> Self {
         Allocation {
             protocol: PROTO_UDP,
@@ -113,6 +115,7 @@ impl Allocation {
             closed: AtomicBool::new(false),
             relayed_bytes: Default::default(),
             drop_tx: None,
+            alloc_close_notify,
         }
     }
 
@@ -245,6 +248,17 @@ impl Allocation {
 
         let _ = self.turn_socket.close().await;
         let _ = self.relay_socket.close().await;
+
+        if let Some(notify_tx) = &self.alloc_close_notify {
+            let _ = notify_tx
+                .send(AllocationInfo {
+                    five_tuple: self.five_tuple,
+                    username: self.username.text.clone(),
+                    #[cfg(feature = "metrics")]
+                    relayed_bytes: self.relayed_bytes.load(Ordering::Acquire),
+                })
+                .await;
+        }
 
         Ok(())
     }
