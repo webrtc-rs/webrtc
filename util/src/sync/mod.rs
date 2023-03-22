@@ -27,6 +27,8 @@ impl<T> Mutex<T> {
 /// dropped (falls out of scope), the lock will be unlocked.
 pub struct MutexGuard<'a, T>(sync::MutexGuard<'a, T>);
 
+unsafe impl<'a, T> Send for MutexGuard<'a, T> {}
+
 impl<'a, T> ops::Deref for MutexGuard<'a, T> {
     type Target = T;
 
