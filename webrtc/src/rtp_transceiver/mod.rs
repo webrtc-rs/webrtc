@@ -424,11 +424,11 @@ impl RTCRtpTransceiver {
         self.stopped.store(true, Ordering::SeqCst);
 
         {
-            let sender = self.sender.lock();
+            let sender = self.sender.lock().clone();
             sender.stop().await?;
         }
         {
-            let r = self.receiver.lock();
+            let r = self.receiver.lock().clone();
             r.stop().await?;
         }
 
