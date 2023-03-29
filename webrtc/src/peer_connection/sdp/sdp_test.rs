@@ -642,17 +642,19 @@ async fn test_media_description_fingerprints() -> Result<()> {
             "video".to_owned(),
             "webrtc-rs".to_owned(),
         ));
-        media[i].transceivers[0].set_sender(Arc::new(
-            RTCRtpSender::new(
-                api.setting_engine.get_receive_mtu(),
-                Some(track),
-                Arc::new(RTCDtlsTransport::default()),
-                Arc::clone(&api.media_engine),
-                Arc::clone(&interceptor),
-                false,
-            )
-            .await,
-        ));
+        media[i].transceivers[0]
+            .set_sender(Arc::new(
+                RTCRtpSender::new(
+                    api.setting_engine.get_receive_mtu(),
+                    Some(track),
+                    Arc::new(RTCDtlsTransport::default()),
+                    Arc::clone(&api.media_engine),
+                    Arc::clone(&interceptor),
+                    false,
+                )
+                .await,
+            ))
+            .await;
         media[i].transceivers[0].set_direction_internal(RTCRtpTransceiverDirection::Sendonly);
     }
 
