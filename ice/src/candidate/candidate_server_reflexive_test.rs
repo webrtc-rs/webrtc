@@ -40,6 +40,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
             }),
         }],
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 
