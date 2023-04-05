@@ -3,7 +3,7 @@ use std::fmt;
 
 /// RTCPMuxPolicy affects what ICE candidates are gathered to support
 /// non-multiplexed RTCP.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize, Default)]
 pub enum RTCRtcpMuxPolicy {
     Unspecified = 0,
 
@@ -12,6 +12,7 @@ pub enum RTCRtcpMuxPolicy {
     /// multiplexing RTCP, multiplex RTCP on the RTP candidates. If it is not,
     /// use both the RTP and RTCP candidates separately.
     #[serde(rename = "negotiate")]
+    #[default]
     Negotiate = 1,
 
     /// RTCPMuxPolicyRequire indicates to gather ICE candidates only for
@@ -19,12 +20,6 @@ pub enum RTCRtcpMuxPolicy {
     /// not capable of rtcp-mux, session negotiation will fail.
     #[serde(rename = "require")]
     Require = 2,
-}
-
-impl Default for RTCRtcpMuxPolicy {
-    fn default() -> Self {
-        RTCRtcpMuxPolicy::Negotiate
-    }
 }
 
 const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "negotiate";

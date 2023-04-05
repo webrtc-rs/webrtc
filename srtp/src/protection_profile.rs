@@ -1,15 +1,11 @@
 /// ProtectionProfile specifies Cipher and AuthTag details, similar to TLS cipher suite
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum ProtectionProfile {
+    #[default]
     Aes128CmHmacSha1_80 = 0x0001,
     AeadAes128Gcm = 0x0007,
-}
-
-impl Default for ProtectionProfile {
-    fn default() -> Self {
-        ProtectionProfile::Aes128CmHmacSha1_80
-    }
 }
 
 impl ProtectionProfile {

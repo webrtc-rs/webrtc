@@ -2,24 +2,19 @@ use std::fmt;
 
 /// ICECredentialType indicates the type of credentials used to connect to
 /// an ICE server.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum RTCIceCredentialType {
     Unspecified,
 
     /// ICECredential::Password describes username and password based
     /// credentials as described in <https://tools.ietf.org/html/rfc5389>.
+    #[default]
     Password,
 
     /// ICECredential::Oauth describes token based credential as described
     /// in <https://tools.ietf.org/html/rfc7635>.
     /// Not supported in WebRTC 1.0 spec
     Oauth,
-}
-
-impl Default for RTCIceCredentialType {
-    fn default() -> Self {
-        RTCIceCredentialType::Password
-    }
 }
 
 const ICE_CREDENTIAL_TYPE_PASSWORD_STR: &str = "password";

@@ -7,7 +7,9 @@ use bytes::{Buf, BufMut};
 /// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum PacketType {
+    #[default]
     Unsupported = 0,
     SenderReport = 200,              // RFC 3550, 6.4.1
     ReceiverReport = 201,            // RFC 3550, 6.4.2
@@ -17,12 +19,6 @@ pub enum PacketType {
     TransportSpecificFeedback = 205, // RFC 4585, 6051
     PayloadSpecificFeedback = 206,   // RFC 4585, 6.3
     ExtendedReport = 207,            // RFC 3611
-}
-
-impl Default for PacketType {
-    fn default() -> Self {
-        PacketType::Unsupported
-    }
 }
 
 /// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here

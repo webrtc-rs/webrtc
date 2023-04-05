@@ -41,7 +41,9 @@ type Result<T> = std::result::Result<T, util::Error>;
 /// type of packet status chunk
 #[derive(PartialEq, Eq, Debug, Clone)]
 #[repr(u16)]
+#[derive(Default)]
 pub enum StatusChunkTypeTcc {
+    #[default]
     RunLengthChunk = 0,
     StatusVectorChunk = 1,
 }
@@ -49,8 +51,10 @@ pub enum StatusChunkTypeTcc {
 /// type of packet status symbol and recv delta
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(u16)]
+#[derive(Default)]
 pub enum SymbolTypeTcc {
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
+    #[default]
     PacketNotReceived = 0,
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
     PacketReceivedSmallDelta = 1,
@@ -64,8 +68,10 @@ pub enum SymbolTypeTcc {
 /// for status vector chunk
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(u16)]
+#[derive(Default)]
 pub enum SymbolSizeTypeTcc {
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
+    #[default]
     OneBit = 0,
     TwoBit = 1,
 }
@@ -79,24 +85,12 @@ impl From<u16> for SymbolSizeTypeTcc {
     }
 }
 
-impl Default for SymbolSizeTypeTcc {
-    fn default() -> Self {
-        SymbolSizeTypeTcc::OneBit
-    }
-}
-
 impl From<u16> for StatusChunkTypeTcc {
     fn from(val: u16) -> Self {
         match val {
             0 => StatusChunkTypeTcc::RunLengthChunk,
             _ => StatusChunkTypeTcc::StatusVectorChunk,
         }
-    }
-}
-
-impl Default for StatusChunkTypeTcc {
-    fn default() -> Self {
-        StatusChunkTypeTcc::RunLengthChunk
     }
 }
 
@@ -108,12 +102,6 @@ impl From<u16> for SymbolTypeTcc {
             2 => SymbolTypeTcc::PacketReceivedLargeDelta,
             _ => SymbolTypeTcc::PacketReceivedWithoutDelta,
         }
-    }
-}
-
-impl Default for SymbolTypeTcc {
-    fn default() -> Self {
-        SymbolTypeTcc::PacketNotReceived
     }
 }
 
