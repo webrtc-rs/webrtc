@@ -25,7 +25,7 @@ const SDES_TEXT_OFFSET: usize = 2;
 #[derive(Default)]
 pub enum SdesType {
     #[default]
-    SdesEnd = 0, // end of SDES list                RFC 3550, 6.5
+    SdesEnd = 0,      // end of SDES list                RFC 3550, 6.5
     SdesCname = 1,    // canonical name                  RFC 3550, 6.5.1
     SdesName = 2,     // user name                       RFC 3550, 6.5.2
     SdesEmail = 3,    // user's electronic mail address  RFC 3550, 6.5.3
