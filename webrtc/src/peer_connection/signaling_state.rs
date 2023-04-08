@@ -3,16 +3,11 @@ use crate::peer_connection::sdp::sdp_type::RTCSdpType;
 
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum StateChangeOp {
+    #[default]
     SetLocal,
     SetRemote,
-}
-
-impl Default for StateChangeOp {
-    fn default() -> Self {
-        StateChangeOp::SetLocal
-    }
 }
 
 impl fmt::Display for StateChangeOp {
@@ -26,8 +21,9 @@ impl fmt::Display for StateChangeOp {
 }
 
 /// SignalingState indicates the signaling state of the offer/answer process.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCSignalingState {
+    #[default]
     Unspecified = 0,
 
     /// SignalingStateStable indicates there is no offer/answer exchange in
@@ -55,12 +51,6 @@ pub enum RTCSignalingState {
 
     /// SignalingStateClosed indicates The PeerConnection has been closed.
     Closed,
-}
-
-impl Default for RTCSignalingState {
-    fn default() -> Self {
-        RTCSignalingState::Unspecified
-    }
 }
 
 const SIGNALING_STATE_STABLE_STR: &str = "stable";

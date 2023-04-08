@@ -1,8 +1,9 @@
 use std::fmt;
 
 /// ICEGathererState represents the current state of the ICE gatherer.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceGathererState {
+    #[default]
     Unspecified,
 
     /// ICEGathererStateNew indicates object has been created but
@@ -19,12 +20,6 @@ pub enum RTCIceGathererState {
     /// ICEGathererStateClosed indicates the closed state can only be entered
     /// when the ICEGatherer has been closed intentionally by calling close().
     Closed,
-}
-
-impl Default for RTCIceGathererState {
-    fn default() -> Self {
-        RTCIceGathererState::Unspecified
-    }
 }
 
 const ICE_GATHERED_STATE_NEW_STR: &str = "new";

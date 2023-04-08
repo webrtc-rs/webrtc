@@ -54,8 +54,9 @@ impl Header {
     }
 }
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub enum Section {
+    #[default]
     NotStarted = 0,
     Header = 1,
     Questions = 2,
@@ -63,12 +64,6 @@ pub enum Section {
     Authorities = 4,
     Additionals = 5,
     Done = 6,
-}
-
-impl Default for Section {
-    fn default() -> Self {
-        Section::NotStarted
-    }
 }
 
 impl From<u8> for Section {

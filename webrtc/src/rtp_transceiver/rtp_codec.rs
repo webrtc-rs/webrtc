@@ -6,8 +6,9 @@ use crate::rtp_transceiver::fmtp;
 use std::fmt;
 
 /// RTPCodecType determines the type of a codec
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTPCodecType {
+    #[default]
     Unspecified = 0,
 
     /// RTPCodecTypeAudio indicates this is an audio codec
@@ -15,12 +16,6 @@ pub enum RTPCodecType {
 
     /// RTPCodecTypeVideo indicates this is a video codec
     Video = 2,
-}
-
-impl Default for RTPCodecType {
-    fn default() -> Self {
-        RTPCodecType::Unspecified
-    }
 }
 
 impl From<&str> for RTPCodecType {
@@ -125,17 +120,12 @@ pub struct RTCRtpParameters {
     pub codecs: Vec<RTCRtpCodecParameters>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum CodecMatch {
+    #[default]
     None = 0,
     Partial = 1,
     Exact = 2,
-}
-
-impl Default for CodecMatch {
-    fn default() -> Self {
-        CodecMatch::None
-    }
 }
 
 /// Do a fuzzy find for a codec in the list of codecs

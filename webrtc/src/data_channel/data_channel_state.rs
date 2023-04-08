@@ -2,9 +2,10 @@ use serde::Serialize;
 use std::fmt;
 
 /// DataChannelState indicates the state of a data channel.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize)]
 pub enum RTCDataChannelState {
     #[serde(rename = "unspecified")]
+    #[default]
     Unspecified = 0,
 
     /// DataChannelStateConnecting indicates that the data channel is being
@@ -27,12 +28,6 @@ pub enum RTCDataChannelState {
     /// has been closed or could not be established.
     #[serde(rename = "closed")]
     Closed,
-}
-
-impl Default for RTCDataChannelState {
-    fn default() -> Self {
-        RTCDataChannelState::Unspecified
-    }
 }
 
 const DATA_CHANNEL_STATE_CONNECTING_STR: &str = "connecting";

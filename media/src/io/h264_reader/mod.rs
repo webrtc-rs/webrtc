@@ -9,9 +9,10 @@ use std::io::Read;
 
 /// NalUnitType is the type of a NAL
 /// Enums for NalUnitTypes
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NalUnitType {
     /// Unspecified
+    #[default]
     Unspecified = 0,
     /// Coded slice of a non-IDR picture
     CodedSliceNonIdr = 1,
@@ -46,12 +47,6 @@ pub enum NalUnitType {
     // 14..18                                            // Reserved
     // 20..23                                            // Reserved
     // 24..31                                            // Unspecified
-}
-
-impl Default for NalUnitType {
-    fn default() -> Self {
-        NalUnitType::Unspecified
-    }
 }
 
 impl fmt::Display for NalUnitType {

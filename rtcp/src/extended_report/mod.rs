@@ -32,8 +32,9 @@ const XR_HEADER_LENGTH: usize = 4;
 
 /// BlockType specifies the type of report in a report block
 /// Extended Report block types from RFC 3611.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BlockType {
+    #[default]
     Unknown = 0,
     LossRLE = 1,               // RFC 3611, section 4.1
     DuplicateRLE = 2,          // RFC 3611, section 4.2
@@ -42,12 +43,6 @@ pub enum BlockType {
     DLRR = 5,                  // RFC 3611, section 4.5
     StatisticsSummary = 6,     // RFC 3611, section 4.6
     VoIPMetrics = 7,           // RFC 3611, section 4.7
-}
-
-impl Default for BlockType {
-    fn default() -> Self {
-        BlockType::Unknown
-    }
 }
 
 impl From<u8> for BlockType {

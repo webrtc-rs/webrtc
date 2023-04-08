@@ -1,9 +1,10 @@
 use std::fmt;
 
 /// SCTPTransportState indicates the state of the SCTP transport.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum RTCSctpTransportState {
+    #[default]
     Unspecified,
 
     /// SCTPTransportStateConnecting indicates the SCTPTransport is in the
@@ -20,12 +21,6 @@ pub enum RTCSctpTransportState {
     /// such as by closing the peer connection or applying a remote description
     /// that rejects data or changes the SCTP port.
     Closed,
-}
-
-impl Default for RTCSctpTransportState {
-    fn default() -> Self {
-        RTCSctpTransportState::Unspecified
-    }
 }
 
 const SCTP_TRANSPORT_STATE_CONNECTING_STR: &str = "connecting";
