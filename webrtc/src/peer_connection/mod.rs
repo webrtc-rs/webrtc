@@ -2084,3 +2084,54 @@ impl RTCPeerConnection {
         self.internal.add_rtp_transceiver(t).await
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+    use interceptor::registry::Registry;
+    use crate::api::APIBuilder;
+    use crate::api::interceptor_registry::register_default_interceptors;
+    use crate::api::media_engine::MediaEngine;
+    use crate::Error;
+    use crate::ice_transport::ice_server::RTCIceServer;
+    use crate::peer_connection::configuration::RTCConfiguration;
+
+    #[tokio::test]
+    async fn test_peer_connection_close_is_send() -> Result<(), Error> {
+        let handle  = tokio::spawn(async move { peer().await });
+        tokio::join!(handle).0.unwrap()
+    }
+
+    async fn peer() -> Result<(), Error> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let mut registry = Registry::new();
+        registry = register_default_interceptors(registry, &mut m)?;
+        let api = APIBuilder::new()
+            .with_media_engine(m)
+            .with_interceptor_registry(registry)
+            .build();
+
+        let config = RTCConfiguration {
+            ice_servers: vec![RTCIceServer {
+                urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let peer_connection = Arc::new(api.new_peer_connection(config).await?);
+
+        let offer = peer_connection.create_offer(None).await?;
+        let mut gather_complete = peer_connection.gathering_complete_promise().await;
+        peer_connection.set_local_description(offer).await?;
+        let _ = gather_complete.recv().await;
+
+        if let Some(local_desc) = peer_connection.local_description().await {
+        }
+
+        peer_connection.close().await?;
+
+        Ok(())
+    }
+}
