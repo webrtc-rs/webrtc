@@ -154,7 +154,7 @@ impl fmt::Display for AckMode {
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum AckState {
     #[default]
-    Idle, // ack timer is off
+    Idle,      // ack timer is off
     Immediate, // will send ack immediately
     Delay,     // ack timer is on (ack is being delayed)
 }
