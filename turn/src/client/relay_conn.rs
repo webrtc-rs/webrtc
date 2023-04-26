@@ -226,6 +226,8 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                 if Error::ErrTryAgain != *err {
                     break;
                 }
+            } else {
+                break;
             }
         }
         result?;
@@ -596,6 +598,8 @@ impl<T: RelayConnObserver + Send + Sync> PeriodicTimerTimeoutHandler for RelayCo
                         if Error::ErrTryAgain != *err {
                             break;
                         }
+                    } else {
+                        break;
                     }
                 }
                 if result.is_err() {
@@ -610,6 +614,8 @@ impl<T: RelayConnObserver + Send + Sync> PeriodicTimerTimeoutHandler for RelayCo
                         if Error::ErrTryAgain != *err {
                             break;
                         }
+                    } else {
+                        break;
                     }
                 }
                 if result.is_err() {
