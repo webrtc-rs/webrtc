@@ -154,7 +154,7 @@ impl<R: Read> H264Reader<R> {
         }
     }
 
-    fn read(&mut self, num_to_read: usize) -> Bytes {
+    fn read(&mut self, num_to_read: usize) -> Result<Bytes> {
         let buf = &mut self.temp_buf;
         while self.read_buffer.len() < num_to_read {
             let n = match self.reader.read(buf) {
@@ -164,7 +164,7 @@ impl<R: Read> H264Reader<R> {
                     }
                     n
                 }
-                Err(_) => break,
+                Err(e) => return Err(Error::Io(e.into())),
             };
 
             self.read_buffer.extend_from_slice(&buf[0..n]);
@@ -176,15 +176,15 @@ impl<R: Read> H264Reader<R> {
             self.read_buffer.len()
         };
 
-        Bytes::from(
+        Ok(Bytes::from(
             self.read_buffer
                 .drain(..num_should_read)
                 .collect::<Vec<u8>>(),
-        )
+        ))
     }
 
     fn bit_stream_starts_with_h264prefix(&mut self) -> Result<usize> {
-        let prefix_buffer = self.read(4);
+        let prefix_buffer = self.read(4)?;
 
         let n = prefix_buffer.len();
         if n == 0 {
@@ -228,7 +228,7 @@ impl<R: Read> H264Reader<R> {
         }
 
         loop {
-            let buffer = self.read(1);
+            let buffer = self.read(1)?;
             let n = buffer.len();
 
             if n != 1 {
