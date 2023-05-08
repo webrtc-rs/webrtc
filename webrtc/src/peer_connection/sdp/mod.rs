@@ -19,7 +19,7 @@ pub mod sdp_type;
 pub mod session_description;
 
 use crate::peer_connection::MEDIA_SECTION_APPLICATION;
-use crate::SDP_ATTRIBUTE_RID;
+use crate::{SmallStr, SDP_ATTRIBUTE_RID};
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::description::common::{Address, ConnectionInformation};
@@ -27,6 +27,7 @@ use sdp::description::media::{MediaDescription, MediaName, RangedPort};
 use sdp::description::session::*;
 use sdp::extmap::ExtMap;
 use sdp::util::ConnectionRole;
+use smol_str::SmolStr;
 use std::collections::HashMap;
 use std::convert::From;
 use std::io::BufReader;
@@ -37,13 +38,13 @@ use url::Url;
 /// This isn't keyed by SSRC because it also needs to support rid based sources
 #[derive(Default, Debug, Clone)]
 pub(crate) struct TrackDetails {
-    pub(crate) mid: String,
+    pub(crate) mid: SmallStr,
     pub(crate) kind: RTPCodecType,
     pub(crate) stream_id: String,
     pub(crate) id: String,
     pub(crate) ssrcs: Vec<SSRC>,
     pub(crate) repair_ssrc: SSRC,
-    pub(crate) rids: Vec<String>,
+    pub(crate) rids: Vec<SmallStr>,
 }
 
 pub(crate) fn track_details_for_ssrc(
@@ -55,7 +56,7 @@ pub(crate) fn track_details_for_ssrc(
 
 pub(crate) fn track_details_for_rid(
     track_details: &[TrackDetails],
-    rid: String,
+    rid: SmallStr,
 ) -> Option<&TrackDetails> {
     track_details.iter().find(|x| x.rids.contains(&rid))
 }
@@ -185,7 +186,8 @@ pub(crate) fn track_details_from_sdp(
                         }
 
                         if track_idx < tracks_in_media_section.len() {
-                            tracks_in_media_section[track_idx].mid = mid_value.to_owned();
+                            tracks_in_media_section[track_idx].mid =
+                                SmallStr(SmolStr::from(mid_value));
                             tracks_in_media_section[track_idx].kind = codec_type;
                             tracks_in_media_section[track_idx].stream_id = stream_id.to_owned();
                             tracks_in_media_section[track_idx].id = track_id.to_owned();
@@ -193,7 +195,7 @@ pub(crate) fn track_details_from_sdp(
                             tracks_in_media_section[track_idx].repair_ssrc = repair_ssrc;
                         } else {
                             let track_details = TrackDetails {
-                                mid: mid_value.to_owned(),
+                                mid: SmallStr(SmolStr::from(mid_value)),
                                 kind: codec_type,
                                 stream_id: stream_id.to_owned(),
                                 id: track_id.to_owned(),
@@ -212,7 +214,7 @@ pub(crate) fn track_details_from_sdp(
         let rids = get_rids(media);
         if !rids.is_empty() && !track_id.is_empty() && !stream_id.is_empty() {
             let mut simulcast_track = TrackDetails {
-                mid: mid_value.to_owned(),
+                mid: SmallStr(SmolStr::from(mid_value)),
                 kind: codec_type,
                 stream_id: stream_id.to_owned(),
                 id: track_id.to_owned(),
@@ -220,7 +222,7 @@ pub(crate) fn track_details_from_sdp(
                 ..Default::default()
             };
             for rid in rids.keys() {
-                simulcast_track.rids.push(rid.to_owned());
+                simulcast_track.rids.push(SmallStr(SmolStr::from(rid)));
             }
             if simulcast_track.rids.len() == tracks_in_media_section.len() {
                 for track in &tracks_in_media_section {

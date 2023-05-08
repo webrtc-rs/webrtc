@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use smol_str::SmolStr;
 use tokio::time::Instant;
 
 use super::*;
@@ -9,7 +10,7 @@ use crate::stats::{
     StatsReportType,
 };
 use crate::track::TrackStream;
-use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
+use crate::{SmallStr, SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
 use arc_swap::ArcSwapOption;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicIsize;
@@ -177,7 +178,7 @@ impl PeerConnectionInternal {
                 for t in tracks {
                     if !t.rid().is_empty() {
                         if let Some(details) =
-                            track_details_for_rid(&track_details, t.rid().to_owned())
+                            track_details_for_rid(&track_details, SmallStr(SmolStr::from(t.rid())))
                         {
                             t.set_id(details.id.clone());
                             t.set_stream_id(details.stream_id.clone());
@@ -668,7 +669,7 @@ impl PeerConnectionInternal {
             // TODO: This is dubious because of rollbacks.
             t.sender().set_negotiated();
             media_sections.push(MediaSection {
-                id: t.mid().unwrap(),
+                id: t.mid().unwrap().0.to_string(),
                 transceivers: vec![Arc::clone(t)],
                 ..Default::default()
             });
@@ -782,7 +783,7 @@ impl PeerConnectionInternal {
             for t in &local_transceivers {
                 t.sender().set_negotiated();
                 media_sections.push(MediaSection {
-                    id: t.mid().unwrap(),
+                    id: t.mid().unwrap().0.to_string(),
                     transceivers: vec![Arc::clone(t)],
                     ..Default::default()
                 });
@@ -1000,7 +1001,7 @@ impl PeerConnectionInternal {
 
             let transceivers = self.rtp_transceivers.lock().await;
             for t in &*transceivers {
-                if t.mid().as_ref() != Some(&mid) {
+                if t.mid().as_ref() != Some(&SmallStr(SmolStr::from(&mid))) {
                     continue;
                 }
 
@@ -1024,7 +1025,7 @@ impl PeerConnectionInternal {
 
                 let track = receiver
                     .receive_for_rid(
-                        rid,
+                        SmallStr(SmolStr::from(rid)),
                         params,
                         TrackStream {
                             stream_info: Some(stream_info.clone()),
@@ -1163,7 +1164,7 @@ impl PeerConnectionInternal {
     pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
-            let m = match t.mid().and_then(|mid| get_by_mid(&mid, desc)) {
+            let m = match t.mid().and_then(|mid| get_by_mid(mid.0.as_str(), desc)) {
                 Some(m) => m,
                 None => return true,
             };
@@ -1200,7 +1201,7 @@ impl PeerConnectionInternal {
         // TODO: There's a lot of await points here that could run concurrently with `futures::join_all`.
         struct TrackInfo {
             ssrc: SSRC,
-            mid: String,
+            mid: SmallStr,
             track_id: String,
             kind: &'static str,
         }
@@ -1325,8 +1326,8 @@ impl PeerConnectionInternal {
         struct TrackInfo {
             track_id: String,
             ssrc: SSRC,
-            mid: String,
-            rid: Option<String>,
+            mid: SmallStr,
+            rid: Option<SmallStr>,
             kind: &'static str,
         }
         let mut track_infos = vec![];
@@ -1353,7 +1354,7 @@ impl PeerConnectionInternal {
             track_infos.push(TrackInfo {
                 track_id,
                 ssrc: sender.ssrc,
-                mid: mid.clone(),
+                mid,
                 rid: None,
                 kind,
             });
