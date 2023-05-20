@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
             // Open a H264 file and start reading using our H264Reader
             let file = File::open(&video_file_name)?;
             let reader = BufReader::new(file);
-            let mut h264 = H264Reader::new(reader);
+            let mut h264 = H264Reader::new(reader, 1_048_576);
 
             // Wait for connection established
             notify_video.notified().await;
