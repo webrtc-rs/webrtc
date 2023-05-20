@@ -156,6 +156,11 @@ pub(crate) fn check_next_signaling_state(
                     }
                     _ => {}
                 }
+            } else if op == StateChangeOp::SetLocal
+                && sdp_type == RTCSdpType::Offer
+                && next == RTCSignalingState::HaveLocalOffer
+            {
+                return Ok(next);
             }
         }
         RTCSignalingState::HaveRemotePranswer => {
