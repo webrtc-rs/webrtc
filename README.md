@@ -105,7 +105,7 @@ This project is still in active and early development stage, please refer to the
 
 ### Toolchain
 
-**Minimum Supported Rust Version:** `1.63.0`
+**Minimum Supported Rust Version:** `1.65.0`
 
 Our minimum supported rust version(MSRV) policy is to support versions of the compiler released within the last six months. We don't eagerly bump the minimum version we support, instead the minimum will be bumped on a needed by needed basis, usually because downstream dependencies force us to.
 
