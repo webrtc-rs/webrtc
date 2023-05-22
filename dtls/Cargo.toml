@@ -17,7 +17,7 @@ util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-f
 
 byteorder = "1"
 rand_core = "0.6.3"
-elliptic-curve = { version = "0.13.5", features = ["default", "ecdh"] }
+#elliptic-curve = { version = "0.13.5", features = ["default", "ecdh"] }
 hkdf = "~0.12.1"
 p256 = { version = "0.11.1", features = ["default", "ecdh", "ecdsa"] }
 p384 = "0.11.2"
