@@ -3,8 +3,9 @@ use std::fmt;
 
 /// ICETransportPolicy defines the ICE candidate policy surface the
 /// permitted candidates. Only these candidates are used for connectivity checks.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCIceTransportPolicy {
+    #[default]
     Unspecified = 0,
 
     /// ICETransportPolicyAll indicates any type of candidate is used.
@@ -15,12 +16,6 @@ pub enum RTCIceTransportPolicy {
     /// as candidates passing through a TURN server are used.
     #[serde(rename = "relay")]
     Relay = 2,
-}
-
-impl Default for RTCIceTransportPolicy {
-    fn default() -> Self {
-        RTCIceTransportPolicy::Unspecified
-    }
 }
 
 /// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy

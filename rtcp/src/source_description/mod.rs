@@ -20,10 +20,11 @@ const SDES_TEXT_OFFSET: usize = 2;
 
 /// SDESType is the item type used in the RTCP SDES control packet.
 /// RTP SDES item types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-5
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SdesType {
-    SdesEnd = 0,      // end of SDES list                RFC 3550, 6.5
+    #[default]
+    SdesEnd = 0, // end of SDES list                RFC 3550, 6.5
     SdesCname = 1,    // canonical name                  RFC 3550, 6.5.1
     SdesName = 2,     // user name                       RFC 3550, 6.5.2
     SdesEmail = 3,    // user's electronic mail address  RFC 3550, 6.5.3
@@ -32,12 +33,6 @@ pub enum SdesType {
     SdesTool = 6,     // name of application or tool     RFC 3550, 6.5.6
     SdesNote = 7,     // notice about the source         RFC 3550, 6.5.7
     SdesPrivate = 8,  // private extensions              RFC 3550, 6.5.8  (not implemented)
-}
-
-impl Default for SdesType {
-    fn default() -> Self {
-        SdesType::SdesEnd
-    }
 }
 
 impl fmt::Display for SdesType {

@@ -24,21 +24,16 @@ use tokio::{
     sync::{mpsc, Mutex, Notify},
 };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub enum ReliabilityType {
     /// ReliabilityTypeReliable is used for reliable transmission
+    #[default]
     Reliable = 0,
     /// ReliabilityTypeRexmit is used for partial reliability by retransmission count
     Rexmit = 1,
     /// ReliabilityTypeTimed is used for partial reliability by retransmission duration
     Timed = 2,
-}
-
-impl Default for ReliabilityType {
-    fn default() -> Self {
-        ReliabilityType::Reliable
-    }
 }
 
 impl fmt::Display for ReliabilityType {

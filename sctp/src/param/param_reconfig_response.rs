@@ -3,7 +3,7 @@ use super::{param_header::*, param_type::*, *};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
 pub(crate) enum ReconfigResult {
     SuccessNop = 0,
@@ -13,13 +13,8 @@ pub(crate) enum ReconfigResult {
     ErrorRequestAlreadyInProgress = 4,
     ErrorBadSequenceNumber = 5,
     InProgress = 6,
+    #[default]
     Unknown,
-}
-
-impl Default for ReconfigResult {
-    fn default() -> Self {
-        ReconfigResult::Unknown
-    }
 }
 
 impl fmt::Display for ReconfigResult {

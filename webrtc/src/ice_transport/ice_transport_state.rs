@@ -2,8 +2,9 @@ use ice::state::ConnectionState;
 use std::fmt;
 
 /// ICETransportState represents the current state of the ICE transport.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceTransportState {
+    #[default]
     Unspecified,
 
     /// ICETransportStateNew indicates the ICETransport is waiting
@@ -41,12 +42,6 @@ pub enum RTCIceTransportState {
     /// ICETransportStateClosed indicates the ICETransport has shut down
     /// and is no longer responding to STUN requests.
     Closed,
-}
-
-impl Default for RTCIceTransportState {
-    fn default() -> Self {
-        RTCIceTransportState::Unspecified
-    }
 }
 
 const ICE_TRANSPORT_STATE_NEW_STR: &str = "new";

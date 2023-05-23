@@ -3,8 +3,9 @@ use std::fmt;
 
 /// ICEProtocol indicates the transport protocol type that is used in the
 /// ice.URL structure.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCIceProtocol {
+    #[default]
     Unspecified,
 
     /// UDP indicates the URL uses a UDP transport.
@@ -14,12 +15,6 @@ pub enum RTCIceProtocol {
     /// TCP indicates the URL uses a TCP transport.
     #[serde(rename = "tcp")]
     Tcp,
-}
-
-impl Default for RTCIceProtocol {
-    fn default() -> Self {
-        RTCIceProtocol::Unspecified
-    }
 }
 
 const ICE_PROTOCOL_UDP_STR: &str = "udp";

@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// ICECandidateType represents the type of the ICE candidate used.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCIceCandidateType {
+    #[default]
     Unspecified,
 
     /// ICECandidateTypeHost indicates that the candidate is of Host type as
@@ -36,12 +37,6 @@ pub enum RTCIceCandidateType {
     /// candidate type obtained from a relay server, such as a TURN server.
     #[serde(rename = "relay")]
     Relay,
-}
-
-impl Default for RTCIceCandidateType {
-    fn default() -> Self {
-        RTCIceCandidateType::Unspecified
-    }
 }
 
 const ICE_CANDIDATE_TYPE_HOST_STR: &str = "host";

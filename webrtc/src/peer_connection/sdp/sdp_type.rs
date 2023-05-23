@@ -2,8 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// SDPType describes the type of an SessionDescription.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCSdpType {
+    #[default]
     Unspecified = 0,
 
     /// indicates that a description MUST be treated as an SDP offer.
@@ -31,12 +32,6 @@ pub enum RTCSdpType {
     /// null if there has not yet been a successful offer-answer negotiation.
     #[serde(rename = "rollback")]
     Rollback,
-}
-
-impl Default for RTCSdpType {
-    fn default() -> Self {
-        RTCSdpType::Unspecified
-    }
 }
 
 const SDP_TYPE_OFFER_STR: &str = "offer";
