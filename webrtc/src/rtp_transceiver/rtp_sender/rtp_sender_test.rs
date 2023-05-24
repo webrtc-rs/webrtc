@@ -133,7 +133,7 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
-    let sender = rtp_transceiver.sender();
+    let sender = rtp_transceiver.sender().await;
     let parameters = sender.get_parameters().await;
     assert_ne!(0, parameters.rtp_parameters.codecs.len());
     assert_eq!(1, parameters.encodings.len());
