@@ -5,15 +5,15 @@ use crate::error::Result;
 use chrono::prelude::*;
 use std::time::{Duration, UNIX_EPOCH};
 
-#[tokio::test]
-async fn test_packetizer() -> Result<()> {
+#[test]
+fn test_packetizer() -> Result<()> {
     let multiple_payload = Bytes::from_static(&[0; 128]);
     let g722 = Box::new(g7xx::G722Payloader {});
     let seq = Box::new(new_random_sequencer());
 
     //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut packetizer = new_packetizer(100, 98, 0x1234ABCD, g722, seq, 90000);
-    let packets = packetizer.packetize(&multiple_payload, 2000).await?;
+    let packets = packetizer.packetize(&multiple_payload, 2000)?;
 
     if packets.len() != 2 {
         let mut packet_lengths = String::new();
@@ -31,22 +31,18 @@ async fn test_packetizer() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_packetizer_abs_send_time() -> Result<()> {
+#[test]
+fn test_packetizer_abs_send_time() -> Result<()> {
     let g722 = Box::new(g7xx::G722Payloader {});
     let sequencer = Box::new(new_fixed_sequencer(1234));
 
-    let time_gen: Option<FnTimeGen> = Some(Arc::new(
-        || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
-            Box::pin(async move {
-                let loc = FixedOffset::west_opt(5 * 60 * 60).unwrap(); // UTC-5
-                let t = loc.with_ymd_and_hms(1985, 6, 23, 4, 0, 0).unwrap();
-                UNIX_EPOCH
-                    .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
-                    .unwrap_or(UNIX_EPOCH)
-            })
-        },
-    ));
+    let time_gen: Option<FnTimeGen> = Some(Arc::new(|| -> SystemTime {
+        let loc = FixedOffset::west_opt(5 * 60 * 60).unwrap(); // UTC-5
+        let t = loc.with_ymd_and_hms(1985, 6, 23, 4, 0, 0).unwrap();
+        UNIX_EPOCH
+            .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
+            .unwrap_or(UNIX_EPOCH)
+    }));
 
     //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut pktizer = PacketizerImpl {
@@ -63,7 +59,7 @@ async fn test_packetizer_abs_send_time() -> Result<()> {
     pktizer.enable_abs_send_time(1);
 
     let payload = Bytes::from_static(&[0x11, 0x12, 0x13, 0x14]);
-    let packets = pktizer.packetize(&payload, 2000).await?;
+    let packets = pktizer.packetize(&payload, 2000)?;
 
     let expected = Packet {
         header: Header {
@@ -94,17 +90,17 @@ async fn test_packetizer_abs_send_time() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_packetizer_timestamp_rollover_does_not_panic() -> Result<()> {
+#[test]
+fn test_packetizer_timestamp_rollover_does_not_panic() -> Result<()> {
     let g722 = Box::new(g7xx::G722Payloader {});
     let seq = Box::new(new_random_sequencer());
 
     let payload = Bytes::from_static(&[0; 128]);
     let mut packetizer = new_packetizer(100, 98, 0x1234ABCD, g722, seq, 90000);
 
-    packetizer.packetize(&payload, 10).await?;
+    packetizer.packetize(&payload, 10)?;
 
-    packetizer.packetize(&payload, u32::MAX).await?;
+    packetizer.packetize(&payload, u32::MAX)?;
 
     packetizer.skip_samples(u32::MAX);
 

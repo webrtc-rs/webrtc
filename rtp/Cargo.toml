@@ -16,14 +16,11 @@ util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-f
 bytes = "1"
 rand = "0.8.5"
 thiserror = "1.0"
-async-trait = "0.1.56"
 serde = { version = "1.0.102", features = ["derive"] }
 
 [dev-dependencies]
 chrono = "0.4.23"
 criterion = "0.4.0"
-tokio = { version = "1.19", features = ["full"] }
-tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 
 [[bench]]
 name = "packet_bench"
