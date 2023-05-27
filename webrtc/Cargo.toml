@@ -20,8 +20,8 @@ ice = { version = "0.9.0", path = "../ice", package = "webrtc-ice" }
 interceptor = { version = "0.8.2", path = "../interceptor" }
 mdns = { version = "0.5.0", path = "../mdns", package = "webrtc-mdns" }
 media = { version = "0.6.0", path = "../media", package = "webrtc-media" }
-rtcp = { version = "0.7.0", path = "../rtcp" }
-rtp = { version = "0.6.7", path = "../rtp" }
+rtcp = { version = "0.8.0", path = "../rtcp" }
+rtp = { version = "0.7.0", path = "../rtp" }
 sctp = { version = "0.8.0", path = "../sctp", package = "webrtc-sctp" }
 sdp = { version = "0.5.2", path = "../sdp" }
 srtp = { version = "0.9.0", path = "../srtp", package = "webrtc-srtp" }
