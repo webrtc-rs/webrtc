@@ -8,11 +8,13 @@ use crate::relay::*;
 use futures::future;
 use std::collections::HashMap;
 use stun::textattrs::Username;
+use tokio::sync::mpsc;
 use util::Conn;
 
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {
     pub relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
+    pub alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
 }
 
 // Manager is used to hold active allocations
@@ -20,6 +22,7 @@ pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
     relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
+    alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
 }
 
 impl Manager {
@@ -29,6 +32,7 @@ impl Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
             reservations: Arc::new(Mutex::new(HashMap::new())),
             relay_addr_generator: config.relay_addr_generator,
+            alloc_close_notify: config.alloc_close_notify,
         }
     }
 
@@ -95,7 +99,14 @@ impl Manager {
             .relay_addr_generator
             .allocate_conn(true, requested_port)
             .await?;
-        let mut a = Allocation::new(turn_socket, relay_socket, relay_addr, five_tuple, username);
+        let mut a = Allocation::new(
+            turn_socket,
+            relay_socket,
+            relay_addr,
+            five_tuple,
+            username,
+            self.alloc_close_notify.clone(),
+        );
         a.allocations = Some(Arc::clone(&self.allocations));
 
         log::debug!("listening on relay addr: {:?}", a.relay_addr);

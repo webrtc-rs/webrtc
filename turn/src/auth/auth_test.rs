@@ -68,6 +68,7 @@ async fn test_new_long_term_auth_handler() -> Result<()> {
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(LongTermAuthHandler::new(SHARED_SECRET.to_string())),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 

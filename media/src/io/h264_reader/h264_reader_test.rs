@@ -4,7 +4,7 @@ use std::io::Cursor;
 #[test]
 fn test_data_does_not_start_with_h264header() -> Result<()> {
     let test_function = |input: &[u8]| {
-        let mut reader = H264Reader::new(Cursor::new(input));
+        let mut reader = H264Reader::new(Cursor::new(input), 1_048_576);
         if let Err(err) = reader.next_nal() {
             assert_eq!(err, Error::ErrDataIsNotH264Stream);
         } else {
@@ -24,7 +24,7 @@ fn test_data_does_not_start_with_h264header() -> Result<()> {
 #[test]
 fn test_parse_header() -> Result<()> {
     let h264bytes = &[0x0, 0x0, 0x1, 0xAB];
-    let mut reader = H264Reader::new(Cursor::new(h264bytes));
+    let mut reader = H264Reader::new(Cursor::new(h264bytes), 1_048_576);
 
     let nal = reader.next_nal()?;
 
@@ -40,7 +40,7 @@ fn test_parse_header() -> Result<()> {
 #[test]
 fn test_eof() -> Result<()> {
     let test_function = |input: &[u8]| {
-        let mut reader = H264Reader::new(Cursor::new(input));
+        let mut reader = H264Reader::new(Cursor::new(input), 1_048_576);
         if let Err(err) = reader.next_nal() {
             assert_eq!(Error::ErrIoEOF, err);
         } else {
@@ -62,7 +62,7 @@ fn test_skip_sei() -> Result<()> {
         0x0, 0x0, 0x0, 0x1, 0xAB,
     ];
 
-    let mut reader = H264Reader::new(Cursor::new(h264bytes));
+    let mut reader = H264Reader::new(Cursor::new(h264bytes), 1_048_576);
 
     let nal = reader.next_nal()?;
     assert_eq!(nal.data[0], 0xAA);
@@ -81,7 +81,7 @@ fn test_issue1734_next_nal() -> Result<()> {
     ];
 
     for test in tests {
-        let mut reader = H264Reader::new(Cursor::new(test));
+        let mut reader = H264Reader::new(Cursor::new(test), 1_048_576);
 
         // Just make sure it doesn't crash
         while reader.next_nal().is_ok() {
@@ -95,7 +95,7 @@ fn test_issue1734_next_nal() -> Result<()> {
 #[test]
 fn test_trailing01after_start_code() -> Result<()> {
     let test = vec![0x0, 0x0, 0x0, 0x1, 0x01, 0x0, 0x0, 0x0, 0x1, 0x01];
-    let mut r = H264Reader::new(Cursor::new(test));
+    let mut r = H264Reader::new(Cursor::new(test), 1_048_576);
 
     for _ in 0..=1 {
         let _nal = r.next_nal()?;

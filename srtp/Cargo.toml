@@ -16,8 +16,8 @@ util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-f
     "buffer",
     "marshal",
 ] }
-rtp = { version = "0.6.7", path = "../rtp" }
-rtcp = { version = "0.7.0", path = "../rtcp" }
+rtp = { version = "0.7.0", path = "../rtp" }
+rtcp = { version = "0.8.0", path = "../rtcp" }
 
 byteorder = "1"
 bytes = "1"

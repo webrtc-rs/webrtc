@@ -142,15 +142,15 @@ pub struct H264Reader<R: Read> {
 }
 
 impl<R: Read> H264Reader<R> {
-    /// new creates new H264Reader
-    pub fn new(reader: R) -> H264Reader<R> {
+    /// new creates new `H264Reader` with `capacity` sized read buffer.
+    pub fn new(reader: R, capacity: usize) -> H264Reader<R> {
         H264Reader {
             reader,
             nal_buffer: BytesMut::new(),
             count_of_consecutive_zero_bytes: 0,
             nal_prefix_parsed: false,
             read_buffer: vec![],
-            temp_buf: vec![0u8; 4096],
+            temp_buf: vec![0u8; capacity],
         }
     }
 

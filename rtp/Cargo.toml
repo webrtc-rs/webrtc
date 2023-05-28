@@ -1,6 +1,6 @@
 [package]
 name = "rtp"
-version = "0.6.8"
+version = "0.7.0"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2021"
 description = "A pure Rust implementation of RTP"
@@ -11,19 +11,16 @@ repository = "https://github.com/webrtc-rs/rtp"
 rust-version = "1.63.0"
 
 [dependencies]
-util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal", "sync"] }
+util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
 
 bytes = "1"
 rand = "0.8.5"
 thiserror = "1.0"
-async-trait = "0.1.56"
 serde = { version = "1.0.102", features = ["derive"] }
 
 [dev-dependencies]
 chrono = "0.4.23"
 criterion = "0.4.0"
-tokio = { version = "1.19", features = ["full"] }
-tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 
 [[bench]]
 name = "packet_bench"

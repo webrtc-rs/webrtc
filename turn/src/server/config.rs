@@ -1,3 +1,4 @@
+use crate::allocation::*;
 use crate::auth::*;
 use crate::error::*;
 use crate::relay::*;
@@ -5,6 +6,7 @@ use crate::relay::*;
 use util::Conn;
 
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio::time::Duration;
 
 // ConnConfig is used for UDP listeners
@@ -36,6 +38,9 @@ pub struct ServerConfig {
 
     // channel_bind_timeout sets the lifetime of channel binding. Defaults to 10 minutes.
     pub channel_bind_timeout: Duration,
+
+    // to receive notify on allocation close event, with metrics data.
+    pub alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
 }
 
 impl ServerConfig {

@@ -7,8 +7,6 @@ use util::marshal::{Marshal, MarshalSize, Unmarshal};
 use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
-use std::future::Future;
-use std::pin::Pin;
 
 /// PacketBitmap shouldn't be used like a normal integral,
 /// so it's type is masked here. Access it with PacketList().
@@ -23,9 +21,6 @@ pub struct NackPair {
     /// Bitmask of following lost packets
     pub lost_packets: PacketBitmap,
 }
-
-pub type RangeFn =
-    Box<dyn (Fn(u16) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>;
 
 pub struct NackIterator {
     packet_id: u16,
@@ -72,9 +67,12 @@ impl NackPair {
         self.into_iter().collect()
     }
 
-    pub async fn range(&self, f: RangeFn) {
+    pub fn range<F>(&self, f: F)
+    where
+        F: Fn(u16) -> bool,
+    {
         for packet_id in self.into_iter() {
-            if !f(packet_id).await {
+            if !f(packet_id) {
                 return;
             }
         }

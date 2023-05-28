@@ -237,6 +237,7 @@ pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler::new()),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 
