@@ -926,6 +926,9 @@ impl RTCPeerConnection {
             .to_connection_role();
         if connection_role == ConnectionRole::Unspecified {
             connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
+            if remote_is_lite && !self.internal.setting_engine.candidates.ice_lite {
+                connection_role = DTLSRole::Server.to_connection_role();
+            }
         }
 
         let local_transceivers = self.get_transceivers().await;
