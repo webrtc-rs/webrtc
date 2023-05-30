@@ -729,8 +729,6 @@ impl RTPReader for RTPReadRecorder {
         attributes: &Attributes,
     ) -> Result<(rtp::packet::Packet, Attributes)> {
         let (pkt, attributes) = self.rtp_reader.read(buf, attributes).await?;
-        // TODO: This parsing happens redundantly in several interceptors, would be good if we
-        // could not do this.
 
         let _ = self
             .tx
