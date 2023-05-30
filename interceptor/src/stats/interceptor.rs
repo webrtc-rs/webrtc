@@ -16,7 +16,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Duration;
 
 use util::sync::Mutex;
-use util::{MarshalSize, Unmarshal};
+use util::MarshalSize;
 
 use crate::error::Result;
 use crate::stream_info::StreamInfo;
@@ -392,11 +392,13 @@ where
     F: Fn() -> SystemTime + Send + Sync,
 {
     /// read a batch of rtcp packets
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attributes) = self.rtcp_reader.read(buf, attributes).await?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+        let (pkts, attributes) = self.rtcp_reader.read(buf, attributes).await?;
 
-        let mut b = &buf[..n];
-        let pkts = rtcp::packet::unmarshal(&mut b)?;
         // Middle 32 bits
         let now = (unix2ntp((self.now_gen)()) >> 16) as u32;
 
@@ -602,7 +604,7 @@ where
             }
         }
 
-        Ok((n, attributes))
+        Ok((pkts, attributes))
     }
 }
 
@@ -721,27 +723,29 @@ impl fmt::Debug for RTPReadRecorder {
 
 #[async_trait]
 impl RTPReader for RTPReadRecorder {
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
-        let (bytes_read, attributes) = self.rtp_reader.read(buf, attributes).await?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
+        let (pkt, attributes) = self.rtp_reader.read(buf, attributes).await?;
         // TODO: This parsing happens redundantly in several interceptors, would be good if we
         // could not do this.
-        let mut b = &buf[..bytes_read];
-        let packet = rtp::packet::Packet::unmarshal(&mut b)?;
 
         let _ = self
             .tx
             .send(Message::StatUpdate {
-                ssrc: packet.header.ssrc,
+                ssrc: pkt.header.ssrc,
                 update: StatsUpdate::InboundRTP {
                     packets: 1,
-                    header_bytes: (bytes_read - packet.payload.len()) as u64,
-                    payload_bytes: packet.payload.len() as u64,
+                    header_bytes: pkt.header.marshal_size() as u64,
+                    payload_bytes: pkt.payload.len() as u64,
                     last_packet_timestamp: SystemTime::now(),
                 },
             })
             .await;
 
-        Ok((bytes_read, attributes))
+        Ok((pkt, attributes))
     }
 }
 

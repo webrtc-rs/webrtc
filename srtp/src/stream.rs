@@ -53,29 +53,32 @@ impl Stream {
     }
 
     /// ReadRTP reads and decrypts full RTP packet and its header from the nextConn
-    pub async fn read_rtp(&self, buf: &mut [u8]) -> Result<(usize, rtp::header::Header)> {
+    pub async fn read_rtp(&self, buf: &mut [u8]) -> Result<rtp::packet::Packet> {
         if !self.is_rtp {
             return Err(Error::InvalidRtpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;
         let mut b = &buf[..n];
-        let header = rtp::header::Header::unmarshal(&mut b)?;
 
-        Ok((n, header))
+        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
+        Ok(pkt)
     }
 
     /// read_rtcp reads and decrypts full RTP packet and its header from the nextConn
-    pub async fn read_rtcp(&self, buf: &mut [u8]) -> Result<(usize, rtcp::header::Header)> {
+    pub async fn read_rtcp(
+        &self,
+        buf: &mut [u8],
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         if self.is_rtp {
             return Err(Error::InvalidRtcpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;
         let mut b = &buf[..n];
-        let header = rtcp::header::Header::unmarshal(&mut b)?;
+        let pkt = rtcp::packet::unmarshal(&mut b)?;
 
-        Ok((n, header))
+        Ok(pkt)
     }
 
     /// Close removes the ReadStream from the session and cleans up any associated state

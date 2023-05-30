@@ -1,5 +1,5 @@
-use bytes::Bytes;
 use tokio::time::Instant;
+use util::Unmarshal;
 
 use super::*;
 use crate::rtp_transceiver::create_stream_info;
@@ -945,7 +945,7 @@ impl PeerConnectionInternal {
         let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
         // Packets that we read as part of simulcast probing that we need to make available
         // if we do find a track later.
-        let mut buffered_packets: VecDeque<(Bytes, Attributes)> = VecDeque::default();
+        let mut buffered_packets: VecDeque<(rtp::packet::Packet, Attributes)> = VecDeque::default();
 
         let n = rtp_stream.read(&mut buf).await?;
 
@@ -955,8 +955,12 @@ impl PeerConnectionInternal {
             sid_extension_id as u8,
             rsid_extension_id as u8,
         )?;
+
+        let mut packet_buf = &buf.as_mut_slice()[..self.setting_engine.get_receive_mtu()];
+        let packet = rtp::packet::Packet::unmarshal(&mut packet_buf).unwrap();
+
         // TODO: Can we have attributes on the first packets?
-        buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), Attributes::new()));
+        buffered_packets.push_back((packet, Attributes::new()));
 
         let params = self
             .media_engine
@@ -983,7 +987,7 @@ impl PeerConnectionInternal {
         let a = Attributes::new();
         for _ in 0..=SIMULCAST_PROBE_COUNT {
             if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
-                let (n, _) = rtp_interceptor.read(&mut buf, &a).await?;
+                let (pkt, _) = rtp_interceptor.read(&mut buf, &a).await?;
                 let (m, r, rs, _) = handle_unknown_rtp_packet(
                     &buf[..n],
                     mid_extension_id as u8,
@@ -994,7 +998,7 @@ impl PeerConnectionInternal {
                 rid = r;
                 rsid = rs;
 
-                buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), a.clone()));
+                buffered_packets.push_back((pkt, a.clone()));
                 continue;
             }
 
@@ -1074,8 +1078,8 @@ impl PeerConnectionInternal {
             tokio::spawn(async move {
                 if let Some(track) = receiver.track().await {
                     let mut b = vec![0u8; receive_mtu];
-                    let n = match track.peek(&mut b).await {
-                        Ok((n, _)) => n,
+                    let pkt = match track.peek(&mut b).await {
+                        Ok((pkt, _)) => pkt,
                         Err(err) => {
                             log::warn!(
                                 "Could not determine PayloadType for SSRC {} ({})",
@@ -1086,7 +1090,7 @@ impl PeerConnectionInternal {
                         }
                     };
 
-                    if let Err(err) = track.check_and_update_track(&b[..n]).await {
+                    if let Err(err) = track.check_and_update_track(&pkt).await {
                         log::warn!(
                             "Failed to set codec settings for track SSRC {} ({})",
                             track.ssrc(),
