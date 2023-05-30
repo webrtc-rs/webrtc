@@ -956,8 +956,7 @@ impl PeerConnectionInternal {
             rsid_extension_id as u8,
         )?;
 
-        let mut packet_buf = &buf.as_mut_slice()[..self.setting_engine.get_receive_mtu()];
-        let packet = rtp::packet::Packet::unmarshal(&mut packet_buf).unwrap();
+        let packet = rtp::packet::Packet::unmarshal(&mut buf.as_slice()).unwrap();
 
         // TODO: Can we have attributes on the first packets?
         buffered_packets.push_back((packet, Attributes::new()));

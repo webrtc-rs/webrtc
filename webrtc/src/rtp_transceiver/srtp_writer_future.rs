@@ -266,9 +266,8 @@ impl RTCPReader for SrtpWriterFuture {
         a: &Attributes,
     ) -> IResult<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let read = self.read(buf).await?;
-        let mut b = &buf[..read];
+        let pkt = rtcp::packet::unmarshal(&mut &buf[..read])?;
 
-        let pkt = rtcp::packet::unmarshal(&mut b)?;
         Ok((pkt, a.clone()))
     }
 }

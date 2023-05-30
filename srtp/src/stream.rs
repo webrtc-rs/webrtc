@@ -60,8 +60,8 @@ impl Stream {
 
         let n = self.buffer.read(buf, None).await?;
         let mut b = &buf[..n];
-
         let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
+
         Ok(pkt)
     }
 
