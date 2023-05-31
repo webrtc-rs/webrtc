@@ -1,6 +1,8 @@
 use super::*;
 use crate::checks::*;
 
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use std::io::BufReader;
 
 #[test]
@@ -36,7 +38,7 @@ fn test_xor_safe_bsmaller() -> Result<()> {
 #[test]
 fn test_xormapped_address_get_from() -> Result<()> {
     let mut m = Message::new();
-    let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
+    let transaction_id = BASE64_STANDARD.decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let addr_value = vec![0x00, 0x01, 0x9c, 0xd5, 0xf4, 0x9f, 0x38, 0xae];
     m.add(ATTR_XORMAPPED_ADDRESS, &addr_value);
@@ -104,7 +106,7 @@ fn test_xormapped_address_get_from() -> Result<()> {
 #[test]
 fn test_xormapped_address_get_from_invalid() -> Result<()> {
     let mut m = Message::new();
-    let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
+    let transaction_id = BASE64_STANDARD.decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let expected_ip: IpAddr = "213.141.156.236".parse().unwrap();
     let expected_port = 21254u16;
@@ -134,7 +136,7 @@ fn test_xormapped_address_get_from_invalid() -> Result<()> {
 #[test]
 fn test_xormapped_address_add_to() -> Result<()> {
     let mut m = Message::new();
-    let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
+    let transaction_id = BASE64_STANDARD.decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let expected_ip: IpAddr = "213.141.156.236".parse().unwrap();
     let expected_port = 21254u16;
@@ -166,7 +168,7 @@ fn test_xormapped_address_add_to() -> Result<()> {
 #[test]
 fn test_xormapped_address_add_to_ipv6() -> Result<()> {
     let mut m = Message::new();
-    let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
+    let transaction_id = BASE64_STANDARD.decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let expected_ip: IpAddr = "fe80::dc2b:44ff:fe20:6009".parse().unwrap();
     let expected_port = 21254u16;
