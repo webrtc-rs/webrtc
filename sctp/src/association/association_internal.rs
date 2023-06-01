@@ -3,6 +3,7 @@ mod association_internal_test;
 
 use super::*;
 
+use crate::param::param_forward_tsn_supported::ParamForwardTsnSupported;
 use crate::param::param_type::ParamType;
 use crate::param::param_unrecognized::ParamUnrecognized;
 use async_trait::async_trait;
@@ -769,6 +770,8 @@ impl AssociationInternal {
                         self.use_forward_tsn = true;
                     }
                 }
+            } else if let Some(_) = param.as_any().downcast_ref::<ParamForwardTsnSupported>() {
+                self.use_forward_tsn = true;
             }
         }
         if !self.use_forward_tsn {
