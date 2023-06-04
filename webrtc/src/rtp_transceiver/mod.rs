@@ -175,7 +175,7 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: OnceCell<SmallStr>,                  //atomic.Value
+    mid: OnceCell<SmallStr>,              //atomic.Value
     sender: Mutex<Arc<RTCRtpSender>>,     //atomic.Value
     receiver: Mutex<Arc<RTCRtpReceiver>>, //atomic.Value
 
