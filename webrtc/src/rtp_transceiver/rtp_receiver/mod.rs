@@ -765,7 +765,7 @@ impl RTCRtpReceiver {
     ) -> Result<Arc<TrackRemote>> {
         let mut tracks = self.internal.tracks.write().await;
         for t in &mut *tracks {
-            if SmolStr::from(t.track.rid()) == rid {
+            if *t.track.rid() == rid {
                 t.track.set_kind(self.kind);
                 if let Some(codec) = params.codecs.first() {
                     t.track.set_codec(codec.clone());
