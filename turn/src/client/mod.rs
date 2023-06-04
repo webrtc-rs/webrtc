@@ -11,6 +11,8 @@ use crate::error::*;
 use crate::proto::{
     chandata::*, data::*, lifetime::*, peeraddr::*, relayaddr::*, reqtrans::*, PROTO_UDP,
 };
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use binding::*;
 use relay_conn::*;
 use transaction::*;
@@ -103,7 +105,7 @@ impl RelayConnObserver for ClientInternal {
         to: &str,
         ignore_result: bool,
     ) -> Result<TransactionResult> {
-        let tr_key = base64::encode(msg.transaction_id.0);
+        let tr_key = BASE64_STANDARD.encode(msg.transaction_id.0);
 
         let mut tr = Transaction::new(TransactionConfig {
             key: tr_key.clone(),
@@ -341,7 +343,7 @@ impl ClientInternal {
         // - stun.ClassSuccessResponse
         // - stun.ClassErrorResponse
 
-        let tr_key = base64::encode(msg.transaction_id.0);
+        let tr_key = BASE64_STANDARD.encode(msg.transaction_id.0);
 
         let mut tm = tr_map.lock().await;
         if tm.find(&tr_key).is_none() {
