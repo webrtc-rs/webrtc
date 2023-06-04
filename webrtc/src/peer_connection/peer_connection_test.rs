@@ -414,7 +414,9 @@ async fn peer() -> Result<()> {
     peer_connection.set_local_description(offer).await?;
     let _ = gather_complete.recv().await;
 
-    if let Some(_) = peer_connection.local_description().await {}
+    if peer_connection.local_description().await.is_some() {
+        //TODO?
+    }
 
     peer_connection.close().await?;
 
