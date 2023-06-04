@@ -15,7 +15,6 @@ use interceptor::{
 };
 use smol_str::SmolStr;
 
-use crate::SmallStr;
 use log::trace;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -96,7 +95,7 @@ pub struct RTCRtpRtxParameters {
 /// <http://draft.ortc.org/#dom-rtcrtpcodingparameters>
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct RTCRtpCodingParameters {
-    pub rid: SmallStr,
+    pub rid: SmolStr,
     pub ssrc: SSRC,
     pub payload_type: PayloadType,
     pub rtx: RTCRtpRtxParameters,
@@ -175,7 +174,7 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: OnceCell<SmallStr>,              //atomic.Value
+    mid: OnceCell<SmolStr>,               //atomic.Value
     sender: Mutex<Arc<RTCRtpSender>>,     //atomic.Value
     receiver: Mutex<Arc<RTCRtpReceiver>>, //atomic.Value
 
@@ -296,14 +295,14 @@ impl RTCRtpTransceiver {
     }
 
     /// set_mid sets the RTPTransceiver's mid. If it was already set, will return an error.
-    pub(crate) fn set_mid(&self, mid: SmallStr) -> Result<()> {
+    pub(crate) fn set_mid(&self, mid: SmolStr) -> Result<()> {
         self.mid
             .set(mid)
             .map_err(|_| Error::ErrRTPTransceiverCannotChangeMid)
     }
 
     /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or create_answer.
-    pub fn mid(&self) -> Option<SmallStr> {
+    pub fn mid(&self) -> Option<SmolStr> {
         self.mid.get().map(Clone::clone)
     }
 
@@ -482,7 +481,7 @@ pub(crate) async fn find_by_mid(
     local_transceivers: &mut Vec<Arc<RTCRtpTransceiver>>,
 ) -> Option<Arc<RTCRtpTransceiver>> {
     for (i, t) in local_transceivers.iter().enumerate() {
-        if t.mid() == Some(SmallStr(SmolStr::from(mid))) {
+        if t.mid() == Some(SmolStr::from(mid)) {
             return Some(local_transceivers.remove(i));
         }
     }

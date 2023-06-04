@@ -15,7 +15,6 @@ use crate::rtp_transceiver::{
 };
 use crate::track::track_remote::TrackRemote;
 use crate::track::{TrackStream, TrackStreams};
-use crate::SmallStr;
 
 use arc_swap::ArcSwapOption;
 use interceptor::stream_info::RTPHeaderExtension;
@@ -760,13 +759,13 @@ impl RTCRtpReceiver {
     /// It populates all the internal state for the given RID
     pub(crate) async fn receive_for_rid(
         &self,
-        rid: SmallStr,
+        rid: SmolStr,
         params: RTCRtpParameters,
         stream: TrackStream,
     ) -> Result<Arc<TrackRemote>> {
         let mut tracks = self.internal.tracks.write().await;
         for t in &mut *tracks {
-            if SmallStr(SmolStr::from(t.track.rid())) == rid {
+            if *t.track.rid() == rid {
                 t.track.set_kind(self.kind);
                 if let Some(codec) = params.codecs.first() {
                     t.track.set_codec(codec.clone());
