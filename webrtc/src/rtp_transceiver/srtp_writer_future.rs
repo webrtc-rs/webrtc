@@ -260,8 +260,15 @@ type IResult<T> = std::result::Result<T, interceptor::Error>;
 
 #[async_trait]
 impl RTCPReader for SrtpWriterFuture {
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> IResult<(usize, Attributes)> {
-        Ok((self.read(buf).await?, a.clone()))
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> IResult<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+        let read = self.read(buf).await?;
+        let pkt = rtcp::packet::unmarshal(&mut &buf[..read])?;
+
+        Ok((pkt, a.clone()))
     }
 }
 

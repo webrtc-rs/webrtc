@@ -102,11 +102,12 @@ pub struct ResponderRtcpReader {
 
 #[async_trait]
 impl RTCPReader for ResponderRtcpReader {
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
-
-        let mut b = &buf[..n];
-        let pkts = rtcp::packet::unmarshal(&mut b)?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+        let (pkts, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
         for p in &pkts {
             if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
                 let nack = nack.clone();
@@ -117,7 +118,7 @@ impl RTCPReader for ResponderRtcpReader {
             }
         }
 
-        Ok((n, attr))
+        Ok((pkts, attr))
     }
 }
 

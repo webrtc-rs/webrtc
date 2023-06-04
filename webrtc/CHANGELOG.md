@@ -60,6 +60,10 @@
         - `onmute`;
         - `onunmute`.
 
+* Change `RTPReader::read` signature to `|&self, buf: &mut [u8], attributes: &Attributes| -> Result<(rtp::packet::Packet, Attributes)>` [#450](https://github.com/webrtc-rs/webrtc/pull/450).
+
+* Change `RTCPReader::read` signature to `|&self, buf: &mut [u8], attributes: &Attributes| -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)>` [#450](https://github.com/webrtc-rs/webrtc/pull/450).
+
 ## v0.6.0
 
 * Added more stats to `RemoteInboundRTPStats` and `RemoteOutboundRTPStats` [#282](https://github.com/webrtc-rs/webrtc/pull/282) by [@k0nserv](https://github.com/k0nserv).

@@ -163,7 +163,10 @@ pub struct RTPReceiverInternal {
 
 impl RTPReceiverInternal {
     /// read reads incoming RTCP for this RTPReceiver
-    async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    async fn read(
+        &self,
+        b: &mut [u8],
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut state_watch_rx = self.state_tx.subscribe();
         // Ensure we are running or paused. When paused we still receive RTCP even if RTP traffic
         // isn't flowing.
@@ -192,7 +195,11 @@ impl RTPReceiverInternal {
     }
 
     /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
-    async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
+    async fn read_simulcast(
+        &self,
+        b: &mut [u8],
+        rid: &str,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut state_watch_rx = self.state_tx.subscribe();
 
         // Ensure we are running or paused. When paused we still recevie RTCP even if RTP traffic
@@ -230,10 +237,7 @@ impl RTPReceiverInternal {
         receive_mtu: usize,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; receive_mtu];
-        let (n, attributes) = self.read(&mut b).await?;
-
-        let mut buf = &b[..n];
-        let pkts = rtcp::packet::unmarshal(&mut buf)?;
+        let (pkts, attributes) = self.read(&mut b).await?;
 
         Ok((pkts, attributes))
     }
@@ -245,15 +249,16 @@ impl RTPReceiverInternal {
         receive_mtu: usize,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; receive_mtu];
-        let (n, attributes) = self.read_simulcast(&mut b, rid).await?;
-
-        let mut buf = &b[..n];
-        let pkts = rtcp::packet::unmarshal(&mut buf)?;
+        let (pkts, attributes) = self.read_simulcast(&mut b, rid).await?;
 
         Ok((pkts, attributes))
     }
 
-    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: usize) -> Result<(usize, Attributes)> {
+    pub(crate) async fn read_rtp(
+        &self,
+        b: &mut [u8],
+        tid: usize,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
         let mut state_watch_rx = self.state_tx.subscribe();
 
         // Ensure we are running.
@@ -615,12 +620,19 @@ impl RTCRtpReceiver {
     }
 
     /// read reads incoming RTCP for this RTPReceiver
-    pub async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    pub async fn read(
+        &self,
+        b: &mut [u8],
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read(b).await
     }
 
     /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
-    pub async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
+    pub async fn read_simulcast(
+        &self,
+        b: &mut [u8],
+        rid: &str,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read_simulcast(b, rid).await
     }
 
@@ -736,7 +748,11 @@ impl RTCRtpReceiver {
     }
 
     /// read_rtp should only be called by a track, this only exists so we can keep state in one place
-    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: usize) -> Result<(usize, Attributes)> {
+    pub(crate) async fn read_rtp(
+        &self,
+        b: &mut [u8],
+        tid: usize,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
         self.internal.read_rtp(b, tid).await
     }
 
