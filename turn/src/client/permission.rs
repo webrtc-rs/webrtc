@@ -3,16 +3,11 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub(crate) enum PermState {
+    #[default]
     Idle = 0,
     Permitted = 1,
-}
-
-impl Default for PermState {
-    fn default() -> Self {
-        PermState::Idle
-    }
 }
 
 impl From<u8> for PermState {

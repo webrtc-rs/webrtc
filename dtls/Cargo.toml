@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-dtls"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of DTLS"
@@ -17,11 +17,7 @@ util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-f
 
 byteorder = "1"
 rand_core = "0.6.3"
-elliptic-curve = { version = "0.12.1", features = ["default", "ecdh"] }
-# required because elliptic-curve requires "0.12", but "0.12.0" does not compile.
 hkdf = "~0.12.1"
-# required because elliptic-curve requires "3", but "3.0.0" does not compile.
-curve25519-dalek = "3.2"
 p256 = { version = "0.11.1", features = ["default", "ecdh", "ecdsa"] }
 p384 = "0.11.2"
 rand = "0.8.5"
@@ -35,8 +31,7 @@ aes-gcm = "0.10.1"
 ccm = "0.3.0"
 tokio = { version = "1.19", features = ["full"] }
 async-trait = "0.1.56"
-x25519-dalek = "2.0.0-pre.1"
-signature = "1.2.2"
+x25519-dalek = { version = "2.0.0-rc.2", features = ["static_secrets"] }
 x509-parser = "0.13.2"
 der-parser = "8.1"
 rcgen = "0.10.0"

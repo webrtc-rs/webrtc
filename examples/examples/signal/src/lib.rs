@@ -2,6 +2,8 @@
 #![allow(dead_code)]
 
 use anyhow::Result;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use std::net::SocketAddr;
@@ -92,13 +94,13 @@ pub fn encode(b: &str) -> String {
     //    b = zip(b)
     //}
 
-    base64::encode(b)
+    BASE64_STANDARD.encode(b)
 }
 
 /// decode decodes the input from base64
 /// It can optionally unzip the input after decoding
 pub fn decode(s: &str) -> Result<String> {
-    let b = base64::decode(s)?;
+    let b = BASE64_STANDARD.decode(s)?;
 
     //if COMPRESS {
     //    b = unzip(b)

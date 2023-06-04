@@ -66,6 +66,7 @@ use crate::sctp_transport::RTCSctpTransport;
 use crate::stats::StatsReport;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
+use crate::SmallStr;
 
 use ::ice::candidate::candidate_base::unmarshal_candidate;
 use ::ice::candidate::Candidate;
@@ -77,6 +78,7 @@ use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use rand::{thread_rng, Rng};
 use rcgen::KeyPair;
+use smol_str::SmolStr;
 use srtp::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;
@@ -454,7 +456,9 @@ impl RTCPeerConnection {
                 // 	return true
                 // }
                 let mid = t.mid();
-                let m = mid.as_ref().and_then(|mid| get_by_mid(mid, local_desc));
+                let m = mid
+                    .as_ref()
+                    .and_then(|mid| get_by_mid(mid.0.as_str(), local_desc));
                 // Step 5.2
                 if !t.stopped.load(Ordering::SeqCst) {
                     if m.is_none() {
@@ -493,8 +497,9 @@ impl RTCPeerConnection {
                             RTCSdpType::Offer => {
                                 // Step 5.3.2
                                 if let Some(remote_desc) = &current_remote_description {
-                                    if let Some(rm) =
-                                        t.mid().and_then(|mid| get_by_mid(&mid, remote_desc))
+                                    if let Some(rm) = t
+                                        .mid()
+                                        .and_then(|mid| get_by_mid(mid.0.as_str(), remote_desc))
                                     {
                                         if get_peer_direction(m) != t.direction()
                                             && get_peer_direction(rm) != t.direction().reverse()
@@ -511,18 +516,20 @@ impl RTCPeerConnection {
                                     Some(d) => d,
                                     None => return true,
                                 };
-                                let offered_direction =
-                                    match t.mid().and_then(|mid| get_by_mid(&mid, remote_desc)) {
-                                        Some(d) => {
-                                            let dir = get_peer_direction(d);
-                                            if dir == RTCRtpTransceiverDirection::Unspecified {
-                                                RTCRtpTransceiverDirection::Inactive
-                                            } else {
-                                                dir
-                                            }
+                                let offered_direction = match t
+                                    .mid()
+                                    .and_then(|mid| get_by_mid(mid.0.as_str(), remote_desc))
+                                {
+                                    Some(d) => {
+                                        let dir = get_peer_direction(d);
+                                        if dir == RTCRtpTransceiverDirection::Unspecified {
+                                            RTCRtpTransceiverDirection::Inactive
+                                        } else {
+                                            dir
                                         }
-                                        None => RTCRtpTransceiverDirection::Inactive,
-                                    };
+                                    }
+                                    None => RTCRtpTransceiverDirection::Inactive,
+                                };
 
                                 let current_direction = get_peer_direction(m);
                                 // Step 5.3.3
@@ -544,8 +551,8 @@ impl RTCPeerConnection {
                     };
 
                     if let Some(remote_desc) = &*params.current_remote_description.lock().await {
-                        return get_by_mid(&search_mid, local_desc).is_some()
-                            || get_by_mid(&search_mid, remote_desc).is_some();
+                        return get_by_mid(search_mid.0.as_str(), local_desc).is_some()
+                            || get_by_mid(search_mid.0.as_str(), remote_desc).is_some();
                     }
                 }
             }
@@ -795,10 +802,13 @@ impl RTCPeerConnection {
                         }
                     }
 
-                    t.set_mid(mid)?;
+                    t.set_mid(crate::SmallStr(SmolStr::from(mid)))?;
                 } else {
                     let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
-                    t.set_mid(format!("{}", greater_mid + 1))?;
+                    t.set_mid(crate::SmallStr(SmolStr::from(format!(
+                        "{}",
+                        greater_mid + 1
+                    ))))?;
                 }
             }
 
@@ -1358,7 +1368,7 @@ impl RTCPeerConnection {
 
                         if let Some(t) = t {
                             if t.mid().is_none() {
-                                t.set_mid(mid_value.to_owned())?;
+                                t.set_mid(crate::SmallStr(SmolStr::from(mid_value)))?;
                             }
                         } else {
                             let local_direction =
@@ -1404,7 +1414,7 @@ impl RTCPeerConnection {
                             self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
                             if t.mid().is_none() {
-                                t.set_mid(mid_value.to_owned())?;
+                                t.set_mid(SmallStr(SmolStr::from(mid_value)))?;
                             }
                         }
                     }

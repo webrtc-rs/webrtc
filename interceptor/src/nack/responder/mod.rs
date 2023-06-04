@@ -69,8 +69,10 @@ impl ResponderInternal {
         };
 
         for n in &nack.nacks {
+            // can't use n.range() since this callback is async fn,
+            // instead, use NackPair into_iter()
             let stream2 = Arc::clone(&stream);
-            n.range(Box::new(
+            let f = Box::new(
                 move |seq: u16| -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> {
                     let stream3 = Arc::clone(&stream2);
                     Box::pin(async move {
@@ -80,12 +82,15 @@ impl ResponderInternal {
                                 log::warn!("failed resending nacked packet: {}", err);
                             }
                         }
-
                         true
                     })
                 },
-            ))
-            .await;
+            );
+            for packet_id in n.into_iter() {
+                if !f(packet_id).await {
+                    return;
+                }
+            }
         }
     }
 }

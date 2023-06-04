@@ -8,16 +8,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TimerIdRefresh {
+    #[default]
     Alloc,
     Perms,
-}
-
-impl Default for TimerIdRefresh {
-    fn default() -> Self {
-        TimerIdRefresh::Alloc
-    }
 }
 
 // PeriodicTimerTimeoutHandler is a handler called on timeout

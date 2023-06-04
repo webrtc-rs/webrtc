@@ -7,12 +7,13 @@ use crate::error::*;
 use std::io::{Read, Write};
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ContentType {
     ChangeCipherSpec = 20,
     Alert = 21,
     Handshake = 22,
     ApplicationData = 23,
+    #[default]
     Invalid,
 }
 
@@ -25,12 +26,6 @@ impl From<u8> for ContentType {
             23 => ContentType::ApplicationData,
             _ => ContentType::Invalid,
         }
-    }
-}
-
-impl Default for ContentType {
-    fn default() -> Self {
-        ContentType::Invalid
     }
 }
 
