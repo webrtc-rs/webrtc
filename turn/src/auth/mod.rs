@@ -6,6 +6,8 @@ use crate::error::*;
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use md5::{Digest, Md5};
 use ring::hmac;
 
@@ -30,7 +32,7 @@ fn long_term_credentials(username: &str, shared_secret: &str) -> String {
         shared_secret.as_bytes(),
     );
     let password = hmac::sign(&mac, username.as_bytes()).as_ref().to_vec();
-    base64::encode(password)
+    BASE64_STANDARD.encode(password)
 }
 
 // generate_auth_key is a convenience function to easily generate keys in the format used by AuthHandler

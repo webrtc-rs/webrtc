@@ -5,6 +5,7 @@ use crate::peer_connection::certificate::RTCCertificate;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 use crate::rtp_transceiver::{PayloadType, SSRC};
 use crate::sctp_transport::RTCSctpTransport;
+use crate::SmallStr;
 
 use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
 use ice::agent::Agent;
@@ -459,7 +460,7 @@ pub struct InboundRTPStats {
 
     // RTCInboundRtpStreamStats
     pub track_identifier: String,
-    pub mid: String,
+    pub mid: SmallStr,
     // TODO: `remoteId`
     // NB: `framesDecoded`, `frameWidth`, frameHeight`, `framesPerSecond`, `qpSum`,
     // `totalDecodeTime`, `totalInterFrameDelay`, and `totalSquaredInterFrameDelay` are all decoder
@@ -504,9 +505,9 @@ pub struct OutboundRTPStats {
     // RTCOutboundRtpStreamStats
     // NB: non-canon in browsers this is available via `RTCMediaSourceStats` which we are unlikely to implement
     pub track_identifier: String,
-    pub mid: String,
+    pub mid: SmallStr,
     // TODO: `mediaSourceId` and `remoteId`
-    pub rid: Option<String>,
+    pub rid: Option<SmallStr>,
     pub header_bytes_sent: u64,
     // TODO: `retransmittedPacketsSent` and `retransmittedPacketsSent`
     // NB: `targetBitrate`, `totalEncodedBytesTarget`, `frameWidth` `frameHeight`, `framesPerSecond`, `framesSent`,

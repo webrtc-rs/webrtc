@@ -1,3 +1,5 @@
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use clap::{App, Arg};
 
 use stun::message::Message;
@@ -28,7 +30,7 @@ fn main() {
     }
 
     let encoded_data = matches.value_of("data").unwrap();
-    let decoded_data = match base64::decode(encoded_data) {
+    let decoded_data = match BASE64_STANDARD.decode(encoded_data) {
         Ok(d) => d,
         Err(e) => panic!("Unable to decode base64 value: {e}"),
     };
