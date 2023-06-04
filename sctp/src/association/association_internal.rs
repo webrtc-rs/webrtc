@@ -770,7 +770,7 @@ impl AssociationInternal {
                         self.use_forward_tsn = true;
                     }
                 }
-            } else if let Some(_) = param.as_any().downcast_ref::<ParamForwardTsnSupported>() {
+            } else if param.as_any().downcast_ref::<ParamForwardTsnSupported>().is_some() {
                 self.use_forward_tsn = true;
             }
         }
