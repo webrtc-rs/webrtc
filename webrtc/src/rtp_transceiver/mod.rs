@@ -399,7 +399,7 @@ impl RTCRtpTransceiver {
         }
 
         {
-            let receiver = self.receiver.lock().await.clone();
+            let receiver = self.receiver.lock().await;
             let pause_receiver = !current_direction.has_recv();
 
             if pause_receiver {
@@ -427,11 +427,11 @@ impl RTCRtpTransceiver {
         self.stopped.store(true, Ordering::SeqCst);
 
         {
-            let sender = self.sender.lock().await.clone();
+            let sender = self.sender.lock().await;
             sender.stop().await?;
         }
         {
-            let r = self.receiver.lock().await.clone();
+            let r = self.receiver.lock().await;
             r.stop().await?;
         }
 
@@ -446,7 +446,7 @@ impl RTCRtpTransceiver {
     ) -> Result<()> {
         let track_is_none = track.is_none();
         {
-            let sender = self.sender.lock().await.clone();
+            let sender = self.sender.lock().await;
             sender.replace_track(track).await?;
         }
 
