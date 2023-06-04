@@ -32,7 +32,6 @@ pub mod rtp_receiver;
 pub mod rtp_sender;
 pub mod rtp_transceiver_direction;
 pub(crate) mod srtp_writer_future;
-use util::sync::Mutex as SyncMutex;
 
 /// SSRC represents a synchronization source
 /// A synchronization source is a randomly chosen
@@ -176,9 +175,9 @@ pub type TriggerNegotiationNeededFnOption =
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTCRtpTransceiver {
-    mid: OnceCell<SmallStr>,                  //atomic.Value
-    sender: SyncMutex<Arc<RTCRtpSender>>,     //atomic.Value
-    receiver: SyncMutex<Arc<RTCRtpReceiver>>, //atomic.Value
+    mid: OnceCell<SmallStr>,              //atomic.Value
+    sender: Mutex<Arc<RTCRtpSender>>,     //atomic.Value
+    receiver: Mutex<Arc<RTCRtpReceiver>>, //atomic.Value
 
     direction: AtomicU8,         //RTPTransceiverDirection
     current_direction: AtomicU8, //RTPTransceiverDirection
@@ -208,8 +207,8 @@ impl RTCRtpTransceiver {
 
         let t = Arc::new(RTCRtpTransceiver {
             mid: OnceCell::new(),
-            sender: SyncMutex::new(sender),
-            receiver: SyncMutex::new(receiver),
+            sender: Mutex::new(sender),
+            receiver: Mutex::new(receiver),
 
             direction: AtomicU8::new(direction as u8),
             current_direction: AtomicU8::new(RTCRtpTransceiverDirection::Unspecified as u8),
@@ -220,7 +219,9 @@ impl RTCRtpTransceiver {
             media_engine,
             trigger_negotiation_needed: Mutex::new(trigger_negotiation_needed),
         });
-        t.sender().set_rtp_transceiver(Some(Arc::downgrade(&t)));
+        t.sender()
+            .await
+            .set_rtp_transceiver(Some(Arc::downgrade(&t)));
 
         t
     }
@@ -250,8 +251,8 @@ impl RTCRtpTransceiver {
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one
-    pub fn sender(&self) -> Arc<RTCRtpSender> {
-        let sender = self.sender.lock();
+    pub async fn sender(&self) -> Arc<RTCRtpSender> {
+        let sender = self.sender.lock().await;
         sender.clone()
     }
 
@@ -261,33 +262,33 @@ impl RTCRtpTransceiver {
         sender: Arc<RTCRtpSender>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
-        self.set_sender(sender);
+        self.set_sender(sender).await;
         self.set_sending_track(track).await
     }
 
-    pub fn set_sender(self: &Arc<Self>, s: Arc<RTCRtpSender>) {
+    pub async fn set_sender(self: &Arc<Self>, s: Arc<RTCRtpSender>) {
         s.set_rtp_transceiver(Some(Arc::downgrade(self)));
 
-        let prev_sender = self.sender();
+        let prev_sender = self.sender().await;
         prev_sender.set_rtp_transceiver(None);
 
         {
-            let mut sender = self.sender.lock();
+            let mut sender = self.sender.lock().await;
             *sender = s;
         }
     }
 
     /// receiver returns the RTPTransceiver's RTPReceiver if it has one
-    pub fn receiver(&self) -> Arc<RTCRtpReceiver> {
-        let receiver = self.receiver.lock();
+    pub async fn receiver(&self) -> Arc<RTCRtpReceiver> {
+        let receiver = self.receiver.lock().await;
         receiver.clone()
     }
 
-    pub(crate) fn set_receiver(&self, r: Arc<RTCRtpReceiver>) {
+    pub(crate) async fn set_receiver(&self, r: Arc<RTCRtpReceiver>) {
         r.set_transceiver_codecs(Some(Arc::clone(&self.codecs)));
 
         {
-            let mut receiver = self.receiver.lock();
+            let mut receiver = self.receiver.lock().await;
             (*receiver).set_transceiver_codecs(None);
 
             *receiver = r;
@@ -398,7 +399,7 @@ impl RTCRtpTransceiver {
         }
 
         {
-            let receiver = self.receiver.lock().clone();
+            let receiver = self.receiver.lock().await;
             let pause_receiver = !current_direction.has_recv();
 
             if pause_receiver {
@@ -410,7 +411,7 @@ impl RTCRtpTransceiver {
 
         let pause_sender = !current_direction.has_send();
         {
-            let sender = &*self.sender.lock();
+            let sender = &*self.sender.lock().await;
             sender.set_paused(pause_sender);
         }
 
@@ -426,11 +427,11 @@ impl RTCRtpTransceiver {
         self.stopped.store(true, Ordering::SeqCst);
 
         {
-            let sender = self.sender.lock();
+            let sender = self.sender.lock().await;
             sender.stop().await?;
         }
         {
-            let r = self.receiver.lock();
+            let r = self.receiver.lock().await;
             r.stop().await?;
         }
 
@@ -445,7 +446,7 @@ impl RTCRtpTransceiver {
     ) -> Result<()> {
         let track_is_none = track.is_none();
         {
-            let sender = self.sender.lock().clone();
+            let sender = self.sender.lock().await;
             sender.replace_track(track).await?;
         }
 

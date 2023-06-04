@@ -167,7 +167,7 @@ impl PeerConnectionInternal {
             self.undeclared_media_processor();
         } else {
             for t in &current_transceivers {
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
                 let tracks = receiver.tracks().await;
                 if tracks.is_empty() {
                     continue;
@@ -217,7 +217,7 @@ impl PeerConnectionInternal {
                     Arc::clone(&self.media_engine),
                     interceptor,
                 ));
-                t.set_receiver(receiver);
+                t.set_receiver(receiver).await;
             }
         }
 
@@ -338,7 +338,7 @@ impl PeerConnectionInternal {
         for incoming_track in incoming_tracks {
             // If we already have a TrackRemote for a given SSRC don't handle it again
             for t in local_transceivers {
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
                 for track in receiver.tracks().await {
                     for ssrc in &incoming_track.ssrcs {
                         if *ssrc == track.ssrc() {
@@ -364,7 +364,7 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
                 if receiver.have_received().await {
                     continue;
                 }
@@ -667,7 +667,7 @@ impl PeerConnectionInternal {
             }
 
             // TODO: This is dubious because of rollbacks.
-            t.sender().set_negotiated();
+            t.sender().await.set_negotiated();
             media_sections.push(MediaSection {
                 id: t.mid().unwrap().0.to_string(),
                 transceivers: vec![Arc::clone(t)],
@@ -756,7 +756,7 @@ impl PeerConnectionInternal {
                         }
 
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
-                            t.sender().set_negotiated();
+                            t.sender().await.set_negotiated();
                             let media_transceivers = vec![t];
 
                             // NB: The below could use `then_some`, but with our current MSRV
@@ -781,7 +781,7 @@ impl PeerConnectionInternal {
         // If we are offering also include unmatched local transceivers
         if include_unmatched {
             for t in &local_transceivers {
-                t.sender().set_negotiated();
+                t.sender().await.set_negotiated();
                 media_sections.push(MediaSection {
                     id: t.mid().unwrap().0.to_string(),
                     transceivers: vec![Arc::clone(t)],
@@ -887,7 +887,7 @@ impl PeerConnectionInternal {
             )
             .await?;
 
-        let receiver = t.receiver();
+        let receiver = t.receiver().await;
         PeerConnectionInternal::start_receiver(
             self.setting_engine.get_receive_mtu(),
             &incoming,
@@ -1008,7 +1008,7 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
 
                 if !rsid.is_empty() {
                     return receiver
@@ -1210,7 +1210,7 @@ impl PeerConnectionInternal {
         }
         let mut track_infos = vec![];
         for transeiver in transceivers {
-            let receiver = transeiver.receiver();
+            let receiver = transeiver.receiver().await;
 
             if let Some(mid) = transeiver.mid() {
                 let tracks = receiver.tracks().await;
@@ -1335,7 +1335,7 @@ impl PeerConnectionInternal {
         }
         let mut track_infos = vec![];
         for transceiver in transceivers {
-            let sender = transceiver.sender();
+            let sender = transceiver.sender().await;
 
             let mid = match transceiver.mid() {
                 Some(mid) => mid,
