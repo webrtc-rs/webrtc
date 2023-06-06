@@ -47,6 +47,7 @@ pub struct Header {
     pub csrc: Vec<u32>,
     pub extension_profile: u16,
     pub extensions: Vec<Extension>,
+    pub extensions_padding: usize
 }
 
 impl Unmarshal for Header {
@@ -97,7 +98,7 @@ impl Unmarshal for Header {
         for _ in 0..cc {
             csrc.push(raw_packet.get_u32());
         }
-
+        let mut extensions_padding: usize = 0;
         let (extension_profile, extensions) = if extension {
             let expected = curr_offset + 4;
             if raw_packet_len < expected {
@@ -123,6 +124,7 @@ impl Unmarshal for Header {
                         if b == 0x00 {
                             // padding
                             curr_offset += 1;
+                            extensions_padding += 1;
                             continue;
                         }
 
@@ -149,6 +151,7 @@ impl Unmarshal for Header {
                         if b == 0x00 {
                             // padding
                             curr_offset += 1;
+                            extensions_padding += 1;
                             continue;
                         }
 
@@ -194,6 +197,7 @@ impl Unmarshal for Header {
             csrc,
             extension_profile,
             extensions,
+            extensions_padding
         })
     }
 }
@@ -203,7 +207,7 @@ impl MarshalSize for Header {
     fn marshal_size(&self) -> usize {
         let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
         if self.extension {
-            let extension_payload_len = self.get_extension_payload_len();
+            let extension_payload_len = self.get_extension_payload_len() + self.extensions_padding;
             let extension_payload_size = (extension_payload_len + 3) / 4;
             head_size += 4 + extension_payload_size * 4;
         }
