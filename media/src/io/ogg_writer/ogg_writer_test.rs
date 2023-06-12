@@ -23,6 +23,7 @@ fn test_ogg_writer_add_packet_and_close() -> Result<()> {
             csrc: vec![],
             padding: false,
             extensions: vec![],
+            extensions_padding: 0,
         },
         payload: raw_pkt.slice(20..),
     };
