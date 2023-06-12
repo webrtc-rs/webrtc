@@ -740,12 +740,12 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
 
     let mut buf = vec![0u8; 3];
     let result = s1.read_sctp(&mut buf).await;
-    assert!(result.is_err(), "expected error to be io.ErrShortBuffer");
+    assert!(result.is_err(), "expected error to be ErrShortBuffer");
     if let Err(err) = result {
         assert_eq!(
             err,
-            Error::ErrShortBuffer,
-            "expected error to be io.ErrShortBuffer"
+            Error::ErrShortBuffer { size: 3 },
+            "expected error to be ErrShortBuffer"
         );
     }
 
