@@ -195,7 +195,7 @@ impl Stream {
             };
 
             match result {
-                Ok(_) | Err(Error::ErrShortBuffer) => return result,
+                Ok(_) | Err(Error::ErrShortBuffer {..}) => return result,
                 Err(_) => {
                     // wait for the next chunk to become available
                     self.read_notifier.notified().await;
