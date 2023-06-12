@@ -210,9 +210,7 @@ pub enum Error {
     #[error("Stream closed")]
     ErrStreamClosed,
     #[error("Short buffer (size: {size:?}) to be filled")]
-    ErrShortBuffer {
-        size: usize,
-    },
+    ErrShortBuffer { size: usize },
     #[error("Io EOF")]
     ErrEof,
     #[error("Invalid SystemTime")]

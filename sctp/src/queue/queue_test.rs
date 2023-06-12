@@ -795,7 +795,11 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
     let result = rq.read(&mut buf);
     assert!(result.is_err(), "read() should not succeed");
     if let Err(err) = result {
-        assert_eq!(err, Error::ErrShortBuffer {size: 8}, "read() should not succeed");
+        assert_eq!(
+            err,
+            Error::ErrShortBuffer { size: 8 },
+            "read() should not succeed"
+        );
     }
     assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
 
