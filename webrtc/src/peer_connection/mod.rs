@@ -911,7 +911,7 @@ impl RTCPeerConnection {
         let remote_description: RTCSessionDescription;
         if let Some(desc) = remote_desc {
             remote_description = desc;
-        }else{
+        } else {
             return Err(Error::ErrNoRemoteDescription);
         }
         if use_identity {
@@ -931,7 +931,7 @@ impl RTCPeerConnection {
             .to_connection_role();
         if connection_role == ConnectionRole::Unspecified {
             connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
-            if let  Some(parsed) = remote_description.parsed {
+            if let Some(parsed) = remote_description.parsed {
                 if Self::is_lite_set(&parsed) && !self.internal.setting_engine.candidates.ice_lite {
                     connection_role = DTLSRole::Server.to_connection_role();
                 }
@@ -1306,13 +1306,13 @@ impl RTCPeerConnection {
         self.current_local_description().await
     }
 
-    pub fn is_lite_set(desc: &SessionDescription) -> bool{
+    pub fn is_lite_set(desc: &SessionDescription) -> bool {
         for a in &desc.attributes {
             if a.key.trim() == ATTR_KEY_ICELITE {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     /// set_remote_description sets the SessionDescription of the remote peer
