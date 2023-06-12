@@ -744,7 +744,7 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
     if let Err(err) = result {
         assert_eq!(
             err,
-            Error::ErrShortBuffer { max: 3 },
+            Error::ErrShortBuffer { size: 3 },
             "expected error to be ErrShortBuffer"
         );
     }

@@ -209,9 +209,9 @@ pub enum Error {
     ErrOutboundPacketTooLarge,
     #[error("Stream closed")]
     ErrStreamClosed,
-    #[error("Short buffer to be filled (max: {max:?})")]
+    #[error("Short buffer (size: {size:?}) to be filled")]
     ErrShortBuffer {
-        max: usize,
+        size: usize,
     },
     #[error("Io EOF")]
     ErrEof,
