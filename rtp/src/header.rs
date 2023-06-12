@@ -47,7 +47,7 @@ pub struct Header {
     pub csrc: Vec<u32>,
     pub extension_profile: u16,
     pub extensions: Vec<Extension>,
-    pub extensions_padding: usize
+    pub extensions_padding: usize,
 }
 
 impl Unmarshal for Header {
@@ -197,7 +197,7 @@ impl Unmarshal for Header {
             csrc,
             extension_profile,
             extensions,
-            extensions_padding
+            extensions_padding,
         })
     }
 }
