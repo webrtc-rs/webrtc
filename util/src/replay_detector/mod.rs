@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod replay_detector_test;
 
+use std::collections::HashMap;
+
 use super::fixed_big_int::*;
 
 // ReplayDetector is the interface of sequence replay detector.
@@ -84,6 +86,7 @@ pub struct WrappedSlidingWindowDetector {
     window_size: usize,
     mask: FixedBigInt,
     init: bool,
+    duplicated: HashMap<u64, u8>,
 }
 
 impl WrappedSlidingWindowDetector {
@@ -98,16 +101,27 @@ impl WrappedSlidingWindowDetector {
             window_size,
             mask: FixedBigInt::new(window_size),
             init: false,
+            duplicated: HashMap::new(),
         }
     }
 }
 
 impl ReplayDetector for WrappedSlidingWindowDetector {
     fn check(&mut self, seq: u64) -> bool {
+        self.duplicated
+            .entry(seq)
+            .and_modify(|i| *i += 1)
+            .or_insert(1);
+        self.accepted = false;
+
         self.accepted = false;
 
         if seq > self.max_seq {
             // Exceeded upper limit.
+            log::error!(
+                "checked {seq} {}\nupper limit",
+                self.duplicated.get(&seq).unwrap_or(&0)
+            );
             return false;
         }
         if !self.init {
@@ -129,10 +143,18 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
 
         if diff >= self.window_size as i64 {
             // Too old.
+            log::error!(
+                "checked {seq} {}\nold",
+                self.duplicated.get(&seq).unwrap_or(&0)
+            );
             return false;
         }
         if diff >= 0 && self.mask.bit(diff as usize) != 0 {
             // The sequence number is duplicated.
+            log::error!(
+                "checked {seq} {}\nduplicated",
+                self.duplicated.get(&seq).unwrap_or(&0)
+            );
             return false;
         }
 
