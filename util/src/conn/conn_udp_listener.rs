@@ -34,14 +34,20 @@ struct ListenerImpl {
 #[async_trait]
 impl Listener for ListenerImpl {
     /// accept waits for and returns the next connection to the listener.
-    async fn accept(&self) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
+    async fn accept(
+        &self,
+    ) -> Result<(
+        Arc<dyn Conn + Send + Sync>,
+        Option<Arc<dyn ConnState + Send + Sync>>,
+        SocketAddr,
+    )> {
         let (accept_ch_rx, done_ch_rx) = &mut *self.ch_rx.lock().await;
 
         tokio::select! {
             c = accept_ch_rx.recv() =>{
                 if let Some(c) = c{
                     let raddr = c.raddr;
-                    Ok((c, raddr))
+                    Ok((c, None, raddr))
                 }else{
                     Err(Error::ErrClosedListenerAcceptCh)
                 }

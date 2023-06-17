@@ -25,6 +25,11 @@ use tokio::net::ToSocketAddrs;
 use crate::error::Result;
 
 #[async_trait]
+pub trait ConnState {
+    fn psk_identity(&self) -> Option<Vec<u8>>;
+}
+
+#[async_trait]
 pub trait Conn {
     async fn connect(&self, addr: SocketAddr) -> Result<()>;
     async fn recv(&self, buf: &mut [u8]) -> Result<usize>;
@@ -41,7 +46,13 @@ pub trait Conn {
 #[async_trait]
 pub trait Listener {
     /// accept waits for and returns the next connection to the listener.
-    async fn accept(&self) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)>;
+    async fn accept(
+        &self,
+    ) -> Result<(
+        Arc<dyn Conn + Send + Sync>,
+        Option<Arc<dyn ConnState + Send + Sync>>,
+        SocketAddr,
+    )>;
 
     /// close closes the listener.
     /// Any blocked accept operations will be unblocked and return errors.
