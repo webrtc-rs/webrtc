@@ -62,6 +62,7 @@ pub(crate) enum AlertDescription {
     UserCanceled = 90,
     NoRenegotiation = 100,
     UnsupportedExtension = 110,
+    UnknownPskIdentity = 115,
     Invalid,
 }
 
@@ -93,6 +94,7 @@ impl fmt::Display for AlertDescription {
             AlertDescription::UserCanceled => write!(f, "UserCanceled"),
             AlertDescription::NoRenegotiation => write!(f, "NoRenegotiation"),
             AlertDescription::UnsupportedExtension => write!(f, "UnsupportedExtension"),
+            AlertDescription::UnknownPskIdentity => write!(f, "UnknownPskIdentity"),
             _ => write!(f, "Invalid alert description"),
         }
     }
@@ -126,6 +128,7 @@ impl From<u8> for AlertDescription {
             90 => AlertDescription::UserCanceled,
             100 => AlertDescription::NoRenegotiation,
             110 => AlertDescription::UnsupportedExtension,
+            115 => AlertDescription::UnknownPskIdentity,
             _ => AlertDescription::Invalid,
         }
     }

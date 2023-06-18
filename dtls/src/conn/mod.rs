@@ -968,7 +968,20 @@ impl DTLSConn {
                     Ok(pkt) => pkt,
                     Err(err) => {
                         debug!("{}: decrypt failed: {}", srv_cli_str(ctx.is_client), err);
-                        return (false, None, None);
+
+                        // If we get an error for PSK we need to return an error.
+                        if cipher_suite.is_psk() {
+                            return (
+                                false,
+                                Some(Alert {
+                                    alert_level: AlertLevel::Fatal,
+                                    alert_description: AlertDescription::UnknownPskIdentity,
+                                }),
+                                None,
+                            );
+                        } else {
+                            return (false, None, None);
+                        }
                     }
                 };
             }
