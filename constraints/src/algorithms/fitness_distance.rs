@@ -27,10 +27,8 @@ mod value_sequence_constraint;
 
 use std::cmp::Ordering;
 
-pub use self::{
-    setting::{SettingFitnessDistanceError, SettingFitnessDistanceErrorKind},
-    settings::SettingsFitnessDistanceError,
-};
+pub use self::setting::{SettingFitnessDistanceError, SettingFitnessDistanceErrorKind};
+pub use self::settings::SettingsFitnessDistanceError;
 
 fn nearly_cmp(lhs: f64, rhs: f64) -> Ordering {
     // Based on: https://stackoverflow.com/a/32334103/227536

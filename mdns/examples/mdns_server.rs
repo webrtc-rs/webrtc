@@ -1,12 +1,12 @@
-use webrtc_mdns as mdns;
-
-use mdns::Error;
-use mdns::{config::*, conn::*};
-
-use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
+
+use clap::{App, AppSettings, Arg};
+use mdns::config::*;
+use mdns::conn::*;
+use mdns::Error;
+use webrtc_mdns as mdns;
 
 // For interop with webrtc-rs/mdns_server
 // cargo run --color=always --package webrtc-mdns --example mdns_server

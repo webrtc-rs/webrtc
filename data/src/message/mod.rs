@@ -5,15 +5,13 @@ pub mod message_channel_ack;
 pub mod message_channel_open;
 pub mod message_type;
 
+use bytes::{Buf, BufMut};
 use message_channel_ack::*;
 use message_channel_open::*;
 use message_type::*;
-
-use crate::error::Error;
-
 use util::marshal::*;
 
-use bytes::{Buf, BufMut};
+use crate::error::Error;
 
 /// A parsed DataChannel message
 #[derive(Eq, PartialEq, Clone, Debug)]

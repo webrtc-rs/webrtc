@@ -1,6 +1,6 @@
-use super::*;
-
 use std::io::{BufReader, BufWriter};
+
+use super::*;
 
 #[test]
 fn test_handshake_message_certificate() -> Result<()> {

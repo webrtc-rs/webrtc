@@ -1,8 +1,10 @@
-use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
+
+use super::*;
 
 pub(crate) const PERMISSION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 

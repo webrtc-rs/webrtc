@@ -1,6 +1,5 @@
-use crate::error::Result;
-
 use super::*;
+use crate::error::Result;
 
 #[test]
 fn test_tcp_frag_string() {

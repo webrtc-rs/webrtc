@@ -1,14 +1,15 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::sync::Arc;
+
 use anyhow::Result;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
-use std::net::SocketAddr;
-use std::str::FromStr;
-use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
 #[macro_use]

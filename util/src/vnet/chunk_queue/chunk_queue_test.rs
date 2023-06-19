@@ -1,9 +1,8 @@
-use crate::error::Result;
-
-use super::*;
-
 use std::net::SocketAddr;
 use std::str::FromStr;
+
+use super::*;
+use crate::error::Result;
 
 const DEMO_IP: &str = "1.2.3.4";
 

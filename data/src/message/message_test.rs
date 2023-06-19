@@ -1,8 +1,7 @@
-use crate::error::Result;
+use bytes::{Bytes, BytesMut};
 
 use super::*;
-
-use bytes::{Bytes, BytesMut};
+use crate::error::Result;
 
 #[test]
 fn test_message_unmarshal_open_success() {

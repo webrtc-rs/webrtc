@@ -1,6 +1,5 @@
-use crate::algorithms::SettingFitnessDistanceErrorKind;
-
 use super::*;
+use crate::algorithms::SettingFitnessDistanceErrorKind;
 
 mod basic {
     use super::*;

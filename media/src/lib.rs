@@ -6,10 +6,10 @@ mod error;
 pub mod io;
 pub mod video;
 
-pub use error::Error;
+use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
-use std::time::{Duration, SystemTime};
+pub use error::Error;
 
 /// A Sample contains encoded media and timing information
 #[derive(Debug)]

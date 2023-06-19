@@ -1,9 +1,10 @@
-use super::*;
-use crate::error::*;
+use std::net::IpAddr;
 
 use async_trait::async_trait;
-use std::net::IpAddr;
 use util::vnet::net::*;
+
+use super::*;
+use crate::error::*;
 
 // RelayAddressGeneratorRanges can be used to only allocate connections inside a defined port range
 pub struct RelayAddressGeneratorRanges {

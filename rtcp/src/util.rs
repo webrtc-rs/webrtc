@@ -1,6 +1,6 @@
-use crate::error::{Error, Result};
-
 use bytes::BufMut;
+
+use crate::error::{Error, Result};
 
 // returns the padding required to make the length a multiple of 4
 pub(crate) fn get_padding_size(len: usize) -> usize {

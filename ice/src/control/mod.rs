@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod control_test;
 
+use std::fmt;
+
 use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;
-
-use std::fmt;
 
 /// Common helper for ICE-{CONTROLLED,CONTROLLING} and represents the so-called Tiebreaker number.
 #[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]

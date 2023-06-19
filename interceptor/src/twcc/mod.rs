@@ -4,11 +4,12 @@ mod twcc_test;
 pub mod receiver;
 pub mod sender;
 
+use std::cmp::Ordering;
+
 use rtcp::transport_feedbacks::transport_layer_cc::{
     PacketStatusChunk, RecvDelta, RunLengthChunk, StatusChunkTypeTcc, StatusVectorChunk,
     SymbolSizeTypeTcc, SymbolTypeTcc, TransportLayerCc,
 };
-use std::cmp::Ordering;
 
 #[derive(Default, Debug, PartialEq, Clone)]
 struct PktInfo {

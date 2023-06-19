@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod handshake_message_finished_test;
 
-use super::*;
-
 use std::io::{Read, Write};
+
+use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageFinished {

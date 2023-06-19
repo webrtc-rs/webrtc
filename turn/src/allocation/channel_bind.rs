@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod channel_bind_test;
 
-use super::*;
-use crate::proto::channum::*;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
+
+use super::*;
+use crate::proto::channum::*;
 
 // ChannelBind represents a TURN Channel
 // https://tools.ietf.org/html/rfc5766#section-2.5

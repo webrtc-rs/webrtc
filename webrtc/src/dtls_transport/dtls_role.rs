@@ -1,8 +1,8 @@
+use std::fmt;
+
 use sdp::description::session::SessionDescription;
 use sdp::util::ConnectionRole;
-
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// DtlsRole indicates the role of the DTLS transport.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,11 +88,10 @@ impl DTLSRole {
 
 #[cfg(test)]
 mod test {
-    use crate::error::Result;
+    use std::io::Cursor;
 
     use super::*;
-
-    use std::io::Cursor;
+    use crate::error::Result;
 
     #[test]
     fn test_dtls_role_string() {

@@ -1,28 +1,24 @@
 #[cfg(test)]
 mod stream_test;
 
+use std::future::Future;
+use std::net::Shutdown;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::{fmt, io};
+
+use arc_swap::ArcSwapOption;
+use bytes::Bytes;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::sync::{mpsc, Mutex, Notify};
+
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::{Error, Result};
 use crate::queue::pending_queue::PendingQueue;
 use crate::queue::reassembly_queue::ReassemblyQueue;
-
-use arc_swap::ArcSwapOption;
-use bytes::Bytes;
-use std::{
-    fmt,
-    future::Future,
-    io,
-    net::Shutdown,
-    pin::Pin,
-    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering},
-    sync::Arc,
-    task::{Context, Poll},
-};
-use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf},
-    sync::{mpsc, Mutex, Notify},
-};
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C)]

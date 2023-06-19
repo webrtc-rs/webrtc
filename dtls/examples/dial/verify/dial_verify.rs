@@ -1,11 +1,13 @@
-use clap::{App, AppSettings, Arg};
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::sync::Arc;
+
+use clap::{App, AppSettings, Arg};
 use tokio::net::UdpSocket;
 use util::Conn;
+use webrtc_dtls::config::*;
+use webrtc_dtls::conn::DTLSConn;
 use webrtc_dtls::Error;
-use webrtc_dtls::{config::*, conn::DTLSConn};
 
 // cargo run --example dial_verify -- --server 127.0.0.1:4444
 

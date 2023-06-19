@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod handshake_message_client_key_exchange_test;
 
-use super::*;
+use std::io::{Read, Write};
 
 use byteorder::{BigEndian, WriteBytesExt};
-use std::io::{Read, Write};
+
+use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageClientKeyExchange {

@@ -1,13 +1,13 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use bytes::{Bytes, BytesMut};
+use tokio::net::UdpSocket;
+use tokio::sync::{mpsc, Mutex};
+
 use super::*;
 use crate::error::Result;
 use crate::protection_profile::*;
-
-use bytes::{Bytes, BytesMut};
-use std::{collections::HashMap, sync::Arc};
-use tokio::{
-    net::UdpSocket,
-    sync::{mpsc, Mutex},
-};
 
 async fn build_session_srtp_pair() -> Result<(Session, Session)> {
     let ua = UdpSocket::bind("127.0.0.1:0").await?;

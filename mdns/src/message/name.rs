@@ -1,7 +1,7 @@
-use crate::error::*;
-
 use std::collections::HashMap;
 use std::fmt;
+
+use crate::error::*;
 
 const NAME_LEN: usize = 255;
 

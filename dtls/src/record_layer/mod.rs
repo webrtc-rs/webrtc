@@ -3,15 +3,16 @@ pub mod record_layer_header;
 #[cfg(test)]
 mod record_layer_test;
 
+use std::io::{Read, Write};
+
+use record_layer_header::*;
+
 use super::content::*;
 use super::error::*;
 use crate::alert::Alert;
 use crate::application_data::ApplicationData;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::handshake::Handshake;
-use record_layer_header::*;
-
-use std::io::{Read, Write};
 
 /*
  The TLS Record Layer which handles all data transport.

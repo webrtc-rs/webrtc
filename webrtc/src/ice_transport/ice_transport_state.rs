@@ -1,5 +1,6 @@
-use ice::state::ConnectionState;
 use std::fmt;
+
+use ice::state::ConnectionState;
 
 /// ICETransportState represents the current state of the ICE transport.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]

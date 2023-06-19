@@ -6,16 +6,17 @@ pub(crate) mod flight4;
 pub(crate) mod flight5;
 pub(crate) mod flight6;
 
+use std::fmt;
+
+use async_trait::async_trait;
+use tokio::sync::mpsc;
+
 use crate::alert::*;
 use crate::error::Error;
 use crate::handshake::handshake_cache::*;
 use crate::handshaker::*;
 use crate::record_layer::*;
 use crate::state::*;
-
-use async_trait::async_trait;
-use std::fmt;
-use tokio::sync::mpsc;
 
 /*
   DTLS messages are grouped into a series of message flights, according

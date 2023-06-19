@@ -1,12 +1,11 @@
-use super::crypto_ccm::*;
-use super::*;
-
-use crate::content::ContentType;
-use crate::record_layer::record_layer_header::{ProtocolVersion, RECORD_LAYER_HEADER_SIZE};
-
 use std::io::Cursor;
 
 use x509_parser::pem::Pem;
+
+use super::crypto_ccm::*;
+use super::*;
+use crate::content::ContentType;
+use crate::record_layer::record_layer_header::{ProtocolVersion, RECORD_LAYER_HEADER_SIZE};
 
 const RAW_PRIVATE_KEY: &str = "
 -----BEGIN RSA PRIVATE KEY-----

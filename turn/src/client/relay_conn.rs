@@ -2,13 +2,11 @@
 mod relay_conn_test;
 
 // client implements the API for a TURN client
-use super::binding::*;
-use super::periodic_timer::*;
-use super::permission::*;
-use super::transaction::*;
-use crate::proto;
-use crate::Error;
+use std::io;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
+use async_trait::async_trait;
 use stun::agent::*;
 use stun::attributes::*;
 use stun::error_code::*;
@@ -16,16 +14,15 @@ use stun::fingerprint::*;
 use stun::integrity::*;
 use stun::message::*;
 use stun::textattrs::*;
-
-use util::Conn;
-
-use std::io;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{Duration, Instant};
+use util::Conn;
 
-use async_trait::async_trait;
+use super::binding::*;
+use super::periodic_timer::*;
+use super::permission::*;
+use super::transaction::*;
+use crate::{proto, Error};
 
 const PERM_REFRESH_INTERVAL: Duration = Duration::from_secs(120);
 const MAX_RETRY_ATTEMPTS: u16 = 3;

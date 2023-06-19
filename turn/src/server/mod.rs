@@ -4,25 +4,23 @@ mod server_test;
 pub mod config;
 pub mod request;
 
-use crate::{
-    allocation::{allocation_manager::*, five_tuple::FiveTuple, AllocationInfo},
-    auth::AuthHandler,
-    error::*,
-    proto::lifetime::DEFAULT_LIFETIME,
-};
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use config::*;
 use request::*;
-
-use std::{collections::HashMap, sync::Arc};
-
-use tokio::{
-    sync::{
-        broadcast::{self, error::RecvError},
-        mpsc, oneshot, Mutex,
-    },
-    time::{Duration, Instant},
-};
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::{self};
+use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::time::{Duration, Instant};
 use util::Conn;
+
+use crate::allocation::allocation_manager::*;
+use crate::allocation::five_tuple::FiveTuple;
+use crate::allocation::AllocationInfo;
+use crate::auth::AuthHandler;
+use crate::error::*;
+use crate::proto::lifetime::DEFAULT_LIFETIME;
 
 const INBOUND_MTU: usize = 1500;
 

@@ -6,10 +6,10 @@ pub mod utilities;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use util::Conn;
 
 use dtls::Error;
+use tokio::sync::Mutex;
+use util::Conn;
 
 const BUF_SIZE: usize = 8192;
 

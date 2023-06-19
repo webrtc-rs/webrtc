@@ -1,9 +1,10 @@
 // Silence warning on `..Default::default()` with no effect:
 #![allow(clippy::needless_update)]
 
+use bytes::{Bytes, BytesMut};
+
 use super::*;
 use crate::error::Result;
-use bytes::{Bytes, BytesMut};
 
 #[test]
 fn test_basic() -> Result<()> {

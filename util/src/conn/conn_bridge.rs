@@ -1,13 +1,14 @@
-use super::*;
-
-use bytes::Bytes;
 use std::collections::VecDeque;
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+use bytes::Bytes;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
+
+use super::*;
 
 const TICK_WAIT: Duration = Duration::from_micros(10);
 

@@ -1,6 +1,7 @@
-use super::*;
 use std::io;
 use std::net::SocketAddr;
+
+use super::*;
 
 type Result<T> = std::result::Result<T, util::Error>;
 

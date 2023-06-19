@@ -1,22 +1,23 @@
-use tokio::net::UdpSocket;
-use webrtc_ice as ice;
-
-use ice::agent::agent_config::AgentConfig;
-use ice::agent::Agent;
-use ice::candidate::{candidate_base::*, *};
-use ice::state::*;
-use ice::Error;
-use ice::{network_type::*, udp_network::UDPNetwork};
+use std::io;
+use std::sync::Arc;
+use std::time::Duration;
 
 use clap::{App, AppSettings, Arg};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
+use ice::agent::agent_config::AgentConfig;
+use ice::agent::Agent;
+use ice::candidate::candidate_base::*;
+use ice::candidate::*;
+use ice::network_type::*;
+use ice::state::*;
+use ice::udp_network::UDPNetwork;
+use ice::Error;
 use rand::{thread_rng, Rng};
-use std::io;
-use std::sync::Arc;
-use std::time::Duration;
+use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch, Mutex};
 use util::Conn;
+use webrtc_ice as ice;
 
 #[macro_use]
 extern crate lazy_static;

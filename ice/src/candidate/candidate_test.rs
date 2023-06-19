@@ -1,6 +1,6 @@
-use super::*;
-
 use std::time::UNIX_EPOCH;
+
+use super::*;
 
 #[test]
 fn test_candidate_priority() -> Result<()> {

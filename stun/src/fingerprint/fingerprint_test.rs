@@ -1,7 +1,6 @@
 use super::*;
-use crate::textattrs::TextAttribute;
-
 use crate::attributes::ATTR_SOFTWARE;
+use crate::textattrs::TextAttribute;
 
 #[test]
 fn fingerprint_uses_crc_32_iso_hdlc() -> Result<()> {

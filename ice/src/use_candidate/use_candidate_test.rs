@@ -1,7 +1,7 @@
+use stun::message::BINDING_REQUEST;
+
 use super::*;
 use crate::error::Result;
-
-use stun::message::BINDING_REQUEST;
 
 #[test]
 fn test_use_candidate_attr_add_to() -> Result<()> {

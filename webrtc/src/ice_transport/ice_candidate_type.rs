@@ -1,6 +1,7 @@
+use std::fmt;
+
 use ice::candidate::CandidateType;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// ICECandidateType represents the type of the ICE candidate used.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]

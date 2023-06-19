@@ -1,11 +1,12 @@
-use super::*;
+use std::net::Ipv4Addr;
 
-use crate::{allocation::*, error::Result};
-
+use stun::attributes::ATTR_USERNAME;
+use stun::textattrs::TextAttribute;
 use tokio::net::UdpSocket;
 
-use std::net::Ipv4Addr;
-use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
+use super::*;
+use crate::allocation::*;
+use crate::error::Result;
 
 async fn create_channel_bind(lifetime: Duration) -> Result<Allocation> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);

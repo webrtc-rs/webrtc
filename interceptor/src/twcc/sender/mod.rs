@@ -2,15 +2,15 @@ mod sender_stream;
 #[cfg(test)]
 mod sender_test;
 
-use crate::*;
-use crate::{Attributes, RTPWriter};
-use sender_stream::SenderStream;
-
-use rtp::extension::transport_cc_extension::TransportCcExtension;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+
+use rtp::extension::transport_cc_extension::TransportCcExtension;
+use sender_stream::SenderStream;
 use tokio::sync::Mutex;
 use util::Marshal;
+
+use crate::{Attributes, RTPWriter, *};
 
 pub(crate) const TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";

@@ -1,6 +1,8 @@
-use super::*;
-use bytes::Bytes;
 use std::io::BufReader;
+
+use bytes::Bytes;
+
+use super::*;
 
 /// build_ivf_container takes frames and prepends valid IVF file header
 fn build_ivf_container(frames: &[Bytes]) -> Bytes {

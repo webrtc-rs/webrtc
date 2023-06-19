@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod network_type_test;
 
-use crate::error::*;
-
-use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::net::IpAddr;
+
+use serde::{Deserialize, Serialize};
+
+use crate::error::*;
 
 pub(crate) const UDP: &str = "udp";
 pub(crate) const TCP: &str = "tcp";

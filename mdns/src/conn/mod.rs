@@ -1,19 +1,22 @@
-use crate::config::*;
-use crate::error::*;
-use crate::message::name::*;
-use crate::message::{header::*, parser::*, question::*, resource::a::*, resource::*, *};
-
+use core::sync::atomic;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use core::sync::atomic;
 use socket2::SockAddr;
 use tokio::net::{ToSocketAddrs, UdpSocket};
-use tokio::sync::mpsc;
-use tokio::sync::Mutex;
-
+use tokio::sync::{mpsc, Mutex};
 use util::ifaces;
+
+use crate::config::*;
+use crate::error::*;
+use crate::message::header::*;
+use crate::message::name::*;
+use crate::message::parser::*;
+use crate::message::question::*;
+use crate::message::resource::a::*;
+use crate::message::resource::*;
+use crate::message::*;
 
 mod conn_test;
 

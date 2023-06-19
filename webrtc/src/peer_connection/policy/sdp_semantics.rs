@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// SDPSemantics determines which style of SDP offers and answers
 /// can be used.
@@ -58,11 +59,12 @@ impl fmt::Display for RTCSdpSemantics {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use std::collections::HashSet;
 
     use sdp::description::media::MediaDescription;
     use sdp::description::session::{SessionDescription, ATTR_KEY_SSRC};
-    use std::collections::HashSet;
+
+    use super::*;
 
     #[test]
     fn test_sdp_semantics_string() {

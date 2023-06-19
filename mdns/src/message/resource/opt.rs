@@ -1,6 +1,5 @@
 use super::*;
-use crate::error::Result;
-use crate::error::*;
+use crate::error::{Result, *};
 use crate::message::packer::*;
 
 // An OPTResource is an OPT pseudo Resource record.

@@ -1,8 +1,10 @@
-use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::sync::Arc;
+
+use clap::{App, AppSettings, Arg};
 use tokio::net::UdpSocket;
-use util::{conn::conn_disconnected_packet::DisconnectedPacketConn, Conn};
+use util::conn::conn_disconnected_packet::DisconnectedPacketConn;
+use util::Conn;
 use webrtc_sctp::association::*;
 use webrtc_sctp::chunk::chunk_payload_data::PayloadProtocolIdentifier;
 use webrtc_sctp::stream::*;

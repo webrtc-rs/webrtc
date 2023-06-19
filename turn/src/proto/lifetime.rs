@@ -3,6 +3,7 @@ mod lifetime_test;
 
 use std::fmt;
 use std::time::Duration;
+
 use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;

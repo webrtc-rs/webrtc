@@ -1,6 +1,19 @@
 #[cfg(test)]
 mod conn_test;
 
+use std::io::{BufReader, BufWriter};
+use std::marker::{Send, Sync};
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use log::*;
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::Duration;
+use util::replay_detector::*;
+use util::Conn;
+
 use crate::alert::*;
 use crate::application_data::*;
 use crate::cipher_suite::*;
@@ -23,18 +36,6 @@ use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::parse_signature_schemes;
 use crate::state::*;
-
-use util::{replay_detector::*, Conn};
-
-use async_trait::async_trait;
-use log::*;
-use std::io::{BufReader, BufWriter};
-use std::marker::{Send, Sync};
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::Duration;
 
 pub(crate) const INITIAL_TICKER_INTERVAL: Duration = Duration::from_secs(1);
 pub(crate) const COOKIE_LENGTH: usize = 20;

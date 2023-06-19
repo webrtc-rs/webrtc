@@ -1,6 +1,7 @@
+use std::io::Cursor;
+
 use super::*;
 use crate::error::Error;
-use std::io::Cursor;
 
 #[test]
 fn test_ivf_writer_add_packet_and_close() -> Result<()> {

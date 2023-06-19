@@ -1,13 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{
-    algorithms::{
-        select_settings::{ConstraintFailureInfo, DeviceInformationExposureMode},
-        FitnessDistance,
-    },
-    errors::OverconstrainedError,
-    MediaTrackProperty, MediaTrackSettings, SanitizedMediaTrackConstraintSet,
-};
+use crate::algorithms::select_settings::{ConstraintFailureInfo, DeviceInformationExposureMode};
+use crate::algorithms::FitnessDistance;
+use crate::errors::OverconstrainedError;
+use crate::{MediaTrackProperty, MediaTrackSettings, SanitizedMediaTrackConstraintSet};
 
 /// Returns the set of settings for which all mandatory constraints'
 /// fitness distance is finite.
@@ -68,13 +64,12 @@ where
 mod tests {
     use std::iter::FromIterator;
 
-    use crate::{
-        property::all::name::*, MediaTrackSupportedConstraints, ResizeMode,
-        ResolvedMandatoryMediaTrackConstraints, ResolvedValueConstraint,
-        ResolvedValueRangeConstraint,
-    };
-
     use super::*;
+    use crate::property::all::name::*;
+    use crate::{
+        MediaTrackSupportedConstraints, ResizeMode, ResolvedMandatoryMediaTrackConstraints,
+        ResolvedValueConstraint, ResolvedValueRangeConstraint,
+    };
 
     // Advanced constraint sets that do not match any candidates should just get ignored:
     #[test]

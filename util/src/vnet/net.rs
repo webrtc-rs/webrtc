@@ -1,6 +1,17 @@
 #[cfg(test)]
 mod net_test;
 
+use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use ipnet::IpNet;
+use tokio::net::UdpSocket;
+use tokio::sync::Mutex;
+
 use super::conn_map::*;
 use super::interface::*;
 use crate::error::*;
@@ -8,16 +19,6 @@ use crate::vnet::chunk::Chunk;
 use crate::vnet::conn::{ConnObserver, UdpConn};
 use crate::vnet::router::*;
 use crate::{conn, ifaces, Conn};
-
-use async_trait::async_trait;
-use ipnet::IpNet;
-use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use tokio::net::UdpSocket;
-use tokio::sync::Mutex;
 
 pub(crate) const LO0_STR: &str = "lo0";
 pub(crate) const UDP_STR: &str = "udp";

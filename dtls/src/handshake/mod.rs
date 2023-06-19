@@ -18,9 +18,6 @@ mod handshake_test;
 use std::fmt;
 use std::io::{Read, Write};
 
-use super::content::*;
-use super::error::*;
-
 use handshake_header::*;
 use handshake_message_certificate::*;
 use handshake_message_certificate_request::*;
@@ -32,6 +29,9 @@ use handshake_message_hello_verify_request::*;
 use handshake_message_server_hello::*;
 use handshake_message_server_hello_done::*;
 use handshake_message_server_key_exchange::*;
+
+use super::content::*;
+use super::error::*;
 
 // https://tools.ietf.org/html/rfc5246#section-7.4
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]

@@ -1,4 +1,6 @@
-use crate::chunk::Chunk;
+use std::fmt;
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::chunk::chunk_abort::ChunkAbort;
 use crate::chunk::chunk_cookie_ack::ChunkCookieAck;
@@ -15,12 +17,10 @@ use crate::chunk::chunk_shutdown::ChunkShutdown;
 use crate::chunk::chunk_shutdown_ack::ChunkShutdownAck;
 use crate::chunk::chunk_shutdown_complete::ChunkShutdownComplete;
 use crate::chunk::chunk_type::*;
+use crate::chunk::chunk_unknown::ChunkUnknown;
+use crate::chunk::Chunk;
 use crate::error::{Error, Result};
 use crate::util::*;
-
-use crate::chunk::chunk_unknown::ChunkUnknown;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::fmt;
 
 ///Packet represents an SCTP packet, defined in https://tools.ietf.org/html/rfc4960#section-3
 ///An SCTP packet is composed of a common header and chunks.  A chunk

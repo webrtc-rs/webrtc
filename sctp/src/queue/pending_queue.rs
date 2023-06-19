@@ -1,10 +1,8 @@
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
 use tokio::sync::{Mutex, Semaphore};
 use util::sync::RwLock;
-
-use std::{
-    collections::VecDeque,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-};
 
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
 

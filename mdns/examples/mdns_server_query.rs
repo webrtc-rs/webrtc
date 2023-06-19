@@ -1,6 +1,8 @@
 use std::net::{Ipv4Addr, SocketAddr};
+
 use tokio::sync::mpsc;
-use webrtc_mdns::{config::*, conn::*};
+use webrtc_mdns::config::*;
+use webrtc_mdns::conn::*;
 
 #[tokio::main]
 async fn main() {

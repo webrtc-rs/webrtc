@@ -1,8 +1,8 @@
-use super::*;
-use util::marshal::*;
-
 use bytes::Bytes;
 use lazy_static::lazy_static;
+use util::marshal::*;
+
+use super::*;
 
 struct RTPTestCase {
     sequence_number: u16,

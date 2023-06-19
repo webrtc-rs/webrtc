@@ -1,12 +1,13 @@
-use super::conn_udp_listener::*;
-use super::*;
-use crate::error::{Error, Result};
-
 use std::future::Future;
 use std::pin::Pin;
+
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
+
+use super::conn_udp_listener::*;
+use super::*;
+use crate::error::{Error, Result};
 
 async fn pipe() -> Result<(
     Arc<dyn Listener + Send + Sync>,

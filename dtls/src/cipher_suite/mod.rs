@@ -10,10 +10,6 @@ pub mod cipher_suite_tls_psk_with_aes_128_gcm_sha256;
 use std::fmt;
 use std::marker::{Send, Sync};
 
-use super::client_certificate_type::*;
-use super::error::*;
-use super::record_layer::record_layer_header::*;
-
 use cipher_suite_aes_128_gcm_sha256::*;
 use cipher_suite_aes_256_cbc_sha::*;
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm::*;
@@ -21,6 +17,10 @@ use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8::*;
 use cipher_suite_tls_psk_with_aes_128_ccm::*;
 use cipher_suite_tls_psk_with_aes_128_ccm8::*;
 use cipher_suite_tls_psk_with_aes_128_gcm_sha256::*;
+
+use super::client_certificate_type::*;
+use super::error::*;
+use super::record_layer::record_layer_header::*;
 
 // CipherSuiteID is an ID for our supported CipherSuites
 // Supported Cipher Suites

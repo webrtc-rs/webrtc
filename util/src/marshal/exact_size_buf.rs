@@ -2,10 +2,8 @@
 // Replace with `bytes::ExactSizeBuf` once merged:
 // https://github.com/tokio-rs/bytes/pull/496
 
-use bytes::{
-    buf::{Chain, Take},
-    Bytes, BytesMut,
-};
+use bytes::buf::{Chain, Take};
+use bytes::{Bytes, BytesMut};
 
 /// A trait for buffers that know their exact length.
 pub trait ExactSizeBuf {

@@ -1,15 +1,15 @@
-use crate::error::*;
-
-use stun::message::*;
-
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
+
+use stun::message::*;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 use util::Conn;
+
+use crate::error::*;
 
 const MAX_RTX_INTERVAL_IN_MS: u16 = 1600;
 const MAX_RTX_COUNT: u16 = 7; // total 7 requests (Rc)

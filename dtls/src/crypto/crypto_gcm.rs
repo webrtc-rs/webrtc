@@ -6,18 +6,17 @@
 // https://github.com/RustCrypto/AEADs
 // https://docs.rs/aes-gcm/0.8.0/aes_gcm/
 
-use aes_gcm::KeyInit;
-use rand::Rng;
-
 use std::io::Cursor;
+
+use aes_gcm::aead::generic_array::GenericArray;
+use aes_gcm::aead::AeadInPlace;
+use aes_gcm::{Aes128Gcm, KeyInit};
+use rand::Rng;
 
 use super::*;
 use crate::content::*;
 use crate::error::*;
-use crate::record_layer::record_layer_header::*;
-
-use aes_gcm::aead::{generic_array::GenericArray, AeadInPlace};
-use aes_gcm::Aes128Gcm; // what about Aes256Gcm?
+use crate::record_layer::record_layer_header::*; // what about Aes256Gcm?
 
 const CRYPTO_GCM_TAG_LENGTH: usize = 16;
 const CRYPTO_GCM_NONCE_LENGTH: usize = 12;

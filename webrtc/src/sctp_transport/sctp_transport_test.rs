@@ -1,5 +1,6 @@
-use super::*;
 use std::sync::atomic::AtomicU16;
+
+use super::*;
 
 #[tokio::test]
 async fn test_generate_data_channel_id() -> Result<()> {

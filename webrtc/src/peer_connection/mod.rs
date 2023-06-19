@@ -11,6 +11,26 @@ pub mod policy;
 pub mod sdp;
 pub mod signaling_state;
 
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use ::ice::candidate::candidate_base::unmarshal_candidate;
+use ::ice::candidate::Candidate;
+use ::sdp::description::session::*;
+use ::sdp::util::ConnectionRole;
+use arc_swap::ArcSwapOption;
+use async_trait::async_trait;
+use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
+use peer_connection_internal::*;
+use rand::{thread_rng, Rng};
+use rcgen::KeyPair;
+use smol_str::SmolStr;
+use srtp::stream::Stream;
+use tokio::sync::{mpsc, Mutex};
+
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
@@ -28,10 +48,9 @@ use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
-use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
 use crate::ice_transport::ice_gatherer::{
     OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
-    RTCIceGatherer,
+    RTCIceGatherOptions, RTCIceGatherer,
 };
 use crate::ice_transport::ice_gatherer_state::RTCIceGathererState;
 use crate::ice_transport::ice_gathering_state::RTCIceGatheringState;
@@ -58,33 +77,14 @@ use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::rtp_transceiver::{
     find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
+    RTCRtpTransceiverInit, SSRC,
 };
-use crate::rtp_transceiver::{RTCRtpTransceiverInit, SSRC};
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::sctp_transport::RTCSctpTransport;
 use crate::stats::StatsReport;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
-
-use ::ice::candidate::candidate_base::unmarshal_candidate;
-use ::ice::candidate::Candidate;
-use ::sdp::description::session::*;
-use ::sdp::util::ConnectionRole;
-use arc_swap::ArcSwapOption;
-use async_trait::async_trait;
-use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
-use peer_connection_internal::*;
-use rand::{thread_rng, Rng};
-use rcgen::KeyPair;
-use smol_str::SmolStr;
-use srtp::stream::Stream;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, Mutex};
 
 /// SIMULCAST_PROBE_COUNT is the amount of RTP Packets
 /// that handleUndeclaredSSRC will read and try to dispatch from

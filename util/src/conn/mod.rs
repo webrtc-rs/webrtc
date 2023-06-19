@@ -16,9 +16,10 @@ mod conn_test;
 #[cfg(test)]
 mod conn_udp_listener_test;
 
-use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+use async_trait::async_trait;
 use tokio::net::ToSocketAddrs;
 
 use crate::error::Result;

@@ -1,14 +1,13 @@
 #[cfg(test)]
 mod vp9_test;
 
-use crate::{
-    error::{Error, Result},
-    packetizer::{Depacketizer, Payloader},
-};
-
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::sync::Arc;
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+use crate::error::{Error, Result};
+use crate::packetizer::{Depacketizer, Payloader};
 
 /// Flexible mode 15 bit picture ID
 const VP9HEADER_SIZE: usize = 3;

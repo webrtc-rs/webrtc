@@ -1,6 +1,28 @@
 #[cfg(test)]
 mod request_test;
 
+use std::collections::HashMap;
+use std::marker::{Send, Sync};
+use std::net::SocketAddr;
+#[cfg(feature = "metrics")]
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use md5::{Digest, Md5};
+use stun::agent::*;
+use stun::attributes::*;
+use stun::error_code::*;
+use stun::fingerprint::*;
+use stun::integrity::*;
+use stun::message::*;
+use stun::textattrs::*;
+use stun::uattrs::*;
+use stun::xoraddr::*;
+use tokio::sync::Mutex;
+use tokio::time::{Duration, Instant};
+use util::Conn;
+
 use crate::allocation::allocation_manager::*;
 use crate::allocation::channel_bind::ChannelBind;
 use crate::allocation::five_tuple::*;
@@ -17,30 +39,6 @@ use crate::proto::relayaddr::RelayedAddress;
 use crate::proto::reqtrans::RequestedTransport;
 use crate::proto::rsrvtoken::ReservationToken;
 use crate::proto::*;
-
-use stun::agent::*;
-use stun::attributes::*;
-use stun::error_code::*;
-use stun::fingerprint::*;
-use stun::integrity::*;
-use stun::message::*;
-use stun::textattrs::*;
-use stun::uattrs::*;
-use stun::xoraddr::*;
-
-use util::Conn;
-
-use std::collections::HashMap;
-use std::marker::{Send, Sync};
-use std::net::SocketAddr;
-#[cfg(feature = "metrics")]
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::sync::Mutex;
-use tokio::time::{Duration, Instant};
-
-use md5::{Digest, Md5};
 
 pub(crate) const MAXIMUM_ALLOCATION_LIFETIME: Duration = Duration::from_secs(3600); // https://tools.ietf.org/html/rfc5766#section-6.2 defines 3600 seconds recommendation
 pub(crate) const NONCE_LIFETIME: Duration = Duration::from_secs(3600); // https://tools.ietf.org/html/rfc5766#section-4

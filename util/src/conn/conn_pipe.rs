@@ -1,8 +1,9 @@
-use super::*;
-
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
+
 use tokio::sync::{mpsc, Mutex};
+
+use super::*;
 
 struct Pipe {
     rd_rx: Mutex<mpsc::Receiver<Vec<u8>>>,

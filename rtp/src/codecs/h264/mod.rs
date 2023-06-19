@@ -1,12 +1,10 @@
 #[cfg(test)]
 mod h264_test;
 
-use crate::{
-    error::{Error, Result},
-    packetizer::{Depacketizer, Payloader},
-};
-
 use bytes::{BufMut, Bytes, BytesMut};
+
+use crate::error::{Error, Result};
+use crate::packetizer::{Depacketizer, Payloader};
 
 /// H264Payloader payloads H264 packets
 #[derive(Default, Debug, Clone)]

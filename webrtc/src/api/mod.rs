@@ -5,18 +5,22 @@ pub mod interceptor_registry;
 pub mod media_engine;
 pub mod setting_engine;
 
-use crate::dtls_transport::RTCDtlsTransport;
-use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
-use crate::ice_transport::ice_gatherer::RTCIceGatherer;
-use crate::ice_transport::RTCIceTransport;
-use crate::peer_connection::certificate::RTCCertificate;
+use std::sync::Arc;
+use std::time::SystemTime;
 
+use interceptor::registry::Registry;
+use interceptor::Interceptor;
 use media_engine::*;
+use rcgen::KeyPair;
 use setting_engine::*;
 
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data_channel::RTCDataChannel;
+use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
+use crate::ice_transport::ice_gatherer::{RTCIceGatherOptions, RTCIceGatherer};
+use crate::ice_transport::RTCIceTransport;
+use crate::peer_connection::certificate::RTCCertificate;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::RTCPeerConnection;
 use crate::rtp_transceiver::rtp_codec::RTPCodecType;
@@ -24,11 +28,6 @@ use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
 use crate::sctp_transport::RTCSctpTransport;
 use crate::track::track_local::TrackLocal;
-use interceptor::{registry::Registry, Interceptor};
-
-use rcgen::KeyPair;
-use std::sync::Arc;
-use std::time::SystemTime;
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the

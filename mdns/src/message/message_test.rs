@@ -1,18 +1,26 @@
 // Silence warning on complex types:
 #![allow(clippy::type_complexity)]
 
+use std::collections::HashMap;
+
 use super::builder::*;
 use super::header::*;
 use super::name::*;
 use super::parser::*;
 use super::question::*;
-use super::resource::{
-    a::*, aaaa::*, cname::*, mx::*, ns::*, opt::*, ptr::*, soa::*, srv::*, txt::*, *,
-};
+use super::resource::a::*;
+use super::resource::aaaa::*;
+use super::resource::cname::*;
+use super::resource::mx::*;
+use super::resource::ns::*;
+use super::resource::opt::*;
+use super::resource::ptr::*;
+use super::resource::soa::*;
+use super::resource::srv::*;
+use super::resource::txt::*;
+use super::resource::*;
 use super::*;
 use crate::error::*;
-
-use std::collections::HashMap;
 
 fn small_test_msg() -> Result<Message> {
     let name = Name::new("example.com.")?;

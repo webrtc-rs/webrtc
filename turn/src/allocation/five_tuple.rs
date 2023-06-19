@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod five_tuple_test;
 
-use crate::proto::*;
-
 use std::fmt;
 use std::net::{Ipv4Addr, SocketAddr};
+
+use crate::proto::*;
 
 // FiveTuple is the combination (client IP address and port, server IP
 // address and port, and transport protocol (currently one of UDP,

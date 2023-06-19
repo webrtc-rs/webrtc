@@ -1,7 +1,8 @@
-use super::*;
-use crate::error::Result;
 use rtcp::packet::Packet;
 use util::Marshal;
+
+use super::*;
+use crate::error::Result;
 
 #[test]
 fn test_chunk_add() -> Result<()> {

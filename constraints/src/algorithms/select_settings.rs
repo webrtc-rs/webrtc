@@ -1,18 +1,18 @@
 use std::collections::HashSet;
 
-use crate::{
-    algorithms::fitness_distance::SettingFitnessDistanceError, errors::OverconstrainedError,
-    MediaTrackSettings, SanitizedMediaTrackConstraints,
-};
+use crate::algorithms::fitness_distance::SettingFitnessDistanceError;
+use crate::errors::OverconstrainedError;
+use crate::{MediaTrackSettings, SanitizedMediaTrackConstraints};
 
 mod apply_advanced;
 mod apply_mandatory;
 mod select_optimal;
 mod tie_breaking;
 
+use self::apply_advanced::*;
+use self::apply_mandatory::*;
+use self::select_optimal::*;
 pub use self::tie_breaking::*;
-
-use self::{apply_advanced::*, apply_mandatory::*, select_optimal::*};
 
 /// A mode indicating whether device information may be exposed.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
