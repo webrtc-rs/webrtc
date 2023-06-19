@@ -19,12 +19,12 @@ dtls = { version = "0.7.1", path = "../dtls", package = "webrtc-dtls" }
 ice = { version = "0.9.0", path = "../ice", package = "webrtc-ice" }
 interceptor = { version = "0.9.0", path = "../interceptor" }
 mdns = { version = "0.5.0", path = "../mdns", package = "webrtc-mdns" }
-media = { version = "0.6.0", path = "../media", package = "webrtc-media" }
-rtcp = { version = "0.8.0", path = "../rtcp" }
-rtp = { version = "0.7.0", path = "../rtp" }
+media = { version = "0.6.1", path = "../media", package = "webrtc-media" }
+rtcp = { version = "0.9.0", path = "../rtcp" }
+rtp = { version = "0.8.0", path = "../rtp" }
 sctp = { version = "0.8.0", path = "../sctp", package = "webrtc-sctp" }
 sdp = { version = "0.5.2", path = "../sdp" }
-srtp = { version = "0.9.0", path = "../srtp", package = "webrtc-srtp" }
+srtp = { version = "0.10.0", path = "../srtp", package = "webrtc-srtp" }
 stun = { version = "0.4.3", path = "../stun" }
 turn = { version = "0.6.0", path = "../turn" }
 util = { version = "0.7.0", path = "../util", package = "webrtc-util" }

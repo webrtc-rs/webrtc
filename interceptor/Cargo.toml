@@ -12,9 +12,9 @@ rust-version = "1.63.0"
 
 [dependencies]
 util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal", "sync"] }
-rtp = { version = "0.7.0", path = "../rtp" }
-rtcp = { version = "0.8.0", path = "../rtcp" }
-srtp = { version = "0.9.0", path = "../srtp", package = "webrtc-srtp" }
+rtp = { version = "0.8.0", path = "../rtp" }
+rtcp = { version = "0.9.0", path = "../rtcp" }
+srtp = { version = "0.10.0", path = "../srtp", package = "webrtc-srtp" }
 
 tokio = { version = "1.19", features = ["sync", "time"] }
 async-trait = "0.1.56"
