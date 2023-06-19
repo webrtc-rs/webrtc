@@ -55,6 +55,9 @@ pem = { version = "1", optional = true }
 # https://github.com/est31/rcgen/pull/88
 # Version 0.3.14 requires Rust 1.59.0 which we don't currently support
 time = "~0.3.1"
+# fixes "error: cannot find macro `__cfg_if_items` in this scope"
+# https://github.com/rust-lang/packed_simd/commit/127a0fc233dbab880e33aeaccdd23e799a8b798b
+cfg-if = "0.1.6"
 
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above

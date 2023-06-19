@@ -299,8 +299,7 @@ impl NetworkAddressTranslator {
                     to.set_destination_addr(&format!("{dst_ip}:{dst_port}"))?;
                 } else {
                     return Err(Error::Other(format!(
-                        "drop {} as {:?}",
-                        from,
+                        "drop {from} as {:?}",
                         Error::ErrNoAssociatedLocalAddress
                     )));
                 }
