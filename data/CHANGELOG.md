@@ -6,6 +6,8 @@
 
 ## v0.7.0
 
+* Increased required `webrtc-sctp` version to `0.8.0`.
+
 ## v0.6.0
 
 * Increased minimum support rust version to `1.60.0`.
