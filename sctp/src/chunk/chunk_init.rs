@@ -169,7 +169,7 @@ impl Chunk for ChunkInit {
         let mut params = vec![];
         let mut offset = CHUNK_HEADER_SIZE + INIT_CHUNK_MIN_LENGTH;
         let mut remaining = raw.len() as isize - offset as isize;
-        while remaining > INIT_OPTIONAL_VAR_HEADER_LENGTH as isize {
+        while remaining >= INIT_OPTIONAL_VAR_HEADER_LENGTH as isize {
             let p = build_param(&raw.slice(offset..CHUNK_HEADER_SIZE + header.value_length()))?;
             let p_len = PARAM_HEADER_LENGTH + p.value_length();
             let len_plus_padding = p_len + get_padding_size(p_len);

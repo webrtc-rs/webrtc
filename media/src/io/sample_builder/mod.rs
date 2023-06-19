@@ -373,10 +373,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
         if self.prepared.empty() {
             return None;
         }
-        let result = std::mem::replace(
-            &mut self.prepared_samples[self.prepared.head as usize],
-            None,
-        );
+        let result = self.prepared_samples[self.prepared.head as usize].take();
         self.prepared.head = self.prepared.head.wrapping_add(1);
         result
     }

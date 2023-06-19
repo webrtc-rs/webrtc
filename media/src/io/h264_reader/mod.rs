@@ -9,9 +9,10 @@ use std::io::Read;
 
 /// NalUnitType is the type of a NAL
 /// Enums for NalUnitTypes
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NalUnitType {
     /// Unspecified
+    #[default]
     Unspecified = 0,
     /// Coded slice of a non-IDR picture
     CodedSliceNonIdr = 1,
@@ -46,12 +47,6 @@ pub enum NalUnitType {
     // 14..18                                            // Reserved
     // 20..23                                            // Reserved
     // 24..31                                            // Unspecified
-}
-
-impl Default for NalUnitType {
-    fn default() -> Self {
-        NalUnitType::Unspecified
-    }
 }
 
 impl fmt::Display for NalUnitType {
@@ -147,19 +142,19 @@ pub struct H264Reader<R: Read> {
 }
 
 impl<R: Read> H264Reader<R> {
-    /// new creates new H264Reader
-    pub fn new(reader: R) -> H264Reader<R> {
+    /// new creates new `H264Reader` with `capacity` sized read buffer.
+    pub fn new(reader: R, capacity: usize) -> H264Reader<R> {
         H264Reader {
             reader,
             nal_buffer: BytesMut::new(),
             count_of_consecutive_zero_bytes: 0,
             nal_prefix_parsed: false,
             read_buffer: vec![],
-            temp_buf: vec![0u8; 4096],
+            temp_buf: vec![0u8; capacity],
         }
     }
 
-    fn read(&mut self, num_to_read: usize) -> Bytes {
+    fn read(&mut self, num_to_read: usize) -> Result<Bytes> {
         let buf = &mut self.temp_buf;
         while self.read_buffer.len() < num_to_read {
             let n = match self.reader.read(buf) {
@@ -169,7 +164,7 @@ impl<R: Read> H264Reader<R> {
                     }
                     n
                 }
-                Err(_) => break,
+                Err(e) => return Err(Error::Io(e.into())),
             };
 
             self.read_buffer.extend_from_slice(&buf[0..n]);
@@ -181,15 +176,15 @@ impl<R: Read> H264Reader<R> {
             self.read_buffer.len()
         };
 
-        Bytes::from(
+        Ok(Bytes::from(
             self.read_buffer
                 .drain(..num_should_read)
                 .collect::<Vec<u8>>(),
-        )
+        ))
     }
 
     fn bit_stream_starts_with_h264prefix(&mut self) -> Result<usize> {
-        let prefix_buffer = self.read(4);
+        let prefix_buffer = self.read(4)?;
 
         let n = prefix_buffer.len();
         if n == 0 {
@@ -233,7 +228,7 @@ impl<R: Read> H264Reader<R> {
         }
 
         loop {
-            let buffer = self.read(1);
+            let buffer = self.read(1)?;
             let n = buffer.len();
 
             if n != 1 {

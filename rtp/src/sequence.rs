@@ -1,7 +1,6 @@
 use std::fmt;
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
-
-use util::sync::Mutex;
 
 /// Sequencer generates sequential sequence numbers for building RTP packets
 pub trait Sequencer: fmt::Debug {
@@ -20,10 +19,10 @@ impl Clone for Box<dyn Sequencer + Send + Sync> {
 /// number
 pub fn new_random_sequencer() -> impl Sequencer {
     let c = Counters {
-        sequence_number: rand::random::<u16>(),
-        roll_over_count: 0,
+        sequence_number: Arc::new(AtomicU16::new(rand::random::<u16>())),
+        roll_over_count: Arc::new(AtomicU64::new(0)),
     };
-    SequencerImpl(Arc::new(Mutex::new(c)))
+    SequencerImpl(c)
 }
 
 /// NewFixedSequencer returns a new sequencer starting from a specific
@@ -32,42 +31,39 @@ pub fn new_fixed_sequencer(s: u16) -> impl Sequencer {
     let sequence_number = if s == 0 { u16::MAX } else { s - 1 };
 
     let c = Counters {
-        sequence_number,
-        roll_over_count: 0,
+        sequence_number: Arc::new(AtomicU16::new(sequence_number)),
+        roll_over_count: Arc::new(AtomicU64::new(0)),
     };
 
-    SequencerImpl(Arc::new(Mutex::new(c)))
+    SequencerImpl(c)
 }
 
 #[derive(Debug, Clone)]
-struct SequencerImpl(Arc<Mutex<Counters>>);
+struct SequencerImpl(Counters);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Counters {
-    sequence_number: u16,
-    roll_over_count: u64,
+    sequence_number: Arc<AtomicU16>,
+    roll_over_count: Arc<AtomicU64>,
 }
 
 impl Sequencer for SequencerImpl {
     /// NextSequenceNumber increment and returns a new sequence number for
     /// building RTP packets
     fn next_sequence_number(&self) -> u16 {
-        let mut lock = self.0.lock();
-
-        if lock.sequence_number == u16::MAX {
-            lock.roll_over_count += 1;
-            lock.sequence_number = 0;
+        if self.0.sequence_number.load(Ordering::SeqCst) == u16::MAX {
+            self.0.roll_over_count.fetch_add(1, Ordering::SeqCst);
+            self.0.sequence_number.store(0, Ordering::SeqCst);
+            0
         } else {
-            lock.sequence_number += 1;
+            self.0.sequence_number.fetch_add(1, Ordering::SeqCst) + 1
         }
-
-        lock.sequence_number
     }
 
     /// RollOverCount returns the amount of times the 16bit sequence number
     /// has wrapped
     fn roll_over_count(&self) -> u64 {
-        self.0.lock().roll_over_count
+        self.0.roll_over_count.load(Ordering::SeqCst)
     }
 
     fn clone_to(&self) -> Box<dyn Sequencer + Send + Sync> {

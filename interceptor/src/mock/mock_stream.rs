@@ -5,7 +5,7 @@ use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWrite
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
-use util::{Marshal, Unmarshal};
+use util::Marshal;
 
 type RTCPPackets = Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>;
 
@@ -88,26 +88,15 @@ impl MockStream {
             let mut buf = vec![0u8; 1500];
             let a = Attributes::new();
             loop {
-                let n = match rtcp_reader.read(&mut buf, &a).await {
+                let pkts = match rtcp_reader.read(&mut buf, &a).await {
                     Ok((n, _)) => n,
                     Err(err) => {
-                        if Error::ErrIoEOF != err {
-                            let _ = rtcp_in_modified_tx.send(Err(err)).await;
-                        }
+                        let _ = rtcp_in_modified_tx.send(Err(err)).await;
                         break;
                     }
                 };
 
-                let mut b = &buf[..n];
-                let pkt = match rtcp::packet::unmarshal(&mut b) {
-                    Ok(pkt) => pkt,
-                    Err(err) => {
-                        let _ = rtcp_in_modified_tx.send(Err(err.into())).await;
-                        break;
-                    }
-                };
-
-                let _ = rtcp_in_modified_tx.send(Ok(pkt)).await;
+                let _ = rtcp_in_modified_tx.send(Ok(pkts)).await;
             }
         });
 
@@ -121,21 +110,10 @@ impl MockStream {
             let mut buf = vec![0u8; 1500];
             let a = Attributes::new();
             loop {
-                let n = match rtp_reader.read(&mut buf, &a).await {
-                    Ok((n, _)) => n,
+                let pkt = match rtp_reader.read(&mut buf, &a).await {
+                    Ok((pkt, _)) => pkt,
                     Err(err) => {
-                        if Error::ErrIoEOF != err {
-                            let _ = rtp_in_modified_tx.send(Err(err)).await;
-                        }
-                        break;
-                    }
-                };
-
-                let mut b = &buf[..n];
-                let pkt = match rtp::packet::Packet::unmarshal(&mut b) {
-                    Ok(pkt) => pkt,
-                    Err(err) => {
-                        let _ = rtp_in_modified_tx.send(Err(err.into())).await;
+                        let _ = rtp_in_modified_tx.send(Err(err)).await;
                         break;
                     }
                 };
@@ -259,7 +237,11 @@ impl RTCPWriter for MockStream {
 
 #[async_trait]
 impl RTCPReader for MockStream {
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let pkts = {
             let mut rtcp_in = self.rtcp_in_rx.lock().await;
             rtcp_in.recv().await.ok_or(Error::ErrIoEOF)?
@@ -272,7 +254,7 @@ impl RTCPReader for MockStream {
         }
 
         buf[..n].copy_from_slice(&marshaled);
-        Ok((n, a.clone()))
+        Ok((pkts, a.clone()))
     }
 }
 
@@ -286,7 +268,11 @@ impl RTPWriter for MockStream {
 
 #[async_trait]
 impl RTPReader for MockStream {
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
         let pkt = {
             let mut rtp_in = self.rtp_in_rx.lock().await;
             rtp_in.recv().await.ok_or(Error::ErrIoEOF)?
@@ -299,7 +285,7 @@ impl RTPReader for MockStream {
         }
 
         buf[..n].copy_from_slice(&marshaled);
-        Ok((n, a.clone()))
+        Ok((pkt, a.clone()))
     }
 }
 

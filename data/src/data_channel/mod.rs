@@ -13,7 +13,6 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use util::marshal::*;
 
 use bytes::{Buf, Bytes};
-use derive_builder::Builder;
 use std::borrow::Borrow;
 use std::fmt;
 use std::future::Future;
@@ -27,19 +26,13 @@ use std::task::{Context, Poll};
 const RECEIVE_MTU: usize = 8192;
 
 /// Config is used to configure the data channel.
-#[derive(Eq, PartialEq, Default, Clone, Debug, Builder)]
+#[derive(Eq, PartialEq, Default, Clone, Debug)]
 pub struct Config {
-    #[builder(default)]
     pub channel_type: ChannelType,
-    #[builder(default)]
     pub negotiated: bool,
-    #[builder(default)]
     pub priority: u16,
-    #[builder(default)]
     pub reliability_parameter: u32,
-    #[builder(default)]
     pub label: String,
-    #[builder(default)]
     pub protocol: String,
 }
 

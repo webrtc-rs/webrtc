@@ -5,7 +5,7 @@ use std::fmt;
 /// can be used.
 ///
 /// This is unsused, we only support UnifiedPlan.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCSdpSemantics {
     Unspecified = 0,
 
@@ -13,6 +13,7 @@ pub enum RTCSdpSemantics {
     /// (the default in Chrome since M72)
     /// <https://tools.ietf.org/html/draft-roach-mmusic-unified-plan-00>
     #[serde(rename = "unified-plan")]
+    #[default]
     UnifiedPlan = 1,
 
     /// PlanB uses plan-b offers and answers
@@ -26,12 +27,6 @@ pub enum RTCSdpSemantics {
     /// with a plan-b answer
     #[serde(rename = "unified-plan-with-fallback")]
     UnifiedPlanWithFallback = 3,
-}
-
-impl Default for RTCSdpSemantics {
-    fn default() -> Self {
-        RTCSdpSemantics::UnifiedPlan
-    }
 }
 
 const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "unified-plan-with-fallback";

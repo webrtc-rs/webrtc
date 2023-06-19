@@ -69,7 +69,7 @@ impl TrackLocalContext {
     }
 }
 /// TrackLocal is an interface that controls how the user can send media
-/// The user can provide their own TrackLocal implementatiosn, or use
+/// The user can provide their own TrackLocal implementations, or use
 /// the implementations in pkg/media
 #[async_trait]
 pub trait TrackLocal {

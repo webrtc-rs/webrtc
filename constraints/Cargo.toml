@@ -8,13 +8,12 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/webrtc-constraints"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/constraints"
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 indexmap = "1.9.1"
-log = "0.4.17"
 serde = { version = "1.0.137", features = ["derive"], optional = true }
 ordered-float = { version = "3.0.0", default-features = false }
 

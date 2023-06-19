@@ -1,8 +1,9 @@
 use std::fmt;
 
 /// RTCIceConnectionState indicates signaling state of the ICE Connection.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceConnectionState {
+    #[default]
     Unspecified,
 
     /// ICEConnectionStateNew indicates that any of the ICETransports are
@@ -38,12 +39,6 @@ pub enum RTCIceConnectionState {
     /// ICEConnectionStateClosed indicates that the PeerConnection's
     /// isClosed is true.
     Closed,
-}
-
-impl Default for RTCIceConnectionState {
-    fn default() -> Self {
-        RTCIceConnectionState::Unspecified
-    }
 }
 
 const ICE_CONNECTION_STATE_NEW_STR: &str = "new";

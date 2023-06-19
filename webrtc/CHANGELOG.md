@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.7.0
+
 * Added support for insecure/deprecated signature verification algorithms, opt in via `SettingsEngine::allow_insecure_verification_algorithm` [#342](https://github.com/webrtc-rs/webrtc/pull/342).
 * Make RTCRtpCodecCapability::payloader_for_codec public API [#349](https://github.com/webrtc-rs/webrtc/pull/349).
 * Fixed a panic in `calculate_rtt_ms` [#350](https://github.com/webrtc-rs/webrtc/pull/350).
@@ -57,6 +59,10 @@
         - `set_params`;
         - `onmute`;
         - `onunmute`.
+
+* Change `RTPReader::read` signature to `|&self, buf: &mut [u8], attributes: &Attributes| -> Result<(rtp::packet::Packet, Attributes)>` [#450](https://github.com/webrtc-rs/webrtc/pull/450).
+
+* Change `RTCPReader::read` signature to `|&self, buf: &mut [u8], attributes: &Attributes| -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)>` [#450](https://github.com/webrtc-rs/webrtc/pull/450).
 
 ## v0.6.0
 

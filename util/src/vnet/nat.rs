@@ -22,9 +22,10 @@ const DEFAULT_NAT_MAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
 //  - Port Mapping behavior
 //  - Filtering behavior
 // See: https://tools.ietf.org/html/rfc4787
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EndpointDependencyType {
     // EndpointIndependent means the behavior is independent of the endpoint's address or port
+    #[default]
     EndpointIndependent,
     // EndpointAddrDependent means the behavior is dependent on the endpoint's address
     EndpointAddrDependent,
@@ -32,28 +33,17 @@ pub enum EndpointDependencyType {
     EndpointAddrPortDependent,
 }
 
-impl Default for EndpointDependencyType {
-    fn default() -> Self {
-        EndpointDependencyType::EndpointIndependent
-    }
-}
-
 // NATMode defines basic behavior of the NAT
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NatMode {
     // NATModeNormal means the NAT behaves as a standard NAPT (RFC 2663).
+    #[default]
     Normal,
     // NATModeNAT1To1 exhibits 1:1 DNAT where the external IP address is statically mapped to
     // a specific local IP address with port number is preserved always between them.
     // When this mode is selected, mapping_behavior, filtering_behavior, port_preservation and
     // mapping_life_time of NATType are ignored.
     Nat1To1,
-}
-
-impl Default for NatMode {
-    fn default() -> Self {
-        NatMode::Normal
-    }
 }
 
 // NATType has a set of parameters that define the behavior of NAT.

@@ -3,7 +3,6 @@ use super::*;
 use crate::nack::UINT16SIZE_HALF;
 
 use util::sync::Mutex;
-use util::Unmarshal;
 
 struct GeneratorStreamInternal {
     packets: Vec<u64>,
@@ -152,14 +151,16 @@ impl GeneratorStream {
 #[async_trait]
 impl RTPReader for GeneratorStream {
     /// read a rtp packet
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = self.parent_rtp_reader.read(buf, a).await?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
+        let (pkt, attr) = self.parent_rtp_reader.read(buf, a).await?;
 
-        let mut b = &buf[..n];
-        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
         self.add(pkt.header.sequence_number);
 
-        Ok((n, attr))
+        Ok((pkt, attr))
     }
 }
 

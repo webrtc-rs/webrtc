@@ -54,7 +54,7 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair> {
             )
         }
         NamedCurve::X25519 => {
-            let secret_key = x25519_dalek::StaticSecret::new(OsRng);
+            let secret_key = x25519_dalek::StaticSecret::random_from_rng(OsRng);
             let public_key = x25519_dalek::PublicKey::from(&secret_key);
             (
                 public_key.as_bytes().to_vec(),

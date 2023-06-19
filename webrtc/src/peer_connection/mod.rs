@@ -77,6 +77,7 @@ use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use rand::{thread_rng, Rng};
 use rcgen::KeyPair;
+use smol_str::SmolStr;
 use srtp::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;
@@ -454,7 +455,9 @@ impl RTCPeerConnection {
                 // 	return true
                 // }
                 let mid = t.mid();
-                let m = mid.as_ref().and_then(|mid| get_by_mid(mid, local_desc));
+                let m = mid
+                    .as_ref()
+                    .and_then(|mid| get_by_mid(mid.as_str(), local_desc));
                 // Step 5.2
                 if !t.stopped.load(Ordering::SeqCst) {
                     if m.is_none() {
@@ -469,7 +472,7 @@ impl RTCPeerConnection {
                                 None => return true, // doesn't contain a single a=msid line
                             };
 
-                            let sender = t.sender();
+                            let sender = t.sender().await;
                             // (...)or the number of MSIDs from the a=msid lines in this m= section,
                             // or the MSID values themselves, differ from what is in
                             // transceiver.sender.[[AssociatedMediaStreamIds]], return true.
@@ -493,8 +496,9 @@ impl RTCPeerConnection {
                             RTCSdpType::Offer => {
                                 // Step 5.3.2
                                 if let Some(remote_desc) = &current_remote_description {
-                                    if let Some(rm) =
-                                        t.mid().and_then(|mid| get_by_mid(&mid, remote_desc))
+                                    if let Some(rm) = t
+                                        .mid()
+                                        .and_then(|mid| get_by_mid(mid.as_str(), remote_desc))
                                     {
                                         if get_peer_direction(m) != t.direction()
                                             && get_peer_direction(rm) != t.direction().reverse()
@@ -511,18 +515,20 @@ impl RTCPeerConnection {
                                     Some(d) => d,
                                     None => return true,
                                 };
-                                let offered_direction =
-                                    match t.mid().and_then(|mid| get_by_mid(&mid, remote_desc)) {
-                                        Some(d) => {
-                                            let dir = get_peer_direction(d);
-                                            if dir == RTCRtpTransceiverDirection::Unspecified {
-                                                RTCRtpTransceiverDirection::Inactive
-                                            } else {
-                                                dir
-                                            }
+                                let offered_direction = match t
+                                    .mid()
+                                    .and_then(|mid| get_by_mid(mid.as_str(), remote_desc))
+                                {
+                                    Some(d) => {
+                                        let dir = get_peer_direction(d);
+                                        if dir == RTCRtpTransceiverDirection::Unspecified {
+                                            RTCRtpTransceiverDirection::Inactive
+                                        } else {
+                                            dir
                                         }
-                                        None => RTCRtpTransceiverDirection::Inactive,
-                                    };
+                                    }
+                                    None => RTCRtpTransceiverDirection::Inactive,
+                                };
 
                                 let current_direction = get_peer_direction(m);
                                 // Step 5.3.3
@@ -544,8 +550,8 @@ impl RTCPeerConnection {
                     };
 
                     if let Some(remote_desc) = &*params.current_remote_description.lock().await {
-                        return get_by_mid(&search_mid, local_desc).is_some()
-                            || get_by_mid(&search_mid, remote_desc).is_some();
+                        return get_by_mid(search_mid.as_str(), local_desc).is_some()
+                            || get_by_mid(search_mid.as_str(), remote_desc).is_some();
                     }
                 }
             }
@@ -795,10 +801,10 @@ impl RTCPeerConnection {
                         }
                     }
 
-                    t.set_mid(mid)?;
+                    t.set_mid(SmolStr::from(mid))?;
                 } else {
                     let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
-                    t.set_mid(format!("{}", greater_mid + 1))?;
+                    t.set_mid(SmolStr::from(format!("{}", greater_mid + 1)))?;
                 }
             }
 
@@ -907,9 +913,14 @@ impl RTCPeerConnection {
         _options: Option<RTCAnswerOptions>,
     ) -> Result<RTCSessionDescription> {
         let use_identity = self.idp_login_url.is_some();
-        if self.remote_description().await.is_none() {
+        let remote_desc = self.remote_description().await;
+        let remote_description: RTCSessionDescription;
+        if let Some(desc) = remote_desc {
+            remote_description = desc;
+        } else {
             return Err(Error::ErrNoRemoteDescription);
-        } else if use_identity {
+        }
+        if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented);
         } else if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
@@ -926,6 +937,11 @@ impl RTCPeerConnection {
             .to_connection_role();
         if connection_role == ConnectionRole::Unspecified {
             connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
+            if let Some(parsed) = remote_description.parsed {
+                if Self::is_lite_set(&parsed) && !self.internal.setting_engine.candidates.ice_lite {
+                    connection_role = DTLSRole::Server.to_connection_role();
+                }
+            }
         }
 
         let local_transceivers = self.get_transceivers().await;
@@ -1296,6 +1312,15 @@ impl RTCPeerConnection {
         self.current_local_description().await
     }
 
+    pub fn is_lite_set(desc: &SessionDescription) -> bool {
+        for a in &desc.attributes {
+            if a.key.trim() == ATTR_KEY_ICELITE {
+                return true;
+            }
+        }
+        false
+    }
+
     /// set_remote_description sets the SessionDescription of the remote peer
     pub async fn set_remote_description(&self, mut desc: RTCSessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
@@ -1358,7 +1383,7 @@ impl RTCPeerConnection {
 
                         if let Some(t) = t {
                             if t.mid().is_none() {
-                                t.set_mid(mid_value.to_owned())?;
+                                t.set_mid(SmolStr::from(mid_value))?;
                             }
                         } else {
                             let local_direction =
@@ -1404,7 +1429,7 @@ impl RTCPeerConnection {
                             self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
                             if t.mid().is_none() {
-                                t.set_mid(mid_value.to_owned())?;
+                                t.set_mid(SmolStr::from(mid_value))?;
                             }
                         }
                     }
@@ -1515,13 +1540,7 @@ impl RTCPeerConnection {
                 return Ok(());
             }
 
-            let mut remote_is_lite = false;
-            for a in &parsed.attributes {
-                if a.key.trim() == ATTR_KEY_ICELITE {
-                    remote_is_lite = true;
-                    break;
-                }
-            }
+            let remote_is_lite = Self::is_lite_set(parsed);
 
             let (fingerprint, fingerprint_hash) = extract_fingerprint(parsed)?;
 
@@ -1585,7 +1604,7 @@ impl RTCPeerConnection {
     pub(crate) async fn start_rtp_senders(&self) -> Result<()> {
         let current_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*current_transceivers {
-            let sender = transceiver.sender();
+            let sender = transceiver.sender().await;
             if sender.is_negotiated() && !sender.has_sent() {
                 sender.send(&sender.get_parameters().await).await?;
             }
@@ -1643,7 +1662,7 @@ impl RTCPeerConnection {
         let mut senders = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            let sender = transceiver.sender();
+            let sender = transceiver.sender().await;
             senders.push(sender);
         }
         senders
@@ -1654,7 +1673,7 @@ impl RTCPeerConnection {
         let mut receivers = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            receivers.push(transceiver.receiver());
+            receivers.push(transceiver.receiver().await);
         }
         receivers
     }
@@ -1678,7 +1697,7 @@ impl RTCPeerConnection {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if !t.stopped.load(Ordering::SeqCst) && t.kind == track.kind() {
-                    let sender = t.sender();
+                    let sender = t.sender().await;
                     if sender.track().await.is_none() {
                         if let Err(err) = sender.replace_track(Some(track)).await {
                             let _ = sender.stop().await;
@@ -1705,7 +1724,7 @@ impl RTCPeerConnection {
             .add_rtp_transceiver(Arc::clone(&transceiver))
             .await;
 
-        Ok(transceiver.sender())
+        Ok(transceiver.sender().await)
     }
 
     /// remove_track removes a Track from the PeerConnection
@@ -1718,7 +1737,7 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if t.sender().id == sender.id {
+                if t.sender().await.id == sender.id {
                     if sender.track().await.is_none() {
                         return Ok(());
                     }

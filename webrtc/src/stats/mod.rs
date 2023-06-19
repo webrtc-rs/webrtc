@@ -10,6 +10,7 @@ use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
 use ice::agent::Agent;
 use ice::candidate::{CandidatePairState, CandidateType};
 use ice::network_type::NetworkType;
+use smol_str::SmolStr;
 use stats_collector::StatsCollector;
 
 use serde::{Serialize, Serializer};
@@ -459,7 +460,7 @@ pub struct InboundRTPStats {
 
     // RTCInboundRtpStreamStats
     pub track_identifier: String,
-    pub mid: String,
+    pub mid: SmolStr,
     // TODO: `remoteId`
     // NB: `framesDecoded`, `frameWidth`, frameHeight`, `framesPerSecond`, `qpSum`,
     // `totalDecodeTime`, `totalInterFrameDelay`, and `totalSquaredInterFrameDelay` are all decoder
@@ -504,9 +505,9 @@ pub struct OutboundRTPStats {
     // RTCOutboundRtpStreamStats
     // NB: non-canon in browsers this is available via `RTCMediaSourceStats` which we are unlikely to implement
     pub track_identifier: String,
-    pub mid: String,
+    pub mid: SmolStr,
     // TODO: `mediaSourceId` and `remoteId`
-    pub rid: Option<String>,
+    pub rid: Option<SmolStr>,
     pub header_bytes_sent: u64,
     // TODO: `retransmittedPacketsSent` and `retransmittedPacketsSent`
     // NB: `targetBitrate`, `totalEncodedBytesTarget`, `frameWidth` `frameHeight`, `framesPerSecond`, `framesSent`,

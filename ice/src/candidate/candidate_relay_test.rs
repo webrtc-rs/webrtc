@@ -61,6 +61,7 @@ async fn test_relay_only_connection() -> Result<(), Error> {
             }),
         }],
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 

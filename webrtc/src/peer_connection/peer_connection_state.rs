@@ -1,8 +1,9 @@
 use std::fmt;
 
 /// PeerConnectionState indicates the state of the PeerConnection.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCPeerConnectionState {
+    #[default]
     Unspecified,
 
     /// PeerConnectionStateNew indicates that any of the ICETransports or
@@ -33,12 +34,6 @@ pub enum RTCPeerConnectionState {
     /// PeerConnectionStateClosed indicates the peer connection is closed
     /// and the isClosed member variable of PeerConnection is true.
     Closed,
-}
-
-impl Default for RTCPeerConnectionState {
-    fn default() -> Self {
-        RTCPeerConnectionState::Unspecified
-    }
 }
 
 const PEER_CONNECTION_STATE_NEW_STR: &str = "new";
@@ -91,20 +86,15 @@ impl fmt::Display for RTCPeerConnectionState {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum NegotiationNeededState {
     /// NegotiationNeededStateEmpty not running and queue is empty
+    #[default]
     Empty,
     /// NegotiationNeededStateEmpty running and queue is empty
     Run,
     /// NegotiationNeededStateEmpty running and queue
     Queue,
-}
-
-impl Default for NegotiationNeededState {
-    fn default() -> Self {
-        NegotiationNeededState::Empty
-    }
 }
 
 impl From<u8> for NegotiationNeededState {

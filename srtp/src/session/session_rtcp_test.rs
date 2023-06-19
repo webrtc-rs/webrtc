@@ -158,9 +158,9 @@ async fn get_sender_ssrc(read_stream: &Arc<Stream>) -> Result<u32> {
     let mut read_buffer = BytesMut::with_capacity(PLI_PACKET_SIZE + auth_tag_size);
     read_buffer.resize(PLI_PACKET_SIZE + auth_tag_size, 0u8);
 
-    let (n, _) = read_stream.read_rtcp(&mut read_buffer).await?;
-    let mut reader = &read_buffer[0..n];
-    let pli = picture_loss_indication::PictureLossIndication::unmarshal(&mut reader)?;
+    let pkts = read_stream.read_rtcp(&mut read_buffer).await?;
+    let mut bytes = &pkts[0].marshal()?[..];
+    let pli = picture_loss_indication::PictureLossIndication::unmarshal(&mut bytes)?;
 
     Ok(pli.sender_ssrc)
 }

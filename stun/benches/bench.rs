@@ -1,3 +1,5 @@
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -623,7 +625,7 @@ fn benchmark_xoraddr(c: &mut Criterion) {
 
     {
         let mut m = Message::new();
-        let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
+        let transaction_id = BASE64_STANDARD.decode("jxhBARZwX+rsC6er").unwrap();
 
         m.transaction_id.0.copy_from_slice(&transaction_id);
         let addr_value = [0, 1, 156, 213, 244, 159, 56, 174]; //hex.DecodeString("00019cd5f49f38ae")

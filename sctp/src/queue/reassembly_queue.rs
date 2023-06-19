@@ -286,7 +286,7 @@ impl ReassemblyQueue {
                 buf[n_written..n_written + n].copy_from_slice(&c.user_data[..n]);
                 n_written += n;
                 if n < to_copy {
-                    err = Some(Error::ErrShortBuffer);
+                    err = Some(Error::ErrShortBuffer { size: buf.len() });
                 }
             }
         }

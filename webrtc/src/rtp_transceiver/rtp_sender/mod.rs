@@ -34,7 +34,10 @@ pub(crate) struct RTPSenderInternal {
 
 impl RTPSenderInternal {
     /// read reads incoming RTCP for this RTPReceiver
-    async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    async fn read(
+        &self,
+        b: &mut [u8],
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut send_called_rx = self.send_called_rx.lock().await;
 
         tokio::select! {
@@ -69,10 +72,7 @@ impl RTPSenderInternal {
         receive_mtu: usize,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; receive_mtu];
-        let (n, attributes) = self.read(&mut b).await?;
-
-        let mut buf = &b[..n];
-        let pkts = rtcp::packet::unmarshal(&mut buf)?;
+        let (pkts, attributes) = self.read(&mut b).await?;
 
         Ok((pkts, attributes))
     }
@@ -469,7 +469,10 @@ impl RTCRtpSender {
     }
 
     /// read reads incoming RTCP for this RTPReceiver
-    pub async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    pub async fn read(
+        &self,
+        b: &mut [u8],
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read(b).await
     }
 

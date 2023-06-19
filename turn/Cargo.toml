@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/turn"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/turn"
-rust-version = "1.60.0"
+rust-version = "1.63.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,7 +20,7 @@ stun = { version = "0.4.3", path = "../stun" }
 tokio = { version = "1.19", features = ["full"] }
 async-trait = "0.1.56"
 log = "0.4.16"
-base64 = "0.13.0"
+base64 = "0.21.2"
 rand = "0.8.5"
 ring = "0.16.20"
 md-5 = "0.10.1"
@@ -32,7 +32,7 @@ env_logger = "0.9.0"
 chrono = "0.4.23"
 hex = "0.4.3"
 clap = "3.2.6"
-criterion = "0.3.5"
+criterion = "0.4.0"
 
 [features]
 metrics = []

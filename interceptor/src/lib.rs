@@ -104,14 +104,19 @@ impl RTPWriter for RTPWriterFn {
 #[async_trait]
 pub trait RTPReader {
     /// read a rtp packet
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)>;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)>;
 }
 
 pub type RTPReaderBoxFn = Box<
     dyn (Fn(
             &mut [u8],
             &Attributes,
-        ) -> Pin<Box<dyn Future<Output = Result<(usize, Attributes)>> + Send + Sync>>)
+        )
+            -> Pin<Box<dyn Future<Output = Result<(rtp::packet::Packet, Attributes)>> + Send + Sync>>)
         + Send
         + Sync,
 >;
@@ -120,7 +125,11 @@ pub struct RTPReaderFn(pub RTPReaderBoxFn);
 #[async_trait]
 impl RTPReader for RTPReaderFn {
     /// read a rtp packet
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
         self.0(buf, attributes).await
     }
 }
@@ -163,15 +172,28 @@ impl RTCPWriter for RTCPWriterFn {
 #[async_trait]
 pub trait RTCPReader {
     /// read a batch of rtcp packets
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)>;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)>;
 }
 
 pub type RTCPReaderBoxFn = Box<
     dyn (Fn(
             &mut [u8],
             &Attributes,
-        ) -> Pin<Box<dyn Future<Output = Result<(usize, Attributes)>> + Send + Sync>>)
-        + Send
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<(
+                            Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>,
+                            Attributes,
+                        )>,
+                    > + Send
+                    + Sync,
+            >,
+        >) + Send
         + Sync,
 >;
 
@@ -180,7 +202,11 @@ pub struct RTCPReaderFn(pub RTCPReaderBoxFn);
 #[async_trait]
 impl RTCPReader for RTCPReaderFn {
     /// read a batch of rtcp packets
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.0(buf, attributes).await
     }
 }

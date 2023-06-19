@@ -118,7 +118,7 @@ impl TrackLocalStaticSample {
             if sample.prev_dropped_packets > 0 {
                 packetizer.skip_samples(samples * sample.prev_dropped_packets as u32);
             }
-            packetizer.packetize(&sample.data, samples).await?
+            packetizer.packetize(&sample.data, samples)?
         } else {
             vec![]
         };

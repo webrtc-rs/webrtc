@@ -69,8 +69,10 @@ impl ResponderInternal {
         };
 
         for n in &nack.nacks {
+            // can't use n.range() since this callback is async fn,
+            // instead, use NackPair into_iter()
             let stream2 = Arc::clone(&stream);
-            n.range(Box::new(
+            let f = Box::new(
                 move |seq: u16| -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> {
                     let stream3 = Arc::clone(&stream2);
                     Box::pin(async move {
@@ -80,12 +82,15 @@ impl ResponderInternal {
                                 log::warn!("failed resending nacked packet: {}", err);
                             }
                         }
-
                         true
                     })
                 },
-            ))
-            .await;
+            );
+            for packet_id in n.into_iter() {
+                if !f(packet_id).await {
+                    return;
+                }
+            }
         }
     }
 }
@@ -97,11 +102,12 @@ pub struct ResponderRtcpReader {
 
 #[async_trait]
 impl RTCPReader for ResponderRtcpReader {
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
-
-        let mut b = &buf[..n];
-        let pkts = rtcp::packet::unmarshal(&mut b)?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+        let (pkts, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
         for p in &pkts {
             if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
                 let nack = nack.clone();
@@ -112,7 +118,7 @@ impl RTCPReader for ResponderRtcpReader {
             }
         }
 
-        Ok((n, attr))
+        Ok((pkts, attr))
     }
 }
 

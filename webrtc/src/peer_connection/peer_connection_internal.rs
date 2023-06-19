@@ -1,5 +1,6 @@
-use bytes::Bytes;
+use smol_str::SmolStr;
 use tokio::time::Instant;
+use util::Unmarshal;
 
 use super::*;
 use crate::rtp_transceiver::create_stream_info;
@@ -166,7 +167,7 @@ impl PeerConnectionInternal {
             self.undeclared_media_processor();
         } else {
             for t in &current_transceivers {
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
                 let tracks = receiver.tracks().await;
                 if tracks.is_empty() {
                     continue;
@@ -177,7 +178,7 @@ impl PeerConnectionInternal {
                 for t in tracks {
                     if !t.rid().is_empty() {
                         if let Some(details) =
-                            track_details_for_rid(&track_details, t.rid().to_owned())
+                            track_details_for_rid(&track_details, SmolStr::from(t.rid()))
                         {
                             t.set_id(details.id.clone());
                             t.set_stream_id(details.stream_id.clone());
@@ -216,7 +217,7 @@ impl PeerConnectionInternal {
                     Arc::clone(&self.media_engine),
                     interceptor,
                 ));
-                t.set_receiver(receiver);
+                t.set_receiver(receiver).await;
             }
         }
 
@@ -337,7 +338,7 @@ impl PeerConnectionInternal {
         for incoming_track in incoming_tracks {
             // If we already have a TrackRemote for a given SSRC don't handle it again
             for t in local_transceivers {
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
                 for track in receiver.tracks().await {
                     for ssrc in &incoming_track.ssrcs {
                         if *ssrc == track.ssrc() {
@@ -363,7 +364,7 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
                 if receiver.have_received().await {
                     continue;
                 }
@@ -666,9 +667,9 @@ impl PeerConnectionInternal {
             }
 
             // TODO: This is dubious because of rollbacks.
-            t.sender().set_negotiated();
+            t.sender().await.set_negotiated();
             media_sections.push(MediaSection {
-                id: t.mid().unwrap(),
+                id: t.mid().unwrap().to_string(),
                 transceivers: vec![Arc::clone(t)],
                 ..Default::default()
             });
@@ -755,7 +756,7 @@ impl PeerConnectionInternal {
                         }
 
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
-                            t.sender().set_negotiated();
+                            t.sender().await.set_negotiated();
                             let media_transceivers = vec![t];
 
                             // NB: The below could use `then_some`, but with our current MSRV
@@ -780,9 +781,9 @@ impl PeerConnectionInternal {
         // If we are offering also include unmatched local transceivers
         if include_unmatched {
             for t in &local_transceivers {
-                t.sender().set_negotiated();
+                t.sender().await.set_negotiated();
                 media_sections.push(MediaSection {
-                    id: t.mid().unwrap(),
+                    id: t.mid().unwrap().to_string(),
                     transceivers: vec![Arc::clone(t)],
                     ..Default::default()
                 });
@@ -886,7 +887,7 @@ impl PeerConnectionInternal {
             )
             .await?;
 
-        let receiver = t.receiver();
+        let receiver = t.receiver().await;
         PeerConnectionInternal::start_receiver(
             self.setting_engine.get_receive_mtu(),
             &incoming,
@@ -945,7 +946,7 @@ impl PeerConnectionInternal {
         let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
         // Packets that we read as part of simulcast probing that we need to make available
         // if we do find a track later.
-        let mut buffered_packets: VecDeque<(Bytes, Attributes)> = VecDeque::default();
+        let mut buffered_packets: VecDeque<(rtp::packet::Packet, Attributes)> = VecDeque::default();
 
         let n = rtp_stream.read(&mut buf).await?;
 
@@ -955,8 +956,11 @@ impl PeerConnectionInternal {
             sid_extension_id as u8,
             rsid_extension_id as u8,
         )?;
+
+        let packet = rtp::packet::Packet::unmarshal(&mut buf.as_slice()).unwrap();
+
         // TODO: Can we have attributes on the first packets?
-        buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), Attributes::new()));
+        buffered_packets.push_back((packet, Attributes::new()));
 
         let params = self
             .media_engine
@@ -983,7 +987,7 @@ impl PeerConnectionInternal {
         let a = Attributes::new();
         for _ in 0..=SIMULCAST_PROBE_COUNT {
             if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
-                let (n, _) = rtp_interceptor.read(&mut buf, &a).await?;
+                let (pkt, _) = rtp_interceptor.read(&mut buf, &a).await?;
                 let (m, r, rs, _) = handle_unknown_rtp_packet(
                     &buf[..n],
                     mid_extension_id as u8,
@@ -994,17 +998,17 @@ impl PeerConnectionInternal {
                 rid = r;
                 rsid = rs;
 
-                buffered_packets.push_back((Bytes::copy_from_slice(&buf[..n]), a.clone()));
+                buffered_packets.push_back((pkt, a.clone()));
                 continue;
             }
 
             let transceivers = self.rtp_transceivers.lock().await;
             for t in &*transceivers {
-                if t.mid().as_ref() != Some(&mid) {
+                if t.mid().as_ref() != Some(&SmolStr::from(&mid)) {
                     continue;
                 }
 
-                let receiver = t.receiver();
+                let receiver = t.receiver().await;
 
                 if !rsid.is_empty() {
                     return receiver
@@ -1024,7 +1028,7 @@ impl PeerConnectionInternal {
 
                 let track = receiver
                     .receive_for_rid(
-                        rid,
+                        SmolStr::from(rid),
                         params,
                         TrackStream {
                             stream_info: Some(stream_info.clone()),
@@ -1074,8 +1078,8 @@ impl PeerConnectionInternal {
             tokio::spawn(async move {
                 if let Some(track) = receiver.track().await {
                     let mut b = vec![0u8; receive_mtu];
-                    let n = match track.peek(&mut b).await {
-                        Ok((n, _)) => n,
+                    let pkt = match track.peek(&mut b).await {
+                        Ok((pkt, _)) => pkt,
                         Err(err) => {
                             log::warn!(
                                 "Could not determine PayloadType for SSRC {} ({})",
@@ -1086,7 +1090,7 @@ impl PeerConnectionInternal {
                         }
                     };
 
-                    if let Err(err) = track.check_and_update_track(&b[..n]).await {
+                    if let Err(err) = track.check_and_update_track(&pkt).await {
                         log::warn!(
                             "Failed to set codec settings for track SSRC {} ({})",
                             track.ssrc(),
@@ -1163,7 +1167,7 @@ impl PeerConnectionInternal {
     pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
-            let m = match t.mid().and_then(|mid| get_by_mid(&mid, desc)) {
+            let m = match t.mid().and_then(|mid| get_by_mid(mid.as_str(), desc)) {
                 Some(m) => m,
                 None => return true,
             };
@@ -1200,13 +1204,13 @@ impl PeerConnectionInternal {
         // TODO: There's a lot of await points here that could run concurrently with `futures::join_all`.
         struct TrackInfo {
             ssrc: SSRC,
-            mid: String,
+            mid: SmolStr,
             track_id: String,
             kind: &'static str,
         }
         let mut track_infos = vec![];
         for transeiver in transceivers {
-            let receiver = transeiver.receiver();
+            let receiver = transeiver.receiver().await;
 
             if let Some(mid) = transeiver.mid() {
                 let tracks = receiver.tracks().await;
@@ -1325,13 +1329,13 @@ impl PeerConnectionInternal {
         struct TrackInfo {
             track_id: String,
             ssrc: SSRC,
-            mid: String,
-            rid: Option<String>,
+            mid: SmolStr,
+            rid: Option<SmolStr>,
             kind: &'static str,
         }
         let mut track_infos = vec![];
         for transceiver in transceivers {
-            let sender = transceiver.sender();
+            let sender = transceiver.sender().await;
 
             let mid = match transceiver.mid() {
                 Some(mid) => mid,
@@ -1353,7 +1357,7 @@ impl PeerConnectionInternal {
             track_infos.push(TrackInfo {
                 track_id,
                 ssrc: sender.ssrc,
-                mid: mid.clone(),
+                mid,
                 rid: None,
                 kind,
             });
