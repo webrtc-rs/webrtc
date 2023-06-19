@@ -1,8 +1,13 @@
-use super::{chunk_header::*, chunk_type::*, *};
-use crate::param::{param_header::*, param_type::*, *};
+use std::fmt;
 
 use bytes::{Bytes, BytesMut};
-use std::fmt;
+
+use super::chunk_header::*;
+use super::chunk_type::*;
+use super::*;
+use crate::param::param_header::*;
+use crate::param::param_type::*;
+use crate::param::*;
 
 ///chunkHeartbeat represents an SCTP Chunk of type HEARTBEAT
 ///

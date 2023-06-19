@@ -1,9 +1,10 @@
+use std::time::{Duration, UNIX_EPOCH};
+
+use chrono::prelude::*;
+
 use super::*;
 use crate::codecs::*;
 use crate::error::Result;
-
-use chrono::prelude::*;
-use std::time::{Duration, UNIX_EPOCH};
 
 #[test]
 fn test_packetizer() -> Result<()> {

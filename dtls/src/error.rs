@@ -1,8 +1,8 @@
-use thiserror::Error;
-
-use rcgen::RcgenError;
 use std::io;
 use std::string::FromUtf8Error;
+
+use rcgen::RcgenError;
+use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 use util::KeyingMaterialExporterError;
 

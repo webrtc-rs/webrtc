@@ -1,12 +1,11 @@
 #[cfg(test)]
 mod periodic_timer_test;
 
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::Duration;
-
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::Duration;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TimerIdRefresh {

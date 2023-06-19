@@ -1,6 +1,5 @@
-use crate::{MediaTrackSetting, ResolvedMediaTrackConstraint};
-
 use super::FitnessDistance;
+use crate::{MediaTrackSetting, ResolvedMediaTrackConstraint};
 
 /// An error indicating a rejected fitness distance computation,
 /// likely caused by a mismatched yet required constraint.
@@ -117,9 +116,9 @@ impl<'a> FitnessDistance<Option<&'a MediaTrackSetting>> for ResolvedMediaTrackCo
 
 #[cfg(test)]
 mod tests {
-    use crate::{constraint::EmptyConstraint, MediaTrackSetting, ResolvedMediaTrackConstraint};
-
     use super::*;
+    use crate::constraint::EmptyConstraint;
+    use crate::{MediaTrackSetting, ResolvedMediaTrackConstraint};
 
     #[test]
     fn empty_constraint() {
@@ -150,9 +149,8 @@ mod tests {
     }
 
     mod bool_constraint {
-        use crate::ResolvedValueConstraint;
-
         use super::*;
+        use crate::ResolvedValueConstraint;
 
         #[test]
         fn bool_setting() {
@@ -231,9 +229,8 @@ mod tests {
     }
 
     mod numeric_constraint {
-        use crate::ResolvedValueRangeConstraint;
-
         use super::*;
+        use crate::ResolvedValueRangeConstraint;
 
         #[test]
         fn missing_settings() {
@@ -357,9 +354,8 @@ mod tests {
     }
 
     mod string_constraint {
-        use crate::ResolvedValueConstraint;
-
         use super::*;
+        use crate::ResolvedValueConstraint;
 
         #[test]
         fn missing_settings() {
@@ -445,9 +441,8 @@ mod tests {
     }
 
     mod string_sequence_constraint {
-        use crate::ResolvedValueSequenceConstraint;
-
         use super::*;
+        use crate::ResolvedValueSequenceConstraint;
 
         #[test]
         fn missing_settings() {

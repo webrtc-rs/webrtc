@@ -6,27 +6,21 @@ pub mod data_channel_message;
 pub mod data_channel_parameters;
 pub mod data_channel_state;
 
-use data_channel_message::*;
-use data_channel_parameters::*;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
+use std::sync::{Arc, Weak};
+use std::time::SystemTime;
 
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::{
-        atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering},
-        Arc, Weak,
-    },
-    time::SystemTime,
-};
-
 use data::message::message_channel_open::ChannelType;
+use data_channel_message::*;
+use data_channel_parameters::*;
+use data_channel_state::RTCDataChannelState;
 use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::{Mutex, Notify};
 use util::sync::Mutex as SyncMutex;
-
-use data_channel_state::RTCDataChannelState;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::error::{Error, OnErrorHdlrFn, Result};

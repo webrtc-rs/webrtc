@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use crate::error::Result;
 use crate::{Interceptor, InterceptorBuilder};
-use std::sync::Arc;
 
 pub type MockBuilderResult = Result<Arc<dyn Interceptor + Send + Sync>>;
 

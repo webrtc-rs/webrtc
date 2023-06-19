@@ -1,3 +1,8 @@
+use std::sync::atomic::AtomicU32;
+
+use tokio::time::Duration;
+use waitgroup::WaitGroup;
+
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
@@ -7,9 +12,6 @@ use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
-use std::sync::atomic::AtomicU32;
-use tokio::time::Duration;
-use waitgroup::WaitGroup;
 
 #[tokio::test]
 async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {

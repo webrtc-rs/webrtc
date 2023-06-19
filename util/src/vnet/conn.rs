@@ -1,17 +1,17 @@
 #[cfg(test)]
 mod conn_test;
 
+use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use tokio::sync::{mpsc, Mutex};
+
 use crate::conn::Conn;
 use crate::error::*;
 use crate::sync::RwLock;
 use crate::vnet::chunk::{Chunk, ChunkUdp};
-
-use std::net::{IpAddr, SocketAddr};
-use tokio::sync::{mpsc, Mutex};
-
-use async_trait::async_trait;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 const MAX_READ_QUEUE_SIZE: usize = 1024;
 

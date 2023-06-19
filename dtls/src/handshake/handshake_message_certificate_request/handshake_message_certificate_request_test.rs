@@ -1,7 +1,7 @@
+use std::io::{BufReader, BufWriter};
+
 use super::*;
 use crate::signature_hash_algorithm::*;
-
-use std::io::{BufReader, BufWriter};
 
 #[test]
 fn test_handshake_message_certificate_request() -> Result<()> {

@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod handshake_message_certificate_verify_test;
 
-use super::*;
-use crate::signature_hash_algorithm::*;
+use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
+
+use super::*;
+use crate::signature_hash_algorithm::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeMessageCertificateVerify {

@@ -1,8 +1,9 @@
+use std::ops::Add;
+
+use tokio::time::Duration;
+
 use super::*;
 use crate::error::*;
-
-use std::ops::Add;
-use tokio::time::Duration;
 
 #[tokio::test]
 async fn test_agent_process_in_transaction() -> Result<()> {

@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod ogg_writer_test;
 
-use crate::error::Result;
-use crate::io::ogg_reader::*;
-use crate::io::Writer;
+use std::io::{BufWriter, Seek, Write};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use rtp::packetizer::Depacketizer;
-use std::io::{BufWriter, Seek, Write};
+
+use crate::error::Result;
+use crate::io::ogg_reader::*;
+use crate::io::Writer;
 
 /// OggWriter is used to take RTP packets and write them to an OGG on disk
 pub struct OggWriter<W: Write + Seek> {

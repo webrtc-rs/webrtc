@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod url_test;
 
-use crate::error::*;
-
 use std::borrow::Cow;
 use std::convert::From;
 use std::fmt;
+
+use crate::error::*;
 
 /// The type of server used in the ice.URL structure.
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]

@@ -1,9 +1,10 @@
-use super::*;
-use crate::checks::*;
+use std::io::BufReader;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use std::io::BufReader;
+
+use super::*;
+use crate::checks::*;
 
 #[test]
 fn test_xor_safe() -> Result<()> {

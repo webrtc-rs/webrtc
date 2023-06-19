@@ -1,9 +1,10 @@
-use crate::candidate::{CandidatePairState, CandidateType};
+use std::sync::atomic::Ordering;
+
+use tokio::time::Instant;
 
 use crate::agent::agent_internal::AgentInternal;
+use crate::candidate::{CandidatePairState, CandidateType};
 use crate::network_type::NetworkType;
-use std::sync::atomic::Ordering;
-use tokio::time::Instant;
 
 /// Contains ICE candidate pair statistics.
 pub struct CandidatePairStats {

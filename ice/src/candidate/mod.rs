@@ -13,19 +13,20 @@ pub mod candidate_peer_reflexive;
 pub mod candidate_relay;
 pub mod candidate_server_reflexive;
 
-use crate::error::Result;
-use crate::network_type::*;
-use crate::tcp_type::*;
-use candidate_base::*;
-
-use async_trait::async_trait;
-use serde::Serialize;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
+
+use async_trait::async_trait;
+use candidate_base::*;
+use serde::Serialize;
 use tokio::sync::{broadcast, Mutex};
+
+use crate::error::Result;
+use crate::network_type::*;
+use crate::tcp_type::*;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 pub(crate) const DEFAULT_LOCAL_PREFERENCE: u16 = 65535;

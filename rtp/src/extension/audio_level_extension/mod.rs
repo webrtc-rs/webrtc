@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod audio_level_extension_test;
 
-use crate::error::Error;
+use bytes::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use bytes::{Buf, BufMut};
+use crate::error::Error;
 
 // AUDIO_LEVEL_EXTENSION_SIZE One byte header size
 pub const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;

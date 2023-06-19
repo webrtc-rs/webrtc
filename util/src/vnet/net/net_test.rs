@@ -1,7 +1,7 @@
+use tokio::sync::{broadcast, mpsc};
+
 use super::*;
 use crate::vnet::chunk::ChunkUdp;
-
-use tokio::sync::{broadcast, mpsc};
 
 const DEMO_IP: &str = "1.2.3.4";
 

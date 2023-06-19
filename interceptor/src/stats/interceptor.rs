@@ -3,7 +3,6 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use super::{inbound, outbound, StatsContainer};
 use async_trait::async_trait;
 use rtcp::extended_report::{DLRRReportBlock, ExtendedReport};
 use rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
@@ -14,10 +13,10 @@ use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
 use rtp::extension::abs_send_time_extension::unix2ntp;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Duration;
-
 use util::sync::Mutex;
 use util::MarshalSize;
 
+use super::{inbound, outbound, StatsContainer};
 use crate::error::Result;
 use crate::stream_info::StreamInfo;
 use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
@@ -837,6 +836,9 @@ mod test {
         };
     }
 
+    use std::sync::Arc;
+    use std::time::{Duration, SystemTime};
+
     use bytes::Bytes;
     use rtcp::extended_report::{DLRRReport, DLRRReportBlock, ExtendedReport};
     use rtcp::payload_feedbacks::full_intra_request::{FirEntry, FullIntraRequest};
@@ -846,14 +848,10 @@ mod test {
     use rtcp::sender_report::SenderReport;
     use rtcp::transport_feedbacks::transport_layer_nack::{NackPair, TransportLayerNack};
 
-    use std::sync::Arc;
-    use std::time::{Duration, SystemTime};
-
+    use super::StatsInterceptor;
     use crate::error::Result;
     use crate::mock::mock_stream::MockStream;
     use crate::stream_info::StreamInfo;
-
-    use super::StatsInterceptor;
 
     #[tokio::test]
     async fn test_stats_interceptor_rtp() -> Result<()> {

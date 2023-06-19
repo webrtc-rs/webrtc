@@ -1,5 +1,6 @@
-use async_trait::async_trait;
 use std::sync::Weak;
+
+use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 

@@ -1,7 +1,8 @@
-use crate::error::Result;
+use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
+
+use crate::error::Result;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CompressionMethodId {

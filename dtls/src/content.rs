@@ -1,10 +1,10 @@
+use std::io::{Read, Write};
+
 use super::alert::*;
 use super::application_data::*;
 use super::change_cipher_spec::*;
 use super::handshake::*;
 use crate::error::*;
-
-use std::io::{Read, Write};
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
 #[derive(Default, Copy, Clone, PartialEq, Eq, Debug)]

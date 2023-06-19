@@ -1,9 +1,8 @@
-use thiserror::Error;
-
-use std::io;
-use std::net;
 use std::num::ParseIntError;
 use std::time::SystemTimeError;
+use std::{io, net};
+
+use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

@@ -1,7 +1,8 @@
-use super::*;
-use crate::vnet::chunk::ChunkUdp;
 use std::net::SocketAddr;
 use std::str::FromStr;
+
+use super::*;
+use crate::vnet::chunk::ChunkUdp;
 
 // oic: outbound internal chunk
 // oec: outbound external chunk

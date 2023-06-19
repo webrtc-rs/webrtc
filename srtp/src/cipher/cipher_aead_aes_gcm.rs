@@ -1,16 +1,13 @@
-use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, Payload},
-    Aes128Gcm, KeyInit, Nonce,
-};
+use aes_gcm::aead::generic_array::GenericArray;
+use aes_gcm::aead::{Aead, Payload};
+use aes_gcm::{Aes128Gcm, KeyInit, Nonce};
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Bytes, BytesMut};
+use util::marshal::*;
 
 use super::Cipher;
-use crate::{
-    error::{Error, Result},
-    key_derivation::*,
-};
-use util::marshal::*;
+use crate::error::{Error, Result};
+use crate::key_derivation::*;
 
 pub const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
 

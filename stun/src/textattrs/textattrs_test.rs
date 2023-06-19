@@ -1,8 +1,8 @@
+use std::io::BufReader;
+
 use super::*;
 use crate::checks::*;
 use crate::error::*;
-
-use std::io::BufReader;
 
 #[test]
 fn test_software_get_from() -> Result<()> {

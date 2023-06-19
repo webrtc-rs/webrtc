@@ -1,6 +1,6 @@
-use super::*;
-
 use std::io::{BufReader, BufWriter};
+
+use super::*;
 
 #[test]
 fn test_change_cipher_spec_round_trip() -> Result<()> {

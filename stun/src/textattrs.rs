@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod textattrs_test;
 
+use std::fmt;
+
 use crate::attributes::*;
 use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
 
 const MAX_USERNAME_B: usize = 513;
 const MAX_REALM_B: usize = 763;

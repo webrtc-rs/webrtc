@@ -1,8 +1,7 @@
-use super::*;
-
-use crate::nack::UINT16SIZE_HALF;
-
 use util::sync::Mutex;
+
+use super::*;
+use crate::nack::UINT16SIZE_HALF;
 
 struct GeneratorStreamInternal {
     packets: Vec<u64>,

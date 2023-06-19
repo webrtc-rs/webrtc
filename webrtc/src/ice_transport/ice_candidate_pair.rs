@@ -1,6 +1,6 @@
-use crate::ice_transport::ice_candidate::*;
-
 use std::fmt;
+
+use crate::ice_transport::ice_candidate::*;
 
 /// ICECandidatePair represents an ICE Candidate pair
 #[derive(Default, Debug, Clone, PartialEq, Eq)]

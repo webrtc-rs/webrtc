@@ -1,6 +1,6 @@
-use super::*;
-
 use tokio::net::UdpSocket;
+
+use super::*;
 
 #[async_trait]
 impl Conn for UdpSocket {

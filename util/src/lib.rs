@@ -1,10 +1,10 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+use std::io;
+
 use async_trait::async_trait;
 use thiserror::Error;
-
-use std::io;
 
 #[cfg(feature = "vnet")]
 #[macro_use]
@@ -76,10 +76,8 @@ pub mod marshal;
 
 #[cfg(feature = "buffer")]
 pub use crate::buffer::Buffer;
-
 #[cfg(feature = "conn")]
 pub use crate::conn::Conn;
-
 #[cfg(feature = "marshal")]
 pub use crate::marshal::{exact_size_buf::ExactSizeBuf, Marshal, MarshalSize, Unmarshal};
 

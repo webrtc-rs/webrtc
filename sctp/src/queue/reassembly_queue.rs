@@ -1,9 +1,8 @@
-use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
-use crate::util::*;
-
-use crate::error::{Error, Result};
-
 use std::cmp::Ordering;
+
+use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
+use crate::error::{Error, Result};
+use crate::util::*;
 
 fn sort_chunks_by_tsn(c: &mut [ChunkPayloadData]) {
     c.sort_by(|a, b| {

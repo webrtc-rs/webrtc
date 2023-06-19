@@ -1,11 +1,12 @@
+use std::sync::atomic::{AtomicU16, AtomicU8};
+
+use util::sync::Mutex as SyncMutex;
+
 use super::candidate_base::*;
 use super::*;
 use crate::error::*;
 use crate::rand::generate_cand_id;
 use crate::util::*;
-use std::sync::atomic::{AtomicU16, AtomicU8};
-
-use util::sync::Mutex as SyncMutex;
 
 /// The config required to create a new `CandidatePeerReflexive`.
 #[derive(Default)]

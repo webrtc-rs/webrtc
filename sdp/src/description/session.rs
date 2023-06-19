@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, io};
-use url::Url;
 
-use crate::error::{Error, Result};
-use crate::lexer::*;
-use crate::util::*;
+use url::Url;
 
 use super::common::*;
 use super::media::*;
+use crate::error::{Error, Result};
+use crate::lexer::*;
+use crate::util::*;
 
 /// Constants for SDP attributes used in JSEP
 pub const ATTR_KEY_CANDIDATE: &str = "candidate";

@@ -1,6 +1,16 @@
 #[cfg(test)]
 mod rtp_sender_test;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
+
+use ice::rand::generate_crypto_random_string;
+use interceptor::stream_info::StreamInfo;
+use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
+use tokio::sync::{mpsc, Mutex, Notify};
+use util::sync::Mutex as SyncMutex;
+
+use super::srtp_writer_future::SequenceTransformer;
 use crate::api::media_engine::MediaEngine;
 use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{Error, Result};
@@ -14,16 +24,6 @@ use crate::rtp_transceiver::{
 use crate::track::track_local::{
     InterceptorToTrackLocalWriter, TrackLocal, TrackLocalContext, TrackLocalWriter,
 };
-
-use ice::rand::generate_crypto_random_string;
-use interceptor::stream_info::StreamInfo;
-use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
-use tokio::sync::{mpsc, Mutex, Notify};
-use util::sync::Mutex as SyncMutex;
-
-use super::srtp_writer_future::SequenceTransformer;
 
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: Mutex<mpsc::Receiver<()>>,

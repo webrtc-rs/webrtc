@@ -1,12 +1,13 @@
-use super::*;
+use std::fs::File;
+use std::io::{self, Read};
+use std::path::PathBuf;
 
 use dtls::crypto::{Certificate, CryptoPrivateKey};
 use rcgen::KeyPair;
 use rustls::internal::pemfile::certs;
-use std::fs::File;
-use std::io::{self, Read};
-use std::path::PathBuf;
 use thiserror::Error;
+
+use super::*;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum Error {

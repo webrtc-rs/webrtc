@@ -1,8 +1,8 @@
-use super::*;
-use crate::error::Result;
+use bytes::Bytes;
 use util::marshal::*;
 
-use bytes::Bytes;
+use super::*;
+use crate::error::Result;
 
 impl Context {
     /// DecryptRTCP decrypts a RTCP packet with an encrypted payload

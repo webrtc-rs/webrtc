@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod abs_send_time_extension_test;
 
-use crate::error::Error;
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::{Buf, BufMut};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
 
 pub const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
 

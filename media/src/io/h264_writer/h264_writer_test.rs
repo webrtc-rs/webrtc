@@ -1,6 +1,8 @@
-use super::*;
-use bytes::Bytes;
 use std::io::Cursor;
+
+use bytes::Bytes;
+
+use super::*;
 
 #[test]
 fn test_is_key_frame() -> Result<()> {

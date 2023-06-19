@@ -4,7 +4,8 @@
 //! [media_stream_track]: https://www.w3.org/TR/mediacapture-streams/#mediastreamtrack
 //! [media_track_supported_constraints]: https://www.w3.org/TR/mediacapture-streams/#dom-mediatracksupportedconstraints
 
-use std::{borrow::Cow, fmt::Display};
+use std::borrow::Cow;
+use std::fmt::Display;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -285,9 +286,8 @@ mod tests {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::macros::test_serde_symmetry;
-
     use super::*;
+    use crate::macros::test_serde_symmetry;
 
     type Subject = MediaTrackProperty;
 

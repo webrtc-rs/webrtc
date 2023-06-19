@@ -1,5 +1,6 @@
-use super::*;
 use bytes::Bytes;
+
+use super::*;
 
 #[test]
 fn test_transport_layer_cc_run_length_chunk_unmarshal() -> Result<()> {

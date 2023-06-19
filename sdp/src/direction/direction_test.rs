@@ -1,5 +1,6 @@
-use super::*;
 use std::iter::Iterator;
+
+use super::*;
 
 #[test]
 fn test_new_direction() {

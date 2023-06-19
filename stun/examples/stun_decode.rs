@@ -1,7 +1,6 @@
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use clap::{App, Arg};
-
 use stun::message::Message;
 
 fn main() {

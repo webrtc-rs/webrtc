@@ -1,5 +1,6 @@
-use super::*;
 use bytes::Bytes;
+
+use super::*;
 
 #[test]
 fn test_rapid_resynchronization_request_unmarshal() {

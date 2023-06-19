@@ -1,14 +1,11 @@
-use crate::error::Result;
-
-use super::*;
-
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::{broadcast, mpsc};
+use tokio::time::Duration;
 use util::conn::conn_bridge::*;
 use util::conn::*;
 
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::{broadcast, mpsc};
-use tokio::time::Duration;
+use super::*;
+use crate::error::Result;
 
 async fn bridge_process_at_least_one(br: &Arc<Bridge>) {
     let mut n_sum = 0;

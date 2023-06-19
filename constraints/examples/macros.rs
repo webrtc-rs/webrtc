@@ -1,14 +1,12 @@
 use std::iter::FromIterator;
 
-use webrtc_constraints::{
-    algorithms::{
-        select_settings_candidates, ClosestToIdealPolicy, DeviceInformationExposureMode,
-        TieBreakingPolicy,
-    },
-    macros::*,
-    property::all::name::*,
-    settings, MediaTrackSupportedConstraints, ResizeMode,
+use webrtc_constraints::algorithms::{
+    select_settings_candidates, ClosestToIdealPolicy, DeviceInformationExposureMode,
+    TieBreakingPolicy,
 };
+use webrtc_constraints::macros::*;
+use webrtc_constraints::property::all::name::*;
+use webrtc_constraints::{settings, MediaTrackSupportedConstraints, ResizeMode};
 
 fn main() {
     let supported_constraints =

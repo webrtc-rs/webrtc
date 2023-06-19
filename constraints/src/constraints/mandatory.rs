@@ -1,17 +1,14 @@
-use std::{
-    iter::FromIterator,
-    ops::{Deref, DerefMut},
-};
+use std::iter::FromIterator;
+use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use super::constraint_set::GenericMediaTrackConstraintSet;
 use crate::{
     MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackProperty,
     MediaTrackSupportedConstraints, ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
 };
-
-use super::constraint_set::GenericMediaTrackConstraintSet;
 
 /// The list of mandatory constraint sets for a [`MediaStreamTrack`][media_stream_track] object.
 ///
@@ -171,12 +168,11 @@ impl ResolvedMandatoryMediaTrackConstraints {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        property::all::name::*, ResolvedMediaTrackConstraintSet, ResolvedValueConstraint,
-        ResolvedValueRangeConstraint,
-    };
-
     use super::*;
+    use crate::property::all::name::*;
+    use crate::{
+        ResolvedMediaTrackConstraintSet, ResolvedValueConstraint, ResolvedValueRangeConstraint,
+    };
 
     #[test]
     fn basic() {
@@ -259,9 +255,9 @@ mod tests {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{property::all::name::*, MediaTrackConstraintSet};
-
     use super::*;
+    use crate::property::all::name::*;
+    use crate::MediaTrackConstraintSet;
 
     #[test]
     fn serialize_default() {

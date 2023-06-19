@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod extension_server_name_test;
 
-use super::*;
+use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
+
+use super::*;
 
 const EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME: u8 = 0;
 

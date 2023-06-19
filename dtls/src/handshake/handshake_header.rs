@@ -1,7 +1,8 @@
-use super::*;
+use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
+
+use super::*;
 
 // msg_len for Handshake messages assumes an extra 12 bytes for
 // sequence, Fragment and version information

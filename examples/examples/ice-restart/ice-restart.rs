@@ -1,11 +1,12 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tokio_util::codec::{BytesCodec, FramedRead};

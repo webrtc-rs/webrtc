@@ -1,11 +1,12 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use tokio::sync::{mpsc, Mutex};
+use util::Marshal;
+
 use crate::error::{Error, Result};
 use crate::stream_info::StreamInfo;
 use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
-
-use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use util::Marshal;
 
 type RTCPPackets = Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>;
 
@@ -291,10 +292,11 @@ impl RTPReader for MockStream {
 
 #[cfg(test)]
 mod test {
+    use tokio::time::Duration;
+
     use super::*;
     use crate::noop::NoOp;
     use crate::test::timeout_or_fail;
-    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_mock_stream() -> Result<()> {

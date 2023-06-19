@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod transport_cc_extension_test;
 
-use crate::error::Error;
+use bytes::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use bytes::{Buf, BufMut};
+use crate::error::Error;
 
 // transport-wide sequence
 pub const TRANSPORT_CC_EXTENSION_SIZE: usize = 2;

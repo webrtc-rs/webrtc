@@ -1,3 +1,7 @@
+use std::fmt;
+
+use async_trait::async_trait;
+
 use super::flight0::*;
 use super::flight4::*;
 use super::*;
@@ -6,9 +10,6 @@ use crate::error::Error;
 use crate::handshake::handshake_message_hello_verify_request::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
-
-use async_trait::async_trait;
-use std::fmt;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Flight2;

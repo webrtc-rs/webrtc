@@ -2,18 +2,18 @@ use std::iter::FromIterator;
 
 use lazy_static::lazy_static;
 
+use super::DeviceInformationExposureMode;
+use crate::algorithms::{select_settings_candidates, SelectSettingsError};
+use crate::errors::OverconstrainedError;
+use crate::property::all::name::*;
+use crate::property::all::names as all_properties;
 use crate::{
-    algorithms::{select_settings_candidates, SelectSettingsError},
-    errors::OverconstrainedError,
-    property::all::{name::*, names as all_properties},
     AdvancedMediaTrackConstraints, FacingMode, MandatoryMediaTrackConstraints,
     MediaTrackConstraints, MediaTrackSettings, MediaTrackSupportedConstraints, ResizeMode,
     ResolvedAdvancedMediaTrackConstraints, ResolvedMandatoryMediaTrackConstraints,
     ResolvedMediaTrackConstraint, ResolvedMediaTrackConstraints, ResolvedValueConstraint,
     ResolvedValueRangeConstraint, ResolvedValueSequenceConstraint, SanitizedMediaTrackConstraints,
 };
-
-use super::DeviceInformationExposureMode;
 
 lazy_static! {
     static ref VIDEO_IDEAL: MediaTrackSettings = MediaTrackSettings::from_iter([
@@ -161,9 +161,8 @@ mod unconstrained {
 }
 
 mod overconstrained {
-    use crate::MediaTrackProperty;
-
     use super::*;
+    use crate::MediaTrackProperty;
 
     #[test]
     fn protected() {
@@ -502,9 +501,8 @@ mod constrained {
 //     selected settings: ─────────────────────────────────────────┘
 // ```
 mod smoke {
-    use crate::{MediaTrackConstraintSet, ValueConstraint, ValueRangeConstraint};
-
     use super::*;
+    use crate::{MediaTrackConstraintSet, ValueConstraint, ValueRangeConstraint};
 
     #[test]
     fn native() {

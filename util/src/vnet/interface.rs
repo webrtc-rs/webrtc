@@ -1,7 +1,9 @@
-use crate::error::*;
-use ipnet::*;
 use std::net::SocketAddr;
 use std::str::FromStr;
+
+use ipnet::*;
+
+use crate::error::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct Interface {

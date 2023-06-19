@@ -36,15 +36,17 @@ fn test_generate_auth_key() -> Result<()> {
 #[cfg(target_family = "unix")]
 #[tokio::test]
 async fn test_new_long_term_auth_handler() -> Result<()> {
-    use crate::client::*;
-    use crate::relay::relay_static::*;
-    use crate::server::{config::*, *};
-
     use std::net::IpAddr;
     use std::str::FromStr;
     use std::sync::Arc;
+
     use tokio::net::UdpSocket;
     use util::vnet::net::*;
+
+    use crate::client::*;
+    use crate::relay::relay_static::*;
+    use crate::server::config::*;
+    use crate::server::*;
 
     //env_logger::init();
 
