@@ -27,7 +27,7 @@ async fn pipe() -> Result<(
     let daddr = d_conn.local_addr()?;
 
     // Accept the connection
-    let (l_conn, raddr) = listener.accept().await?;
+    let (l_conn, _ctx, raddr) = listener.accept().await?;
     assert_eq!(daddr, raddr, "remote address should be match");
 
     let raddr = l_conn.remote_addr();
@@ -119,7 +119,7 @@ async fn test_listener_accept_filter() -> Result<()> {
         let listener2 = Arc::clone(&listener);
         tokio::spawn(async move {
             let (c, _raddr) = match listener2.accept().await {
-                Ok((c, raddr)) => (c, raddr),
+                Ok((c, _ctx, raddr)) => (c, raddr),
                 Err(err) => {
                     assert_eq!(Error::ErrClosedListener, err);
                     return Result::<()>::Ok(());
@@ -179,7 +179,7 @@ async fn test_listener_concurrent() -> Result<()> {
 
     let mut b = vec![0u8; 1];
     for i in 0..BACKLOG as u8 {
-        let (conn, _raddr) = listener.accept().await?;
+        let (conn, _ctx, _raddr) = listener.accept().await?;
         let n = conn.recv(&mut b).await?;
         assert_eq!(
             &b[..n],
@@ -197,7 +197,7 @@ async fn test_listener_concurrent() -> Result<()> {
     let listener2 = Arc::clone(&listener);
     tokio::spawn(async move {
         match listener2.accept().await {
-            Ok((conn, _raddr)) => {
+            Ok((conn, _ctx, _raddr)) => {
                 conn.close().await?;
             }
             Err(err) => {
