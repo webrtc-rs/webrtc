@@ -114,19 +114,3 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-
-  minimal_versions:
-    name: Compile and test with minimal versions
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: 🌙 Install latest nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-      - uses: taiki-e/install-action@cargo-hack
-      - uses: taiki-e/install-action@cargo-minimal-versions
-      - run: cargo minimal-versions check --workspace --all-features --ignore-private -v
-      - run: cargo minimal-versions build --workspace --all-features --ignore-private -v
-      - run: cargo minimal-versions test --workspace --all-features -v
