@@ -42,7 +42,7 @@
 </a><br>
 <p align="center">
 <strong>Silver Sponsors:</strong><br>
-<a href="https://getstream.io/?utm_source=https://github.com/webrtc-rs/webrtc&utm_medium=github&utm_content=developer&utm_term=webrtc" target="_blank">
+<a href="https://getstream.io/video/voice-calling/?utm_source=https://github.com/webrtc-rs/webrtc&utm_medium=sponsorship&utm_content=&utm_campaign=webrtcRepo_July2023_video_klmh22" target="_blank">
 <img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?h=50" alt="Stream Chat">
 </a><br>
 <a href="https://kittycad.io/" target="_blank">
@@ -51,7 +51,6 @@
 <strong>Bronze Sponsors:</strong><br>
 <a href="https://www.embark-studios.com/" target="_blank"><img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/embark.jpg" alt="embark"></a><br>
 <a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a><br>
-<a href="https://avstack.io/?utm_medium=social&utm_source=github&utm_campaign=webrtc-rs-sponsorship" target="_blank"><img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/AVStack.jpg" alt="AVStack" style="height:75px;"></a>
 </p>
 
 <details>
