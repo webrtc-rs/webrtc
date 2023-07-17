@@ -1,5 +1,4 @@
 use std::cmp::min;
-use std::fmt::format;
 
 use bytes::{BufMut, Bytes, BytesMut};
 
