@@ -302,18 +302,19 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         // Split the auth tag and the cipher text into two parts.
         let actual_tag = &encrypted[encrypted.len() - self.auth_tag_len()..];
-        if actual_tag.len() != self.auth_tag_len() {
-            return Err(Error::RtcpInvalidLengthAuthTag);
-        }
-
+        
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
-
+        
         // Generate the auth tag we expect to see from the ciphertext.
         let expected_tag = self.generate_srtcp_auth_tag(cipher_text);
-
+        
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
+        let len_eq = actual_tag.len() != self.auth_tag_len();
         if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
+            if !len_eq {
+                return Err(Error::RtcpInvalidLengthAuthTag);
+            }
             return Err(Error::RtcpFailedToVerifyAuthTag);
         }
 
