@@ -296,7 +296,7 @@ async fn test_net_virtual_assign_port() -> Result<()> {
             log::debug!("{} got port: {}", i, port);
 
             let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-                Arc::new(Mutex::new(DummyObserver::default()));
+                Arc::new(Mutex::new(DummyObserver));
 
             let conn = Arc::new(UdpConn::new(SocketAddr::new(ip, port), None, obs));
 
