@@ -159,7 +159,7 @@ impl<W: Write + Seek> OggWriter<W> {
 impl<W: Write + Seek> Writer for OggWriter<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
-        let mut opus_packet = rtp::codecs::opus::OpusPacket::default();
+        let mut opus_packet = rtp::codecs::opus::OpusPacket;
         let payload = opus_packet.depacketize(&packet.payload)?;
 
         // Should be equivalent to sample_rate * duration
