@@ -69,8 +69,8 @@ pub enum Error {
     SrtcpTooSmall(usize, usize),
     #[error("failed to verify rtp auth tag")]
     RtpFailedToVerifyAuthTag,
-    #[error("tag is too short")]
-    RtcpInvalidLengthAuthTag,
+    #[error("too short auth tag: only {0} bytes, expected > {1} bytes")]
+    RtcpInvalidLengthAuthTag(usize, usize),
     #[error("failed to verify rtcp auth tag")]
     RtcpFailedToVerifyAuthTag,
     #[error("SessionSRTP has been closed")]

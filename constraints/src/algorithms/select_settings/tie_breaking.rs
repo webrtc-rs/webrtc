@@ -115,7 +115,7 @@ mod tests {
             MediaTrackSettings::from_iter([(&DEVICE_ID, "device-id-2".into())]),
         ];
 
-        let policy = FirstPolicy::default();
+        let policy = FirstPolicy;
 
         let actual = policy.select_candidate(&settings);
 

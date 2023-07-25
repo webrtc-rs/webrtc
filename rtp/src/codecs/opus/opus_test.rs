@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_opus_unmarshal() -> Result<()> {
-    let mut pck = OpusPacket::default();
+    let mut pck = OpusPacket;
 
     // Empty packet
     let empty_bytes = Bytes::from_static(&[]);
@@ -19,7 +19,7 @@ fn test_opus_unmarshal() -> Result<()> {
 
 #[test]
 fn test_opus_payload() -> Result<()> {
-    let mut pck = OpusPayloader::default();
+    let mut pck = OpusPayloader;
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
 
@@ -40,7 +40,7 @@ fn test_opus_payload() -> Result<()> {
 
 #[test]
 fn test_opus_is_partition_head() -> Result<()> {
-    let opus = OpusPacket::default();
+    let opus = OpusPacket;
     //"NormalPacket"
     assert!(
         opus.is_partition_head(&Bytes::from_static(&[0x00, 0x00])),
