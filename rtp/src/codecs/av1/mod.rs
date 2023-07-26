@@ -15,6 +15,7 @@ mod packetizer;
 pub struct Av1Payloader {}
 
 impl Payloader for Av1Payloader {
+    /// Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
     fn payload(&mut self, mtu: usize, payload: &Bytes) -> crate::error::Result<Vec<Bytes>> {
         let obus = parse_obus(payload)?;
         let packets_metadata = packetize(&obus, mtu);
