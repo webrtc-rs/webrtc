@@ -55,8 +55,7 @@ pub trait BytesMutExt {
 impl BytesMutExt for BytesMut {
     fn put_leb128(&mut self, n: u32) {
         let encoded = encode_leb128(n);
-        let leb128_size = leb128_size(n);
-        for i in (0..leb128_size).rev() {
+        for i in (0..leb128_size(n)).rev() {
             let byte = (encoded >> (i * 8)) as u8;
             self.put_u8(byte)
         }
