@@ -1,3 +1,4 @@
+/// Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
 use std::cmp::min;
 
 use crate::codecs::av1::leb128::leb128_size;
