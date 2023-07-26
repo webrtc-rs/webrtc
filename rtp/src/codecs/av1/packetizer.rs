@@ -1,11 +1,13 @@
-/// Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
+//! Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
+//! Reference: https://aomediacodec.github.io/av1-rtp-spec
+
 use std::cmp::min;
 
 use crate::codecs::av1::leb128::leb128_size;
 use crate::codecs::av1::obu::{obu_type, Obu, OBU_TYPE_SEQUENCE_HEADER};
 
-// When there are 3 or less OBU (fragments) in a packet, size of the last one
-// can be omitted.
+/// When there are 3 or less OBU (fragments) in a packet, size of the last one
+/// can be omitted.
 pub const MAX_NUM_OBUS_TO_OMIT_SIZE: usize = 3;
 pub const AGGREGATION_HEADER_SIZE: usize = 1;
 
@@ -14,6 +16,7 @@ pub struct PacketMetadata {
     pub num_obu_elements: usize,
     pub first_obu_offset: usize,
     pub last_obu_size: usize,
+    /// Total size consumed by the packet.
     pub packet_size: usize,
 }
 
@@ -30,6 +33,8 @@ impl PacketMetadata {
 }
 
 /// Returns the instructions for how to packetize the OBU elements into RTP packets.
+/// Reference: https://aomediacodec.github.io/av1-rtp-spec/#45-payload-structure
+///            https://aomediacodec.github.io/av1-rtp-spec/#5-packetization-rules
 pub fn packetize(obus: &Vec<Obu>, mtu: usize) -> Vec<PacketMetadata> {
     if obus.is_empty() {
         return vec![];
@@ -169,6 +174,8 @@ pub fn packetize(obus: &Vec<Obu>, mtu: usize) -> Vec<PacketMetadata> {
     packets
 }
 
+/// Returns the aggregation header for the packet.
+/// Reference: https://aomediacodec.github.io/av1-rtp-spec/#44-av1-aggregation-header
 pub fn get_aggregation_header(
     obus: &Vec<Obu>,
     packets: &Vec<PacketMetadata>,
@@ -210,6 +217,8 @@ pub fn get_aggregation_header(
     header
 }
 
+/// Returns the number of additional bytes needed to store the previous OBU
+/// element if an additional OBU element is added to the packet.
 fn additional_bytes_for_previous_obu_element(packet: &PacketMetadata) -> usize {
     if packet.packet_size == 0 {
         // Packet is still empty => no last OBU element, no need to reserve space
@@ -225,6 +234,9 @@ fn additional_bytes_for_previous_obu_element(packet: &PacketMetadata) -> usize {
     }
 }
 
+/// Given |remaining_bytes| free bytes left in a packet, returns max size of an
+/// OBU fragment that can fit into the packet.
+/// i.e. MaxFragmentSize + Leb128Size(MaxFragmentSize) <= remaining_bytes.
 fn max_fragment_size(remaining_bytes: usize) -> usize {
     if remaining_bytes <= 1 {
         return 0;

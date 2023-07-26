@@ -16,11 +16,40 @@ pub struct Av1Payloader {}
 
 impl Payloader for Av1Payloader {
     /// Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
+    /// Reference: https://aomediacodec.github.io/av1-rtp-spec/#45-payload-structure
     fn payload(&mut self, mtu: usize, payload: &Bytes) -> crate::error::Result<Vec<Bytes>> {
+        // example:
+        //
+        // 0                   1                   2                   3
+        // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |Z|Y|1 0|N|-|-|-|  OBU element 1 size (leb128)  |               |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+               |
+        // |                                                               |
+        // :                                                               :
+        // :                      OBU element 1 data                       :
+        // :                                                               :
+        // |                                                               |
+        // |                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |                               |                               |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
+        // |                                                               |
+        // :                                                               :
+        // :                      OBU element 2 data                       :
+        // :                                                               :
+        // |                                                               |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        // Parse the payload into series of OBUs.
         let obus = parse_obus(payload)?;
+
+        // Packetize the OBUs, possibly aggregating multiple OBUs into a single packet,
+        // or splitting a single OBU across multiple packets.
         let packets_metadata = packetize(&obus, mtu);
+
         let mut payloads = vec![];
 
+        // Split the payload into RTP packets according to the packetization scheme.
         for packet_index in 0..packets_metadata.len() {
             let packet = &packets_metadata[packet_index];
             let mut obu_offset = packet.first_obu_offset;
@@ -83,6 +112,7 @@ impl Payloader for Av1Payloader {
 
             payloads.push(out.freeze());
         }
+
         Ok(payloads)
     }
 

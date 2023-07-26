@@ -1,4 +1,6 @@
-/// Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
+//! Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
+//! Reference: https://aomediacodec.github.io/av1-spec/#obu-syntax
+
 use bytes::Bytes;
 
 use crate::codecs::av1::leb128::read_leb128;
@@ -18,6 +20,7 @@ pub struct Obu {
     pub header: u8,
     pub extension_header: u8,
     pub payload: Bytes,
+    /// size of the header and payload combined.
     pub size: usize,
 }
 
@@ -31,7 +34,8 @@ impl Obu {
     }
 }
 
-/// Parses the raw payload into a list of OBU elements.
+/// Parses the payload into series of OBUs.
+/// Reference: https://aomediacodec.github.io/av1-spec/#obu-syntax
 pub fn parse_obus(payload: &Bytes) -> Result<Vec<Obu>> {
     let mut obus = vec![];
     let mut payload_data_remaining = payload.len() as isize;
