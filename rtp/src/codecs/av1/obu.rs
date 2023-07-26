@@ -13,9 +13,14 @@ pub const OBU_TYPE_MASK: u8 = 0b0_1111_000;
 
 pub const OBU_TYPE_SEQUENCE_HEADER: u8 = 1;
 pub const OBU_TYPE_TEMPORAL_DELIMITER: u8 = 2;
-pub const OBU_TYPE_TILE_LIST: u8 = 3;
+pub const OBU_TYPE_FRAME_HEADER: u8 = 3;
+pub const OBU_TYPE_TILE_GROUP: u8 = 4;
+pub const OBU_TYPE_METADATA: u8 = 5;
+pub const OBU_TYPE_FRAME: u8 = 6;
+pub const OBU_TYPE_TILE_LIST: u8 = 8;
 pub const OBU_TYPE_PADDING: u8 = 15;
 
+#[derive(Debug, Clone)]
 pub struct Obu {
     pub header: u8,
     pub extension_header: u8,

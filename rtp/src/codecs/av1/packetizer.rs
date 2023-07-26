@@ -32,7 +32,7 @@ impl PacketMetadata {
     }
 }
 
-/// Returns the instructions for how to packetize the OBU elements into RTP packets.
+/// Returns the scheme for how to aggregate or split the OBUs across RTP packets.
 /// Reference: https://aomediacodec.github.io/av1-rtp-spec/#45-payload-structure
 ///            https://aomediacodec.github.io/av1-rtp-spec/#5-packetization-rules
 pub fn packetize(obus: &Vec<Obu>, mtu: usize) -> Vec<PacketMetadata> {
@@ -211,6 +211,19 @@ pub fn get_aggregation_header(
     // Encoder may produce key frame without a sequence header, thus double check
     // incoming frame includes the sequence header. Since Temporal delimiter is
     // already filtered out, sequence header should be the first obu when present.
+    //
+    // TODO: This is technically incorrect, since sequence headers may be present in delta frames.
+    //      However, unlike the Chromium implementation: https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc#345,
+    //      we do not have direct access to the whether this is a keyframe or a delta frame.
+    //      Thus for now we assume that every frame that starts with a sequence header is a keyframe,
+    //      which is not always true. This is the best we can do for now until implementing
+    //      a proper frame type detection, perhaps by parsing the FRAME_HEADER OBUs according to
+    //      https://aomediacodec.github.io/av1-spec/#ordering-of-obus:
+    //              A new coded video sequence is defined to start at each temporal unit which
+    //              satisfies both of the following conditions:
+    //                  - A sequence header OBU appears before the first frame header.
+    //                  - The first frame header has frame_type equal to KEY_FRAME, show_frame equal
+    //                    to 1, show_existing_frame equal to 0, and temporal_id equal to 0.
     if packet_index == 0 && obu_type(obus.first().unwrap().header) == OBU_TYPE_SEQUENCE_HEADER {
         header |= 1 << 3;
     }

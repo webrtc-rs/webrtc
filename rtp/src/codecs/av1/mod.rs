@@ -7,6 +7,8 @@ use crate::codecs::av1::packetizer::{
 };
 use crate::packetizer::Payloader;
 
+#[cfg(test)]
+mod av1_test;
 mod leb128;
 mod obu;
 mod packetizer;
@@ -18,8 +20,6 @@ impl Payloader for Av1Payloader {
     /// Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
     /// Reference: https://aomediacodec.github.io/av1-rtp-spec/#45-payload-structure
     fn payload(&mut self, mtu: usize, payload: &Bytes) -> crate::error::Result<Vec<Bytes>> {
-        // example:
-        //
         // 0                   1                   2                   3
         // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
