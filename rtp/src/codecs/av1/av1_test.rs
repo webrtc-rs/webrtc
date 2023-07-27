@@ -7,7 +7,7 @@ use crate::error::Result;
 use super::*;
 
 const OBU_EXTENSION_S1T1: u8 = 0b0010_1000;
-const NEW_CODED_VIDEO_SEQUENCE_BIT: u8 = 0b00_00_1000;
+const NEW_CODED_VIDEO_SEQUENCE_BIT: u8 = 0b0000_1000;
 
 struct Av1Obu {
     header: u8,
@@ -51,8 +51,8 @@ fn build_av1_frame(obus: &Vec<Av1Obu>) -> Bytes {
         if obu.header & OBU_HAS_SIZE_BIT != 0 {
             // write size in leb128 format.
             let mut payload_size = obu.payload.len();
-            while payload_size >= 0b_1000_0000 {
-                raw.push(0b_1000_0000 | (payload_size & 0b_0111_1111) as u8);
+            while payload_size >= 0b1000_0000 {
+                raw.push(0b1000_0000 | (payload_size & 0b0111_1111) as u8);
                 payload_size >>= 7;
             }
             raw.push(payload_size as u8);
@@ -71,7 +71,7 @@ fn test_packetize_one_obu_without_size_and_extension() -> Result<()> {
     assert_eq!(
         payloader.payload(1200, &frame)?,
         vec![vec![
-            0b00_01_0000,        // aggregation header
+            0b0001_0000,         // aggregation header
             OBU_TYPE_FRAME << 3, // header
             1,
             2,
@@ -95,7 +95,7 @@ fn test_packetize_one_obu_without_size_with_extension() -> Result<()> {
     assert_eq!(
         payloader.payload(1200, &frame)?,
         vec![vec![
-            0b00_01_0000,                                // aggregation header
+            0b0001_0000,                                 // aggregation header
             OBU_TYPE_FRAME << 3 | OBU_HAS_EXTENSION_BIT, // header
             OBU_EXTENSION_S1T1,                          // extension header
             2,
@@ -118,7 +118,7 @@ fn removes_obu_size_field_without_extension() -> Result<()> {
     assert_eq!(
         payloader.payload(1200, &frame)?,
         vec![vec![
-            0b00_01_0000,        // aggregation header
+            0b0001_0000,         // aggregation header
             OBU_TYPE_FRAME << 3, // header
             11,
             12,
@@ -141,7 +141,7 @@ fn removes_obu_size_field_with_extension() -> Result<()> {
     assert_eq!(
         payloader.payload(1200, &frame)?,
         vec![vec![
-            0b00_01_0000,                                // aggregation header
+            0b0001_0000,                                 // aggregation header
             OBU_TYPE_FRAME << 3 | OBU_HAS_EXTENSION_BIT, // header
             OBU_EXTENSION_S1T1,                          // extension header
             1,
@@ -167,7 +167,7 @@ fn test_omits_size_for_last_obu_when_three_obus_fits_into_the_packet() -> Result
     assert_eq!(
         payloader.payload(1200, &frame)?,
         vec![vec![
-            0b00_11_1000,                  // aggregation header
+            0b0011_1000,                   // aggregation header
             7,                             // size of the first OBU
             OBU_TYPE_SEQUENCE_HEADER << 3, // header of the first OBU
             1,
@@ -206,7 +206,7 @@ fn test_use_size_for_all_obus_when_four_obus_fits_into_the_packet() -> Result<()
     assert_eq!(
         payloader.payload(1200, &frame)?,
         vec![vec![
-            0b00_00_1000,                  // aggregation header
+            0b0000_1000,                   // aggregation header
             7,                             // size of the first OBU
             OBU_TYPE_SEQUENCE_HEADER << 3, // header of the first OBU
             1,
@@ -252,7 +252,7 @@ fn test_discards_temporal_delimiter_and_tile_list_obu() -> Result<()> {
     assert_eq!(
         payloader.payload(1200, &frame)?,
         vec![vec![
-            0b00_11_0000,               // aggregation header
+            0b0011_0000,                // aggregation header
             1,                          // size of the first OBU
             OBU_TYPE_METADATA << 3,     // header of the first OBU
             4,                          // size of the second OBU
@@ -290,7 +290,7 @@ fn test_split_two_obus_into_two_packet_force_split_obu_header() -> Result<()> {
         payloader.payload(6, &frame)?,
         vec![
             vec![
-                0b01_10_0000,                                       // aggregation header
+                0b0110_0000,                                        // aggregation header
                 3,                                                  // size of the first OBU
                 OBU_TYPE_FRAME_HEADER << 3 | OBU_HAS_EXTENSION_BIT, // header of the first OBU
                 OBU_EXTENSION_S1T1,                                 // extension header
@@ -298,7 +298,7 @@ fn test_split_two_obus_into_two_packet_force_split_obu_header() -> Result<()> {
                 OBU_TYPE_TILE_GROUP << 3 | OBU_HAS_EXTENSION_BIT, // header of the second OBU
             ],
             vec![
-                0b10_01_0000, // aggregation header
+                0b1001_0000, // aggregation header
                 OBU_EXTENSION_S1T1,
                 11,
                 12,
@@ -358,7 +358,7 @@ fn test_split_single_obu_into_two_packets() -> Result<()> {
         payloader.payload(8, &frame)?,
         vec![
             vec![
-                0b01_01_0000,        // aggregation header
+                0b0101_0000,         // aggregation header
                 OBU_TYPE_FRAME << 3, // header
                 11,
                 12,
@@ -368,7 +368,7 @@ fn test_split_single_obu_into_two_packets() -> Result<()> {
                 16
             ],
             vec![
-                0b10_01_0000, // aggregation header
+                0b1001_0000, // aggregation header
                 17,
                 18,
                 19
@@ -389,7 +389,7 @@ fn test_split_single_obu_into_many_packets() -> Result<()> {
     assert_eq!(result.len(), 13);
     assert_eq!(result[0], {
         let mut ret = vec![
-            0b01_01_0000,        // aggregation header
+            0b0101_0000,         // aggregation header
             OBU_TYPE_FRAME << 3, // header
         ];
         ret.extend(vec![27; 98]);
@@ -398,7 +398,7 @@ fn test_split_single_obu_into_many_packets() -> Result<()> {
     for packet in result.iter().take(12).skip(1) {
         assert_eq!(packet.to_vec(), {
             let mut ret = vec![
-                0b11_01_0000, // aggregation header
+                0b1101_0000, // aggregation header
             ];
             ret.extend(vec![27; 99]);
             ret
@@ -406,7 +406,7 @@ fn test_split_single_obu_into_many_packets() -> Result<()> {
     }
     assert_eq!(result[12], {
         let mut ret = vec![
-            0b10_01_0000, // aggregation header
+            0b1001_0000, // aggregation header
         ];
         ret.extend(vec![27; 13]);
         ret
@@ -429,7 +429,7 @@ fn test_split_two_obus_into_two_packets() -> Result<()> {
         result,
         vec![
             vec![
-                0b01_10_1000,                  // aggregation header
+                0b0110_1000,                   // aggregation header
                 3,                             // size of the first OBU
                 OBU_TYPE_SEQUENCE_HEADER << 3, // header
                 11,
@@ -439,7 +439,7 @@ fn test_split_two_obus_into_two_packets() -> Result<()> {
                 2
             ],
             vec![
-                0b10_01_0000, // aggregation header
+                0b1001_0000, // aggregation header
                 3,
                 4,
                 5,
