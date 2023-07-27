@@ -176,11 +176,7 @@ pub fn packetize(obus: &Vec<Obu>, mtu: usize) -> Vec<PacketMetadata> {
 
 /// Returns the aggregation header for the packet.
 /// Reference: https://aomediacodec.github.io/av1-rtp-spec/#44-av1-aggregation-header
-pub fn get_aggregation_header(
-    obus: &Vec<Obu>,
-    packets: &Vec<PacketMetadata>,
-    packet_index: usize,
-) -> u8 {
+pub fn get_aggregation_header(obus: &[Obu], packets: &[PacketMetadata], packet_index: usize) -> u8 {
     let packet = &packets[packet_index];
     let mut header: u8 = 0;
 
@@ -233,11 +229,9 @@ pub fn get_aggregation_header(
 /// Returns the number of additional bytes needed to store the previous OBU
 /// element if an additional OBU element is added to the packet.
 fn additional_bytes_for_previous_obu_element(packet: &PacketMetadata) -> usize {
-    if packet.packet_size == 0 {
-        // Packet is still empty => no last OBU element, no need to reserve space
-        // for it.
-        0
-    } else if packet.num_obu_elements > MAX_NUM_OBUS_TO_OMIT_SIZE {
+    if packet.packet_size == 0 || packet.num_obu_elements > MAX_NUM_OBUS_TO_OMIT_SIZE {
+        // Packet is still empty => no last OBU element, no need to reserve space for it.
+        //  OR
         // There are so many obu elements in the packet, all of them must be
         // prepended with the length field. That imply space for the length of the
         // last obu element is already reserved.
@@ -256,7 +250,7 @@ fn max_fragment_size(remaining_bytes: usize) -> usize {
     }
     let mut i = 1;
     loop {
-        if remaining_bytes < (1 << 7 * i) + i {
+        if remaining_bytes < (1 << (7 * i)) + i {
             return remaining_bytes - i;
         }
         i += 1;

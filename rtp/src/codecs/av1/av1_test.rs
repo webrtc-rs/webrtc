@@ -6,7 +6,7 @@ use crate::error::Result;
 
 use super::*;
 
-const OBU_EXTENSION_S1T1: u8 = 0b001_01_000;
+const OBU_EXTENSION_S1T1: u8 = 0b0010_1000;
 const NEW_CODED_VIDEO_SEQUENCE_BIT: u8 = 0b00_00_1000;
 
 struct Av1Obu {
@@ -395,8 +395,8 @@ fn test_split_single_obu_into_many_packets() -> Result<()> {
         ret.extend(vec![27; 98]);
         ret
     });
-    for i in 1..12 {
-        assert_eq!(result[i], {
+    for packet in result.iter().take(12).skip(1) {
+        assert_eq!(packet.to_vec(), {
             let mut ret = vec![
                 0b11_01_0000, // aggregation header
             ];
