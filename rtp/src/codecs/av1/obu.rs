@@ -7,9 +7,9 @@ use crate::codecs::av1::leb128::read_leb128;
 use crate::error::Result;
 use crate::Error::{ErrPayloadTooSmallForObuExtensionHeader, ErrPayloadTooSmallForObuPayloadSize};
 
-pub const OBU_HAS_EXTENSION_BIT: u8 = 0b0_0000_100;
-pub const OBU_HAS_SIZE_BIT: u8 = 0b0_0000_010;
-pub const OBU_TYPE_MASK: u8 = 0b0_1111_000;
+pub const OBU_HAS_EXTENSION_BIT: u8 = 0b0000_0100;
+pub const OBU_HAS_SIZE_BIT: u8 = 0b0000_0010;
+pub const OBU_TYPE_MASK: u8 = 0b0111_1000;
 
 pub const OBU_TYPE_SEQUENCE_HEADER: u8 = 1;
 pub const OBU_TYPE_TEMPORAL_DELIMITER: u8 = 2;
