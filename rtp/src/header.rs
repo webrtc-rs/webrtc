@@ -390,8 +390,14 @@ impl Header {
             self.extension = true;
             let mut extension_profile_len = 0;
             self.extension_profile = match payload.len() {
-                0..=16 => { extension_profile_len = 1 ; EXTENSION_PROFILE_ONE_BYTE},
-                17..=255 => { extension_profile_len = 2; EXTENSION_PROFILE_TWO_BYTE},
+                0..=16 => {
+                    extension_profile_len = 1;
+                    EXTENSION_PROFILE_ONE_BYTE
+                }
+                17..=255 => {
+                    extension_profile_len = 2;
+                    EXTENSION_PROFILE_TWO_BYTE
+                }
                 _ => self.extension_profile,
             };
 
