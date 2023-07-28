@@ -342,7 +342,7 @@ impl Header {
     /// SetExtension sets an RTP header extension
     pub fn set_extension(&mut self, id: u8, payload: Bytes) -> Result<(), Error> {
         if self.extension {
-            match self.extension_profile {
+            let extension_profile_len = match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
                     if !(1..=14).contains(&id) {
                         return Err(Error::ErrRfc8285oneByteHeaderIdrange);
@@ -350,6 +350,7 @@ impl Header {
                     if payload.len() > 16 {
                         return Err(Error::ErrRfc8285oneByteHeaderSize);
                     }
+                    1
                 }
                 EXTENSION_PROFILE_TWO_BYTE => {
                     if id < 1 {
@@ -358,11 +359,13 @@ impl Header {
                     if payload.len() > 255 {
                         return Err(Error::ErrRfc8285twoByteHeaderSize);
                     }
+                    2
                 }
                 _ => {
                     if id != 0 {
                         return Err(Error::ErrRfc3550headerIdrange);
                     }
+                    0
                 }
             };
 
@@ -374,18 +377,30 @@ impl Header {
             {
                 extension.payload = payload;
             } else {
+                let extension_padding = (payload.len() + extension_profile_len) % 4;
+                if self.extensions_padding < extension_padding {
+                    self.extensions_padding = self.extensions_padding + 4 - extension_padding;
+                } else {
+                    self.extensions_padding -= extension_padding
+                }
                 self.extensions.push(Extension { id, payload });
             }
         } else {
             // No existing header extensions
             self.extension = true;
-
+            let mut extension_profile_len = 0;
             self.extension_profile = match payload.len() {
-                0..=16 => EXTENSION_PROFILE_ONE_BYTE,
-                17..=255 => EXTENSION_PROFILE_TWO_BYTE,
+                0..=16 => { extension_profile_len = 1 ; EXTENSION_PROFILE_ONE_BYTE},
+                17..=255 => { extension_profile_len = 2; EXTENSION_PROFILE_TWO_BYTE},
                 _ => self.extension_profile,
             };
 
+            let extension_padding = (payload.len() + extension_profile_len) % 4;
+            if self.extensions_padding < extension_padding {
+                self.extensions_padding = self.extensions_padding + 4 - extension_padding;
+            } else {
+                self.extensions_padding -= extension_padding
+            }
             self.extensions.push(Extension { id, payload });
         }
         Ok(())
