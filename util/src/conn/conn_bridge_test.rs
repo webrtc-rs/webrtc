@@ -1,10 +1,11 @@
-use super::conn_bridge::*;
-use super::*;
-
-use bytes::Bytes;
 use std::collections::VecDeque;
 use std::sync::Arc;
+
+use bytes::Bytes;
 use tokio::sync::mpsc;
+
+use super::conn_bridge::*;
+use super::*;
 
 static MSG1: Bytes = Bytes::from_static(b"ADC");
 static MSG2: Bytes = Bytes::from_static(b"DEFG");

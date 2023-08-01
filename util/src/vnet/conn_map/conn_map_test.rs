@@ -1,10 +1,11 @@
+use std::net::IpAddr;
+use std::str::FromStr;
+
+use async_trait::async_trait;
+
 use super::*;
 use crate::vnet::chunk::*;
 use crate::vnet::conn::*;
-
-use async_trait::async_trait;
-use std::net::IpAddr;
-use std::str::FromStr;
 
 #[derive(Default)]
 struct DummyObserver;
@@ -26,8 +27,7 @@ impl ConnObserver for DummyObserver {
 async fn test_udp_conn_map_insert_remove() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("127.0.0.1:1234")?,
@@ -65,8 +65,7 @@ async fn test_udp_conn_map_insert_remove() -> Result<()> {
 async fn test_udp_conn_map_insert_0_remove() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("0.0.0.0:1234")?,
@@ -104,8 +103,7 @@ async fn test_udp_conn_map_insert_0_remove() -> Result<()> {
 async fn test_udp_conn_map_find_0() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("0.0.0.0:1234")?,
@@ -133,8 +131,7 @@ async fn test_udp_conn_map_find_0() -> Result<()> {
 async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("10.1.2.1:5678")?,
@@ -180,8 +177,7 @@ async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<()> {
 async fn test_udp_conn_map_already_inuse_when_insert_0() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("10.1.2.1:5678")?,
@@ -205,8 +201,7 @@ async fn test_udp_conn_map_already_inuse_when_insert_0() -> Result<()> {
 async fn test_udp_conn_map_already_inuse_when_insert_a_specified_ip() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("0.0.0.0:5678")?,
@@ -230,8 +225,7 @@ async fn test_udp_conn_map_already_inuse_when_insert_a_specified_ip() -> Result<
 async fn test_udp_conn_map_already_inuse_when_insert_same_specified_ip() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
@@ -255,8 +249,7 @@ async fn test_udp_conn_map_already_inuse_when_insert_same_specified_ip() -> Resu
 async fn test_udp_conn_map_find_failure_1() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
@@ -277,8 +270,7 @@ async fn test_udp_conn_map_find_failure_1() -> Result<()> {
 async fn test_udp_conn_map_find_failure_2() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
@@ -299,8 +291,7 @@ async fn test_udp_conn_map_find_failure_2() -> Result<()> {
 async fn test_udp_conn_map_insert_two_on_same_port_then_remove() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
-    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
-        Arc::new(Mutex::new(DummyObserver::default()));
+    let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> = Arc::new(Mutex::new(DummyObserver));
 
     let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,

@@ -2,6 +2,7 @@
 mod channnum_test;
 
 use std::fmt;
+
 use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;

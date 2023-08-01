@@ -1,7 +1,7 @@
+use std::net::Ipv4Addr;
+
 use super::*;
 use crate::error::Result;
-
-use std::net::Ipv4Addr;
 
 struct DummyRelayConnObserver {
     turn_server_addr: String,

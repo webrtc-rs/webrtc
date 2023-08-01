@@ -1,9 +1,9 @@
+use std::fmt;
+
 use super::*;
 use crate::api::media_engine::*;
 use crate::error::{Error, Result};
 use crate::rtp_transceiver::fmtp;
-
-use std::fmt;
 
 /// RTPCodecType determines the type of a codec
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
@@ -80,6 +80,8 @@ impl RTCRtpCodecCapability {
             || mime_type == MIME_TYPE_TELEPHONE_EVENT.to_lowercase()
         {
             Ok(Box::<rtp::codecs::g7xx::G7xxPayloader>::default())
+        } else if mime_type == MIME_TYPE_AV1.to_lowercase() {
+            Ok(Box::<rtp::codecs::av1::Av1Payloader>::default())
         } else {
             Err(Error::ErrNoPayloaderForCodec)
         }

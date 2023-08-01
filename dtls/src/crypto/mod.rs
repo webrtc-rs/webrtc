@@ -6,17 +6,19 @@ pub mod crypto_ccm;
 pub mod crypto_gcm;
 pub mod padding;
 
+use std::convert::TryFrom;
+use std::sync::Arc;
+
+use der_parser::oid;
+use der_parser::oid::Oid;
+use rcgen::KeyPair;
+use ring::rand::SystemRandom;
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+
 use crate::curve::named_curve::*;
 use crate::error::*;
 use crate::record_layer::record_layer_header::*;
 use crate::signature_hash_algorithm::{HashAlgorithm, SignatureAlgorithm, SignatureHashAlgorithm};
-
-use der_parser::{oid, oid::Oid};
-use rcgen::KeyPair;
-use ring::rand::SystemRandom;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
-use std::convert::TryFrom;
-use std::sync::Arc;
 
 /// A X.509 certificate(s) used to authenticate a DTLS connection.
 #[derive(Clone, PartialEq, Debug)]

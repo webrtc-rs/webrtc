@@ -1,9 +1,9 @@
+use std::io::BufWriter;
+
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::NewBlockCipher;
 use aes::{Aes128, BlockEncrypt};
-
 use byteorder::{BigEndian, WriteBytesExt};
-use std::io::BufWriter;
 
 use crate::error::{Error, Result};
 

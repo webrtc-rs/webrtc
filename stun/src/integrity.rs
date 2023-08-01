@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod integrity_test;
 
+use std::fmt;
+
+use md5::{Digest, Md5};
+use ring::hmac;
+
 use crate::attributes::*;
 use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
-
-use md5::{Digest, Md5};
-use ring::hmac;
-use std::fmt;
 
 // separator for credentials.
 pub(crate) const CREDENTIALS_SEP: &str = ":";

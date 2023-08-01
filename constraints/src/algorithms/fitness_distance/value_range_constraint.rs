@@ -1,8 +1,6 @@
+use super::setting::SettingFitnessDistanceError;
+use super::{FitnessDistance, SettingFitnessDistanceErrorKind};
 use crate::ResolvedValueRangeConstraint;
-
-use super::{
-    setting::SettingFitnessDistanceError, FitnessDistance, SettingFitnessDistanceErrorKind,
-};
 
 macro_rules! impl_value_range_constraint {
     (setting: $s:ty, constraint: $c:ty) => {

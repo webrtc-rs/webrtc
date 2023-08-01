@@ -1,5 +1,6 @@
-use super::*;
 use bytes::Bytes;
+
+use super::*;
 
 #[test]
 fn test_full_intra_request_unmarshal() {

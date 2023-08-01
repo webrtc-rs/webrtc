@@ -1,7 +1,8 @@
-use crate::error::{Error, Result};
-use util::{marshal::*, Buffer};
-
 use tokio::sync::mpsc;
+use util::marshal::*;
+use util::Buffer;
+
+use crate::error::{Error, Result};
 
 /// Limit the buffer size to 1MB
 pub const SRTP_BUFFER_SIZE: usize = 1000 * 1000;

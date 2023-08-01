@@ -11,18 +11,16 @@
 use std::io::Cursor;
 use std::ops::Not;
 
-use crate::content::*;
-use crate::error::*;
-use crate::prf::*;
-use crate::record_layer::record_layer_header::*;
-
 use aes::Aes256;
-use block_modes::BlockModeError;
-use block_modes::{BlockMode, Cbc};
+use block_modes::{BlockMode, BlockModeError, Cbc};
 use rand::Rng;
 use subtle::ConstantTimeEq;
 
 use super::padding::DtlsPadding;
+use crate::content::*;
+use crate::error::*;
+use crate::prf::*;
+use crate::record_layer::record_layer_header::*;
 type Aes256Cbc = Cbc<Aes256, DtlsPadding>;
 
 // State needed to handle encrypted input/output

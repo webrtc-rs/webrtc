@@ -1,3 +1,14 @@
+use std::fmt;
+use std::ops::Add;
+use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use async_trait::async_trait;
+use crc::{Crc, CRC_32_ISCSI};
+use tokio::sync::{broadcast, Mutex};
+use util::sync::Mutex as SyncMutex;
+
 use super::*;
 use crate::candidate::candidate_host::CandidateHostConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
@@ -5,20 +16,6 @@ use crate::candidate::candidate_relay::CandidateRelayConfig;
 use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::error::*;
 use crate::util::*;
-
-use async_trait::async_trait;
-use crc::{Crc, CRC_32_ISCSI};
-use std::{
-    fmt,
-    ops::Add,
-    sync::{
-        atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering},
-        Arc,
-    },
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
-use tokio::sync::{broadcast, Mutex};
-use util::sync::Mutex as SyncMutex;
 
 #[derive(Default)]
 pub struct CandidateBaseConfig {

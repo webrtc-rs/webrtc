@@ -1,6 +1,5 @@
-use crate::error::Result;
-
 use super::*;
+use crate::error::Result;
 
 /// NoOp is an Interceptor that does not modify any packets. It can embedded in other interceptors, so it's
 /// possible to implement only a subset of the methods.

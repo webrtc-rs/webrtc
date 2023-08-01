@@ -1,10 +1,12 @@
-use super::*;
-use crate::mux::mux_func::match_all;
-use async_trait::async_trait;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use async_trait::async_trait;
 use util::conn::conn_pipe::pipe;
+
+use super::*;
+use crate::mux::mux_func::match_all;
 
 const TEST_PIPE_BUFFER_SIZE: usize = 8192;
 

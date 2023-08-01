@@ -1,5 +1,11 @@
+use std::fmt;
+
+use async_trait::async_trait;
+use log::*;
+
 use super::flight5::*;
 use super::*;
+use crate::cipher_suite::cipher_suite_for_id;
 use crate::compression_methods::*;
 use crate::config::*;
 use crate::content::*;
@@ -11,21 +17,15 @@ use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_supported_signature_algorithms::*;
 use crate::extension::extension_use_extended_master_secret::*;
 use crate::extension::extension_use_srtp::*;
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use crate::extension::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::*;
+use crate::prf::{prf_pre_master_secret, prf_psk_pre_master_secret};
 use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
-
-use crate::cipher_suite::cipher_suite_for_id;
-use crate::prf::{prf_pre_master_secret, prf_psk_pre_master_secret};
 use crate::{find_matching_cipher_suite, find_matching_srtp_profile};
-
-use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
-use async_trait::async_trait;
-use log::*;
-use std::fmt;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Flight3;

@@ -1,4 +1,5 @@
 use std::io;
+
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -209,8 +210,8 @@ pub enum Error {
     ErrOutboundPacketTooLarge,
     #[error("Stream closed")]
     ErrStreamClosed,
-    #[error("Short buffer to be filled")]
-    ErrShortBuffer,
+    #[error("Short buffer (size: {size:?}) to be filled")]
+    ErrShortBuffer { size: usize },
     #[error("Io EOF")]
     ErrEof,
     #[error("Invalid SystemTime")]

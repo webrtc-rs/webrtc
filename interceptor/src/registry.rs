@@ -1,9 +1,9 @@
+use std::sync::Arc;
+
 use crate::chain::Chain;
 use crate::error::Result;
 use crate::noop::NoOp;
 use crate::{Interceptor, InterceptorBuilder};
-
-use std::sync::Arc;
 
 /// Registry is a collector for interceptors.
 #[derive(Default)]

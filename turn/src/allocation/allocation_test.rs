@@ -1,9 +1,11 @@
-use super::*;
-
-use crate::proto::lifetime::DEFAULT_LIFETIME;
 use std::str::FromStr;
-use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
+
+use stun::attributes::ATTR_USERNAME;
+use stun::textattrs::TextAttribute;
 use tokio::net::UdpSocket;
+
+use super::*;
+use crate::proto::lifetime::DEFAULT_LIFETIME;
 
 #[tokio::test]
 async fn test_has_permission() -> Result<()> {

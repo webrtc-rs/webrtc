@@ -6,13 +6,12 @@ use std::sync::Arc;
 use arc_swap::ArcSwapOption;
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
-use tokio::sync::{mpsc, Mutex};
-use util::Conn;
-
 use ice_candidate::RTCIceCandidate;
 use ice_candidate_pair::RTCIceCandidatePair;
 use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
+use tokio::sync::{mpsc, Mutex};
+use util::Conn;
 
 use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;

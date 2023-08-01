@@ -1,6 +1,7 @@
+use bytes::{Bytes, BytesMut};
+
 use super::*;
 use crate::error::Result;
-use bytes::{Bytes, BytesMut};
 
 #[test]
 fn test_video_orientation_extension_too_small() -> Result<()> {

@@ -1,8 +1,9 @@
-use rcgen::RcgenError;
 use std::future::Future;
 use std::num::ParseIntError;
 use std::pin::Pin;
 use std::string::FromUtf8Error;
+
+use rcgen::RcgenError;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 

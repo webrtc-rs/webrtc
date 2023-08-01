@@ -1,5 +1,3 @@
-use crate::error::{Error, Result};
-
 use bytes::{Bytes, BytesMut};
 
 ///////////////////////////////////////////////////////////////////
@@ -8,6 +6,7 @@ use bytes::{Bytes, BytesMut};
 use super::payload_queue::*;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::chunk::chunk_selective_ack::GapAckBlock;
+use crate::error::{Error, Result};
 
 fn make_payload(tsn: u32, n_bytes: usize) -> ChunkPayloadData {
     ChunkPayloadData {
@@ -443,9 +442,10 @@ async fn test_pending_queue_append() -> Result<()> {
 ///////////////////////////////////////////////////////////////////
 //reassembly_queue_test
 ///////////////////////////////////////////////////////////////////
-use super::reassembly_queue::*;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+
+use super::reassembly_queue::*;
 
 #[test]
 fn test_reassembly_queue_ordered_fragments() -> Result<()> {
@@ -795,7 +795,11 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
     let result = rq.read(&mut buf);
     assert!(result.is_err(), "read() should not succeed");
     if let Err(err) = result {
-        assert_eq!(err, Error::ErrShortBuffer, "read() should not succeed");
+        assert_eq!(
+            err,
+            Error::ErrShortBuffer { size: 8 },
+            "read() should not succeed"
+        );
     }
     assert_eq!(rq.get_num_bytes(), 0, "num bytes mismatch");
 

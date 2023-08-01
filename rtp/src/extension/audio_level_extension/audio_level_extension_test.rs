@@ -1,6 +1,7 @@
+use bytes::{Bytes, BytesMut};
+
 use super::*;
 use crate::error::Result;
-use bytes::{Bytes, BytesMut};
 
 #[test]
 fn test_audio_level_extension_too_small() -> Result<()> {

@@ -1,10 +1,10 @@
 [package]
 name = "webrtc-srtp"
-version = "0.9.1"
+version = "0.10.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of SRTP"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-srtp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/srtp"
@@ -16,8 +16,8 @@ util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-f
     "buffer",
     "marshal",
 ] }
-rtp = { version = "0.7.0", path = "../rtp" }
-rtcp = { version = "0.8.0", path = "../rtcp" }
+rtp = { version = "0.8.0", path = "../rtp" }
+rtcp = { version = "0.9.0", path = "../rtcp" }
 
 byteorder = "1"
 bytes = "1"

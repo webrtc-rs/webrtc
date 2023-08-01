@@ -1,7 +1,4 @@
-use super::Cipher;
-use crate::error::Result;
-use crate::{error::Error, key_derivation::*, protection_profile::*};
-use util::marshal::*;
+use std::io::BufWriter;
 
 use aes::cipher::generic_array::GenericArray;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
@@ -9,8 +6,13 @@ use bytes::{BufMut, Bytes, BytesMut};
 use ctr::cipher::{NewCipher, StreamCipher, StreamCipherSeek};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
-use std::io::BufWriter;
 use subtle::ConstantTimeEq;
+use util::marshal::*;
+
+use super::Cipher;
+use crate::error::{Error, Result};
+use crate::key_derivation::*;
+use crate::protection_profile::*;
 
 type HmacSha1 = Hmac<Sha1>;
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
@@ -300,6 +302,13 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         // Split the auth tag and the cipher text into two parts.
         let actual_tag = &encrypted[encrypted.len() - self.auth_tag_len()..];
+        if actual_tag.len() != self.auth_tag_len() {
+            return Err(Error::RtcpInvalidLengthAuthTag(
+                actual_tag.len(),
+                self.auth_tag_len(),
+            ));
+        }
+
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
 
         // Generate the auth tag we expect to see from the ciphertext.

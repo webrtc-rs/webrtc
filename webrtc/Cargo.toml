@@ -1,10 +1,10 @@
 [package]
 name = "webrtc"
-version = "0.7.3"
+version = "0.8.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of WebRTC API"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/webrtc"
@@ -17,14 +17,14 @@ rust-version = "1.63.0"
 data = { version = "0.7.0", path = "../data", package = "webrtc-data" }
 dtls = { version = "0.7.1", path = "../dtls", package = "webrtc-dtls" }
 ice = { version = "0.9.0", path = "../ice", package = "webrtc-ice" }
-interceptor = { version = "0.8.2", path = "../interceptor" }
+interceptor = { version = "0.9.0", path = "../interceptor" }
 mdns = { version = "0.5.0", path = "../mdns", package = "webrtc-mdns" }
-media = { version = "0.6.0", path = "../media", package = "webrtc-media" }
-rtcp = { version = "0.8.0", path = "../rtcp" }
-rtp = { version = "0.7.0", path = "../rtp" }
+media = { version = "0.6.1", path = "../media", package = "webrtc-media" }
+rtcp = { version = "0.9.0", path = "../rtcp" }
+rtp = { version = "0.8.0", path = "../rtp" }
 sctp = { version = "0.8.0", path = "../sctp", package = "webrtc-sctp" }
 sdp = { version = "0.5.2", path = "../sdp" }
-srtp = { version = "0.9.0", path = "../srtp", package = "webrtc-srtp" }
+srtp = { version = "0.10.0", path = "../srtp", package = "webrtc-srtp" }
 stun = { version = "0.4.3", path = "../stun" }
 turn = { version = "0.6.0", path = "../turn" }
 util = { version = "0.7.0", path = "../util", package = "webrtc-util" }
@@ -55,6 +55,9 @@ pem = { version = "1", optional = true }
 # https://github.com/est31/rcgen/pull/88
 # Version 0.3.14 requires Rust 1.59.0 which we don't currently support
 time = "~0.3.1"
+# fixes "error: cannot find macro `__cfg_if_items` in this scope"
+# https://github.com/rust-lang/packed_simd/commit/127a0fc233dbab880e33aeaccdd23e799a8b798b
+cfg-if = "0.1.6"
 
 [dev-dependencies]
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above

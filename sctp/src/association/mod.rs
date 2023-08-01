@@ -4,6 +4,19 @@ mod association_test;
 mod association_internal;
 mod association_stats;
 
+use std::collections::{HashMap, VecDeque};
+use std::fmt;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use association_internal::*;
+use association_stats::*;
+use bytes::{Bytes, BytesMut};
+use rand::random;
+use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
+use util::Conn;
+
 use crate::chunk::chunk_abort::ChunkAbort;
 use crate::chunk::chunk_cookie_ack::ChunkCookieAck;
 use crate::chunk::chunk_cookie_echo::ChunkCookieEcho;
@@ -36,19 +49,6 @@ use crate::stream::*;
 use crate::timer::ack_timer::*;
 use crate::timer::rtx_timer::*;
 use crate::util::*;
-
-use association_internal::*;
-use association_stats::*;
-
-use bytes::{Bytes, BytesMut};
-use rand::random;
-use std::collections::{HashMap, VecDeque};
-use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
-use util::Conn;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 /// MTU for inbound packet (from DTLS)

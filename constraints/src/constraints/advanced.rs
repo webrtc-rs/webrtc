@@ -1,17 +1,14 @@
-use std::{
-    iter::FromIterator,
-    ops::{Deref, DerefMut},
-};
+use std::iter::FromIterator;
+use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use super::constraint_set::GenericMediaTrackConstraintSet;
 use crate::{
     MediaTrackConstraint, MediaTrackConstraintResolutionStrategy, MediaTrackSupportedConstraints,
     ResolvedMediaTrackConstraint, SanitizedMediaTrackConstraint,
 };
-
-use super::constraint_set::GenericMediaTrackConstraintSet;
 
 /// Advanced media track constraints that contain sets of either bare values or constraints.
 pub type AdvancedMediaTrackConstraints = GenericAdvancedMediaTrackConstraints<MediaTrackConstraint>;
@@ -126,9 +123,9 @@ impl ResolvedAdvancedMediaTrackConstraints {
 #[cfg(feature = "serde")]
 #[cfg(test)]
 mod serde_tests {
-    use crate::{property::all::name::*, MediaTrackConstraintSet};
-
     use super::*;
+    use crate::property::all::name::*;
+    use crate::MediaTrackConstraintSet;
 
     #[test]
     fn serialize_default() {

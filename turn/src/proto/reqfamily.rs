@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod reqfamily_test;
 
+use std::fmt;
+
 use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;
-
-use std::fmt;
 
 // Values for RequestedAddressFamily as defined in RFC 6156 Section 4.1.1.
 pub const REQUESTED_FAMILY_IPV4: RequestedAddressFamily = RequestedAddressFamily(0x01);

@@ -1,7 +1,7 @@
+use std::io::{BufReader, BufWriter};
+
 use super::*;
 use crate::error::Error;
-
-use std::io::{BufReader, BufWriter};
 
 #[test]
 fn test_alert() -> Result<()> {

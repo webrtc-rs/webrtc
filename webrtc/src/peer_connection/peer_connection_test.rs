@@ -1,8 +1,17 @@
-use super::*;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 
+use bytes::Bytes;
+use interceptor::registry::Registry;
+use media::Sample;
+use tokio::time::Duration;
+use util::vnet::net::{Net, NetConfig};
+use util::vnet::router::{Router, RouterConfig};
+use waitgroup::WaitGroup;
+
+use super::*;
 use crate::api::interceptor_registry::register_default_interceptors;
-use crate::api::media_engine::MediaEngine;
-use crate::api::media_engine::MIME_TYPE_VP8;
+use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
 use crate::ice_transport::ice_server::RTCIceServer;
@@ -11,16 +20,6 @@ use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use crate::stats::StatsReportType;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::Error;
-use interceptor::registry::Registry;
-
-use bytes::Bytes;
-use media::Sample;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use tokio::time::Duration;
-use util::vnet::net::{Net, NetConfig};
-use util::vnet::router::{Router, RouterConfig};
-use waitgroup::WaitGroup;
 
 pub(crate) async fn create_vnet_pair(
 ) -> Result<(RTCPeerConnection, RTCPeerConnection, Arc<Mutex<Router>>)> {

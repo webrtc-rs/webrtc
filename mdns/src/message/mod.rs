@@ -9,15 +9,16 @@ pub mod parser;
 pub mod question;
 pub mod resource;
 
-use crate::error::*;
+use std::collections::HashMap;
+use std::fmt;
+
 use header::*;
 use packer::*;
 use parser::*;
 use question::*;
 use resource::*;
 
-use std::collections::HashMap;
-use std::fmt;
+use crate::error::*;
 
 // Message formats
 

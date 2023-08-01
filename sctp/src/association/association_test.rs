@@ -1,20 +1,20 @@
 // Silence warning on `for i in 0..vec.len() { … }`:
 #![allow(clippy::needless_range_loop)]
 
-use super::*;
-use crate::stream::*;
-
-use crate::chunk::chunk_selective_ack::GapAckBlock;
-use async_trait::async_trait;
 use std::io;
-use std::net::Shutdown;
-use std::net::SocketAddr;
+use std::net::{Shutdown, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
+
+use async_trait::async_trait;
 use tokio::net::UdpSocket;
 use util::conn::conn_bridge::*;
 use util::conn::conn_pipe::pipe;
 use util::conn::*;
+
+use super::*;
+use crate::chunk::chunk_selective_ack::GapAckBlock;
+use crate::stream::*;
 
 async fn create_new_association_pair(
     br: &Arc<Bridge>,
@@ -740,12 +740,12 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
 
     let mut buf = vec![0u8; 3];
     let result = s1.read_sctp(&mut buf).await;
-    assert!(result.is_err(), "expected error to be io.ErrShortBuffer");
+    assert!(result.is_err(), "expected error to be ErrShortBuffer");
     if let Err(err) = result {
         assert_eq!(
             err,
-            Error::ErrShortBuffer,
-            "expected error to be io.ErrShortBuffer"
+            Error::ErrShortBuffer { size: 3 },
+            "expected error to be ErrShortBuffer"
         );
     }
 

@@ -1,8 +1,8 @@
-use ::std::io::{Error, ErrorKind};
 use std::ffi::CStr;
+use std::net::IpAddr;
 use std::{net, ptr};
 
-use std::net::IpAddr;
+use ::std::io::{Error, ErrorKind};
 
 use crate::ifaces::{Interface, Kind, NextHop};
 

@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod buffer_test;
 
-use crate::error::{Error, Result};
-
 use std::sync::Arc;
+
 use tokio::sync::{Mutex, Notify};
 use tokio::time::{timeout, Duration};
+
+use crate::error::{Error, Result};
 
 const MIN_SIZE: usize = 2048;
 const CUTOFF_SIZE: usize = 128 * 1024;

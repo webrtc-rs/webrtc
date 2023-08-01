@@ -5,7 +5,8 @@ use std::convert::{TryFrom, TryInto};
 
 use bytes::BufMut;
 use serde::{Deserialize, Serialize};
-use util::{marshal::Unmarshal, Marshal, MarshalSize};
+use util::marshal::Unmarshal;
+use util::{Marshal, MarshalSize};
 
 use crate::Error;
 

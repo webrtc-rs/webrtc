@@ -1,9 +1,9 @@
+use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
+
 use super::*;
 use crate::mock::mock_stream::MockStream;
 use crate::stream_info::RTCPFeedback;
 use crate::test::timeout_or_fail;
-
-use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
 
 #[tokio::test]
 async fn test_generator_interceptor() -> Result<()> {

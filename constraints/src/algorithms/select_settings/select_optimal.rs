@@ -44,9 +44,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::MediaTrackSettings;
-
     use super::select_optimal_candidates;
+    use crate::MediaTrackSettings;
 
     #[test]
     fn monotonic_increasing() {

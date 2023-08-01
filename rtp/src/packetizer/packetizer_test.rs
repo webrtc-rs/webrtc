@@ -1,9 +1,10 @@
+use std::time::{Duration, UNIX_EPOCH};
+
+use chrono::prelude::*;
+
 use super::*;
 use crate::codecs::*;
 use crate::error::Result;
-
-use chrono::prelude::*;
-use std::time::{Duration, UNIX_EPOCH};
 
 #[test]
 fn test_packetizer() -> Result<()> {
@@ -77,6 +78,7 @@ fn test_packetizer_abs_send_time() -> Result<()> {
                 id: 1,
                 payload: Bytes::from_static(&[0x40, 0, 0]),
             }],
+            extensions_padding: 0,
         },
         payload: Bytes::from_static(&[0x11, 0x12, 0x13, 0x14]),
     };

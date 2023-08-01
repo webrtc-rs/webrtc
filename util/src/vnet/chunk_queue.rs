@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod chunk_queue_test;
 
-use super::chunk::*;
-
 use std::collections::VecDeque;
+
 use tokio::sync::RwLock;
+
+use super::chunk::*;
 
 #[derive(Default)]
 pub(crate) struct ChunkQueue {

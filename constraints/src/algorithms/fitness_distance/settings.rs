@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use super::setting::SettingFitnessDistanceError;
+use super::FitnessDistance;
 use crate::{MediaTrackProperty, MediaTrackSettings, SanitizedMediaTrackConstraintSet};
-
-use super::{setting::SettingFitnessDistanceError, FitnessDistance};
 
 /// A list of media track properties and their corresponding fitness distance errors.
 #[derive(Debug, Clone, Eq, PartialEq)]

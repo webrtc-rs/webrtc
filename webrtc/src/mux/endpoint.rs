@@ -1,12 +1,13 @@
-use crate::mux::mux_func::MatchFunc;
-use util::{Buffer, Conn};
-
-use async_trait::async_trait;
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+use async_trait::async_trait;
 use tokio::sync::Mutex;
+use util::{Buffer, Conn};
+
+use crate::mux::mux_func::MatchFunc;
 
 /// Endpoint implements net.Conn. It is used to read muxed packets.
 pub struct Endpoint {

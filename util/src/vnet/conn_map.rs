@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod conn_map_test;
 
-use crate::error::*;
-use crate::vnet::conn::UdpConn;
-use crate::Conn;
-
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
 use tokio::sync::Mutex;
+
+use crate::error::*;
+use crate::vnet::conn::UdpConn;
+use crate::Conn;
 
 type PortMap = Mutex<HashMap<u16, Vec<Arc<UdpConn>>>>;
 

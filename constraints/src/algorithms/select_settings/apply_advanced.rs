@@ -1,7 +1,6 @@
-use crate::{
-    algorithms::FitnessDistance, constraints::SanitizedAdvancedMediaTrackConstraints,
-    MediaTrackSettings,
-};
+use crate::algorithms::FitnessDistance;
+use crate::constraints::SanitizedAdvancedMediaTrackConstraints;
+use crate::MediaTrackSettings;
 
 /// Returns the set of settings for which all non-overconstraining advanced constraints'
 /// fitness distance is finite.
@@ -56,13 +55,12 @@ pub(super) fn apply_advanced_constraints<'a>(
 mod tests {
     use std::iter::FromIterator;
 
-    use crate::{
-        property::all::name::*, MediaTrackSupportedConstraints, ResizeMode,
-        ResolvedAdvancedMediaTrackConstraints, ResolvedMediaTrackConstraintSet,
-        ResolvedValueConstraint, ResolvedValueRangeConstraint,
-    };
-
     use super::*;
+    use crate::property::all::name::*;
+    use crate::{
+        MediaTrackSupportedConstraints, ResizeMode, ResolvedAdvancedMediaTrackConstraints,
+        ResolvedMediaTrackConstraintSet, ResolvedValueConstraint, ResolvedValueRangeConstraint,
+    };
 
     // Advanced constraint sets that doe not match any
     // candidates should just get ignored:

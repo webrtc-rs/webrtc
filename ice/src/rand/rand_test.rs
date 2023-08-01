@@ -1,9 +1,10 @@
-use super::*;
-use crate::error::Result;
-
 use std::sync::Arc;
+
 use tokio::sync::Mutex;
 use waitgroup::WaitGroup;
+
+use super::*;
+use crate::error::Result;
 
 #[tokio::test]
 async fn test_random_generator_collision() -> Result<()> {

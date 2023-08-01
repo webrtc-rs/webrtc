@@ -1,15 +1,16 @@
 #[cfg(test)]
 mod allocation_manager_test;
 
-use super::*;
-use crate::error::*;
-use crate::relay::*;
+use std::collections::HashMap;
 
 use futures::future;
-use std::collections::HashMap;
 use stun::textattrs::Username;
 use tokio::sync::mpsc;
 use util::Conn;
+
+use super::*;
+use crate::error::*;
+use crate::relay::*;
 
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {

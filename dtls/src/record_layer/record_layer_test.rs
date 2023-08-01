@@ -1,8 +1,8 @@
+use std::io::{BufReader, BufWriter};
+
 use super::record_layer_header::*;
 use super::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
-
-use std::io::{BufReader, BufWriter};
 
 #[test]
 fn test_udp_decode() -> Result<()> {

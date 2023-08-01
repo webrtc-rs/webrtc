@@ -2,24 +2,24 @@ mod generator_stream;
 #[cfg(test)]
 mod generator_test;
 
-use generator_stream::GeneratorStream;
-
-use crate::error::{Error, Result};
-use crate::stream_info::StreamInfo;
-use crate::{Attributes, Interceptor, RTCPReader, RTPReader, RTPWriter};
-use crate::{InterceptorBuilder, RTCPWriter};
-
-use crate::nack::stream_support_nack;
-
-use async_trait::async_trait;
-use rtcp::transport_feedbacks::transport_layer_nack::{
-    nack_pairs_from_sequence_numbers, TransportLayerNack,
-};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+
+use async_trait::async_trait;
+use generator_stream::GeneratorStream;
+use rtcp::transport_feedbacks::transport_layer_nack::{
+    nack_pairs_from_sequence_numbers, TransportLayerNack,
+};
 use tokio::sync::{mpsc, Mutex};
 use waitgroup::WaitGroup;
+
+use crate::error::{Error, Result};
+use crate::nack::stream_support_nack;
+use crate::stream_info::StreamInfo;
+use crate::{
+    Attributes, Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader, RTPWriter,
+};
 
 /// GeneratorBuilder can be used to configure Generator Interceptor
 #[derive(Default)]

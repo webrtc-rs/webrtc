@@ -1,18 +1,19 @@
 #[cfg(test)]
 mod nat_test;
 
-use crate::error::*;
-use crate::vnet::chunk::Chunk;
-use crate::vnet::net::UDP_STR;
-
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::ops::Add;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
+
 use tokio::sync::Mutex;
 use tokio::time::Duration;
+
+use crate::error::*;
+use crate::vnet::chunk::Chunk;
+use crate::vnet::net::UDP_STR;
 
 const DEFAULT_NAT_MAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
 
@@ -299,8 +300,7 @@ impl NetworkAddressTranslator {
                     to.set_destination_addr(&format!("{dst_ip}:{dst_port}"))?;
                 } else {
                     return Err(Error::Other(format!(
-                        "drop {} as {:?}",
-                        from,
+                        "drop {from} as {:?}",
                         Error::ErrNoAssociatedLocalAddress
                     )));
                 }

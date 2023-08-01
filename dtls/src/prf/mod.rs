@@ -6,8 +6,7 @@ use std::fmt;
 
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
-use sha2::Digest;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha1 = Hmac<Sha1>;

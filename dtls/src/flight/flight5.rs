@@ -1,3 +1,8 @@
+use std::fmt;
+use std::io::{BufReader, BufWriter};
+
+use async_trait::async_trait;
+
 use super::flight3::*;
 use super::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
@@ -16,10 +21,6 @@ use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
-
-use async_trait::async_trait;
-use std::fmt;
-use std::io::{BufReader, BufWriter};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Flight5;

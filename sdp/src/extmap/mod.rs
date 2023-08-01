@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod extmap_test;
 
+use std::{fmt, io};
+
+use url::Url;
+
 use super::direction::*;
 use super::error::{Error, Result};
 use crate::description::common::*;
-
-use std::fmt;
-use std::io;
-use url::Url;
 
 /// Default ext values
 pub const DEF_EXT_MAP_VALUE_ABS_SEND_TIME: usize = 1;

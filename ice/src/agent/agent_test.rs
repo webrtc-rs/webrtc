@@ -1,5 +1,17 @@
+use std::net::Ipv4Addr;
+use std::ops::Sub;
+use std::str::FromStr;
+
+use async_trait::async_trait;
+use stun::message::*;
+use stun::textattrs::Username;
+use util::vnet::*;
+use util::Conn;
+use waitgroup::{WaitGroup, Worker};
+
 use super::agent_vnet_test::*;
 use super::*;
+use crate::agent::agent_transport_test::pipe;
 use crate::candidate::candidate_base::*;
 use crate::candidate::candidate_host::*;
 use crate::candidate::candidate_peer_reflexive::*;
@@ -8,16 +20,6 @@ use crate::candidate::candidate_server_reflexive::*;
 use crate::control::AttrControlling;
 use crate::priority::PriorityAttr;
 use crate::use_candidate::UseCandidateAttr;
-
-use crate::agent::agent_transport_test::pipe;
-use async_trait::async_trait;
-use std::net::Ipv4Addr;
-use std::ops::Sub;
-use std::str::FromStr;
-use stun::message::*;
-use stun::textattrs::Username;
-use util::{vnet::*, Conn};
-use waitgroup::{WaitGroup, Worker};
 
 #[tokio::test]
 async fn test_pair_search() -> Result<()> {

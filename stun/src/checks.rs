@@ -1,7 +1,7 @@
+use subtle::ConstantTimeEq;
+
 use crate::attributes::*;
 use crate::error::*;
-
-use subtle::ConstantTimeEq;
 
 // check_size returns ErrAttrSizeInvalid if got is not equal to expected.
 pub fn check_size(_at: AttrType, got: usize, expected: usize) -> Result<()> {

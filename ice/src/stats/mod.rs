@@ -1,7 +1,7 @@
+use tokio::time::Instant;
+
 use crate::candidate::*;
 use crate::network_type::*;
-
-use tokio::time::Instant;
 
 // CandidatePairStats contains ICE candidate pair statistics
 #[derive(Debug, Clone)]

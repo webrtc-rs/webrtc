@@ -4,10 +4,8 @@
 
 use std::collections::HashMap;
 
-use crate::{
-    algorithms::{ConstraintFailureInfo, SettingFitnessDistanceErrorKind},
-    MediaTrackProperty,
-};
+use crate::algorithms::{ConstraintFailureInfo, SettingFitnessDistanceErrorKind};
+use crate::MediaTrackProperty;
 
 /// An error indicating one or more over-constrained settings.
 #[derive(Clone, Eq, PartialEq, Debug)]

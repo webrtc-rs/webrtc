@@ -1,9 +1,9 @@
+use std::collections::HashMap;
+use std::fmt;
+
 use super::name::*;
 use super::*;
 use crate::error::Result;
-
-use std::collections::HashMap;
-use std::fmt;
 
 // A question is a DNS query.
 #[derive(Default, Debug, PartialEq, Eq, Clone)]

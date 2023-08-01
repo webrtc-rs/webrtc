@@ -1,3 +1,9 @@
+use ice::mdns::MulticastDnsMode;
+use ice::network_type::NetworkType;
+use regex::Regex;
+use tokio::time::Duration;
+use waitgroup::WaitGroup;
+
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
@@ -8,11 +14,6 @@ use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
-use ice::mdns::MulticastDnsMode;
-use ice::network_type::NetworkType;
-use regex::Regex;
-use tokio::time::Duration;
-use waitgroup::WaitGroup;
 
 //use log::LevelFilter;
 //use std::io::Write;

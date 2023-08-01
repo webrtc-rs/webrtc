@@ -1,9 +1,11 @@
+use std::io::Cursor;
+
+use regex::Regex;
+
 use super::*;
 use crate::api::media_engine::MIME_TYPE_OPUS;
 use crate::api::APIBuilder;
 use crate::peer_connection::configuration::RTCConfiguration;
-use regex::Regex;
-use std::io::Cursor;
 
 #[tokio::test]
 async fn test_opus_case() -> Result<()> {

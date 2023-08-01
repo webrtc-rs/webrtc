@@ -1,7 +1,7 @@
-use crate::error::Error;
+use bytes::{Buf, BufMut};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use bytes::{Buf, BufMut};
+use crate::error::Error;
 
 /// PacketType specifies the type of an RTCP packet
 /// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
@@ -173,8 +173,9 @@ impl Unmarshal for Header {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use bytes::Bytes;
+
+    use super::*;
 
     #[test]
     fn test_header_unmarshal() {

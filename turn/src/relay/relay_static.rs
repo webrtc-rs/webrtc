@@ -1,9 +1,10 @@
-use super::*;
-use crate::error::*;
+use std::net::IpAddr;
 
 use async_trait::async_trait;
-use std::net::IpAddr;
 use util::vnet::net::*;
+
+use super::*;
+use crate::error::*;
 
 // RelayAddressGeneratorStatic can be used to return static IP address each time a relay is created.
 // This can be used when you have a single static IP address that you want to use

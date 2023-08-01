@@ -1,6 +1,6 @@
-use super::*;
-
 use std::io::{BufReader, BufWriter};
+
+use super::*;
 
 #[test]
 fn test_extension_supported_groups() -> Result<()> {

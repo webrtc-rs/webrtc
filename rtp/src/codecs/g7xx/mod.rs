@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod g7xx_test;
 
+use bytes::Bytes;
+
 use crate::error::Result;
 use crate::packetizer::Payloader;
-
-use bytes::Bytes;
 
 /// G711Payloader payloads G711 packets
 pub type G711Payloader = G7xxPayloader;

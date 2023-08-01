@@ -1,11 +1,11 @@
+use std::sync::Arc;
+
+use clap::{App, Arg};
 use stun::agent::*;
 use stun::client::*;
 use stun::message::*;
 use stun::xoraddr::*;
 use stun::Error;
-
-use clap::{App, Arg};
-use std::sync::Arc;
 use tokio::net::UdpSocket;
 
 #[tokio::main]

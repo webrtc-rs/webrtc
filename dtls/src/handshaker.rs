@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+use std::fmt;
+use std::sync::Arc;
+
+use log::*;
+
 use crate::cipher_suite::*;
 use crate::config::*;
 use crate::conn::*;
@@ -6,11 +12,6 @@ use crate::crypto::*;
 use crate::error::*;
 use crate::extension::extension_use_srtp::*;
 use crate::signature_hash_algorithm::*;
-
-use log::*;
-use std::collections::HashMap;
-use std::fmt;
-use std::sync::Arc;
 
 //use std::io::BufWriter;
 

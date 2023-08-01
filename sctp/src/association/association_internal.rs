@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod association_internal_test;
 
-use super::*;
+use std::sync::atomic::AtomicBool;
 
+use async_trait::async_trait;
+
+use super::*;
 use crate::param::param_forward_tsn_supported::ParamForwardTsnSupported;
 use crate::param::param_type::ParamType;
 use crate::param::param_unrecognized::ParamUnrecognized;
-use async_trait::async_trait;
-use std::sync::atomic::AtomicBool;
 
 #[derive(Default)]
 pub struct AssociationInternal {

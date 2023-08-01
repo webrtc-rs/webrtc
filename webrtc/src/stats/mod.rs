@@ -1,3 +1,16 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
+use ice::agent::Agent;
+use ice::candidate::{CandidatePairState, CandidateType};
+use ice::network_type::NetworkType;
+use serde::{Serialize, Serializer};
+use smol_str::SmolStr;
+use stats_collector::StatsCollector;
+use tokio::time::Instant;
+
 use crate::data_channel::data_channel_state::RTCDataChannelState;
 use crate::data_channel::RTCDataChannel;
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
@@ -5,19 +18,6 @@ use crate::peer_connection::certificate::RTCCertificate;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 use crate::rtp_transceiver::{PayloadType, SSRC};
 use crate::sctp_transport::RTCSctpTransport;
-
-use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
-use ice::agent::Agent;
-use ice::candidate::{CandidatePairState, CandidateType};
-use ice::network_type::NetworkType;
-use smol_str::SmolStr;
-use stats_collector::StatsCollector;
-
-use serde::{Serialize, Serializer};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::time::Instant;
 
 mod serialize;
 pub mod stats_collector;
