@@ -1,7 +1,5 @@
-use std::io::BufWriter;
-
 use aes::cipher::generic_array::GenericArray;
-use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use bytes::{BufMut, Bytes, BytesMut};
 use ctr::cipher::{NewCipher, StreamCipher, StreamCipherSeek};
 use hmac::{Hmac, Mac};
@@ -13,6 +11,11 @@ use super::Cipher;
 use crate::error::{Error, Result};
 use crate::key_derivation::*;
 use crate::protection_profile::*;
+
+use openssl::cipher;
+use openssl::cipher_ctx::CipherCtx;
+use openssl::error::ErrorStack;
+use openssl::symm::{Cipher as OpenSslCipher, Crypter, Mode};
 
 type HmacSha1 = Hmac<Sha1>;
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
@@ -28,6 +31,8 @@ pub(crate) struct CipherAesCmHmacSha1 {
     srtcp_session_salt: Vec<u8>,
     srtcp_session_auth: HmacSha1,
     //srtcp_session_auth_tag: Vec<u8>,
+
+    ctx: CipherCtx
 }
 
 impl CipherAesCmHmacSha1 {
@@ -84,6 +89,11 @@ impl CipherAesCmHmacSha1 {
         let srtcp_session_auth = HmacSha1::new_from_slice(&srtcp_session_auth_tag)
             .map_err(|e| Error::Other(e.to_string()))?;
 
+        let t = openssl::cipher::Cipher::aes_128_ctr();
+        let mut ctx = CipherCtx::new().expect("a reusable cipher context");
+        ctx.encrypt_init(Some(t), Some(&srtp_session_key[..]), None)
+            .expect("enc init");
+
         Ok(CipherAesCmHmacSha1 {
             srtp_session_key,
             srtp_session_salt,
@@ -93,6 +103,7 @@ impl CipherAesCmHmacSha1 {
             srtcp_session_salt,
             srtcp_session_auth,
             //srtcp_session_auth_tag,
+            ctx,
         })
     }
 
@@ -110,25 +121,19 @@ impl CipherAesCmHmacSha1 {
     /// - Authenticated portion of the packet is everything BEFORE MKI
     /// - k_a is the session message authentication key
     /// - n_tag is the bit-length of the output authentication tag
-    fn generate_srtp_auth_tag(&mut self, buf: &[u8], roc: u32) -> Result<Vec<u8>> {
+    fn generate_srtp_auth_tag(&mut self, buf: &[u8], roc: u32) -> Vec<u8> {
         self.srtp_session_auth.reset();
 
         self.srtp_session_auth.update(buf);
 
         // For SRTP only, we need to hash the rollover counter as well.
-        let mut roc_buf: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(roc_buf.as_mut());
-            writer.write_u32::<BigEndian>(roc)?;
-        }
-
-        self.srtp_session_auth.update(&roc_buf);
+        self.srtp_session_auth.update(&roc.to_be_bytes());
 
         let result = self.srtp_session_auth.clone().finalize();
         let code_bytes = result.into_bytes();
 
         // Truncate the hash to the first AUTH_TAG_SIZE bytes.
-        Ok(code_bytes[0..self.auth_tag_len()].to_vec())
+        code_bytes[0..self.auth_tag_len()].to_vec()
     }
 
     /// https://tools.ietf.org/html/rfc3711#section-4.2
@@ -172,34 +177,30 @@ impl Cipher for CipherAesCmHmacSha1 {
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes> {
+        let header_len = header.marshal_size();
         let mut writer =
-            BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
+            BytesMut::with_capacity(header_len + payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
-        let data = header.marshal()?;
-        writer.extend(data);
-
-        // Write the plaintext header to the destination buffer.
-        writer.extend_from_slice(payload);
-
+        writer.extend(header.marshal());
         // Encrypt the payload
-        let counter = generate_counter(
+        let nonce = generate_counter(
             header.sequence_number,
             roc,
             header.ssrc,
             &self.srtp_session_salt,
-        )?;
-        let key = GenericArray::from_slice(&self.srtp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-        let payload_offset = header.marshal_size();
-        stream.apply_keystream(&mut writer[payload_offset..]);
+        );
+
+        writer.put_bytes(0, payload.len());
+        self.ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
+        let count = self.ctx.cipher_update(&payload, Some(&mut writer[header_len..])).unwrap();
+        self.ctx.cipher_final(&mut writer[count..]).unwrap();
 
         // Generate the auth tag.
-        let auth_tag = self.generate_srtp_auth_tag(&writer, roc)?;
+        let auth_tag = self.generate_srtp_auth_tag(&writer, roc);
         writer.extend(auth_tag);
 
-        Ok(writer.freeze())
+        Ok(Bytes::from(writer))
     }
 
     fn decrypt_rtp(
@@ -219,7 +220,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
 
         // Generate the auth tag we expect to see from the ciphertext.
-        let expected_tag = self.generate_srtp_auth_tag(cipher_text, roc)?;
+        let expected_tag = self.generate_srtp_auth_tag(cipher_text, roc);
 
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
@@ -236,7 +237,7 @@ impl Cipher for CipherAesCmHmacSha1 {
             roc,
             header.ssrc,
             &self.srtp_session_salt,
-        )?;
+        );
 
         let key = GenericArray::from_slice(&self.srtp_session_key);
         let nonce = GenericArray::from_slice(&counter);
@@ -261,7 +262,7 @@ impl Cipher for CipherAesCmHmacSha1 {
             (srtcp_index >> 16) as u32,
             ssrc,
             &self.srtcp_session_salt,
-        )?;
+        );
 
         let key = GenericArray::from_slice(&self.srtcp_session_key);
         let nonce = GenericArray::from_slice(&counter);
@@ -325,7 +326,7 @@ impl Cipher for CipherAesCmHmacSha1 {
             (srtcp_index >> 16) as u32,
             ssrc,
             &self.srtcp_session_salt,
-        )?;
+        );
 
         let key = GenericArray::from_slice(&self.srtcp_session_key);
         let nonce = GenericArray::from_slice(&counter);

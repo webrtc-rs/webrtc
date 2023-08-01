@@ -1,9 +1,6 @@
-use std::io::BufWriter;
-
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::NewBlockCipher;
 use aes::{Aes128, BlockEncrypt};
-use byteorder::{BigEndian, WriteBytesExt};
 
 use crate::error::{Error, Result};
 
@@ -74,22 +71,24 @@ pub(crate) fn generate_counter(
     rollover_counter: u32,
     ssrc: u32,
     session_salt: &[u8],
-) -> Result<Vec<u8>> {
+) -> [u8; 16] {
     assert!(session_salt.len() <= 16);
 
-    let mut counter: Vec<u8> = vec![0; 16];
-    {
-        let mut writer = BufWriter::<&mut [u8]>::new(counter[4..].as_mut());
-        writer.write_u32::<BigEndian>(ssrc)?;
-        writer.write_u32::<BigEndian>(rollover_counter)?;
-        writer.write_u32::<BigEndian>((sequence_number as u32) << 16)?;
-    }
+    let mut counter = [0; 16];
+
+    let ssrc_be = ssrc.to_be_bytes();
+    let rollover_be = rollover_counter.to_be_bytes();
+    let seq_be = ((sequence_number as u32) << 16).to_be_bytes();
+
+    counter[4..8].copy_from_slice(&ssrc_be);
+    counter[8..12].copy_from_slice(&rollover_be);
+    counter[12..16].copy_from_slice(&seq_be);
 
     for i in 0..session_salt.len() {
         counter[i] ^= session_salt[i];
     }
 
-    Ok(counter)
+    counter
 }
 
 #[cfg(test)]
