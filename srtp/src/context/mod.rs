@@ -160,15 +160,14 @@ impl Context {
         })
     }
 
-    fn get_srtp_ssrc_state(&mut self, ssrc: u32) -> Option<&mut SrtpSsrcState> {
+    fn get_srtp_ssrc_state(&mut self, ssrc: u32) -> &mut SrtpSsrcState {
         let s = SrtpSsrcState {
             ssrc,
             replay_detector: Some((self.new_srtp_replay_detector)()),
             ..Default::default()
         };
 
-        self.srtp_ssrc_states.entry(ssrc).or_insert(s);
-        self.srtp_ssrc_states.get_mut(&ssrc)
+        self.srtp_ssrc_states.entry(ssrc).or_insert(s)
     }
 
     fn get_srtcp_ssrc_state(&mut self, ssrc: u32) -> Option<&mut SrtcpSsrcState> {
@@ -188,9 +187,7 @@ impl Context {
 
     /// set_roc sets SRTP rollover counter value of specified SSRC.
     fn set_roc(&mut self, ssrc: u32, roc: u32) {
-        if let Some(s) = self.get_srtp_ssrc_state(ssrc) {
-            s.rollover_counter = roc;
-        }
+        self.get_srtp_ssrc_state(ssrc).rollover_counter = roc;
     }
 
     /// index returns SRTCP index value of specified SSRC.

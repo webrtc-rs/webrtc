@@ -16,6 +16,7 @@ fn benchmark_buffer(c: &mut Criterion) {
     .unwrap();
 
     let mut pld = BytesMut::new();
+
     for i in 0..1000 {
         pld.extend_from_slice(&[i as u8]);
     }

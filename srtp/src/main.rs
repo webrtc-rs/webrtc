@@ -18,7 +18,7 @@ fn main() {
         pld.extend_from_slice(&[i as u8]);
     }
 
-    for i in 1..=100000u32 {
+    for i in 1..=10000000u32 {
         let pkt = rtp::packet::Packet {
             header: rtp::header::Header {
                 sequence_number: i as u16,

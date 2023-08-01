@@ -109,11 +109,11 @@ fn test_valid_packet_counter() -> Result<()> {
         ssrc: 4160032510,
         ..Default::default()
     };
-    let expected_counter = vec![
+    let expected_counter = [
         0xcf, 0x90, 0x1e, 0xa5, 0xda, 0xd3, 0x2c, 0x15, 0x00, 0xa2, 0x24, 0xae, 0xae, 0xaf, 0x00,
         0x00,
     ];
-    let counter = generate_counter(32846, s.rollover_counter, s.ssrc, &srtp_session_salt)?;
+    let counter = generate_counter(32846, s.rollover_counter, s.ssrc, &srtp_session_salt);
     assert_eq!(
         counter, expected_counter,
         "Session Key {counter:?} does not match expected {expected_counter:?}",
