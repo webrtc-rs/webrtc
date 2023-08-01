@@ -33,5 +33,10 @@ aead = { version = "0.4.3", features = ["std"] }
 aes-gcm = { version = "0.10.1", features = ["std"] }
 
 [dev-dependencies]
+criterion = { version = "0.4.0", features = ["async_futures"] }
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 lazy_static = "1.4.0"
+
+[[bench]]
+name = "srtp_bench"
+harness = false
