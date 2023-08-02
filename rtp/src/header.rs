@@ -311,7 +311,7 @@ impl Marshal for Header {
             };
 
             // add padding to reach 4 bytes boundaries
-            for _ in 0..self.extensions_padding {
+            for _ in extension_payload_len..extension_payload_size as usize * 4 {
                 buf.put_u8(0);
             }
         }
