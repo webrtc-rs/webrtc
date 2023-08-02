@@ -384,15 +384,20 @@ impl Header {
                 self.extensions.push(Extension { id, payload });
             }
 
-            if delta > 0 {
-                let extension_padding = (delta % 4) as usize;
-                if self.extensions_padding < extension_padding {
-                    self.extensions_padding = (self.extensions_padding + 4) - extension_padding;
-                } else {
-                    self.extensions_padding -= extension_padding
+            match delta.cmp(&0) {
+                std::cmp::Ordering::Less => {
+                    self.extensions_padding =
+                        ((self.extensions_padding as isize - delta) % 4) as usize;
                 }
-            } else if delta < 0 {
-                self.extensions_padding = ((self.extensions_padding as isize - delta) % 4) as usize;
+                std::cmp::Ordering::Greater => {
+                    let extension_padding = (delta % 4) as usize;
+                    if self.extensions_padding < extension_padding {
+                        self.extensions_padding = (self.extensions_padding + 4) - extension_padding;
+                    } else {
+                        self.extensions_padding -= extension_padding
+                    }
+                }
+                _ => {}
             }
         } else {
             // No existing header extensions
