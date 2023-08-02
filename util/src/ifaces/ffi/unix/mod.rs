@@ -100,33 +100,13 @@ pub fn nix_socketaddr_to_sockaddr(sa: *mut nix::sys::socket::sockaddr) -> Option
             let sa: *const nix::sys::socket::sockaddr_in = sa as *const nix::libc::sockaddr_in;
             let sa = &unsafe { *sa };
             let (addr, port) = (sa.sin_addr.s_addr, sa.sin_port);
-            (
-                IpAddr::V4(net::Ipv4Addr::new(
-                    (addr & 0x000000FF) as u8,
-                    ((addr & 0x0000FF00) >> 8) as u8,
-                    ((addr & 0x00FF0000) >> 16) as u8,
-                    ((addr & 0xFF000000) >> 24) as u8,
-                )),
-                port,
-            )
+            (IpAddr::V4(Into::into(u32::from_be(addr))), port)
         }
         AF_INET6 => {
             let sa: *const nix::sys::socket::sockaddr_in6 = sa as *const nix::libc::sockaddr_in6;
             let sa = &unsafe { *sa };
             let (addr, port) = (sa.sin6_addr.s6_addr, sa.sin6_port);
-            (
-                IpAddr::V6(net::Ipv6Addr::new(
-                    addr[0] as u16,
-                    addr[1] as u16,
-                    addr[2] as u16,
-                    addr[3] as u16,
-                    addr[4] as u16,
-                    addr[5] as u16,
-                    addr[6] as u16,
-                    addr[7] as u16,
-                )),
-                port,
-            )
+            (Into::into(addr), port)
         }
         _ => return None,
     };
