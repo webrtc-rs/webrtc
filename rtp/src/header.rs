@@ -311,7 +311,7 @@ impl Marshal for Header {
             };
 
             // add padding to reach 4 bytes boundaries
-            for _ in extension_payload_len..extension_payload_size as usize * 4 {
+            for _ in 0..self.extensions_padding {
                 buf.put_u8(0);
             }
         }
@@ -341,13 +341,14 @@ impl Header {
 
     /// SetExtension sets an RTP header extension
     pub fn set_extension(&mut self, id: u8, payload: Bytes) -> Result<(), Error> {
+        let payload_len = payload.len() as isize;
         if self.extension {
             let extension_profile_len = match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
                     if !(1..=14).contains(&id) {
                         return Err(Error::ErrRfc8285oneByteHeaderIdrange);
                     }
-                    if payload.len() > 16 {
+                    if payload_len > 16 {
                         return Err(Error::ErrRfc8285oneByteHeaderSize);
                     }
                     1
@@ -356,7 +357,7 @@ impl Header {
                     if id < 1 {
                         return Err(Error::ErrRfc8285twoByteHeaderIdrange);
                     }
-                    if payload.len() > 255 {
+                    if payload_len > 255 {
                         return Err(Error::ErrRfc8285twoByteHeaderSize);
                     }
                     2
@@ -369,27 +370,35 @@ impl Header {
                 }
             };
 
+            let delta;
             // Update existing if it exists else add new extension
             if let Some(extension) = self
                 .extensions
                 .iter_mut()
                 .find(|extension| extension.id == id)
             {
+                delta = payload_len - extension.payload.len() as isize;
                 extension.payload = payload;
             } else {
-                let extension_padding = (payload.len() + extension_profile_len) % 4;
+                delta = payload_len + extension_profile_len;
+                self.extensions.push(Extension { id, payload });
+            }
+
+            if delta > 0 {
+                let extension_padding = (delta % 4) as usize;
                 if self.extensions_padding < extension_padding {
-                    self.extensions_padding = self.extensions_padding + 4 - extension_padding;
+                    self.extensions_padding = (self.extensions_padding + 4) - extension_padding;
                 } else {
                     self.extensions_padding -= extension_padding
                 }
-                self.extensions.push(Extension { id, payload });
+            } else if delta < 0 {
+                self.extensions_padding = ((self.extensions_padding as isize - delta) % 4) as usize;
             }
         } else {
             // No existing header extensions
             self.extension = true;
             let mut extension_profile_len = 0;
-            self.extension_profile = match payload.len() {
+            self.extension_profile = match payload_len {
                 0..=16 => {
                     extension_profile_len = 1;
                     EXTENSION_PROFILE_ONE_BYTE
@@ -441,7 +450,17 @@ impl Header {
                 .iter()
                 .position(|extension| extension.id == id)
             {
-                self.extensions.remove(index);
+                let extension = self.extensions.remove(index);
+
+                let extension_profile_len = match self.extension_profile {
+                    EXTENSION_PROFILE_ONE_BYTE => 1,
+                    EXTENSION_PROFILE_TWO_BYTE => 2,
+                    _ => 0,
+                };
+
+                let extension_padding = (extension.payload.len() + extension_profile_len) % 4;
+                self.extensions_padding = (self.extensions_padding + extension_padding) % 4;
+
                 Ok(())
             } else {
                 Err(Error::ErrHeaderExtensionNotFound)
