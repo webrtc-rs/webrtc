@@ -32,7 +32,8 @@ pub(crate) struct CipherAesCmHmacSha1 {
     srtcp_session_auth: HmacSha1,
     //srtcp_session_auth_tag: Vec<u8>,
 
-    ctx: CipherCtx
+    rtp_ctx: CipherCtx,
+    rtcp_ctx: CipherCtx
 }
 
 impl CipherAesCmHmacSha1 {
@@ -90,8 +91,13 @@ impl CipherAesCmHmacSha1 {
             .map_err(|e| Error::Other(e.to_string()))?;
 
         let t = openssl::cipher::Cipher::aes_128_ctr();
-        let mut ctx = CipherCtx::new().expect("a reusable cipher context");
-        ctx.encrypt_init(Some(t), Some(&srtp_session_key[..]), None)
+        let mut rtp_ctx = CipherCtx::new().expect("a reusable cipher context");
+        rtp_ctx.encrypt_init(Some(t), Some(&srtp_session_key[..]), None)
+            .expect("enc init");
+
+        let t = openssl::cipher::Cipher::aes_128_ctr();
+        let mut rtcp_ctx = CipherCtx::new().expect("a reusable cipher context");
+        rtcp_ctx.encrypt_init(Some(t), Some(&srtcp_session_key[..]), None)
             .expect("enc init");
 
         Ok(CipherAesCmHmacSha1 {
@@ -103,7 +109,8 @@ impl CipherAesCmHmacSha1 {
             srtcp_session_salt,
             srtcp_session_auth,
             //srtcp_session_auth_tag,
-            ctx,
+            rtp_ctx,
+            rtcp_ctx
         })
     }
 
@@ -187,9 +194,9 @@ impl Cipher for CipherAesCmHmacSha1 {
             &self.srtp_session_salt,
         );
         writer.resize(payload.len(), 0);
-        self.ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
-        let count = self.ctx.cipher_update(&payload[header_len..], Some(&mut writer[header_len..])).unwrap();
-        self.ctx.cipher_final(&mut writer[count..]).unwrap();
+        self.rtp_ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
+        let count = self.rtp_ctx.cipher_update(&payload[header_len..], Some(&mut writer[header_len..])).unwrap();
+        self.rtp_ctx.cipher_final(&mut writer[count..]).unwrap();
 
         // Generate and write the auth tag.
         let auth_tag = &self.generate_srtp_auth_tag(&writer, roc)[..self.auth_tag_len()];
@@ -236,9 +243,9 @@ impl Cipher for CipherAesCmHmacSha1 {
         );
 
         writer.put_bytes(0, encrypted.len() - header_len - self.auth_tag_len());
-        self.ctx.decrypt_init(None, None, Some(&nonce)).unwrap();
-        let count = self.ctx.cipher_update(&cipher_text[header_len..], Some(&mut writer[header_len..])).unwrap();
-        self.ctx.cipher_final(&mut writer[count..]).unwrap();
+        self.rtp_ctx.decrypt_init(None, None, Some(&nonce)).unwrap();
+        let count = self.rtp_ctx.cipher_update(&cipher_text[header_len..], Some(&mut writer[header_len..])).unwrap();
+        self.rtp_ctx.cipher_final(&mut writer[count..]).unwrap();
 
         Ok(writer.freeze())
     }
@@ -248,23 +255,20 @@ impl Cipher for CipherAesCmHmacSha1 {
             BytesMut::with_capacity(decrypted.len() + SRTCP_INDEX_SIZE + self.auth_tag_len());
 
         // Write the decrypted to the destination buffer.
-        writer.extend_from_slice(decrypted);
+        writer.extend_from_slice(&decrypted[..rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH]);
 
         // Encrypt everything after header
-        let counter = generate_counter(
+        let nonce = generate_counter(
             (srtcp_index & 0xFFFF) as u16,
             (srtcp_index >> 16) as u32,
             ssrc,
             &self.srtcp_session_salt,
         );
 
-        let key = GenericArray::from_slice(&self.srtcp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-
-        stream.apply_keystream(
-            &mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..],
-        );
+        writer.resize(decrypted.len() - rtcp::header::HEADER_LENGTH - rtcp::header::SSRC_LENGTH, 0);
+        self.rtcp_ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
+        let count = self.rtcp_ctx.cipher_update(&decrypted[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..], Some(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..])).unwrap();
+        self.rtcp_ctx.cipher_final(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH + count..]).unwrap();
 
         // Add SRTCP index and set Encryption bit
         writer.put_u32(srtcp_index as u32 | (1u32 << 31));
