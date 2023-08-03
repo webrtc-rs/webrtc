@@ -236,7 +236,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         );
 
         writer.put_bytes(0, encrypted.len() - header_len - self.auth_tag_len());
-        self.ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
+        self.ctx.decrypt_init(None, None, Some(&nonce)).unwrap();
         let count = self.ctx.cipher_update(&cipher_text[header_len..], Some(&mut writer[header_len..])).unwrap();
         self.ctx.cipher_final(&mut writer[count..]).unwrap();
 
