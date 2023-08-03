@@ -49,8 +49,6 @@ pub enum Error {
     SrtpSaltLength(usize, usize),
     #[error("SyntaxError: {0}")]
     ExtMapParse(String),
-    #[error("ssrc {0} not exist in srtp_ssrc_state")]
-    SsrcMissingFromSrtp(u32),
     #[error("srtp ssrc={0} index={1}: duplicated")]
     SrtpSsrcDuplicated(u32, u16),
     #[error("srtcp ssrc={0} index={1}: duplicated")]

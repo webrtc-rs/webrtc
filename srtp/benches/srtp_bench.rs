@@ -3,7 +3,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use util::Marshal;
 use webrtc_srtp::{context::Context, protection_profile::ProtectionProfile};
 
-fn benchmark_buffer(c: &mut Criterion) {
+fn benchmark_encrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     let mut ctx = Context::new(
         &vec![
             96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
@@ -16,20 +16,18 @@ fn benchmark_buffer(c: &mut Criterion) {
     .unwrap();
 
     let mut pld = BytesMut::new();
-
-    for i in 0..1000 {
+    for i in 0..1200 {
         pld.extend_from_slice(&[i as u8]);
     }
 
-    let mut count = 1;
-
     c.bench_function("Benchmark context ", |b| {
+        let mut seq = 1;
         b.iter_batched(
             || {
                 let pkt = rtp::packet::Packet {
                     header: rtp::header::Header {
-                        sequence_number: count,
-                        timestamp: count.into(),
+                        sequence_number: seq,
+                        timestamp: seq.into(),
                         extension_profile: 48862,
                         marker: true,
                         padding: false,
@@ -39,7 +37,7 @@ fn benchmark_buffer(c: &mut Criterion) {
                     },
                     payload: pld.clone().into(),
                 };
-                count += 1;
+                seq += 1;
                 pkt.marshal().unwrap()
             },
             |pkt_raw| {
@@ -50,5 +48,5 @@ fn benchmark_buffer(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_buffer);
+criterion_group!(benches, benchmark_encrypt_rtp_aes_128_cm_hmac_sha1);
 criterion_main!(benches);
