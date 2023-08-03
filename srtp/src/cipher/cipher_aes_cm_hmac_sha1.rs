@@ -207,6 +207,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         if encrypted.len() < self.auth_tag_len() {
             return Err(Error::SrtpTooSmall(encrypted.len(), self.auth_tag_len()));
         }
+        let header_len = header.marshal_size();
 
         let mut writer = BytesMut::with_capacity(encrypted.len() - self.auth_tag_len());
 
@@ -224,22 +225,20 @@ impl Cipher for CipherAesCmHmacSha1 {
         }
 
         // Write cipher_text to the destination buffer.
-        writer.extend_from_slice(cipher_text);
+        writer.extend_from_slice(&cipher_text[..header_len]);
 
         // Decrypt the ciphertext for the payload.
-        let counter = generate_counter(
+        let nonce = generate_counter(
             header.sequence_number,
             roc,
             header.ssrc,
             &self.srtp_session_salt,
         );
 
-        let key = GenericArray::from_slice(&self.srtp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-        let payload_offset = header.marshal_size();
-        stream.seek(0);
-        stream.apply_keystream(&mut writer[payload_offset..]);
+        writer.put_bytes(0, encrypted.len() - header_len - self.auth_tag_len());
+        self.ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
+        let count = self.ctx.cipher_update(&cipher_text[header_len..], Some(&mut writer[header_len..])).unwrap();
+        self.ctx.cipher_final(&mut writer[count..]).unwrap();
 
         Ok(writer.freeze())
     }

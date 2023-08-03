@@ -97,7 +97,7 @@ impl Session {
                 tokio::select! {
                     result = incoming_stream => match result{
                         Ok(()) => {},
-                        Err(err) => log::error!("{}", err),
+                        Err(err) => log::info!("{}", err),
                     },
                     opt = close_stream => if let Some(ssrc) = opt {
                         Session::close_stream(&cloned_streams_map, ssrc).await
