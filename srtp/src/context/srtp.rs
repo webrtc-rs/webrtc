@@ -10,8 +10,7 @@ impl Context {
         encrypted: &[u8],
         header: &rtp::header::Header,
     ) -> Result<Bytes> {
-        let roc;
-        {
+        let roc = {
             let state = self.get_srtp_ssrc_state(header.ssrc);
             if let Some(replay_detector) = &mut state.replay_detector {
                 if !replay_detector.check(header.sequence_number as u64) {
@@ -22,8 +21,8 @@ impl Context {
                 }
             }
 
-            roc = state.next_rollover_count(header.sequence_number);
-        }
+            state.next_rollover_count(header.sequence_number)
+        };
 
         let dst = self.cipher.decrypt_rtp(encrypted, header, roc)?;
         {
@@ -46,14 +45,14 @@ impl Context {
 
     pub fn encrypt_rtp_with_header(
         &mut self,
-        plaintext: &[u8],
+        payload: &[u8],
         header: &rtp::header::Header,
     ) -> Result<Bytes> {
         let roc = self.get_srtp_ssrc_state(header.ssrc).next_rollover_count(header.sequence_number);
 
         let dst = self
             .cipher
-            .encrypt_rtp(&plaintext[header.marshal_size()..], header, roc)?;
+            .encrypt_rtp(&payload, header, roc)?;
 
         self.get_srtp_ssrc_state(header.ssrc).update_rollover_count(header.sequence_number);
 

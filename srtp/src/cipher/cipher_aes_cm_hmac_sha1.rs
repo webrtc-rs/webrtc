@@ -121,19 +121,15 @@ impl CipherAesCmHmacSha1 {
     /// - Authenticated portion of the packet is everything BEFORE MKI
     /// - k_a is the session message authentication key
     /// - n_tag is the bit-length of the output authentication tag
-    fn generate_srtp_auth_tag(&mut self, buf: &[u8], roc: u32) -> Vec<u8> {
-        self.srtp_session_auth.reset();
+    fn generate_srtp_auth_tag(&self, buf: &[u8], roc: u32) -> [u8; 20] {
+        let mut signer = self.srtp_session_auth.clone();
 
-        self.srtp_session_auth.update(buf);
+        signer.update(buf);
 
         // For SRTP only, we need to hash the rollover counter as well.
-        self.srtp_session_auth.update(&roc.to_be_bytes());
+        signer.update(&roc.to_be_bytes());
 
-        let result = self.srtp_session_auth.clone().finalize();
-        let code_bytes = result.into_bytes();
-
-        // Truncate the hash to the first AUTH_TAG_SIZE bytes.
-        code_bytes[0..self.auth_tag_len()].to_vec()
+        signer.finalize().into_bytes().into()
     }
 
     /// https://tools.ietf.org/html/rfc3711#section-4.2
@@ -147,13 +143,12 @@ impl CipherAesCmHmacSha1 {
     /// - Authenticated portion of the packet is everything BEFORE MKI
     /// - k_a is the session message authentication key
     /// - n_tag is the bit-length of the output authentication tag
-    fn generate_srtcp_auth_tag(&mut self, buf: &[u8]) -> Vec<u8> {
-        self.srtcp_session_auth.reset();
+    fn generate_srtcp_auth_tag(&self, buf: &[u8]) -> Vec<u8> {
+        let mut signer = self.srtcp_session_auth.clone();
 
-        self.srtcp_session_auth.update(buf);
+        signer.update(buf);
 
-        let result = self.srtcp_session_auth.clone().finalize();
-        let code_bytes = result.into_bytes();
+        let code_bytes = signer.finalize().into_bytes();
 
         // Truncate the hash to the first AUTH_TAG_SIZE bytes.
         code_bytes[0..self.auth_tag_len()].to_vec()
@@ -179,10 +174,11 @@ impl Cipher for CipherAesCmHmacSha1 {
     ) -> Result<Bytes> {
         let header_len = header.marshal_size();
         let mut writer =
-            BytesMut::with_capacity(header_len + payload.len() + self.auth_tag_len());
+            Vec::with_capacity(payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
-        writer.extend(header.marshal());
+        writer.extend_from_slice(&payload[..header_len]);
+
         // Encrypt the payload
         let nonce = generate_counter(
             header.sequence_number,
@@ -190,15 +186,14 @@ impl Cipher for CipherAesCmHmacSha1 {
             header.ssrc,
             &self.srtp_session_salt,
         );
-
-        writer.put_bytes(0, payload.len());
+        writer.resize(payload.len(), 0);
         self.ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
-        let count = self.ctx.cipher_update(&payload, Some(&mut writer[header_len..])).unwrap();
+        let count = self.ctx.cipher_update(&payload[header_len..], Some(&mut writer[header_len..])).unwrap();
         self.ctx.cipher_final(&mut writer[count..]).unwrap();
 
-        // Generate the auth tag.
-        let auth_tag = self.generate_srtp_auth_tag(&writer, roc);
-        writer.extend(auth_tag);
+        // Generate and write the auth tag.
+        let auth_tag = &self.generate_srtp_auth_tag(&writer, roc)[..self.auth_tag_len()];
+        writer.extend_from_slice(auth_tag);
 
         Ok(Bytes::from(writer))
     }
@@ -220,11 +215,11 @@ impl Cipher for CipherAesCmHmacSha1 {
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
 
         // Generate the auth tag we expect to see from the ciphertext.
-        let expected_tag = self.generate_srtp_auth_tag(cipher_text, roc);
+        let expected_tag = &self.generate_srtp_auth_tag(cipher_text, roc)[..self.auth_tag_len()];
 
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
-        if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
+        if actual_tag.ct_eq(expected_tag).unwrap_u8() != 1 {
             return Err(Error::RtpFailedToVerifyAuthTag);
         }
 
