@@ -31,9 +31,8 @@ pub(crate) struct CipherAesCmHmacSha1 {
     srtcp_session_salt: Vec<u8>,
     srtcp_session_auth: HmacSha1,
     //srtcp_session_auth_tag: Vec<u8>,
-
     rtp_ctx: CipherCtx,
-    rtcp_ctx: CipherCtx
+    rtcp_ctx: CipherCtx,
 }
 
 impl CipherAesCmHmacSha1 {
@@ -92,12 +91,14 @@ impl CipherAesCmHmacSha1 {
 
         let t = openssl::cipher::Cipher::aes_128_ctr();
         let mut rtp_ctx = CipherCtx::new().expect("a reusable cipher context");
-        rtp_ctx.encrypt_init(Some(t), Some(&srtp_session_key[..]), None)
+        rtp_ctx
+            .encrypt_init(Some(t), Some(&srtp_session_key[..]), None)
             .expect("enc init");
 
         let t = openssl::cipher::Cipher::aes_128_ctr();
         let mut rtcp_ctx = CipherCtx::new().expect("a reusable cipher context");
-        rtcp_ctx.encrypt_init(Some(t), Some(&srtcp_session_key[..]), None)
+        rtcp_ctx
+            .encrypt_init(Some(t), Some(&srtcp_session_key[..]), None)
             .expect("enc init");
 
         Ok(CipherAesCmHmacSha1 {
@@ -110,7 +111,7 @@ impl CipherAesCmHmacSha1 {
             srtcp_session_auth,
             //srtcp_session_auth_tag,
             rtp_ctx,
-            rtcp_ctx
+            rtcp_ctx,
         })
     }
 
@@ -180,8 +181,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         roc: u32,
     ) -> Result<Bytes> {
         let header_len = header.marshal_size();
-        let mut writer =
-            Vec::with_capacity(payload.len() + self.auth_tag_len());
+        let mut writer = Vec::with_capacity(payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
         writer.extend_from_slice(&payload[..header_len]);
@@ -195,7 +195,10 @@ impl Cipher for CipherAesCmHmacSha1 {
         );
         writer.resize(payload.len(), 0);
         self.rtp_ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
-        let count = self.rtp_ctx.cipher_update(&payload[header_len..], Some(&mut writer[header_len..])).unwrap();
+        let count = self
+            .rtp_ctx
+            .cipher_update(&payload[header_len..], Some(&mut writer[header_len..]))
+            .unwrap();
         self.rtp_ctx.cipher_final(&mut writer[count..]).unwrap();
 
         // Generate and write the auth tag.
@@ -244,7 +247,10 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         writer.put_bytes(0, encrypted.len() - header_len - self.auth_tag_len());
         self.rtp_ctx.decrypt_init(None, None, Some(&nonce)).unwrap();
-        let count = self.rtp_ctx.cipher_update(&cipher_text[header_len..], Some(&mut writer[header_len..])).unwrap();
+        let count = self
+            .rtp_ctx
+            .cipher_update(&cipher_text[header_len..], Some(&mut writer[header_len..]))
+            .unwrap();
         self.rtp_ctx.cipher_final(&mut writer[count..]).unwrap();
 
         Ok(writer.freeze())
@@ -255,7 +261,9 @@ impl Cipher for CipherAesCmHmacSha1 {
             BytesMut::with_capacity(decrypted.len() + SRTCP_INDEX_SIZE + self.auth_tag_len());
 
         // Write the decrypted to the destination buffer.
-        writer.extend_from_slice(&decrypted[..rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH]);
+        writer.extend_from_slice(
+            &decrypted[..rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH],
+        );
 
         // Encrypt everything after header
         let nonce = generate_counter(
@@ -265,10 +273,22 @@ impl Cipher for CipherAesCmHmacSha1 {
             &self.srtcp_session_salt,
         );
 
-        writer.resize(decrypted.len() - rtcp::header::HEADER_LENGTH - rtcp::header::SSRC_LENGTH, 0);
-        self.rtcp_ctx.encrypt_init(None, None, Some(&nonce)).unwrap();
-        let count = self.rtcp_ctx.cipher_update(&decrypted[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..], Some(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..])).unwrap();
-        self.rtcp_ctx.cipher_final(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH + count..]).unwrap();
+        writer.resize(decrypted.len(), 0);
+        self.rtcp_ctx
+            .encrypt_init(None, None, Some(&nonce))
+            .unwrap();
+        let count = self
+            .rtcp_ctx
+            .cipher_update(
+                &decrypted[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..],
+                Some(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]),
+            )
+            .unwrap();
+        self.rtcp_ctx
+            .cipher_final(
+                &mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH + count..],
+            )
+            .unwrap();
 
         // Add SRTCP index and set Encryption bit
         writer.put_u32(srtcp_index as u32 | (1u32 << 31));
@@ -281,6 +301,7 @@ impl Cipher for CipherAesCmHmacSha1 {
     }
 
     fn decrypt_rtcp(&mut self, encrypted: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes> {
+        println!("encrypted len {:?}", encrypted.len());
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
             return Err(Error::SrtcpTooSmall(
                 encrypted.len(),
@@ -292,7 +313,9 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let mut writer = BytesMut::with_capacity(tail_offset);
 
-        writer.extend_from_slice(&encrypted[0..tail_offset]);
+        writer.extend_from_slice(
+            &encrypted[..rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH],
+        );
 
         let is_encrypted = encrypted[tail_offset] >> 7;
         if is_encrypted == 0 {
@@ -310,6 +333,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
 
+        println!("cipher_text len {:?}", cipher_text.len());
         // Generate the auth tag we expect to see from the ciphertext.
         let expected_tag = self.generate_srtcp_auth_tag(cipher_text);
 
@@ -319,21 +343,29 @@ impl Cipher for CipherAesCmHmacSha1 {
             return Err(Error::RtcpFailedToVerifyAuthTag);
         }
 
-        let counter = generate_counter(
+        let nonce = generate_counter(
             (srtcp_index & 0xFFFF) as u16,
             (srtcp_index >> 16) as u32,
             ssrc,
             &self.srtcp_session_salt,
         );
 
-        let key = GenericArray::from_slice(&self.srtcp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-
-        stream.seek(0);
-        stream.apply_keystream(
-            &mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..],
-        );
+        writer.resize(tail_offset, 0);
+        self.rtcp_ctx
+            .decrypt_init(None, None, Some(&nonce))
+            .unwrap();
+        let count = self
+            .rtcp_ctx
+            .cipher_update(
+                &encrypted[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..tail_offset],
+                Some(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]),
+            )
+            .unwrap();
+        self.rtcp_ctx
+            .cipher_final(
+                &mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH + count..],
+            )
+            .unwrap();
 
         Ok(writer.freeze())
     }
