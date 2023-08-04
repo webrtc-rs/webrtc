@@ -301,7 +301,6 @@ impl Cipher for CipherAesCmHmacSha1 {
     }
 
     fn decrypt_rtcp(&mut self, encrypted: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes> {
-        println!("encrypted len {:?}", encrypted.len());
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
             return Err(Error::SrtcpTooSmall(
                 encrypted.len(),
@@ -333,7 +332,6 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
 
-        println!("cipher_text len {:?}", cipher_text.len());
         // Generate the auth tag we expect to see from the ciphertext.
         let expected_tag = self.generate_srtcp_auth_tag(cipher_text);
 
