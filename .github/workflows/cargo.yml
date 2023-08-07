@@ -47,7 +47,9 @@ jobs:
       - name: 🏭 Cache dependencies
         uses: Swatinem/rust-cache@v2
       - name: Test
-        run: cargo test --features metrics
+        run: cargo test
+      - name: Test with all features enabled
+        run: cargo test --all-features
 
   test_windows:
     name: Test (windows)

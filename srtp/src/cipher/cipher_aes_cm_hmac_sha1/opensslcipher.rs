@@ -4,19 +4,22 @@ use rtcp::header::{HEADER_LENGTH, SSRC_LENGTH};
 use subtle::ConstantTimeEq;
 use util::marshal::*;
 
-use super::CipherInner;
-use crate::cipher::Cipher;
-use crate::error::{Error, Result};
-use crate::key_derivation::*;
+use super::{Cipher, CipherInner};
+use crate::{
+    error::{Error, Result},
+    key_derivation::*,
+};
 
-pub(crate) struct OpenSslCipher {
+pub(crate) struct CipherAesCmHmacSha1 {
     inner: CipherInner,
     rtp_ctx: CipherCtx,
     rtcp_ctx: CipherCtx,
 }
 
-impl OpenSslCipher {
-    pub fn new(inner: CipherInner, master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
+impl CipherAesCmHmacSha1 {
+    pub fn new(master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
+        let inner = CipherInner::new(master_key, master_salt)?;
+
         let srtp_session_key = aes_cm_key_derivation(
             LABEL_SRTP_ENCRYPTION,
             master_key,
@@ -52,7 +55,7 @@ impl OpenSslCipher {
     }
 }
 
-impl Cipher for OpenSslCipher {
+impl Cipher for CipherAesCmHmacSha1 {
     fn auth_tag_len(&self) -> usize {
         self.inner.auth_tag_len()
     }

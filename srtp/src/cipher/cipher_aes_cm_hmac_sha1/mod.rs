@@ -7,9 +7,17 @@ use crate::error::{Error, Result};
 use crate::key_derivation::*;
 use crate::protection_profile::*;
 
+#[cfg(not(feature = "openssl"))]
 mod ctrcipher;
+
 #[cfg(feature = "openssl")]
 mod opensslcipher;
+
+#[cfg(not(feature = "openssl"))]
+pub(crate) use ctrcipher::CipherAesCmHmacSha1;
+
+#[cfg(feature = "openssl")]
+pub(crate) use opensslcipher::CipherAesCmHmacSha1;
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -121,26 +129,5 @@ impl CipherInner {
         let tail_offset = input.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
         (BigEndian::read_u32(&input[tail_offset..tail_offset + SRTCP_INDEX_SIZE]) & !(1 << 31))
             as usize
-    }
-}
-
-pub(crate) struct CipherAesCmHmacSha1 {}
-
-impl CipherAesCmHmacSha1 {
-    pub fn new(master_key: &[u8], master_salt: &[u8]) -> Result<Box<dyn Cipher + Send>> {
-        let inner = CipherInner::new(master_key, master_salt)?;
-
-        #[cfg(feature = "openssl")]
-        return Ok(Box::new(opensslcipher::OpenSslCipher::new(
-            inner,
-            master_key,
-            master_salt,
-        )?));
-
-        Ok(Box::new(ctrcipher::CtrCipher::new(
-            inner,
-            master_key,
-            master_salt,
-        )?))
     }
 }
