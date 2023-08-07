@@ -65,3 +65,5 @@ env_logger = "0.9.0"
 
 [features]
 pem = ["dep:pem", "dtls/pem"]
+openssl = ["srtp/openssl"]
+vendored-openssl = ["srtp/vendored-openssl"]

@@ -131,7 +131,7 @@ impl Context {
 
         let cipher: Box<dyn Cipher + Send> = match profile {
             ProtectionProfile::Aes128CmHmacSha1_80 => {
-                CipherAesCmHmacSha1::new(master_key, master_salt)?
+                Box::new(CipherAesCmHmacSha1::new(master_key, master_salt)?)
             }
 
             ProtectionProfile::AeadAes128Gcm => {

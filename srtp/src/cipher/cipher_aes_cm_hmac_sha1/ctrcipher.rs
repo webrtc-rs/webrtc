@@ -11,14 +11,16 @@ use crate::key_derivation::*;
 
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 
-pub(crate) struct CtrCipher {
+pub(crate) struct CipherAesCmHmacSha1 {
     inner: CipherInner,
     srtp_session_key: Vec<u8>,
     srtcp_session_key: Vec<u8>,
 }
 
-impl CtrCipher {
-    pub fn new(inner: CipherInner, master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
+impl CipherAesCmHmacSha1 {
+    pub fn new(master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
+        let inner = CipherInner::new(master_key, master_salt)?;
+
         let srtp_session_key = aes_cm_key_derivation(
             LABEL_SRTP_ENCRYPTION,
             master_key,
@@ -34,7 +36,7 @@ impl CtrCipher {
             master_key.len(),
         )?;
 
-        Ok(CtrCipher {
+        Ok(CipherAesCmHmacSha1 {
             inner,
             srtp_session_key,
             srtcp_session_key,
@@ -42,7 +44,7 @@ impl CtrCipher {
     }
 }
 
-impl Cipher for CtrCipher {
+impl Cipher for CipherAesCmHmacSha1 {
     fn auth_tag_len(&self) -> usize {
         self.inner.auth_tag_len()
     }
