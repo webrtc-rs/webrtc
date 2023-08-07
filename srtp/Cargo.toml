@@ -10,10 +10,8 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/srtp"
 rust-version = "1.63.0"
 
-[[bin]]
-name = "kek"
-edition = "2021"
-path = "src/main.rs"
+[features]
+openssl = ["dep:openssl"]
 
 [dependencies]
 util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = [
@@ -36,7 +34,7 @@ tokio = { version = "1.19", features = ["full"] }
 log = "0.4.16"
 aead = { version = "0.4.3", features = ["std"] }
 aes-gcm = { version = "0.10.1", features = ["std"] }
-openssl = { version = "0.10.45", features = ["vendored"] }
+openssl = { version = "0.10.45", features = ["vendored"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["async_futures"] }
