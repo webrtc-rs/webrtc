@@ -34,8 +34,7 @@ impl Cipher for CipherAeadAesGcm {
     ) -> Result<Bytes> {
         // Grow the given buffer to fit the output.
         let header_len = header.marshal_size();
-        let mut writer =
-            BytesMut::with_capacity(payload.len() + self.auth_tag_len());
+        let mut writer = BytesMut::with_capacity(payload.len() + self.auth_tag_len());
 
         // Copy header unencrypted.
         writer.extend_from_slice(&payload[..header_len]);
