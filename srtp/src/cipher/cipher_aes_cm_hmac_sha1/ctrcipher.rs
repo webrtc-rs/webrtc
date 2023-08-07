@@ -104,7 +104,7 @@ impl Cipher for CtrCipher {
 
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
-        if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
+        if actual_tag.ct_eq(expected_tag).unwrap_u8() != 1 {
             return Err(Error::RtpFailedToVerifyAuthTag);
         }
 
@@ -147,9 +147,7 @@ impl Cipher for CtrCipher {
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(key, nonce);
 
-        stream.apply_keystream(
-            &mut writer[HEADER_LENGTH + SSRC_LENGTH..],
-        );
+        stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
 
         // Add SRTCP index and set Encryption bit
         writer.put_u32(srtcp_index as u32 | (1u32 << 31));
@@ -197,7 +195,7 @@ impl Cipher for CtrCipher {
 
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
-        if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
+        if actual_tag.ct_eq(expected_tag).unwrap_u8() != 1 {
             return Err(Error::RtcpFailedToVerifyAuthTag);
         }
 
@@ -213,9 +211,7 @@ impl Cipher for CtrCipher {
         let mut stream = Aes128Ctr::new(key, nonce);
 
         stream.seek(0);
-        stream.apply_keystream(
-            &mut writer[HEADER_LENGTH + SSRC_LENGTH..],
-        );
+        stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
 
         Ok(Bytes::from(writer))
     }

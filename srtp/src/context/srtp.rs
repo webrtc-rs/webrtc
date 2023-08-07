@@ -48,13 +48,14 @@ impl Context {
         payload: &[u8],
         header: &rtp::header::Header,
     ) -> Result<Bytes> {
-        let roc = self.get_srtp_ssrc_state(header.ssrc).next_rollover_count(header.sequence_number);
+        let roc = self
+            .get_srtp_ssrc_state(header.ssrc)
+            .next_rollover_count(header.sequence_number);
 
-        let dst = self
-            .cipher
-            .encrypt_rtp(&payload, header, roc)?;
+        let dst = self.cipher.encrypt_rtp(payload, header, roc)?;
 
-        self.get_srtp_ssrc_state(header.ssrc).update_rollover_count(header.sequence_number);
+        self.get_srtp_ssrc_state(header.ssrc)
+            .update_rollover_count(header.sequence_number);
 
         Ok(dst)
     }
