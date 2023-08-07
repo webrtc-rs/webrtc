@@ -1,7 +1,12 @@
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use criterion::{criterion_group, criterion_main, Criterion};
 use util::Marshal;
 use webrtc_srtp::{context::Context, protection_profile::ProtectionProfile};
+
+const RAW_RTCP: Bytes = Bytes::from_static(&[
+    0x81, 0xc8, 0x00, 0x0b, 0xca, 0xfe, 0xba, 0xbe, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab,
+    0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab,
+]);
 
 fn benchmark_encrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     let mut ctx = Context::new(
@@ -20,7 +25,7 @@ fn benchmark_encrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
         pld.extend_from_slice(&[i as u8]);
     }
 
-    c.bench_function("Benchmark encrypt", |b| {
+    c.bench_function("Benchmark RTP encrypt", |b| {
         let mut seq = 1;
         b.iter_batched(
             || {
@@ -58,7 +63,7 @@ fn benchmark_decrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
         None,
         None,
     )
-        .unwrap();
+    .unwrap();
 
     let mut ctx = Context::new(
         &vec![
@@ -69,14 +74,14 @@ fn benchmark_decrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
         None,
         None,
     )
-        .unwrap();
+    .unwrap();
 
     let mut pld = BytesMut::new();
     for i in 0..1200 {
         pld.extend_from_slice(&[i as u8]);
     }
 
-    c.bench_function("Benchmark decrypt", |b| {
+    c.bench_function("Benchmark RTP decrypt", |b| {
         let mut seq = 1;
         b.iter_batched(
             || {
@@ -96,15 +101,67 @@ fn benchmark_decrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
                 seq += 1;
                 setup_ctx.encrypt_rtp(&pkt.marshal().unwrap()).unwrap()
             },
-            |encrypted| {
-                ctx.decrypt_rtp(&encrypted).unwrap()
-            },
+            |encrypted| ctx.decrypt_rtp(&encrypted).unwrap(),
             criterion::BatchSize::LargeInput,
         );
     });
 }
 
+fn benchmark_encrypt_rtcp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
+    let mut ctx = Context::new(
+        &vec![
+            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
+        ],
+        &vec![247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        ProtectionProfile::Aes128CmHmacSha1_80,
+        None,
+        None,
+    )
+    .unwrap();
 
+    c.bench_function("Benchmark RTCP encrypt", |b| {
+        b.iter(|| {
+            ctx.encrypt_rtcp(&RAW_RTCP)
+            .unwrap();
+        });
+    });
+}
 
-criterion_group!(benches, benchmark_encrypt_rtp_aes_128_cm_hmac_sha1, benchmark_decrypt_rtp_aes_128_cm_hmac_sha1);
+fn benchmark_decrypt_rtcp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
+    let encrypted = Context::new(
+        &vec![
+            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
+        ],
+        &vec![247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        ProtectionProfile::Aes128CmHmacSha1_80,
+        None,
+        None,
+    )
+    .unwrap()
+    .encrypt_rtcp(&RAW_RTCP)
+    .unwrap();
+
+    let mut ctx = Context::new(
+        &vec![
+            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
+        ],
+        &vec![247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        ProtectionProfile::Aes128CmHmacSha1_80,
+        None,
+        None,
+    )
+    .unwrap();
+
+    c.bench_function("Benchmark RTCP decrypt", |b| {
+        b.iter(|| ctx.decrypt_rtcp(&encrypted).unwrap());
+    });
+}
+
+criterion_group!(
+    benches,
+    benchmark_encrypt_rtp_aes_128_cm_hmac_sha1,
+    benchmark_decrypt_rtp_aes_128_cm_hmac_sha1,
+    benchmark_encrypt_rtcp_aes_128_cm_hmac_sha1,
+    benchmark_decrypt_rtcp_aes_128_cm_hmac_sha1
+);
 criterion_main!(benches);

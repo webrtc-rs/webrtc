@@ -7,14 +7,13 @@ use crate::error::{Error, Result};
 use crate::key_derivation::*;
 use crate::protection_profile::*;
 
+mod ctrcipher;
 #[cfg(feature = "openssl")]
 mod opensslcipher;
-mod ctrcipher;
 
 type HmacSha1 = Hmac<Sha1>;
 
 pub const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
-
 
 pub(crate) struct CipherInner {
     srtp_session_salt: Vec<u8>,
@@ -131,10 +130,17 @@ impl CipherAesCmHmacSha1 {
     pub fn new(master_key: &[u8], master_salt: &[u8]) -> Result<Box<dyn Cipher + Send>> {
         let inner = CipherInner::new(master_key, master_salt)?;
 
-        if cfg!(feature = "openssl") {
-            Ok(Box::new(opensslcipher::OpenSslCipher::new(inner, master_key, master_salt)?))
-        } else {
-            Ok(Box::new(ctrcipher::CtrCipher::new(inner, master_key, master_salt)?))
-        }
+        #[cfg(feature = "openssl")]
+        return Ok(Box::new(opensslcipher::OpenSslCipher::new(
+            inner,
+            master_key,
+            master_salt,
+        )?));
+
+        Ok(Box::new(ctrcipher::CtrCipher::new(
+            inner,
+            master_key,
+            master_salt,
+        )?))
     }
 }
