@@ -33,18 +33,18 @@ impl Cipher for CipherAeadAesGcm {
         roc: u32,
     ) -> Result<Bytes> {
         // Grow the given buffer to fit the output.
-        let mut writer =
-            BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
+        let header_len = header.marshal_size();
+        let mut writer = BytesMut::with_capacity(payload.len() + self.auth_tag_len());
 
-        let data = header.marshal()?;
-        writer.extend(data);
+        // Copy header unencrypted.
+        writer.extend_from_slice(&payload[..header_len]);
 
         let nonce = self.rtp_initialization_vector(header, roc);
 
         let encrypted = self.srtp_cipher.encrypt(
             Nonce::from_slice(&nonce),
             Payload {
-                msg: payload,
+                msg: &payload[header_len..],
                 aad: &writer,
             },
         )?;

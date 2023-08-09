@@ -49,8 +49,6 @@ pub enum Error {
     SrtpSaltLength(usize, usize),
     #[error("SyntaxError: {0}")]
     ExtMapParse(String),
-    #[error("ssrc {0} not exist in srtp_ssrc_state")]
-    SsrcMissingFromSrtp(u32),
     #[error("srtp ssrc={0} index={1}: duplicated")]
     SrtpSsrcDuplicated(u32, u16),
     #[error("srtcp ssrc={0} index={1}: duplicated")]
@@ -69,6 +67,8 @@ pub enum Error {
     SrtcpTooSmall(usize, usize),
     #[error("failed to verify rtp auth tag")]
     RtpFailedToVerifyAuthTag,
+    #[error("too short auth tag: only {0} bytes, expected > {1} bytes")]
+    RtcpInvalidLengthAuthTag(usize, usize),
     #[error("failed to verify rtcp auth tag")]
     RtcpFailedToVerifyAuthTag,
     #[error("SessionSRTP has been closed")]

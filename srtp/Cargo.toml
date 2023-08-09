@@ -10,6 +10,10 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/srtp"
 rust-version = "1.63.0"
 
+[features]
+openssl = ["dep:openssl"]
+vendored-openssl = ["openssl/vendored"]
+
 [dependencies]
 util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = [
     "conn",
@@ -22,7 +26,7 @@ rtcp = { version = "0.9.0", path = "../rtcp" }
 byteorder = "1"
 bytes = "1"
 thiserror = "1.0"
-hmac = { version = "0.12.1", features = ["std", "reset"] }
+hmac = { version = "0.12.1", features = ["std"] }
 sha1 = "0.10.5"
 ctr = "0.8.0"
 aes = "0.7.5"
@@ -31,7 +35,13 @@ tokio = { version = "1.19", features = ["full"] }
 log = "0.4.16"
 aead = { version = "0.4.3", features = ["std"] }
 aes-gcm = { version = "0.10.1", features = ["std"] }
+openssl = { version = "0.10", optional = true }
 
 [dev-dependencies]
+criterion = { version = "0.4.0", features = ["async_futures"] }
 tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
 lazy_static = "1.4.0"
+
+[[bench]]
+name = "srtp_bench"
+harness = false
