@@ -3,6 +3,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use util::Marshal;
 use webrtc_srtp::{context::Context, protection_profile::ProtectionProfile};
 
+const MASTER_KEY: &[u8] = &[
+    96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
+];
+const MASTER_SALT: &[u8] = &[247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195];
 const RAW_RTCP: &[u8] = &[
     0x81, 0xc8, 0x00, 0x0b, 0xca, 0xfe, 0xba, 0xbe, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab,
     0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab, 0xab,
@@ -10,10 +14,8 @@ const RAW_RTCP: &[u8] = &[
 
 fn benchmark_encrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     let mut ctx = Context::new(
-        &[
-            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
-        ],
-        &[247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        MASTER_KEY,
+        MASTER_SALT,
         ProtectionProfile::Aes128CmHmacSha1_80,
         None,
         None,
@@ -55,10 +57,8 @@ fn benchmark_encrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
 
 fn benchmark_decrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     let mut setup_ctx = Context::new(
-        &[
-            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
-        ],
-        &[247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        MASTER_KEY,
+        MASTER_SALT,
         ProtectionProfile::Aes128CmHmacSha1_80,
         None,
         None,
@@ -66,10 +66,8 @@ fn benchmark_decrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     .unwrap();
 
     let mut ctx = Context::new(
-        &[
-            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
-        ],
-        &[247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        MASTER_KEY,
+        MASTER_SALT,
         ProtectionProfile::Aes128CmHmacSha1_80,
         None,
         None,
@@ -109,10 +107,8 @@ fn benchmark_decrypt_rtp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
 
 fn benchmark_encrypt_rtcp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     let mut ctx = Context::new(
-        &[
-            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
-        ],
-        &[247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        MASTER_KEY,
+        MASTER_SALT,
         ProtectionProfile::Aes128CmHmacSha1_80,
         None,
         None,
@@ -128,10 +124,8 @@ fn benchmark_encrypt_rtcp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
 
 fn benchmark_decrypt_rtcp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     let encrypted = Context::new(
-        &[
-            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
-        ],
-        &[247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        MASTER_KEY,
+        MASTER_SALT,
         ProtectionProfile::Aes128CmHmacSha1_80,
         None,
         None,
@@ -141,10 +135,8 @@ fn benchmark_decrypt_rtcp_aes_128_cm_hmac_sha1(c: &mut Criterion) {
     .unwrap();
 
     let mut ctx = Context::new(
-        &[
-            96, 180, 31, 4, 119, 137, 128, 252, 75, 194, 252, 44, 63, 56, 61, 55,
-        ],
-        &[247, 26, 49, 94, 99, 29, 79, 94, 5, 111, 252, 216, 62, 195],
+        MASTER_KEY,
+        MASTER_SALT,
         ProtectionProfile::Aes128CmHmacSha1_80,
         None,
         None,
