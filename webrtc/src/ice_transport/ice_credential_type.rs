@@ -1,8 +1,10 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 /// ICECredentialType indicates the type of credentials used to connect to
 /// an ICE server.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum RTCIceCredentialType {
     #[default]
     Unspecified,
