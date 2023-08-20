@@ -2,25 +2,30 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// ICETransportPolicy defines the ICE candidate policy surface the
-/// permitted candidates. Only these candidates are used for connectivity checks.
+/// Defines the policy that will be used to determine the
+/// permitted ICE candidates that will be used for connectivity checks.
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCIceTransportPolicy {
     #[default]
     Unspecified = 0,
 
-    /// ICETransportPolicyAll indicates any type of candidate is used.
+    /// Indicates that the ICE Agent can use any type of candidate.
     #[serde(rename = "all")]
     All = 1,
 
-    /// ICETransportPolicyRelay indicates only media relay candidates such
-    /// as candidates passing through a TURN server are used.
+    /// Indicates that the ICE Agent must use only media relay candidates,
+    /// such as candidates passing through a TURN server.
+    ///
+    /// This can be used to prevent the remote endpoint from learning the
+    /// user's IP addresses via STUN requests, which may be desirable in
+    /// certain use cases.
+    ///
+    /// Keep in mind that media relay candidates can increase latency,
+    /// reduce throughput, and consume more battery power than direct
+    /// peer-to-peer connections.
     #[serde(rename = "relay")]
     Relay = 2,
 }
-
-/// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy
-pub type ICEGatherPolicy = RTCIceTransportPolicy;
 
 const ICE_TRANSPORT_POLICY_RELAY_STR: &str = "relay";
 const ICE_TRANSPORT_POLICY_ALL_STR: &str = "all";
