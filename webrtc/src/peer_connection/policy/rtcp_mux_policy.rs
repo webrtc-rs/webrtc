@@ -9,14 +9,14 @@ pub enum RTCRtcpMuxPolicy {
     #[default]
     Unspecified = 0,
 
-    /// RTCPMuxPolicyNegotiate indicates to gather ICE candidates for both
+    /// Gather ICE candidates for both
     /// RTP and RTCP candidates. If the remote-endpoint is capable of
     /// multiplexing RTCP, multiplex RTCP on the RTP candidates. If it is not,
     /// use both the RTP and RTCP candidates separately.
     #[serde(rename = "negotiate")]
     Negotiate = 1,
 
-    /// RTCPMuxPolicyRequire indicates to gather ICE candidates only for
+    /// Gather ICE candidates only for
     /// RTP and multiplex RTCP on the RTP candidates. If the remote endpoint is
     /// not capable of rtcp-mux, session negotiation will fail.
     #[serde(rename = "require")]

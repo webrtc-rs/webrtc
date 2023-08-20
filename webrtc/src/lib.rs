@@ -20,9 +20,6 @@
 //! - Support for Multicast DNS (mDNS)
 //! - Interceptors for RTP, RTCP, and DataChannel packets
 //!
-//! ## Usage
-//! ...
-//!
 //! ## Key Concepts
 //!
 //! The WebRTC API, as defined by the W3C specification, is composed of a number of
@@ -74,8 +71,8 @@
 //! - [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 //! - [MIT License](https://opensource.org/license/mit/)
 //!
-//! [`RTCConfiguration`]: peer_connection::configuration::RTCConfiguration
-//! [`RTCPeerConnection`]: peer_connection::RTCPeerConnection
+//! [`RTCConfiguration`]: crate::peer_connection::configuration::RTCConfiguration
+//! [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
 
 // re-export sub-crates
 pub use {data, dtls, ice, interceptor, mdns, media, rtcp, rtp, sctp, sdp, srtp, stun, turn, util};

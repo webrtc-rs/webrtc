@@ -1,6 +1,8 @@
 use std::fmt;
 
-/// PeerConnectionState indicates the state of the PeerConnection.
+/// Indicates the state of the [`RTCPeerConnection`].
+///
+/// [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCPeerConnectionState {
     #[default]
