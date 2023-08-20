@@ -39,8 +39,8 @@
 //!
 //! ### RTCConfiguration
 //!
-//! The `RTCConfiguration` struct defines the set of parameters that are used to configure
-//! how peer-to-peer communication via `RTCPeerConnection` is established or re-established.
+//! The [`RTCConfiguration`] struct defines the set of parameters that are used to configure
+//! how peer-to-peer communication via [`RTCPeerConnection`] is established or re-established.
 //! This includes the set of ICE servers to use, the ICE transport policy, the bundle policy,
 //! the RTCP mux policy, the peer identity, and the set of certificates to use.
 //!
@@ -49,7 +49,7 @@
 //!
 //! ### RTCPeerConnection
 //!
-//! The `RTCPeerConnection` is the primary entry point to the WebRTC API. It represents an
+//! The [`RTCPeerConnection`] is the primary entry point to the WebRTC API. It represents an
 //! individual connection between a local device and a remote peer.
 //!
 //! ### MediaStream
@@ -73,6 +73,9 @@
 //! This project is licensed under either of the following, at your option:
 //! - [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 //! - [MIT License](https://opensource.org/license/mit/)
+//!
+//! [`RTCConfiguration`]: peer_connection::configuration::RTCConfiguration
+//! [`RTCPeerConnection`]: peer_connection::RTCPeerConnection
 
 // re-export sub-crates
 pub use {data, dtls, ice, interceptor, mdns, media, rtcp, rtp, sctp, sdp, srtp, stun, turn, util};

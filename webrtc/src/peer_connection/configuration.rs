@@ -4,48 +4,58 @@ use crate::peer_connection::policy::bundle_policy::RTCBundlePolicy;
 use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::peer_connection::policy::rtcp_mux_policy::RTCRtcpMuxPolicy;
 
-/// A Configuration defines how peer-to-peer communication via PeerConnection
-/// is established or re-established.
-/// Configurations may be set up once and reused across multiple connections.
-/// Configurations are treated as readonly. As long as they are unmodified,
-/// they are safe for concurrent use.
+/// Defines a set of parameters to configure how the peer-to-peer communication via
+/// [`RTCPeerConnection`] is established or re-established. These may be set up once
+/// and reused across multiple connections, and are treated as readonly. As long as
+/// they are unmodified, they are safe for concurrent use.
+///
+/// [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
 #[derive(Default, Clone)]
 pub struct RTCConfiguration {
-    /// iceservers defines a slice describing servers available to be used by
+    /// Defines a slice describing servers available to be used by
     /// ICE, such as STUN and TURN servers.
     pub ice_servers: Vec<RTCIceServer>,
 
-    /// icetransport_policy indicates which candidates the ICEAgent is allowed
+    /// Indicates which candidates the ICE Agent is allowed
     /// to use.
     pub ice_transport_policy: RTCIceTransportPolicy,
 
-    /// bundle_policy indicates which media-bundling policy to use when gathering
+    /// Indicates which media-bundling policy to use when gathering
     /// ICE candidates.
     pub bundle_policy: RTCBundlePolicy,
 
-    /// rtcp_mux_policy indicates which rtcp-mux policy to use when gathering ICE
+    /// Indicates which rtcp-mux policy to use when gathering ICE
     /// candidates.
     pub rtcp_mux_policy: RTCRtcpMuxPolicy,
 
-    /// peer_identity sets the target peer identity for the PeerConnection.
+    /// **UNIMPLEMENTED:** Sets the target peer identity for the [`RTCPeerConnection`].
     /// The PeerConnection will not establish a connection to a remote peer
     /// unless it can be successfully authenticated with the provided name.
+    ///
+    /// [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
     pub peer_identity: String,
 
-    /// Certificates describes a set of certificates that the PeerConnection
-    /// uses to authenticate. Valid values for this parameter are created
-    /// through calls to the generate_certificate function. Although any given
-    /// DTLS connection will use only one certificate, this attribute allows the
-    /// caller to provide multiple certificates that support different
-    /// algorithms. The final certificate will be selected based on the DTLS
-    /// handshake, which establishes which certificates are allowed. The
-    /// PeerConnection implementation selects which of the certificates is
+    /// A set of certificates that the [`RTCPeerConnection`] uses to authenticate.
+    ///
+    /// Valid values for this parameter are created through calls to the
+    /// generate_certificate function.
+    ///
+    /// Although any given DTLS connection will use only one certificate, this
+    /// attribute allows the caller to provide multiple certificates that support
+    /// different algorithms. The final certificate will be selected based on the
+    /// DTLS handshake, which establishes which certificates are allowed. The
+    /// [`RTCPeerConnection`] implementation selects which of the certificates is
     /// used for a given connection; how certificates are selected is outside
-    /// the scope of this specification. If this value is absent, then a default
-    /// set of certificates is generated for each PeerConnection instance.
+    /// the scope of this specification.
+    ///
+    /// If this value is absent, then a default set of certificates is generated
+    /// for each [`RTCPeerConnection`] instance.
+    ///
+    /// [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
     pub certificates: Vec<RTCCertificate>,
 
-    /// icecandidate_pool_size describes the size of the prefetched ICE pool.
+    /// **UNIMPLEMENTED:** The size of the prefetched ICE pool, as defined in
+    /// [RFC8829](https://www.rfc-editor.org/rfc/rfc8829).
     pub ice_candidate_pool_size: u8,
 }
 

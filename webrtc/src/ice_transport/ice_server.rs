@@ -3,13 +3,35 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::ice_transport::ice_credential_type::RTCIceCredentialType;
 
-/// ICEServer describes a single STUN and TURN server that can be used by
-/// the ICEAgent to establish a connection with a peer.
+/// Describes a single STUN or TURN server that can be used by
+/// the ICE Agent to establish a connection with a peer.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RTCIceServer {
+    /// A sequence of [STUN](https://www.rfc-editor.org/rfc/rfc5389)
+    /// or [TURN](https://www.rfc-editor.org/rfc/rfc5928) URIs to be used by
+    /// the ICE Agent to establish a connection with a peer.
+    ///
+    /// STUN URIs (defined in [RFC7064](https://www.rfc-editor.org/rfc/rfc7064))
+    /// allow for the discovery of server-reflexive candidates.
+    ///
+    /// TURN URIs (defined in [RFC7065](https://www.rfc-editor.org/rfc/rfc7065))
+    /// allow for the discovery of relayed candidates.
     pub urls: Vec<String>,
+
+    /// If this [`RTCIceServer`] object represents a TURN server, then this attribute
+    /// specifies the username to use during the authentication process with the
+    /// TURN server.
     pub username: String,
+
+    /// If this [`RTCIceServer`] object represents a TURN server, then this attribute
+    /// specifies the credential to use during the authentication process with the
+    /// TURN server. It represents a long-term authentication password, as described
+    /// in [RFC5389](https://www.rfc-editor.org/rfc/rfc5389).
     pub credential: String,
+
+    /// **NOT IN SPEC:** If this [`RTCIceServer`] object represents a TURN server,
+    /// then this attribute indicates the type of credential to use to connect
+    /// to the TURN server.
     pub credential_type: RTCIceCredentialType,
 }
 
