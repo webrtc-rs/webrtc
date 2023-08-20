@@ -2,11 +2,12 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// The bundle policy affects which media tracks are negotiated if the remote
-/// endpoint is not bundle-aware, and what ICE candidates are gathered. If the
+/// The bundle policy
+/// ([RFC8829](https://tools.ietf.org/html/rfc8829#section-4.1.1)) affects
+/// which media tracks are negotiated if the remote endpoint is not
+/// bundle-aware, and what ICE candidates are gathered. If the
 /// remote endpoint is bundle-aware, all media tracks and data channels are
-/// bundled onto the same transport. This is described in
-/// [RFC8829](https://tools.ietf.org/html/rfc8829).
+/// bundled onto the same transport.
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCBundlePolicy {
     #[default]

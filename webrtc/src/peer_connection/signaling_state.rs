@@ -20,36 +20,38 @@ impl fmt::Display for StateChangeOp {
     }
 }
 
-/// SignalingState indicates the signaling state of the offer/answer process.
+/// Indicates the signaling state of the offer/answer process.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCSignalingState {
     #[default]
     Unspecified = 0,
 
-    /// SignalingStateStable indicates there is no offer/answer exchange in
+    /// There is no offer/answer exchange in
     /// progress. This is also the initial state, in which case the local and
-    /// remote descriptions are nil.
+    /// remote descriptions aren't set.
     Stable,
 
-    /// SignalingStateHaveLocalOffer indicates that a local description, of
+    /// A local description, of
     /// type "offer", has been successfully applied.
     HaveLocalOffer,
 
-    /// SignalingStateHaveRemoteOffer indicates that a remote description, of
+    /// A remote description, of
     /// type "offer", has been successfully applied.
     HaveRemoteOffer,
 
-    /// SignalingStateHaveLocalPranswer indicates that a remote description
+    /// A remote description
     /// of type "offer" has been successfully applied and a local description
     /// of type "pranswer" has been successfully applied.
     HaveLocalPranswer,
 
-    /// SignalingStateHaveRemotePranswer indicates that a local description
+    /// A local description
     /// of type "offer" has been successfully applied and a remote description
     /// of type "pranswer" has been successfully applied.
     HaveRemotePranswer,
 
-    /// SignalingStateClosed indicates The PeerConnection has been closed.
+    /// The [`RTCPeerConnection`] has been closed.
+    ///
+    /// [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
     Closed,
 }
 

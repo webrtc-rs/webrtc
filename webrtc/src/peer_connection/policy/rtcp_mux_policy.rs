@@ -2,8 +2,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// RTCPMuxPolicy affects what ICE candidates are gathered to support
-/// non-multiplexed RTCP.
+/// The mux policy [RFC8829](https://tools.ietf.org/html/rfc8829#section-4.1.1)
+/// affects what ICE candidates are gathered to support non-multiplexed RTCP.
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCRtcpMuxPolicy {
     #[default]

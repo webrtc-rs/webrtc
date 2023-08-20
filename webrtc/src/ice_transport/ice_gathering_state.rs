@@ -1,22 +1,28 @@
 use std::fmt;
 
-/// ICEGatheringState describes the state of the candidate gathering process.
+/// Describes the state of the ICE candidate gathering process.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceGatheringState {
     #[default]
     Unspecified,
 
-    /// ICEGatheringStateNew indicates that any of the ICETransports are
+    /// Any of the [`RTCIceTransport`]s are
     /// in the "new" gathering state and none of the transports are in the
     /// "gathering" state, or there are no transports.
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     New,
 
-    /// ICEGatheringStateGathering indicates that any of the ICETransports
+    /// Any of the [`RTCIceTransport`]s
     /// are in the "gathering" state.
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     Gathering,
 
-    /// ICEGatheringStateComplete indicates that at least one ICETransport
-    /// exists, and all ICETransports are in the "completed" gathering state.
+    /// At least one [`RTCIceTransport`]
+    /// exists, and all [`RTCIceTransport`]s are in the "complete" gathering state.
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     Complete,
 }
 
