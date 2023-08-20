@@ -487,7 +487,7 @@ pub(crate) async fn add_transceiver_sdp(
             // We need to include connection information even if we're rejecting a track, otherwise Firefox will fail to
             // parse the SDP with an error like:
             // SIPCC Failed to parse SDP: SDP Parse Error on line 50:  c= connection line not specified for every media level, validation failed.
-            // In addition this makes our SDP compliant with RFC 4566 Section 5.7: https://datatracker.ietf.org/doc/html/rfc4566#section-5.7
+            // In addition this makes our SDP compliant with RFC 4566 Section 5.7: https://tools.ietf.org/html/rfc4566#section-5.7
             connection_information: Some(ConnectionInformation {
                 network_type: "IN".to_owned(),
                 address_type: "IP4".to_owned(),
@@ -557,7 +557,7 @@ pub(crate) async fn add_transceiver_sdp(
             // After we have include an msid attribute in an offer it must stay the same for
             // all subsequent offer even if the track or transceiver direction changes.
             //
-            // [RFC 8829 Section 5.2.2](https://datatracker.ietf.org/doc/html/rfc8829#section-5.2.2)
+            // [RFC 8829 Section 5.2.2](https://tools.ietf.org/html/rfc8829#section-5.2.2)
             //
             // For RtpTransceivers that are not stopped, the "a=msid" line or
             // lines MUST stay the same if they are present in the current
@@ -604,7 +604,7 @@ pub(crate) async fn add_transceiver_sdp(
             // If don't have an offered direction to intersect with just use the transceivers
             // current direction.
             //
-            // https://datatracker.ietf.org/doc/html/rfc8829#section-4.2.3
+            // https://tools.ietf.org/html/rfc8829#section-4.2.3
             //
             //    When creating offers, the transceiver direction is directly reflected
             //    in the output, even for re-offers.

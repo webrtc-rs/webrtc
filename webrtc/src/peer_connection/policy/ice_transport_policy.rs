@@ -2,8 +2,10 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Defines the policy that will be used to determine the
-/// permitted ICE candidates that will be used for connectivity checks.
+/// Defines the ICE candidate policy
+/// ([RFC8829](https://datatracker.ietf.org/doc/html/rfc8829#section-4.1.1))
+/// that will be used to determine the permitted ICE candidates. Permitted
+/// candidates will be used for connectivity checks.
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCIceTransportPolicy {
     #[default]

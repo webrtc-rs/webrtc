@@ -75,7 +75,7 @@ pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param + Send + Sy
         ParamType::OutSsnResetReq => Ok(Box::new(ParamOutgoingResetRequest::unmarshal(raw_param)?)),
         ParamType::ReconfigResp => Ok(Box::new(ParamReconfigResponse::unmarshal(raw_param)?)),
         _ => {
-            // According to RFC https://datatracker.ietf.org/doc/html/rfc4960#section-3.2.1
+            // According to RFC https://tools.ietf.org/html/rfc4960#section-3.2.1
             let stop_processing = ((raw_type >> 15) & 0x01) == 0;
             if stop_processing {
                 Err(Error::ErrParamTypeUnhandled { typ: raw_type })

@@ -55,7 +55,7 @@ pub struct RTCConfiguration {
     pub certificates: Vec<RTCCertificate>,
 
     /// **UNIMPLEMENTED:** The size of the prefetched ICE pool, as defined in
-    /// [RFC8829](https://www.rfc-editor.org/rfc/rfc8829).
+    /// [RFC8829](https://tools.ietf.org/html/rfc8829).
     pub ice_candidate_pool_size: u8,
 }
 

@@ -2,29 +2,30 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// BundlePolicy affects which media tracks are negotiated if the remote
+/// The bundle policy affects which media tracks are negotiated if the remote
 /// endpoint is not bundle-aware, and what ICE candidates are gathered. If the
 /// remote endpoint is bundle-aware, all media tracks and data channels are
-/// bundled onto the same transport.
+/// bundled onto the same transport. This is described in
+/// [RFC8829](https://tools.ietf.org/html/rfc8829).
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCBundlePolicy {
     #[default]
     Unspecified = 0,
 
-    /// BundlePolicyBalanced indicates to gather ICE candidates for each
+    /// Gather ICE candidates for each
     /// media type in use (audio, video, and data). If the remote endpoint is
     /// not bundle-aware, negotiate only one audio and video track on separate
     /// transports.
     #[serde(rename = "balanced")]
     Balanced = 1,
 
-    /// BundlePolicyMaxCompat indicates to gather ICE candidates for each
+    /// Gather ICE candidates for each
     /// track. If the remote endpoint is not bundle-aware, negotiate all media
     /// tracks on separate transports.
     #[serde(rename = "max-compat")]
     MaxCompat = 2,
 
-    /// BundlePolicyMaxBundle indicates to gather ICE candidates for only
+    /// Gather ICE candidates for only
     /// one track. If the remote endpoint is not bundle-aware, negotiate only
     /// one media track.
     #[serde(rename = "max-bundle")]

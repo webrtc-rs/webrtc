@@ -362,7 +362,7 @@ mod outbound {
         remote_round_trip_time_measurements: u64,
 
         /// The fraction of packets lost reported for this stream.
-        /// Calculated as defined in [RFC3550](https://www.rfc-editor.org/rfc/rfc3550) section 6.4.1 and Appendix A.3.
+        /// Calculated as defined in [RFC3550](https://tools.ietf.org/html/rfc3550) section 6.4.1 and Appendix A.3.
         remote_fraction_lost: Option<f64>,
     }
 
