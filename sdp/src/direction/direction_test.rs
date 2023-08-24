@@ -11,7 +11,7 @@ fn test_new_direction() {
         ("inactive", Direction::Inactive),
     ];
 
-    let failingtests = vec!["", "notadirection"];
+    let failingtests = ["", "notadirection"];
 
     for (i, u) in passingtests.iter().enumerate() {
         let dir = Direction::new(u.0);

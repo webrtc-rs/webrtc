@@ -872,7 +872,7 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
         Box::pin(async move {
             for _ in 0..10 {
                 assert!(
-                    matches!(dc3.send(&buf).await, Ok(_)),
+                    dc3.send(&buf).await.is_ok(),
                     "Failed to send string on data channel"
                 );
                 assert_eq!(
@@ -973,7 +973,7 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
 
             for _ in 0..10 {
                 assert!(
-                    matches!(dc3.send(&buf).await, Ok(_)),
+                    dc3.send(&buf).await.is_ok(),
                     "Failed to send string on data channel"
                 );
                 assert_eq!(

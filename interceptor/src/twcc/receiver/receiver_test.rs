@@ -119,7 +119,7 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
     )
     .await;
 
-    let delays = vec![0, 10, 100, 200];
+    let delays = [0, 10, 100, 200];
     for (i, d) in delays.iter().enumerate() {
         tokio::time::advance(Duration::from_millis(*d)).await;
 

@@ -18,7 +18,7 @@ fn test_extmap() -> Result<()> {
     let example_attr_extmap2_line = EXAMPLE_ATTR_EXTMAP2;
     let failing_attr_extmap1_line = format!("{ATTRIBUTE_KEY}{FAILING_ATTR_EXTMAP1}{END_LINE}");
     let failing_attr_extmap2_line = format!("{ATTRIBUTE_KEY}{FAILING_ATTR_EXTMAP2}{END_LINE}");
-    let passingtests = vec![
+    let passingtests = [
         (EXAMPLE_ATTR_EXTMAP1, example_attr_extmap1_line),
         (EXAMPLE_ATTR_EXTMAP2, example_attr_extmap2_line),
     ];
