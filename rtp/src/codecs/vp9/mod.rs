@@ -106,7 +106,7 @@ impl Payloader for Vp9Payloader {
             let current_fragment_size =
                 std::cmp::min(max_fragment_size as usize, payload_data_remaining);
             let mut out = BytesMut::with_capacity(VP9HEADER_SIZE + current_fragment_size);
-            let mut buf = vec![0u8; VP9HEADER_SIZE];
+            let mut buf = [0u8; VP9HEADER_SIZE];
             buf[0] = 0x90; // F=1 I=1
             if payload_data_index == 0 {
                 buf[0] |= 0x08; // B=1

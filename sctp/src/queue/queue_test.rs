@@ -78,7 +78,7 @@ fn test_payload_queue_get_gap_ack_block() -> Result<()> {
     pq.push(make_payload(5, 0), 0);
     pq.push(make_payload(6, 0), 0);
 
-    let gab1 = vec![GapAckBlock { start: 1, end: 6 }];
+    let gab1 = [GapAckBlock { start: 1, end: 6 }];
     let gab2 = pq.get_gap_ack_blocks(0);
     assert!(!gab2.is_empty());
     assert_eq!(gab2.len(), 1);
@@ -89,7 +89,7 @@ fn test_payload_queue_get_gap_ack_block() -> Result<()> {
     pq.push(make_payload(8, 0), 0);
     pq.push(make_payload(9, 0), 0);
 
-    let gab1 = vec![
+    let gab1 = [
         GapAckBlock { start: 1, end: 6 },
         GapAckBlock { start: 8, end: 9 },
     ];

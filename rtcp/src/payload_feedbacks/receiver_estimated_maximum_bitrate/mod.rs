@@ -228,7 +228,7 @@ impl Unmarshal for ReceiverEstimatedMaximumBitrate {
         }
 
         // REMB rules all around me
-        let mut unique_identifier = vec![0; 4];
+        let mut unique_identifier = [0; 4];
         unique_identifier[0] = raw_packet.get_u8();
         unique_identifier[1] = raw_packet.get_u8();
         unique_identifier[2] = raw_packet.get_u8();

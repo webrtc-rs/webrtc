@@ -641,8 +641,8 @@ fn test_router_static_ips_static_ip_local_ip_mapping() -> Result<()> {
     assert_eq!(lan.static_ips[2].to_string(), "1.2.3.3", "should match");
 
     assert_eq!(3, lan.static_local_ips.len(), "should be 3");
-    let local_ips = vec!["192.168.0.1", "192.168.0.2", "192.168.0.3"];
-    let ips = vec!["1.2.3.1", "1.2.3.2", "1.2.3.3"];
+    let local_ips = ["192.168.0.1", "192.168.0.2", "192.168.0.3"];
+    let ips = ["1.2.3.1", "1.2.3.2", "1.2.3.3"];
     for i in 0..3 {
         let ext_ipstr = ips[i];
         if let Some(loc_ip) = lan.static_local_ips.get(ext_ipstr) {

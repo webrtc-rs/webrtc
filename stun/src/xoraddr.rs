@@ -119,7 +119,7 @@ impl XorMappedAddress {
             IpAddr::V6(ipv6) => (FAMILY_IPV6, IPV6LEN, ipv6.octets().to_vec()),
         };
 
-        let mut value = vec![0; 32 + 128];
+        let mut value = [0; 32 + 128];
         //value[0] = 0 // first 8 bits are zeroes
         let mut xor_value = vec![0; IPV6LEN];
         xor_value[4..].copy_from_slice(&m.transaction_id.0);

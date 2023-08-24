@@ -47,11 +47,7 @@ impl<L> Copy for BufferInfo<L> {}
 
 impl<L> Clone for BufferInfo<L> {
     fn clone(&self) -> Self {
-        Self {
-            channels: self.channels,
-            frames: self.frames,
-            _phantom: PhantomData,
-        }
+        *self
     }
 }
 
