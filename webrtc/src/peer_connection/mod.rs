@@ -1696,7 +1696,10 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if !t.stopped.load(Ordering::SeqCst) && t.kind == track.kind() {
+                if !t.stopped.load(Ordering::SeqCst)
+                    && t.kind == track.kind()
+                    && track.id() == t.sender().await.id
+                {
                     let sender = t.sender().await;
                     if sender.track().await.is_none() {
                         if let Err(err) = sender.replace_track(Some(track)).await {
