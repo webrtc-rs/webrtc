@@ -18,9 +18,8 @@ const CHANNEL_DATA_LENGTH_SIZE: usize = 2;
 const CHANNEL_DATA_NUMBER_SIZE: usize = CHANNEL_DATA_LENGTH_SIZE;
 const CHANNEL_DATA_HEADER_SIZE: usize = CHANNEL_DATA_LENGTH_SIZE + CHANNEL_DATA_NUMBER_SIZE;
 
-// ChannelData represents The ChannelData Message.
-//
-// See RFC 5766 Section 11.4
+/// `ChannelData` represents the `ChannelData` Message defined in
+/// [RFC 5766 Section 11.4](https://www.rfc-editor.org/rfc/rfc5766#section-11.4).
 #[derive(Default, Debug)]
 pub struct ChannelData {
     pub data: Vec<u8>, // can be subslice of Raw
@@ -35,14 +34,14 @@ impl PartialEq for ChannelData {
 }
 
 impl ChannelData {
-    // Reset resets Length, Data and Raw length.
+    /// Resets length, [`Self::data`] and [`Self::raw`] length.
     #[inline]
     pub fn reset(&mut self) {
         self.raw.clear();
         self.data.clear();
     }
 
-    // Encode encodes ChannelData Message to Raw.
+    /// Encodes this to [`Self::raw`].
     pub fn encode(&mut self) {
         self.raw.clear();
         self.write_header();
@@ -54,7 +53,7 @@ impl ChannelData {
         }
     }
 
-    // Decode decodes The ChannelData Message from Raw.
+    /// Decodes this from [`Self::raw`].
     pub fn decode(&mut self) -> Result<()> {
         let buf = &self.raw;
         if buf.len() < CHANNEL_DATA_HEADER_SIZE {
@@ -77,7 +76,7 @@ impl ChannelData {
         Ok(())
     }
 
-    // WriteHeader writes channel number and length.
+    /// Writes channel number and length.
     pub fn write_header(&mut self) {
         if self.raw.len() < CHANNEL_DATA_HEADER_SIZE {
             // Making WriteHeader call valid even when c.Raw
@@ -90,7 +89,7 @@ impl ChannelData {
             .copy_from_slice(&(self.data.len() as u16).to_be_bytes());
     }
 
-    // is_channel_data returns true if buf looks like the ChannelData Message.
+    /// Returns `true` if `buf` looks like the `ChannelData` Message.
     pub fn is_channel_data(buf: &[u8]) -> bool {
         if buf.len() < CHANNEL_DATA_HEADER_SIZE {
             return false;

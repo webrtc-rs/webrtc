@@ -8,9 +8,10 @@ use super::*;
 
 pub(crate) const PERMISSION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
-// Permission represents a TURN permission. TURN permissions mimic the address-restricted
-// filtering mechanism of NATs that comply with [RFC4787].
-// https://tools.ietf.org/html/rfc5766#section-2.3
+/// `Permission` represents a TURN permission. TURN permissions mimic the address-restricted
+/// filtering mechanism of NATs that comply with [RFC4787].
+///
+/// https://tools.ietf.org/html/rfc5766#section-2.3
 pub struct Permission {
     pub(crate) addr: SocketAddr,
     pub(crate) permissions: Option<Arc<Mutex<HashMap<String, Permission>>>>,
@@ -19,7 +20,7 @@ pub struct Permission {
 }
 
 impl Permission {
-    // NewPermission create a new Permission
+    /// Creates a new [`Permission`].
     pub fn new(addr: SocketAddr) -> Self {
         Permission {
             addr,

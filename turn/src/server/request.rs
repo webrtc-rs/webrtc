@@ -43,7 +43,7 @@ use crate::proto::*;
 pub(crate) const MAXIMUM_ALLOCATION_LIFETIME: Duration = Duration::from_secs(3600); // https://tools.ietf.org/html/rfc5766#section-6.2 defines 3600 seconds recommendation
 pub(crate) const NONCE_LIFETIME: Duration = Duration::from_secs(3600); // https://tools.ietf.org/html/rfc5766#section-4
 
-// Request contains all the state needed to process a single incoming datagram
+/// Request contains all the state needed to process a single incoming datagram
 pub struct Request {
     // Current Request State
     pub conn: Arc<dyn Conn + Send + Sync>,
@@ -79,7 +79,7 @@ impl Request {
         }
     }
 
-    // handle_request processes the give Request
+    /// Processes the give [`Request`]
     pub async fn handle_request(&mut self) -> Result<()> {
         /*log::debug!(
             "received {} bytes of udp from {} on {}",
@@ -275,7 +275,7 @@ impl Request {
         build_and_send(&self.conn, self.src_addr, msg).await
     }
 
-    // // https://tools.ietf.org/html/rfc5766#section-6.2
+    /// https://tools.ietf.org/html/rfc5766#section-6.2
     pub(crate) async fn handle_allocate_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received AllocateRequest from {}", self.src_addr);
 
@@ -841,7 +841,7 @@ pub(crate) async fn build_and_send(
     Ok(())
 }
 
-// Send a STUN packet and return the original error to the caller
+/// Send a STUN packet and return the original error to the caller
 pub(crate) async fn build_and_send_err(
     conn: &Arc<dyn Conn + Send + Sync>,
     dst: SocketAddr,

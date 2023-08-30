@@ -10,14 +10,14 @@ use util::Conn;
 
 use crate::error::Result;
 
-// RelayAddressGenerator is used to generate a RelayAddress when creating an allocation.
-// You can use one of the provided ones or provide your own.
+/// `RelayAddressGenerator` is used to generate a Relay Address when creating an allocation.
+/// You can use one of the provided ones or provide your own.
 #[async_trait]
 pub trait RelayAddressGenerator {
-    // validate confirms that the RelayAddressGenerator is properly initialized
+    /// Confirms that this is properly initialized
     fn validate(&self) -> Result<()>;
 
-    // Allocate a RelayAddress
+    /// Allocates a Relay Address
     async fn allocate_conn(
         &self,
         use_ipv4: bool,

@@ -50,7 +50,7 @@ pub struct AllocationInfo {
 }
 
 impl AllocationInfo {
-    // Creates a new `AllocationInfo`
+    /// Creates a new [`AllocationInfo`].
     pub fn new(
         five_tuple: FiveTuple,
         username: String,
@@ -65,8 +65,8 @@ impl AllocationInfo {
     }
 }
 
-// Allocation is tied to a FiveTuple and relays traffic
-// use create_allocation and get_allocation to operate
+/// `Allocation` is tied to a FiveTuple and relays traffic
+/// use create_allocation and get_allocation to operate.
 pub struct Allocation {
     protocol: Protocol,
     turn_socket: Arc<dyn Conn + Send + Sync>,
@@ -90,7 +90,7 @@ fn addr2ipfingerprint(addr: &SocketAddr) -> String {
 }
 
 impl Allocation {
-    // creates a new instance of NewAllocation.
+    /// Creates a new [`Allocation`].
     pub fn new(
         turn_socket: Arc<dyn Conn + Send + Sync>,
         relay_socket: Arc<dyn Conn + Send + Sync>,
@@ -118,13 +118,13 @@ impl Allocation {
         }
     }
 
-    // has_permission gets the Permission from the allocation
+    /// Checks the Permission for the `addr`.
     pub async fn has_permission(&self, addr: &SocketAddr) -> bool {
         let permissions = self.permissions.lock().await;
         permissions.get(&addr2ipfingerprint(addr)).is_some()
     }
 
-    // add_permission adds a new permission to the allocation
+    /// Adds a new [`Permission`] to this [`Allocation`].
     pub async fn add_permission(&self, mut p: Permission) {
         let fingerprint = addr2ipfingerprint(&p.addr);
 
@@ -145,14 +145,14 @@ impl Allocation {
         }
     }
 
-    // remove_permission removes the net.Addr's fingerprint from the allocation's permissions
+    /// Removes the `addr`'s fingerprint from this [`Allocation`]'s permissions.
     pub async fn remove_permission(&self, addr: &SocketAddr) -> bool {
         let mut permissions = self.permissions.lock().await;
         permissions.remove(&addr2ipfingerprint(addr)).is_some()
     }
 
-    // add_channel_bind adds a new ChannelBind to the allocation, it also updates the
-    // permissions needed for this ChannelBind
+    /// Adds a new [`ChannelBind`] to this [`Allocation`], it also updates the
+    /// permissions needed for this [`ChannelBind`].
     pub async fn add_channel_bind(&self, mut c: ChannelBind, lifetime: Duration) -> Result<()> {
         {
             if let Some(addr) = self.get_channel_addr(&c.number).await {
@@ -197,19 +197,19 @@ impl Allocation {
         Ok(())
     }
 
-    // remove_channel_bind removes the ChannelBind from this allocation by id
+    /// Removes the [`ChannelBind`] from this [`Allocation`] by `number`.
     pub async fn remove_channel_bind(&self, number: ChannelNumber) -> bool {
         let mut channel_bindings = self.channel_bindings.lock().await;
         channel_bindings.remove(&number).is_some()
     }
 
-    // get_channel_addr gets the ChannelBind's addr
+    /// Gets the [`ChannelBind`]'s address by `number`.
     pub async fn get_channel_addr(&self, number: &ChannelNumber) -> Option<SocketAddr> {
         let channel_bindings = self.channel_bindings.lock().await;
         channel_bindings.get(number).map(|cb| cb.peer)
     }
 
-    // GetChannelByAddr gets the ChannelBind's number from this allocation by net.Addr
+    /// Gets the [`ChannelBind`]'s number from this [`Allocation`] by `addr`.
     pub async fn get_channel_number(&self, addr: &SocketAddr) -> Option<ChannelNumber> {
         let channel_bindings = self.channel_bindings.lock().await;
         for cb in channel_bindings.values() {
@@ -220,7 +220,7 @@ impl Allocation {
         None
     }
 
-    // Close closes the allocation
+    /// Closes the [`Allocation`].
     pub async fn close(&self) -> Result<()> {
         if self.closed.load(Ordering::Acquire) {
             return Err(Error::ErrClosed);
@@ -305,7 +305,7 @@ impl Allocation {
         reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst)
     }
 
-    // Refresh updates the allocations lifetime
+    /// Updates the allocations lifetime.
     pub async fn refresh(&self, lifetime: Duration) {
         let reset_tx = self.reset_tx.lock().clone();
         if let Some(tx) = reset_tx {

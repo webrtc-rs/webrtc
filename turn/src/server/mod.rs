@@ -34,7 +34,7 @@ pub struct Server {
 }
 
 impl Server {
-    /// creates the TURN server
+    /// creates a new TURN server
     pub async fn new(config: ServerConfig) -> Result<Self> {
         config.validate()?;
 
@@ -77,7 +77,9 @@ impl Server {
         Ok(s)
     }
 
-    /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
+    /// Deletes all existing [`Allocation`][`Allocation`]s by the provided `username`.
+    ///
+    /// [`Allocation`]: crate::allocation::Allocation
     pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
         let tx = {
             let command_tx = self.command_tx.lock().await;
@@ -96,13 +98,13 @@ impl Server {
         }
     }
 
-    /// Get information of [`Allocation`]s by specified [`FiveTuple`]s.
+    /// Get information of [`Allocation`][`Allocation`]s by specified [`FiveTuple`]s.
     ///
     /// If `five_tuples` is:
     /// - [`None`]:               It returns information about the all
-    ///                           [`Allocation`]s.
+    ///                           [`Allocation`][`Allocation`]s.
     /// - [`Some`] and not empty: It returns information about
-    ///                           the [`Allocation`]s associated with
+    ///                           the [`Allocation`][`Allocation`]s associated with
     ///                           the specified [`FiveTuples`].
     /// - [`Some`], but empty:    It returns an empty [`HashMap`].
     ///
@@ -216,7 +218,7 @@ impl Server {
         let _ = conn.close().await;
     }
 
-    /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
+    /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing.
     pub async fn close(&self) -> Result<()> {
         let tx = {
             let mut command_tx = self.command_tx.lock().await;
@@ -238,16 +240,17 @@ impl Server {
 }
 
 /// The protocol to communicate between the [`Server`]'s public methods
-/// and the tasks spawned in the [`read_loop`] method.
+/// and the tasks spawned in the [`Server::read_loop`] method.
 #[derive(Clone)]
 enum Command {
-    /// Command to delete [`crate::allocation::Allocation`] by provided
-    /// `username`.
+    /// Command to delete [`Allocation`][`Allocation`] by provided `username`.
+    ///
+    /// [`Allocation`]: `crate::allocation::Allocation`
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
 
-    /// Command to get information of [`Allocation`]s by provided [`FiveTuple`]s.
+    /// Command to get information of [`Allocation`][`Allocation`]s by provided [`FiveTuple`]s.
     ///
-    /// [`Allocation`]: [`crate::allocation::Allocation`]
+    /// [`Allocation`]: `crate::allocation::Allocation`
     GetAllocationsInfo(
         Option<Vec<FiveTuple>>,
         mpsc::Sender<HashMap<FiveTuple, AllocationInfo>>,

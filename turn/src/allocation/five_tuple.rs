@@ -6,12 +6,12 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 use crate::proto::*;
 
-// FiveTuple is the combination (client IP address and port, server IP
-// address and port, and transport protocol (currently one of UDP,
-// TCP, or TLS)) used to communicate between the client and the
-// server.  The 5-tuple uniquely identifies this communication
-// stream.  The 5-tuple also uniquely identifies the Allocation on
-// the server.
+/// `FiveTuple` is the combination (client IP address and port, server IP
+/// address and port, and transport protocol (currently one of UDP,
+/// TCP, or TLS)) used to communicate between the client and the
+/// server.  The 5-tuple uniquely identifies this communication
+/// stream.  The 5-tuple also uniquely identifies the Allocation on
+/// the server.
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 pub struct FiveTuple {
     pub protocol: Protocol,

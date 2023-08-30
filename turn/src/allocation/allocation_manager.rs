@@ -12,13 +12,13 @@ use super::*;
 use crate::error::*;
 use crate::relay::*;
 
-// ManagerConfig a bag of config params for Manager.
+/// `ManagerConfig` a bag of config params for `Manager`.
 pub struct ManagerConfig {
     pub relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
     pub alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
 }
 
-// Manager is used to hold active allocations
+/// `Manager` is used to hold active allocations.
 pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
@@ -27,7 +27,7 @@ pub struct Manager {
 }
 
 impl Manager {
-    // creates a new instance of Manager.
+    /// Creates a new [`Manager`].
     pub fn new(config: ManagerConfig) -> Self {
         Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
@@ -37,7 +37,7 @@ impl Manager {
         }
     }
 
-    // Close closes the manager and closes all allocations it manages
+    /// Closes this [`manager`] and closes all [`Allocation`]s it manages.
     pub async fn close(&self) -> Result<()> {
         let allocations = self.allocations.lock().await;
         for a in allocations.values() {
@@ -46,8 +46,8 @@ impl Manager {
         Ok(())
     }
 
-    // Returns the information about the all [`Allocation`]s associated with
-    // the specified [`FiveTuple`]s.
+    /// Returns the information about the all [`Allocation`]s associated with
+    /// the specified [`FiveTuple`]s.
     pub async fn get_allocations_info(
         &self,
         five_tuples: Option<Vec<FiveTuple>>,
@@ -73,13 +73,13 @@ impl Manager {
         infos
     }
 
-    // get_allocation fetches the allocation matching the passed FiveTuple
+    /// Fetches the [`Allocation`] matching the passed [`FiveTuple`].
     pub async fn get_allocation(&self, five_tuple: &FiveTuple) -> Option<Arc<Allocation>> {
         let allocations = self.allocations.lock().await;
         allocations.get(five_tuple).map(Arc::clone)
     }
 
-    // create_allocation creates a new allocation and starts relaying
+    /// Creates a new [`Allocation`] and starts relaying.
     pub async fn create_allocation(
         &self,
         five_tuple: FiveTuple,
@@ -123,7 +123,7 @@ impl Manager {
         Ok(a)
     }
 
-    // delete_allocation removes an allocation
+    /// Removes an [`Allocation`].
     pub async fn delete_allocation(&self, five_tuple: &FiveTuple) {
         let allocation = self.allocations.lock().await.remove(five_tuple);
 
@@ -134,7 +134,7 @@ impl Manager {
         }
     }
 
-    /// Deletes the [`Allocation`]s according to the specified `username`.
+    /// Deletes the [`Allocation`]s according to the specified username `name`.
     pub async fn delete_allocations_by_username(&self, name: &str) {
         let to_delete = {
             let mut allocations = self.allocations.lock().await;
@@ -163,7 +163,7 @@ impl Manager {
         .await;
     }
 
-    // create_reservation stores the reservation for the token+port
+    /// Stores the reservation for the token+port.
     pub async fn create_reservation(&self, reservation_token: String, port: u16) {
         let reservations = Arc::clone(&self.reservations);
         let reservation_token2 = reservation_token.clone();
@@ -183,13 +183,13 @@ impl Manager {
         reservations.insert(reservation_token, port);
     }
 
-    // get_reservation returns the port for a given reservation if it exists
+    /// Returns the port for a given reservation if it exists.
     pub async fn get_reservation(&self, reservation_token: &str) -> Option<u16> {
         let reservations = self.reservations.lock().await;
         reservations.get(reservation_token).copied()
     }
 
-    // get_random_even_port returns a random un-allocated udp4 port
+    /// Returns a random un-allocated udp4 port.
     pub async fn get_random_even_port(&self) -> Result<u16> {
         let (_, addr) = self.relay_addr_generator.allocate_conn(true, 0).await?;
         Ok(addr.port())

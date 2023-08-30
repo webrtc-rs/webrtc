@@ -14,13 +14,13 @@ pub enum TimerIdRefresh {
     Perms,
 }
 
-// PeriodicTimerTimeoutHandler is a handler called on timeout
+/// `PeriodicTimerTimeoutHandler` is a handler called on timeout.
 #[async_trait]
 pub trait PeriodicTimerTimeoutHandler {
     async fn on_timeout(&mut self, id: TimerIdRefresh);
 }
 
-// PeriodicTimer is a periodic timer
+/// `PeriodicTimer` is a periodic timer.
 #[derive(Default)]
 pub struct PeriodicTimer {
     id: TimerIdRefresh,
@@ -29,7 +29,7 @@ pub struct PeriodicTimer {
 }
 
 impl PeriodicTimer {
-    // create a new timer
+    /// create a new [`PeriodicTimer`].
     pub fn new(id: TimerIdRefresh, interval: Duration) -> Self {
         PeriodicTimer {
             id,
@@ -38,7 +38,7 @@ impl PeriodicTimer {
         }
     }
 
-    // Start starts the timer.
+    /// Starts the timer.
     pub async fn start<T: 'static + PeriodicTimerTimeoutHandler + std::marker::Send>(
         &self,
         timeout_handler: Arc<Mutex<T>>,
@@ -78,14 +78,14 @@ impl PeriodicTimer {
         true
     }
 
-    // Stop stops the timer.
+    /// Stops the timer.
     pub async fn stop(&self) {
         let mut close_tx = self.close_tx.lock().await;
         close_tx.take();
     }
 
-    // is_running tests if the timer is running.
-    // Debug purpose only
+    /// Tests if the timer is running.
+    /// Debug purpose only.
     pub async fn is_running(&self) -> bool {
         let close_tx = self.close_tx.lock().await;
         close_tx.is_some()

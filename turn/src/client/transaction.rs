@@ -80,7 +80,7 @@ async fn on_rtx_timeout(
     false
 }
 
-// TransactionResult is a bag of result values of a transaction
+/// `TransactionResult` is a bag of result values of a transaction.
 #[derive(Debug)] //Clone
 pub struct TransactionResult {
     pub msg: Message,
@@ -100,7 +100,7 @@ impl Default for TransactionResult {
     }
 }
 
-// TransactionConfig is a set of config params used by NewTransaction
+/// `TransactionConfig` is a set of config params used by [`Transaction::new()`].
 #[derive(Default)]
 pub struct TransactionConfig {
     pub key: String,
@@ -110,7 +110,7 @@ pub struct TransactionConfig {
     pub ignore_result: bool, // true to throw away the result of this transaction (it will not be readable using wait_for_result)
 }
 
-// Transaction represents a transaction
+/// `Transaction` represents a transaction.
 #[derive(Debug)]
 pub struct Transaction {
     pub key: String,
@@ -140,7 +140,7 @@ impl Default for Transaction {
 }
 
 impl Transaction {
-    // NewTransaction creates a new instance of Transaction
+    /// Creates a new [`Transaction`] using the given `config`.
     pub fn new(config: TransactionConfig) -> Self {
         let (result_ch_tx, result_ch_rx) = if !config.ignore_result {
             let (tx, rx) = mpsc::channel(1);
@@ -160,7 +160,7 @@ impl Transaction {
         }
     }
 
-    // start_rtx_timer starts the transaction timer
+    /// Starts the transaction timer.
     pub async fn start_rtx_timer(
         &mut self,
         conn: Arc<dyn Conn + Send + Sync>,
@@ -197,14 +197,14 @@ impl Transaction {
         });
     }
 
-    // stop_rtx_timer stop the transaction timer
+    /// Stops the transaction timer.
     pub fn stop_rtx_timer(&mut self) {
         if self.timer_ch_tx.is_some() {
             self.timer_ch_tx.take();
         }
     }
 
-    // write_result writes the result to the result channel
+    /// Writes the result to the result channel.
     pub async fn write_result(&self, res: TransactionResult) -> bool {
         if let Some(result_ch) = &self.result_ch_tx {
             result_ch.send(res).await.is_ok()
@@ -213,58 +213,60 @@ impl Transaction {
         }
     }
 
+    /// Returns the result channel.
     pub fn get_result_channel(&mut self) -> Option<mpsc::Receiver<TransactionResult>> {
         self.result_ch_rx.take()
     }
 
-    // Close closes the transaction
+    /// Closes the transaction.
     pub fn close(&mut self) {
         if self.result_ch_tx.is_some() {
             self.result_ch_tx.take();
         }
     }
 
-    // retries returns the number of retransmission it has made
+    /// Returns the number of retransmission it has made.
     pub fn retries(&self) -> u16 {
         self.n_rtx.load(Ordering::SeqCst)
     }
 }
 
-// TransactionMap is a thread-safe transaction map
+/// `TransactionMap` is a thread-safe transaction map.
 #[derive(Default, Debug)]
 pub struct TransactionMap {
     tr_map: HashMap<String, Transaction>,
 }
 
 impl TransactionMap {
-    // NewTransactionMap create a new instance of the transaction map
+    /// Create a new [`TransactionMap`].
     pub fn new() -> TransactionMap {
         TransactionMap {
             tr_map: HashMap::new(),
         }
     }
 
-    // Insert inserts a trasaction to the map
+    /// Inserts a [`Transaction`] to the map.
     pub fn insert(&mut self, key: String, tr: Transaction) -> bool {
         self.tr_map.insert(key, tr);
         true
     }
 
-    // Find looks up a transaction by its key
+    /// Looks up a [`Transaction`] by its key.
     pub fn find(&self, key: &str) -> Option<&Transaction> {
         self.tr_map.get(key)
     }
 
+    /// Gets the [`Transaction`] associated with the given `key`.
     pub fn get(&mut self, key: &str) -> Option<&mut Transaction> {
         self.tr_map.get_mut(key)
     }
 
-    // Delete deletes a transaction by its key
+    /// Deletes a [`Transaction`] by its key.
     pub fn delete(&mut self, key: &str) -> Option<Transaction> {
         self.tr_map.remove(key)
     }
 
-    // close_and_delete_all closes and deletes all transactions
+    /// Closes and deletes all [`Transaction`]s.
     pub fn close_and_delete_all(&mut self) {
         for tr in self.tr_map.values_mut() {
             tr.close();
@@ -272,7 +274,7 @@ impl TransactionMap {
         self.tr_map.clear();
     }
 
-    // Size returns the length of the transaction map
+    /// Returns its length.
     pub fn size(&self) -> usize {
         self.tr_map.len()
     }

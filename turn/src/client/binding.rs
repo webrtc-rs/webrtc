@@ -48,7 +48,7 @@ impl Binding {
         self.refreshed_at
     }
 }
-// Thread-safe Binding map
+/// Thread-safe Binding map.
 #[derive(Default)]
 pub(crate) struct BindingManager {
     chan_map: HashMap<u16, String>,
