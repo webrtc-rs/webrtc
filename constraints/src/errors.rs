@@ -4,11 +4,13 @@
 
 use std::collections::HashMap;
 
+use thiserror::Error;
+
 use crate::algorithms::{ConstraintFailureInfo, SettingFitnessDistanceErrorKind};
 use crate::MediaTrackProperty;
 
 /// An error indicating one or more over-constrained settings.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Error, Clone, Eq, PartialEq, Debug)]
 pub struct OverconstrainedError {
     /// The offending constraint's name.
     pub constraint: MediaTrackProperty,
@@ -27,15 +29,13 @@ impl Default for OverconstrainedError {
 
 impl std::fmt::Display for OverconstrainedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Overconstrained property {:?}", self.constraint)?;
+        write!(f, "Over-constrained property {:?}", self.constraint)?;
         if let Some(message) = self.message.as_ref() {
             write!(f, ": {message}")?;
         }
         Ok(())
     }
 }
-
-impl std::error::Error for OverconstrainedError {}
 
 impl OverconstrainedError {
     pub(super) fn exposing_device_information(
