@@ -52,7 +52,7 @@ const MAX_READ_QUEUE_SIZE: usize = 1024;
 // 6: 31500 ms  +32000
 // -: 63500 ms  failed
 
-// ClientConfig is a bag of config parameters for Client.
+/// ClientConfig is a bag of config parameters for Client.
 pub struct ClientConfig {
     pub stun_serv_addr: String, // STUN server address (e.g. "stun.abc.com:3478")
     pub turn_serv_addr: String, // TURN server addrees (e.g. "turn.abc.com:3478")
@@ -82,28 +82,28 @@ struct ClientInternal {
 
 #[async_trait]
 impl RelayConnObserver for ClientInternal {
-    // turn_server_addr return the TURN server address
+    /// Returns the TURN server address.
     fn turn_server_addr(&self) -> String {
         self.turn_serv_addr.clone()
     }
 
-    // username returns username
+    /// Returns the `username`.
     fn username(&self) -> Username {
         self.username.clone()
     }
 
-    // realm return realm
+    /// Return the `realm`.
     fn realm(&self) -> Realm {
         self.realm.clone()
     }
 
-    // WriteTo sends data to the specified destination using the base socket.
+    /// Sends data to the specified destination using the base socket.
     async fn write_to(&self, data: &[u8], to: &str) -> std::result::Result<usize, util::Error> {
         let n = self.conn.send_to(data, SocketAddr::from_str(to)?).await?;
         Ok(n)
     }
 
-    // PerformTransaction performs STUN transaction
+    /// Performs STUN transaction.
     async fn perform_transaction(
         &mut self,
         msg: &Message,
@@ -158,7 +158,7 @@ impl RelayConnObserver for ClientInternal {
 }
 
 impl ClientInternal {
-    // new returns a new Client instance. listeningAddress is the address and port to listen on, default "0.0.0.0:0"
+    /// Creates a new [`ClientInternal`].
     async fn new(config: ClientConfig) -> Result<Self> {
         let net = if let Some(vnet) = config.vnet {
             if vnet.is_virtual() {
@@ -213,14 +213,14 @@ impl ClientInternal {
         })
     }
 
-    // stun_server_addr return the STUN server address
+    /// Returns the STUN server address.
     fn stun_server_addr(&self) -> String {
         self.stun_serv_addr.clone()
     }
 
-    // Listen will have this client start listening on the relay_conn provided via the config.
-    // This is optional. If not used, you will need to call handle_inbound method
-    // to supply incoming data, instead.
+    /// `listen()` will have this client start listening on the `relay_conn` provided via the config.
+    /// This is optional. If not used, you will need to call `handle_inbound` method
+    /// to supply incoming data, instead.
     async fn listen(&self) -> Result<()> {
         let conn = Arc::clone(&self.conn);
         let stun_serv_str = self.stun_serv_addr.clone();
@@ -261,13 +261,13 @@ impl ClientInternal {
         Ok(())
     }
 
-    // handle_inbound handles data received.
-    // This method handles incoming packet demultiplex it by the source address
-    // and the types of the message.
-    // This return a booleen (handled or not) and if there was an error.
-    // Caller should check if the packet was handled by this client or not.
-    // If not handled, it is assumed that the packet is application data.
-    // If an error is returned, the caller should discard the packet regardless.
+    /// Handles data received.
+    ///
+    /// This method handles incoming packet demultiplex it by the source address
+    /// and the types of the message.
+    /// Caller should check if the packet was handled by this client or not.
+    /// If not handled, it is assumed that the packet is application data.
+    /// If an error is returned, the caller should discard the packet regardless.
     async fn handle_inbound(
         read_ch_tx: &Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
         data: &[u8],
@@ -403,7 +403,7 @@ impl ClientInternal {
         Ok(())
     }
 
-    // handle_inbound_relay_conn passes inbound data in RelayConn
+    /// Passes inbound data in RelayConn.
     async fn handle_inbound_relay_conn(
         read_ch_tx: &Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
         data: &[u8],
@@ -428,7 +428,7 @@ impl ClientInternal {
         }
     }
 
-    // Close closes this client
+    /// Closes this client.
     async fn close(&mut self) {
         {
             let mut read_ch_tx = self.read_ch_tx.lock().await;
@@ -440,7 +440,7 @@ impl ClientInternal {
         }
     }
 
-    // send_binding_request_to sends a new STUN request to the given transport address
+    /// Sends a new STUN request to the given transport address.
     async fn send_binding_request_to(&mut self, to: &str) -> Result<SocketAddr> {
         let msg = {
             let attrs: Vec<Box<dyn Setter>> = if !self.software.text.is_empty() {
@@ -467,7 +467,7 @@ impl ClientInternal {
         Ok(SocketAddr::new(refl_addr.ip, refl_addr.port))
     }
 
-    // send_binding_request sends a new STUN request to the STUN server
+    /// Sends a new STUN request to the STUN server.
     async fn send_binding_request(&mut self) -> Result<SocketAddr> {
         if self.stun_serv_addr.is_empty() {
             Err(Error::ErrStunserverAddressNotSet)
@@ -477,7 +477,7 @@ impl ClientInternal {
         }
     }
 
-    // find_addr_by_channel_number returns a peer address associated with the
+    /// Returns a peer address associated with the
     // channel number on this UDPConn
     async fn find_addr_by_channel_number(
         binding_mgr: &Arc<Mutex<BindingManager>>,
@@ -487,7 +487,7 @@ impl ClientInternal {
         bm.find_by_number(ch_num).map(|b| b.addr)
     }
 
-    // Allocate sends a TURN allocation request to the given transport address
+    /// Sends a TURN allocation request to the given transport address.
     async fn allocate(&mut self) -> Result<RelayConnConfig> {
         {
             let read_ch_tx = self.read_ch_tx.lock().await;
@@ -580,7 +580,7 @@ impl ClientInternal {
     }
 }
 
-// Client is a STUN server client
+/// Client is a STUN server client.
 #[derive(Clone)]
 pub struct Client {
     client_internal: Arc<Mutex<ClientInternal>>,
@@ -614,13 +614,13 @@ impl Client {
         Ok(())
     }
 
-    // send_binding_request_to sends a new STUN request to the given transport address
+    /// Sends a new STUN request to the given transport address.
     pub async fn send_binding_request_to(&self, to: &str) -> Result<SocketAddr> {
         let mut ci = self.client_internal.lock().await;
         ci.send_binding_request_to(to).await
     }
 
-    // send_binding_request sends a new STUN request to the STUN server
+    /// Sends a new STUN request to the STUN server.
     pub async fn send_binding_request(&self) -> Result<SocketAddr> {
         let mut ci = self.client_internal.lock().await;
         ci.send_binding_request().await

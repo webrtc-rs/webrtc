@@ -6,13 +6,13 @@ use util::vnet::net::*;
 use super::*;
 use crate::error::*;
 
-// RelayAddressGeneratorStatic can be used to return static IP address each time a relay is created.
-// This can be used when you have a single static IP address that you want to use
+/// `RelayAddressGeneratorStatic` can be used to return static IP address each time a relay is created.
+/// This can be used when you have a single static IP address that you want to use.
 pub struct RelayAddressGeneratorStatic {
-    // RelayAddress is the IP returned to the user when the relay is created
+    /// `relay_address` is the IP returned to the user when the relay is created.
     pub relay_address: IpAddr,
 
-    // Address is passed to Listen/ListenPacket when creating the Relay
+    /// `address` is passed to Listen/ListenPacket when creating the Relay.
     pub address: String,
 
     pub net: Arc<Net>,
@@ -20,7 +20,6 @@ pub struct RelayAddressGeneratorStatic {
 
 #[async_trait]
 impl RelayAddressGenerator for RelayAddressGeneratorStatic {
-    // validate confirms that the RelayAddressGenerator is properly initialized
     fn validate(&self) -> Result<()> {
         if self.address.is_empty() {
             Err(Error::ErrListeningAddressInvalid)
@@ -29,7 +28,6 @@ impl RelayAddressGenerator for RelayAddressGeneratorStatic {
         }
     }
 
-    // Allocate a PacketConn (UDP) RelayAddress
     async fn allocate_conn(
         &self,
         use_ipv4: bool,

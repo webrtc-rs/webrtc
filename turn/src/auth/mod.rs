@@ -15,7 +15,7 @@ pub trait AuthHandler {
     fn auth_handle(&self, username: &str, realm: &str, src_addr: SocketAddr) -> Result<Vec<u8>>;
 }
 
-// generate_long_term_credentials can be used to create credentials valid for [duration] time
+/// `generate_long_term_credentials()` can be used to create credentials valid for `duration` time/
 pub fn generate_long_term_credentials(
     shared_secret: &str,
     duration: Duration,
@@ -35,7 +35,7 @@ fn long_term_credentials(username: &str, shared_secret: &str) -> String {
     BASE64_STANDARD.encode(password)
 }
 
-// generate_auth_key is a convenience function to easily generate keys in the format used by AuthHandler
+/// A convenience function to easily generate keys in the format used by [`AuthHandler`].
 pub fn generate_auth_key(username: &str, realm: &str, password: &str) -> Vec<u8> {
     let s = format!("{username}:{realm}:{password}");
 
@@ -70,7 +70,7 @@ impl AuthHandler for LongTermAuthHandler {
 }
 
 impl LongTermAuthHandler {
-    // https://tools.ietf.org/search/rfc5389#section-10.2
+    /// https://tools.ietf.org/search/rfc5389#section-10.2
     pub fn new(shared_secret: String) -> Self {
         LongTermAuthHandler { shared_secret }
     }

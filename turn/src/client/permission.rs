@@ -34,7 +34,7 @@ impl Permission {
     }
 }
 
-// Thread-safe Permission map
+/// Thread-safe Permission map.
 #[derive(Default)]
 pub(crate) struct PermissionMap {
     perm_map: HashMap<String, Arc<Permission>>,

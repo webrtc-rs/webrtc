@@ -10,8 +10,9 @@ use tokio::time::{Duration, Instant};
 use super::*;
 use crate::proto::channum::*;
 
-// ChannelBind represents a TURN Channel
-// https://tools.ietf.org/html/rfc5766#section-2.5
+/// `ChannelBind` represents a TURN Channel.
+///
+/// https://tools.ietf.org/html/rfc5766#section-2.5.
 #[derive(Clone)]
 pub struct ChannelBind {
     pub(crate) peer: SocketAddr,
@@ -22,7 +23,7 @@ pub struct ChannelBind {
 }
 
 impl ChannelBind {
-    // NewChannelBind creates a new ChannelBind
+    /// Creates a new [`ChannelBind`]
     pub fn new(number: ChannelNumber, peer: SocketAddr) -> Self {
         ChannelBind {
             number,
