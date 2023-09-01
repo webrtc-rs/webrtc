@@ -1067,7 +1067,7 @@ fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth> {
     } else {
         // Set according to currently registered with IANA
         // https://tools.ietf.org/html/rfc4566#section-5.8
-        let i = index_of(parts[0], &["CT", "AS"]);
+        let i = index_of(parts[0], &["CT", "AS", "TIAS"]);
         if i == -1 {
             return Err(Error::SdpInvalidValue(parts[0].to_owned()));
         }
