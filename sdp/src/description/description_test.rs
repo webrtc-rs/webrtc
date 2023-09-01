@@ -402,6 +402,15 @@ m=audio 54400 RTP/SAVPF 0 96\r\n\
 b=X-YZ:128\r\n\
 b=AS:12345\r\n";
 
+const MEDIA_TRANSPORT_BANDWIDTH_SDP: &str = "v=0\r\n\
+o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+s=SDP Seminar\r\n\
+t=2873397496 2873404696\r\n\
+m=video 51372 RTP/AVP 99\r\n\
+m=audio 54400 RTP/SAVPF 0 96\r\n\
+b=AS:12345\r\n\
+b=TIAS:12345\r\n";
+
 const MEDIA_ENCRYPTION_KEY_SDP: &str = "v=0\r\n\
 o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
 s=SDP Seminar\r\n\
@@ -520,6 +529,11 @@ fn test_round_trip() -> Result<()> {
             Some(MEDIA_DESCRIPTION_OUT_OF_ORDER_SDPACTUAL),
         ),
         ("MediaBandwidth", MEDIA_BANDWIDTH_SDP, None),
+        (
+            "MediaTransportBandwidth",
+            MEDIA_TRANSPORT_BANDWIDTH_SDP,
+            None,
+        ),
         ("MediaEncryptionKey", MEDIA_ENCRYPTION_KEY_SDP, None),
         (
             "MediaEncryptionKeyExtraCRLF",
