@@ -664,7 +664,7 @@ fn test_rfc8285_get_extension_ids() {
     };
 
     let ids = p.header.get_extension_ids();
-    assert!(!ids.is_empty(), "Extenstions should exist");
+    assert!(!ids.is_empty(), "Extensions should exist");
 
     assert_eq!(
         ids.len(),
@@ -699,10 +699,10 @@ fn test_rfc8285_get_extension_ids_return_empty_when_extension_disabled() {
     };
 
     let ids = p.header.get_extension_ids();
-    assert!(ids.is_empty(), "Extenstions should not exist");
+    assert!(ids.is_empty(), "Extensions should not exist");
 }
 
-fn test_rfc8285_del_extension_returns_error_when_extenstions_disabled() {
+fn test_rfc8285_del_extension_returns_error_when_extensions_disabled() {
     let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
@@ -1102,7 +1102,7 @@ fn test_rfc3550_set_extension_should_error_when_non_zero() -> Result<()> {
     assert_eq!(
         res,
         Some(Bytes::from_static(&[0xBB])),
-        "p.get_extenstion returned incorrect value"
+        "p.get_extension returned incorrect value"
     );
 
     Ok(())

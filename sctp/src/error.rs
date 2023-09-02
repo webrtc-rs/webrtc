@@ -100,7 +100,7 @@ pub enum Error {
     #[error("failed marshaling INIT common data")]
     ErrChunkTypeInitMarshalFailed,
     #[error("ChunkType of type INIT ACK InitiateTag must not be 0")]
-    ErrChunkTypeInitInitateTagZero,
+    ErrChunkTypeInitInitiateTagZero,
     #[error("INIT ACK inbound stream request must be > 0")]
     ErrInitInboundStreamRequestZero,
     #[error("INIT ACK outbound stream request must be > 0")]
@@ -196,7 +196,7 @@ pub enum Error {
     #[error("sending reset packet in non-Established state")]
     ErrResetPacketInStateNotExist,
     #[error("unexpected parameter type")]
-    ErrParamterType,
+    ErrParameterType,
     #[error("sending payload data in non-Established state")]
     ErrPayloadDataStateNotExist,
     #[error("unhandled chunk type")]

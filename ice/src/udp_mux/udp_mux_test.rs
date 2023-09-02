@@ -26,7 +26,7 @@ impl Network {
         }
     }
 
-    /// Connnect ip from the "remote".
+    /// Connect ip from the "remote".
     fn connect_ip(self, port: u16) -> String {
         match self {
             Network::Ipv4 => format!("127.0.0.1:{port}"),
@@ -174,7 +174,7 @@ async fn test_mux_connection(
     );
 
     // These bytes should be dropped
-    remote_connection.send("Droppped bytes".as_bytes()).await?;
+    remote_connection.send("Dropped bytes".as_bytes()).await?;
 
     sleep(Duration::from_millis(1)).await;
 

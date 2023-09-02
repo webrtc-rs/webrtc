@@ -11,7 +11,7 @@
 ## v0.9.0
 
 * [#8 update deps + loosen some requirements](https://github.com/webrtc-rs/srtp/pull/8) by [@melekes](https://github.com/melekes).
-* Increased min verison of `log` dependency to `0.4.16`. [#250 Fix log at ^0.4.16 to make tests compile](https://github.com/webrtc-rs/webrtc/pull/250) by [@k0nserv](https://github.com/k0nserv).
+* Increased min version of `log` dependency to `0.4.16`. [#250 Fix log at ^0.4.16 to make tests compile](https://github.com/webrtc-rs/webrtc/pull/250) by [@k0nserv](https://github.com/k0nserv).
 
 ## Prior to 0.8.9
 

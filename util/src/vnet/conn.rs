@@ -26,7 +26,7 @@ pub(crate) trait ConnObserver {
 pub(crate) type ChunkChTx = mpsc::Sender<Box<dyn Chunk + Send + Sync>>;
 
 /// UDPConn is the implementation of the Conn and PacketConn interfaces for UDP network connections.
-/// comatible with net.PacketConn and net.Conn
+/// compatible with net.PacketConn and net.Conn
 pub(crate) struct UdpConn {
     loc_addr: SocketAddr,
     rem_addr: RwLock<Option<SocketAddr>>,

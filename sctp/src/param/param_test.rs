@@ -170,13 +170,13 @@ use bytes::Buf;
 
 use super::param_reconfig_response::*;
 
-static CHUNK_RECONFIG_RESPONCE: Bytes =
+static CHUNK_RECONFIG_RESPONSE: Bytes =
     Bytes::from_static(&[0x0, 0x10, 0x0, 0xc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1]);
 
 #[test]
 fn test_param_reconfig_response_success() -> Result<()> {
     let tests = vec![(
-        CHUNK_RECONFIG_RESPONCE.clone(),
+        CHUNK_RECONFIG_RESPONSE.clone(),
         ParamReconfigResponse {
             reconfig_response_sequence_number: 1,
             result: ReconfigResult::SuccessPerformed,
@@ -196,7 +196,7 @@ fn test_param_reconfig_response_success() -> Result<()> {
 #[test]
 fn test_param_reconfig_response_failure() -> Result<()> {
     let tests = vec![
-        ("packet too short", CHUNK_RECONFIG_RESPONCE.slice(..8)),
+        ("packet too short", CHUNK_RECONFIG_RESPONSE.slice(..8)),
         (
             "param too short",
             Bytes::from_static(&[0x0, 0x10, 0x0, 0x4]),

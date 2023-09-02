@@ -193,7 +193,7 @@ impl ResourceHeader {
 
     // set_edns0 configures h for EDNS(0).
     //
-    // The provided ext_rcode must be an extedned RCode.
+    // The provided ext_rcode must be an extended RCode.
     pub fn set_edns0(
         &mut self,
         udp_payload_len: u16,

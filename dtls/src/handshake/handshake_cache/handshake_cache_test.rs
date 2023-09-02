@@ -650,7 +650,7 @@ async fn test_handshake_cache_session_hash() -> Result<()> {
 
         assert_eq!(
             verify_data, expected,
-            "handshakeCacheSesssionHassh '{name}' exp: {expected:?} actual {verify_data:?}"
+            "handshakeCacheSessionHassh '{name}' exp: {expected:?} actual {verify_data:?}"
         );
     }
 

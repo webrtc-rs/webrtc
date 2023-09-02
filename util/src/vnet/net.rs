@@ -394,7 +394,7 @@ pub struct NetConfig {
     pub static_ip: String,
 }
 
-// Net represents a local network stack euivalent to a set of layers from NIC
+// Net represents a local network stack equivalent to a set of layers from NIC
 // up to the transport (UDP / TCP) layer.
 pub enum Net {
     VNet(Arc<Mutex<VNet>>),

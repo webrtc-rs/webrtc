@@ -807,7 +807,7 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
 }
 
 #[test]
-fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<()> {
+fn test_reassembly_queue_forward_tsn_for_ordered_fragments() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -863,7 +863,7 @@ fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<()> {
 }
 
 #[test]
-fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<()> {
+fn test_reassembly_queue_forward_tsn_for_unordered_fragments() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;

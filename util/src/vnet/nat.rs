@@ -17,7 +17,7 @@ use crate::vnet::net::UDP_STR;
 
 const DEFAULT_NAT_MAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
 
-// EndpointDependencyType defines a type of behavioral dependendency on the
+// EndpointDependencyType defines a type of behavioral dependency on the
 // remote endpoint's IP address or port number. This is used for the two
 // kinds of behaviors:
 //  - Port Mapping behavior
@@ -112,7 +112,7 @@ impl NetworkAddressTranslator {
             nat_type.mapping_life_time = Duration::from_secs(0);
 
             if config.mapped_ips.is_empty() {
-                return Err(Error::ErrNatRequriesMapping);
+                return Err(Error::ErrNatRequiresMapping);
             }
             if config.mapped_ips.len() != config.local_ips.len() {
                 return Err(Error::ErrMismatchLengthIp);
@@ -233,7 +233,7 @@ impl NetworkAddressTranslator {
                             )),
                         }
                     } else {
-                        return Err(Error::ErrNatRequriesMapping);
+                        return Err(Error::ErrNatRequiresMapping);
                     };
 
                     {

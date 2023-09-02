@@ -48,7 +48,7 @@ pub enum Error {
     #[error("no address assigned")]
     ErrNoAddressAssigned,
     #[error("1:1 NAT requires more than one mapping")]
-    ErrNatRequriesMapping,
+    ErrNatRequiresMapping,
     #[error("length mismtach between mappedIPs and localIPs")]
     ErrMismatchLengthIp,
     #[error("non-udp translation is not supported yet")]

@@ -58,7 +58,7 @@ impl PayloadQueue {
     }
 
     /// push pushes a payload data. If the payload data is already in our queue or
-    /// older than our cumulative_tsn marker, it will be recored as duplications,
+    /// older than our cumulative_tsn marker, it will be recorded as duplications,
     /// which can later be retrieved using popDuplicates.
     pub(crate) fn push(&mut self, p: ChunkPayloadData, cumulative_tsn: u32) -> bool {
         let ok = self.chunk_map.contains_key(&p.tsn);

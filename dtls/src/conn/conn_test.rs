@@ -2374,7 +2374,7 @@ async fn send_client_hello(
 // a ClientHello contained that extension or not
 #[cfg(not(target_os = "windows"))] // this times out in CI on windows.
 #[tokio::test]
-async fn test_renegotation_info() -> Result<()> {
+async fn test_renegotiation_info() -> Result<()> {
     let mut resp = vec![0u8; 1024];
 
     let tests = vec![
@@ -2440,13 +2440,13 @@ async fn test_renegotation_info() -> Result<()> {
             }
         };
 
-        let got_negotation_info = server_hello
+        let got_negotiation_info = server_hello
             .extensions
             .iter()
             .any(|v| matches!(v, Extension::RenegotiationInfo(_)));
 
         assert!(
-            got_negotation_info,
+            got_negotiation_info,
             "{name}: Received ServerHello without RenegotiationInfo"
         );
 

@@ -7,7 +7,7 @@ use crate::error::Error::ErrInvalidPacketLength;
 const RENEGOTIATION_INFO_HEADER_SIZE: usize = 5;
 
 /// RenegotiationInfo allows a Client/Server to
-/// communicate their renegotation support
+/// communicate their renegotiation support
 /// https://tools.ietf.org/html/rfc5746
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtensionRenegotiationInfo {

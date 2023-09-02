@@ -1908,7 +1908,7 @@ async fn test_agent_restart_both_side() -> Result<()> {
     let _ = a_connected.recv().await;
     let _ = b_connected.recv().await;
 
-    // Assert that we have new candiates each time
+    // Assert that we have new candidates each time
     assert_ne!(
         conn_afirst_candidates,
         generate_candidate_address_strings(agent_a.get_local_candidates().await)

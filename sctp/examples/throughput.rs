@@ -75,7 +75,7 @@ fn main() -> Result<(), Error> {
                 let stream = a.accept_stream().await.unwrap();
                 println!("accepted a stream");
 
-                // set unordered = true and 10ms treshold for dropping packets
+                // set unordered = true and 10ms threshold for dropping packets
                 stream.set_reliability_params(true, ReliabilityType::Rexmit, 0);
 
                 let mut buff = [0u8; 65535];

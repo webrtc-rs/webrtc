@@ -35,7 +35,7 @@ async fn test_bridge_normal() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_bridge_drop_1st_packet_from_conn0() -> Result<()> {
+async fn test_bridge_drop_first_packet_from_conn0() -> Result<()> {
     let (br, conn0, conn1) = Bridge::new(0, None, None);
 
     let n = conn0.send(&MSG1).await?;
@@ -62,7 +62,7 @@ async fn test_bridge_drop_1st_packet_from_conn0() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_bridge_drop_2nd_packet_from_conn0() -> Result<()> {
+async fn test_bridge_drop_second_packet_from_conn0() -> Result<()> {
     let (br, conn0, conn1) = Bridge::new(0, None, None);
 
     let n = conn0.send(&MSG1).await?;
@@ -89,7 +89,7 @@ async fn test_bridge_drop_2nd_packet_from_conn0() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_bridge_drop_1st_packet_from_conn1() -> Result<()> {
+async fn test_bridge_drop_first_packet_from_conn1() -> Result<()> {
     let (br, conn0, conn1) = Bridge::new(0, None, None);
 
     let n = conn1.send(&MSG1).await?;
@@ -116,7 +116,7 @@ async fn test_bridge_drop_1st_packet_from_conn1() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_bridge_drop_2nd_packet_from_conn1() -> Result<()> {
+async fn test_bridge_drop_second_packet_from_conn1() -> Result<()> {
     let (br, conn0, conn1) = Bridge::new(0, None, None);
 
     let n = conn1.send(&MSG1).await?;

@@ -235,7 +235,7 @@ impl Chunk for ChunkInit {
         // to be 0, the receiver MUST treat it as an error and close the
         // association by transmitting an ABORT.
         if self.initiate_tag == 0 {
-            return Err(Error::ErrChunkTypeInitInitateTagZero);
+            return Err(Error::ErrChunkTypeInitInitiateTagZero);
         }
 
         // Defines the maximum number of streams the sender of this INIT

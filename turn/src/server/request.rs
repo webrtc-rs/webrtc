@@ -432,7 +432,7 @@ impl Request {
                 random_port = match self.allocation_manager.get_random_even_port().await {
                     Ok(port) => port,
                     Err(err) => {
-                        let insufficent_capacity_msg = build_msg(
+                        let insufficient_capacity_msg = build_msg(
                             m.transaction_id,
                             MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
                             vec![Box::new(ErrorCodeAttribute {
@@ -443,7 +443,7 @@ impl Request {
                         return build_and_send_err(
                             &self.conn,
                             self.src_addr,
-                            insufficent_capacity_msg,
+                            insufficient_capacity_msg,
                             err,
                         )
                         .await;
@@ -480,7 +480,7 @@ impl Request {
         {
             Ok(a) => a,
             Err(err) => {
-                let insufficent_capacity_msg = build_msg(
+                let insufficient_capacity_msg = build_msg(
                     m.transaction_id,
                     MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
                     vec![Box::new(ErrorCodeAttribute {
@@ -491,7 +491,7 @@ impl Request {
                 return build_and_send_err(
                     &self.conn,
                     self.src_addr,
-                    insufficent_capacity_msg,
+                    insufficient_capacity_msg,
                     err,
                 )
                 .await;

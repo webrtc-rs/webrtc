@@ -46,7 +46,7 @@ mod inbound {
         /// been derived yet, or if it wasn't possible to derive it.
         remote_round_trip_time: Option<f64>,
 
-        /// The cummulative total round trip times reported in ms.
+        /// The cumulative total round trip times reported in ms.
         remote_total_round_trip_time: f64,
 
         /// The total number of measurements of the remote round trip time.
@@ -123,7 +123,7 @@ mod inbound {
         /// been derived yet, or if it wasn't possible to derive it.
         remote_round_trip_time: Option<f64>,
 
-        /// The cummulative total round trip times reported in ms.
+        /// The cumulative total round trip times reported in ms.
         remote_total_round_trip_time: f64,
 
         /// The total number of measurements of the remote round trip time.
@@ -240,7 +240,7 @@ mod outbound {
         /// been derived yet, or if it wasn't possible to derive it.
         remote_round_trip_time: Option<f64>,
 
-        /// The cummulative total round trip times reported in ms.
+        /// The cumulative total round trip times reported in ms.
         remote_total_round_trip_time: f64,
 
         /// The total number of measurements of the remote round trip time.
@@ -355,7 +355,7 @@ mod outbound {
         /// The most recent remote round trip time in milliseconds.
         remote_round_trip_time: Option<f64>,
 
-        /// The cummulative total round trip times reported in ms.
+        /// The cumulative total round trip times reported in ms.
         remote_total_round_trip_time: f64,
 
         /// The total number of measurements of the remote round trip time.
@@ -496,7 +496,7 @@ pub struct RTPStats {
     /// Header bytes sent or received
     header_bytes: u64,
 
-    /// A wall clock timestamp for when the last packet was sent or recieved encoded as milliseconds since
+    /// A wall clock timestamp for when the last packet was sent or received encoded as milliseconds since
     /// [`SystemTime::UNIX_EPOCH`].
     last_packet_timestamp: Option<SystemTime>,
 }
@@ -528,13 +528,13 @@ impl RTPStats {
 
 #[derive(Debug, Default, Clone)]
 pub struct RTCPStats {
-    /// The number of FIRs sent or recevied
+    /// The number of FIRs sent or received
     fir_count: u64,
 
-    /// The number of PLIs sent or recevied
+    /// The number of PLIs sent or received
     pli_count: u64,
 
-    /// The number of NACKs sent or recevied
+    /// The number of NACKs sent or received
     nack_count: u64,
 }
 

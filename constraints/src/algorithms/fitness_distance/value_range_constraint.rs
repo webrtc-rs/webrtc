@@ -142,7 +142,7 @@ impl_value_range_constraint!(setting: i64, constraint: u64);
 impl_value_range_constraint!(setting: i64, constraint: f64);
 impl_value_range_constraint!(setting: f64, constraint: u64);
 
-// Specialized implementations for non-boolean value constraints of mis-matching,
+// Specialized implementations for non-boolean value constraints of mismatching,
 // and thus ignored setting types:
 macro_rules! impl_ignored_value_range_constraint {
     (settings: [$($s:ty),+], constraint: $c:ty) => {

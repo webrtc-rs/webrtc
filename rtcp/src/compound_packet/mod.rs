@@ -20,7 +20,7 @@ type Result<T> = std::result::Result<T, util::Error>;
 /// A CompoundPacket is a collection of RTCP packets transmitted as a single packet with
 /// the underlying protocol (for example UDP).
 ///
-/// To maximize the resolution of receiption statistics, the first Packet in a CompoundPacket
+/// To maximize the resolution of reception statistics, the first Packet in a CompoundPacket
 /// must always be either a SenderReport or a ReceiverReport.  This is true even if no data
 /// has been sent or received, in which case an empty ReceiverReport must be sent, and even
 /// if the only other RTCP packet in the compound packet is a Goodbye.

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// SDPSemantics determines which style of SDP offers and answers
 /// can be used.
 ///
-/// This is unsused, we only support UnifiedPlan.
+/// This is unused, we only support UnifiedPlan.
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCSdpSemantics {
     Unspecified = 0,

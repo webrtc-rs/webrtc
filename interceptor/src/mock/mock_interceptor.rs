@@ -43,7 +43,7 @@ pub type UnbindRemoteStreamFn =
 pub type CloseFn =
     Box<dyn (Fn() -> Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>) + Send + Sync>;
 
-/// MockInterceptor is an mock Interceptor fot testing.
+/// MockInterceptor is an mock Interceptor for testing.
 #[derive(Default)]
 pub struct MockInterceptor {
     pub bind_rtcp_reader_fn: Option<BindRtcpReaderFn>,

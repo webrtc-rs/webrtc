@@ -1,11 +1,11 @@
 //! # What are these tests?
 //!
-//! These tests ensure that regressions in the unmarshaling code are caught.
+//! These tests ensure that regressions in the unmarshalling code are caught.
 //!
 //! They check all artifacts of the fuzzer that crashed this lib, and make sure they no longer crash the library.
 //!
-//! The content of the files is mostly garbage, but it triggers "intersting" behaviour in the unmarshaling code.
-//! So if your change fails one of these tests you probably made an error somwhere.
+//! The content of the files is mostly garbage, but it triggers "interesting" behaviour in the unmarshalling code.
+//! So if your change fails one of these tests you probably made an error somewhere.
 //!
 //! Sadly these tests cannot really tell you where your error is specifically outside the standard backtrace rust will provide to you. Sorry.
 

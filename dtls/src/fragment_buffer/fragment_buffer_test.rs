@@ -78,7 +78,7 @@ fn test_fragment_buffer() -> Result<()> {
             0,
         ),
         (
-            "Multiple Handshakes in Signle Fragment",
+            "Multiple Handshakes in Single Fragment",
             vec![vec![
                 0x16, 0xfe, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
                 0x30, /* record header */
