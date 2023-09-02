@@ -9,8 +9,6 @@ additionals = "additionals"
 stap = "stap"
 # MIS value
 mis = "mis"
-# alls is short for allocs. TODO: maybe just make it allocs?
-alls = "alls"
 # datas is used a lot for plural.
 datas = "datas"
 # 2nd for second
