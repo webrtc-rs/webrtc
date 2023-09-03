@@ -160,7 +160,7 @@ impl_numeric_value_constraint!(setting: i64, constraint: u64);
 impl_numeric_value_constraint!(setting: i64, constraint: f64);
 impl_numeric_value_constraint!(setting: f64, constraint: u64);
 
-// Specialized implementations for boolean value constraints of mis-matching
+// Specialized implementations for boolean value constraints of mismatching
 // and thus either "existence"-checked or ignored setting types:
 macro_rules! impl_exists_value_constraint {
     (settings: [$($s:ty),+], constraint: bool) => {

@@ -586,7 +586,7 @@ impl<T: RelayConnObserver + Send + Sync> PeriodicTimerTimeoutHandler for RelayCo
             TimerIdRefresh::Alloc => {
                 let lifetime = self.lifetime;
                 // limit the max retries on errTryAgain to 3
-                // when stale nonce returns, sencond retry should succeed
+                // when stale nonce returns, second retry should succeed
                 let mut result = Ok(());
                 for _ in 0..MAX_RETRY_ATTEMPTS {
                     result = self.refresh_allocation(lifetime, false).await;

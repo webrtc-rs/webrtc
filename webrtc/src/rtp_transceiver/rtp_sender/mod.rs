@@ -106,7 +106,7 @@ pub struct RTCRtpSender {
     /// The id of the initial track, even if we later change to a different
     /// track id should be use when negotiating.
     pub(crate) initial_track_id: std::sync::Mutex<Option<String>>,
-    /// AssociatedMediaStreamIds from the WebRTC specifcations
+    /// AssociatedMediaStreamIds from the WebRTC specifications
     pub(crate) associated_media_stream_ids: std::sync::Mutex<Vec<String>>,
 
     rtp_transceiver: SyncMutex<Option<Weak<RTCRtpTransceiver>>>,

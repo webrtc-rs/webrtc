@@ -279,8 +279,8 @@ impl Allocation {
                 tokio::select! {
                     _ = &mut timer => {
                         if let Some(allocs) = &allocations{
-                            let mut alls = allocs.lock().await;
-                            if let Some(a) = alls.remove(&five_tuple) {
+                            let mut allocs = allocs.lock().await;
+                            if let Some(a) = allocs.remove(&five_tuple) {
                                 let _ = a.close().await;
                             }
                         }
@@ -355,8 +355,8 @@ impl Allocation {
                             Ok((n, src_addr)) => (n, src_addr),
                             Err(_) => {
                                 if let Some(allocs) = &allocations {
-                                    let mut alls = allocs.lock().await;
-                                    alls.remove(&five_tuple);
+                                    let mut allocs = allocs.lock().await;
+                                    allocs.remove(&five_tuple);
                                 }
                                 break;
                             }

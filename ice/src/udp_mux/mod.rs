@@ -77,7 +77,7 @@ pub struct UDPMuxDefault {
     // Close sender
     closed_watch_tx: Mutex<Option<watch::Sender<()>>>,
 
-    /// Close reciever
+    /// Close receiver
     closed_watch_rx: watch::Receiver<()>,
 }
 
@@ -183,7 +183,7 @@ impl UDPMuxDefault {
 
                                 let conn = match conn {
                                     // If we couldn't find the connection based on source address, see if
-                                    // this is a STUN mesage and if so if we can find the connection based on ufrag.
+                                    // this is a STUN message and if so if we can find the connection based on ufrag.
                                     None if is_stun_message(&buffer) => {
                                         loop_self.conn_from_stun_message(&buffer, &addr).await
                                     }

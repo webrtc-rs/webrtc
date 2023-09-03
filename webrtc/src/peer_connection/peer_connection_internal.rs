@@ -772,7 +772,7 @@ impl PeerConnectionInternal {
                                 ..Default::default()
                             });
                         } else {
-                            return Err(Error::ErrPeerConnTranscieverMidNil);
+                            return Err(Error::ErrPeerConnTransceiverMidNil);
                         }
                     }
                 }

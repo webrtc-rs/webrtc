@@ -99,7 +99,7 @@ pub(crate) const MEDIA_SECTION_APPLICATION: &str = "application";
 
 const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-/// math_rand_alpha generates a mathmatical random alphabet sequence of the requested length.
+/// math_rand_alpha generates a mathematical random alphabet sequence of the requested length.
 pub fn math_rand_alpha(n: usize) -> String {
     let mut rng = thread_rng();
 
@@ -1327,7 +1327,7 @@ impl RTCPeerConnection {
             return Err(Error::ErrConnectionClosed);
         }
 
-        let is_renegotation = {
+        let is_renegotiation = {
             let current_remote_description = self.internal.current_remote_description.lock().await;
             current_remote_description.is_some()
         };
@@ -1491,7 +1491,7 @@ impl RTCPeerConnection {
 
             let (remote_ufrag, remote_pwd, candidates) = extract_ice_details(parsed).await?;
 
-            if is_renegotation
+            if is_renegotiation
                 && self
                     .internal
                     .ice_transport
@@ -1516,7 +1516,7 @@ impl RTCPeerConnection {
                     .await?;
             }
 
-            if is_renegotation {
+            if is_renegotiation {
                 if we_offer {
                     self.start_rtp_senders().await?;
 

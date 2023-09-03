@@ -336,7 +336,7 @@ impl Flight for Flight5 {
         }
 
         if let Err((alert, err)) =
-            initalize_cipher_suite(state, cache, cfg, &server_key_exchange, &merged).await
+            initialize_cipher_suite(state, cache, cfg, &server_key_exchange, &merged).await
         {
             return Err((alert, err));
         }
@@ -599,7 +599,7 @@ impl Flight for Flight5 {
         Ok(pkts)
     }
 }
-async fn initalize_cipher_suite(
+async fn initialize_cipher_suite(
     state: &mut State,
     cache: &HandshakeCache,
     cfg: &HandshakeConfig,

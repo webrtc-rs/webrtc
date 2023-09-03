@@ -448,13 +448,13 @@ pub struct InboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCReceivedRtpStreamStats
     pub packets_received: u64,
     // TODO: packetsLost
-    // TOOD: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
+    // TODO: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
     // NB: `framesDropped` can't be produced since we aren't decoding, might be worth introducing a
     // way for consumers to control this in the future.
 
@@ -495,7 +495,7 @@ pub struct OutboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCSentRtpStreamStats
@@ -538,13 +538,13 @@ pub struct RemoteInboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCReceivedRtpStreamStats
     pub packets_received: u64,
     pub packets_lost: i64,
-    // TOOD: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
+    // TODO: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
     // NB: `framesDropped` can't be produced since we aren't decoding, might be worth introducing a
     // way for consumers to control this in the future.
 
@@ -569,7 +569,7 @@ pub struct RemoteOutboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCSentRtpStreamStats

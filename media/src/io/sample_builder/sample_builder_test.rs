@@ -801,7 +801,7 @@ pub fn test_sample_builder() {
                     ..Default::default()
                 },
                 Packet {
-                    // Eigth packet
+                    // Eighth packet
                     header: Header {
                         sequence_number: 5017,
                         timestamp: 7001,

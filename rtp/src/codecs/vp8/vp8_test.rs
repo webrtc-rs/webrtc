@@ -175,7 +175,7 @@ fn test_vp8_payload() -> Result<()> {
 }
 
 #[test]
-fn test_vp8_payload_eror() -> Result<()> {
+fn test_vp8_payload_error() -> Result<()> {
     let mut pck = Vp8Payloader::default();
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);

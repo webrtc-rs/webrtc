@@ -68,14 +68,14 @@ enum StatsUpdate {
     /// An extended sequence number sent in an SR.
     OutboundSRExtSeqNum { seq_num: u32 },
     /// Stats collected from received Receiver Reports i.e. where we have an outbound RTP stream.
-    InboundRecieverReport {
+    InboundReceiverReport {
         ext_seq_num: u32,
         total_lost: u32,
         jitter: u32,
         rtt_ms: Option<f64>,
         fraction_lost: u8,
     },
-    /// Stats collected from recieved Sender Reports i.e. where we have an inbound RTP stream.
+    /// Stats collected from received Sender Reports i.e. where we have an inbound RTP stream.
     InboundSenderRerport {
         packets_and_bytes_sent: Option<(u32, u32)>,
         rtt_ms: Option<f64>,
@@ -262,7 +262,7 @@ fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: Stats
             stats.record_sr_ext_seq_num(seq_num);
             stats.mark_updated();
         }
-        StatsUpdate::InboundRecieverReport {
+        StatsUpdate::InboundReceiverReport {
             ext_seq_num,
             total_lost,
             jitter,
@@ -565,7 +565,7 @@ where
             let futures = receiver_reports.into_iter().map(|rr| {
                 self.tx.send(Message::StatUpdate {
                     ssrc,
-                    update: StatsUpdate::InboundRecieverReport {
+                    update: StatsUpdate::InboundReceiverReport {
                         ext_seq_num: rr.ext_seq_num,
                         total_lost: rr.total_lost,
                         jitter: rr.jitter,
@@ -1183,7 +1183,7 @@ mod test {
         assert_eq!(recv_snapshot.remote_bytes_sent(), 10351);
         let rtt_ms = recv_snapshot
             .remote_round_trip_time()
-            .expect("After reciving SR and DLRR we should have a round trip time ");
+            .expect("After receiving SR and DLRR we should have a round trip time ");
         assert_feq!(rtt_ms, 6125.0);
         assert_eq!(recv_snapshot.remote_reports_sent(), 2);
         assert_eq!(recv_snapshot.remote_round_trip_time_measurements(), 1);

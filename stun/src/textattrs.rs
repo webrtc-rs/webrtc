@@ -78,7 +78,7 @@ impl TextAttribute {
         TextAttribute { attr, text }
     }
 
-    // get_from_as gets t attribute from m and appends its value to reseted v.
+    // get_from_as gets t attribute from m and appends its value to reset v.
     pub fn get_from_as(m: &Message, attr: AttrType) -> Result<Self> {
         match attr {
             ATTR_USERNAME => {}

@@ -201,7 +201,7 @@ impl RTPReceiverInternal {
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut state_watch_rx = self.state_tx.subscribe();
 
-        // Ensure we are running or paused. When paused we still recevie RTCP even if RTP traffic
+        // Ensure we are running or paused. When paused we still receive RTCP even if RTP traffic
         // isn't flowing.
         State::wait_for(&mut state_watch_rx, &[State::Started, State::Paused]).await?;
 

@@ -55,7 +55,7 @@ const MAX_READ_QUEUE_SIZE: usize = 1024;
 /// ClientConfig is a bag of config parameters for Client.
 pub struct ClientConfig {
     pub stun_serv_addr: String, // STUN server address (e.g. "stun.abc.com:3478")
-    pub turn_serv_addr: String, // TURN server addrees (e.g. "turn.abc.com:3478")
+    pub turn_serv_addr: String, // TURN server address (e.g. "turn.abc.com:3478")
     pub username: String,
     pub password: String,
     pub realm: String,

@@ -243,7 +243,7 @@ static TEST_CHUNK_RECONFIG_PARAM_B: Bytes = Bytes::from_static(&[
     0x0, 0xd, 0x0, 0x10, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x3,
 ]);
 
-static TEST_CHUNK_RECONFIG_RESPONCE: Bytes =
+static TEST_CHUNK_RECONFIG_RESPONSE: Bytes =
     Bytes::from_static(&[0x0, 0x10, 0x0, 0xc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1]);
 
 lazy_static! {
@@ -264,7 +264,7 @@ lazy_static! {
         {
             let mut test = BytesMut::new();
             test.extend(vec![0x82, 0x0, 0x0, 0x10]);
-            test.extend(TEST_CHUNK_RECONFIG_RESPONCE.clone());
+            test.extend(TEST_CHUNK_RECONFIG_RESPONSE.clone());
             tests.push(test.freeze());
         }
         {

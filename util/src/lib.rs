@@ -34,7 +34,7 @@ pub trait KeyingMaterialExporter {
 /// Possible errors while exporting keying material.
 ///
 /// These errors might have been more logically kept in the dtls
-/// crate, but that would have required a direct depdency between
+/// crate, but that would have required a direct dependency between
 /// srtp and dtls.
 #[derive(Debug, Error, PartialEq)]
 #[non_exhaustive]

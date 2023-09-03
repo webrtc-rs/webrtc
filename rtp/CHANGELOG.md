@@ -12,7 +12,7 @@
 
 ## v0.6.7
 
-* Bumped util dependecy to `0.6.0`.
+* Bumped util dependency to `0.6.0`.
 
 ## Prior to 0.6.7
 

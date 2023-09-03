@@ -353,7 +353,7 @@ impl MediaEngine {
     ///
     /// The `allowed_direction` controls for which transceiver directions the extension matches. If
     /// set to `None` it matches all directions. The `SendRecv` direction would match all transceiver
-    /// directions apart from `Inactive`. Inactive ony matches inactive.
+    /// directions apart from `Inactive`. Inactive only matches inactive.
     pub fn register_header_extension(
         &mut self,
         extension: RTCRtpHeaderExtensionCapability,

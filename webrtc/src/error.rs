@@ -259,7 +259,7 @@ pub enum Error {
     #[error("ICEAgent does not exist")]
     ErrICEAgentNotExist,
     #[error("unable to convert ICE candidates to ICECandidates")]
-    ErrICECandiatesCoversionFailed,
+    ErrICECandidatesConversionFailed,
     #[error("unknown ICE Role")]
     ErrICERoleUnknown,
     #[error("unknown protocol")]
@@ -309,7 +309,7 @@ pub enum Error {
     #[error("write_rtcp failed to open write_stream")]
     ErrPeerConnWriteRTCPOpenWriteStream,
     #[error("cannot find transceiver with mid")]
-    ErrPeerConnTranscieverMidNil,
+    ErrPeerConnTransceiverMidNil,
     #[error("DTLSTransport must not be nil")]
     ErrRTPReceiverDTLSTransportNil,
     #[error("Receive has already been called")]

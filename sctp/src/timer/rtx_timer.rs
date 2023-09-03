@@ -94,7 +94,7 @@ pub(crate) fn calculate_next_timeout(rto: u64, n_rtos: usize) -> u64 {
     }
 }
 
-/// rtxTimerObserver is the inteface to a timer observer.
+/// rtxTimerObserver is the interface to a timer observer.
 /// NOTE: Observers MUST NOT call start() or stop() method on rtxTimer
 /// from within these callbacks.
 #[async_trait]

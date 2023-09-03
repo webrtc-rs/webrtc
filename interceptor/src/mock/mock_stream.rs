@@ -209,7 +209,7 @@ impl MockStream {
         rtp_in_modified_rx.recv().await
     }
 
-    /// cose closes the stream and the underlying interceptor
+    /// close closes the stream and the underlying interceptor
     pub async fn close(&self) -> Result<()> {
         {
             let mut rtcp_in_tx = self.rtcp_in_tx.lock().await;

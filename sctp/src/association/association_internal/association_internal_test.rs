@@ -151,7 +151,7 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
                 assert_eq!(1, s.sequence, "ssn should be 1");
                 si2ok = true;
             }
-            _ => panic!("unexpected stream indentifier"),
+            _ => panic!("unexpected stream identifier"),
         }
     }
     assert!(si1ok, "si=1 should be present");

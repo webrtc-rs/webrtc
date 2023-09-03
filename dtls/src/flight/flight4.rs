@@ -269,7 +269,7 @@ impl Flight for Flight4 {
             state.peer_certificates_verified = verified
         } else if !state.peer_certificates.is_empty() {
             // A certificate was received, but we haven't seen a CertificateVerify
-            // keep reading until we receieve one
+            // keep reading until we receive one
             return Err((None, None));
         }
 

@@ -17,7 +17,7 @@ use crate::rtp_transceiver::SSRC;
 /// `RTP` packet sequence number manager.
 ///
 /// Used to override outgoing `RTP` packets' sequence numbers. On creating it is
-/// unabled and can be enabled before sending data begining. Once data sending
+/// unabled and can be enabled before sending data beginning. Once data sending
 /// began it can not be enabled any more.
 pub(crate) struct SequenceTransformer(util::sync::Mutex<SequenceTransformerInner>);
 

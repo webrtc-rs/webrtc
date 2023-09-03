@@ -309,7 +309,7 @@ unsafe fn local_ifaces_with_buffer(buffer: &mut Vec<u8>) -> io::Result<()> {
         )),
         _ => Err(io::Error::new(
             io::ErrorKind::Other,
-            "Some Other Error Occured.",
+            "Some Other Error Occurred.",
         )),
     }
 }

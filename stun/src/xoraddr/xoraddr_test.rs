@@ -242,7 +242,7 @@ fn test_xormapped_address_string() -> Result<()> {
         assert_eq!(
             addr.to_string(),
             ip,
-            " XORMappesAddres.String() {addr} (got) != {ip} (expected)",
+            " XORMappesAddress.String() {addr} (got) != {ip} (expected)",
         );
     }
 

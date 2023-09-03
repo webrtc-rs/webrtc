@@ -74,7 +74,7 @@ async fn main() -> Result<(), Error> {
     let stream = a.open_stream(0, PayloadProtocolIdentifier::String).await?;
     println!("opened a stream");
 
-    // set unordered = true and 10ms treshold for dropping packets
+    // set unordered = true and 10ms threshold for dropping packets
     stream.set_reliability_params(true, ReliabilityType::Timed, 10);
 
     let stream_tx = Arc::clone(&stream);

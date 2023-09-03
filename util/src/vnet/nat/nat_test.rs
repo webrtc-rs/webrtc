@@ -166,7 +166,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<()> {
     let result = nat.translate_inbound(&iec).await;
     assert!(result.is_ok(), "should succeed");
 
-    // packet from different addr will be droped (restricted-cone)
+    // packet from different addr will be dropped (restricted-cone)
     let iec = ChunkUdp::new(
         SocketAddr::from_str(&format!("{}:{}", "6.6.6.6", dst.port()))?,
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
@@ -245,7 +245,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<()> {
     let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should fail (dropped)");
 
-    // packet from different addr will be droped (restricted-cone)
+    // packet from different addr will be dropped (restricted-cone)
     let iec = ChunkUdp::new(
         SocketAddr::from_str(&format!("{}:{}", "6.6.6.6", dst.port()))?,
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
@@ -471,7 +471,7 @@ async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_nat1to1_bahavior_one_mapping() -> Result<()> {
+async fn test_nat1to1_behavior_one_mapping() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mode: NatMode::Nat1To1,
@@ -517,7 +517,7 @@ async fn test_nat1to1_bahavior_one_mapping() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_nat1to1_bahavior_more_mapping() -> Result<()> {
+async fn test_nat1to1_behavior_more_mapping() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mode: NatMode::Nat1To1,
@@ -584,7 +584,7 @@ async fn test_nat1to1_bahavior_more_mapping() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_nat1to1_bahavior_failure() -> Result<()> {
+async fn test_nat1to1_behavior_failure() -> Result<()> {
     // 1:1 NAT requires more than one mapping
     let result = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {

@@ -107,7 +107,7 @@ where
     // # Important
     // Instead of return just ONE settings instance "with the smallest fitness distance, as calculated in step 3"
     // we instead return ALL settings instances "with the smallest fitness distance, as calculated in step 3"
-    // and leave tie-breaking to the User Agent in a seperate step:
+    // and leave tie-breaking to the User Agent in a separate step:
     Ok(select_optimal_candidates(candidates))
 }
 
