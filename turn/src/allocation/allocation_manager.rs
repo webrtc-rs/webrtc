@@ -87,6 +87,7 @@ impl Manager {
         requested_port: u16,
         lifetime: Duration,
         username: Username,
+        use_ipv4: bool,
     ) -> Result<Arc<Allocation>> {
         if lifetime == Duration::from_secs(0) {
             return Err(Error::ErrLifetimeZero);
@@ -98,7 +99,7 @@ impl Manager {
 
         let (relay_socket, relay_addr) = self
             .relay_addr_generator
-            .allocate_conn(true, requested_port)
+            .allocate_conn(use_ipv4, requested_port)
             .await?;
         let mut a = Allocation::new(
             turn_socket,

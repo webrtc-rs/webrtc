@@ -92,6 +92,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
             0,
             Duration::from_secs(3600),
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
     assert!(r
