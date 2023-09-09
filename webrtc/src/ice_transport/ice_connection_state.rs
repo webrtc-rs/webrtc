@@ -85,13 +85,13 @@ impl From<&str> for RTCIceConnectionState {
 impl From<u8> for RTCIceConnectionState {
     fn from(v: u8) -> Self {
         match v {
-            1 => RTCIceConnectionState::New,
-            2 => RTCIceConnectionState::Checking,
-            3 => RTCIceConnectionState::Connected,
-            4 => RTCIceConnectionState::Completed,
-            5 => RTCIceConnectionState::Disconnected,
-            6 => RTCIceConnectionState::Failed,
-            7 => RTCIceConnectionState::Closed,
+            1 => RTCIceConnectionState::Closed,
+            2 => RTCIceConnectionState::Failed,
+            3 => RTCIceConnectionState::Disconnected,
+            4 => RTCIceConnectionState::New,
+            5 => RTCIceConnectionState::Checking,
+            6 => RTCIceConnectionState::Completed,
+            7 => RTCIceConnectionState::Connected,
             _ => RTCIceConnectionState::Unspecified,
         }
     }
