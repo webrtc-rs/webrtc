@@ -12,7 +12,7 @@
 //! [WebRTC for the Curious](https://webrtcforthecurious.com/) book is a free
 //! resource that provides a great introduction to the topic.
 //!
-//! ## Features
+//! # Features
 //!
 //! - Connections to remote peers using NAT-traversal technologies (STUN, TURN, and ICE)
 //! - Streaming of audio and video media via RTP and RTCP
@@ -22,7 +22,7 @@
 //! - Support for Multicast DNS (mDNS)
 //! - Interceptors for RTP, RTCP, and DataChannel packets
 //!
-//! ## Key Concepts
+//! # Key Concepts
 //!
 //! The WebRTC API, as defined by the W3C specification, is composed of a number of
 //! constructs and interfaces that provide a rich set of functionality, including
@@ -36,7 +36,7 @@
 //! The following section provides a brief overview of the key concepts and constructs
 //! that are used throughout the WebRTC API.
 //!
-//! ### RTCConfiguration
+//! ### Configuration
 //!
 //! The [`RTCConfiguration`] struct defines the set of parameters that are used to configure
 //! how peer-to-peer communication via [`RTCPeerConnection`] is established or re-established.
@@ -46,7 +46,7 @@
 //! Configurations may be reused across multiple [`RTCPeerConnection`]s, and are treated as read-only
 //! once constructed.
 //!
-//! ### RTCPeerConnection
+//! ### Peer Connections
 //!
 //! The [`RTCPeerConnection`] is the primary entry point to the WebRTC API. It represents an
 //! individual connection between a local device and a remote peer.
@@ -66,7 +66,7 @@
 //! passing a FnMut closure that accepts the corresponding enum type and returns a
 //! `Pin<Box<dyn Future<Output = ()> + Send + 'static>` future to be awaited.
 //!
-//! #### Sync vs. Async
+//! ### Event Handling
 //!
 //! For clarity, the event handler methods run synchronously and accept a (synchronous) closure
 //! that returns a future. Any async work that you need to do as part of an event handler should
@@ -80,7 +80,7 @@
 //!
 //! **This will be a common source of confusion for new users of the crate.**
 //!
-//! #### Session Descriptions
+//! ### Session Descriptions
 //!
 //! In the WebRTC protocol, session descriptions serve as the mechanism for exchanging
 //! information about media capabilities, network addresses, and other metadata between
@@ -95,7 +95,7 @@
 //! ([Session Description Protocol](https://en.wikipedia.org/wiki/Session_Description_Protocol))
 //! documents.
 //!
-//! #### Signaling
+//! ### Signaling
 //!
 //! In order to establish a connection, both peers must exchange their session descriptions
 //! with each other. The process of exchanging of session descriptions between peers is
@@ -136,6 +136,25 @@
 //! As signaling is an application-specific concern, this crate does not provide any
 //! built-in signaling functionality or guidance on how to implement.
 //!
+//! ### ICE Agent
+//!
+//! The [`Agent`](ice::agent::Agent) struct implements the ICE ([Interactive Connectivity Establishment](https://en.wikipedia.org/wiki/Interactive_Connectivity_Establishment))
+//! protocol, which is used to gather local ICE candidates, as well as manage the state of the
+//! ICE transport for a given peer connection.
+//!
+//! ICE agent's configuration parameters are defined by the [`RTCConfiguration`] struct.
+//!
+//! Certain [`RTCPeerConnection`] methods interact with the ICE agent, including:
+//!
+//! - [`add_ice_candidate()`](crate::peer_connection::RTCPeerConnection::add_ice_candidate)
+//! - [`set_local_description()`](crate::peer_connection::RTCPeerConnection::set_local_description)
+//! - [`set_remote_description()`](crate::peer_connection::RTCPeerConnection::set_remote_description)
+//! - [`close()`](crate::peer_connection::RTCPeerConnection::close)
+//!
+//! These interactions are described in [RFC8829](https://tools.ietf.org/html/rfc8829). The ICE
+//! agency also provides indications when the state of an ICE transport changes via the event
+//! handler methods that are available within [`RTCPeerConnection`].
+//!
 //! ### MediaStream
 //!
 //! ### DataChannel
@@ -144,18 +163,18 @@
 //!
 //! ### RTCSessionDescription
 //!
-//! ## Examples
+//! # Examples
 //!
 //! The `examples/` directory contains a range of examples, from basic peer connections to
 //! advanced data channel usage.
 //!
-//! ## Compatibility
+//! # Compatibility
 //!
 //! This crate aims to stay up-to-date with the latest W3C WebRTC specification. However,
 //! as WebRTC is a rapidly evolving standard, there might be minor discrepancies. Always
 //! refer to the official W3C WebRTC specification for authoritative information.
 //!
-//! ## License
+//! # License
 //!
 //! This project is licensed under either of the following, at your option:
 //! - [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
