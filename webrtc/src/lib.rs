@@ -41,13 +41,42 @@
 //! This includes the set of ICE servers to use, the ICE transport policy, the bundle policy,
 //! the RTCP mux policy, the peer identity, and the set of certificates to use.
 //!
-//! Configurations may be reused across multiple connections, and are treated as read-only
+//! Configurations may be reused across multiple [`RTCPeerConnection`]s, and are treated as read-only
 //! once constructed.
 //!
 //! ### RTCPeerConnection
 //!
 //! The [`RTCPeerConnection`] is the primary entry point to the WebRTC API. It represents an
 //! individual connection between a local device and a remote peer.
+//!
+//! #### State Machine
+//!
+//! Each [`RTCPeerConnection`] tracks four distinct states as part of its state machine:
+//!
+//! | State Machine | Getter Method | Event Handler Method | Enum |
+//! | ------------- | ------------- | -------------------- | ---- |
+//! | Signaling state | [`signaling_state()`](crate::peer_connection::RTCPeerConnection::signaling_state) | [`on_signaling_state_change()`](crate::peer_connection::RTCPeerConnection::on_signaling_state_change) | [`RTCSignalingState`](crate::peer_connection::signaling_state::RTCSignalingState) |
+//! | ICE connection state | [`ice_connection_state()`](crate::peer_connection::RTCPeerConnection::ice_connection_state) | [`on_ice_connection_state_change()`](crate::peer_connection::RTCPeerConnection::on_ice_connection_state_change) | [`RTCIceConnectionState`](crate::ice_transport::ice_connection_state::RTCIceConnectionState) |
+//! | ICE gathering state | [`ice_gathering_state()`](crate::peer_connection::RTCPeerConnection::ice_gathering_state) | [`on_ice_gathering_state_change()`](crate::peer_connection::RTCPeerConnection::on_ice_gathering_state_change) | [`RTCIceGatheringState`](crate::ice_transport::ice_gathering_state::RTCIceGatheringState) |
+//! | Peer connection state | [`connection_state()`](crate::peer_connection::RTCPeerConnection::connection_state) !! | [`on_peer_connection_state_change()`](crate::peer_connection::RTCPeerConnection::on_peer_connection_state_change) | [`RTCPeerConnectionState`](crate::peer_connection::peer_connection_state::RTCPeerConnectionState) |
+//!
+//! You can define event handlers for each of these states using the corresponding `on_*` methods,
+//! passing a FnMut closure that accepts the corresponding enum type and returns a
+//! `Pin<Box<dyn Future<Output = ()> + Send + 'static>` future to be awaited.
+//!
+//! #### Sync vs. Async
+//!
+//! For clarity, the event handler methods run synchronously and accept a (synchronous) closure
+//! that returns a future. Any async work that you need to do as part of an event handler should
+//! be placed in the future that is returned by the closure, as the returned future will be
+//! immediately awaited.
+//!
+//! In fact, all of the event handler methods within this crate are structured in this way.
+//! While it may feel odd to be forced into returning a future from a synchronous method,
+//! it allows for a mix of synchronous and asynchronous work to be done within the handler,
+//! depending on your specific use case.
+//!
+//! **This will be a common source of confusion for new users of the crate.**
 //!
 //! ### MediaStream
 //!
