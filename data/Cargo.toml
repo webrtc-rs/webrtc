@@ -13,15 +13,15 @@ rust-version = "1.63.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "marshal"]  }
-sctp = { version = "0.8.0", path = "../sctp", package = "webrtc-sctp" }
+util = { version = "0.7", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "marshal"]  }
+sctp = { version = "0.8", path = "../sctp", package = "webrtc-sctp" }
 
-tokio = { version = "1.19", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 bytes = "1"
-log = "0.4.16"
-thiserror = "1.0"
+log = "0.4"
+thiserror = "1"
 
 [dev-dependencies]
-tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
-env_logger = "0.9.0"
-chrono = "0.4.23"
+tokio-test = "0.4" # must match the min version of the `tokio` crate above
+env_logger = "0.10"
+chrono = "0.4"
