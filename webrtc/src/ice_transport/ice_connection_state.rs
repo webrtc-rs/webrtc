@@ -1,44 +1,61 @@
 use std::fmt;
 
-/// RTCIceConnectionState indicates signaling state of the ICE Connection.
+/// Indicates the signaling state of the ICE Connection.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceConnectionState {
     #[default]
     Unspecified,
 
-    /// ICEConnectionStateNew indicates that any of the ICETransports are
-    /// in the "new" state and none of them are in the "checking", "disconnected"
-    /// or "failed" state, or all ICETransports are in the "closed" state, or
-    /// there are no transports.
-    New,
+    /// Indicates that the [`RTCPeerConnection`] is closed
+    ///
+    /// [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
+    Closed,
 
-    /// ICEConnectionStateChecking indicates that any of the ICETransports
-    /// are in the "checking" state and none of them are in the "disconnected"
-    /// or "failed" state.
-    Checking,
-
-    /// ICEConnectionStateConnected indicates that all ICETransports are
-    /// in the "connected", "completed" or "closed" state and at least one of
-    /// them is in the "connected" state.
-    Connected,
-
-    /// ICEConnectionStateCompleted indicates that all ICETransports are
-    /// in the "completed" or "closed" state and at least one of them is in the
-    /// "completed" state.
-    Completed,
-
-    /// ICEConnectionStateDisconnected indicates that any of the
-    /// ICETransports are in the "disconnected" state and none of them are
-    /// in the "failed" state.
-    Disconnected,
-
-    /// ICEConnectionStateFailed indicates that any of the ICETransports
-    /// are in the "failed" state.
+    /// Indicates all of the following:
+    /// - the previous state does not apply
+    /// - any of the [`RTCIceTransport`]s are in the `failed` state
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     Failed,
 
-    /// ICEConnectionStateClosed indicates that the PeerConnection's
-    /// isClosed is true.
-    Closed,
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - any of the [`RTCIceTransport`]s are in the `disconnected` state
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    Disconnected,
+
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - all of the [`RTCIceTransport`]s are in the `new` or
+    /// `closed` state, or
+    /// - there are no transports
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    New,
+
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - any of the [`RTCIceTransport`]s are in the `new` or `checking` state
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    Checking,
+
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - all of the [`RTCIceTransport`]s are in the `completed` or
+    /// `closed` state
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    Completed,
+
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - all of the [`RTCIceTransport`]s are in the `connected`, `completed`, or
+    /// `closed` state
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    Connected,
 }
 
 const ICE_CONNECTION_STATE_NEW_STR: &str = "new";
