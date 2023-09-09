@@ -8,7 +8,6 @@ license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-srtp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/srtp"
-rust-version = "1.63.0"
 
 [features]
 openssl = ["dep:openssl"]

@@ -8,9 +8,6 @@ license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-ice"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/ice"
-rust-version = "1.63.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 util = { version = "0.7", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }

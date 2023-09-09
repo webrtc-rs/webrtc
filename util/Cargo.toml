@@ -8,9 +8,6 @@ license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-util"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/util"
-rust-version = "1.63.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 default = ["buffer", "conn", "ifaces", "vnet", "marshal", "sync"]
