@@ -179,9 +179,10 @@ struct NegotiationNeededParams {
     check_negotiation_needed_params: CheckNegotiationNeededParams,
 }
 
-/// PeerConnection represents a WebRTC connection that establishes a
-/// peer-to-peer communications with another PeerConnection instance in a
-/// browser, or to another endpoint implementing the required protocols.
+/// Represents an individual connection between a local device and a remote peer.
+///
+/// A high-level overview of how peer connections work is available in the [crate-level
+/// documentation](crate).
 pub struct RTCPeerConnection {
     stats_id: String,
     idp_login_url: Option<String>,
