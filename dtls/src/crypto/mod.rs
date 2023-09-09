@@ -71,25 +71,25 @@ impl Certificate {
                 pems.len()
             )));
         }
-        if pems[0].tag != "PRIVATE_KEY" {
+        if pems[0].tag() != "PRIVATE_KEY" {
             return Err(Error::InvalidPEM(format!(
                 "invalid tag (expected: 'PRIVATE_KEY', got: '{}')",
-                pems[0].tag
+                pems[0].tag()
             )));
         }
 
-        let keypair = rcgen::KeyPair::from_der(&pems[0].contents)
+        let keypair = rcgen::KeyPair::from_der(pems[0].contents())
             .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {e}")))?;
 
         let mut rustls_certs = Vec::new();
         for p in pems.drain(1..) {
-            if p.tag != "CERTIFICATE" {
+            if p.tag() != "CERTIFICATE" {
                 return Err(Error::InvalidPEM(format!(
                     "invalid tag (expected: 'CERTIFICATE', got: '{}')",
-                    p.tag
+                    p.tag()
                 )));
             }
-            rustls_certs.push(rustls::Certificate(p.contents));
+            rustls_certs.push(rustls::Certificate(p.contents().to_vec()));
         }
 
         Ok(Certificate {
@@ -101,15 +101,15 @@ impl Certificate {
     /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
     #[cfg(feature = "pem")]
     pub fn serialize_pem(&self) -> String {
-        let mut data = vec![pem::Pem {
-            tag: "PRIVATE_KEY".to_string(),
-            contents: self.private_key.serialized_der.clone(),
-        }];
+        let mut data = vec![pem::Pem::new(
+            "PRIVATE_KEY".to_string(),
+            self.private_key.serialized_der.clone(),
+        )];
         for rustls_cert in &self.certificate {
-            data.push(pem::Pem {
-                tag: "CERTIFICATE".to_string(),
-                contents: rustls_cert.0.clone(),
-            });
+            data.push(pem::Pem::new(
+                "CERTIFICATE".to_string(),
+                rustls_cert.0.clone(),
+            ));
         }
         pem::encode_many(&data)
     }

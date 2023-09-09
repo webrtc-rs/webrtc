@@ -13,40 +13,40 @@ repository = "https://github.com/webrtc-rs/dtls"
 util = { version = "0.7", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
 
 byteorder = "1"
-rand_core = "0.6.3"
-hkdf = "~0.12.1"
-p256 = { version = "0.11.1", features = ["default", "ecdh", "ecdsa"] }
-p384 = "0.11.2"
-rand = "0.8.5"
-hmac = "0.12.1"
-sec1 = { version = "0.3.0", features = [ "std" ] }
-sha1 = "0.10.5"
-sha2 = "0.10.6"
+rand_core = "0.6"
+hkdf = "0.12"
+p256 = { version = "0.13", features = ["default", "ecdh", "ecdsa"] }
+p384 = "0.13"
+rand = "0.8"
+hmac = "0.12"
+sec1 = { version = "0.7", features = [ "std" ] }
+sha1 = "0.10"
+sha2 = "0.10"
 aes = "0.6.0"
 block-modes = "0.7.0"
-aes-gcm = "0.10.1"
+aes-gcm = "0.10"
 ccm = "0.3.0"
-tokio = { version = "1.19", features = ["full"] }
-async-trait = "0.1.56"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
-x509-parser = "0.13.2"
+x509-parser = "0.15"
 der-parser = "8.1"
-rcgen = "0.10.0"
+rcgen = "0.11"
 ring = "0.16.19"
 webpki = "0.21.4"
 rustls = { version = "0.19.0", features = ["dangerous_configuration"]}
-bincode = "1.3"
-serde = { version = "1.0.110", features = ["derive"] }
-subtle = "2.4"
-log = "0.4.16"
-thiserror = "1.0"
-pem = { version = "1", optional = true }
+bincode = "1"
+serde = { version = "1", features = ["derive"] }
+subtle = "2"
+log = "0.4"
+thiserror = "1"
+pem = { version = "3", optional = true }
 
 [dev-dependencies]
-tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
-env_logger = "0.9.0"
-chrono = "0.4.23"
-clap = "3.2.6"
+tokio-test = "0.4"
+env_logger = "0.10"
+chrono = "0.4"
+clap = "3"
 hub = {path = "examples/hub"}
 
 [features]
