@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 //! # WebRTC Crate Overview
+//!
 //! The `webrtc` crate provides Rust-based bindings and high-level abstractions
 //! for WebRTC, based on the [W3C specification](https://www.w3.org/TR/webrtc/).
 //! Included is a set of communication protocols and APIs for building real-time
@@ -12,6 +13,7 @@
 //! resource that provides a great introduction to the topic.
 //!
 //! ## Features
+//!
 //! - Connections to remote peers using NAT-traversal technologies (STUN, TURN, and ICE)
 //! - Streaming of audio and video media via RTP and RTCP
 //! - Data channels for high performance, bi-directional communication
@@ -78,6 +80,62 @@
 //!
 //! **This will be a common source of confusion for new users of the crate.**
 //!
+//! #### Session Descriptions
+//!
+//! In the WebRTC protocol, session descriptions serve as the mechanism for exchanging
+//! information about media capabilities, network addresses, and other metadata between
+//! peers. Session descriptions are represented by the [`RTCSessionDescription`] struct.
+//!
+//! Session descriptions are exchanged via an offer/answer model, where one peer sends
+//! an offer to the other peer, and the other peer responds with an answer. Offers and
+//! answers are represented by the [`RTCOfferOptions`] and [`RTCAnswerOptions`] structs,
+//! respectively.
+//!
+//! On the wire, session descriptions are encoded as SDP
+//! ([Session Description Protocol](https://en.wikipedia.org/wiki/Session_Description_Protocol))
+//! documents.
+//!
+//! #### Signaling
+//!
+//! In order to establish a connection, both peers must exchange their session descriptions
+//! with each other. The process of exchanging of session descriptions between peers is
+//! more commonly referred to as the signaling process.
+//!
+//! At a high level, the signaling process looks something like this:
+//!
+//! | Step # | Peer | Action | Method |
+//! | :----: | :--: |--------|--------|
+//! | 1 | Peer A | Creates an offer | [`create_offer()`](crate::peer_connection::RTCPeerConnection::create_offer) |
+//! | 2 | Peer A | Sets the offer as the local description | [`set_local_description()`](crate::peer_connection::RTCPeerConnection::set_local_description) |
+//! | 3 | Peer A | Sends the offer to Peer B via the signaling channel | |
+//! | 4 | Peer B | Receives the offer from the signaling channel | |
+//! | 5 | Peer B | Sets the received offer as the remote description | [`set_remote_description()`](crate::peer_connection::RTCPeerConnection::set_remote_description) |
+//! | 6 | Peer B | Creates an answer | [`create_answer()`](crate::peer_connection::RTCPeerConnection::create_answer) |
+//! | 7 | Peer B | Sets the answer as the local description | [`set_local_description()`](crate::peer_connection::RTCPeerConnection::set_local_description) |
+//! | 8 | Peer B | Sends the answer to Peer A via the signaling channel | |
+//! | 9 | Peer A | Receives the answer from the signaling channel | |
+//! | 10 | Peer A | Sets the received answer as the remote description | [`set_remote_description()`](crate::peer_connection::RTCPeerConnection::set_remote_description) |
+//! | 11 | Both | Are now connected | |
+//!
+//! #### No Automatic Signaling in WebRTC
+//!
+//! **In the WebRTC protocol, the signaling process does not happen automatically.**
+//!
+//! Signaling is outside the scope of the WebRTC specification, and is left up to the
+//! application to implement. In other words, you will have to provide your own signaling
+//! implementation. There is generally no one-size-fits-all solution for signaling, as
+//! it is highly dependent on the specific use case (which may need to consider things
+//! such as user authentication, security, encryption, etc.).
+//!
+//! Common signaling methods include (but may not be limited to):
+//! - WebSockets
+//! - HTTPS (e.g. using a REST API)
+//! - SIP (Session Initiation Protocol)
+//! - XMPP (Extensible Messaging and Presence Protocol)
+//!
+//! As signaling is an application-specific concern, this crate does not provide any
+//! built-in signaling functionality or guidance on how to implement.
+//!
 //! ### MediaStream
 //!
 //! ### DataChannel
@@ -87,21 +145,27 @@
 //! ### RTCSessionDescription
 //!
 //! ## Examples
+//!
 //! The `examples/` directory contains a range of examples, from basic peer connections to
 //! advanced data channel usage.
 //!
 //! ## Compatibility
+//!
 //! This crate aims to stay up-to-date with the latest W3C WebRTC specification. However,
 //! as WebRTC is a rapidly evolving standard, there might be minor discrepancies. Always
 //! refer to the official W3C WebRTC specification for authoritative information.
 //!
 //! ## License
+//!
 //! This project is licensed under either of the following, at your option:
 //! - [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 //! - [MIT License](https://opensource.org/license/mit/)
 //!
 //! [`RTCConfiguration`]: crate::peer_connection::configuration::RTCConfiguration
 //! [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
+//! [`RTCSessionDescription`]: crate::peer_connection::sdp::session_description::RTCSessionDescription
+//! [`RTCOfferOptions`]: crate::peer_connection::offer_answer_options::RTCOfferOptions
+//! [`RTCAnswerOptions`]: crate::peer_connection::offer_answer_options::RTCAnswerOptions
 
 // re-export sub-crates
 pub use {data, dtls, ice, interceptor, mdns, media, rtcp, rtp, sctp, sdp, srtp, stun, turn, util};
