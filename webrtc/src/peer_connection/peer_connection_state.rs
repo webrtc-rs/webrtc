@@ -8,34 +8,56 @@ pub enum RTCPeerConnectionState {
     #[default]
     Unspecified,
 
-    /// PeerConnectionStateNew indicates that any of the ICETransports or
-    /// DTLSTransports are in the "new" state and none of the transports are
-    /// in the "connecting", "checking", "failed" or "disconnected" state, or
-    /// all transports are in the "closed" state, or there are no transports.
-    New,
+    /// Indicates that the [`RTCPeerConnection`] is closed
+    ///
+    /// [`RTCPeerConnection`]: crate::peer_connection::RTCPeerConnection
+    Closed,
 
-    /// PeerConnectionStateConnecting indicates that any of the
-    /// ICETransports or DTLSTransports are in the "connecting" or
-    /// "checking" state and none of them is in the "failed" state.
-    Connecting,
-
-    /// PeerConnectionStateConnected indicates that all ICETransports and
-    /// DTLSTransports are in the "connected", "completed" or "closed" state
-    /// and at least one of them is in the "connected" or "completed" state.
-    Connected,
-
-    /// PeerConnectionStateDisconnected indicates that any of the
-    /// ICETransports or DTLSTransports are in the "disconnected" state
-    /// and none of them are in the "failed" or "connecting" or "checking" state.
-    Disconnected,
-
-    /// PeerConnectionStateFailed indicates that any of the ICETransports
-    /// or DTLSTransports are in a "failed" state.
+    /// Indicates all of the following:
+    /// - the previous state does not apply
+    /// - any of the [`RTCIceTransport`]s or [`RTCDtlsTransport`]s
+    /// are in a `failed` state
+    ///
+    /// [`RTCDtlsTransport`]: crate::dtls_transport::RTCDtlsTransport
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     Failed,
 
-    /// PeerConnectionStateClosed indicates the peer connection is closed
-    /// and the isClosed member variable of PeerConnection is true.
-    Closed,
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - any of the [`RTCIceTransport`]s are in the `disconnected` state
+    ///
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    Disconnected,
+
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - all of the [`RTCIceTransport`]s are in the `new` or `closed` state
+    /// - all of the [`RTCDtlsTransport`]s (if any) are in the `new` or
+    /// `closed` state
+    ///
+    /// [`RTCDtlsTransport`]: crate::dtls_transport::RTCDtlsTransport
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    New,
+
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - any of the [`RTCIceTransport`]s are in the `new` or `checking` state, or
+    /// - any of the [`RTCDtlsTransport`]s are in the `new` or `connecting` state
+    ///
+    /// [`RTCDtlsTransport`]: crate::dtls_transport::RTCDtlsTransport
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    Connecting,
+
+    /// Indicates all of the following:
+    /// - none of the previous states apply
+    /// - all of the [`RTCIceTransport`]s are in the `connected`, `completed`, or
+    /// `closed` state
+    /// - all of the [`RTCDtlsTransport`]s (if any) are in the `connected` or
+    /// `closed` state
+    ///
+    /// [`RTCDtlsTransport`]: crate::dtls_transport::RTCDtlsTransport
+    /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
+    Connected,
 }
 
 const PEER_CONNECTION_STATE_NEW_STR: &str = "new";

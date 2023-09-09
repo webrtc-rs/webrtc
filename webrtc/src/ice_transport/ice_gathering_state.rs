@@ -7,20 +7,20 @@ pub enum RTCIceGatheringState {
     Unspecified,
 
     /// Any of the [`RTCIceTransport`]s are
-    /// in the "new" gathering state and none of the transports are in the
-    /// "gathering" state, or there are no transports.
+    /// in the `new` gathering state and none of the transports are in the
+    /// `gathering` state, or there are no transports.
     ///
     /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     New,
 
     /// Any of the [`RTCIceTransport`]s
-    /// are in the "gathering" state.
+    /// are in the `gathering` state.
     ///
     /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     Gathering,
 
     /// At least one [`RTCIceTransport`]
-    /// exists, and all [`RTCIceTransport`]s are in the "complete" gathering state.
+    /// exists, and all [`RTCIceTransport`]s are in the `complete` gathering state.
     ///
     /// [`RTCIceTransport`]: crate::ice_transport::RTCIceTransport
     Complete,

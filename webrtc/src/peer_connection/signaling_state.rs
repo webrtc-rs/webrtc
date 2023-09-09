@@ -32,21 +32,21 @@ pub enum RTCSignalingState {
     Stable,
 
     /// A local description, of
-    /// type "offer", has been successfully applied.
+    /// type `offer`, has been successfully applied.
     HaveLocalOffer,
 
     /// A remote description, of
-    /// type "offer", has been successfully applied.
+    /// type `offer`, has been successfully applied.
     HaveRemoteOffer,
 
     /// A remote description
-    /// of type "offer" has been successfully applied and a local description
-    /// of type "pranswer" has been successfully applied.
+    /// of type `offer` has been successfully applied and a local description
+    /// of type `pranswer` has been successfully applied.
     HaveLocalPranswer,
 
     /// A local description
-    /// of type "offer" has been successfully applied and a remote description
-    /// of type "pranswer" has been successfully applied.
+    /// of type `offer` has been successfully applied and a remote description
+    /// of type `pranswer` has been successfully applied.
     HaveRemotePranswer,
 
     /// The [`RTCPeerConnection`] has been closed.
