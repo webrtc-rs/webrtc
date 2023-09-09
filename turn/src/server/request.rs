@@ -36,6 +36,9 @@ use crate::proto::evenport::EvenPort;
 use crate::proto::lifetime::*;
 use crate::proto::peeraddr::PeerAddress;
 use crate::proto::relayaddr::RelayedAddress;
+use crate::proto::reqfamily::{
+    RequestedAddressFamily, REQUESTED_FAMILY_IPV4, REQUESTED_FAMILY_IPV6,
+};
 use crate::proto::reqtrans::RequestedTransport;
 use crate::proto::rsrvtoken::ReservationToken;
 use crate::proto::*;
@@ -299,6 +302,7 @@ impl Request {
         };
         let mut requested_port = 0;
         let mut reservation_token = "".to_owned();
+        let mut use_ipv4 = true;
 
         // 2. The server checks if the 5-tuple is currently in use by an
         //    existing allocation.  If yes, the server rejects the request with
@@ -397,7 +401,8 @@ impl Request {
         //     the token is not valid for some reason, the server rejects the
         //     request with a 508 (Insufficient Capacity) error.
         let mut reservation_token_attr = ReservationToken::default();
-        if reservation_token_attr.get_from(m).is_ok() {
+        let reservation_token_attr_result = reservation_token_attr.get_from(m);
+        if reservation_token_attr_result.is_ok() {
             let mut even_port = EvenPort::default();
             if even_port.get_from(m).is_ok() {
                 let bad_request_msg = build_msg(
@@ -415,6 +420,65 @@ impl Request {
                     Error::ErrRequestWithReservationTokenAndEvenPort,
                 )
                 .await;
+            }
+        }
+
+        // RFC 6156, Section 4.2:
+        //
+        // If it contains both a RESERVATION-TOKEN and a
+        // REQUESTED-ADDRESS-FAMILY, the server replies with a 400
+        // (Bad Request) Allocate error response.
+        //
+        // 4.2.1.  Unsupported Address Family
+        // This document defines the following new error response code:
+        // 440 (Address Family not Supported):  The server does not support the
+        // address family requested by the client.
+        let mut req_family = RequestedAddressFamily::default();
+        match req_family.get_from(m) {
+            Err(err) => {
+                // Currently, the RequestedAddressFamily::get_from() function returns
+                // Err::Other only when it is an unsupported address family.
+                if let stun::Error::Other(_) = err {
+                    let addr_family_not_supported_msg = build_msg(
+                        m.transaction_id,
+                        MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+                        vec![Box::new(ErrorCodeAttribute {
+                            code: CODE_ADDR_FAMILY_NOT_SUPPORTED,
+                            reason: vec![],
+                        })],
+                    )?;
+                    return build_and_send_err(
+                        &self.conn,
+                        self.src_addr,
+                        addr_family_not_supported_msg,
+                        Error::ErrInvalidRequestedFamilyValue,
+                    )
+                    .await;
+                }
+            }
+            Ok(()) => {
+                if reservation_token_attr_result.is_ok() {
+                    let bad_request_msg = build_msg(
+                        m.transaction_id,
+                        MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+                        vec![Box::new(ErrorCodeAttribute {
+                            code: CODE_BAD_REQUEST,
+                            reason: vec![],
+                        })],
+                    )?;
+
+                    return build_and_send_err(
+                        &self.conn,
+                        self.src_addr,
+                        bad_request_msg,
+                        Error::ErrRequestWithReservationTokenAndReqAddressFamily,
+                    )
+                    .await;
+                }
+
+                if req_family == REQUESTED_FAMILY_IPV6 {
+                    use_ipv4 = false;
+                }
             }
         }
 
@@ -475,6 +539,7 @@ impl Request {
                 requested_port,
                 lifetime_duration,
                 username,
+                use_ipv4,
             )
             .await
         {
@@ -570,6 +635,31 @@ impl Request {
         if lifetime_duration != Duration::from_secs(0) {
             let a = self.allocation_manager.get_allocation(&five_tuple).await;
             if let Some(a) = a {
+                // If a server receives a Refresh Request with a REQUESTED-ADDRESS-FAMILY
+                // attribute, and the attribute's value doesn't match the address
+                // family of the allocation, the server MUST reply with a 443 (Peer
+                // Address Family Mismatch) Refresh error response. [RFC 6156, Section 5.2]
+                let mut req_family = RequestedAddressFamily::default();
+                if req_family.get_from(m).is_ok()
+                    && ((req_family == REQUESTED_FAMILY_IPV6 && !a.relay_addr.is_ipv6())
+                        || (req_family == REQUESTED_FAMILY_IPV4 && !a.relay_addr.is_ipv4()))
+                {
+                    let peer_address_family_mismatch_msg = build_msg(
+                        m.transaction_id,
+                        MessageType::new(METHOD_REFRESH, CLASS_ERROR_RESPONSE),
+                        vec![Box::new(ErrorCodeAttribute {
+                            code: CODE_PEER_ADDR_FAMILY_MISMATCH,
+                            reason: vec![],
+                        })],
+                    )?;
+                    return build_and_send_err(
+                        &self.conn,
+                        self.src_addr,
+                        peer_address_family_mismatch_msg,
+                        Error::ErrPeerAddressFamilyMismatch,
+                    )
+                    .await;
+                }
                 a.refresh(lifetime_duration).await;
             } else {
                 return Err(Error::ErrNoAllocationFound);
@@ -624,6 +714,30 @@ impl Request {
                     if peer_address.get_from(m).is_err() {
                         add_count = 0;
                         break;
+                    }
+
+                    // If an XOR-PEER-ADDRESS attribute contains an address of an address
+                    // family different than that of the relayed transport address for the
+                    // allocation, the server MUST generate an error response with the 443
+                    // (Peer Address Family Mismatch) response code. [RFC 6156, Section 6.2]
+                    if (peer_address.ip.is_ipv4() && !a.relay_addr.is_ipv4())
+                        || (peer_address.ip.is_ipv6() && !a.relay_addr.is_ipv6())
+                    {
+                        let peer_address_family_mismatch_msg = build_msg(
+                            m.transaction_id,
+                            MessageType::new(METHOD_CREATE_PERMISSION, CLASS_ERROR_RESPONSE),
+                            vec![Box::new(ErrorCodeAttribute {
+                                code: CODE_PEER_ADDR_FAMILY_MISMATCH,
+                                reason: vec![],
+                            })],
+                        )?;
+                        return build_and_send_err(
+                            &self.conn,
+                            self.src_addr,
+                            peer_address_family_mismatch_msg,
+                            Error::ErrPeerAddressFamilyMismatch,
+                        )
+                        .await;
                     }
 
                     log::debug!(
@@ -734,9 +848,41 @@ impl Request {
             }
 
             let mut peer_addr = PeerAddress::default();
-            if let Err(err) = peer_addr.get_from(m) {
-                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+            match peer_addr.get_from(m) {
+                Err(err) => {
+                    return build_and_send_err(
+                        &self.conn,
+                        self.src_addr,
+                        bad_request_msg,
+                        err.into(),
+                    )
                     .await;
+                }
+                _ => {
+                    // If the XOR-PEER-ADDRESS attribute contains an address of an address
+                    // family different than that of the relayed transport address for the
+                    // allocation, the server MUST generate an error response with the 443
+                    // (Peer Address Family Mismatch) response code. [RFC 6156, Section 7.2]
+                    if (peer_addr.ip.is_ipv4() && !a.relay_addr.is_ipv4())
+                        || (peer_addr.ip.is_ipv6() && !a.relay_addr.is_ipv6())
+                    {
+                        let peer_address_family_mismatch_msg = build_msg(
+                            m.transaction_id,
+                            MessageType::new(METHOD_CHANNEL_BIND, CLASS_ERROR_RESPONSE),
+                            vec![Box::new(ErrorCodeAttribute {
+                                code: CODE_PEER_ADDR_FAMILY_MISMATCH,
+                                reason: vec![],
+                            })],
+                        )?;
+                        return build_and_send_err(
+                            &self.conn,
+                            self.src_addr,
+                            peer_address_family_mismatch_msg,
+                            Error::ErrPeerAddressFamilyMismatch,
+                        )
+                        .await;
+                    }
+                }
             }
 
             log::debug!(

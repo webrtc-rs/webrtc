@@ -73,6 +73,7 @@ async fn test_packet_handler() -> Result<()> {
             0,
             DEFAULT_LIFETIME,
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
 
@@ -178,6 +179,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
             0,
             DEFAULT_LIFETIME,
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
 
@@ -188,6 +190,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
             0,
             DEFAULT_LIFETIME,
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await;
     assert!(result.is_err(), "expected error, but got ok");
@@ -213,6 +216,7 @@ async fn test_delete_allocation() -> Result<()> {
             0,
             DEFAULT_LIFETIME,
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
 
@@ -253,6 +257,7 @@ async fn test_allocation_timeout() -> Result<()> {
                 0,
                 lifetime,
                 TextAttribute::new(ATTR_USERNAME, "user".into()),
+                true,
             )
             .await?;
 
@@ -302,6 +307,7 @@ async fn test_manager_close() -> Result<()> {
             0,
             Duration::from_millis(100),
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
     allocations.push(a1);
@@ -313,6 +319,7 @@ async fn test_manager_close() -> Result<()> {
             0,
             Duration::from_millis(200),
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
     allocations.push(a2);
@@ -350,6 +357,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             0,
             DEFAULT_LIFETIME,
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
     let _ = m
@@ -359,6 +367,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             0,
             DEFAULT_LIFETIME,
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
     let _ = m
@@ -368,6 +377,7 @@ async fn test_delete_allocation_by_username() -> Result<()> {
             0,
             DEFAULT_LIFETIME,
             TextAttribute::new(ATTR_USERNAME, "user2".into()),
+            true,
         )
         .await?;
 
