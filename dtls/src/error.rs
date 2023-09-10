@@ -158,6 +158,8 @@ pub enum Error {
     #[error("{0}")]
     Sec1(#[source] sec1::Error),
     #[error("{0}")]
+    Aes(#[from] aes::cipher::InvalidLength),
+    #[error("{0}")]
     P256(#[source] P256Error),
     #[error("{0}")]
     RcGen(#[from] RcgenError),
@@ -211,17 +213,6 @@ impl PartialEq for P256Error {
 impl From<p256::elliptic_curve::Error> for Error {
     fn from(e: p256::elliptic_curve::Error) -> Self {
         Error::P256(P256Error(e))
-    }
-}
-
-impl From<block_modes::InvalidKeyIvLength> for Error {
-    fn from(e: block_modes::InvalidKeyIvLength) -> Self {
-        Error::Other(e.to_string())
-    }
-}
-impl From<block_modes::BlockModeError> for Error {
-    fn from(e: block_modes::BlockModeError) -> Self {
-        Error::Other(e.to_string())
     }
 }
 

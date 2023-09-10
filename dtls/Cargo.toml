@@ -22,10 +22,10 @@ hmac = "0.12"
 sec1 = { version = "0.7", features = [ "std" ] }
 sha1 = "0.10"
 sha2 = "0.10"
-aes = "0.6.0"
-block-modes = "0.7.0"
+aes = "0.8"
+cbc = { version = "0.1", features = [ "block-padding", "alloc"] }
 aes-gcm = "0.10"
-ccm = "0.3.0"
+ccm = "0.5"
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
