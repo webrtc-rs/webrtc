@@ -15,7 +15,7 @@ rtp = { version = "0.8", path = "../rtp" }
 rtcp = { version = "0.9", path = "../rtcp" }
 srtp = { version = "0.10", path = "../srtp", package = "webrtc-srtp" }
 
-tokio = { version = "1", features = ["sync", "time"] }
+tokio = { version = "1.32.0", features = ["sync", "time"] }
 async-trait = "0.1"
 bytes = "1"
 thiserror = "1"
@@ -25,4 +25,4 @@ log = "0.4"
 
 [dev-dependencies]
 tokio-test = "0.4"
-chrono = "0.4"
+chrono = "0.4.28"

@@ -26,7 +26,7 @@ aes = "0.8"
 cbc = { version = "0.1", features = [ "block-padding", "alloc"] }
 aes-gcm = "0.10"
 ccm = "0.5"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
 async-trait = "0.1"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 x509-parser = "0.15"
@@ -44,7 +44,7 @@ pem = { version = "3", optional = true }
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.10"
-chrono = "0.4"
+chrono = "0.4.28"
 clap = "3"
 hub = {path = "examples/hub"}
 

@@ -30,11 +30,11 @@ sha1 = "0.10"
 ctr = "0.9"
 aes = "0.8"
 subtle = "2"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
 log = "0.4"
 aead = { version = "0.5", features = ["std"] }
 aes-gcm = { version = "0.10", features = ["std"] }
-openssl = { version = "0.10", optional = true }
+openssl = { version = "0.10.57", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_futures"] }

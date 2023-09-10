@@ -23,20 +23,20 @@ rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 waitgroup = "0.1"
 
 [dev-dependencies]
 tokio-test = "0.4"
-regex = "1"
+regex = "1.9.5"
 env_logger = "0.10"
-chrono = "0.4"
+chrono = "0.4.28"
 ipnet = "2"
 clap = "3"
 lazy_static = "1"
-hyper = { version = "0.14", features = ["full"] }
+hyper = { version = "0.14.27", features = ["full"] }
 sha1 = "0.10"
 
 [[example]]

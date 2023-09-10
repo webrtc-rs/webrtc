@@ -3,11 +3,9 @@ name = "signal"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
 anyhow = "1"
 base64 = "0.21"
 lazy_static = "1"
-hyper = { version = "0.14", features = ["full"] }
+hyper = { version = "0.14.27", features = ["full"] }

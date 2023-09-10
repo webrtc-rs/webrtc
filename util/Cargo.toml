@@ -19,7 +19,7 @@ marshal = []
 sync = []
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
 lazy_static = "1"
 async-trait = "0.1"
 ipnet = "2"
@@ -48,7 +48,7 @@ cc = "1"
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.10"
-chrono = "0.4"
+chrono = "0.4.28"
 criterion = { version = "0.5", features = ["async_futures"] }
 async-global-executor = "2"
 

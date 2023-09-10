@@ -13,7 +13,7 @@ repository = "https://github.com/webrtc-rs/sctp"
 util = { version = "0.7", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
 
 arc-swap = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
 bytes = "1"
 rand = "0.8"
 crc = "3"
@@ -25,7 +25,7 @@ thiserror = "1"
 tokio-test = "0.4"
 lazy_static = "1"
 env_logger = "0.10"
-chrono = "0.4"
+chrono = "0.4.28"
 clap = "3"
 
 [[example]]

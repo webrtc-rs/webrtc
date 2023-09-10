@@ -18,7 +18,7 @@ thiserror = "1"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
-chrono = "0.4"
+chrono = "0.4.28"
 criterion = "0.5"
 
 [[bench]]

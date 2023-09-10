@@ -15,14 +15,14 @@ repository = "https://github.com/webrtc-rs/examples"
 [dev-dependencies]
 webrtc = { path = "../webrtc" }
 
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
 env_logger = "0.10"
 clap = "3"
-hyper = { version = "0.14", features = ["full"] }
+hyper = { version = "0.14.27", features = ["full"] }
 signal = { path = "examples/signal" }
 tokio-util = { version = "0.7", features = ["codec"] }
 anyhow = "1"
-chrono = "0.4"
+chrono = "0.4.28"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
