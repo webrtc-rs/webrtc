@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use dtls::crypto::{Certificate, CryptoPrivateKey};
 use rcgen::KeyPair;
-use rustls::internal::pemfile::certs;
 use thiserror::Error;
 
 use super::*;
@@ -106,8 +105,8 @@ pub fn load_certificate(path: PathBuf) -> Result<Vec<rustls::Certificate>, Error
     let f = File::open(path)?;
 
     let mut reader = BufReader::new(f);
-    match certs(&mut reader) {
-        Ok(ders) => Ok(ders),
+    match rustls_pemfile::certs(&mut reader) {
+        Ok(certs) => Ok(certs.into_iter().map(rustls::Certificate).collect()),
         Err(_) => Err(Error::ErrNoCertificateFound),
     }
 }

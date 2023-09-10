@@ -213,14 +213,19 @@ impl DTLSConn {
             insecure_skip_verify: config.insecure_skip_verify,
             insecure_verification: config.insecure_verification,
             verify_peer_certificate: config.verify_peer_certificate.take(),
-            roots_cas: config.roots_cas,
             client_cert_verifier: if config.client_auth as u8
                 >= ClientAuthType::VerifyClientCertIfGiven as u8
             {
-                Some(rustls::AllowAnyAuthenticatedClient::new(config.client_cas))
+                Some(Arc::new(rustls::server::AllowAnyAuthenticatedClient::new(
+                    config.client_cas,
+                )))
             } else {
                 None
             },
+            server_cert_verifier: Arc::new(rustls::client::WebPkiVerifier::new(
+                config.roots_cas,
+                None,
+            )),
             retransmit_interval,
             //log: logger,
             initial_epoch: 0,

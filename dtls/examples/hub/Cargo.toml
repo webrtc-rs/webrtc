@@ -11,5 +11,6 @@ dtls = { package = "webrtc-dtls", path = "../../" }
 
 tokio = { version = "1", features = ["full"] }
 rcgen = { version = "0.11", features = ["pem", "x509-parser"] }
-rustls = "0.19"
+rustls = "0.21"
+rustls-pemfile = "1"
 thiserror = "1"

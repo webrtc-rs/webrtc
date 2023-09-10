@@ -471,11 +471,16 @@ pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Cer
 
 pub(crate) fn verify_client_cert(
     raw_certificates: &[Vec<u8>],
-    cert_verifier: &Arc<dyn rustls::ClientCertVerifier>,
+    cert_verifier: &Arc<dyn rustls::server::ClientCertVerifier>,
 ) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
 
-    match cert_verifier.verify_client_cert(&chains, None) {
+    let (end_entity, intermediates) = chains
+        .split_first()
+        .ok_or(Error::ErrClientCertificateRequired)?;
+
+    match cert_verifier.verify_client_cert(end_entity, intermediates, std::time::SystemTime::now())
+    {
         Ok(_) => {}
         Err(err) => return Err(Error::Other(err.to_string())),
     };
@@ -485,17 +490,26 @@ pub(crate) fn verify_client_cert(
 
 pub(crate) fn verify_server_cert(
     raw_certificates: &[Vec<u8>],
-    cert_verifier: &Arc<dyn rustls::ServerCertVerifier>,
-    roots: &rustls::RootCertStore,
+    cert_verifier: &Arc<dyn rustls::client::ServerCertVerifier>,
     server_name: &str,
 ) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
-    let dns_name = match webpki::DNSNameRef::try_from_ascii_str(server_name) {
+    let dns_name = match rustls::server::DnsName::try_from_ascii(server_name.as_ref()) {
         Ok(dns_name) => dns_name,
         Err(err) => return Err(Error::Other(err.to_string())),
     };
 
-    match cert_verifier.verify_server_cert(roots, &chains, dns_name, &[]) {
+    let (end_entity, intermediates) = chains
+        .split_first()
+        .ok_or(Error::ErrServerMustHaveCertificate)?;
+    match cert_verifier.verify_server_cert(
+        end_entity,
+        intermediates,
+        &rustls::ServerName::DnsName(dns_name.to_owned()),
+        &mut [].into_iter(),
+        &[],
+        std::time::SystemTime::now(),
+    ) {
         Ok(_) => {}
         Err(err) => return Err(Error::Other(err.to_string())),
     };
