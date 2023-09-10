@@ -1,6 +1,6 @@
 use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
 use bytes::{BufMut, Bytes};
-use ctr::cipher::{NewCipher, StreamCipher, StreamCipherSeek};
 use rtcp::header::{HEADER_LENGTH, SSRC_LENGTH};
 use subtle::ConstantTimeEq;
 use util::marshal::*;
