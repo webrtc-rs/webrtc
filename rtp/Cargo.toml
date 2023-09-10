@@ -8,19 +8,18 @@ license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/rtp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtp"
-rust-version = "1.63.0"
 
 [dependencies]
-util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
+util = { version = "0.7", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
 
 bytes = "1"
-rand = "0.8.5"
-thiserror = "1.0"
-serde = { version = "1.0.102", features = ["derive"] }
+rand = "0.8"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
-chrono = "0.4.23"
-criterion = "0.4.0"
+chrono = "0.4"
+criterion = "0.5"
 
 [[bench]]
 name = "packet_bench"

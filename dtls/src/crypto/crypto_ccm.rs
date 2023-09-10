@@ -12,9 +12,10 @@ use std::io::Cursor;
 
 use aes::Aes128;
 use ccm::aead::generic_array::GenericArray;
-use ccm::aead::{AeadInPlace, NewAead};
+use ccm::aead::AeadInPlace;
 use ccm::consts::{U12, U16, U8};
 use ccm::Ccm;
+use ccm::KeyInit;
 use rand::Rng;
 
 use super::*;

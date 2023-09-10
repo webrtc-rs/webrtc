@@ -122,14 +122,14 @@ impl RTCCertificate {
         };
         let expires_pem =
             pem::parse(first_block).map_err(|e| Error::new(format!("can't parse PEM: {e}")))?;
-        if expires_pem.tag != "EXPIRES" {
+        if expires_pem.tag() != "EXPIRES" {
             return Err(Error::InvalidPEM(format!(
                 "invalid tag (expected: 'EXPIRES', got '{}')",
-                expires_pem.tag
+                expires_pem.tag()
             )));
         }
         let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&expires_pem.contents[..8]);
+        bytes.copy_from_slice(&expires_pem.contents()[..8]);
         let expires = if let Some(e) =
             SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(u64::from_le_bytes(bytes)))
         {
@@ -164,16 +164,15 @@ impl RTCCertificate {
         // Encode `expires` as a PEM block.
         //
         // TODO: serialize as nanos when https://github.com/rust-lang/rust/issues/103332 is fixed.
-        let expires_pem = pem::Pem {
-            tag: "EXPIRES".to_string(),
-            contents: self
-                .expires
+        let expires_pem = pem::Pem::new(
+            "EXPIRES".to_string(),
+            self.expires
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .expect("expires to be valid")
                 .as_secs()
                 .to_le_bytes()
                 .to_vec(),
-        };
+        );
         format!(
             "{}\n{}",
             pem::encode(&expires_pem),

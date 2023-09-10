@@ -1,8 +1,8 @@
-use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::sync::Arc;
 
 use clap::{App, AppSettings, Arg};
+use hub::utilities::load_certificate;
 use util::conn::*;
 use webrtc_dtls::config::{ClientAuthType, Config, ExtendedMasterSecretType};
 use webrtc_dtls::listener::listen;
@@ -62,10 +62,11 @@ async fn main() -> Result<(), Error> {
     )?;
 
     let mut cert_pool = rustls::RootCertStore::empty();
-    let f = File::open("dtls/examples/certificates/server.pub.pem")?;
-    let mut reader = BufReader::new(f);
-    if cert_pool.add_pem_file(&mut reader).is_err() {
-        return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
+    let certs = load_certificate("dtls/examples/certificates/server.pub.pem".into())?;
+    for cert in &certs {
+        if cert_pool.add(cert).is_err() {
+            return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
+        }
     }
 
     let cfg = Config {

@@ -8,30 +8,29 @@ license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/stun"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/stun"
-rust-version = "1.63.0"
 
 [features]
 default = []
 bench = []
 
 [dependencies]
-util = { version = "0.7.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
+util = { version = "0.7", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
 
-tokio = { version = "1.19", features = ["full"] }
-lazy_static = "1.4"
-url = "2.2"
-rand = "0.8.5"
-base64 = "0.21.2"
+tokio = { version = "1", features = ["full"] }
+lazy_static = "1"
+url = "2"
+rand = "0.8"
+base64 = "0.21"
 subtle = "2.4"
-crc = "3.0"
-ring = "0.16.20"
-md-5 = "0.10.1"
-thiserror = "1.0"
+crc = "3"
+ring = "0.16"
+md-5 = "0.10"
+thiserror = "1"
 
 [dev-dependencies]
-tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
-clap = "3.2.6"
-criterion = "0.4.0"
+tokio-test = "0.4"
+clap = "3"
+criterion = "0.5"
 
 
 [[bench]]

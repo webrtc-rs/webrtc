@@ -4,7 +4,6 @@ mod crypto_test;
 pub mod crypto_cbc;
 pub mod crypto_ccm;
 pub mod crypto_gcm;
-pub mod padding;
 
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -71,25 +70,25 @@ impl Certificate {
                 pems.len()
             )));
         }
-        if pems[0].tag != "PRIVATE_KEY" {
+        if pems[0].tag() != "PRIVATE_KEY" {
             return Err(Error::InvalidPEM(format!(
                 "invalid tag (expected: 'PRIVATE_KEY', got: '{}')",
-                pems[0].tag
+                pems[0].tag()
             )));
         }
 
-        let keypair = rcgen::KeyPair::from_der(&pems[0].contents)
+        let keypair = rcgen::KeyPair::from_der(pems[0].contents())
             .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {e}")))?;
 
         let mut rustls_certs = Vec::new();
         for p in pems.drain(1..) {
-            if p.tag != "CERTIFICATE" {
+            if p.tag() != "CERTIFICATE" {
                 return Err(Error::InvalidPEM(format!(
                     "invalid tag (expected: 'CERTIFICATE', got: '{}')",
-                    p.tag
+                    p.tag()
                 )));
             }
-            rustls_certs.push(rustls::Certificate(p.contents));
+            rustls_certs.push(rustls::Certificate(p.contents().to_vec()));
         }
 
         Ok(Certificate {
@@ -101,15 +100,15 @@ impl Certificate {
     /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
     #[cfg(feature = "pem")]
     pub fn serialize_pem(&self) -> String {
-        let mut data = vec![pem::Pem {
-            tag: "PRIVATE_KEY".to_string(),
-            contents: self.private_key.serialized_der.clone(),
-        }];
+        let mut data = vec![pem::Pem::new(
+            "PRIVATE_KEY".to_string(),
+            self.private_key.serialized_der.clone(),
+        )];
         for rustls_cert in &self.certificate {
-            data.push(pem::Pem {
-                tag: "CERTIFICATE".to_string(),
-                contents: rustls_cert.0.clone(),
-            });
+            data.push(pem::Pem::new(
+                "CERTIFICATE".to_string(),
+                rustls_cert.0.clone(),
+            ));
         }
         pem::encode_many(&data)
     }
@@ -471,11 +470,16 @@ pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Cer
 
 pub(crate) fn verify_client_cert(
     raw_certificates: &[Vec<u8>],
-    cert_verifier: &Arc<dyn rustls::ClientCertVerifier>,
+    cert_verifier: &Arc<dyn rustls::server::ClientCertVerifier>,
 ) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
 
-    match cert_verifier.verify_client_cert(&chains, None) {
+    let (end_entity, intermediates) = chains
+        .split_first()
+        .ok_or(Error::ErrClientCertificateRequired)?;
+
+    match cert_verifier.verify_client_cert(end_entity, intermediates, std::time::SystemTime::now())
+    {
         Ok(_) => {}
         Err(err) => return Err(Error::Other(err.to_string())),
     };
@@ -485,17 +489,26 @@ pub(crate) fn verify_client_cert(
 
 pub(crate) fn verify_server_cert(
     raw_certificates: &[Vec<u8>],
-    cert_verifier: &Arc<dyn rustls::ServerCertVerifier>,
-    roots: &rustls::RootCertStore,
+    cert_verifier: &Arc<dyn rustls::client::ServerCertVerifier>,
     server_name: &str,
 ) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
-    let dns_name = match webpki::DNSNameRef::try_from_ascii_str(server_name) {
+    let dns_name = match rustls::server::DnsName::try_from_ascii(server_name.as_ref()) {
         Ok(dns_name) => dns_name,
         Err(err) => return Err(Error::Other(err.to_string())),
     };
 
-    match cert_verifier.verify_server_cert(roots, &chains, dns_name, &[]) {
+    let (end_entity, intermediates) = chains
+        .split_first()
+        .ok_or(Error::ErrServerMustHaveCertificate)?;
+    match cert_verifier.verify_server_cert(
+        end_entity,
+        intermediates,
+        &rustls::ServerName::DnsName(dns_name.to_owned()),
+        &mut [].into_iter(),
+        &[],
+        std::time::SystemTime::now(),
+    ) {
         Ok(_) => {}
         Err(err) => return Err(Error::Other(err.to_string())),
     };
