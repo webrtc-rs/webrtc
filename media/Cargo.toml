@@ -10,7 +10,7 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/media"
 
 [dependencies]
-rtp = { version = "0.8", path = "../rtp" }
+rtp = { version = "0.9", path = "../rtp" }
 
 byteorder = "1"
 bytes = "1"

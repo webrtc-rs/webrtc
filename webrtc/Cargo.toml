@@ -12,14 +12,14 @@ readme = "../README.md"
 
 [dependencies]
 data = { version = "0.7", path = "../data", package = "webrtc-data" }
-dtls = { version = "0.7", path = "../dtls", package = "webrtc-dtls" }
-ice = { version = "0.9", path = "../ice", package = "webrtc-ice" }
+dtls = { version = "0.8", path = "../dtls", package = "webrtc-dtls" }
+ice = { version = "0.10", path = "../ice", package = "webrtc-ice" }
 interceptor = { version = "0.9", path = "../interceptor" }
 mdns = { version = "0.6", path = "../mdns", package = "webrtc-mdns" }
 media = { version = "0.6", path = "../media", package = "webrtc-media" }
-rtcp = { version = "0.9", path = "../rtcp" }
-rtp = { version = "0.8", path = "../rtp" }
-sctp = { version = "0.8", path = "../sctp", package = "webrtc-sctp" }
+rtcp = { version = "0.10", path = "../rtcp" }
+rtp = { version = "0.9", path = "../rtp" }
+sctp = { version = "0.9", path = "../sctp", package = "webrtc-sctp" }
 sdp = { version = "0.6", path = "../sdp" }
 srtp = { version = "0.10", path = "../srtp", package = "webrtc-srtp" }
 stun = { version = "0.5", path = "../stun" }
