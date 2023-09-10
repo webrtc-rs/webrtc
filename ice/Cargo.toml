@@ -15,7 +15,7 @@ turn = { version = "0.6", path = "../turn" }
 stun = { version = "0.4", path = "../stun" }
 mdns = { version = "0.5", path = "../mdns", package = "webrtc-mdns" }
 
-arc-swap = "1.6"
+arc-swap = "1"
 async-trait = "0.1"
 crc = "3"
 log = "0.4"
