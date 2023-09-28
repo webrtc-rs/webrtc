@@ -63,3 +63,50 @@ fn test_ogg_writer_add_packet_and_close() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_ogg_writer_add_large_packet_and_close() -> Result<()> {
+    let raw_pkt = Bytes::from_iter(std::iter::repeat(0x45).take(1000));
+
+    let mut valid_packet = rtp::packet::Packet {
+        header: rtp::header::Header {
+            marker: true,
+            extension: true,
+            extension_profile: 1,
+            version: 2,
+            //PayloadOffset:    20,
+            payload_type: 111,
+            sequence_number: 27023,
+            timestamp: 3653407706,
+            ssrc: 476325762,
+            csrc: vec![],
+            padding: false,
+            extensions: vec![],
+            extensions_padding: 0,
+        },
+        payload: raw_pkt,
+    };
+    valid_packet
+        .header
+        .set_extension(0, Bytes::from_static(&[0xFF, 0xFF, 0xFF, 0xFF]))?;
+
+    //     let mut page =
+    //     Vec::with_capacity(PAGE_HEADER_SIZE + 1 + self.last_payload_size + n_segments);
+    // {
+    //     let mut header_writer = BufWriter::new(&mut page)
+    // }
+    let buffer = Cursor::new(Vec::<u8>::new());
+    let mut writer = OggWriter::new(buffer, 48000, 2)?;
+    let result = writer.write_rtp(&valid_packet);
+
+    assert!(
+        result.is_ok(),
+        "OggWriter should be able to write a large (> 255 bytes) Opus packet"
+    );
+    assert!(
+        writer.writer.into_inner()[126..131] == [4, 255, 255, 255, 235],
+        "OggWriter should be able to write multiple segments per page, for 1000 bytes, 4 segments of 255, 255, 255 and 235 long"
+    );
+
+    Ok(())
+}
