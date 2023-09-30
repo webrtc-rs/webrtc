@@ -127,7 +127,7 @@ impl<W: Write + Seek> OggWriter<W> {
     ) -> Result<()> {
         self.last_payload_size = payload.len();
         self.last_payload = payload.clone();
-        let n_segments = (self.last_payload_size / 255) + 1;
+        let n_segments = (self.last_payload_size + 255 - 1) / 255;
 
         let mut page =
             Vec::with_capacity(PAGE_HEADER_SIZE + 1 + self.last_payload_size + n_segments);
@@ -148,7 +148,7 @@ impl<W: Write + Seek> OggWriter<W> {
                 header_writer.write_u8(255)?;
             }
             // The last value will be the remainder.
-            header_writer.write_u8((self.last_payload_size % 255) as u8)?;
+            header_writer.write_u8((self.last_payload_size - (n_segments * 255 - 255)) as u8)?;
 
             header_writer.write_all(payload)?; // inserting at 28th since Segment Table(1) + header length(27)
         }
