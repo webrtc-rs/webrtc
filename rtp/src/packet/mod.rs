@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod packet_test;
 
-use crate::{error::Error, header::*};
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
+use std::fmt;
 
 use bytes::{Buf, BufMut, Bytes};
-use std::fmt;
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
 
 /// Packet represents an RTP Packet
 /// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
@@ -27,7 +29,7 @@ impl fmt::Display for Packet {
         out += format!("\tSSRC: {} ({:x})\n", self.header.ssrc, self.header.ssrc).as_str();
         out += format!("\tPayload Length: {}\n", self.payload.len()).as_str();
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

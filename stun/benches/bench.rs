@@ -1,10 +1,13 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
 use std::io::Cursor;
 use std::net::Ipv4Addr;
 use std::ops::{Add, Sub};
 use std::time::Duration;
+
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use criterion::{criterion_group, criterion_main, Criterion};
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use stun::addr::{AlternateServer, MappedAddress};
 use stun::agent::{noop_handler, Agent, TransactionId};
 use stun::attributes::{
@@ -79,7 +82,7 @@ fn benchmark_agent(c: &mut Criterion) {
         }
 
         let mut m = Message::new();
-        m.build(&[Box::new(TransactionId::default())]).unwrap();
+        m.build(&[Box::<TransactionId>::default()]).unwrap();
         c.bench_function("BenchmarkAgent_Process", |b| {
             b.iter(|| {
                 a.process(m.clone()).unwrap();
@@ -623,7 +626,7 @@ fn benchmark_xoraddr(c: &mut Criterion) {
 
     {
         let mut m = Message::new();
-        let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
+        let transaction_id = BASE64_STANDARD.decode("jxhBARZwX+rsC6er").unwrap();
 
         m.transaction_id.0.copy_from_slice(&transaction_id);
         let addr_value = [0, 1, 156, 213, 244, 159, 56, 174]; //hex.DecodeString("00019cd5f49f38ae")

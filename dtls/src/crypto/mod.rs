@@ -4,20 +4,20 @@ mod crypto_test;
 pub mod crypto_cbc;
 pub mod crypto_ccm;
 pub mod crypto_gcm;
-pub mod padding;
+
+use std::convert::TryFrom;
+use std::sync::Arc;
+
+use der_parser::oid;
+use der_parser::oid::Oid;
+use rcgen::KeyPair;
+use ring::rand::SystemRandom;
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 
 use crate::curve::named_curve::*;
 use crate::error::*;
 use crate::record_layer::record_layer_header::*;
 use crate::signature_hash_algorithm::{HashAlgorithm, SignatureAlgorithm, SignatureHashAlgorithm};
-
-use der_parser::{oid, oid::Oid};
-use rcgen::KeyPair;
-use ring::rand::SystemRandom;
-use ring::rsa;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
-use std::convert::TryFrom;
-use std::sync::Arc;
 
 /// A X.509 certificate(s) used to authenticate a DTLS connection.
 #[derive(Clone, PartialEq, Debug)]
@@ -70,25 +70,25 @@ impl Certificate {
                 pems.len()
             )));
         }
-        if pems[0].tag != "PRIVATE_KEY" {
+        if pems[0].tag() != "PRIVATE_KEY" {
             return Err(Error::InvalidPEM(format!(
                 "invalid tag (expected: 'PRIVATE_KEY', got: '{}')",
-                pems[0].tag
+                pems[0].tag()
             )));
         }
 
-        let keypair = rcgen::KeyPair::from_der(&pems[0].contents)
-            .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {}", e)))?;
+        let keypair = rcgen::KeyPair::from_der(pems[0].contents())
+            .map_err(|e| Error::InvalidPEM(format!("can't decode keypair: {e}")))?;
 
         let mut rustls_certs = Vec::new();
         for p in pems.drain(1..) {
-            if p.tag != "CERTIFICATE" {
+            if p.tag() != "CERTIFICATE" {
                 return Err(Error::InvalidPEM(format!(
                     "invalid tag (expected: 'CERTIFICATE', got: '{}')",
-                    p.tag
+                    p.tag()
                 )));
             }
-            rustls_certs.push(rustls::Certificate(p.contents));
+            rustls_certs.push(rustls::Certificate(p.contents().to_vec()));
         }
 
         Ok(Certificate {
@@ -100,15 +100,15 @@ impl Certificate {
     /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
     #[cfg(feature = "pem")]
     pub fn serialize_pem(&self) -> String {
-        let mut data = vec![pem::Pem {
-            tag: "PRIVATE_KEY".to_string(),
-            contents: self.private_key.serialized_der.clone(),
-        }];
+        let mut data = vec![pem::Pem::new(
+            "PRIVATE_KEY".to_string(),
+            self.private_key.serialized_der.clone(),
+        )];
         for rustls_cert in &self.certificate {
-            data.push(pem::Pem {
-                tag: "CERTIFICATE".to_string(),
-                contents: rustls_cert.0.clone(),
-            });
+            data.push(pem::Pem::new(
+                "CERTIFICATE".to_string(),
+                rustls_cert.0.clone(),
+            ));
         }
         pem::encode_many(&data)
     }
@@ -297,6 +297,7 @@ fn verify_signature(
     hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
+    insecure_verification: bool,
 ) -> Result<()> {
     if raw_certificates.is_empty() {
         return Err(Error::ErrLengthMismatch);
@@ -316,14 +317,22 @@ fn verify_signature(
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha1 => {
             &ring::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
         }
-        SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha256 => {
-            &ring::signature::RSA_PKCS1_2048_8192_SHA256
+        SignatureAlgorithm::Rsa if (hash_algorithm.hash == HashAlgorithm::Sha256) => {
+            if remote_key_signature.len() < 256 && insecure_verification {
+                &ring::signature::RSA_PKCS1_1024_8192_SHA256_FOR_LEGACY_USE_ONLY
+            } else {
+                &ring::signature::RSA_PKCS1_2048_8192_SHA256
+            }
         }
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha384 => {
             &ring::signature::RSA_PKCS1_2048_8192_SHA384
         }
         SignatureAlgorithm::Rsa if hash_algorithm.hash == HashAlgorithm::Sha512 => {
-            &ring::signature::RSA_PKCS1_2048_8192_SHA512
+            if remote_key_signature.len() < 256 && insecure_verification {
+                &ring::signature::RSA_PKCS1_1024_8192_SHA512_FOR_LEGACY_USE_ONLY
+            } else {
+                &ring::signature::RSA_PKCS1_2048_8192_SHA512
+            }
         }
         _ => return Err(Error::ErrKeySignatureVerifyUnimplemented),
     };
@@ -351,12 +360,14 @@ pub(crate) fn verify_key_signature(
     hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
+    insecure_verification: bool,
 ) -> Result<()> {
     verify_signature(
         message,
         hash_algorithm,
         remote_key_signature,
         raw_certificates,
+        insecure_verification,
     )
 }
 
@@ -404,12 +415,14 @@ pub(crate) fn verify_certificate_verify(
     hash_algorithm: &SignatureHashAlgorithm,
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
+    insecure_verification: bool,
 ) -> Result<()> {
     verify_signature(
         handshake_bodies,
         hash_algorithm,
         remote_key_signature,
         raw_certificates,
+        insecure_verification,
     )
 }
 
@@ -429,11 +442,16 @@ pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Cer
 
 pub(crate) fn verify_client_cert(
     raw_certificates: &[Vec<u8>],
-    cert_verifier: &Arc<dyn rustls::ClientCertVerifier>,
+    cert_verifier: &Arc<dyn rustls::server::ClientCertVerifier>,
 ) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
 
-    match cert_verifier.verify_client_cert(&chains, None) {
+    let (end_entity, intermediates) = chains
+        .split_first()
+        .ok_or(Error::ErrClientCertificateRequired)?;
+
+    match cert_verifier.verify_client_cert(end_entity, intermediates, std::time::SystemTime::now())
+    {
         Ok(_) => {}
         Err(err) => return Err(Error::Other(err.to_string())),
     };
@@ -443,17 +461,26 @@ pub(crate) fn verify_client_cert(
 
 pub(crate) fn verify_server_cert(
     raw_certificates: &[Vec<u8>],
-    cert_verifier: &Arc<dyn rustls::ServerCertVerifier>,
-    roots: &rustls::RootCertStore,
+    cert_verifier: &Arc<dyn rustls::client::ServerCertVerifier>,
     server_name: &str,
 ) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
-    let dns_name = match webpki::DNSNameRef::try_from_ascii_str(server_name) {
+    let dns_name = match rustls::server::DnsName::try_from_ascii(server_name.as_ref()) {
         Ok(dns_name) => dns_name,
         Err(err) => return Err(Error::Other(err.to_string())),
     };
 
-    match cert_verifier.verify_server_cert(roots, &chains, dns_name, &[]) {
+    let (end_entity, intermediates) = chains
+        .split_first()
+        .ok_or(Error::ErrServerMustHaveCertificate)?;
+    match cert_verifier.verify_server_cert(
+        end_entity,
+        intermediates,
+        &rustls::ServerName::DnsName(dns_name.to_owned()),
+        &mut [].into_iter(),
+        &[],
+        std::time::SystemTime::now(),
+    ) {
         Ok(_) => {}
         Err(err) => return Err(Error::Other(err.to_string())),
     };
@@ -477,6 +504,9 @@ pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: 
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "pem")]
+    use super::*;
+
     #[cfg(feature = "pem")]
     #[test]
     fn test_certificate_serialize_pem_and_from_pem() -> crate::error::Result<()> {

@@ -1,7 +1,6 @@
 use super::*;
-use crate::textattrs::TextAttribute;
-
 use crate::attributes::ATTR_SOFTWARE;
+use crate::textattrs::TextAttribute;
 
 #[test]
 fn fingerprint_uses_crc_32_iso_hdlc() -> Result<()> {
@@ -67,7 +66,7 @@ fn test_fingerprint_check_bad() -> Result<()> {
             "IsAttrSizeInvalid should be true"
         );
     } else {
-        assert!(false, "Expected error, but got ok");
+        panic!("Expected error, but got ok");
     }
 
     Ok(())

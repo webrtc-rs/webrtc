@@ -7,8 +7,7 @@ fn test_unknown_attributes() -> Result<()> {
     assert_eq!(
         a.to_string(),
         "DONT-FRAGMENT, CHANNEL-NUMBER",
-        "bad String:{}",
-        a
+        "bad String:{a}"
     );
     assert_eq!(
         UnknownAttributes(vec![]).to_string(),

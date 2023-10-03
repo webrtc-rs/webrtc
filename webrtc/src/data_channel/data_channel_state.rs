@@ -1,10 +1,12 @@
-use serde::Serialize;
 use std::fmt;
 
+use serde::Serialize;
+
 /// DataChannelState indicates the state of a data channel.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize)]
 pub enum RTCDataChannelState {
     #[serde(rename = "unspecified")]
+    #[default]
     Unspecified = 0,
 
     /// DataChannelStateConnecting indicates that the data channel is being
@@ -27,12 +29,6 @@ pub enum RTCDataChannelState {
     /// has been closed or could not be established.
     #[serde(rename = "closed")]
     Closed,
-}
-
-impl Default for RTCDataChannelState {
-    fn default() -> Self {
-        RTCDataChannelState::Unspecified
-    }
 }
 
 const DATA_CHANNEL_STATE_CONNECTING_STR: &str = "connecting";
@@ -73,7 +69,7 @@ impl fmt::Display for RTCDataChannelState {
             RTCDataChannelState::Closed => DATA_CHANNEL_STATE_CLOSED_STR,
             RTCDataChannelState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -93,10 +89,9 @@ mod test {
 
         for (state_string, expected_state) in tests {
             assert_eq!(
-                expected_state,
                 RTCDataChannelState::from(state_string),
-                "testCase: {}",
                 expected_state,
+                "testCase: {expected_state}",
             );
         }
     }
@@ -112,7 +107,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string(),)
+            assert_eq!(state.to_string(), expected_string)
         }
     }
 }

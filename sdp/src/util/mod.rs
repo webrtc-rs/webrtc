@@ -1,16 +1,17 @@
 #[cfg(test)]
 mod util_test;
 
-use super::error::{Error, Result};
-
 use std::collections::HashMap;
 use std::fmt;
+
+use super::error::{Error, Result};
 
 pub const ATTRIBUTE_KEY: &str = "a=";
 
 /// ConnectionRole indicates which of the end points should initiate the connection establishment
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ConnectionRole {
+    #[default]
     Unspecified,
 
     /// ConnectionRoleActive indicates the endpoint will initiate an outgoing connection.
@@ -24,12 +25,6 @@ pub enum ConnectionRole {
 
     /// ConnectionRoleHoldconn indicates the endpoint does not want the connection to be established for the time being.
     Holdconn,
-}
-
-impl Default for ConnectionRole {
-    fn default() -> Self {
-        ConnectionRole::Unspecified
-    }
 }
 
 const CONNECTION_ROLE_ACTIVE_STR: &str = "active";
@@ -46,7 +41,7 @@ impl fmt::Display for ConnectionRole {
             ConnectionRole::Holdconn => CONNECTION_ROLE_HOLDCONN_STR,
             _ => "Unspecified",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

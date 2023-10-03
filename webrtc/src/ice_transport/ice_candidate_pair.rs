@@ -1,6 +1,6 @@
-use crate::ice_transport::ice_candidate::*;
-
 use std::fmt;
+
+use crate::ice_transport::ice_candidate::*;
 
 /// ICECandidatePair represents an ICE Candidate pair
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -18,7 +18,7 @@ impl fmt::Display for RTCIceCandidatePair {
 
 impl RTCIceCandidatePair {
     fn stats_id(local_id: &str, remote_id: &str) -> String {
-        format!("{}-{}", local_id, remote_id)
+        format!("{local_id}-{remote_id}")
     }
 
     /// returns an initialized ICECandidatePair

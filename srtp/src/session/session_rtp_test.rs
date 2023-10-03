@@ -1,13 +1,13 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use bytes::{Bytes, BytesMut};
+use tokio::net::UdpSocket;
+use tokio::sync::{mpsc, Mutex};
+
 use super::*;
 use crate::error::Result;
 use crate::protection_profile::*;
-
-use bytes::{Bytes, BytesMut};
-use std::{collections::HashMap, sync::Arc};
-use tokio::{
-    net::UdpSocket,
-    sync::{mpsc, Mutex},
-};
 
 async fn build_session_srtp_pair() -> Result<(Session, Session)> {
     let ua = UdpSocket::bind("127.0.0.1:0").await?;
@@ -97,8 +97,7 @@ async fn test_session_srtp_accept() -> Result<()> {
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,
-        "SSRC mismatch during accept exp({}) actual({})",
-        TEST_SSRC, ssrc
+        "SSRC mismatch during accept exp({TEST_SSRC}) actual({ssrc})"
     );
 
     read_stream.read(&mut read_buffer).await?;
@@ -187,7 +186,7 @@ async fn test_session_srtp_multi_ssrc() -> Result<()> {
                 &read_buffer[RTP_HEADER_SIZE..]
             );
         } else {
-            assert!(false, "ssrc {} not found", *ssrc);
+            panic!("ssrc {} not found", *ssrc);
         }
     }
 
@@ -211,17 +210,17 @@ async fn payload_srtp(
     let mut read_buffer = BytesMut::with_capacity(header_size + expected_payload.len());
     read_buffer.resize(header_size + expected_payload.len(), 0u8);
 
-    let (n, hdr) = read_stream.read_rtp(&mut read_buffer).await?;
+    let pkt = read_stream.read_rtp(&mut read_buffer).await?;
 
     assert_eq!(
         expected_payload,
-        &read_buffer[header_size..n],
+        &pkt.payload[..],
         "Sent buffer does not match the one received exp({:?}) actual({:?})",
         expected_payload,
-        &read_buffer[header_size..n]
+        &pkt.payload[..]
     );
 
-    Ok(hdr.sequence_number)
+    Ok(pkt.header.sequence_number)
 }
 
 #[tokio::test]
@@ -271,18 +270,13 @@ async fn test_session_srtp_replay_protection() -> Result<()> {
     tokio::spawn(async move {
         let mut i = 0;
         while i < count {
-            match payload_srtp(&read_stream, RTP_HEADER_SIZE, &test_payload).await {
-                Ok(seq) => {
-                    let mut r = cloned_received_sequence_number.lock().await;
-                    r.push(seq);
+            let seq = payload_srtp(&read_stream, RTP_HEADER_SIZE, &test_payload)
+                .await
+                .unwrap();
+            let mut r = cloned_received_sequence_number.lock().await;
+            r.push(seq);
 
-                    i += 1;
-                }
-                Err(err) => {
-                    assert!(false, "{}", err);
-                    break;
-                }
-            }
+            i += 1;
         }
 
         drop(done_tx);
@@ -307,7 +301,7 @@ async fn test_session_srtp_replay_protection() -> Result<()> {
 
     {
         let received_sequence_number = received_sequence_number.lock().await;
-        assert_eq!(&expected_sequence_number[..], &received_sequence_number[..]);
+        assert_eq!(&received_sequence_number[..], &expected_sequence_number[..]);
     }
 
     Ok(())

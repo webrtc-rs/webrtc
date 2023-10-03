@@ -122,21 +122,18 @@ fn test_parse_signature_schemes() -> Result<()> {
                 assert_eq!(
                     err.to_string(),
                     output_err.to_string(),
-                    "Expected error: {:?}, got: {:?}",
-                    err,
-                    output_err
+                    "Expected error: {err:?}, got: {output_err:?}"
                 );
             } else {
-                assert!(false, "expect err, but got non-err for {}", name);
+                panic!("expect err, but got non-err for {name}");
             }
         } else if let Ok(output_val) = output {
             assert_eq!(
                 expected, output_val,
-                "Expected signatureHashAlgorithm:\n{:?}\ngot:\n{:?}",
-                expected, output_val,
+                "Expected signatureHashAlgorithm:\n{expected:?}\ngot:\n{output_val:?}",
             );
         } else {
-            assert!(false, "expect non-err, but got err for {}", name);
+            panic!("expect non-err, but got err for {name}");
         }
     }
 

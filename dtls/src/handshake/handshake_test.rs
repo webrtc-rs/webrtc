@@ -1,12 +1,11 @@
+use std::io::{BufReader, BufWriter};
+use std::time::{Duration, SystemTime};
+
 use super::*;
 use crate::compression_methods::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_random::HandshakeRandom;
 use crate::record_layer::record_layer_header::ProtocolVersion;
-
-use std::time::{Duration, SystemTime};
-
-use std::io::{BufReader, BufWriter};
 
 #[test]
 fn test_handshake_message() -> Result<()> {
@@ -54,8 +53,7 @@ fn test_handshake_message() -> Result<()> {
     let h = Handshake::unmarshal(&mut reader)?;
     assert_eq!(
         h, parsed_handshake,
-        "handshakeMessageClientHello unmarshal: got {:?}, want {:?}",
-        h, parsed_handshake
+        "handshakeMessageClientHello unmarshal: got {h:?}, want {parsed_handshake:?}"
     );
 
     let mut raw = vec![];
@@ -65,8 +63,7 @@ fn test_handshake_message() -> Result<()> {
     }
     assert_eq!(
         raw, raw_handshake_message,
-        "handshakeMessageClientHello marshal: got {:?}, want {:?}",
-        raw, raw_handshake_message
+        "handshakeMessageClientHello marshal: got {raw:?}, want {raw_handshake_message:?}"
     );
 
     Ok(())

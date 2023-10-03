@@ -1,8 +1,9 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
@@ -14,10 +15,8 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
 
 #[tokio::main]
@@ -145,91 +144,83 @@ async fn main() -> Result<()> {
     let pc = Arc::downgrade(&peer_connection);
     let curr_track1 = Arc::clone(&curr_track);
     let track_count1 = Arc::clone(&track_count);
-    peer_connection
-        .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-                if let Some(track) = track {
-                    let track_num = track_count1.fetch_add(1, Ordering::SeqCst);
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        let track_num = track_count1.fetch_add(1, Ordering::SeqCst);
 
-                    let curr_track2 = Arc::clone(&curr_track1);
-                    let pc2 = pc.clone();
-                    let packets_tx2 = Arc::clone(&packets_tx);
-                    tokio::spawn(async move {
-                        println!(
-                            "Track has started, of type {}: {}",
-                            track.payload_type(),
-                            track.codec().await.capability.mime_type
-                        );
+        let curr_track2 = Arc::clone(&curr_track1);
+        let pc2 = pc.clone();
+        let packets_tx2 = Arc::clone(&packets_tx);
+        tokio::spawn(async move {
+            println!(
+                "Track has started, of type {}: {}",
+                track.payload_type(),
+                track.codec().capability.mime_type
+            );
 
-                        let mut last_timestamp = 0;
-                        let mut is_curr_track = false;
-                        while let Ok((mut rtp, _)) = track.read_rtp().await {
-                            // Change the timestamp to only be the delta
-                            let old_timestamp = rtp.header.timestamp;
-                            if last_timestamp == 0 {
-                                rtp.header.timestamp = 0
-                            } else {
-                                rtp.header.timestamp -= last_timestamp;
-                            }
-                            last_timestamp = old_timestamp;
-
-                            // Check if this is the current track
-                            if curr_track2.load(Ordering::SeqCst) == track_num {
-                                // If just switched to this track, send PLI to get picture refresh
-                                if !is_curr_track {
-                                    is_curr_track = true;
-                                    if let Some(pc) = pc2.upgrade() {
-                                        if let Err(err) = pc
-                                            .write_rtcp(&[Box::new(PictureLossIndication {
-                                                sender_ssrc: 0,
-                                                media_ssrc: track.ssrc(),
-                                            })])
-                                            .await
-                                        {
-                                            println!("write_rtcp err: {}", err);
-                                        }
-                                    } else {
-                                        break;
-                                    }
-                                }
-                                let _ = packets_tx2.send(rtp).await;
-                            } else {
-                                is_curr_track = false;
-                            }
-                        }
-
-                        println!(
-                            "Track has ended, of type {}: {}",
-                            track.payload_type(),
-                            track.codec().await.capability.mime_type
-                        );
-                    });
+            let mut last_timestamp = 0;
+            let mut is_curr_track = false;
+            while let Ok((mut rtp, _)) = track.read_rtp().await {
+                // Change the timestamp to only be the delta
+                let old_timestamp = rtp.header.timestamp;
+                if last_timestamp == 0 {
+                    rtp.header.timestamp = 0
+                } else {
+                    rtp.header.timestamp -= last_timestamp;
                 }
+                last_timestamp = old_timestamp;
 
-                Box::pin(async {})
-            },
-        ))
-        .await;
+                // Check if this is the current track
+                if curr_track2.load(Ordering::SeqCst) == track_num {
+                    // If just switched to this track, send PLI to get picture refresh
+                    if !is_curr_track {
+                        is_curr_track = true;
+                        if let Some(pc) = pc2.upgrade() {
+                            if let Err(err) = pc
+                                .write_rtcp(&[Box::new(PictureLossIndication {
+                                    sender_ssrc: 0,
+                                    media_ssrc: track.ssrc(),
+                                })])
+                                .await
+                            {
+                                println!("write_rtcp err: {err}");
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    let _ = packets_tx2.send(rtp).await;
+                } else {
+                    is_curr_track = false;
+                }
+            }
+
+            println!(
+                "Track has ended, of type {}: {}",
+                track.payload_type(),
+                track.codec().capability.mime_type
+            );
+        });
+
+        Box::pin(async {})
+    }));
 
     let (connected_tx, mut connected_rx) = tokio::sync::mpsc::channel(1);
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel(1);
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
-            if s == RTCPeerConnectionState::Connected {
-                let _ = connected_tx.try_send(());
-            } else if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                let _ = done_tx.try_send(());
-            }
-            Box::pin(async move {})
-        }))
-        .await;
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
+        if s == RTCPeerConnectionState::Connected {
+            let _ = connected_tx.try_send(());
+        } else if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            let _ = done_tx.try_send(());
+        }
+        Box::pin(async move {})
+    }));
 
     // Create an answer
     let answer = peer_connection.create_answer(None).await?;
@@ -249,7 +240,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -309,7 +300,7 @@ async fn main() -> Result<()> {
                         break;
                     }
                     _ = tokio::signal::ctrl_c() => {
-                        println!("");
+                        println!();
                         break;
                     }
                 };

@@ -1,7 +1,7 @@
-use thiserror::Error;
-
 use std::io;
 use std::string::FromUtf8Error;
+
+use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 
 pub type Result<T> = std::result::Result<T, Error>;

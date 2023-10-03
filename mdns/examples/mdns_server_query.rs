@@ -1,6 +1,8 @@
 use std::net::{Ipv4Addr, SocketAddr};
+
 use tokio::sync::mpsc;
-use webrtc_mdns::{config::*, conn::*};
+use webrtc_mdns::config::*;
+use webrtc_mdns::conn::*;
 
 #[tokio::main]
 async fn main() {
@@ -36,7 +38,7 @@ async fn main() {
     });
 
     let (answer, src) = server_b.query("webrtc-rs-mdns-1.local", b).await.unwrap();
-    println!("webrtc-rs-mdns-1.local answer = {}, src = {}", answer, src);
+    println!("webrtc-rs-mdns-1.local answer = {answer}, src = {src}");
 
     let (a, b) = mpsc::channel(1);
 
@@ -46,7 +48,7 @@ async fn main() {
     });
 
     let (answer, src) = server_b.query("webrtc-rs-mdns-2.local", b).await.unwrap();
-    println!("webrtc-rs-mdns-2.local answer = {}, src = {}", answer, src);
+    println!("webrtc-rs-mdns-2.local answer = {answer}, src = {src}");
 
     server_a.close().await.unwrap();
     server_b.close().await.unwrap();

@@ -13,19 +13,20 @@ pub mod candidate_peer_reflexive;
 pub mod candidate_relay;
 pub mod candidate_server_reflexive;
 
-use crate::error::Result;
-use crate::network_type::*;
-use crate::tcp_type::*;
-use candidate_base::*;
-
-use async_trait::async_trait;
-use serde::Serialize;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
+
+use async_trait::async_trait;
+use candidate_base::*;
+use serde::Serialize;
 use tokio::sync::{broadcast, Mutex};
+
+use crate::error::Result;
+use crate::network_type::*;
+use crate::tcp_type::*;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 pub(crate) const DEFAULT_LOCAL_PREFERENCE: u16 = 65535;
@@ -74,14 +75,14 @@ pub trait Candidate: fmt::Display {
 
     fn marshal(&self) -> String;
 
-    async fn addr(&self) -> SocketAddr;
+    fn addr(&self) -> SocketAddr;
 
     async fn close(&self) -> Result<()>;
     fn seen(&self, outbound: bool);
 
     async fn write_to(&self, raw: &[u8], dst: &(dyn Candidate + Send + Sync)) -> Result<usize>;
     fn equal(&self, other: &dyn Candidate) -> bool;
-    async fn set_ip(&self, ip: &IpAddr) -> Result<()>;
+    fn set_ip(&self, ip: &IpAddr) -> Result<()>;
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
 }
@@ -111,7 +112,7 @@ impl fmt::Display for CandidateType {
             CandidateType::Relay => "relay",
             CandidateType::Unspecified => "Unknown candidate type",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -220,7 +221,7 @@ impl fmt::Display for CandidatePairState {
             Self::Unspecified => "unspecified",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

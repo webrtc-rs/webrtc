@@ -1,11 +1,13 @@
-use clap::{App, AppSettings, Arg};
-use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::sync::Arc;
+
+use clap::{App, AppSettings, Arg};
+use hub::utilities::load_certificate;
 use tokio::net::UdpSocket;
 use util::Conn;
+use webrtc_dtls::config::*;
+use webrtc_dtls::conn::DTLSConn;
 use webrtc_dtls::Error;
-use webrtc_dtls::{config::*, conn::DTLSConn};
 
 // cargo run --example dial_verify -- --server 127.0.0.1:4444
 
@@ -57,18 +59,19 @@ async fn main() -> Result<(), Error> {
 
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     conn.connect(server).await?;
-    println!("connecting {}..", server);
+    println!("connecting {server}..");
 
     let certificate = hub::utilities::load_key_and_certificate(
-        "examples/certificates/client.pem.private_key.pem".into(),
-        "examples/certificates/client.pub.pem".into(),
+        "dtls/examples/certificates/client.pem.private_key.pem".into(),
+        "dtls/examples/certificates/client.pub.pem".into(),
     )?;
 
     let mut cert_pool = rustls::RootCertStore::empty();
-    let f = File::open("examples/certificates/server.pub.pem")?;
-    let mut reader = BufReader::new(f);
-    if cert_pool.add_pem_file(&mut reader).is_err() {
-        return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
+    let certs = load_certificate("dtls/examples/certificates/server.pub.pem".into())?;
+    for cert in &certs {
+        if cert_pool.add(cert).is_err() {
+            return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
+        }
     }
 
     let config = Config {

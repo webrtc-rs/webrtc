@@ -1,11 +1,15 @@
-use super::*;
-use crate::mock::mock_stream::MockStream;
-use crate::stream_info::RTPHeaderExtension;
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
+
 use rtcp::transport_feedbacks::transport_layer_cc::{
     PacketStatusChunk, RunLengthChunk, StatusChunkTypeTcc, StatusVectorChunk, SymbolSizeTypeTcc,
     SymbolTypeTcc, TransportLayerCc,
 };
 use util::Marshal;
+
+use super::*;
+use crate::mock::mock_stream::MockStream;
+use crate::stream_info::RTPHeaderExtension;
 
 #[tokio::test]
 async fn test_twcc_receiver_interceptor_before_any_packets() -> Result<()> {
@@ -77,18 +81,18 @@ async fn test_twcc_receiver_interceptor_after_rtp_packets() -> Result<()> {
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
     if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(1, cc.media_ssrc);
-        assert_eq!(0, cc.base_sequence_number);
+        assert_eq!(cc.media_ssrc, 1);
+        assert_eq!(cc.base_sequence_number, 0);
         assert_eq!(
+            cc.packet_chunks,
             vec![PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                 type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                 packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                 run_length: 10,
-            })],
-            cc.packet_chunks
+            })]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -115,7 +119,7 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
     )
     .await;
 
-    let delays = vec![0, 10, 100, 200];
+    let delays = [0, 10, 100, 200];
     for (i, d) in delays.iter().enumerate() {
         tokio::time::advance(Duration::from_millis(*d)).await;
 
@@ -145,8 +149,9 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
 
     assert_eq!(pkts.len(), 1);
     if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(0, cc.base_sequence_number);
+        assert_eq!(cc.base_sequence_number, 0);
         assert_eq!(
+            cc.packet_chunks,
             vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                 type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                 symbol_size: SymbolSizeTypeTcc::TwoBit,
@@ -156,11 +161,10 @@ async fn test_twcc_receiver_interceptor_different_delays_between_rtp_packets() -
                     SymbolTypeTcc::PacketReceivedLargeDelta,
                     SymbolTypeTcc::PacketReceivedLargeDelta,
                 ],
-            })],
-            cc.packet_chunks
+            })]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -224,8 +228,9 @@ async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
 
     assert_eq!(pkts.len(), 1);
     if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(0, cc.base_sequence_number);
+        assert_eq!(cc.base_sequence_number, 0);
         assert_eq!(
+            cc.packet_chunks,
             vec![
                 PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                     type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
@@ -263,11 +268,10 @@ async fn test_twcc_receiver_interceptor_packet_loss() -> Result<()> {
                     packet_status_symbol: SymbolTypeTcc::PacketReceivedLargeDelta,
                     run_length: 1,
                 }),
-            ],
-            cc.packet_chunks
+            ]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;
@@ -312,8 +316,9 @@ async fn test_twcc_receiver_interceptor_overflow() -> Result<()> {
     let pkts = stream.written_rtcp().await.unwrap();
     assert_eq!(pkts.len(), 1);
     if let Some(cc) = pkts[0].as_any().downcast_ref::<TransportLayerCc>() {
-        assert_eq!(65530, cc.base_sequence_number);
+        assert_eq!(cc.base_sequence_number, 65530);
         assert_eq!(
+            cc.packet_chunks,
             vec![
                 PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                     type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
@@ -344,11 +349,10 @@ async fn test_twcc_receiver_interceptor_overflow() -> Result<()> {
                         SymbolTypeTcc::PacketReceivedSmallDelta,
                     ],
                 }),
-            ],
-            cc.packet_chunks
+            ]
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     stream.close().await?;

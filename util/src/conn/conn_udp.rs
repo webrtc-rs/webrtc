@@ -1,6 +1,6 @@
-use super::*;
-
 use tokio::net::UdpSocket;
+
+use super::*;
 
 #[async_trait]
 impl Conn for UdpSocket {
@@ -24,11 +24,11 @@ impl Conn for UdpSocket {
         Ok(self.send_to(buf, target).await?)
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    fn local_addr(&self) -> Result<SocketAddr> {
         Ok(self.local_addr()?)
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 

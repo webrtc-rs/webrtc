@@ -1,19 +1,19 @@
 #[cfg(test)]
 mod client_test;
 
-use crate::agent::*;
-use crate::error::*;
-use crate::message::*;
-
-use util::Conn;
-
 use std::collections::HashMap;
 use std::io::BufReader;
 use std::marker::{Send, Sync};
 use std::ops::Add;
 use std::sync::Arc;
+
 use tokio::sync::mpsc;
 use tokio::time::{self, Duration, Instant};
+use util::Conn;
+
+use crate::agent::*;
+use crate::error::*;
+use crate::message::*;
 
 const DEFAULT_TIMEOUT_RATE: Duration = Duration::from_millis(5);
 const DEFAULT_RTO: Duration = Duration::from_millis(300);
@@ -412,7 +412,7 @@ impl Client {
         tokio::spawn(async move { Agent::run(agent, client_agent_rx).await });
 
         if self.settings.collector.is_none() {
-            self.settings.collector = Some(Box::new(TickerCollector::default()));
+            self.settings.collector = Some(Box::<TickerCollector>::default());
         }
         if let Some(collector) = &mut self.settings.collector {
             collector.start(self.settings.rto_rate, Arc::clone(&client_agent_tx))?;

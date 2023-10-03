@@ -1,12 +1,13 @@
-use crate::mux::mux_func::MatchFunc;
-use util::{Buffer, Conn};
-
-use async_trait::async_trait;
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+use async_trait::async_trait;
 use tokio::sync::Mutex;
+use util::{Buffer, Conn};
+
+use crate::mux::mux_func::MatchFunc;
 
 /// Endpoint implements net.Conn. It is used to read muxed packets.
 pub struct Endpoint {
@@ -58,12 +59,12 @@ impl Conn for Endpoint {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
-        self.next_conn.local_addr().await
+    fn local_addr(&self) -> Result<SocketAddr> {
+        self.next_conn.local_addr()
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
-        self.next_conn.remote_addr().await
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        self.next_conn.remote_addr()
     }
 
     async fn close(&self) -> Result<()> {

@@ -1,38 +1,46 @@
 [package]
 name = "webrtc-srtp"
-version = "0.9.0"
+version = "0.11.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2018"
+edition = "2021"
 description = "A pure Rust implementation of SRTP"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-srtp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/srtp"
-rust-version = "1.60.0"
+
+[features]
+openssl = ["dep:openssl"]
+vendored-openssl = ["openssl/vendored"]
 
 [dependencies]
-util = { version = "0.6.0", path = "../util", package = "webrtc-util", default-features = false, features = [
+util = { version = "0.8", path = "../util", package = "webrtc-util", default-features = false, features = [
     "conn",
     "buffer",
     "marshal",
 ] }
-rtp = { version = "0.6.7", path = "../rtp" }
-rtcp = { version = "0.7.0", path = "../rtcp" }
+rtp = { version = "0.9", path = "../rtp" }
+rtcp = { version = "0.10", path = "../rtcp" }
 
 byteorder = "1"
 bytes = "1"
-thiserror = "1.0"
-hmac = { version = "0.11.0", features = ["std"] }
-sha-1 = "0.9.8"
-ctr = "0.8.0"
-aes = "0.7.5"
-subtle = "2.4"
-tokio = { version = "1.19", features = ["full"] }
-async-trait = "0.1.56"
-log = "0.4.16"
-aead = { version = "0.4.3", features = ["std"] }
-aes-gcm = "0.9.4"
+thiserror = "1"
+hmac = { version = "0.12", features = ["std"] }
+sha1 = "0.10"
+ctr = "0.9"
+aes = "0.8"
+subtle = "2"
+tokio = { version = "1.32.0", features = ["full"] }
+log = "0.4"
+aead = { version = "0.5", features = ["std"] }
+aes-gcm = { version = "0.10", features = ["std"] }
+openssl = { version = "0.10.57", optional = true }
 
 [dev-dependencies]
-tokio-test = "0.4.0" # must match the min version of the `tokio` crate above
-lazy_static = "1.4.0"
+criterion = { version = "0.5", features = ["async_futures"] }
+tokio-test = "0.4"
+lazy_static = "1"
+
+[[bench]]
+name = "srtp_bench"
+harness = false

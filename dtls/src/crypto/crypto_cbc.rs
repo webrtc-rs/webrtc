@@ -8,6 +8,9 @@
 
 // https://github.com/RustCrypto/block-ciphers
 
+use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use p256::elliptic_curve::subtle::ConstantTimeEq;
+use rand::Rng;
 use std::io::Cursor;
 use std::ops::Not;
 
@@ -15,15 +18,8 @@ use crate::content::*;
 use crate::error::*;
 use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
-
-use aes::Aes256;
-use block_modes::BlockModeError;
-use block_modes::{BlockMode, Cbc};
-use rand::Rng;
-use subtle::ConstantTimeEq;
-
-use super::padding::DtlsPadding;
-type Aes256Cbc = Cbc<Aes256, DtlsPadding>;
+type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
+type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 
 // State needed to handle encrypted input/output
 #[derive(Clone)]
@@ -73,8 +69,8 @@ impl CryptoCbc {
         let mut iv: Vec<u8> = vec![0; Self::BLOCK_SIZE];
         rand::thread_rng().fill(iv.as_mut_slice());
 
-        let write_cbc = Aes256Cbc::new_var(&self.local_key, &iv)?;
-        let encrypted = write_cbc.encrypt_vec(&payload);
+        let write_cbc = Aes256CbcEnc::new_from_slices(&self.local_key, &iv)?;
+        let encrypted = write_cbc.encrypt_padded_vec_mut::<Pkcs7>(&payload);
 
         // Prepend unencrypte header with encrypted payload
         let mut r = vec![];
@@ -102,9 +98,11 @@ impl CryptoCbc {
         let body = &body[Self::BLOCK_SIZE..];
         //TODO: add body.len() check
 
-        let read_cbc = Aes256Cbc::new_var(&self.remote_key, iv)?;
+        let read_cbc = Aes256CbcDec::new_from_slices(&self.remote_key, iv)?;
 
-        let decrypted = read_cbc.decrypt_vec(body)?;
+        let decrypted = read_cbc
+            .decrypt_padded_vec_mut::<Pkcs7>(body)
+            .map_err(|_| Error::ErrInvalidPacketLength)?;
 
         let recv_mac = &decrypted[decrypted.len() - Self::MAC_SIZE..];
         let decrypted = &decrypted[0..decrypted.len() - Self::MAC_SIZE];
@@ -118,7 +116,7 @@ impl CryptoCbc {
         )?;
 
         if recv_mac.ct_eq(&mac).not().into() {
-            return Err(BlockModeError.into());
+            return Err(Error::ErrInvalidMac);
         }
 
         let mut d = Vec::with_capacity(RECORD_LAYER_HEADER_SIZE + decrypted.len());

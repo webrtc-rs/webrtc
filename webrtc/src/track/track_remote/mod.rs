@@ -1,20 +1,20 @@
-use crate::api::media_engine::MediaEngine;
-use crate::error::{Error, Result};
-use crate::rtp_transceiver::rtp_codec::{RTCRtpCodecParameters, RTCRtpParameters, RTPCodecType};
-use crate::rtp_transceiver::{PayloadType, SSRC};
-use crate::RECEIVE_MTU;
-
-use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
-
-use crate::track::RTP_PAYLOAD_TYPE_BITMASK;
-use bytes::{Bytes, BytesMut};
-use interceptor::{Attributes, Interceptor};
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
+
+use arc_swap::ArcSwapOption;
+use interceptor::{Attributes, Interceptor};
+use smol_str::SmolStr;
 use tokio::sync::Mutex;
-use util::Unmarshal;
+use util::sync::Mutex as SyncMutex;
+
+use crate::api::media_engine::MediaEngine;
+use crate::error::{Error, Result};
+use crate::rtp_transceiver::rtp_codec::{RTCRtpCodecParameters, RTCRtpParameters, RTPCodecType};
+use crate::rtp_transceiver::rtp_receiver::RTPReceiverInternal;
+use crate::rtp_transceiver::{PayloadType, SSRC};
 
 lazy_static! {
     static ref TRACK_REMOTE_UNIQUE_ID: AtomicUsize = AtomicUsize::new(0);
@@ -25,35 +25,34 @@ pub type OnMuteHdlrFn = Box<
 
 #[derive(Default)]
 struct Handlers {
-    on_mute: Option<OnMuteHdlrFn>,
-    on_unmute: Option<OnMuteHdlrFn>,
+    on_mute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
+    on_unmute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
 }
 
 #[derive(Default)]
 struct TrackRemoteInternal {
-    peeked: Option<Bytes>,
-    peeked_attributes: Option<Attributes>,
+    peeked: VecDeque<(rtp::packet::Packet, Attributes)>,
 }
 
 /// TrackRemote represents a single inbound source of media
 pub struct TrackRemote {
     tid: usize,
 
-    id: Mutex<String>,
-    stream_id: Mutex<String>,
+    id: SyncMutex<String>,
+    stream_id: SyncMutex<String>,
 
     receive_mtu: usize,
     payload_type: AtomicU8, //PayloadType,
     kind: AtomicU8,         //RTPCodecType,
     ssrc: AtomicU32,        //SSRC,
-    codec: Mutex<RTCRtpCodecParameters>,
-    pub(crate) params: Mutex<RTCRtpParameters>,
-    rid: String,
+    codec: SyncMutex<RTCRtpCodecParameters>,
+    pub(crate) params: SyncMutex<RTCRtpParameters>,
+    rid: SmolStr,
 
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
 
-    handlers: Mutex<Handlers>,
+    handlers: Arc<Handlers>,
 
     receiver: Option<Weak<RTPReceiverInternal>>,
     internal: Mutex<TrackRemoteInternal>,
@@ -79,7 +78,7 @@ impl TrackRemote {
         receive_mtu: usize,
         kind: RTPCodecType,
         ssrc: SSRC,
-        rid: String,
+        rid: SmolStr,
         receiver: Weak<RTPReceiverInternal>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
@@ -111,24 +110,24 @@ impl TrackRemote {
     /// id is the unique identifier for this Track. This should be unique for the
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
     /// and StreamID would be 'desktop' or 'webcam'
-    pub async fn id(&self) -> String {
-        let id = self.id.lock().await;
+    pub fn id(&self) -> String {
+        let id = self.id.lock();
         id.clone()
     }
 
-    pub async fn set_id(&self, s: String) {
-        let mut id = self.id.lock().await;
+    pub fn set_id(&self, s: String) {
+        let mut id = self.id.lock();
         *id = s;
     }
 
     /// stream_id is the group this track belongs too. This must be unique
-    pub async fn stream_id(&self) -> String {
-        let stream_id = self.stream_id.lock().await;
+    pub fn stream_id(&self) -> String {
+        let stream_id = self.stream_id.lock();
         stream_id.clone()
     }
 
-    pub async fn set_stream_id(&self, s: String) {
-        let mut stream_id = self.stream_id.lock().await;
+    pub fn set_stream_id(&self, s: String) {
+        let mut stream_id = self.stream_id.lock();
         *stream_id = s;
     }
 
@@ -167,86 +166,78 @@ impl TrackRemote {
     }
 
     /// msid gets the Msid of the track
-    pub async fn msid(&self) -> String {
-        self.stream_id().await + " " + self.id().await.as_str()
+    pub fn msid(&self) -> String {
+        format!("{} {}", self.stream_id(), self.id())
     }
 
     /// codec gets the Codec of the track
-    pub async fn codec(&self) -> RTCRtpCodecParameters {
-        let codec = self.codec.lock().await;
+    pub fn codec(&self) -> RTCRtpCodecParameters {
+        let codec = self.codec.lock();
         codec.clone()
     }
 
-    pub async fn set_codec(&self, codec: RTCRtpCodecParameters) {
-        let mut c = self.codec.lock().await;
+    pub fn set_codec(&self, codec: RTCRtpCodecParameters) {
+        let mut c = self.codec.lock();
         *c = codec;
     }
 
-    pub async fn params(&self) -> RTCRtpParameters {
-        let p = self.params.lock().await;
+    pub fn params(&self) -> RTCRtpParameters {
+        let p = self.params.lock();
         p.clone()
     }
 
-    pub async fn set_params(&self, params: RTCRtpParameters) {
-        let mut p = self.params.lock().await;
+    pub fn set_params(&self, params: RTCRtpParameters) {
+        let mut p = self.params.lock();
         *p = params;
     }
 
-    pub async fn onmute<F>(&self, handler: F)
+    pub fn onmute<F>(&self, handler: F)
     where
         F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
     {
-        let mut handlers = self.handlers.lock().await;
-        handlers.on_mute = Some(Box::new(handler));
+        self.handlers
+            .on_mute
+            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
     }
 
-    pub async fn onunmute<F>(&self, handler: F)
+    pub fn onunmute<F>(&self, handler: F)
     where
         F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
     {
-        let mut handlers = self.handlers.lock().await;
-        handlers.on_unmute = Some(Box::new(handler));
+        self.handlers
+            .on_unmute
+            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
     }
 
-    /// Read reads data from the track.
-    pub async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
-        let (peeked, peeked_attributes) = {
+    /// Reads data from the track.
+    ///
+    /// **Cancel Safety:** This method is not cancel safe. Dropping the resulting [`Future`] before
+    /// it returns [`Poll::Ready`] will cause data loss.
+    pub async fn read(&self, b: &mut [u8]) -> Result<(rtp::packet::Packet, Attributes)> {
+        {
+            // Internal lock scope
             let mut internal = self.internal.lock().await;
-            (internal.peeked.take(), internal.peeked_attributes.take())
+            if let Some((pkt, attributes)) = internal.peeked.pop_front() {
+                self.check_and_update_track(&pkt).await?;
+
+                return Ok((pkt, attributes));
+            }
         };
 
-        if let (Some(data), Some(attributes)) = (peeked, peeked_attributes) {
-            // someone else may have stolen our packet when we
-            // released the lock.  Deal with it.
-            let n = std::cmp::min(b.len(), data.len());
-            b[..n].copy_from_slice(&data[..n]);
-            self.check_and_update_track(&b[..n]).await?;
-            Ok((n, attributes))
-        } else {
-            let (n, attributes) = {
-                if let Some(receiver) = &self.receiver {
-                    if let Some(receiver) = receiver.upgrade() {
-                        receiver.read_rtp(b, self.tid).await?
-                    } else {
-                        return Err(Error::ErrRTPReceiverNil);
-                    }
-                } else {
-                    return Err(Error::ErrRTPReceiverNil);
-                }
-            };
-            self.check_and_update_track(&b[..n]).await?;
-            Ok((n, attributes))
-        }
+        let receiver = match self.receiver.as_ref().and_then(|r| r.upgrade()) {
+            Some(r) => r,
+            None => return Err(Error::ErrRTPReceiverNil),
+        };
+
+        let (pkt, attributes) = receiver.read_rtp(b, self.tid).await?;
+        self.check_and_update_track(&pkt).await?;
+        Ok((pkt, attributes))
     }
 
     /// check_and_update_track checks payloadType for every incoming packet
     /// once a different payloadType is detected the track will be updated
-    pub(crate) async fn check_and_update_track(&self, b: &[u8]) -> Result<()> {
-        if b.len() < 2 {
-            return Err(Error::ErrRTPTooShort);
-        }
-
-        let payload_type = b[1] & RTP_PAYLOAD_TYPE_BITMASK;
+    pub(crate) async fn check_and_update_track(&self, pkt: &rtp::packet::Packet) -> Result<()> {
+        let payload_type = pkt.header.payload_type;
         if payload_type != self.payload_type() {
             let p = self
                 .media_engine
@@ -260,7 +251,7 @@ impl TrackRemote {
             }
             self.payload_type.store(payload_type, Ordering::SeqCst);
             {
-                let mut codec = self.codec.lock().await;
+                let mut codec = self.codec.lock();
                 *codec = if let Some(codec) = p.codecs.first() {
                     codec.clone()
                 } else {
@@ -268,7 +259,7 @@ impl TrackRemote {
                 };
             }
             {
-                let mut params = self.params.lock().await;
+                let mut params = self.params.lock();
                 *params = p;
             }
         }
@@ -279,59 +270,51 @@ impl TrackRemote {
     /// read_rtp is a convenience method that wraps Read and unmarshals for you.
     pub async fn read_rtp(&self) -> Result<(rtp::packet::Packet, Attributes)> {
         let mut b = vec![0u8; self.receive_mtu];
-        let (n, attributes) = self.read(&mut b).await?;
+        let (pkt, attributes) = self.read(&mut b).await?;
 
-        let mut buf = &b[..n];
-        let r = rtp::packet::Packet::unmarshal(&mut buf)?;
-        Ok((r, attributes))
-    }
-
-    /// determine_payload_type blocks and reads a single packet to determine the PayloadType for this Track
-    /// this is useful because we can't announce it to the user until we know the payload_type
-    pub(crate) async fn determine_payload_type(&self) -> Result<()> {
-        let mut b = vec![0u8; RECEIVE_MTU];
-        let (n, _) = self.peek(&mut b).await?;
-
-        let mut buf = &b[..n];
-        let r = rtp::packet::Packet::unmarshal(&mut buf)?;
-        self.payload_type
-            .store(r.header.payload_type, Ordering::SeqCst);
-
-        Ok(())
+        Ok((pkt, attributes))
     }
 
     /// peek is like Read, but it doesn't discard the packet read
-    pub(crate) async fn peek(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
-        let (n, a) = self.read(b).await?;
+    pub(crate) async fn peek(&self, b: &mut [u8]) -> Result<(rtp::packet::Packet, Attributes)> {
+        let (pkt, a) = self.read(b).await?;
 
         // this might overwrite data if somebody peeked between the Read
         // and us getting the lock.  Oh well, we'll just drop a packet in
         // that case.
-        let mut data = BytesMut::new();
-        data.extend(b[..n].to_vec());
         {
             let mut internal = self.internal.lock().await;
-            internal.peeked = Some(data.freeze());
-            internal.peeked_attributes = Some(a.clone());
+            internal.peeked.push_back((pkt.clone(), a.clone()));
         }
-        Ok((n, a))
+        Ok((pkt, a))
+    }
+
+    /// Set the initially peeked data for this track.
+    ///
+    /// This is useful when a track is first created to populate data read from the track in the
+    /// process of identifying the track as part of simulcast probing. Using this during other
+    /// parts of the track's lifecycle is probably an error.
+    pub(crate) async fn prepopulate_peeked_data(
+        &self,
+        data: VecDeque<(rtp::packet::Packet, Attributes)>,
+    ) {
+        let mut internal = self.internal.lock().await;
+        internal.peeked = data;
     }
 
     pub(crate) async fn fire_onmute(&self) {
-        let mut handlers = self.handlers.lock().await;
+        let on_mute = self.handlers.on_mute.load();
 
-        match &mut handlers.on_mute {
-            Some(f) => f().await,
-            None => {}
+        if let Some(f) = on_mute.as_ref() {
+            (f.lock().await)().await
         };
     }
 
     pub(crate) async fn fire_onunmute(&self) {
-        let mut handlers = self.handlers.lock().await;
+        let on_unmute = self.handlers.on_unmute.load();
 
-        match &mut handlers.on_unmute {
-            Some(f) => f().await,
-            None => {}
+        if let Some(f) = on_unmute.as_ref() {
+            (f.lock().await)().await
         };
     }
 }

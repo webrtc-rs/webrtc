@@ -24,8 +24,7 @@ fn test_data_add_to() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             }
         }

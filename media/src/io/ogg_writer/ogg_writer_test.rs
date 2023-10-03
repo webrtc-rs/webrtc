@@ -1,6 +1,7 @@
+use std::io::Cursor;
+
 use super::*;
 use crate::error::Error;
-use std::io::Cursor;
 
 #[test]
 fn test_ogg_writer_add_packet_and_close() -> Result<()> {
@@ -23,6 +24,7 @@ fn test_ogg_writer_add_packet_and_close() -> Result<()> {
             csrc: vec![],
             padding: false,
             extensions: vec![],
+            extensions_padding: 0,
         },
         payload: raw_pkt.slice(20..),
     };

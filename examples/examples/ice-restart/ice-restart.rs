@@ -1,11 +1,12 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -111,11 +112,10 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
             // This will notify you when the peer has connected/disconnected
             pc.on_ice_connection_state_change(Box::new(
                 |connection_state: RTCIceConnectionState| {
-                    println!("ICE Connection State has changed: {}", connection_state);
+                    println!("ICE Connection State has changed: {connection_state}");
                     Box::pin(async {})
                 },
-            ))
-            .await;
+            ));
 
             // Send the current time via a DataChannel to the remote peer every 3 seconds
             pc.on_data_channel(Box::new(|d: Arc<RTCDataChannel>| {
@@ -131,11 +131,9 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
                                 tokio::time::sleep(Duration::from_secs(3)).await;
                             }
                         })
-                    }))
-                    .await;
+                    }));
                 })
-            }))
-            .await;
+            }));
 
             *peer_connection = Some(Arc::clone(&pc));
             pc
@@ -249,7 +247,7 @@ async fn main() -> Result<()> {
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 

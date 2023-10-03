@@ -1,15 +1,26 @@
+// Silence warning on complex types:
+#![allow(clippy::type_complexity)]
+
+use std::collections::HashMap;
+
 use super::builder::*;
 use super::header::*;
 use super::name::*;
 use super::parser::*;
 use super::question::*;
-use super::resource::{
-    a::*, aaaa::*, cname::*, mx::*, ns::*, opt::*, ptr::*, soa::*, srv::*, txt::*, *,
-};
+use super::resource::a::*;
+use super::resource::aaaa::*;
+use super::resource::cname::*;
+use super::resource::mx::*;
+use super::resource::ns::*;
+use super::resource::opt::*;
+use super::resource::ptr::*;
+use super::resource::soa::*;
+use super::resource::srv::*;
+use super::resource::txt::*;
+use super::resource::*;
 use super::*;
 use crate::error::*;
-
-use std::collections::HashMap;
 
 fn small_test_msg() -> Result<Message> {
     let name = Name::new("example.com.")?;
@@ -270,8 +281,7 @@ fn test_question_pack_unpack() -> Result<()> {
     );
     assert_eq!(
         got, want,
-        "got from Parser.Question() = {}, want = {}",
-        got, want
+        "got from Parser.Question() = {got}, want = {want}"
     );
 
     Ok(())
@@ -294,7 +304,7 @@ fn test_name() -> Result<()> {
     for test in tests {
         let name = Name::new(test)?;
         let ns = name.to_string();
-        assert_eq!(ns, test, "got {} = {}, want = {}", name, ns, test);
+        assert_eq!(ns, test, "got {name} = {ns}, want = {test}");
     }
 
     Ok(())
@@ -319,9 +329,9 @@ fn test_name_pack_unpack() -> Result<()> {
         let result = input.pack(vec![], &mut Some(HashMap::new()), 0);
         if let Some(want_err) = want_err {
             if let Err(actual_err) = result {
-                assert_eq!(want_err, actual_err);
+                assert_eq!(actual_err, want_err);
             } else {
-                assert!(false);
+                panic!();
             }
             continue;
         } else {
@@ -345,8 +355,7 @@ fn test_name_pack_unpack() -> Result<()> {
 
         assert_eq!(
             got, want,
-            "unpacking packing of {}: got = {}, want = {}",
-            input, got, want
+            "unpacking packing of {input}: got = {got}, want = {want}"
         );
     }
 
@@ -372,7 +381,7 @@ fn test_incompressible_name() -> Result<()> {
             Error::ErrCompressedSrv
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())
@@ -414,100 +423,46 @@ fn test_resource_not_started() -> Result<()> {
     let tests: Vec<(&str, Box<dyn Fn(&mut Parser<'_>) -> Result<()>>)> = vec![
         (
             "CNAMEResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "MXResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "NSResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "PTRResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "SOAResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "TXTResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "SRVResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "AResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
         (
             "AAAAResource",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.resource_body() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.resource_body().map(|_| ()) }),
         ),
     ];
 
     for (name, test_fn) in tests {
         let mut p = Parser::default();
         if let Err(err) = test_fn(&mut p) {
-            assert_eq!(Error::ErrNotStarted, err, "{}", name);
+            assert_eq!(err, Error::ErrNotStarted, "{name}");
         }
     }
 
@@ -623,30 +578,30 @@ fn test_skip_each() -> Result<()> {
 
     p.skip_question()?;
     if let Err(err) = p.skip_question() {
-        assert_eq!(Error::ErrSectionDone, err);
+        assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     p.skip_answer()?;
     if let Err(err) = p.skip_answer() {
-        assert_eq!(Error::ErrSectionDone, err);
+        assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     p.skip_authority()?;
     if let Err(err) = p.skip_authority() {
-        assert_eq!(Error::ErrSectionDone, err);
+        assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     p.skip_additional()?;
     if let Err(err) = p.skip_additional() {
-        assert_eq!(Error::ErrSectionDone, err);
+        assert_eq!(err, Error::ErrSectionDone);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -662,43 +617,19 @@ fn test_skip_after_read() -> Result<()> {
     let tests: Vec<(&str, Box<dyn Fn(&mut Parser<'_>) -> Result<()>>)> = vec![
         (
             "Question",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.question() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.question().map(|_| ()) }),
         ),
         (
             "Answer",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.answer() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.answer().map(|_| ()) }),
         ),
         (
             "Authority",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.authority() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.authority().map(|_| ()) }),
         ),
         (
             "Additional",
-            Box::new(|p: &mut Parser<'_>| -> Result<()> {
-                if let Err(err) = p.additional() {
-                    Err(err)
-                } else {
-                    Ok(())
-                }
-            }),
+            Box::new(|p: &mut Parser<'_>| -> Result<()> { p.additional().map(|_| ()) }),
         ),
     ];
 
@@ -713,9 +644,9 @@ fn test_skip_after_read() -> Result<()> {
         };
 
         if let Err(err) = result {
-            assert_eq!(Error::ErrSectionDone, err);
+            assert_eq!(err, Error::ErrSectionDone);
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -746,9 +677,9 @@ fn test_skip_not_started() -> Result<()> {
     let mut p = Parser::default();
     for (name, test_fn) in tests {
         if let Err(err) = test_fn(&mut p) {
-            assert_eq!(Error::ErrNotStarted, err);
+            assert_eq!(err, Error::ErrNotStarted);
         } else {
-            assert!(false, "{} expected error, but got ok", name);
+            panic!("{name} expected error, but got ok");
         }
     }
 
@@ -814,12 +745,11 @@ fn test_too_many_records() -> Result<()> {
     for (name, mut msg, want) in tests {
         if let Err(got) = msg.pack() {
             assert_eq!(
-                want, got,
-                "got Message.Pack() for {} = {}, want = {}",
-                name, got, want
+                got, want,
+                "got Message.Pack() for {name} = {got}, want = {want}"
             )
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -878,9 +808,9 @@ fn test_too_long_txt() -> Result<()> {
     }
     let rb = TxtResource { txt: vec![str256] };
     if let Err(err) = rb.pack(vec![], &mut Some(HashMap::new()), 0) {
-        assert_eq!(Error::ErrStringTooLong, err);
+        assert_eq!(err, Error::ErrStringTooLong);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -935,16 +865,11 @@ fn test_start_error() -> Result<()> {
             let mut b = env_fn();
             if let Err(got_err) = test_fn(&mut b) {
                 assert_eq!(
-                    *env_err, got_err,
-                    "got Builder{}.{} = {}, want = {}",
-                    env_name, test_name, got_err, env_err
+                    got_err, *env_err,
+                    "got Builder{env_name}.{test_name} = {got_err}, want = {env_err}"
                 );
             } else {
-                assert!(
-                    false,
-                    "{}.{}expected error, but got ok",
-                    env_name, test_name
-                );
+                panic!("{env_name}.{test_name}expected error, but got ok");
             }
         }
     }
@@ -960,7 +885,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(CnameResource::default())),
+                    body: Some(Box::<CnameResource>::default()),
                 })
             }),
         ),
@@ -969,7 +894,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(MxResource::default())),
+                    body: Some(Box::<MxResource>::default()),
                 })
             }),
         ),
@@ -978,7 +903,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(NsResource::default())),
+                    body: Some(Box::<NsResource>::default()),
                 })
             }),
         ),
@@ -987,7 +912,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(PtrResource::default())),
+                    body: Some(Box::<PtrResource>::default()),
                 })
             }),
         ),
@@ -996,7 +921,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(SoaResource::default())),
+                    body: Some(Box::<SoaResource>::default()),
                 })
             }),
         ),
@@ -1005,7 +930,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(TxtResource::default())),
+                    body: Some(Box::<TxtResource>::default()),
                 })
             }),
         ),
@@ -1014,7 +939,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(SrvResource::default())),
+                    body: Some(Box::<SrvResource>::default()),
                 })
             }),
         ),
@@ -1023,7 +948,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(AResource::default())),
+                    body: Some(Box::<AResource>::default()),
                 })
             }),
         ),
@@ -1032,7 +957,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(AaaaResource::default())),
+                    body: Some(Box::<AaaaResource>::default()),
                 })
             }),
         ),
@@ -1041,7 +966,7 @@ fn test_builder_resource_error() -> Result<()> {
             Box::new(|b: &mut Builder| -> Result<()> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(OptResource::default())),
+                    body: Some(Box::<OptResource>::default()),
                 })
             }),
         ),
@@ -1095,16 +1020,11 @@ fn test_builder_resource_error() -> Result<()> {
             let mut b = env_fn();
             if let Err(got_err) = test_fn(&mut b) {
                 assert_eq!(
-                    *env_err, got_err,
-                    "got Builder{}.{} = {}, want = {}",
-                    env_name, test_name, got_err, env_err
+                    got_err, *env_err,
+                    "got Builder{env_name}.{test_name} = {got_err}, want = {env_err}"
                 );
             } else {
-                assert!(
-                    false,
-                    "{}.{}expected error, but got ok",
-                    env_name, test_name
-                );
+                panic!("{env_name}.{test_name}expected error, but got ok");
             }
         }
     }
@@ -1117,9 +1037,9 @@ fn test_finish_error() -> Result<()> {
     let mut b = Builder::default();
     let want = Error::ErrNotStarted;
     if let Err(got) = b.finish() {
-        assert_eq!(want, got, "got Builder.Finish() = {}, want = {}", got, want);
+        assert_eq!(got, want, "got Builder.Finish() = {got}, want = {want}");
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -1192,7 +1112,7 @@ fn test_resource_pack() -> Result<()> {
                 }],
                 authorities: vec![Resource {
                     header: ResourceHeader::default(),
-                    body: Some(Box::new(NsResource::default())),
+                    body: Some(Box::<NsResource>::default()),
                 }],
                 ..Default::default()
             },
@@ -1217,9 +1137,9 @@ fn test_resource_pack() -> Result<()> {
 
     for (mut m, want_err) in tests {
         if let Err(err) = m.pack() {
-            assert_eq!(want_err, err);
+            assert_eq!(err, want_err);
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -1245,7 +1165,7 @@ fn test_resource_pack_length() -> Result<()> {
     hdr.unpack(&buf, 0, 0)?;
 
     let (got, want) = (hdr.length as usize, buf.len() - hb.len());
-    assert_eq!(got, want, "got hdr.Length = {}, want = {}", got, want);
+    assert_eq!(got, want, "got hdr.Length = {got}, want = {want}");
 
     Ok(())
 }
@@ -1274,7 +1194,7 @@ fn test_option_pack_unpack() -> Result<()> {
                         0xfe0 | RCode::FormatError as u32,
                         true,
                     )?,
-                    body: Some(Box::new(OptResource::default())),
+                    body: Some(Box::<OptResource>::default()),
                 }],
                 ..Default::default()
             },

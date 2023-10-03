@@ -1,9 +1,13 @@
-use super::{chunk_header::*, chunk_type::*, *};
-use crate::param::{param_header::*, *};
-use crate::util::get_padding_size;
+use std::fmt;
 
 use bytes::{Bytes, BytesMut};
-use std::fmt;
+
+use super::chunk_header::*;
+use super::chunk_type::*;
+use super::*;
+use crate::param::param_header::*;
+use crate::param::*;
+use crate::util::get_padding_size;
 
 ///https://tools.ietf.org/html/rfc6525#section-3.1
 ///chunkReconfig represents an SCTP Chunk used to reconfigure streams.
@@ -41,12 +45,12 @@ impl fmt::Display for ChunkReconfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut res = String::new();
         if let Some(param_a) = &self.param_a {
-            res += format!("Param A:\n {}", param_a).as_str();
+            res += format!("Param A:\n {param_a}").as_str();
         }
         if let Some(param_b) = &self.param_b {
-            res += format!("Param B:\n {}", param_b).as_str()
+            res += format!("Param B:\n {param_b}").as_str()
         }
-        write!(f, "{}", res)
+        write!(f, "{res}")
     }
 }
 

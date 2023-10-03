@@ -18,9 +18,6 @@ mod handshake_test;
 use std::fmt;
 use std::io::{Read, Write};
 
-use super::content::*;
-use super::error::*;
-
 use handshake_header::*;
 use handshake_message_certificate::*;
 use handshake_message_certificate_request::*;
@@ -33,8 +30,11 @@ use handshake_message_server_hello::*;
 use handshake_message_server_hello_done::*;
 use handshake_message_server_key_exchange::*;
 
+use super::content::*;
+use super::error::*;
+
 // https://tools.ietf.org/html/rfc5246#section-7.4
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HandshakeType {
     HelloRequest = 0,
     ClientHello = 1,
@@ -47,6 +47,7 @@ pub enum HandshakeType {
     CertificateVerify = 15,
     ClientKeyExchange = 16,
     Finished = 20,
+    #[default]
     Invalid,
 }
 
@@ -85,12 +86,6 @@ impl From<u8> for HandshakeType {
             20 => HandshakeType::Finished,
             _ => HandshakeType::Invalid,
         }
-    }
-}
-
-impl Default for HandshakeType {
-    fn default() -> Self {
-        HandshakeType::Invalid
     }
 }
 

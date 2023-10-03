@@ -1,3 +1,8 @@
+use std::fmt;
+use std::io::{BufReader, BufWriter};
+
+use async_trait::async_trait;
+
 use super::flight3::*;
 use super::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
@@ -16,10 +21,6 @@ use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
-
-use async_trait::async_trait;
-use std::fmt;
-use std::io::{BufReader, BufWriter};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Flight5;
@@ -335,7 +336,7 @@ impl Flight for Flight5 {
         }
 
         if let Err((alert, err)) =
-            initalize_cipher_suite(state, cache, cfg, &server_key_exchange, &merged).await
+            initialize_cipher_suite(state, cache, cfg, &server_key_exchange, &merged).await
         {
             return Err((alert, err));
         }
@@ -598,7 +599,7 @@ impl Flight for Flight5 {
         Ok(pkts)
     }
 }
-async fn initalize_cipher_suite(
+async fn initialize_cipher_suite(
     state: &mut State,
     cache: &HandshakeCache,
     cfg: &HandshakeConfig,
@@ -709,6 +710,7 @@ async fn initalize_cipher_suite(
             &h.algorithm,
             &h.signature,
             &state.peer_certificates,
+            cfg.insecure_verification,
         ) {
             return Err((
                 Some(Alert {
@@ -724,7 +726,6 @@ async fn initalize_cipher_suite(
             chains = match verify_server_cert(
                 &state.peer_certificates,
                 &cfg.server_cert_verifier,
-                &cfg.roots_cas,
                 &cfg.server_name,
             ) {
                 Ok(chains) => chains,

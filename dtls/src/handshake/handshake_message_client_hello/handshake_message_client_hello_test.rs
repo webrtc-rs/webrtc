@@ -1,9 +1,9 @@
+use std::io::{BufReader, BufWriter};
+use std::time::{Duration, SystemTime};
+
 use super::*;
 use crate::curve::named_curve::*;
 use crate::extension::extension_supported_elliptic_curves::*;
-
-use std::io::{BufReader, BufWriter};
-use std::time::{Duration, SystemTime};
 
 #[test]
 fn test_handshake_message_client_hello() -> Result<()> {
@@ -41,8 +41,8 @@ fn test_handshake_message_client_hello() -> Result<()> {
         cipher_suites: vec![
             CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
             CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha,
-            //Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
-            //Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
+            //Box::<CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256>::default(),
+            //Box::<CipherSuiteTLSEcdheEcdsaWithAes256CbcSha>::default(),
         ],
         compression_methods: CompressionMethods {
             ids: vec![CompressionMethodId::Null],
@@ -58,8 +58,7 @@ fn test_handshake_message_client_hello() -> Result<()> {
     let c = HandshakeMessageClientHello::unmarshal(&mut reader)?;
     assert_eq!(
         c, parsed_client_hello,
-        "handshakeMessageClientHello unmarshal: got {:?}, want {:?}",
-        c, parsed_client_hello
+        "handshakeMessageClientHello unmarshal: got {c:?}, want {parsed_client_hello:?}"
     );
 
     let mut raw = vec![];
@@ -69,8 +68,7 @@ fn test_handshake_message_client_hello() -> Result<()> {
     }
     assert_eq!(
         raw, raw_client_hello,
-        "handshakeMessageClientHello marshal: got {:?}, want {:?}",
-        raw, raw_client_hello
+        "handshakeMessageClientHello marshal: got {raw:?}, want {raw_client_hello:?}"
     );
 
     Ok(())

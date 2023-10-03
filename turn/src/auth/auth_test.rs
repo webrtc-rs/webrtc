@@ -9,8 +9,7 @@ fn test_lt_cred() -> Result<()> {
     let actual_password = long_term_credentials(username, shared_secret);
     assert_eq!(
         expected_password, actual_password,
-        "Expected {}, got {}",
-        expected_password, actual_password
+        "Expected {expected_password}, got {actual_password}"
     );
 
     Ok(())
@@ -28,8 +27,7 @@ fn test_generate_auth_key() -> Result<()> {
     let actual_key = generate_auth_key(username, realm, password);
     assert_eq!(
         expected_key, actual_key,
-        "Expected {:?}, got {:?}",
-        expected_key, actual_key
+        "Expected {expected_key:?}, got {actual_key:?}"
     );
 
     Ok(())
@@ -38,15 +36,17 @@ fn test_generate_auth_key() -> Result<()> {
 #[cfg(target_family = "unix")]
 #[tokio::test]
 async fn test_new_long_term_auth_handler() -> Result<()> {
-    use crate::client::*;
-    use crate::relay::relay_static::*;
-    use crate::server::{config::*, *};
-
     use std::net::IpAddr;
     use std::str::FromStr;
     use std::sync::Arc;
+
     use tokio::net::UdpSocket;
     use util::vnet::net::*;
+
+    use crate::client::*;
+    use crate::relay::relay_static::*;
+    use crate::server::config::*;
+    use crate::server::*;
 
     //env_logger::init();
 
@@ -70,6 +70,7 @@ async fn test_new_long_term_auth_handler() -> Result<()> {
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(LongTermAuthHandler::new(SHARED_SECRET.to_string())),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 
@@ -79,8 +80,8 @@ async fn test_new_long_term_auth_handler() -> Result<()> {
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
     let client = Client::new(ClientConfig {
-        stun_serv_addr: format!("0.0.0.0:{}", server_port),
-        turn_serv_addr: format!("0.0.0.0:{}", server_port),
+        stun_serv_addr: format!("0.0.0.0:{server_port}"),
+        turn_serv_addr: format!("0.0.0.0:{server_port}"),
         username,
         password,
         realm: "webrtc.rs".to_owned(),

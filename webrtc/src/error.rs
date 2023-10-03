@@ -1,8 +1,9 @@
-use rcgen::RcgenError;
 use std::future::Future;
 use std::num::ParseIntError;
 use std::pin::Pin;
 use std::string::FromUtf8Error;
+
+use rcgen::RcgenError;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 
@@ -197,6 +198,14 @@ pub enum Error {
     #[error("new track must be of the same kind as previous")]
     ErrRTPSenderNewTrackHasIncorrectKind,
 
+    /// ErrRTPSenderDataSent indicates that the sequence number transformer tries to be enabled after the data sending began
+    #[error("Sequence number transformer must be enabled before sending data")]
+    ErrRTPSenderDataSent,
+
+    /// ErrRTPSenderSeqTransEnabled indicates that the sequence number transformer has been already enabled
+    #[error("Sequence number transformer has been already enabled")]
+    ErrRTPSenderSeqTransEnabled,
+
     /// ErrUnbindFailed indicates that a TrackLocal was not able to be unbind
     #[error("failed to unbind TrackLocal from PeerConnection")]
     ErrUnbindFailed,
@@ -250,7 +259,7 @@ pub enum Error {
     #[error("ICEAgent does not exist")]
     ErrICEAgentNotExist,
     #[error("unable to convert ICE candidates to ICECandidates")]
-    ErrICECandiatesCoversionFailed,
+    ErrICECandidatesConversionFailed,
     #[error("unknown ICE Role")]
     ErrICERoleUnknown,
     #[error("unknown protocol")]
@@ -300,7 +309,7 @@ pub enum Error {
     #[error("write_rtcp failed to open write_stream")]
     ErrPeerConnWriteRTCPOpenWriteStream,
     #[error("cannot find transceiver with mid")]
-    ErrPeerConnTranscieverMidNil,
+    ErrPeerConnTransceiverMidNil,
     #[error("DTLSTransport must not be nil")]
     ErrRTPReceiverDTLSTransportNil,
     #[error("Receive has already been called")]
@@ -347,7 +356,7 @@ pub enum Error {
     #[error("can't rollback from stable state")]
     ErrSignalingStateCannotRollback,
     #[error(
-        "invalid proposed signaling state transition from {} applying {} {}", 
+        "invalid proposed signaling state transition from {} applying {} {}",
         from,
         if *is_local { "local" } else {  "remote" },
         applying

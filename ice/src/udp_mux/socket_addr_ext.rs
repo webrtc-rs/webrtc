@@ -120,8 +120,9 @@ impl SocketAddrExt for SocketAddr {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+
+    use super::*;
 
     #[test]
     fn test_ipv4() {

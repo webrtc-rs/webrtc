@@ -1,10 +1,12 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// ICEProtocol indicates the transport protocol type that is used in the
 /// ice.URL structure.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCIceProtocol {
+    #[default]
     Unspecified,
 
     /// UDP indicates the URL uses a UDP transport.
@@ -14,12 +16,6 @@ pub enum RTCIceProtocol {
     /// TCP indicates the URL uses a TCP transport.
     #[serde(rename = "tcp")]
     Tcp,
-}
-
-impl Default for RTCIceProtocol {
-    fn default() -> Self {
-        RTCIceProtocol::Unspecified
-    }
 }
 
 const ICE_PROTOCOL_UDP_STR: &str = "udp";
@@ -41,8 +37,8 @@ impl From<&str> for RTCIceProtocol {
 impl fmt::Display for RTCIceProtocol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceProtocol::Udp => write!(f, "{}", ICE_PROTOCOL_UDP_STR),
-            RTCIceProtocol::Tcp => write!(f, "{}", ICE_PROTOCOL_TCP_STR),
+            RTCIceProtocol::Udp => write!(f, "{ICE_PROTOCOL_UDP_STR}"),
+            RTCIceProtocol::Tcp => write!(f, "{ICE_PROTOCOL_TCP_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -64,7 +60,7 @@ mod test {
 
         for (proto_string, expected_proto) in tests {
             let actual = RTCIceProtocol::from(proto_string);
-            assert_eq!(expected_proto, actual);
+            assert_eq!(actual, expected_proto);
         }
     }
 
@@ -77,7 +73,7 @@ mod test {
         ];
 
         for (proto, expected_string) in tests {
-            assert_eq!(expected_string, proto.to_string());
+            assert_eq!(proto.to_string(), expected_string);
         }
     }
 }

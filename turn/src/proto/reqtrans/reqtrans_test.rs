@@ -43,7 +43,7 @@ fn test_requested_transport_add_to() -> Result<(), stun::Error> {
             protocol: PROTO_UDP,
         };
         req.get_from(&decoded)?;
-        assert_eq!(req, r, "Decoded {}, expected {}", req, r);
+        assert_eq!(req, r, "Decoded {req}, expected {r}");
 
         //"HandleErr"
         {
@@ -53,11 +53,10 @@ fn test_requested_transport_add_to() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             } else {
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
 
             m.add(ATTR_REQUESTED_TRANSPORT, &[1, 2, 3]);
@@ -67,7 +66,7 @@ fn test_requested_transport_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
         }
     }

@@ -1,6 +1,7 @@
+use std::io::Cursor;
+
 use super::*;
 use crate::error::Error;
-use std::io::Cursor;
 
 #[test]
 fn test_ivf_writer_add_packet_and_close() -> Result<()> {
@@ -24,6 +25,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             csrc: vec![],
             padding: false,
             extensions: vec![],
+            extensions_padding: 0,
         },
         payload: raw_valid_pkt.slice(20..),
     };
@@ -51,6 +53,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             csrc: vec![],
             padding: raw_mid_part_pkt.len() % 4 != 0,
             extensions: vec![],
+            extensions_padding: 0,
         },
         payload: raw_mid_part_pkt.slice(20..),
     };
@@ -78,6 +81,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             csrc: vec![],
             padding: raw_keyframe_pkt.len() % 4 != 0,
             extensions: vec![],
+            extensions_padding: 0,
         },
         payload: raw_keyframe_pkt.slice(20..),
     };
@@ -90,26 +94,26 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
     let payload = vp8packet.depacketize(&valid_packet.payload)?;
     assert_eq!(1, vp8packet.s, "Start packet S value should be 1");
     assert_eq!(
-        1,
         payload[0] & 0x01,
+        1,
         "Non Keyframe packet P value should be 1"
     );
 
     // Check mid partition packet parameters
     let mut vp8packet = rtp::codecs::vp8::Vp8Packet::default();
     let payload = vp8packet.depacketize(&mid_part_packet.payload)?;
-    assert_eq!(0, vp8packet.s, "Mid Partition packet S value should be 0");
+    assert_eq!(vp8packet.s, 0, "Mid Partition packet S value should be 0");
     assert_eq!(
-        1,
         payload[0] & 0x01,
+        1,
         "Non Keyframe packet P value should be 1"
     );
 
     // Check keyframe packet parameters
     let mut vp8packet = rtp::codecs::vp8::Vp8Packet::default();
     let payload = vp8packet.depacketize(&keyframe_packet.payload)?;
-    assert_eq!(1, vp8packet.s, "Start packet S value should be 1");
-    assert_eq!(0, payload[0] & 0x01, "Keyframe packet P value should be 0");
+    assert_eq!(vp8packet.s, 1, "Start packet S value should be 1");
+    assert_eq!(payload[0] & 0x01, 0, "Keyframe packet P value should be 0");
 
     let add_packet_test_case = vec![
         (
@@ -157,7 +161,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             !writer.seen_key_frame,
             "Writer's seenKeyFrame should initialize false"
         );
-        assert_eq!(0, writer.count, "Writer's packet count should initialize 0");
+        assert_eq!(writer.count, 0, "Writer's packet count should initialize 0");
         let result = writer.write_rtp(&packet);
         if err.is_some() {
             assert!(result.is_err(), "{}", msg1);
@@ -166,21 +170,21 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             assert!(result.is_ok(), "{}", msg1);
         }
 
-        assert_eq!(seen_key_frame, writer.seen_key_frame, "{} failed", msg1);
+        assert_eq!(seen_key_frame, writer.seen_key_frame, "{msg1} failed");
         if count == 1 {
-            assert_eq!(0, writer.count);
+            assert_eq!(writer.count, 0);
         } else if count == 2 {
-            assert_eq!(1, writer.count);
+            assert_eq!(writer.count, 1);
         }
 
         writer.write_rtp(&mid_part_packet)?;
         if count == 1 {
-            assert_eq!(0, writer.count);
+            assert_eq!(writer.count, 0);
         } else if count == 2 {
-            assert_eq!(1, writer.count);
+            assert_eq!(writer.count, 1);
 
             writer.write_rtp(&valid_packet)?;
-            assert_eq!(2, writer.count);
+            assert_eq!(writer.count, 2);
         }
 
         writer.close()?;

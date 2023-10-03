@@ -1,17 +1,18 @@
 #[cfg(test)]
 mod packetizer_test;
 
-use crate::error::Result;
-use crate::{extension::abs_send_time_extension::*, header::*, packet::*, sequence::*};
-use util::marshal::{Marshal, MarshalSize};
-
-use async_trait::async_trait;
-use bytes::{Bytes, BytesMut};
 use std::fmt;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::SystemTime;
+
+use bytes::{Bytes, BytesMut};
+use util::marshal::{Marshal, MarshalSize};
+
+use crate::error::Result;
+use crate::extension::abs_send_time_extension::*;
+use crate::header::*;
+use crate::packet::*;
+use crate::sequence::*;
 
 /// Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader: fmt::Debug {
@@ -26,10 +27,9 @@ impl Clone for Box<dyn Payloader + Send + Sync> {
 }
 
 /// Packetizer packetizes a payload
-#[async_trait]
 pub trait Packetizer: fmt::Debug {
     fn enable_abs_send_time(&mut self, value: u8);
-    async fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>>;
+    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>>;
     fn skip_samples(&mut self, skipped_samples: u32);
     fn clone_to(&self) -> Box<dyn Packetizer + Send + Sync>;
 }
@@ -57,8 +57,7 @@ pub trait Depacketizer {
 //TODO: SystemTime vs Instant?
 // non-monotonic clock vs monotonically non-decreasing clock
 /// FnTimeGen provides current SystemTime
-pub type FnTimeGen =
-    Arc<dyn (Fn() -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>>) + Send + Sync>;
+pub type FnTimeGen = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;
 
 #[derive(Clone)]
 pub(crate) struct PacketizerImpl {
@@ -107,13 +106,12 @@ pub fn new_packetizer(
     }
 }
 
-#[async_trait]
 impl Packetizer for PacketizerImpl {
     fn enable_abs_send_time(&mut self, value: u8) {
         self.abs_send_time = value
     }
 
-    async fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>> {
+    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>> {
         let payloads = self.payloader.payload(self.mtu - 12, payload)?;
         let payloads_len = payloads.len();
         let mut packets = Vec::with_capacity(payloads_len);
@@ -138,7 +136,7 @@ impl Packetizer for PacketizerImpl {
 
         if payloads_len != 0 && self.abs_send_time != 0 {
             let st = if let Some(fn_time_gen) = &self.time_gen {
-                fn_time_gen().await
+                fn_time_gen()
             } else {
                 SystemTime::now()
             };

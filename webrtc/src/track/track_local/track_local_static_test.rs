@@ -1,14 +1,15 @@
-use super::{track_local_static_rtp::*, track_local_static_sample::*, *};
+use std::sync::Arc;
+
+use bytes::Bytes;
+use tokio::sync::{mpsc, Mutex};
+
+use super::track_local_static_rtp::*;
+use super::track_local_static_sample::*;
+use super::*;
 use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::peer_connection_test::*;
-use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
-use crate::track::track_remote::TrackRemote;
-
-use bytes::Bytes;
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
 
 // If a remote doesn't support a Codec used by a `TrackLocalStatic`
 // an error should be returned to the user
@@ -39,9 +40,9 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         pc.add_track(Arc::clone(&track)).await?;
 
         if let Err(err) = signal_pair(&mut pc, &mut no_codec_pc).await {
-            assert_eq!(Error::ErrUnsupportedCodec, err);
+            assert_eq!(err, Error::ErrUnsupportedCodec);
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&no_codec_pc, &pc).await;
@@ -73,21 +74,21 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
             .await?;
 
         vp9only_pc
-            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .add_transceiver_from_kind(RTPCodecType::Video, None)
             .await?;
 
         pc.add_track(Arc::clone(&track)).await?;
 
         if let Err(err) = signal_pair(&mut vp9only_pc, &mut pc).await {
             assert_eq!(
-                Error::ErrUnsupportedCodec,
                 err,
+                Error::ErrUnsupportedCodec,
                 "expected {}, but got {}",
                 Error::ErrUnsupportedCodec,
                 err
             );
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&vp9only_pc, &pc).await;
@@ -109,9 +110,9 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         offerer.add_track(Arc::new(invalid_codec_track)).await?;
 
         if let Err(err) = signal_pair(&mut offerer, &mut answerer).await {
-            assert_eq!(Error::ErrUnsupportedCodec, err);
+            assert_eq!(err, Error::ErrUnsupportedCodec);
         } else {
-            assert!(false);
+            panic!();
         }
 
         close_pair_now(&offerer, &answerer).await;
@@ -130,7 +131,7 @@ async fn test_track_local_static_closed() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     pc_answer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
@@ -152,7 +153,7 @@ async fn test_track_local_static_closed() -> Result<()> {
             "No binding should exist before signaling"
         );
     } else {
-        assert!(false);
+        panic!();
     }
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
@@ -161,7 +162,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         let bindings = v.bindings.lock().await;
         assert_eq!(bindings.len(), 1, "binding should exist after signaling");
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&pc_offer, &pc_answer).await;
@@ -170,7 +171,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         let bindings = v.bindings.lock().await;
         assert_eq!(bindings.len(), 0, "No binding should exist after close");
     } else {
-        assert!(false);
+        panic!();
     }
 
     Ok(())
@@ -248,7 +249,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         "webrtc-rs".to_owned(),
     ));
     offerer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     answerer
@@ -257,24 +258,18 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     let (on_track_fired_tx, on_track_fired_rx) = mpsc::channel::<()>(1);
     let on_track_fired_tx = Arc::new(Mutex::new(Some(on_track_fired_tx)));
-    offerer
-        .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
-                let on_track_fired_tx2 = Arc::clone(&on_track_fired_tx);
-                Box::pin(async move {
-                    if let Some(t) = &track {
-                        assert_eq!(t.payload_type(), 100);
-                        assert_eq!(t.codec().await.capability.mime_type, MIME_TYPE_VP8);
-                    }
-                    {
-                        log::debug!("onTrackFiredFunc!!!");
-                        let mut done = on_track_fired_tx2.lock().await;
-                        done.take();
-                    }
-                })
-            },
-        ))
-        .await;
+    offerer.on_track(Box::new(move |track, _, _| {
+        let on_track_fired_tx2 = Arc::clone(&on_track_fired_tx);
+        Box::pin(async move {
+            assert_eq!(track.payload_type(), 100);
+            assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
+            {
+                log::debug!("onTrackFiredFunc!!!");
+                let mut done = on_track_fired_tx2.lock().await;
+                done.take();
+            }
+        })
+    }));
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
@@ -340,7 +335,7 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
         v.write_rtp(&pkt).await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     assert_eq!(pkt.header.ssrc, 1);
@@ -380,7 +375,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     let (pc_offer, pc_answer) = new_pair(&api).await?;
 
     pc_offer
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
@@ -403,7 +398,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
         v.write(&[0u8; 20]).await?;
     } else {
-        assert!(false);
+        panic!();
     }
 
     close_pair_now(&pc_offer, &pc_answer).await;

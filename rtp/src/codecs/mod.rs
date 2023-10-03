@@ -1,3 +1,4 @@
+pub mod av1;
 pub mod g7xx;
 pub mod h264;
 pub mod h265;

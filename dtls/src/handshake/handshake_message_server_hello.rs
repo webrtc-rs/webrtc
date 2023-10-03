@@ -1,16 +1,17 @@
 #[cfg(test)]
 mod handshake_message_server_hello_test;
 
+use std::fmt;
+use std::io::{BufReader, BufWriter};
+
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
 use super::handshake_random::*;
 use super::*;
 use crate::cipher_suite::*;
 use crate::compression_methods::*;
 use crate::extension::*;
 use crate::record_layer::record_layer_header::*;
-
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::fmt;
-use std::io::{BufReader, BufWriter};
 
 /*
 The server will send this message in response to a ClientHello

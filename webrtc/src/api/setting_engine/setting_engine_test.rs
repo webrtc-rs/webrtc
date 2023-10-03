@@ -1,9 +1,10 @@
+use std::sync::atomic::Ordering;
+
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
 use crate::peer_connection::peer_connection_test::*;
 use crate::rtp_transceiver::rtp_codec::RTPCodecType;
-use std::sync::atomic::Ordering;
 
 #[test]
 fn test_set_connection_timeout() -> Result<()> {
@@ -161,7 +162,7 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         let (mut offerer, mut answerer) = new_pair(&api).await?;
 
         offerer
-            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .add_transceiver_from_kind(RTPCodecType::Video, None)
             .await?;
 
         signal_pair(&mut offerer, &mut answerer).await?;
@@ -169,7 +170,7 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         // Assert that the MediaEngine the user created isn't modified
         assert!(!api.media_engine.negotiated_video.load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = api.media_engine.negotiated_video_codecs.lock().await;
+            let negotiated_video_codecs = api.media_engine.negotiated_video_codecs.lock();
             assert!(negotiated_video_codecs.is_empty());
         }
 
@@ -180,12 +181,8 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
             .negotiated_video
             .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer
-                .internal
-                .media_engine
-                .negotiated_video_codecs
-                .lock()
-                .await;
+            let negotiated_video_codecs =
+                offerer.internal.media_engine.negotiated_video_codecs.lock();
             assert!(!negotiated_video_codecs.is_empty());
         }
 
@@ -200,12 +197,8 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
             .negotiated_video
             .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer
-                .internal
-                .media_engine
-                .negotiated_video_codecs
-                .lock()
-                .await;
+            let negotiated_video_codecs =
+                offerer.internal.media_engine.negotiated_video_codecs.lock();
             assert!(!negotiated_video_codecs.is_empty());
         }
 
@@ -220,8 +213,7 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
                 .internal
                 .media_engine
                 .negotiated_video_codecs
-                .lock()
-                .await;
+                .lock();
             assert!(negotiated_video_codecs.is_empty());
         }
 
@@ -244,7 +236,7 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         let (mut offerer, mut answerer) = new_pair(&api).await?;
 
         offerer
-            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .add_transceiver_from_kind(RTPCodecType::Video, None)
             .await?;
 
         signal_pair(&mut offerer, &mut answerer).await?;
@@ -252,7 +244,7 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         // Assert that the user MediaEngine was modified, so no copy happened
         assert!(api.media_engine.negotiated_video.load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = api.media_engine.negotiated_video_codecs.lock().await;
+            let negotiated_video_codecs = api.media_engine.negotiated_video_codecs.lock();
             assert!(!negotiated_video_codecs.is_empty());
         }
 
@@ -267,12 +259,8 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
             .negotiated_video
             .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer
-                .internal
-                .media_engine
-                .negotiated_video_codecs
-                .lock()
-                .await;
+            let negotiated_video_codecs =
+                offerer.internal.media_engine.negotiated_video_codecs.lock();
             assert!(!negotiated_video_codecs.is_empty());
         }
 

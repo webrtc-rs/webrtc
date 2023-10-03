@@ -1,12 +1,16 @@
 #[cfg(test)]
 mod receiver_estimated_maximum_bitrate_test;
 
-use crate::{error::Error, header::*, packet::*, util::*};
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
-
-use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
+
+use bytes::{Buf, BufMut};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
+use crate::packet::*;
+use crate::util::*;
 
 type Result<T> = std::result::Result<T, util::Error>;
 
@@ -224,7 +228,7 @@ impl Unmarshal for ReceiverEstimatedMaximumBitrate {
         }
 
         // REMB rules all around me
-        let mut unique_identifier = vec![0; 4];
+        let mut unique_identifier = [0; 4];
         unique_identifier[0] = raw_packet.get_u8();
         unique_identifier[1] = raw_packet.get_u8();
         unique_identifier[2] = raw_packet.get_u8();

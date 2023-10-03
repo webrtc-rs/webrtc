@@ -1,5 +1,6 @@
-use super::*;
 use bytes::Bytes;
+
+use super::*;
 
 // generates a valid ogg file that can be used for tests
 fn build_ogg_container() -> Vec<u8> {
@@ -36,7 +37,7 @@ fn test_ogg_reader_parse_next_page() -> Result<()> {
     let (mut reader, _header) = OggReader::new(r, true)?;
 
     let (payload, _) = reader.parse_next_page()?;
-    assert_eq!(Bytes::from_static(&[0x98, 0x36, 0xbe, 0x88, 0x9e]), payload);
+    assert_eq!(payload, Bytes::from_static(&[0x98, 0x36, 0xbe, 0x88, 0x9e]));
 
     let result = reader.parse_next_page();
     assert!(result.is_err());
@@ -54,7 +55,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert_eq!(Error::ErrBadIDPageSignature, err);
+            assert_eq!(err, Error::ErrBadIDPageSignature);
         }
     }
 
@@ -66,7 +67,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert_eq!(Error::ErrBadIDPageType, err);
+            assert_eq!(err, Error::ErrBadIDPageType);
         }
     }
 
@@ -78,7 +79,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert_eq!(Error::ErrBadIDPageLength, err);
+            assert_eq!(err, Error::ErrBadIDPageLength);
         }
     }
 
@@ -90,7 +91,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), false);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert_eq!(Error::ErrBadIDPagePayloadSignature, err);
+            assert_eq!(err, Error::ErrBadIDPagePayloadSignature);
         }
     }
 
@@ -102,7 +103,7 @@ fn test_ogg_reader_parse_errors() -> Result<()> {
         let result = OggReader::new(Cursor::new(ogg), true);
         assert!(result.is_err());
         if let Err(err) = result {
-            assert_eq!(Error::ErrChecksumMismatch, err);
+            assert_eq!(err, Error::ErrChecksumMismatch);
         }
     }
 

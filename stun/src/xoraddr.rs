@@ -1,15 +1,14 @@
 #[cfg(test)]
 mod xoraddr_test;
 
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::{fmt, mem};
+
 use crate::addr::*;
 use crate::attributes::*;
 use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
-use std::mem;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 const WORD_SIZE: usize = mem::size_of::<usize>();
 
@@ -120,7 +119,7 @@ impl XorMappedAddress {
             IpAddr::V6(ipv6) => (FAMILY_IPV6, IPV6LEN, ipv6.octets().to_vec()),
         };
 
-        let mut value = vec![0; 32 + 128];
+        let mut value = [0; 32 + 128];
         //value[0] = 0 // first 8 bits are zeroes
         let mut xor_value = vec![0; IPV6LEN];
         xor_value[4..].copy_from_slice(&m.transaction_id.0);
@@ -142,7 +141,7 @@ impl XorMappedAddress {
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::Other(format!("bad value {}", family)));
+            return Err(Error::Other(format!("bad value {family}")));
         }
 
         check_overflow(

@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod uattrs_test;
 
+use std::fmt;
+
 use crate::attributes::*;
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
 
 // UnknownAttributes represents UNKNOWN-ATTRIBUTES attribute.
 //

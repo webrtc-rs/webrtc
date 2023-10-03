@@ -1,16 +1,18 @@
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
+
+use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
+use util::vnet::router::Nic;
+use util::vnet::*;
+
 use super::config::*;
 use super::*;
 use crate::auth::generate_auth_key;
 use crate::client::*;
 use crate::error::*;
-use crate::relay::relay_static::*;
-
 use crate::relay::relay_none::RelayAddressGeneratorNone;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
-use tokio::net::UdpSocket;
-use tokio::sync::mpsc;
-use util::{vnet::router::Nic, vnet::*};
+use crate::relay::relay_static::*;
 
 struct TestAuthHandler {
     cred_map: HashMap<String, Vec<u8>>,
@@ -58,6 +60,7 @@ async fn test_server_simple() -> Result<()> {
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler::new()),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 
@@ -84,7 +87,7 @@ async fn test_server_simple() -> Result<()> {
     client.listen().await?;
 
     client
-        .send_binding_request_to(format!("127.0.0.1:{}", server_port).as_str())
+        .send_binding_request_to(format!("127.0.0.1:{server_port}").as_str())
         .await?;
 
     client.close().await?;
@@ -192,6 +195,7 @@ async fn build_vnet() -> Result<VNet> {
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler::new()),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 
@@ -275,12 +279,12 @@ async fn test_server_vnet_echo_via_relay() -> Result<()> {
 
     log::debug!("sending a binding request.");
     let conn = client.allocate().await?;
-    let local_addr = conn.local_addr().await?;
+    let local_addr = conn.local_addr()?;
 
-    log::debug!("laddr: {}", conn.local_addr().await?);
+    log::debug!("laddr: {}", conn.local_addr()?);
 
     let echo_conn = v.net1.bind(SocketAddr::from_str("1.2.3.5:5678")?).await?;
-    let echo_addr = echo_conn.local_addr().await?;
+    let echo_addr = echo_conn.local_addr()?;
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
 

@@ -1,10 +1,12 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// RTCPMuxPolicy affects what ICE candidates are gathered to support
 /// non-multiplexed RTCP.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCRtcpMuxPolicy {
+    #[default]
     Unspecified = 0,
 
     /// RTCPMuxPolicyNegotiate indicates to gather ICE candidates for both
@@ -19,12 +21,6 @@ pub enum RTCRtcpMuxPolicy {
     /// not capable of rtcp-mux, session negotiation will fail.
     #[serde(rename = "require")]
     Require = 2,
-}
-
-impl Default for RTCRtcpMuxPolicy {
-    fn default() -> Self {
-        RTCRtcpMuxPolicy::Negotiate
-    }
 }
 
 const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "negotiate";
@@ -47,7 +43,7 @@ impl fmt::Display for RTCRtcpMuxPolicy {
             RTCRtcpMuxPolicy::Require => RTCP_MUX_POLICY_REQUIRE_STR,
             RTCRtcpMuxPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -64,7 +60,7 @@ mod test {
         ];
 
         for (policy_string, expected_policy) in tests {
-            assert_eq!(expected_policy, RTCRtcpMuxPolicy::from(policy_string));
+            assert_eq!(RTCRtcpMuxPolicy::from(policy_string), expected_policy);
         }
     }
 
@@ -77,7 +73,7 @@ mod test {
         ];
 
         for (policy, expected_string) in tests {
-            assert_eq!(expected_string, policy.to_string());
+            assert_eq!(policy.to_string(), expected_string);
         }
     }
 }

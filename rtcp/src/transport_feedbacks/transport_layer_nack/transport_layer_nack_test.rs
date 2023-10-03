@@ -1,7 +1,8 @@
-use super::*;
+use std::sync::{Arc, Mutex};
+
 use bytes::Bytes;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+
+use super::*;
 
 #[test]
 fn test_transport_layer_nack_unmarshal() {
@@ -65,25 +66,20 @@ fn test_transport_layer_nack_unmarshal() {
         assert_eq!(
             got.is_err(),
             want_error.is_some(),
-            "Unmarshal {} rr: err = {:?}, want {:?}",
-            name,
-            got,
-            want_error
+            "Unmarshal {name} rr: err = {got:?}, want {want_error:?}"
         );
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
             assert_eq!(
                 err, got_err,
-                "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
+                "Unmarshal {name} rr: err = {got_err:?}, want {err:?}",
             );
         } else {
             let actual = got.unwrap();
             assert_eq!(
                 actual, want,
-                "Unmarshal {} rr: got {:?}, want {:?}",
-                name, actual, want
+                "Unmarshal {name} rr: got {actual:?}, want {want:?}"
             );
         }
     }
@@ -116,28 +112,23 @@ fn test_transport_layer_nack_roundtrip() {
         assert_eq!(
             got.is_ok(),
             want_error.is_none(),
-            "Marshal {}: err = {:?}, want {:?}",
-            name,
-            got,
-            want_error
+            "Marshal {name}: err = {got:?}, want {want_error:?}"
         );
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
             assert_eq!(
                 err, got_err,
-                "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
+                "Unmarshal {name} rr: err = {got_err:?}, want {err:?}",
             );
         } else {
             let mut data = got.ok().unwrap();
             let actual = TransportLayerNack::unmarshal(&mut data)
-                .unwrap_or_else(|_| panic!("Unmarshal {}", name));
+                .unwrap_or_else(|_| panic!("Unmarshal {name}"));
 
             assert_eq!(
                 actual, want,
-                "{} round trip: got {:?}, want {:?}",
-                name, actual, want
+                "{name} round trip: got {actual:?}, want {want:?}"
             )
         }
     }
@@ -148,7 +139,7 @@ fn test_nack_pair() {
     let test_nack = |s: Vec<u16>, n: NackPair| {
         let l = n.packet_list();
 
-        assert_eq!(s, l, "{:?}: expected {:?}, got {:?}", n, s, l);
+        assert_eq!(s, l, "{n:?}: expected {s:?}, got {l:?}");
     };
 
     test_nack(
@@ -210,8 +201,8 @@ fn test_nack_pair() {
     );
 }
 
-#[tokio::test]
-async fn test_nack_pair_range() {
+#[test]
+fn test_nack_pair_range() {
     let n = NackPair {
         packet_id: 42,
         lost_packets: 2,
@@ -219,39 +210,29 @@ async fn test_nack_pair_range() {
 
     let out = Arc::new(Mutex::new(vec![]));
     let out1 = Arc::clone(&out);
-    n.range(Box::new(
-        move |s: u16| -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> {
-            let out2 = Arc::clone(&out1);
-            Box::pin(async move {
-                let mut o = out2.lock().await;
-                o.push(s);
-                true
-            })
-        },
-    ))
-    .await;
+    n.range(move |s: u16| -> bool {
+        let out2 = Arc::clone(&out1);
+        let mut o = out2.lock().unwrap();
+        o.push(s);
+        true
+    });
 
     {
-        let o = out.lock().await;
+        let o = out.lock().unwrap();
         assert_eq!(*o, &[42, 44]);
     }
 
     let out = Arc::new(Mutex::new(vec![]));
     let out1 = Arc::clone(&out);
-    n.range(Box::new(
-        move |s: u16| -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> {
-            let out2 = Arc::clone(&out1);
-            Box::pin(async move {
-                let mut o = out2.lock().await;
-                o.push(s);
-                false
-            })
-        },
-    ))
-    .await;
+    n.range(move |s: u16| -> bool {
+        let out2 = Arc::clone(&out1);
+        let mut o = out2.lock().unwrap();
+        o.push(s);
+        false
+    });
 
     {
-        let o = out.lock().await;
+        let o = out.lock().unwrap();
         assert_eq!(*o, &[42]);
     }
 }
@@ -343,7 +324,7 @@ fn test_transport_layer_nack_pair_generation() {
                 },
                 NackPair {
                     packet_id: 99,
-                    lost_packets: 1,
+                    lost_packets: 0,
                 },
             ],
         ),
@@ -354,8 +335,27 @@ fn test_transport_layer_nack_pair_generation() {
 
         assert_eq!(
             actual, expected,
-            "{} NackPair generation mismatch: got {:#?}, want {:#?}",
-            name, actual, expected
+            "{name} NackPair generation mismatch: got {actual:#?}, want {expected:#?}"
         )
     }
+}
+
+/// This test case reproduced a bug in the implementation
+#[test]
+fn test_lost_packets_is_reset_when_crossing_16_bit_boundary() {
+    let seq: Vec<_> = (0u16..=17u16).collect();
+    assert_eq!(
+        nack_pairs_from_sequence_numbers(&seq),
+        vec![
+            NackPair {
+                packet_id: 0,
+                lost_packets: 0b1111_1111_1111_1111,
+            },
+            NackPair {
+                packet_id: 17,
+                // Was 0xffff before fixing the bug
+                lost_packets: 0b0000_0000_0000_0000,
+            }
+        ],
+    )
 }

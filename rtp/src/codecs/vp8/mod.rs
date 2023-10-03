@@ -1,12 +1,10 @@
 #[cfg(test)]
 mod vp8_test;
 
-use crate::{
-    error::{Error, Result},
-    packetizer::{Depacketizer, Payloader},
-};
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+use crate::error::{Error, Result};
+use crate::packetizer::{Depacketizer, Payloader};
 
 pub const VP8_HEADER_SIZE: usize = 1;
 
@@ -69,7 +67,7 @@ impl Payloader for Vp8Payloader {
             let current_fragment_size =
                 std::cmp::min(max_fragment_size, payload_data_remaining) as usize;
             let mut out = BytesMut::with_capacity(using_header_size + current_fragment_size);
-            let mut buf = vec![0u8; 4];
+            let mut buf = [0u8; 4];
             if first {
                 buf[0] = 0x10;
                 first = false;

@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "constraints",
     "data",
     "dtls",
     "examples",
@@ -17,6 +18,7 @@ members = [
     "util",
     "webrtc",
 ]
+resolver = "2"
 
 [profile.dev]
 opt-level = 0

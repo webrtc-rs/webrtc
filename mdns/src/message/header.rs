@@ -33,7 +33,7 @@ impl fmt::Display for Header {
 impl Header {
     pub fn pack(&self) -> (u16, u16) {
         let id = self.id;
-        let mut bits = (self.op_code as u16) << 11 | self.rcode as u16;
+        let mut bits = self.op_code << 11 | self.rcode as u16;
         if self.recursion_available {
             bits |= HEADER_BIT_RA
         }
@@ -54,8 +54,9 @@ impl Header {
     }
 }
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub enum Section {
+    #[default]
     NotStarted = 0,
     Header = 1,
     Questions = 2,
@@ -63,12 +64,6 @@ pub enum Section {
     Authorities = 4,
     Additionals = 5,
     Done = 6,
-}
-
-impl Default for Section {
-    fn default() -> Self {
-        Section::NotStarted
-    }
 }
 
 impl From<u8> for Section {
@@ -96,7 +91,7 @@ impl fmt::Display for Section {
             Section::Additionals => "additional",
             Section::Done => "Done",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

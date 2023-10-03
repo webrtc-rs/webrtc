@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+use std::fmt;
+use std::sync::Arc;
+
+use log::*;
+
 use crate::cipher_suite::*;
 use crate::config::*;
 use crate::conn::*;
@@ -6,11 +12,6 @@ use crate::crypto::*;
 use crate::error::*;
 use crate::extension::extension_use_srtp::*;
 use crate::signature_hash_algorithm::*;
-
-use log::*;
-use std::collections::HashMap;
-use std::fmt;
-use std::sync::Arc;
 
 //use std::io::BufWriter;
 
@@ -85,10 +86,10 @@ pub(crate) struct HandshakeConfig {
     pub(crate) local_certificates: Vec<Certificate>,
     pub(crate) name_to_certificate: HashMap<String, Certificate>,
     pub(crate) insecure_skip_verify: bool,
+    pub(crate) insecure_verification: bool,
     pub(crate) verify_peer_certificate: Option<VerifyPeerCertificateFn>,
-    pub(crate) roots_cas: rustls::RootCertStore,
-    pub(crate) server_cert_verifier: Arc<dyn rustls::ServerCertVerifier>,
-    pub(crate) client_cert_verifier: Option<Arc<dyn rustls::ClientCertVerifier>>,
+    pub(crate) server_cert_verifier: Arc<dyn rustls::client::ServerCertVerifier>,
+    pub(crate) client_cert_verifier: Option<Arc<dyn rustls::server::ClientCertVerifier>>,
     pub(crate) retransmit_interval: tokio::time::Duration,
     pub(crate) initial_epoch: u16,
     //log           logging.LeveledLogger
@@ -109,9 +110,12 @@ impl Default for HandshakeConfig {
             local_certificates: vec![],
             name_to_certificate: HashMap::new(),
             insecure_skip_verify: false,
+            insecure_verification: false,
             verify_peer_certificate: None,
-            roots_cas: rustls::RootCertStore::empty(),
-            server_cert_verifier: Arc::new(rustls::WebPKIVerifier::new()),
+            server_cert_verifier: Arc::new(rustls::client::WebPkiVerifier::new(
+                rustls::RootCertStore::empty(),
+                None,
+            )),
             client_cert_verifier: None,
             retransmit_interval: tokio::time::Duration::from_secs(0),
             initial_epoch: 0,

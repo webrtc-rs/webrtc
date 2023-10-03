@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+## v0.8.0
+
+* Fix over-NACK due not resetting lost_packets bitmask [\#372](https://github.com/webrtc-rs/webrtc/pull/372/).
 * Increased minimum support rust version to `1.60.0`.
+* Increased required `webrtc-util` version to `0.7.0`.
 
 ## v0.7.0
 
@@ -13,4 +17,3 @@
 ## Prior to 0.7.0
 
 Before 0.7.0 there was no changelog, previous changes are sometimes, but not always, available in the [GitHub Releases](https://github.com/webrtc-rs/rtcp/releases).
-

@@ -3,19 +3,19 @@
  <br>
 </h1>
 <p align="center">
- <a href="https://github.com/webrtc-rs/webrtc/actions"> 
+ <a href="https://github.com/webrtc-rs/webrtc/actions">
   <img src="https://github.com/webrtc-rs/webrtc/workflows/webrtc/badge.svg?branch=master">
- </a> 
- <a href="https://codecov.io/gh/webrtc-rs/webrtc"> 
+ </a>
+ <a href="https://codecov.io/gh/webrtc-rs/webrtc">
   <img src="https://codecov.io/gh/webrtc-rs/webrtc/branch/master/graph/badge.svg">
  </a>
- <a href="https://deps.rs/repo/github/webrtc-rs/webrtc"> 
+ <a href="https://deps.rs/repo/github/webrtc-rs/webrtc">
   <img src="https://deps.rs/repo/github/webrtc-rs/webrtc/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc"> 
+ <a href="https://crates.io/crates/webrtc">
   <img src="https://img.shields.io/crates/v/webrtc.svg">
- </a> 
- <a href="https://docs.rs/webrtc"> 
+ </a>
+ <a href="https://docs.rs/webrtc">
   <img src="https://docs.rs/webrtc/badge.svg">
  </a>
  <a href="https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license">
@@ -26,7 +26,7 @@
  </a>
  <a href="https://twitter.com/WebRTCrs">
   <img src="https://img.shields.io/twitter/url/https/twitter.com/webrtcrs.svg?style=social&label=%40WebRTCrs" alt="Twitter">
- </a>  
+ </a>
 </p>
 <p align="center">
  A pure Rust implementation of WebRTC stack. Rewrite <a href="http://Pion.ly">Pion</a> WebRTC stack in Rust
@@ -42,15 +42,16 @@
 </a><br>
 <p align="center">
 <strong>Silver Sponsors:</strong><br>
-<a href="https://getstream.io/?utm_source=https://github.com/webrtc-rs/webrtc&utm_medium=github&utm_content=developer&utm_term=webrtc" target="_blank">
+<a href="https://getstream.io/video/voice-calling/?utm_source=https://github.com/webrtc-rs/webrtc&utm_medium=sponsorship&utm_content=&utm_campaign=webrtcRepo_July2023_video_klmh22" target="_blank">
 <img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?h=50" alt="Stream Chat">
+</a><br>
+<a href="https://kittycad.io/" target="_blank">
+<img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/KittyCAD.png" alt="KittyCAD">
 </a><br>
 <strong>Bronze Sponsors:</strong><br>
 <a href="https://www.embark-studios.com/" target="_blank"><img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/embark.jpg" alt="embark"></a><br>
-<a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a>
+<a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a><br>
 </p>
-
-#
 
 <details>
 <summary><b>Table of Content</b></summary>
@@ -58,14 +59,12 @@
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-  - [Toolchain(MSRV)](#toolchain)
+  - [Toolchain](#toolchain)
   - [Monorepo Setup](#monorepo-setup)
-  - [Testing with Local Dependencies](#testing-with-local-dependencies)
-- [Open Source License](#open-source-license) 
+- [Open Source License](#open-source-license)
 - [Contributing](#contributing)
-</details>
 
-#
+</details>
 
 ## Overview
 
@@ -108,7 +107,7 @@ This project is still in active and early development stage, please refer to the
 
 ### Toolchain
 
-**Minimum Supported Rust Version:** `1.60.0`
+**Minimum Supported Rust Version:** `1.65.0`
 
 Our minimum supported rust version(MSRV) policy is to support versions of the compiler released within the last six months. We don't eagerly bump the minimum version we support, instead the minimum will be bumped on a needed by needed basis, usually because downstream dependencies force us to.
 
@@ -120,25 +119,26 @@ All webrtc dependent crates and examples are included in this repository at the 
 
 To build all webrtc examples:
 
-```
+```shell
 cd examples
 cargo test # build all examples (maybe very slow)
 #[ or just build single example (much faster)
 cargo build --example play-from-disk-vpx # build play-from-disk-vpx example only
 cargo build --example play-from-disk-h264 # build play-from-disk-h264 example only
 #...
-#]   
+#]
 ```
 
 To build webrtc crate:
 
-```
+```shell
 cargo build [or clippy or test or fmt]
 ```
 
 ## Open Source License
-Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has been used for both the compiler and many public libraries since (see https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license). In order to match the community standards, webrtc-rs is using the dual MIT+Apache-2.0 license.
 
+Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has been used for both the compiler and many public libraries since (see <https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license>). In order to match the community standards, webrtc-rs is using the dual MIT+Apache-2.0 license.
 
 ## Contributing
+
 Contributors or Pull Requests are Welcome!!!

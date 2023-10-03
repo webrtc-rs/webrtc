@@ -118,25 +118,20 @@ fn test_sender_report_unmarshal() {
         assert_eq!(
             got.is_err(),
             want_error.is_some(),
-            "Unmarshal {}: err = {:?}, want {:?}",
-            name,
-            got,
-            want_error
+            "Unmarshal {name}: err = {got:?}, want {want_error:?}"
         );
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
             assert_eq!(
                 err, got_err,
-                "Unmarshal {}: err = {:?}, want {:?}",
-                name, got_err, err,
+                "Unmarshal {name}: err = {got_err:?}, want {err:?}",
             );
         } else {
             let actual = got.unwrap();
             assert_eq!(
                 actual, want,
-                "Unmarshal {}: got {:?}, want {:?}",
-                name, actual, want
+                "Unmarshal {name}: got {actual:?}, want {want:?}"
             );
         }
     }
@@ -234,28 +229,23 @@ fn test_sender_report_roundtrip() {
         assert_eq!(
             got.is_ok(),
             want_error.is_none(),
-            "Marshal {}: err = {:?}, want {:?}",
-            name,
-            got,
-            want_error
+            "Marshal {name}: err = {got:?}, want {want_error:?}"
         );
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
             assert_eq!(
                 err, got_err,
-                "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
+                "Unmarshal {name} rr: err = {got_err:?}, want {err:?}",
             );
         } else {
             let mut data = got.ok().unwrap();
             let actual =
-                SenderReport::unmarshal(&mut data).unwrap_or_else(|_| panic!("Unmarshal {}", name));
+                SenderReport::unmarshal(&mut data).unwrap_or_else(|_| panic!("Unmarshal {name}"));
 
             assert_eq!(
                 actual, want,
-                "{} round trip: got {:?}, want {:?}",
-                name, actual, want
+                "{name} round trip: got {actual:?}, want {want:?}"
             )
         }
     }

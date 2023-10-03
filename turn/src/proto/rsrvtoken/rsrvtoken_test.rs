@@ -19,7 +19,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
                 "IsAttrSizeInvalid should be true"
             );
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -29,7 +29,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
         decoded.write(&m.raw)?;
         let mut tok = ReservationToken::default();
         tok.get_from(&decoded)?;
-        assert_eq!(tok, tk, "Decoded {:?}, expected {:?}", tok, tk);
+        assert_eq!(tok, tk, "Decoded {tok:?}, expected {tk:?}");
 
         //"HandleErr"
         {
@@ -39,11 +39,10 @@ fn test_reservation_token() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
             m.add(ATTR_RESERVATION_TOKEN, &[1, 2, 3]);
             if let Err(err) = handle.get_from(&m) {
@@ -52,7 +51,7 @@ fn test_reservation_token() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, got ok");
+                panic!("expected error, got ok");
             }
         }
     }

@@ -1,11 +1,13 @@
-use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::sync::Arc;
+
+use clap::{App, AppSettings, Arg};
 use tokio::net::UdpSocket;
 use util::Conn;
 use webrtc_dtls::cipher_suite::CipherSuiteId;
+use webrtc_dtls::config::*;
+use webrtc_dtls::conn::DTLSConn;
 use webrtc_dtls::Error;
-use webrtc_dtls::{config::*, conn::DTLSConn};
 
 // cargo run --example dial_psk -- --server 127.0.0.1:4444
 
@@ -57,7 +59,7 @@ async fn main() -> Result<(), Error> {
 
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     conn.connect(server).await?;
-    println!("connecting {}..", server);
+    println!("connecting {server}..");
 
     let config = Config {
         psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>, Error> {

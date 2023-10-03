@@ -1,8 +1,8 @@
-use super::*;
-use crate::error::Result;
+use bytes::Bytes;
 use util::marshal::*;
 
-use bytes::Bytes;
+use super::*;
+use crate::error::Result;
 
 impl Context {
     /// DecryptRTCP decrypts a RTCP packet with an encrypted payload
@@ -13,26 +13,16 @@ impl Context {
         let index = self.cipher.get_rtcp_index(encrypted);
         let ssrc = u32::from_be_bytes([encrypted[4], encrypted[5], encrypted[6], encrypted[7]]);
 
-        {
-            if let Some(state) = self.get_srtcp_ssrc_state(ssrc) {
-                if let Some(replay_detector) = &mut state.replay_detector {
-                    if !replay_detector.check(index as u64) {
-                        return Err(Error::SrtcpSsrcDuplicated(ssrc, index));
-                    }
-                }
-            } else {
-                return Err(Error::SsrcMissingFromSrtcp(ssrc));
+        if let Some(replay_detector) = &mut self.get_srtcp_ssrc_state(ssrc).replay_detector {
+            if !replay_detector.check(index as u64) {
+                return Err(Error::SrtcpSsrcDuplicated(ssrc, index));
             }
         }
 
         let dst = self.cipher.decrypt_rtcp(encrypted, index, ssrc)?;
 
-        {
-            if let Some(state) = self.get_srtcp_ssrc_state(ssrc) {
-                if let Some(replay_detector) = &mut state.replay_detector {
-                    replay_detector.accept();
-                }
-            }
+        if let Some(replay_detector) = &mut self.get_srtcp_ssrc_state(ssrc).replay_detector {
+            replay_detector.accept();
         }
 
         Ok(dst)
@@ -46,18 +36,14 @@ impl Context {
 
         let ssrc = u32::from_be_bytes([decrypted[4], decrypted[5], decrypted[6], decrypted[7]]);
 
-        let index;
-        {
-            if let Some(state) = self.get_srtcp_ssrc_state(ssrc) {
-                state.srtcp_index += 1;
-                if state.srtcp_index > MAX_SRTCP_INDEX {
-                    state.srtcp_index = 0;
-                }
-                index = state.srtcp_index;
-            } else {
-                return Err(Error::SsrcMissingFromSrtcp(ssrc));
+        let index = {
+            let state = self.get_srtcp_ssrc_state(ssrc);
+            state.srtcp_index += 1;
+            if state.srtcp_index > MAX_SRTCP_INDEX {
+                state.srtcp_index = 0;
             }
-        }
+            state.srtcp_index
+        };
 
         self.cipher.encrypt_rtcp(decrypted, index, ssrc)
     }

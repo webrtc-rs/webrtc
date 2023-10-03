@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use tokio::sync::Mutex;
+
 use crate::error::Result;
 use crate::nack::UINT16SIZE_HALF;
 use crate::{Attributes, RTPWriter};
-
-use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 struct ResponderStreamInternal {
     packets: Vec<Option<rtp::packet::Packet>>,
@@ -132,7 +133,7 @@ mod test {
                             seq, packet.header.sequence_number
                         );
                     } else {
-                        assert!(false, "packet not found: {}", seq);
+                        panic!("packet not found: {seq}");
                     }
                 }
             };
@@ -141,8 +142,7 @@ mod test {
                 for n in nums {
                     let seq = start.wrapping_add(*n);
                     if let Some(packet) = sb.get(seq) {
-                        assert!(
-                            false,
+                        panic!(
                             "packet found for {}: {}",
                             seq, packet.header.sequence_number
                         );

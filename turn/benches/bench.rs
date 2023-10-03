@@ -1,5 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
 use std::time::Duration;
+
+use criterion::{criterion_group, criterion_main, Criterion};
 use stun::attributes::ATTR_DATA;
 use stun::message::{Getter, Message, Setter};
 use turn::proto::chandata::ChannelData;
@@ -70,7 +71,7 @@ fn benchmark_chan(c: &mut Criterion) {
         c.bench_function("BenchmarkChannelNumber/GetFrom", |b| {
             b.iter(|| {
                 n.get_from(&m).unwrap();
-                assert_eq!(expected, n);
+                assert_eq!(n, expected);
             })
         });
     }

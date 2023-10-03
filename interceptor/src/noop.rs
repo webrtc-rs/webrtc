@@ -1,6 +1,5 @@
-use crate::error::Result;
-
 use super::*;
+use crate::error::Result;
 
 /// NoOp is an Interceptor that does not modify any packets. It can embedded in other interceptors, so it's
 /// possible to implement only a subset of the methods.
@@ -60,14 +59,22 @@ impl Interceptor for NoOp {
 
 #[async_trait]
 impl RTPReader for NoOp {
-    async fn read(&self, _buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        Ok((0, a.clone()))
+    async fn read(
+        &self,
+        _buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
+        Ok((rtp::packet::Packet::default(), a.clone()))
     }
 }
 
 #[async_trait]
 impl RTCPReader for NoOp {
-    async fn read(&self, _buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        Ok((0, a.clone()))
+    async fn read(
+        &self,
+        _buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+        Ok((vec![], a.clone()))
     }
 }

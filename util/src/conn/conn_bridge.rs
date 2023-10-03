@@ -1,13 +1,14 @@
-use super::*;
-
-use bytes::Bytes;
 use std::collections::VecDeque;
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+use bytes::Bytes;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
+
+use super::*;
 
 const TICK_WAIT: Duration = Duration::from_micros(10);
 
@@ -53,11 +54,11 @@ impl Conn for BridgeConn {
         Err(Error::new(ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    fn local_addr(&self) -> Result<SocketAddr> {
         Err(Error::new(ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 
@@ -166,13 +167,13 @@ impl Bridge {
 
     /// drop_next_nwrites drops the next n packets that will be written
     /// to the specified queue.
-    pub async fn drop_next_nwrites(&self, id: usize, n: usize) {
+    pub fn drop_next_nwrites(&self, id: usize, n: usize) {
         self.drop_nwrites[id].store(n, Ordering::SeqCst);
     }
 
     /// reorder_next_nwrites drops the next n packets that will be written
     /// to the specified queue.
-    pub async fn reorder_next_nwrites(&self, id: usize, n: usize) {
+    pub fn reorder_next_nwrites(&self, id: usize, n: usize) {
         self.reorder_nwrites[id].store(n, Ordering::SeqCst);
     }
 

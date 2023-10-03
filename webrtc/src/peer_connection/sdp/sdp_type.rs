@@ -1,9 +1,11 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 /// SDPType describes the type of an SessionDescription.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCSdpType {
+    #[default]
     Unspecified = 0,
 
     /// indicates that a description MUST be treated as an SDP offer.
@@ -33,12 +35,6 @@ pub enum RTCSdpType {
     Rollback,
 }
 
-impl Default for RTCSdpType {
-    fn default() -> Self {
-        RTCSdpType::Unspecified
-    }
-}
-
 const SDP_TYPE_OFFER_STR: &str = "offer";
 const SDP_TYPE_PRANSWER_STR: &str = "pranswer";
 const SDP_TYPE_ANSWER_STR: &str = "answer";
@@ -60,10 +56,10 @@ impl From<&str> for RTCSdpType {
 impl fmt::Display for RTCSdpType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCSdpType::Offer => write!(f, "{}", SDP_TYPE_OFFER_STR),
-            RTCSdpType::Pranswer => write!(f, "{}", SDP_TYPE_PRANSWER_STR),
-            RTCSdpType::Answer => write!(f, "{}", SDP_TYPE_ANSWER_STR),
-            RTCSdpType::Rollback => write!(f, "{}", SDP_TYPE_ROLLBACK_STR),
+            RTCSdpType::Offer => write!(f, "{SDP_TYPE_OFFER_STR}"),
+            RTCSdpType::Pranswer => write!(f, "{SDP_TYPE_PRANSWER_STR}"),
+            RTCSdpType::Answer => write!(f, "{SDP_TYPE_ANSWER_STR}"),
+            RTCSdpType::Rollback => write!(f, "{SDP_TYPE_ROLLBACK_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -84,7 +80,7 @@ mod test {
         ];
 
         for (sdp_type_string, expected_sdp_type) in tests {
-            assert_eq!(expected_sdp_type, RTCSdpType::from(sdp_type_string));
+            assert_eq!(RTCSdpType::from(sdp_type_string), expected_sdp_type);
         }
     }
 
@@ -99,7 +95,7 @@ mod test {
         ];
 
         for (sdp_type, expected_string) in tests {
-            assert_eq!(expected_string, sdp_type.to_string());
+            assert_eq!(sdp_type.to_string(), expected_string);
         }
     }
 }

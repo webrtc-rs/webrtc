@@ -6,27 +6,30 @@ pub mod channel_bind;
 pub mod five_tuple;
 pub mod permission;
 
-use crate::error::*;
-use crate::proto::{chandata::*, channum::*, data::*, peeraddr::*, *};
+use std::collections::HashMap;
+use std::marker::{Send, Sync};
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
+
 use channel_bind::*;
 use five_tuple::*;
 use permission::*;
-
-use stun::{agent::*, message::*, textattrs::Username};
-
+use stun::agent::*;
+use stun::message::*;
+use stun::textattrs::Username;
+use tokio::sync::oneshot::{self, Sender};
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::{Duration, Instant};
+use util::sync::Mutex as SyncMutex;
 use util::Conn;
 
-use std::sync::atomic::AtomicUsize;
-use std::{
-    collections::HashMap,
-    marker::{Send, Sync},
-    net::SocketAddr,
-    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex as StdMutex},
-};
-use tokio::{
-    sync::{mpsc, Mutex},
-    time::{Duration, Instant},
-};
+use crate::error::*;
+use crate::proto::chandata::*;
+use crate::proto::channum::*;
+use crate::proto::data::*;
+use crate::proto::peeraddr::*;
+use crate::proto::*;
 
 const RTP_MTU: usize = 1500;
 
@@ -47,7 +50,7 @@ pub struct AllocationInfo {
 }
 
 impl AllocationInfo {
-    // Creates a new `AllocationInfo`
+    /// Creates a new [`AllocationInfo`].
     pub fn new(
         five_tuple: FiveTuple,
         username: String,
@@ -62,8 +65,8 @@ impl AllocationInfo {
     }
 }
 
-// Allocation is tied to a FiveTuple and relays traffic
-// use create_allocation and get_allocation to operate
+/// `Allocation` is tied to a FiveTuple and relays traffic
+/// use create_allocation and get_allocation to operate.
 pub struct Allocation {
     protocol: Protocol,
     turn_socket: Arc<dyn Conn + Send + Sync>,
@@ -74,10 +77,12 @@ pub struct Allocation {
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
     pub(crate) allocations: Option<AllocationMap>,
-    reset_tx: StdMutex<Option<mpsc::Sender<Duration>>>,
+    reset_tx: SyncMutex<Option<mpsc::Sender<Duration>>>,
     timer_expired: Arc<AtomicBool>,
     closed: AtomicBool, // Option<mpsc::Receiver<()>>,
     pub(crate) relayed_bytes: AtomicUsize,
+    drop_tx: Option<Sender<u32>>,
+    alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -85,13 +90,14 @@ fn addr2ipfingerprint(addr: &SocketAddr) -> String {
 }
 
 impl Allocation {
-    // creates a new instance of NewAllocation.
+    /// Creates a new [`Allocation`].
     pub fn new(
         turn_socket: Arc<dyn Conn + Send + Sync>,
         relay_socket: Arc<dyn Conn + Send + Sync>,
         relay_addr: SocketAddr,
         five_tuple: FiveTuple,
         username: Username,
+        alloc_close_notify: Option<mpsc::Sender<AllocationInfo>>,
     ) -> Self {
         Allocation {
             protocol: PROTO_UDP,
@@ -103,20 +109,22 @@ impl Allocation {
             permissions: Arc::new(Mutex::new(HashMap::new())),
             channel_bindings: Arc::new(Mutex::new(HashMap::new())),
             allocations: None,
-            reset_tx: StdMutex::new(None),
+            reset_tx: SyncMutex::new(None),
             timer_expired: Arc::new(AtomicBool::new(false)),
             closed: AtomicBool::new(false),
             relayed_bytes: Default::default(),
+            drop_tx: None,
+            alloc_close_notify,
         }
     }
 
-    // has_permission gets the Permission from the allocation
+    /// Checks the Permission for the `addr`.
     pub async fn has_permission(&self, addr: &SocketAddr) -> bool {
         let permissions = self.permissions.lock().await;
         permissions.get(&addr2ipfingerprint(addr)).is_some()
     }
 
-    // add_permission adds a new permission to the allocation
+    /// Adds a new [`Permission`] to this [`Allocation`].
     pub async fn add_permission(&self, mut p: Permission) {
         let fingerprint = addr2ipfingerprint(&p.addr);
 
@@ -137,14 +145,14 @@ impl Allocation {
         }
     }
 
-    // remove_permission removes the net.Addr's fingerprint from the allocation's permissions
+    /// Removes the `addr`'s fingerprint from this [`Allocation`]'s permissions.
     pub async fn remove_permission(&self, addr: &SocketAddr) -> bool {
         let mut permissions = self.permissions.lock().await;
         permissions.remove(&addr2ipfingerprint(addr)).is_some()
     }
 
-    // add_channel_bind adds a new ChannelBind to the allocation, it also updates the
-    // permissions needed for this ChannelBind
+    /// Adds a new [`ChannelBind`] to this [`Allocation`], it also updates the
+    /// permissions needed for this [`ChannelBind`].
     pub async fn add_channel_bind(&self, mut c: ChannelBind, lifetime: Duration) -> Result<()> {
         {
             if let Some(addr) = self.get_channel_addr(&c.number).await {
@@ -189,19 +197,19 @@ impl Allocation {
         Ok(())
     }
 
-    // remove_channel_bind removes the ChannelBind from this allocation by id
+    /// Removes the [`ChannelBind`] from this [`Allocation`] by `number`.
     pub async fn remove_channel_bind(&self, number: ChannelNumber) -> bool {
         let mut channel_bindings = self.channel_bindings.lock().await;
         channel_bindings.remove(&number).is_some()
     }
 
-    // get_channel_addr gets the ChannelBind's addr
+    /// Gets the [`ChannelBind`]'s address by `number`.
     pub async fn get_channel_addr(&self, number: &ChannelNumber) -> Option<SocketAddr> {
         let channel_bindings = self.channel_bindings.lock().await;
         channel_bindings.get(number).map(|cb| cb.peer)
     }
 
-    // GetChannelByAddr gets the ChannelBind's number from this allocation by net.Addr
+    /// Gets the [`ChannelBind`]'s number from this [`Allocation`] by `addr`.
     pub async fn get_channel_number(&self, addr: &SocketAddr) -> Option<ChannelNumber> {
         let channel_bindings = self.channel_bindings.lock().await;
         for cb in channel_bindings.values() {
@@ -212,7 +220,7 @@ impl Allocation {
         None
     }
 
-    // Close closes the allocation
+    /// Closes the [`Allocation`].
     pub async fn close(&self) -> Result<()> {
         if self.closed.load(Ordering::Acquire) {
             return Err(Error::ErrClosed);
@@ -240,12 +248,23 @@ impl Allocation {
         let _ = self.turn_socket.close().await;
         let _ = self.relay_socket.close().await;
 
+        if let Some(notify_tx) = &self.alloc_close_notify {
+            let _ = notify_tx
+                .send(AllocationInfo {
+                    five_tuple: self.five_tuple,
+                    username: self.username.text.clone(),
+                    #[cfg(feature = "metrics")]
+                    relayed_bytes: self.relayed_bytes.load(Ordering::Acquire),
+                })
+                .await;
+        }
+
         Ok(())
     }
 
     pub async fn start(&self, lifetime: Duration) {
         let (reset_tx, mut reset_rx) = mpsc::channel(1);
-        self.reset_tx.lock().unwrap().replace(reset_tx);
+        self.reset_tx.lock().replace(reset_tx);
 
         let allocations = self.allocations.clone();
         let five_tuple = self.five_tuple;
@@ -260,8 +279,8 @@ impl Allocation {
                 tokio::select! {
                     _ = &mut timer => {
                         if let Some(allocs) = &allocations{
-                            let mut alls = allocs.lock().await;
-                            if let Some(a) = alls.remove(&five_tuple) {
+                            let mut allocs = allocs.lock().await;
+                            if let Some(a) = allocs.remove(&five_tuple) {
                                 let _ = a.close().await;
                             }
                         }
@@ -282,15 +301,13 @@ impl Allocation {
     }
 
     fn stop(&self) -> bool {
-        let mut reset_tx = self.reset_tx.lock().unwrap();
-        let expired = reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
-        reset_tx.take();
-        expired
+        let reset_tx = self.reset_tx.lock().take();
+        reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst)
     }
 
-    // Refresh updates the allocations lifetime
+    /// Updates the allocations lifetime.
     pub async fn refresh(&self, lifetime: Duration) {
-        let reset_tx = self.reset_tx.lock().unwrap().clone();
+        let reset_tx = self.reset_tx.lock().clone();
         if let Some(tx) = reset_tx {
             let _ = tx.send(lifetime).await;
         }
@@ -315,7 +332,7 @@ impl Allocation {
     //  datagram, and the XOR-PEER-ADDRESS attribute is set to the source
     //  transport address of the received UDP datagram.  The Data indication
     //  is then sent on the 5-tuple associated with the allocation.
-    async fn packet_handler(&self) {
+    async fn packet_handler(&mut self) {
         let five_tuple = self.five_tuple;
         let relay_addr = self.relay_addr;
         let relay_socket = Arc::clone(&self.relay_socket);
@@ -323,25 +340,37 @@ impl Allocation {
         let allocations = self.allocations.clone();
         let channel_bindings = Arc::clone(&self.channel_bindings);
         let permissions = Arc::clone(&self.permissions);
+        let (drop_tx, drop_rx) = oneshot::channel::<u32>();
+        self.drop_tx = Some(drop_tx);
 
         tokio::spawn(async move {
             let mut buffer = vec![0u8; RTP_MTU];
 
+            tokio::pin!(drop_rx);
+
             loop {
-                let (n, src_addr) = match relay_socket.recv_from(&mut buffer).await {
-                    Ok((n, src_addr)) => (n, src_addr),
-                    Err(_) => {
-                        if let Some(allocs) = &allocations {
-                            let mut alls = allocs.lock().await;
-                            alls.remove(&five_tuple);
+                let (n, src_addr) = tokio::select! {
+                    result = relay_socket.recv_from(&mut buffer) => {
+                        match result {
+                            Ok((n, src_addr)) => (n, src_addr),
+                            Err(_) => {
+                                if let Some(allocs) = &allocations {
+                                    let mut allocs = allocs.lock().await;
+                                    allocs.remove(&five_tuple);
+                                }
+                                break;
+                            }
                         }
+                    }
+                    _ = drop_rx.as_mut() => {
+                        log::trace!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
                         break;
                     }
                 };
 
                 log::debug!(
                     "relay socket {:?} received {} bytes from {}",
-                    relay_socket.local_addr().await,
+                    relay_socket.local_addr(),
                     n,
                     src_addr
                 );

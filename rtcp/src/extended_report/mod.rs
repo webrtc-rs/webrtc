@@ -9,22 +9,23 @@ pub mod ssr;
 pub mod unknown;
 pub mod vm;
 
+use std::any::Any;
+use std::fmt;
+
+use bytes::{Buf, BufMut, Bytes};
 pub use dlrr::{DLRRReport, DLRRReportBlock};
 pub use prt::PacketReceiptTimesReportBlock;
 pub use rle::{Chunk, ChunkType, DuplicateRLEReportBlock, LossRLEReportBlock, RLEReportBlock};
 pub use rrt::ReceiverReferenceTimeReportBlock;
 pub use ssr::{StatisticsSummaryReportBlock, TTLorHopLimitType};
 pub use unknown::UnknownReportBlock;
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 pub use vm::VoIPMetricsReportBlock;
 
 use crate::error;
 use crate::header::{Header, PacketType, HEADER_LENGTH, SSRC_LENGTH};
 use crate::packet::Packet;
 use crate::util::{get_padding_size, put_padding};
-use bytes::{Buf, BufMut, Bytes};
-use std::any::Any;
-use std::fmt;
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 type Result<T> = std::result::Result<T, util::Error>;
 
@@ -32,8 +33,9 @@ const XR_HEADER_LENGTH: usize = 4;
 
 /// BlockType specifies the type of report in a report block
 /// Extended Report block types from RFC 3611.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BlockType {
+    #[default]
     Unknown = 0,
     LossRLE = 1,               // RFC 3611, section 4.1
     DuplicateRLE = 2,          // RFC 3611, section 4.2
@@ -42,12 +44,6 @@ pub enum BlockType {
     DLRR = 5,                  // RFC 3611, section 4.5
     StatisticsSummary = 6,     // RFC 3611, section 4.6
     VoIPMetrics = 7,           // RFC 3611, section 4.7
-}
-
-impl Default for BlockType {
-    fn default() -> Self {
-        BlockType::Unknown
-    }
 }
 
 impl From<u8> for BlockType {
@@ -78,7 +74,7 @@ impl fmt::Display for BlockType {
             BlockType::VoIPMetrics => "VoIPMetricsReportBlockType",
             _ => "UnknownReportBlockType",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -166,7 +162,7 @@ pub struct ExtendedReport {
 
 impl fmt::Display for ExtendedReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

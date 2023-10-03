@@ -1,10 +1,12 @@
-use std::{collections::HashMap, io::ErrorKind, net::SocketAddr, sync::Arc, sync::Weak};
-
-use util::{sync::RwLock, Conn, Error};
+use std::collections::HashMap;
+use std::io::ErrorKind;
+use std::net::SocketAddr;
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-
 use tokio::sync::{watch, Mutex};
+use util::sync::RwLock;
+use util::{Conn, Error};
 
 mod udp_mux_conn;
 pub use udp_mux_conn::{UDPMuxConn, UDPMuxConnParams, UDPMuxWriter};
@@ -14,10 +16,8 @@ mod udp_mux_test;
 
 mod socket_addr_ext;
 
-use stun::{
-    attributes::ATTR_USERNAME,
-    message::{is_message as is_stun_message, Message as STUNMessage},
-};
+use stun::attributes::ATTR_USERNAME;
+use stun::message::{is_message as is_stun_message, Message as STUNMessage};
 
 use crate::candidate::RECEIVE_MTU;
 
@@ -77,7 +77,7 @@ pub struct UDPMuxDefault {
     // Close sender
     closed_watch_tx: Mutex<Option<watch::Sender<()>>>,
 
-    /// Close reciever
+    /// Close receiver
     closed_watch_rx: watch::Receiver<()>,
 }
 
@@ -104,8 +104,8 @@ impl UDPMuxDefault {
     }
 
     /// Create a muxed connection for a given ufrag.
-    async fn create_muxed_conn(self: &Arc<Self>, ufrag: &str) -> Result<UDPMuxConn, Error> {
-        let local_addr = self.params.conn.local_addr().await?;
+    fn create_muxed_conn(self: &Arc<Self>, ufrag: &str) -> Result<UDPMuxConn, Error> {
+        let local_addr = self.params.conn.local_addr()?;
 
         let params = UDPMuxConnParams {
             local_addr,
@@ -183,7 +183,7 @@ impl UDPMuxDefault {
 
                                 let conn = match conn {
                                     // If we couldn't find the connection based on source address, see if
-                                    // this is a STUN mesage and if so if we can find the connection based on ufrag.
+                                    // this is a STUN message and if so if we can find the connection based on ufrag.
                                     None if is_stun_message(&buffer) => {
                                         loop_self.conn_from_stun_message(&buffer, &addr).await
                                     }
@@ -267,7 +267,7 @@ impl UDPMux for UDPMuxDefault {
                 return Ok(Arc::new(conn.clone()) as Arc<dyn Conn + Send + Sync>);
             }
 
-            let muxed_conn = self.create_muxed_conn(ufrag).await?;
+            let muxed_conn = self.create_muxed_conn(ufrag)?;
             let mut close_rx = muxed_conn.close_rx();
             let cloned_self = Arc::clone(&self);
             let cloned_ufrag = ufrag.to_string();

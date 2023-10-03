@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod integrity_test;
 
+use std::fmt;
+
+use md5::{Digest, Md5};
+use ring::hmac;
+
 use crate::attributes::*;
 use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
-
-use md5::{Digest, Md5};
-use ring::hmac;
-use std::fmt;
 
 // separator for credentials.
 pub(crate) const CREDENTIALS_SEP: &str = ":";
@@ -67,7 +68,7 @@ impl MessageIntegrity {
     // new_long_term_integrity returns new MessageIntegrity with key for long-term
     // credentials. Password, username, and realm must be SASL-prepared.
     pub fn new_long_term_integrity(username: String, realm: String, password: String) -> Self {
-        let s = vec![username, realm, password].join(CREDENTIALS_SEP);
+        let s = [username, realm, password].join(CREDENTIALS_SEP);
 
         let mut h = Md5::new();
         h.update(s.as_bytes());

@@ -1,9 +1,14 @@
-use async_trait::async_trait;
-use tokio::sync::Mutex;
-use tokio::time::{sleep, Duration};
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use tokio::sync::Mutex;
+use tokio::time::{sleep, Duration};
 
 ///////////////////////////////////////////////////////////////////
 //ack_timer_test
@@ -11,9 +16,8 @@ use std::sync::Arc;
 use super::ack_timer::*;
 
 mod test_ack_timer {
-    use crate::error::Result;
-
     use super::*;
+    use crate::error::Result;
 
     struct TestAckTimerObserver {
         ncbs: Arc<AtomicU32>,
@@ -47,8 +51,8 @@ mod test_ack_timer {
         sleep(ACK_INTERVAL + Duration::from_millis(50)).await;
 
         assert_eq!(
-            0,
             ncbs.load(Ordering::SeqCst),
+            0,
             "should not be timed out (actual: {})",
             ncbs.load(Ordering::SeqCst)
         );
@@ -72,17 +76,16 @@ mod test_ack_timer {
 use super::rtx_timer::*;
 
 mod test_rto_manager {
-    use crate::error::Result;
-
     use super::*;
+    use crate::error::Result;
 
     #[tokio::test]
     async fn test_rto_manager_initial_values() -> Result<()> {
         let m = RtoManager::new();
-        assert_eq!(RTO_INITIAL, m.rto, "should be rtoInitial");
-        assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
-        assert_eq!(0, m.srtt, "should be 0");
-        assert_eq!(0.0, m.rttvar, "should be 0.0");
+        assert_eq!(m.rto, RTO_INITIAL, "should be rtoInitial");
+        assert_eq!(m.get_rto(), RTO_INITIAL, "should be rtoInitial");
+        assert_eq!(m.srtt, 0, "should be 0");
+        assert_eq!(m.rttvar, 0.0, "should be 0.0");
 
         Ok(())
     }
@@ -90,14 +93,12 @@ mod test_rto_manager {
     #[tokio::test]
     async fn test_rto_manager_rto_calculation_small_rtt() -> Result<()> {
         let mut m = RtoManager::new();
-        let exp = vec![
-            1800, 1500, 1275, 1106, 1000, // capped at RTO.Min
-        ];
+        let exp = [1800, 1500, 1275, 1106, 1000];
 
         for i in 0..5 {
             m.set_new_rtt(600);
             let rto = m.get_rto();
-            assert_eq!(exp[i], rto, "should be equal: {}", i);
+            assert_eq!(rto, exp[i], "should be equal: {i}");
         }
 
         Ok(())
@@ -106,7 +107,7 @@ mod test_rto_manager {
     #[tokio::test]
     async fn test_rto_manager_rto_calculation_large_rtt() -> Result<()> {
         let mut m = RtoManager::new();
-        let exp = vec![
+        let exp = [
             60000, // capped at RTO.Max
             60000, // capped at RTO.Max
             60000, // capped at RTO.Max
@@ -116,7 +117,7 @@ mod test_rto_manager {
         for i in 0..5 {
             m.set_new_rtt(30000);
             let rto = m.get_rto();
-            assert_eq!(exp[i], rto, "should be equal: {}", i);
+            assert_eq!(rto, exp[i], "should be equal: {i}");
         }
 
         Ok(())
@@ -125,17 +126,17 @@ mod test_rto_manager {
     #[tokio::test]
     async fn test_rto_manager_calculate_next_timeout() -> Result<()> {
         let rto = calculate_next_timeout(1, 0);
-        assert_eq!(1, rto, "should match");
+        assert_eq!(rto, 1, "should match");
         let rto = calculate_next_timeout(1, 1);
-        assert_eq!(2, rto, "should match");
+        assert_eq!(rto, 2, "should match");
         let rto = calculate_next_timeout(1, 2);
-        assert_eq!(4, rto, "should match");
+        assert_eq!(rto, 4, "should match");
         let rto = calculate_next_timeout(1, 30);
-        assert_eq!(60000, rto, "should match");
+        assert_eq!(rto, 60000, "should match");
         let rto = calculate_next_timeout(1, 63);
-        assert_eq!(60000, rto, "should match");
+        assert_eq!(rto, 60000, "should match");
         let rto = calculate_next_timeout(1, 64);
-        assert_eq!(60000, rto, "should match");
+        assert_eq!(rto, 60000, "should match");
 
         Ok(())
     }
@@ -148,9 +149,9 @@ mod test_rto_manager {
         }
 
         m.reset();
-        assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
-        assert_eq!(0, m.srtt, "should be 0");
-        assert_eq!(0.0, m.rttvar, "should be 0");
+        assert_eq!(m.get_rto(), RTO_INITIAL, "should be rtoInitial");
+        assert_eq!(m.srtt, 0, "should be 0");
+        assert_eq!(m.rttvar, 0.0, "should be 0");
 
         Ok(())
     }
@@ -159,12 +160,13 @@ mod test_rto_manager {
 //TODO: remove this conditional test
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod test_rtx_timer {
+    use std::time::SystemTime;
+
+    use tokio::sync::mpsc;
+
     use super::*;
     use crate::association::RtxTimerId;
     use crate::error::Result;
-
-    use std::time::SystemTime;
-    use tokio::sync::mpsc;
 
     struct TestTimerObserver {
         ncbs: Arc<AtomicU32>,
@@ -192,7 +194,7 @@ mod test_rtx_timer {
             // 60 : 2 (90)
             // 120: 3 (210)
             // 240: 4 (550) <== expected in 650 msec
-            assert_eq!(self.timer_id, timer_id, "unexpected timer ID: {}", timer_id);
+            assert_eq!(self.timer_id, timer_id, "unexpected timer ID: {timer_id}");
             if (self.max_rtos > 0 && n_rtos == self.max_rtos) || self.max_rtos == usize::MAX {
                 if let Some(done) = &self.done_tx {
                     let elapsed = SystemTime::now();
@@ -204,13 +206,13 @@ mod test_rtx_timer {
         async fn on_retransmission_failure(&mut self, timer_id: RtxTimerId) {
             if self.max_rtos == 0 {
                 if let Some(done) = &self.done_tx {
-                    assert_eq!(self.timer_id, timer_id, "unexpted timer ID: {}", timer_id);
+                    assert_eq!(self.timer_id, timer_id, "unexpted timer ID: {timer_id}");
                     let elapsed = SystemTime::now();
                     //t.Logf("onRtxFailure: elapsed=%.03f\n", elapsed)
                     let _ = done.send(elapsed).await;
                 }
             } else {
-                assert!(false, "timer should not fail");
+                panic!("timer should not fail");
             }
         }
     }
@@ -237,7 +239,7 @@ mod test_rtx_timer {
         rt.stop().await;
         assert!(!rt.is_running().await, "should not be running");
 
-        assert_eq!(4, ncbs.load(Ordering::SeqCst), "should be called 4 times");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 4, "should be called 4 times");
 
         Ok(())
     }
@@ -265,7 +267,7 @@ mod test_rtx_timer {
         rt.stop().await;
 
         assert!(!rt.is_running().await, "should not be running");
-        assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 1, "must be called once");
 
         Ok(())
     }
@@ -290,7 +292,7 @@ mod test_rtx_timer {
         rt.stop().await;
 
         assert!(!rt.is_running().await, "should not be running");
-        assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 0, "no callback should be made");
 
         Ok(())
     }
@@ -319,7 +321,7 @@ mod test_rtx_timer {
         rt.stop().await;
 
         assert!(!rt.is_running().await, "should NOT be running");
-        assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 1, "must be called once");
 
         Ok(())
     }
@@ -343,7 +345,7 @@ mod test_rtx_timer {
             assert!(!rt.is_running().await, "should NOT be running");
         }
 
-        assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 0, "no callback should be made");
 
         Ok(())
     }
@@ -380,7 +382,7 @@ mod test_rtx_timer {
         let elapsed = done_rx.recv().await;
 
         assert!(!rt.is_running().await, "should not be running");
-        assert_eq!(5, ncbs.load(Ordering::SeqCst), "should be called 5 times");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 5, "should be called 5 times");
 
         if let Some(elapsed) = elapsed {
             let diff = elapsed.duration_since(since).unwrap();
@@ -431,7 +433,7 @@ mod test_rtx_timer {
         let elapsed = done_rx.recv().await;
 
         assert!(rt.is_running().await, "should still be running");
-        assert_eq!(6, ncbs.load(Ordering::SeqCst), "should be called 6 times");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 6, "should be called 6 times");
 
         if let Some(elapsed) = elapsed {
             let diff = elapsed.duration_since(since).unwrap();
@@ -501,7 +503,7 @@ mod test_rtx_timer {
         assert!(!rt.is_running().await, "must not be running");
 
         sleep(Duration::from_millis(100)).await;
-        assert_eq!(0, ncbs.load(Ordering::SeqCst), "RTO should not occur");
+        assert_eq!(ncbs.load(Ordering::SeqCst), 0, "RTO should not occur");
 
         Ok(())
     }

@@ -1,12 +1,13 @@
-use super::conn_udp_listener::*;
-use super::*;
-use crate::error::{Error, Result};
-
 use std::future::Future;
 use std::pin::Pin;
+
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
+
+use super::conn_udp_listener::*;
+use super::*;
+use crate::error::{Error, Result};
 
 async fn pipe() -> Result<(
     Arc<dyn Listener + Send + Sync>,
@@ -29,11 +30,11 @@ async fn pipe() -> Result<(
     let (l_conn, raddr) = listener.accept().await?;
     assert_eq!(daddr, raddr, "remote address should be match");
 
-    let raddr = l_conn.remote_addr().await;
+    let raddr = l_conn.remote_addr();
     if let Some(raddr) = raddr {
         assert_eq!(daddr, raddr, "remote address should be match");
     } else {
-        assert!(false, "expected Some, but got None, for remote_addr()");
+        panic!("expected Some, but got None, for remote_addr()");
     }
 
     let mut buf = vec![0u8; handshake.len()];
@@ -42,8 +43,7 @@ async fn pipe() -> Result<(
     let result = String::from_utf8(buf[..n].to_vec())?;
     if handshake != result {
         Err(Error::Other(format!(
-            "errHandshakeFailed: {} != {}",
-            handshake, result
+            "errHandshakeFailed: {handshake} != {result}"
         )))
     } else {
         Ok((listener, l_conn, d_conn))
@@ -145,8 +145,8 @@ async fn test_listener_accept_filter() -> Result<()> {
             }
         }
 
-        assert_eq!(accepted, expected, "{}: unexpected result", name);
-        assert_eq!(!timeout, expected, "{}: unexpected result", name);
+        assert_eq!(accepted, expected, "{name}: unexpected result");
+        assert_eq!(!timeout, expected, "{name}: unexpected result");
 
         conn.close().await?;
         listener.close().await?;

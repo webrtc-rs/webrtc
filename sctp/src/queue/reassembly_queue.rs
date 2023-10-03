@@ -1,9 +1,8 @@
-use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
-use crate::util::*;
-
-use crate::error::{Error, Result};
-
 use std::cmp::Ordering;
+
+use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
+use crate::error::{Error, Result};
+use crate::util::*;
 
 fn sort_chunks_by_tsn(c: &mut [ChunkPayloadData]) {
     c.sort_by(|a, b| {
@@ -267,7 +266,8 @@ impl ReassemblyQueue {
                 return Err(Error::ErrTryAgain);
             }
             if cset.ssn == self.next_ssn {
-                self.next_ssn += 1;
+                // From RFC 4960 Sec 6.5:
+                self.next_ssn = self.next_ssn.wrapping_add(1);
             }
             self.ordered.remove(0)
         } else {
@@ -285,7 +285,7 @@ impl ReassemblyQueue {
                 buf[n_written..n_written + n].copy_from_slice(&c.user_data[..n]);
                 n_written += n;
                 if n < to_copy {
-                    err = Some(Error::ErrShortBuffer);
+                    err = Some(Error::ErrShortBuffer { size: buf.len() });
                 }
             }
         }
@@ -314,7 +314,7 @@ impl ReassemblyQueue {
 
         // Finally, forward next_ssn
         if sna16lte(self.next_ssn, last_ssn) {
-            self.next_ssn = last_ssn + 1;
+            self.next_ssn = last_ssn.wrapping_add(1);
         }
     }
 

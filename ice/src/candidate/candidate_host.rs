@@ -1,8 +1,8 @@
+use std::sync::atomic::{AtomicU16, AtomicU8};
+
 use super::candidate_base::*;
 use super::*;
 use crate::rand::generate_cand_id;
-
-use std::sync::atomic::{AtomicU16, AtomicU8};
 
 /// The config required to create a new `CandidateHost`.
 #[derive(Default)]
@@ -14,7 +14,7 @@ pub struct CandidateHostConfig {
 
 impl CandidateHostConfig {
     /// Creates a new host candidate.
-    pub async fn new_candidate_host(self) -> Result<CandidateBase> {
+    pub fn new_candidate_host(self) -> Result<CandidateBase> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
             candidate_id = generate_cand_id();
@@ -37,7 +37,7 @@ impl CandidateHostConfig {
 
         if !self.base_config.address.ends_with(".local") {
             let ip = self.base_config.address.parse()?;
-            c.set_ip(&ip).await?;
+            c.set_ip(&ip)?;
         };
 
         Ok(c)

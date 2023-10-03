@@ -1,9 +1,9 @@
-use thiserror::Error;
-
 use std::io;
 use std::num::ParseIntError;
 use std::string::FromUtf8Error;
+
 use substring::Substring;
+use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

@@ -1,9 +1,7 @@
 use aes::cipher::generic_array::GenericArray;
-use aes::cipher::NewBlockCipher;
-use aes::{Aes128, BlockEncrypt};
-
-use byteorder::{BigEndian, WriteBytesExt};
-use std::io::BufWriter;
+use aes::cipher::BlockEncrypt;
+use aes::Aes128;
+use aes_gcm::KeyInit;
 
 use crate::error::{Error, Result};
 
@@ -74,22 +72,24 @@ pub(crate) fn generate_counter(
     rollover_counter: u32,
     ssrc: u32,
     session_salt: &[u8],
-) -> Result<Vec<u8>> {
+) -> [u8; 16] {
     assert!(session_salt.len() <= 16);
 
-    let mut counter: Vec<u8> = vec![0; 16];
-    {
-        let mut writer = BufWriter::<&mut [u8]>::new(counter[4..].as_mut());
-        writer.write_u32::<BigEndian>(ssrc)?;
-        writer.write_u32::<BigEndian>(rollover_counter)?;
-        writer.write_u32::<BigEndian>((sequence_number as u32) << 16)?;
-    }
+    let mut counter = [0; 16];
+
+    let ssrc_be = ssrc.to_be_bytes();
+    let rollover_be = rollover_counter.to_be_bytes();
+    let seq_be = ((sequence_number as u32) << 16).to_be_bytes();
+
+    counter[4..8].copy_from_slice(&ssrc_be);
+    counter[8..12].copy_from_slice(&rollover_be);
+    counter[12..16].copy_from_slice(&seq_be);
 
     for i in 0..session_salt.len() {
         counter[i] ^= session_salt[i];
     }
 
-    Ok(counter)
+    counter
 }
 
 #[cfg(test)]
@@ -129,8 +129,7 @@ mod test {
         )?;
         assert_eq!(
             session_key, expected_session_key,
-            "Session Key:\n{:?} \ndoes not match expected:\n{:?}\nMaster Key:\n{:?}\nMaster Salt:\n{:?}\n",
-            session_key, expected_session_key, master_key, master_salt,
+            "Session Key:\n{session_key:?} \ndoes not match expected:\n{expected_session_key:?}\nMaster Key:\n{master_key:?}\nMaster Salt:\n{master_salt:?}\n",
         );
 
         let session_salt = aes_cm_key_derivation(
@@ -142,8 +141,7 @@ mod test {
         )?;
         assert_eq!(
             session_salt, expected_session_salt,
-            "Session Salt {:?} does not match expected {:?}",
-            session_salt, expected_session_salt
+            "Session Salt {session_salt:?} does not match expected {expected_session_salt:?}"
         );
 
         let auth_key_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_key_len();
@@ -157,8 +155,7 @@ mod test {
         )?;
         assert_eq!(
             session_auth_tag, expected_session_auth_tag,
-            "Session Auth Tag {:?} does not match expected {:?}",
-            session_auth_tag, expected_session_auth_tag,
+            "Session Auth Tag {session_auth_tag:?} does not match expected {expected_session_auth_tag:?}",
         );
 
         Ok(())

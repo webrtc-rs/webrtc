@@ -1,6 +1,6 @@
-use super::*;
-
 use std::net::Ipv4Addr;
+
+use super::*;
 
 #[test]
 fn test_relayed_address() -> Result<(), stun::Error> {

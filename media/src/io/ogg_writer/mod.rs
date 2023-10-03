@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod ogg_writer_test;
 
-use crate::error::Result;
-use crate::io::ogg_reader::*;
-use crate::io::Writer;
+use std::io::{BufWriter, Seek, Write};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use rtp::packetizer::Depacketizer;
-use std::io::{BufWriter, Seek, Write};
+
+use crate::error::Result;
+use crate::io::ogg_reader::*;
+use crate::io::Writer;
 
 /// OggWriter is used to take RTP packets and write them to an OGG on disk
 pub struct OggWriter<W: Write + Seek> {
@@ -158,7 +159,7 @@ impl<W: Write + Seek> OggWriter<W> {
 impl<W: Write + Seek> Writer for OggWriter<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
-        let mut opus_packet = rtp::codecs::opus::OpusPacket::default();
+        let mut opus_packet = rtp::codecs::opus::OpusPacket;
         let payload = opus_packet.depacketize(&packet.payload)?;
 
         // Should be equivalent to sample_rate * duration

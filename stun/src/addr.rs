@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod addr_test;
 
+use std::fmt;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
 use crate::attributes::*;
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 pub(crate) const FAMILY_IPV4: u16 = 0x01;
 pub(crate) const FAMILY_IPV6: u16 = 0x02;
@@ -71,7 +71,7 @@ impl MappedAddress {
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::Other(format!("bad value {}", family)));
+            return Err(Error::Other(format!("bad value {family}")));
         }
         self.port = u16::from_be_bytes([v[2], v[3]]);
 

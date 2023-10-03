@@ -1,10 +1,10 @@
-use turn::client::*;
-use turn::Error;
+use std::sync::Arc;
 
 use clap::{App, AppSettings, Arg};
-use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
+use turn::client::*;
+use turn::Error;
 use util::Conn;
 
 // RUST_LOG=trace cargo run --color=always --package turn --example turn_client_udp -- --host 0.0.0.0 --user user=pass --ping
@@ -76,7 +76,7 @@ async fn main() -> Result<(), Error> {
     // TURN client won't create a local listening socket by itself.
     let conn = UdpSocket::bind("0.0.0.0:0").await?;
 
-    let turn_server_addr = format!("{}:{}", host, port);
+    let turn_server_addr = format!("{host}:{port}");
 
     let cfg = ClientConfig {
         stun_serv_addr: turn_server_addr.clone(),
@@ -102,9 +102,9 @@ async fn main() -> Result<(), Error> {
 
     // The relayConn's local address is actually the transport
     // address assigned on the TURN server.
-    println!("relayed-address={}", relay_conn.local_addr().await?);
+    println!("relayed-address={}", relay_conn.local_addr()?);
 
-    // If you provided `-ping`, perform a ping test agaist the
+    // If you provided `-ping`, perform a ping test against the
     // relayConn we have just allocated.
     if ping {
         do_ping_test(&client, relay_conn).await?;
@@ -132,7 +132,7 @@ async fn do_ping_test(
     // the TURN server.
     //println!("relay_conn send hello to mapped_addr {}", mapped_addr);
     relay_conn.send_to("Hello".as_bytes(), mapped_addr).await?;
-    let relay_addr = relay_conn.local_addr().await?;
+    let relay_addr = relay_conn.local_addr()?;
 
     let pinger_conn_rx = Arc::clone(&pinger_conn_tx);
 
@@ -150,7 +150,7 @@ async fn do_ping_test(
                 Err(_) => break,
             };
 
-            println!("pingerConn read-loop: {} from {}", msg, from);
+            println!("pingerConn read-loop: {msg} from {from}");
             /*if sentAt, pingerErr := time.Parse(time.RFC3339Nano, msg); pingerErr == nil {
                 rtt := time.Since(sentAt)
                 log.Printf("%d bytes from from %s time=%d ms\n", n, from.String(), int(rtt.Seconds()*1000))

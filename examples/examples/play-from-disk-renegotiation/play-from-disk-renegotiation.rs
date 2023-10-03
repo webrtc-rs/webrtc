@@ -1,14 +1,14 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use std::fs::File;
-use std::io::BufReader;
-use std::io::Write;
+use std::io::{BufReader, Write};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -279,7 +279,7 @@ async fn main() -> Result<()> {
 
     if let Some(video_file) = video_file {
         if !Path::new(video_file).exists() {
-            return Err(Error::new(format!("video file: '{}' not exist", video_file)).into());
+            return Err(Error::new(format!("video file: '{video_file}' not exist")).into());
         }
         let mut vf = VIDEO_FILE.lock().await;
         *vf = Some(video_file.to_owned());
@@ -323,21 +323,19 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     {
         let mut pcm = PEER_CONNECTION_MUTEX.lock().await;
@@ -353,7 +351,7 @@ async fn main() -> Result<()> {
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 
@@ -363,7 +361,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 
@@ -375,7 +373,7 @@ async fn main() -> Result<()> {
 // Read a video file from disk and write it to a webrtc.Track
 // When the video has been completely read this exits without error
 async fn write_video_to_track(video_file: String, t: Arc<TrackLocalStaticSample>) -> Result<()> {
-    println!("play video from disk file {}", video_file);
+    println!("play video from disk file {video_file}");
 
     // Open a IVF file and start reading using our IVFReader
     let file = File::open(video_file)?;
@@ -395,7 +393,7 @@ async fn write_video_to_track(video_file: String, t: Arc<TrackLocalStaticSample>
         let frame = match ivf.parse_next_frame() {
             Ok((frame, _)) => frame,
             Err(err) => {
-                println!("All video frames parsed and sent: {}", err);
+                println!("All video frames parsed and sent: {err}");
                 return Err(err.into());
             }
         };

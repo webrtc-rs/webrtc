@@ -1,14 +1,16 @@
 #[cfg(test)]
 mod transport_layer_nack_test;
 
-use crate::{error::Error, header::*, packet::*, util::*};
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
-
-use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
-use std::future::Future;
-use std::pin::Pin;
+
+use bytes::{Buf, BufMut};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
+use crate::packet::*;
+use crate::util::*;
 
 /// PacketBitmap shouldn't be used like a normal integral,
 /// so it's type is masked here. Access it with PacketList().
@@ -23,9 +25,6 @@ pub struct NackPair {
     /// Bitmask of following lost packets
     pub lost_packets: PacketBitmap,
 }
-
-pub type RangeFn =
-    Box<dyn (Fn(u16) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>;
 
 pub struct NackIterator {
     packet_id: u16,
@@ -60,14 +59,24 @@ impl Iterator for NackIterator {
 }
 
 impl NackPair {
+    pub fn new(seq: u16) -> Self {
+        Self {
+            packet_id: seq,
+            lost_packets: Default::default(),
+        }
+    }
+
     /// PacketList returns a list of Nack'd packets that's referenced by a NackPair
     pub fn packet_list(&self) -> Vec<u16> {
         self.into_iter().collect()
     }
 
-    pub async fn range(&self, f: RangeFn) {
+    pub fn range<F>(&self, f: F)
+    where
+        F: Fn(u16) -> bool,
+    {
         for packet_id in self.into_iter() {
-            if !f(packet_id).await {
+            if !f(packet_id) {
                 return;
             }
         }
@@ -113,7 +122,7 @@ impl fmt::Display for TransportLayerNack {
         for nack in &self.nacks {
             out += format!("\t{}\t{:b}\n", nack.packet_id, nack.lost_packets).as_str();
         }
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 
@@ -243,11 +252,7 @@ pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
         return vec![];
     }
 
-    let mut nack_pair = NackPair {
-        packet_id: seq_nos[0],
-        ..Default::default()
-    };
-
+    let mut nack_pair = NackPair::new(seq_nos[0]);
     let mut pairs = vec![];
 
     for &seq in seq_nos.iter().skip(1) {
@@ -256,7 +261,7 @@ pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
         }
         if seq <= nack_pair.packet_id || seq > nack_pair.packet_id.saturating_add(16) {
             pairs.push(nack_pair);
-            nack_pair.packet_id = seq;
+            nack_pair = NackPair::new(seq);
             continue;
         }
 

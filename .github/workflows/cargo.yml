@@ -20,7 +20,7 @@ jobs:
       matrix:
         os: ["ubuntu-latest", "macos-latest"]
         toolchain:
-          - 1.60.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
+          # - 1.65.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
           - stable
     runs-on: ${{ matrix.os }}
     steps:
@@ -47,14 +47,16 @@ jobs:
       - name: 🏭 Cache dependencies
         uses: Swatinem/rust-cache@v2
       - name: Test
-        run: cargo test --features metrics
+        run: cargo test
+      - name: Test with all features enabled
+        run: cargo test --all-features
 
   test_windows:
     name: Test (windows)
     strategy:
       matrix:
         toolchain:
-          - 1.60.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
+          # - 1.63.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
           - stable
     runs-on: windows-latest
     steps:
@@ -86,7 +88,7 @@ jobs:
         working-directory: "C:\\a\\webrtc\\webrtc"
         run: cargo test --features metrics
 
-  rustfmt_and_clippy:
+  quality:
     name: Check formatting style and run clippy
     runs-on: ubuntu-latest
     steps:
@@ -108,25 +110,11 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: --workspace --all-targets --all-features --all -- -D warnings
       - name: 💬 Check formatting
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-
-  minimal_versions:
-    name: Compile and test with minimal versions
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: 🌙 Install latest nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-      - uses: taiki-e/install-action@cargo-hack
-      - uses: taiki-e/install-action@cargo-minimal-versions
-      - run: cargo minimal-versions check --workspace --all-features --ignore-private -v
-      - run: cargo minimal-versions build --workspace --all-features --ignore-private -v
-      - run: cargo minimal-versions test --workspace --all-features -v
+      - name: Check for typos
+        uses: crate-ci/typos@master

@@ -6,10 +6,10 @@ pub mod utilities;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use util::Conn;
 
 use dtls::Error;
+use tokio::sync::Mutex;
+use util::Conn;
 
 const BUF_SIZE: usize = 8192;
 
@@ -29,9 +29,9 @@ impl Hub {
 
     /// register adds a new conn to the Hub
     pub async fn register(&self, conn: Arc<dyn Conn + Send + Sync>) {
-        println!("Connected to {}", conn.remote_addr().await.unwrap());
+        println!("Connected to {}", conn.remote_addr().unwrap());
 
-        if let Some(remote_addr) = conn.remote_addr().await {
+        if let Some(remote_addr) = conn.remote_addr() {
             let mut conns = self.conns.lock().await;
             conns.insert(remote_addr.to_string(), Arc::clone(&conn));
         }
@@ -50,7 +50,7 @@ impl Hub {
 
         while let Ok(n) = conn.recv(&mut b).await {
             let msg = String::from_utf8(b[..n].to_vec())?;
-            print!("Got message: {}", msg);
+            print!("Got message: {msg}");
         }
 
         Hub::unregister(conns, conn).await
@@ -60,16 +60,16 @@ impl Hub {
         conns: Arc<Mutex<HashMap<String, Arc<dyn Conn + Send + Sync>>>>,
         conn: Arc<dyn Conn + Send + Sync>,
     ) -> Result<(), Error> {
-        if let Some(remote_addr) = conn.remote_addr().await {
+        if let Some(remote_addr) = conn.remote_addr() {
             {
                 let mut cs = conns.lock().await;
                 cs.remove(&remote_addr.to_string());
             }
 
             if let Err(err) = conn.close().await {
-                println!("Failed to disconnect: {} with err {}", remote_addr, err);
+                println!("Failed to disconnect: {remote_addr} with err {err}");
             } else {
-                println!("Disconnected: {} ", remote_addr);
+                println!("Disconnected: {remote_addr} ");
             }
         }
 
@@ -82,7 +82,7 @@ impl Hub {
             if let Err(err) = conn.send(msg).await {
                 println!(
                     "Failed to write message to {:?}: {}",
-                    conn.remote_addr().await,
+                    conn.remote_addr(),
                     err
                 );
             }
@@ -98,7 +98,7 @@ impl Hub {
             match reader.read_line(&mut msg) {
                 Ok(0) => return,
                 Err(err) => {
-                    println!("stdin read err: {}", err);
+                    println!("stdin read err: {err}");
                     return;
                 }
                 _ => {}

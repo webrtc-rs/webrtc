@@ -1,9 +1,9 @@
+use std::io::BufReader;
+use std::iter::Iterator;
+
 use super::*;
 use crate::lexer::END_LINE;
 use crate::util::ATTRIBUTE_KEY;
-
-use std::io::BufReader;
-use std::iter::Iterator;
 
 const EXAMPLE_ATTR_EXTMAP1: &str = "extmap:1 http://example.com/082005/ext.htm#ttime";
 const EXAMPLE_ATTR_EXTMAP2: &str =
@@ -16,11 +16,9 @@ const FAILING_ATTR_EXTMAP2: &str = "extmap:2/blorg http://example.com/082005/ext
 fn test_extmap() -> Result<()> {
     let example_attr_extmap1_line = EXAMPLE_ATTR_EXTMAP1;
     let example_attr_extmap2_line = EXAMPLE_ATTR_EXTMAP2;
-    let failing_attr_extmap1_line =
-        format!("{}{}{}", ATTRIBUTE_KEY, FAILING_ATTR_EXTMAP1, END_LINE);
-    let failing_attr_extmap2_line =
-        format!("{}{}{}", ATTRIBUTE_KEY, FAILING_ATTR_EXTMAP2, END_LINE);
-    let passingtests = vec![
+    let failing_attr_extmap1_line = format!("{ATTRIBUTE_KEY}{FAILING_ATTR_EXTMAP1}{END_LINE}");
+    let failing_attr_extmap2_line = format!("{ATTRIBUTE_KEY}{FAILING_ATTR_EXTMAP2}{END_LINE}");
+    let passingtests = [
         (EXAMPLE_ATTR_EXTMAP1, example_attr_extmap1_line),
         (EXAMPLE_ATTR_EXTMAP2, example_attr_extmap2_line),
     ];
@@ -33,8 +31,8 @@ fn test_extmap() -> Result<()> {
         let mut reader = BufReader::new(u.1.as_bytes());
         let actual = ExtMap::unmarshal(&mut reader)?;
         assert_eq!(
-            u.1,
             actual.marshal(),
+            u.1,
             "{}: {} vs {}",
             i,
             u.1,
@@ -67,7 +65,7 @@ fn test_transport_cc_extmap() -> Result<()> {
 
     let s = e.marshal();
     if s == "3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01" {
-        assert!(false, "TestTransportCC failed");
+        panic!("TestTransportCC failed");
     } else {
         assert_eq!(
             s,

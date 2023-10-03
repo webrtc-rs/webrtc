@@ -1,8 +1,7 @@
-use crate::error::Result;
+use bytes::{Bytes, BytesMut};
 
 use super::*;
-
-use bytes::{Bytes, BytesMut};
+use crate::error::Result;
 
 #[test]
 fn test_message_unmarshal_open_success() {
@@ -46,12 +45,9 @@ fn test_message_unmarshal_ack_success() -> Result<()> {
 fn test_message_unmarshal_invalid_message_type() {
     let mut bytes = Bytes::from_static(&[0x01]);
     let expected = Error::InvalidMessageType(0x01);
-    let actual = Message::unmarshal(&mut bytes);
-    if let Err(err) = actual {
-        assert_eq!(expected, err);
-    } else {
-        panic!("expected err, but got ok");
-    }
+    let result = Message::unmarshal(&mut bytes);
+    let actual = result.expect_err("expected err, but got ok");
+    assert_eq!(actual, expected);
 }
 
 #[test]

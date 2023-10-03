@@ -1,9 +1,11 @@
+use std::io::Cursor;
+
+use regex::Regex;
+
 use super::*;
 use crate::api::media_engine::MIME_TYPE_OPUS;
 use crate::api::APIBuilder;
 use crate::peer_connection::configuration::RTCConfiguration;
-use regex::Regex;
-use std::io::Cursor;
 
 #[tokio::test]
 async fn test_opus_case() -> Result<()> {
@@ -12,7 +14,7 @@ async fn test_opus_case() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
-    pc.add_transceiver_from_kind(RTPCodecType::Audio, &[])
+    pc.add_transceiver_from_kind(RTPCodecType::Audio, None)
         .await?;
 
     let offer = pc.create_offer(None).await?;
@@ -32,7 +34,7 @@ async fn test_video_case() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
-    pc.add_transceiver_from_kind(RTPCodecType::Video, &[])
+    pc.add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let offer = pc.create_offer(None).await?;
@@ -492,9 +494,9 @@ a=fmtp:97 apt=96
         assert!(m.negotiated_video.load(Ordering::SeqCst));
 
         if let Err(err) = m.get_codec_by_payload(97).await {
-            assert_eq!(Error::ErrCodecNotFound, err);
+            assert_eq!(err, Error::ErrCodecNotFound);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -532,11 +534,10 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             None,
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
-        assert_eq!(1, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 1);
     }
 
     //"Same Direction"
@@ -551,11 +552,10 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             Some(RTCRtpTransceiverDirection::Recvonly),
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
-        assert_eq!(1, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 1);
     }
 
     //"Different Direction"
@@ -570,11 +570,10 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             Some(RTCRtpTransceiverDirection::Sendonly),
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Recvonly);
 
-        assert_eq!(0, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 0);
     }
 
     //"No direction and inactive"
@@ -589,11 +588,10 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
             None,
         )?;
 
-        let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive)
-            .await;
+        let params =
+            m.get_rtp_parameters_by_kind(RTPCodecType::Audio, RTCRtpTransceiverDirection::Inactive);
 
-        assert_eq!(1, params.header_extensions.len());
+        assert_eq!(params.header_extensions.len(), 1);
     }
 
     Ok(())
@@ -647,7 +645,7 @@ async fn validate(m: &MediaEngine) -> Result<()> {
             uri: "test-extension".to_owned(),
         })
         .await;
-    assert_eq!(2, id);
+    assert_eq!(id, 2);
     assert!(audio_negotiated);
     assert!(!video_negotiated);
 
@@ -656,7 +654,7 @@ async fn validate(m: &MediaEngine) -> Result<()> {
 
 /// The cloned MediaEngine instance should be able to update negotiated header extensions.
 #[tokio::test]
-async fn test_update_header_extenstion_to_cloned_media_engine() -> Result<()> {
+async fn test_update_header_extension_to_cloned_media_engine() -> Result<()> {
     let mut m = MediaEngine::default();
 
     m.register_codec(
@@ -708,7 +706,8 @@ a=rtpmap:111 opus/48000/2
 
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
-    for extension in ["urn:3gpp:video-orientation"] {
+    {
+        let extension = "urn:3gpp:video-orientation";
         m.register_header_extension(
             RTCRtpHeaderExtensionCapability {
                 uri: extension.to_owned(),
@@ -764,9 +763,8 @@ a=rtpmap:111 opus/48000/2
     assert!(mid_audio_enabled);
     assert!(!mid_video_enabled);
 
-    let params = m
-        .get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly)
-        .await;
+    let params =
+        m.get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly);
     dbg!(&params);
 
     let orientation = params

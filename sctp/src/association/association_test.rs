@@ -1,17 +1,20 @@
-use super::*;
-use crate::stream::*;
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
 
-use crate::chunk::chunk_selective_ack::GapAckBlock;
-use async_trait::async_trait;
 use std::io;
-use std::net::Shutdown;
-use std::net::SocketAddr;
+use std::net::{Shutdown, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
+
+use async_trait::async_trait;
 use tokio::net::UdpSocket;
 use util::conn::conn_bridge::*;
 use util::conn::conn_pipe::pipe;
 use util::conn::*;
+
+use super::*;
+use crate::chunk::chunk_selective_ack::GapAckBlock;
+use crate::stream::*;
 
 async fn create_new_association_pair(
     br: &Arc<Bridge>,
@@ -87,7 +90,7 @@ async fn create_new_association_pair(
     }
 
     if !a0handshake_done || !a1handshake_done {
-        return Err(Error::Other("handshake failed".to_owned()).into());
+        return Err(Error::Other("handshake failed".to_owned()));
     }
 
     drop(closed_tx);
@@ -193,7 +196,7 @@ async fn establish_session_pair(
 
     let s1 = server.accept_stream().await.unwrap();
     if s0.stream_identifier != s1.stream_identifier {
-        return Err(Error::Other("SI should match".to_owned()).into());
+        return Err(Error::Other("SI should match".to_owned()));
     }
 
     br.process().await;
@@ -202,15 +205,15 @@ async fn establish_session_pair(
     let (n, ppi) = s1.read_sctp(&mut buf).await?;
 
     if n != hello_msg.len() {
-        return Err(Error::Other("received data must by 3 bytes".to_owned()).into());
+        return Err(Error::Other("received data must by 3 bytes".to_owned()));
     }
 
     if ppi != PayloadProtocolIdentifier::Dcep {
-        return Err(Error::Other("unexpected ppi".to_owned()).into());
+        return Err(Error::Other("unexpected ppi".to_owned()));
     }
 
-    if &buf[..n] != &hello_msg {
-        return Err(Error::Other("received data mismatch".to_owned()).into());
+    if buf[..n] != hello_msg {
+        return Err(Error::Other("received data mismatch".to_owned()));
     }
 
     flush_buffers(br, client, server).await;
@@ -239,7 +242,7 @@ async fn test_assoc_reliable_simple() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -250,16 +253,16 @@ async fn test_assoc_reliable_simple() -> Result<()> {
 
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), 0, "incorrect bufferedAmount");
     }
 
     let n = s0
         .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
         .await?;
-    assert_eq!(MSG.len(), n, "unexpected length of received data");
+    assert_eq!(n, MSG.len(), "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(MSG.len(), a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), MSG.len(), "incorrect bufferedAmount");
     }
 
     flush_buffers(&br, &a0, &a1).await;
@@ -276,7 +279,7 @@ async fn test_assoc_reliable_simple() -> Result<()> {
 
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), 0, "incorrect bufferedAmount");
     }
 
     close_association_pair(&br, a0, a1).await;
@@ -325,7 +328,7 @@ async fn test_assoc_reliable_ordered_reordered() -> Result<()> {
 
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), 0, "incorrect bufferedAmount");
     }
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
@@ -335,7 +338,7 @@ async fn test_assoc_reliable_ordered_reordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -344,7 +347,7 @@ async fn test_assoc_reliable_ordered_reordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     tokio::time::sleep(Duration::from_millis(10)).await;
     br.reorder(0).await;
@@ -427,7 +430,7 @@ async fn test_assoc_reliable_ordered_fragmented_then_defragmented() -> Result<()
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbufl.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbufl.len(), "unexpected length of received data");
 
     flush_buffers(&br, &a0, &a1).await;
 
@@ -494,7 +497,7 @@ async fn test_assoc_reliable_unordered_fragmented_then_defragmented() -> Result<
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbufl.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbufl.len(), "unexpected length of received data");
 
     flush_buffers(&br, &a0, &a1).await;
 
@@ -555,7 +558,7 @@ async fn test_assoc_reliable_unordered_ordered() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Reliable, 0);
     s1.set_reliability_params(true, ReliabilityType::Reliable, 0);
 
-    br.reorder_next_nwrites(0, 2).await;
+    br.reorder_next_nwrites(0, 2);
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0
@@ -564,7 +567,7 @@ async fn test_assoc_reliable_unordered_ordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -573,7 +576,7 @@ async fn test_assoc_reliable_unordered_ordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     flush_buffers(&br, &a0, &a1).await;
 
@@ -632,8 +635,8 @@ async fn test_assoc_reliable_retransmission() -> Result<()> {
     .init();*/
 
     const SI: u16 = 6;
-    const MSG1: Bytes = Bytes::from_static(b"ABC");
-    const MSG2: Bytes = Bytes::from_static(b"DEFG");
+    static MSG1: Bytes = Bytes::from_static(b"ABC");
+    static MSG2: Bytes = Bytes::from_static(b"DEFG");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -649,12 +652,12 @@ async fn test_assoc_reliable_retransmission() -> Result<()> {
     let n = s0
         .write_sctp(&MSG1, PayloadProtocolIdentifier::Binary)
         .await?;
-    assert_eq!(MSG1.len(), n, "unexpected length of received data");
+    assert_eq!(n, MSG1.len(), "unexpected length of received data");
 
     let n = s0
         .write_sctp(&MSG2, PayloadProtocolIdentifier::Binary)
         .await?;
-    assert_eq!(MSG2.len(), n, "unexpected length of received data");
+    assert_eq!(n, MSG2.len(), "unexpected length of received data");
 
     tokio::time::sleep(Duration::from_millis(10)).await;
     log::debug!("dropping packet");
@@ -710,7 +713,7 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"Hello");
+    static MSG: Bytes = Bytes::from_static(b"Hello");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -721,28 +724,28 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
 
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), 0, "incorrect bufferedAmount");
     }
 
     let n = s0
         .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
         .await?;
-    assert_eq!(MSG.len(), n, "unexpected length of received data");
+    assert_eq!(n, MSG.len(), "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(MSG.len(), a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), MSG.len(), "incorrect bufferedAmount");
     }
 
     flush_buffers(&br, &a0, &a1).await;
 
     let mut buf = vec![0u8; 3];
     let result = s1.read_sctp(&mut buf).await;
-    assert!(result.is_err(), "expected error to be io.ErrShortBuffer");
+    assert!(result.is_err(), "expected error to be ErrShortBuffer");
     if let Err(err) = result {
         assert_eq!(
-            Error::ErrShortBuffer,
             err,
-            "expected error to be io.ErrShortBuffer"
+            Error::ErrShortBuffer { size: 3 },
+            "expected error to be ErrShortBuffer"
         );
     }
 
@@ -753,7 +756,7 @@ async fn test_assoc_reliable_short_buffer() -> Result<()> {
 
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), 0, "incorrect bufferedAmount");
     }
 
     close_association_pair(&br, a0, a1).await;
@@ -798,7 +801,7 @@ async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(false, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0
@@ -807,7 +810,7 @@ async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -816,7 +819,7 @@ async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     log::debug!("flush_buffers");
     flush_buffers(&br, &a0, &a1).await;
@@ -888,7 +891,7 @@ async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(false, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0
@@ -897,7 +900,7 @@ async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -906,7 +909,7 @@ async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     //log::debug!("flush_buffers");
     flush_buffers(&br, &a0, &a1).await;
@@ -973,7 +976,7 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Rexmit, 0);
     s1.set_reliability_params(true, ReliabilityType::Rexmit, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0
@@ -982,7 +985,7 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -991,7 +994,7 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     //log::debug!("flush_buffers");
     flush_buffers(&br, &a0, &a1).await;
@@ -1068,7 +1071,7 @@ async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -1077,7 +1080,7 @@ async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     //log::debug!("flush_buffers");
     tokio::time::sleep(Duration::from_millis(10)).await;
@@ -1103,13 +1106,13 @@ async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<()> {
         let q = s0.reassembly_queue.lock().await;
         assert!(!q.is_readable(), "should no longer be readable");
         assert_eq!(
-            0,
             q.unordered.len(),
+            0,
             "should be nothing in the unordered queue"
         );
         assert_eq!(
-            0,
             q.unordered_chunks.len(),
+            0,
             "should be nothing in the unorderedChunks list"
         );
     }
@@ -1156,7 +1159,7 @@ async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<()> {
     s0.set_reliability_params(false, ReliabilityType::Timed, 0);
     s1.set_reliability_params(false, ReliabilityType::Timed, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0
@@ -1165,7 +1168,7 @@ async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -1174,7 +1177,7 @@ async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     //log::debug!("flush_buffers");
     flush_buffers(&br, &a0, &a1).await;
@@ -1241,7 +1244,7 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
     s0.set_reliability_params(true, ReliabilityType::Timed, 0);
     s1.set_reliability_params(true, ReliabilityType::Timed, 0); // doesn't matter
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
     let n = s0
@@ -1250,7 +1253,7 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = s0
@@ -1259,7 +1262,7 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
             PayloadProtocolIdentifier::Binary,
         )
         .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     //log::debug!("flush_buffers");
     flush_buffers(&br, &a0, &a1).await;
@@ -1283,13 +1286,13 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
         let q = s0.reassembly_queue.lock().await;
         assert!(!q.is_readable(), "should no longer be readable");
         assert_eq!(
-            0,
             q.unordered.len(),
+            0,
             "should be nothing in the unordered queue"
         );
         assert_eq!(
-            0,
             q.unordered_chunks.len(),
+            0,
             "should be nothing in the unorderedChunks list"
         );
     }
@@ -1339,7 +1342,7 @@ async fn test_assoc_congestion_control_fast_retransmission() -> Result<()> {
 
     let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
 
-    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+    br.drop_next_nwrites(0, 1); // drop the first packet (second one should be sacked)
 
     for i in 0..4u32 {
         sbuf[0..4].copy_from_slice(&i.to_be_bytes());
@@ -1349,7 +1352,7 @@ async fn test_assoc_congestion_control_fast_retransmission() -> Result<()> {
                 PayloadProtocolIdentifier::Binary,
             )
             .await?;
-        assert_eq!(sbuf.len(), n, "unexpected length of received data");
+        assert_eq!(n, sbuf.len(), "unexpected length of received data");
     }
 
     // process packets for 500 msec, assuming that the fast retrans/recover
@@ -1390,7 +1393,7 @@ async fn test_assoc_congestion_control_fast_retransmission() -> Result<()> {
         log::debug!("nAckTimeouts: {}", b.stats.get_num_ack_timeouts());
         log::debug!("nFastRetrans: {}", a.stats.get_num_fast_retrans());
 
-        assert_eq!(1, a.stats.get_num_fast_retrans(), "should be 1");
+        assert_eq!(a.stats.get_num_fast_retrans(), 1, "should be 1");
     }
 
     close_association_pair(&br, a0, a1).await;
@@ -1454,7 +1457,7 @@ async fn test_assoc_congestion_control_congestion_avoidance() -> Result<()> {
                 PayloadProtocolIdentifier::Binary,
             )
             .await?;
-        assert_eq!(sbuf.len(), n, "unexpected length of received data");
+        assert_eq!(n, sbuf.len(), "unexpected length of received data");
     }
 
     let mut rbuf = vec![0u8; 3000];
@@ -1478,7 +1481,7 @@ async fn test_assoc_congestion_control_congestion_avoidance() -> Result<()> {
                 break;
             }
             let (n, ppi) = s1.read_sctp(&mut rbuf).await?;
-            assert_eq!(sbuf.len(), n, "unexpected length of received data");
+            assert_eq!(n, sbuf.len(), "unexpected length of received data");
             assert_eq!(
                 n_packets_received,
                 u32::from_be_bytes([rbuf[0], rbuf[1], rbuf[2], rbuf[3]]),
@@ -1524,15 +1527,15 @@ async fn test_assoc_congestion_control_congestion_avoidance() -> Result<()> {
         log::debug!("nT3Timeouts: {}", a.stats.get_num_t3timeouts());
 
         assert_eq!(
-            N_PACKETS_TO_SEND as u64,
             b.stats.get_num_datas(),
+            N_PACKETS_TO_SEND as u64,
             "packet count mismatch"
         );
         assert!(
             a.stats.get_num_sacks() <= N_PACKETS_TO_SEND as u64 / 2,
             "too many sacks"
         );
-        assert_eq!(0, a.stats.get_num_t3timeouts(), "should be no retransmit");
+        assert_eq!(a.stats.get_num_t3timeouts(), 0, "should be no retransmit");
     }
 
     close_association_pair(&br, a0, a1).await;
@@ -1589,7 +1592,7 @@ async fn test_assoc_congestion_control_slow_reader() -> Result<()> {
                 PayloadProtocolIdentifier::Binary,
             )
             .await?;
-        assert_eq!(sbuf.len(), n, "unexpected length of received data");
+        assert_eq!(n, sbuf.len(), "unexpected length of received data");
     }
 
     let mut rbuf = vec![0u8; 3000];
@@ -1630,7 +1633,7 @@ async fn test_assoc_congestion_control_slow_reader() -> Result<()> {
                 break;
             }
             let (n, ppi) = s1.read_sctp(&mut rbuf).await?;
-            assert_eq!(sbuf.len(), n, "unexpected length of received data");
+            assert_eq!(n, sbuf.len(), "unexpected length of received data");
             assert_eq!(
                 n_packets_received,
                 u32::from_be_bytes([rbuf[0], rbuf[1], rbuf[2], rbuf[3]]),
@@ -1651,8 +1654,8 @@ async fn test_assoc_congestion_control_slow_reader() -> Result<()> {
         "unexpected num of packets received"
     );
     assert_eq!(
-        0,
         s1.get_num_bytes_in_reassembly_queue().await,
+        0,
         "reassembly queue should be empty"
     );
 
@@ -1716,9 +1719,8 @@ async fn test_assoc_delayed_ack() -> Result<()> {
         .write_sctp(
             &Bytes::from(sbuf.clone()),
             PayloadProtocolIdentifier::Binary,
-        )
-        .await?;
-    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+        )?;
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
 
     // Repeat calling br.Tick() until the buffered amount becomes 0
     let since = SystemTime::now();
@@ -1740,7 +1742,7 @@ async fn test_assoc_delayed_ack() -> Result<()> {
                 break;
             }
             let (n, ppi) = s1.read_sctp(&mut rbuf).await?;
-            assert_eq!(sbuf.len(), n, "unexpected length of received data");
+            assert_eq!(n, sbuf.len(), "unexpected length of received data");
             assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
 
             n_packets_received += 1;
@@ -1754,8 +1756,8 @@ async fn test_assoc_delayed_ack() -> Result<()> {
 
     assert_eq!(n_packets_received, 1, "unexpected num of packets received");
     assert_eq!(
-        0,
         s1.get_num_bytes_in_reassembly_queue().await,
+        0,
         "reassembly queue should be empty"
     );
 
@@ -1767,18 +1769,18 @@ async fn test_assoc_delayed_ack() -> Result<()> {
         log::debug!("nSACKs      : {}", a.stats.get_num_sacks());
         log::debug!("nAckTimeouts: {}", b.stats.get_num_ack_timeouts());
 
-        assert_eq!(1, b.stats.get_num_datas(), "DATA chunk count mismatch");
+        assert_eq!(b.stats.get_num_datas(), 1, "DATA chunk count mismatch");
         assert_eq!(
             a.stats.get_num_sacks(),
             b.stats.get_num_datas(),
             "sack count should be equal to the number of data chunks"
         );
         assert_eq!(
-            1,
             b.stats.get_num_ack_timeouts(),
+            1,
             "ackTimeout count mismatch"
         );
-        assert_eq!(0, a.stats.get_num_t3timeouts(), "should be no retransmit");
+        assert_eq!(a.stats.get_num_t3timeouts(), 0, "should be no retransmit");
     }
 
     close_association_pair(&br, a0, a1).await;
@@ -1807,7 +1809,7 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1824,10 +1826,10 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
     let n = s0
         .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
         .await?;
-    assert_eq!(MSG.len(), n, "unexpected length of received data");
+    assert_eq!(n, MSG.len(), "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(MSG.len(), a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), MSG.len(), "incorrect bufferedAmount");
     }
 
     log::debug!("s0.shutdown");
@@ -1871,11 +1873,10 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s1. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -1907,7 +1908,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
     .init();*/
 
     const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
+    static MSG: Bytes = Bytes::from_static(b"ABC");
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1924,10 +1925,10 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
     let n = s0
         .write_sctp(&MSG, PayloadProtocolIdentifier::Binary)
         .await?;
-    assert_eq!(MSG.len(), n, "unexpected length of received data");
+    assert_eq!(n, MSG.len(), "unexpected length of received data");
     {
         let a = a0.association_internal.lock().await;
-        assert_eq!(MSG.len(), a.buffered_amount(), "incorrect bufferedAmount");
+        assert_eq!(a.buffered_amount(), MSG.len(), "incorrect bufferedAmount");
     }
 
     log::debug!("s0.shutdown");
@@ -1974,11 +1975,10 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s1. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -2000,7 +2000,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
                     break;
                 }
                 Ok(_) => {
-                    assert!(false, "must be error");
+                    panic!("must be error");
                 }
                 Err(err) => {
                     log::debug!("s0.read_sctp err {:?}", err);
@@ -2022,13 +2022,12 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
             result = done_ch_rx.recv() => {
                 log::debug!("s0. {:?}", result);
                 if let Some(err_opt) = result {
-                    if let Some(err) = err_opt{
-                        assert!(true, "got error {:?}", err);
+                    if err_opt.is_some() {
                         break;
-                    }else{
-                        assert!(false, "must be error");
+                    } else {
+                        panic!("must be error");
                     }
-                }else{
+                } else {
                     break;
                 }
             }
@@ -2080,8 +2079,8 @@ async fn test_assoc_abort() -> Result<()> {
     let (_s0, _s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
 
     // Both associations are established
-    assert_eq!(AssociationState::Established, a0.get_state());
-    assert_eq!(AssociationState::Established, a1.get_state());
+    assert_eq!(a0.get_state(), AssociationState::Established);
+    assert_eq!(a1.get_state(), AssociationState::Established);
 
     let result = a0.net_conn.send(&packet).await;
     assert!(result.is_ok(), "must be ok");
@@ -2092,8 +2091,8 @@ async fn test_assoc_abort() -> Result<()> {
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     // The receiving association should be closed because it got an ABORT
-    assert_eq!(AssociationState::Established, a0.get_state());
-    assert_eq!(AssociationState::Closed, a1.get_state());
+    assert_eq!(a0.get_state(), AssociationState::Established);
+    assert_eq!(a1.get_state(), AssociationState::Closed);
 
     close_association_pair(&br, a0, a1).await;
 
@@ -2108,7 +2107,13 @@ struct FakeEchoConn {
 }
 
 impl FakeEchoConn {
-    fn new() -> impl Conn + AsAny {
+    fn type_erased() -> impl Conn + AsAny {
+        Self::default()
+    }
+}
+
+impl Default for FakeEchoConn {
+    fn default() -> Self {
         let (wr_tx, rd_rx) = mpsc::channel(1);
         FakeEchoConn {
             wr_tx: Mutex::new(wr_tx),
@@ -2169,11 +2174,11 @@ impl Conn for FakeEchoConn {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> UResult<SocketAddr> {
+    fn local_addr(&self) -> UResult<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 
@@ -2201,7 +2206,7 @@ async fn test_stats() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let conn = Arc::new(FakeEchoConn::new());
+    let conn = Arc::new(FakeEchoConn::type_erased());
     let a = Association::client(Config {
         net_conn: Arc::clone(&conn) as Arc<dyn Conn + Send + Sync>,
         max_receive_buffer_size: 0,
@@ -2217,7 +2222,7 @@ async fn test_stats() -> Result<()> {
         );
         assert_eq!(conn.bytes_sent.load(Ordering::SeqCst), a.bytes_sent());
     } else {
-        assert!(false, "must be FakeEchoConn");
+        panic!("must be FakeEchoConn");
     }
 
     Ok(())
@@ -2268,8 +2273,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     tokio::pin!(timer1);
     let a1 = tokio::select! {
         _ = timer1.as_mut() =>{
-            assert!(false,"timed out waiting for a1");
-            return Err(Error::Other("timed out waiting for a1".to_owned()).into());
+            panic!("timed out waiting for a1");
         },
         a1 = a1chan_rx.recv() => {
             a1.unwrap()
@@ -2280,8 +2284,7 @@ async fn create_assocs() -> Result<(Association, Association)> {
     tokio::pin!(timer2);
     let a2 = tokio::select! {
         _ = timer2.as_mut() =>{
-            assert!(false,"timed out waiting for a2");
-            return Err(Error::Other("timed out waiting for a2".to_owned()).into());
+            panic!("timed out waiting for a2");
         },
         a2 = a2chan_rx.recv() => {
             a2.unwrap()
@@ -2319,17 +2322,17 @@ async fn test_association_shutdown() -> Result<()> {
     let test_data = Bytes::from_static(b"test");
 
     let n = s11.write(&test_data).await?;
-    assert_eq!(test_data.len(), n);
+    assert_eq!(n, test_data.len());
 
     let mut buf = vec![0u8; test_data.len()];
     let n = s21.read(&mut buf).await?;
-    assert_eq!(test_data.len(), n);
-    assert_eq!(&test_data, &buf[0..n]);
+    assert_eq!(n, test_data.len());
+    assert_eq!(&buf[0..n], &test_data);
 
     if let Ok(result) = tokio::time::timeout(Duration::from_secs(1), a1.shutdown()).await {
         assert!(result.is_ok(), "shutdown should be ok");
     } else {
-        assert!(false, "shutdown timeout");
+        panic!("shutdown timeout");
     }
 
     {
@@ -2340,7 +2343,7 @@ async fn test_association_shutdown() -> Result<()> {
         tokio::pin!(timer2);
         tokio::select! {
             _ = timer2.as_mut() =>{
-                assert!(false,"timed out waiting for a2 read loop to close");
+                panic!("timed out waiting for a2 read loop to close");
             },
             _ = close_loop_ch_rx.recv() => {
                 log::debug!("recv a2.close_loop_ch_rx");
@@ -2397,12 +2400,12 @@ async fn test_association_shutdown_during_write() -> Result<()> {
     let test_data = Bytes::from_static(b"test");
 
     let n = s11.write(&test_data).await?;
-    assert_eq!(test_data.len(), n);
+    assert_eq!(n, test_data.len());
 
     let mut buf = vec![0u8; test_data.len()];
     let n = s21.read(&mut buf).await?;
-    assert_eq!(test_data.len(), n);
-    assert_eq!(&test_data, &buf[0..n]);
+    assert_eq!(n, test_data.len());
+    assert_eq!(&buf[0..n], &test_data);
 
     {
         let mut close_loop_ch_rx = a1.close_loop_ch_rx.lock().await;
@@ -2411,7 +2414,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
                 if let Ok(result) = res {
                     assert!(result.is_ok(), "shutdown should be ok");
                 } else {
-                    assert!(false, "shutdown timeout");
+                    panic!("shutdown timeout");
                 }
             }
             _ = writing_done_rx.recv() => {
@@ -2429,7 +2432,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
         tokio::pin!(timer2);
         tokio::select! {
             _ = timer2.as_mut() =>{
-                assert!(false,"timed out waiting for a2 read loop to close");
+                panic!("timed out waiting for a2 read loop to close");
             },
             _ = close_loop_ch_rx.recv() => {
                 log::debug!("recv a2.close_loop_ch_rx");
@@ -2482,7 +2485,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkAbort::default())],
+                chunks: vec![Box::<ChunkAbort>::default()],
             },
         ),
         (
@@ -2491,7 +2494,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkCookieEcho::default())],
+                chunks: vec![Box::<ChunkCookieEcho>::default()],
             },
         ),
         (
@@ -2500,7 +2503,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkHeartbeat::default())],
+                chunks: vec![Box::<ChunkHeartbeat>::default()],
             },
         ),
         (
@@ -2509,7 +2512,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkPayloadData::default())],
+                chunks: vec![Box::<ChunkPayloadData>::default()],
             },
         ),
         (
@@ -2536,8 +2539,8 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 destination_port: 1,
                 verification_tag: 0,
                 chunks: vec![Box::new(ChunkReconfig {
-                    param_a: Some(Box::new(ParamOutgoingResetRequest::default())),
-                    param_b: Some(Box::new(ParamReconfigResponse::default())),
+                    param_a: Some(Box::<ParamOutgoingResetRequest>::default()),
+                    param_b: Some(Box::<ParamReconfigResponse>::default()),
                 })],
             },
         ),
@@ -2559,7 +2562,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkError::default())],
+                chunks: vec![Box::<ChunkError>::default()],
             },
         ),
         (
@@ -2568,7 +2571,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdown::default())],
+                chunks: vec![Box::<ChunkShutdown>::default()],
             },
         ),
         (
@@ -2577,7 +2580,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdownAck::default())],
+                chunks: vec![Box::<ChunkShutdownAck>::default()],
             },
         ),
         (
@@ -2586,7 +2589,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 source_port: 1,
                 destination_port: 1,
                 verification_tag: 0,
-                chunks: vec![Box::new(ChunkShutdownComplete::default())],
+                chunks: vec![Box::<ChunkShutdownComplete>::default()],
             },
         ),
     ];
@@ -2610,7 +2613,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
 
         let packet = packet.marshal()?;
         let result = charlie_conn.send(&packet).await;
-        assert!(result.is_ok(), "{} charlie_conn.send should be ok", name);
+        assert!(result.is_ok(), "{name} charlie_conn.send should be ok");
 
         // Should not panic.
         tokio::time::sleep(Duration::from_millis(100)).await;

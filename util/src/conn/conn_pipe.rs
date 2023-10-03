@@ -1,8 +1,9 @@
-use super::*;
-
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
+
 use tokio::sync::{mpsc, Mutex};
+
+use super::*;
 
 struct Pipe {
     rd_rx: Mutex<mpsc::Receiver<Vec<u8>>>,
@@ -61,11 +62,11 @@ impl Conn for Pipe {
         Err(Error::new(ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    fn local_addr(&self) -> Result<SocketAddr> {
         Err(Error::new(ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 

@@ -2,20 +2,7 @@
 #![allow(dead_code)]
 
 // re-export sub-crates
-pub use data;
-pub use dtls;
-pub use ice;
-pub use interceptor;
-pub use mdns;
-pub use media;
-pub use rtcp;
-pub use rtp;
-pub use sctp;
-pub use sdp;
-pub use srtp;
-pub use stun;
-pub use turn;
-pub use util;
+pub use {data, dtls, ice, interceptor, mdns, media, rtcp, rtp, sctp, sdp, srtp, stun, turn, util};
 
 pub mod api;
 pub mod data_channel;

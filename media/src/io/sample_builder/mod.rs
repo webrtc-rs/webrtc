@@ -8,11 +8,11 @@ pub mod sample_sequence_location;
 use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
-use rtp::{packet::Packet, packetizer::Depacketizer};
-
-use crate::Sample;
+use rtp::packet::Packet;
+use rtp::packetizer::Depacketizer;
 
 use self::sample_sequence_location::{Comparison, SampleSequenceLocation};
+use crate::Sample;
 
 /// SampleBuilder buffers packets until media frames are complete.
 pub struct SampleBuilder<T: Depacketizer> {
@@ -43,7 +43,7 @@ pub struct SampleBuilder<T: Depacketizer> {
     dropped_packets: u16,
 
     /// number of padding packets detected and dropped. This number will be a subset of
-    /// `droppped_packets`
+    /// `dropped_packets`
     padding_packets: u16,
 }
 
@@ -179,8 +179,8 @@ impl<T: Depacketizer> SampleBuilder<T> {
                     Err(e) => e,
                 };
 
-                if !matches!(err, BuildError::InvalidParition(_)) {
-                    // In the InvalidParition case `build_sample` will have already adjusted `droppped_packets`.
+                if !matches!(err, BuildError::InvalidPartition(_)) {
+                    // In the InvalidPartition case `build_sample` will have already adjusted `dropped_packets`.
                     self.dropped_packets += 1;
                 }
 
@@ -251,7 +251,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
                 .is_partition_tail(packet.header.marker, &packet.payload);
 
             // If the timestamp is not the same it might be because the next packet is both a start
-            // and end of the next parition in which case a sample should be generated now. This
+            // and end of the next partition in which case a sample should be generated now. This
             // can happen when padding packets are used .e.g:
             //
             // p1(t=1), p2(t=1), p3(t=1), p4(t=2, marker=true, start=true)
@@ -318,7 +318,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             self.purge_consumed_buffers();
 
             self.active.head = consume.tail;
-            return Err(BuildError::InvalidParition(consume));
+            return Err(BuildError::InvalidPartition(consume));
         }
 
         // the head set of packets is now fully consumed
@@ -373,10 +373,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
         if self.prepared.empty() {
             return None;
         }
-        let result = std::mem::replace(
-            &mut self.prepared_samples[self.prepared.head as usize],
-            None,
-        );
+        let result = self.prepared_samples[self.prepared.head as usize].take();
         self.prepared.head = self.prepared.head.wrapping_add(1);
         result
     }
@@ -424,9 +421,9 @@ enum BuildError {
     /// duration of the sample.
     PendingTimestampPacket,
 
-    /// The active segment's head was not aligned with a sample parition head. Some packets were
+    /// The active segment's head was not aligned with a sample partition head. Some packets were
     /// dropped.
-    InvalidParition(SampleSequenceLocation),
+    InvalidPartition(SampleSequenceLocation),
 
     /// There was a gap in the active segment because of one or more missing RTP packets.
     GapInSegment,

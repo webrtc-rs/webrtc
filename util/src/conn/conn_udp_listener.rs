@@ -1,14 +1,15 @@
-use super::*;
-use crate::error::Error;
-use crate::Buffer;
-
 use core::sync::atomic::Ordering;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
+
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch, Mutex};
+
+use super::*;
+use crate::error::Error;
+use crate::Buffer;
 
 const RECEIVE_MTU: usize = 8192;
 const DEFAULT_LISTEN_BACKLOG: usize = 128; // same as Linux default
@@ -69,7 +70,7 @@ impl Listener for ListenerImpl {
 
     /// Addr returns the listener's network address.
     async fn addr(&self) -> Result<SocketAddr> {
-        self.pconn.local_addr().await
+        self.pconn.local_addr()
     }
 }
 
@@ -277,11 +278,11 @@ impl Conn for UdpConn {
         self.pconn.send_to(buf, target).await
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
-        self.pconn.local_addr().await
+    fn local_addr(&self) -> Result<SocketAddr> {
+        self.pconn.local_addr()
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         Some(self.raddr)
     }
 

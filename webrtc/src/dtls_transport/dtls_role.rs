@@ -1,12 +1,13 @@
-use sdp::description::session::SessionDescription;
-use sdp::util::ConnectionRole;
-
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use sdp::description::session::SessionDescription;
+use sdp::util::ConnectionRole;
+use serde::{Deserialize, Serialize};
+
 /// DtlsRole indicates the role of the DTLS transport.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DTLSRole {
+    #[default]
     Unspecified = 0,
 
     /// DTLSRoleAuto defines the DTLS role is determined based on
@@ -37,12 +38,6 @@ pub(crate) const DEFAULT_DTLS_ROLE_ANSWER: DTLSRole = DTLSRole::Client;
 /// value of setup:actpass and be prepared to receive a client_hello
 /// before it receives the answer.
 pub(crate) const DEFAULT_DTLS_ROLE_OFFER: DTLSRole = DTLSRole::Auto;
-
-impl Default for DTLSRole {
-    fn default() -> Self {
-        DTLSRole::Unspecified
-    }
-}
 
 impl fmt::Display for DTLSRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -93,11 +88,10 @@ impl DTLSRole {
 
 #[cfg(test)]
 mod test {
-    use crate::error::Result;
+    use std::io::Cursor;
 
     use super::*;
-
-    use std::io::Cursor;
+    use crate::error::Result;
 
     #[test]
     fn test_dtls_role_string() {
@@ -109,7 +103,7 @@ mod test {
         ];
 
         for (role, expected_string) in tests {
-            assert_eq!(expected_string, role.to_string(),)
+            assert_eq!(role.to_string(), expected_string)
         }
     }
 
@@ -165,10 +159,9 @@ a=setup:";
             let mut reader = Cursor::new(session_description_str.as_bytes());
             let session_description = SessionDescription::unmarshal(&mut reader)?;
             assert_eq!(
-                expected_role,
                 DTLSRole::from(&session_description),
-                "{} failed",
-                name
+                expected_role,
+                "{name} failed"
             );
         }
 

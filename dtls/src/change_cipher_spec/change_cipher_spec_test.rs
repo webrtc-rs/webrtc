@@ -1,6 +1,6 @@
-use super::*;
-
 use std::io::{BufReader, BufWriter};
+
+use super::*;
 
 #[test]
 fn test_change_cipher_spec_round_trip() -> Result<()> {
@@ -15,8 +15,7 @@ fn test_change_cipher_spec_round_trip() -> Result<()> {
     let cnew = ChangeCipherSpec::unmarshal(&mut reader)?;
     assert_eq!(
         c, cnew,
-        "ChangeCipherSpec round trip: got {:?}, want {:?}",
-        cnew, c
+        "ChangeCipherSpec round trip: got {cnew:?}, want {c:?}"
     );
 
     Ok(())
@@ -30,7 +29,7 @@ fn test_change_cipher_spec_invalid() -> Result<()> {
     let result = ChangeCipherSpec::unmarshal(&mut reader);
 
     match result {
-        Ok(_) => assert!(false, "must be error"),
+        Ok(_) => panic!("must be error"),
         Err(err) => assert_eq!(err.to_string(), Error::ErrInvalidCipherSpec.to_string()),
     };
 

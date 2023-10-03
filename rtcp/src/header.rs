@@ -1,13 +1,14 @@
-use crate::error::Error;
+use bytes::{Buf, BufMut};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use bytes::{Buf, BufMut};
+use crate::error::Error;
 
 /// PacketType specifies the type of an RTCP packet
 /// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PacketType {
+    #[default]
     Unsupported = 0,
     SenderReport = 200,              // RFC 3550, 6.4.1
     ReceiverReport = 201,            // RFC 3550, 6.4.2
@@ -17,12 +18,6 @@ pub enum PacketType {
     TransportSpecificFeedback = 205, // RFC 4585, 6051
     PayloadSpecificFeedback = 206,   // RFC 4585, 6.3
     ExtendedReport = 207,            // RFC 3611
-}
-
-impl Default for PacketType {
-    fn default() -> Self {
-        PacketType::Unsupported
-    }
 }
 
 /// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
@@ -54,7 +49,7 @@ impl std::fmt::Display for PacketType {
             PacketType::PayloadSpecificFeedback => "PSFB",
             PacketType::ExtendedReport => "XR",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -178,8 +173,9 @@ impl Unmarshal for Header {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use bytes::Bytes;
+
+    use super::*;
 
     #[test]
     fn test_header_unmarshal() {
@@ -235,25 +231,20 @@ mod test {
             assert_eq!(
                 got.is_err(),
                 want_error.is_some(),
-                "Unmarshal {}: err = {:?}, want {:?}",
-                name,
-                got,
-                want_error
+                "Unmarshal {name}: err = {got:?}, want {want_error:?}"
             );
 
-            if let Some(err) = want_error {
+            if let Some(want_error) = want_error {
                 let got_err = got.err().unwrap();
                 assert_eq!(
-                    err, got_err,
-                    "Unmarshal {}: err = {:?}, want {:?}",
-                    name, got_err, err,
+                    want_error, got_err,
+                    "Unmarshal {name}: err = {got_err:?}, want {want_error:?}",
                 );
             } else {
                 let actual = got.unwrap();
                 assert_eq!(
                     actual, want,
-                    "Unmarshal {}: got {:?}, want {:?}",
-                    name, actual, want
+                    "Unmarshal {name}: got {actual:?}, want {want:?}"
                 );
             }
         }
@@ -300,29 +291,23 @@ mod test {
             assert_eq!(
                 got.is_ok(),
                 want_error.is_none(),
-                "Marshal {}: err = {:?}, want {:?}",
-                name,
-                got,
-                want_error
+                "Marshal {name}: err = {got:?}, want {want_error:?}"
             );
 
             if let Some(err) = want_error {
                 let got_err = got.err().unwrap();
                 assert_eq!(
                     err, got_err,
-                    "Unmarshal {} rr: err = {:?}, want {:?}",
-                    name, got_err, err,
+                    "Unmarshal {name} rr: err = {got_err:?}, want {err:?}",
                 );
             } else {
                 let data = got.ok().unwrap();
                 let buf = &mut data.clone();
-                let actual =
-                    Header::unmarshal(buf).unwrap_or_else(|_| panic!("Unmarshal {}", name));
+                let actual = Header::unmarshal(buf).unwrap_or_else(|_| panic!("Unmarshal {name}"));
 
                 assert_eq!(
                     actual, want,
-                    "{} round trip: got {:?}, want {:?}",
-                    name, actual, want
+                    "{name} round trip: got {actual:?}, want {want:?}"
                 )
             }
         }

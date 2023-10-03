@@ -45,6 +45,11 @@ pub enum Error {
     #[error("invalid h265 packet type")]
     ErrInvalidH265PacketType,
 
+    #[error("payload is too small for OBU extension header")]
+    ErrPayloadTooSmallForObuExtensionHeader,
+    #[error("payload is too small for OBU payload size")]
+    ErrPayloadTooSmallForObuPayloadSize,
+
     #[error("extension_payload must be in 32-bit words")]
     HeaderExtensionPayloadNot32BitWords,
     #[error("audio level overflow")]

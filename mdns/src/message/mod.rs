@@ -9,20 +9,21 @@ pub mod parser;
 pub mod question;
 pub mod resource;
 
-use crate::error::*;
+use std::collections::HashMap;
+use std::fmt;
+
 use header::*;
 use packer::*;
 use parser::*;
 use question::*;
 use resource::*;
 
-use std::collections::HashMap;
-use std::fmt;
+use crate::error::*;
 
 // Message formats
 
 // A Type is a type of DNS request and response.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DnsType {
     // ResourceHeader.Type and question.Type
     A = 1,
@@ -43,13 +44,8 @@ pub enum DnsType {
     Axfr = 252,
     All = 255,
 
+    #[default]
     Unsupported = 0,
-}
-
-impl Default for DnsType {
-    fn default() -> Self {
-        DnsType::Unsupported
-    }
 }
 
 impl From<u16> for DnsType {
@@ -98,7 +94,7 @@ impl fmt::Display for DnsType {
             DnsType::All => "ALL",
             _ => "Unsupported",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -142,7 +138,7 @@ impl fmt::Display for DnsClass {
             DNSCLASS_ANY => "ClassANY",
             _ => other.as_str(),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -167,9 +163,10 @@ impl DnsClass {
 pub type OpCode = u16;
 
 // An RCode is a DNS response status code.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RCode {
     // Message.Rcode
+    #[default]
     Success = 0,
     FormatError = 1,
     ServerFailure = 2,
@@ -177,12 +174,6 @@ pub enum RCode {
     NotImplemented = 4,
     Refused = 5,
     Unsupported,
-}
-
-impl Default for RCode {
-    fn default() -> Self {
-        RCode::Success
-    }
 }
 
 impl From<u8> for RCode {
@@ -210,7 +201,7 @@ impl fmt::Display for RCode {
             RCode::Refused => "RCodeRefused",
             RCode::Unsupported => "RCodeUnsupported",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -271,7 +262,7 @@ impl fmt::Display for Message {
         let v: Vec<String> = self.additionals.iter().map(|q| q.to_string()).collect();
         s += &v.join(", ");
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

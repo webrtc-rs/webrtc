@@ -1,10 +1,12 @@
-use super::*;
-use crate::mux::mux_func::match_all;
-use async_trait::async_trait;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use async_trait::async_trait;
 use util::conn::conn_pipe::pipe;
+
+use super::*;
+use crate::mux::mux_func::match_all;
 
 const TEST_PIPE_BUFFER_SIZE: usize = 8192;
 
@@ -80,11 +82,11 @@ impl Conn for MuxErrorConn {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    fn local_addr(&self) -> Result<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
 

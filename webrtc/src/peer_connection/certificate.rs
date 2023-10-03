@@ -1,12 +1,12 @@
+use std::ops::Add;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
 use rcgen::{CertificateParams, KeyPair};
 use ring::rand::SystemRandom;
 use ring::rsa;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
 use sha2::{Digest, Sha256};
-
-use std::ops::Add;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::error::{Error, Result};
@@ -124,17 +124,17 @@ impl RTCCertificate {
             return Err(Error::InvalidPEM("empty PEM".into()));
         };
         let expires_pem =
-            pem::parse(first_block).map_err(|e| Error::new(format!("can't parse PEM: {}", e)))?;
-        if expires_pem.tag != "EXPIRES" {
+            pem::parse(first_block).map_err(|e| Error::new(format!("can't parse PEM: {e}")))?;
+        if expires_pem.tag() != "EXPIRES" {
             return Err(Error::InvalidPEM(format!(
                 "invalid tag (expected: 'EXPIRES', got '{}')",
-                expires_pem.tag
+                expires_pem.tag()
             )));
         }
         let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&expires_pem.contents[..8]);
-        let expires = if let Some(e) = SystemTime::UNIX_EPOCH
-            .checked_add(Duration::from_secs(u64::from_le_bytes(bytes)).into())
+        bytes.copy_from_slice(&expires_pem.contents()[..8]);
+        let expires = if let Some(e) =
+            SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(u64::from_le_bytes(bytes)))
         {
             e
         } else {
@@ -167,16 +167,15 @@ impl RTCCertificate {
         // Encode `expires` as a PEM block.
         //
         // TODO: serialize as nanos when https://github.com/rust-lang/rust/issues/103332 is fixed.
-        let expires_pem = pem::Pem {
-            tag: "EXPIRES".to_string(),
-            contents: self
-                .expires
+        let expires_pem = pem::Pem::new(
+            "EXPIRES".to_string(),
+            self.expires
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .expect("expires to be valid")
                 .as_secs()
                 .to_le_bytes()
                 .to_vec(),
-        };
+        );
         format!(
             "{}\n{}",
             pem::encode(&expires_pem),
@@ -195,7 +194,7 @@ impl RTCCertificate {
             let mut h = Sha256::new();
             h.update(c.as_ref());
             let hashed = h.finalize();
-            let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
+            let values: Vec<String> = hashed.iter().map(|x| format! {"{x:02x}"}).collect();
 
             fingerprints.push(RTCDtlsFingerprint {
                 algorithm: "sha-256".to_owned(),

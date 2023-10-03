@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 use crate::error::{Error, Result};
 use crate::ice_transport::ice_credential_type::RTCIceCredentialType;
 
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RTCIceServer {
     pub urls: Vec<String>,
     pub username: String,
@@ -141,9 +143,9 @@ mod test {
 
         for (ice_server, expected_err) in tests {
             if let Err(err) = ice_server.urls() {
-                assert_eq!(expected_err, err, "{:?} with err {:?}", ice_server, err);
+                assert_eq!(err, expected_err, "{ice_server:?} with err {err:?}");
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
         }
     }
@@ -162,9 +164,9 @@ mod test {
 
         for (ice_server, expected_err) in tests {
             if let Err(err) = ice_server.urls() {
-                assert_eq!(err, expected_err, "{:?} with err {:?}", ice_server, err);
+                assert_eq!(err, expected_err, "{ice_server:?} with err {err:?}");
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
         }
     }

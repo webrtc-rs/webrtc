@@ -40,8 +40,9 @@ impl Unmarshal for DataChannelAck {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bytes::{Bytes, BytesMut};
+
+    use super::*;
 
     #[test]
     fn test_channel_ack_unmarshal() -> Result<()> {

@@ -1,10 +1,10 @@
-use super::*;
-use crate::{Attributes, RTPReader};
+use std::time::SystemTime;
 
 use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
-use util::Unmarshal;
+use util::sync::Mutex;
+
+use super::*;
+use crate::{Attributes, RTPReader};
 
 struct ReceiverStreamInternal {
     ssrc: u32,
@@ -51,7 +51,7 @@ impl ReceiverStreamInternal {
             // following frames
             self.set_received(pkt.header.sequence_number);
 
-            let diff = pkt.header.sequence_number as i32 - self.last_seq_num as i32;
+            let diff = pkt.header.sequence_number as i32 - self.last_seq_num;
             if !(-0x0FFF..=0).contains(&diff) {
                 // overflow
                 if diff < -0x0FFF {
@@ -185,7 +185,7 @@ impl ReceiverStream {
     }
 
     pub(crate) fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet) {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.process_rtp(now, pkt);
     }
 
@@ -194,12 +194,12 @@ impl ReceiverStream {
         now: SystemTime,
         sr: &rtcp::sender_report::SenderReport,
     ) {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.process_sender_report(now, sr);
     }
 
     pub(crate) fn generate_report(&self, now: SystemTime) -> rtcp::receiver_report::ReceiverReport {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.generate_report(now)
     }
 }
@@ -208,11 +208,13 @@ impl ReceiverStream {
 #[async_trait]
 impl RTPReader for ReceiverStream {
     /// read a rtp packet
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = self.parent_rtp_reader.read(buf, a).await?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
+        let (pkt, attr) = self.parent_rtp_reader.read(buf, a).await?;
 
-        let mut b = &buf[..n];
-        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
         let now = if let Some(f) = &self.now {
             f()
         } else {
@@ -220,6 +222,6 @@ impl RTPReader for ReceiverStream {
         };
         self.process_rtp(now, &pkt);
 
-        Ok((n, attr))
+        Ok((pkt, attr))
     }
 }

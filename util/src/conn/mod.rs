@@ -16,9 +16,10 @@ mod conn_test;
 #[cfg(test)]
 mod conn_udp_listener_test;
 
-use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+use async_trait::async_trait;
 use tokio::net::ToSocketAddrs;
 
 use crate::error::Result;
@@ -30,8 +31,8 @@ pub trait Conn {
     async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)>;
     async fn send(&self, buf: &[u8]) -> Result<usize>;
     async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize>;
-    async fn local_addr(&self) -> Result<SocketAddr>;
-    async fn remote_addr(&self) -> Option<SocketAddr>;
+    fn local_addr(&self) -> Result<SocketAddr>;
+    fn remote_addr(&self) -> Option<SocketAddr>;
     async fn close(&self) -> Result<()>;
 }
 

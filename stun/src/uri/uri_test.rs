@@ -47,8 +47,8 @@ fn test_parse_uri() -> Result<()> {
 
     for (name, input, output, expected_str) in tests {
         let out = Uri::parse_uri(input)?;
-        assert_eq!(out, output, "{}: {} != {}", name, out, output);
-        assert_eq!(out.to_string(), expected_str, "{}", name);
+        assert_eq!(out, output, "{name}: {out} != {output}");
+        assert_eq!(out.to_string(), expected_str, "{name}");
     }
 
     //"MustFail"
@@ -60,7 +60,7 @@ fn test_parse_uri() -> Result<()> {
         ];
         for (name, input) in tests {
             let result = Uri::parse_uri(input);
-            assert!(result.is_err(), "{} should fail, but did not", name);
+            assert!(result.is_err(), "{name} should fail, but did not");
         }
     }
 

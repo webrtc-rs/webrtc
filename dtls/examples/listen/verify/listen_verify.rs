@@ -1,11 +1,12 @@
-use clap::{App, AppSettings, Arg};
-use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::sync::Arc;
+
+use clap::{App, AppSettings, Arg};
+use hub::utilities::load_certificate;
 use util::conn::*;
-use webrtc_dtls::config::{ClientAuthType, ExtendedMasterSecretType};
+use webrtc_dtls::config::{ClientAuthType, Config, ExtendedMasterSecretType};
+use webrtc_dtls::listener::listen;
 use webrtc_dtls::Error;
-use webrtc_dtls::{config::Config, listener::listen};
 
 // cargo run --example listen_verify -- --host 127.0.0.1:4444
 
@@ -56,15 +57,16 @@ async fn main() -> Result<(), Error> {
     let host = matches.value_of("host").unwrap().to_owned();
 
     let certificate = hub::utilities::load_key_and_certificate(
-        "examples/certificates/server.pem.private_key.pem".into(),
-        "examples/certificates/server.pub.pem".into(),
+        "dtls/examples/certificates/server.pem.private_key.pem".into(),
+        "dtls/examples/certificates/server.pub.pem".into(),
     )?;
 
     let mut cert_pool = rustls::RootCertStore::empty();
-    let f = File::open("examples/certificates/server.pub.pem")?;
-    let mut reader = BufReader::new(f);
-    if cert_pool.add_pem_file(&mut reader).is_err() {
-        return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
+    let certs = load_certificate("dtls/examples/certificates/server.pub.pem".into())?;
+    for cert in &certs {
+        if cert_pool.add(cert).is_err() {
+            return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
+        }
     }
 
     let cfg = Config {
@@ -75,7 +77,7 @@ async fn main() -> Result<(), Error> {
         ..Default::default()
     };
 
-    println!("listening {}...\ntype 'exit' to shutdown gracefully", host);
+    println!("listening {host}...\ntype 'exit' to shutdown gracefully");
 
     let listener = Arc::new(listen(host, cfg).await?);
 
@@ -100,7 +102,7 @@ async fn main() -> Result<(), Error> {
                             h2.register(dtls_conn).await;
                         }
                         Err(err) => {
-                            println!("connecting failed with error: {}", err);
+                            println!("connecting failed with error: {err}");
                         }
                     }
                 }

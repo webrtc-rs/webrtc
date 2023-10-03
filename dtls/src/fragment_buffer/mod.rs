@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod fragment_buffer_test;
 
+use std::collections::HashMap;
+use std::io::{BufWriter, Cursor};
+
 use crate::content::*;
 use crate::error::*;
 use crate::handshake::handshake_header::*;
 use crate::record_layer::record_layer_header::*;
-
-use std::collections::HashMap;
-use std::io::{BufWriter, Cursor};
 
 // 2 mb max buffer size
 const FRAGMENT_BUFFER_MAX_SIZE: usize = 2_000_000;
@@ -127,8 +127,8 @@ impl FragmentBuffer {
 
     fn size(&self) -> usize {
         self.cache
-            .iter()
-            .map(|(_, fragment)| fragment.iter().map(|f| f.data.len()).sum::<usize>())
+            .values()
+            .map(|fragment| fragment.iter().map(|f| f.data.len()).sum::<usize>())
             .sum()
     }
 }
@@ -139,7 +139,7 @@ fn append_message(target_offset: u32, frags: &[Fragment], raw_message: &mut Vec<
             let fragment_end =
                 f.handshake_header.fragment_offset + f.handshake_header.fragment_length;
 
-            // NB: Order here is imporant, the `f.handshake_header.fragment_length != 0`
+            // NB: Order here is important, the `f.handshake_header.fragment_length != 0`
             // MUST come before the recursive call.
             if fragment_end != f.handshake_header.length
                 && f.handshake_header.fragment_length != 0

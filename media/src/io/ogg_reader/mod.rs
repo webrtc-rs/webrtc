@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod ogg_reader_test;
 
-use crate::error::{Error, Result};
-use crate::io::ResetFn;
+use std::io::{Cursor, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::BytesMut;
-use std::io::{Cursor, Read};
+
+use crate::error::{Error, Result};
+use crate::io::ResetFn;
 
 pub const PAGE_HEADER_TYPE_CONTINUATION_OF_STREAM: u8 = 0x00;
 pub const PAGE_HEADER_TYPE_BEGINNING_OF_STREAM: u8 = 0x02;
@@ -132,7 +133,7 @@ impl<R: Read> OggReader<R> {
         }
 
         let mut payload = BytesMut::with_capacity(payload_size);
-        payload.resize(payload_size as usize, 0);
+        payload.resize(payload_size, 0);
         self.reader.read_exact(&mut payload)?;
 
         if self.do_checksum {

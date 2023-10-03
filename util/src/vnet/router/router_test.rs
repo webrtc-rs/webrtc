@@ -1,5 +1,6 @@
-use super::*;
 use std::sync::atomic::{AtomicI32, AtomicUsize};
+
+use super::*;
 
 const MARGIN: Duration = Duration::from_millis(18);
 const DEMO_IP: &str = "1.2.3.4";
@@ -120,10 +121,10 @@ fn test_router_standalone_cidr_parsing() -> Result<()> {
         ..Default::default()
     })?;
 
-    assert_eq!("1.2.3.0", r.ipv4net.addr().to_string(), "ip should match");
+    assert_eq!(r.ipv4net.addr().to_string(), "1.2.3.0", "ip should match");
     assert_eq!(
-        "255.255.255.0",
         r.ipv4net.netmask().to_string(),
+        "255.255.255.0",
         "mask should match"
     );
 
@@ -143,10 +144,10 @@ async fn test_router_standalone_assign_ip_address() -> Result<()> {
             IpAddr::V4(ip) => ip.octets().to_vec(),
             IpAddr::V6(ip) => ip.octets().to_vec(),
         };
-        assert_eq!(1_u8, ip[0], "should match");
-        assert_eq!(2_u8, ip[1], "should match");
-        assert_eq!(3_u8, ip[2], "should match");
-        assert_eq!(i as u8, ip[3], "should match");
+        assert_eq!(ip[0], 1_u8, "should match");
+        assert_eq!(ip[1], 2_u8, "should match");
+        assert_eq!(ip[2], 3_u8, "should match");
+        assert_eq!(ip[3], i as u8, "should match");
     }
 
     let result = ri.assign_ip_address();
@@ -178,9 +179,9 @@ async fn test_router_standalone_add_net() -> Result<()> {
     assert!(eth0.is_some(), "should succeed");
     if let Some(eth0) = eth0 {
         let addrs = eth0.addrs();
-        assert_eq!(1, addrs.len(), "should match");
-        assert_eq!("1.2.3.1/24", addrs[0].to_string(), "should match");
-        assert_eq!("1.2.3.1", addrs[0].addr().to_string(), "should match");
+        assert_eq!(addrs.len(), 1, "should match");
+        assert_eq!(addrs[0].to_string(), "1.2.3.1/24", "should match");
+        assert_eq!(addrs[0].addr().to_string(), "1.2.3.1", "should match");
     }
 
     Ok(())
@@ -225,7 +226,7 @@ async fn test_router_standalone_routing() -> Result<()> {
             let n = nic.lock().await;
             if let Some(eth0) = n.get_interface("eth0").await {
                 let addrs = eth0.addrs();
-                assert_eq!(1, addrs.len(), "should match");
+                assert_eq!(addrs.len(), 1, "should match");
                 ips.push(SocketAddr::new(addrs[0].addr(), 1111 * (i + 1)));
             }
         }
@@ -250,7 +251,7 @@ async fn test_router_standalone_routing() -> Result<()> {
 
     {
         let n = nics[0].lock().await;
-        assert_eq!(0, n.cbs0.load(Ordering::SeqCst), "should be zero");
+        assert_eq!(n.cbs0.load(Ordering::SeqCst), 0, "should be zero");
     }
 
     Ok(())
@@ -305,7 +306,7 @@ async fn test_router_standalone_add_chunk_filter() -> Result<()> {
             let n = nic.lock().await;
             if let Some(eth0) = n.get_interface("eth0").await {
                 let addrs = eth0.addrs();
-                assert_eq!(1, addrs.len(), "should match");
+                assert_eq!(addrs.len(), 1, "should match");
                 ips.push(SocketAddr::new(addrs[0].addr(), 1111 * (i + 1)));
             }
         }
@@ -353,12 +354,12 @@ async fn test_router_standalone_add_chunk_filter() -> Result<()> {
 
     {
         let n = nics[0].lock().await;
-        assert_eq!(0, n.cbs0.load(Ordering::SeqCst), "should be zero");
+        assert_eq!(n.cbs0.load(Ordering::SeqCst), 0, "should be zero");
     }
 
     {
         let n = nics[1].lock().await;
-        assert_eq!(1, n.cbs0.load(Ordering::SeqCst), "should be one");
+        assert_eq!(n.cbs0.load(Ordering::SeqCst), 1, "should be one");
     }
 
     Ok(())
@@ -408,7 +409,7 @@ async fn delay_sub_test(title: String, min_delay: Duration, max_jitter: Duration
             let n = nic.lock().await;
             if let Some(eth0) = n.get_interface("eth0").await {
                 let addrs = eth0.addrs();
-                assert_eq!(1, addrs.len(), "should match");
+                assert_eq!(addrs.len(), 1, "should match");
                 ips.push(SocketAddr::new(addrs[0].addr(), 1111 * (i + 1)));
             }
         }
@@ -442,12 +443,10 @@ async fn delay_sub_test(title: String, min_delay: Duration, max_jitter: Duration
             log::info!("min delay : {:?}", min_delay);
             log::info!("max jitter: {:?}", max_jitter);
             log::info!("actual delay: {:?}", d);
-            assert!(*d >= min_delay, "{} should delay {:?} >= 20ms", title, d);
+            assert!(*d >= min_delay, "{title} should delay {d:?} >= 20ms");
             assert!(
                 *d <= (min_delay + max_jitter + MARGIN),
-                "{} should delay {:?} <= minDelay + maxJitter",
-                title,
-                d,
+                "{title} should delay {d:?} <= minDelay + maxJitter",
             );
             // Note: actual delay should be within 30ms but giving a 8ms
             // MARGIN for possible extra delay
@@ -616,10 +615,10 @@ fn test_router_static_ips_more_than_one() -> Result<()> {
         ..Default::default()
     })?;
 
-    assert_eq!(3, lan.static_ips.len(), "should be 3");
-    assert_eq!("1.2.3.1", lan.static_ips[0].to_string(), "should match");
-    assert_eq!("1.2.3.2", lan.static_ips[1].to_string(), "should match");
-    assert_eq!("1.2.3.3", lan.static_ips[2].to_string(), "should match");
+    assert_eq!(lan.static_ips.len(), 3, "should be 3");
+    assert_eq!(lan.static_ips[0].to_string(), "1.2.3.1", "should match");
+    assert_eq!(lan.static_ips[1].to_string(), "1.2.3.2", "should match");
+    assert_eq!(lan.static_ips[2].to_string(), "1.2.3.3", "should match");
 
     Ok(())
 }
@@ -636,20 +635,20 @@ fn test_router_static_ips_static_ip_local_ip_mapping() -> Result<()> {
         ..Default::default()
     })?;
 
-    assert_eq!(3, lan.static_ips.len(), "should be 3");
-    assert_eq!("1.2.3.1", lan.static_ips[0].to_string(), "should match");
-    assert_eq!("1.2.3.2", lan.static_ips[1].to_string(), "should match");
-    assert_eq!("1.2.3.3", lan.static_ips[2].to_string(), "should match");
+    assert_eq!(lan.static_ips.len(), 3, "should be 3");
+    assert_eq!(lan.static_ips[0].to_string(), "1.2.3.1", "should match");
+    assert_eq!(lan.static_ips[1].to_string(), "1.2.3.2", "should match");
+    assert_eq!(lan.static_ips[2].to_string(), "1.2.3.3", "should match");
 
     assert_eq!(3, lan.static_local_ips.len(), "should be 3");
-    let local_ips = vec!["192.168.0.1", "192.168.0.2", "192.168.0.3"];
-    let ips = vec!["1.2.3.1", "1.2.3.2", "1.2.3.3"];
+    let local_ips = ["192.168.0.1", "192.168.0.2", "192.168.0.3"];
+    let ips = ["1.2.3.1", "1.2.3.2", "1.2.3.3"];
     for i in 0..3 {
         let ext_ipstr = ips[i];
         if let Some(loc_ip) = lan.static_local_ips.get(ext_ipstr) {
             assert_eq!(local_ips[i], loc_ip.to_string(), "should match");
         } else {
-            assert!(false, "should have the external IP");
+            panic!("should have the external IP");
         }
     }
 
@@ -723,25 +722,25 @@ async fn test_router_static_ips_1to1_nat() -> Result<()> {
         let l = lan.lock().await;
         let ri = l.router_internal.lock().await;
 
-        assert_eq!(3, ri.nat.mapped_ips.len(), "should be 3");
-        assert_eq!("1.2.3.1", ri.nat.mapped_ips[0].to_string(), "should match");
-        assert_eq!("1.2.3.2", ri.nat.mapped_ips[1].to_string(), "should match");
-        assert_eq!("1.2.3.3", ri.nat.mapped_ips[2].to_string(), "should match");
+        assert_eq!(ri.nat.mapped_ips.len(), 3, "should be 3");
+        assert_eq!(ri.nat.mapped_ips[0].to_string(), "1.2.3.1", "should match");
+        assert_eq!(ri.nat.mapped_ips[1].to_string(), "1.2.3.2", "should match");
+        assert_eq!(ri.nat.mapped_ips[2].to_string(), "1.2.3.3", "should match");
 
         assert_eq!(3, ri.nat.local_ips.len(), "should be 3");
         assert_eq!(
-            "192.168.0.1",
             ri.nat.local_ips[0].to_string(),
+            "192.168.0.1",
             "should match"
         );
         assert_eq!(
-            "192.168.0.2",
             ri.nat.local_ips[1].to_string(),
+            "192.168.0.2",
             "should match"
         );
         assert_eq!(
-            "192.168.0.3",
             ri.nat.local_ips[2].to_string(),
+            "192.168.0.3",
             "should match"
         );
     }

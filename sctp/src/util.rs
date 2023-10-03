@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use crc::{Crc, CRC_32_ISCSI};
 
-const PADDING_MULTIPLE: usize = 4;
+pub(crate) const PADDING_MULTIPLE: usize = 4;
 
 pub(crate) fn get_padding_size(len: usize) -> usize {
     (PADDING_MULTIPLE - (len % PADDING_MULTIPLE)) % PADDING_MULTIPLE
@@ -11,10 +11,11 @@ pub(crate) fn get_padding_size(len: usize) -> usize {
 /// We need to use it for the checksum and don't want to allocate/clear each time.
 pub(crate) static FOUR_ZEROES: Bytes = Bytes::from_static(&[0, 0, 0, 0]);
 
+pub(crate) const ISCSI_CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
+
 /// Fastest way to do a crc32 without allocating.
 pub(crate) fn generate_packet_checksum(raw: &Bytes) -> u32 {
-    let hasher = Crc::<u32>::new(&CRC_32_ISCSI);
-    let mut digest = hasher.digest();
+    let mut digest = ISCSI_CRC.digest();
     digest.update(&raw[0..8]);
     digest.update(&FOUR_ZEROES[..]);
     digest.update(&raw[12..]);
@@ -74,9 +75,8 @@ pub(crate) fn sna16eq(i1: u16, i2: u16) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::error::Result;
-
     use super::*;
+    use crate::error::Result;
 
     const DIV: isize = 16;
 
@@ -93,115 +93,68 @@ mod test {
             let s2b = s1.checked_add(MAX_BACKWARD_DISTANCE);
 
             if let (Some(s2f), Some(s2b)) = (s2f, s2b) {
-                assert!(
-                    sna32lt(s1, s2f),
-                    "s1 < s2 should be true: s1={} s2={}",
-                    s1,
-                    s2f
-                );
+                assert!(sna32lt(s1, s2f), "s1 < s2 should be true: s1={s1} s2={s2f}");
                 assert!(
                     !sna32lt(s1, s2b),
-                    "s1 < s2 should be false: s1={} s2={}",
-                    s1,
-                    s2b
+                    "s1 < s2 should be false: s1={s1} s2={s2b}"
                 );
 
                 assert!(
                     !sna32gt(s1, s2f),
-                    "s1 > s2 should be false: s1={} s2={}",
-                    s1,
-                    s2f
+                    "s1 > s2 should be false: s1={s1} s2={s2f}"
                 );
-                assert!(
-                    sna32gt(s1, s2b),
-                    "s1 > s2 should be true: s1={} s2={}",
-                    s1,
-                    s2b
-                );
+                assert!(sna32gt(s1, s2b), "s1 > s2 should be true: s1={s1} s2={s2b}");
 
                 assert!(
                     sna32lte(s1, s2f),
-                    "s1 <= s2 should be true: s1={} s2={}",
-                    s1,
-                    s2f
+                    "s1 <= s2 should be true: s1={s1} s2={s2f}"
                 );
                 assert!(
                     !sna32lte(s1, s2b),
-                    "s1 <= s2 should be false: s1={} s2={}",
-                    s1,
-                    s2b
+                    "s1 <= s2 should be false: s1={s1} s2={s2b}"
                 );
 
                 assert!(
                     !sna32gte(s1, s2f),
-                    "s1 >= s2 should be fales: s1={} s2={}",
-                    s1,
-                    s2f
+                    "s1 >= s2 should be fales: s1={s1} s2={s2f}"
                 );
                 assert!(
                     sna32gte(s1, s2b),
-                    "s1 >= s2 should be true: s1={} s2={}",
-                    s1,
-                    s2b
+                    "s1 >= s2 should be true: s1={s1} s2={s2b}"
                 );
 
                 assert!(
                     sna32eq(s2b, s2b),
-                    "s2 == s2 should be true: s2={} s2={}",
-                    s2b,
-                    s2b
+                    "s2 == s2 should be true: s2={s2b} s2={s2b}"
                 );
                 assert!(
                     sna32lte(s2b, s2b),
-                    "s2 == s2 should be true: s2={} s2={}",
-                    s2b,
-                    s2b
+                    "s2 == s2 should be true: s2={s2b} s2={s2b}"
                 );
                 assert!(
                     sna32gte(s2b, s2b),
-                    "s2 == s2 should be true: s2={} s2={}",
-                    s2b,
-                    s2b
+                    "s2 == s2 should be true: s2={s2b} s2={s2b}"
                 );
             }
 
             if let Some(s1add1) = s1.checked_add(1) {
                 assert!(
                     !sna32eq(s1, s1add1),
-                    "s1 == s1+1 should be false: s1={} s1+1={}",
-                    s1,
-                    s1add1
+                    "s1 == s1+1 should be false: s1={s1} s1+1={s1add1}"
                 );
             }
 
             if let Some(s1sub1) = s1.checked_sub(1) {
                 assert!(
                     !sna32eq(s1, s1sub1),
-                    "s1 == s1-1 hould be false: s1={} s1-1={}",
-                    s1,
-                    s1sub1
+                    "s1 == s1-1 should be false: s1={s1} s1-1={s1sub1}"
                 );
             }
 
-            assert!(
-                sna32eq(s1, s1),
-                "s1 == s1 should be true: s1={} s2={}",
-                s1,
-                s1
-            );
-            assert!(
-                sna32lte(s1, s1),
-                "s1 == s1 should be true: s1={} s2={}",
-                s1,
-                s1
-            );
+            assert!(sna32eq(s1, s1), "s1 == s1 should be true: s1={s1} s2={s1}");
+            assert!(sna32lte(s1, s1), "s1 == s1 should be true: s1={s1} s2={s1}");
 
-            assert!(
-                sna32gte(s1, s1),
-                "s1 == s1 should be true: s1={} s2={}",
-                s1,
-                s1
-            );
+            assert!(sna32gte(s1, s1), "s1 == s1 should be true: s1={s1} s2={s1}");
         }
 
         Ok(())
@@ -220,114 +173,67 @@ mod test {
             let s2b = s1.checked_add(MAX_BACKWARD_DISTANCE);
 
             if let (Some(s2f), Some(s2b)) = (s2f, s2b) {
-                assert!(
-                    sna16lt(s1, s2f),
-                    "s1 < s2 should be true: s1={} s2={}",
-                    s1,
-                    s2f
-                );
+                assert!(sna16lt(s1, s2f), "s1 < s2 should be true: s1={s1} s2={s2f}");
                 assert!(
                     !sna16lt(s1, s2b),
-                    "s1 < s2 should be false: s1={} s2={}",
-                    s1,
-                    s2b
+                    "s1 < s2 should be false: s1={s1} s2={s2b}"
                 );
 
                 assert!(
                     !sna16gt(s1, s2f),
-                    "s1 > s2 should be fales: s1={} s2={}",
-                    s1,
-                    s2f
+                    "s1 > s2 should be fales: s1={s1} s2={s2f}"
                 );
-                assert!(
-                    sna16gt(s1, s2b),
-                    "s1 > s2 should be true: s1={} s2={}",
-                    s1,
-                    s2b
-                );
+                assert!(sna16gt(s1, s2b), "s1 > s2 should be true: s1={s1} s2={s2b}");
 
                 assert!(
                     sna16lte(s1, s2f),
-                    "s1 <= s2 should be true: s1={} s2={}",
-                    s1,
-                    s2f
+                    "s1 <= s2 should be true: s1={s1} s2={s2f}"
                 );
                 assert!(
                     !sna16lte(s1, s2b),
-                    "s1 <= s2 should be false: s1={} s2={}",
-                    s1,
-                    s2b
+                    "s1 <= s2 should be false: s1={s1} s2={s2b}"
                 );
 
                 assert!(
                     !sna16gte(s1, s2f),
-                    "s1 >= s2 should be fales: s1={} s2={}",
-                    s1,
-                    s2f
+                    "s1 >= s2 should be fales: s1={s1} s2={s2f}"
                 );
                 assert!(
                     sna16gte(s1, s2b),
-                    "s1 >= s2 should be true: s1={} s2={}",
-                    s1,
-                    s2b
+                    "s1 >= s2 should be true: s1={s1} s2={s2b}"
                 );
 
                 assert!(
                     sna16eq(s2b, s2b),
-                    "s2 == s2 should be true: s2={} s2={}",
-                    s2b,
-                    s2b
+                    "s2 == s2 should be true: s2={s2b} s2={s2b}"
                 );
                 assert!(
                     sna16lte(s2b, s2b),
-                    "s2 == s2 should be true: s2={} s2={}",
-                    s2b,
-                    s2b
+                    "s2 == s2 should be true: s2={s2b} s2={s2b}"
                 );
                 assert!(
                     sna16gte(s2b, s2b),
-                    "s2 == s2 should be true: s2={} s2={}",
-                    s2b,
-                    s2b
+                    "s2 == s2 should be true: s2={s2b} s2={s2b}"
                 );
             }
 
-            assert!(
-                sna16eq(s1, s1),
-                "s1 == s1 should be true: s1={} s2={}",
-                s1,
-                s1
-            );
+            assert!(sna16eq(s1, s1), "s1 == s1 should be true: s1={s1} s2={s1}");
 
             if let Some(s1add1) = s1.checked_add(1) {
                 assert!(
                     !sna16eq(s1, s1add1),
-                    "s1 == s1+1 should be false: s1={} s1+1={}",
-                    s1,
-                    s1add1
+                    "s1 == s1+1 should be false: s1={s1} s1+1={s1add1}"
                 );
             }
             if let Some(s1sub1) = s1.checked_sub(1) {
                 assert!(
                     !sna16eq(s1, s1sub1),
-                    "s1 == s1-1 hould be false: s1={} s1-1={}",
-                    s1,
-                    s1sub1
+                    "s1 == s1-1 should be false: s1={s1} s1-1={s1sub1}"
                 );
             }
 
-            assert!(
-                sna16lte(s1, s1),
-                "s1 == s1 should be true: s1={} s2={}",
-                s1,
-                s1
-            );
-            assert!(
-                sna16gte(s1, s1),
-                "s1 == s1 should be true: s1={} s2={}",
-                s1,
-                s1
-            );
+            assert!(sna16lte(s1, s1), "s1 == s1 should be true: s1={s1} s2={s1}");
+            assert!(sna16gte(s1, s1), "s1 == s1 should be true: s1={s1} s2={s1}");
         }
 
         Ok(())

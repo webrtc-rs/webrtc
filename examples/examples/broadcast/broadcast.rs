@@ -1,7 +1,8 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
 use std::io::Write;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
@@ -13,10 +14,8 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
 
 #[tokio::main]
@@ -117,7 +116,7 @@ async fn main() -> Result<()> {
 
     // Allow us to receive 1 video track
     peer_connection
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let (local_track_chan_tx, mut local_track_chan_rx) =
@@ -127,72 +126,64 @@ async fn main() -> Result<()> {
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
     let pc = Arc::downgrade(&peer_connection);
-    peer_connection
-        .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-                if let Some(track) = track {
-                    // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-                    // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
-                    let media_ssrc = track.ssrc();
-                    let pc2 = pc.clone();
-                    tokio::spawn(async move {
-                        let mut result = Result::<usize>::Ok(0);
-                        while result.is_ok() {
-                            let timeout = tokio::time::sleep(Duration::from_secs(3));
-                            tokio::pin!(timeout);
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+        // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
+        let media_ssrc = track.ssrc();
+        let pc2 = pc.clone();
+        tokio::spawn(async move {
+            let mut result = Result::<usize>::Ok(0);
+            while result.is_ok() {
+                let timeout = tokio::time::sleep(Duration::from_secs(3));
+                tokio::pin!(timeout);
 
-                            tokio::select! {
-                                _ = timeout.as_mut() =>{
-                                    if let Some(pc) = pc2.upgrade(){
-                                        result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                            sender_ssrc: 0,
-                                            media_ssrc,
-                                        })]).await.map_err(Into::into);
-                                    }else{
-                                        break;
-                                    }
-                                }
-                            };
+                tokio::select! {
+                    _ = timeout.as_mut() =>{
+                        if let Some(pc) = pc2.upgrade(){
+                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                sender_ssrc: 0,
+                                media_ssrc,
+                            })]).await.map_err(Into::into);
+                        }else{
+                            break;
                         }
-                    });
+                    }
+                };
+            }
+        });
 
-                    let local_track_chan_tx2 = Arc::clone(&local_track_chan_tx);
-                    tokio::spawn(async move {
-                        // Create Track that we send video back to browser on
-                        let local_track = Arc::new(TrackLocalStaticRTP::new(
-                            track.codec().await.capability,
-                            "video".to_owned(),
-                            "webrtc-rs".to_owned(),
-                        ));
-                        let _ = local_track_chan_tx2.send(Arc::clone(&local_track)).await;
+        let local_track_chan_tx2 = Arc::clone(&local_track_chan_tx);
+        tokio::spawn(async move {
+            // Create Track that we send video back to browser on
+            let local_track = Arc::new(TrackLocalStaticRTP::new(
+                track.codec().capability,
+                "video".to_owned(),
+                "webrtc-rs".to_owned(),
+            ));
+            let _ = local_track_chan_tx2.send(Arc::clone(&local_track)).await;
 
-                        // Read RTP packets being sent to webrtc-rs
-                        while let Ok((rtp, _)) = track.read_rtp().await {
-                            if let Err(err) = local_track.write_rtp(&rtp).await {
-                                if Error::ErrClosedPipe != err {
-                                    print!("output track write_rtp got error: {} and break", err);
-                                    break;
-                                } else {
-                                    print!("output track write_rtp got error: {}", err);
-                                }
-                            }
-                        }
-                    });
+            // Read RTP packets being sent to webrtc-rs
+            while let Ok((rtp, _)) = track.read_rtp().await {
+                if let Err(err) = local_track.write_rtp(&rtp).await {
+                    if Error::ErrClosedPipe != err {
+                        print!("output track write_rtp got error: {err} and break");
+                        break;
+                    } else {
+                        print!("output track write_rtp got error: {err}");
+                    }
                 }
+            }
+        });
 
-                Box::pin(async {})
-            },
-        ))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
-            Box::pin(async {})
-        }))
-        .await;
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
+        Box::pin(async {})
+    }));
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
@@ -215,7 +206,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -275,12 +266,12 @@ async fn main() -> Result<()> {
 
             // Set the handler for Peer connection state
             // This will notify you when the peer has connected/disconnected
-            peer_connection
-                .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-                    println!("Peer Connection State has changed: {}", s);
+            peer_connection.on_peer_connection_state_change(Box::new(
+                move |s: RTCPeerConnectionState| {
+                    println!("Peer Connection State has changed: {s}");
                     Box::pin(async {})
-                }))
-                .await;
+                },
+            ));
 
             // Set the remote SessionDescription
             peer_connection
@@ -304,7 +295,7 @@ async fn main() -> Result<()> {
             if let Some(local_desc) = peer_connection.local_description().await {
                 let json_str = serde_json::to_string(&local_desc)?;
                 let b64 = signal::encode(&json_str);
-                println!("{}", b64);
+                println!("{b64}");
             } else {
                 println!("generate local_description failed!");
             }

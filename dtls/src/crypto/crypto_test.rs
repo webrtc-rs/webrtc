@@ -1,12 +1,11 @@
-use super::crypto_ccm::*;
-use super::*;
-
-use crate::content::ContentType;
-use crate::record_layer::record_layer_header::{ProtocolVersion, RECORD_LAYER_HEADER_SIZE};
-
 use std::io::Cursor;
 
 use x509_parser::pem::Pem;
+
+use super::crypto_ccm::*;
+use super::*;
+use crate::content::ContentType;
+use crate::record_layer::record_layer_header::{ProtocolVersion, RECORD_LAYER_HEADER_SIZE};
 
 const RAW_PRIVATE_KEY: &str = "
 -----BEGIN RSA PRIVATE KEY-----
@@ -97,9 +96,8 @@ fn test_generate_key_signature() -> Result<()> {
     )?;
 
     assert_eq!(
-        expected_signature, signature,
-        "Signature generation failed \nexp {:?} \nactual {:?} ",
-        expected_signature, signature
+        signature, expected_signature,
+        "Signature generation failed \nexp {expected_signature:?} \nactual {signature:?} "
     );
 
     Ok(())
@@ -134,8 +132,8 @@ fn test_ccm_encryption_and_decryption() -> Result<()> {
     let cipher_text = ccm.encrypt(&rlh, &raw)?;
 
     assert_eq!(
-        [0, 27],
         &cipher_text[RECORD_LAYER_HEADER_SIZE - 2..RECORD_LAYER_HEADER_SIZE],
+        [0, 27],
         "RecordLayer size updating failed \nexp: {:?} \nactual {:?} ",
         [0, 27],
         &cipher_text[RECORD_LAYER_HEADER_SIZE - 2..RECORD_LAYER_HEADER_SIZE]
@@ -193,6 +191,7 @@ fn test_certificate_verify() -> Result<()> {
             .iter()
             .map(|x| x.0.clone())
             .collect::<Vec<Vec<u8>>>(),
+        false,
     )?;
 
     //test ED25519
@@ -214,6 +213,7 @@ fn test_certificate_verify() -> Result<()> {
             .iter()
             .map(|x| x.0.clone())
             .collect::<Vec<Vec<u8>>>(),
+        false,
     )?;
 
     Ok(())

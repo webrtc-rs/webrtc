@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod chunk_test;
 
-use super::net::*;
-use crate::error::Result;
-
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::ops::{BitAnd, BitOr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
+
+use super::net::*;
+use crate::error::Result;
 
 lazy_static! {
     static ref TAG_CTR: AtomicU64 = AtomicU64::new(0);

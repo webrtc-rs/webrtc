@@ -1,10 +1,10 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
 use std::fs::File;
-use std::io::BufReader;
-use std::io::Write;
+use std::io::{BufReader, Write};
 use std::path::Path;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
 use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
 
     let video_file = matches.value_of("video").unwrap();
     if !Path::new(video_file).exists() {
-        return Err(Error::new(format!("video file: '{}' not exist", video_file)).into());
+        return Err(Error::new(format!("video file: '{video_file}' not exist")).into());
     }
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
@@ -155,7 +155,7 @@ async fn main() -> Result<()> {
         let (mut ivf, header) = IVFReader::new(reader)?;
 
         // Wait for connection established
-        let _ = notify_video.notified().await;
+        notify_video.notified().await;
 
         println!("play video from disk file output.ivf");
 
@@ -168,7 +168,7 @@ async fn main() -> Result<()> {
             let mut frame = match ivf.parse_next_frame() {
                 Ok((frame, _)) => frame,
                 Err(err) => {
-                    println!("All video frames parsed and sent: {}", err);
+                    println!("All video frames parsed and sent: {err}");
                     break;
                 }
             };
@@ -196,33 +196,31 @@ async fn main() -> Result<()> {
 
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
-            println!("Connection State has changed {}", connection_state);
+    peer_connection.on_ice_connection_state_change(Box::new(
+        move |connection_state: RTCIceConnectionState| {
+            println!("Connection State has changed {connection_state}");
             if connection_state == RTCIceConnectionState::Connected {
                 notify_tx.notify_waiters();
             }
             Box::pin(async {})
-        }))
-        .await;
+        },
+    ));
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;
@@ -250,7 +248,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -261,7 +259,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 

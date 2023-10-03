@@ -1,8 +1,9 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
 use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
 use tokio::sync::{Mutex, Notify};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -19,7 +20,6 @@ use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndicat
 use webrtc::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
 };
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use webrtc::track::track_remote::TrackRemote;
 
 async fn save_to_disk(
@@ -37,7 +37,7 @@ async fn save_to_disk(
                     println!("file closing begin after read_rtp error");
                     let mut w = writer.lock().await;
                     if let Err(err) = w.close() {
-                        println!("file close err: {}", err);
+                        println!("file close err: {err}");
                     }
                     println!("file closing end after read_rtp error");
                     return Ok(());
@@ -47,7 +47,7 @@ async fn save_to_disk(
                 println!("file closing begin after notified");
                 let mut w = writer.lock().await;
                 if let Err(err) = w.close() {
-                    println!("file close err: {}", err);
+                    println!("file close err: {err}");
                 }
                 println!("file closing end after notified");
                 return Ok(());
@@ -192,10 +192,10 @@ async fn main() -> Result<()> {
 
     // Allow us to receive 1 audio track, and 1 video track
     peer_connection
-        .add_transceiver_from_kind(RTPCodecType::Audio, &[])
+        .add_transceiver_from_kind(RTPCodecType::Audio, None)
         .await?;
     peer_connection
-        .add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
         .await?;
 
     let notify_tx = Arc::new(Notify::new());
@@ -205,62 +205,58 @@ async fn main() -> Result<()> {
     // an ivf file, since we could have multiple video tracks we provide a counter.
     // In your application this is where you would handle/process video
     let pc = Arc::downgrade(&peer_connection);
-    peer_connection.on_track(Box::new(move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-        if let Some(track) = track {
-            // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-            let media_ssrc = track.ssrc();
-            let pc2 = pc.clone();
-            tokio::spawn(async move {
-                let mut result = Result::<usize>::Ok(0);
-                while result.is_ok() {
-                    let timeout = tokio::time::sleep(Duration::from_secs(3));
-                    tokio::pin!(timeout);
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+        let media_ssrc = track.ssrc();
+        let pc2 = pc.clone();
+        tokio::spawn(async move {
+            let mut result = Result::<usize>::Ok(0);
+            while result.is_ok() {
+                let timeout = tokio::time::sleep(Duration::from_secs(3));
+                tokio::pin!(timeout);
 
-                    tokio::select! {
-                        _ = timeout.as_mut() =>{
-                            if let Some(pc) = pc2.upgrade(){
-                                result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                    sender_ssrc: 0,
-                                    media_ssrc,
-                                })]).await.map_err(Into::into);
-                            }else {
-                                break;
-                            }
+                tokio::select! {
+                    _ = timeout.as_mut() =>{
+                        if let Some(pc) = pc2.upgrade(){
+                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                sender_ssrc: 0,
+                                media_ssrc,
+                            })]).await.map_err(Into::into);
+                        }else {
+                            break;
                         }
-                    };
-                }
-            });
+                    }
+                };
+            }
+        });
 
-            let notify_rx2 = Arc::clone(&notify_rx);
-            let h264_writer2 = Arc::clone(&h264_writer);
-            let ogg_writer2 = Arc::clone(&ogg_writer);
-            Box::pin(async move {
-                let codec = track.codec().await;
-                let mime_type = codec.capability.mime_type.to_lowercase();
-                if mime_type == MIME_TYPE_OPUS.to_lowercase() {
-                    println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");     
-                    tokio::spawn(async move {
-                        let _ = save_to_disk(ogg_writer2, track, notify_rx2).await;
-                    });
-                } else if mime_type == MIME_TYPE_H264.to_lowercase() {
-                    println!("Got h264 track, saving to disk as output.h264");
-                     tokio::spawn(async move {
-                         let _ = save_to_disk(h264_writer2, track, notify_rx2).await;
-                     });
-                }
-            })
-        }else {
-            Box::pin(async {})
-        }
-	})).await;
+        let notify_rx2 = Arc::clone(&notify_rx);
+        let h264_writer2 = Arc::clone(&h264_writer);
+        let ogg_writer2 = Arc::clone(&ogg_writer);
+        Box::pin(async move {
+            let codec = track.codec();
+            let mime_type = codec.capability.mime_type.to_lowercase();
+            if mime_type == MIME_TYPE_OPUS.to_lowercase() {
+                println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");
+                tokio::spawn(async move {
+                    let _ = save_to_disk(ogg_writer2, track, notify_rx2).await;
+                });
+            } else if mime_type == MIME_TYPE_H264.to_lowercase() {
+                println!("Got h264 track, saving to disk as output.h264");
+                tokio::spawn(async move {
+                    let _ = save_to_disk(h264_writer2, track, notify_rx2).await;
+                });
+            }
+        })
+    }));
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Set the handler for ICE connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
-            println!("Connection State has changed {}", connection_state);
+    peer_connection.on_ice_connection_state_change(Box::new(
+        move |connection_state: RTCIceConnectionState| {
+            println!("Connection State has changed {connection_state}");
 
             if connection_state == RTCIceConnectionState::Connected {
                 println!("Ctrl+C the remote client to stop the demo");
@@ -272,8 +268,8 @@ async fn main() -> Result<()> {
                 let _ = done_tx.try_send(());
             }
             Box::pin(async {})
-        }))
-        .await;
+        },
+    ));
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;
@@ -301,7 +297,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -312,7 +308,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 

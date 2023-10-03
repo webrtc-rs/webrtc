@@ -1,6 +1,10 @@
+// Silence warning on `..Default::default()` with no effect:
+#![allow(clippy::needless_update)]
+
+use bytes::{Bytes, BytesMut};
+
 use super::*;
 use crate::error::Result;
-use bytes::{Bytes, BytesMut};
 
 #[test]
 fn test_basic() -> Result<()> {
@@ -39,8 +43,7 @@ fn test_basic() -> Result<()> {
     let packet = Packet::unmarshal(buf)?;
     assert_eq!(
         packet, parsed_packet,
-        "TestBasic unmarshal: got {}, want {}",
-        packet, parsed_packet
+        "TestBasic unmarshal: got {packet}, want {parsed_packet}"
     );
     assert_eq!(
         packet.header.marshal_size(),
@@ -66,8 +69,7 @@ fn test_basic() -> Result<()> {
     );
     assert_eq!(
         raw, raw_pkt,
-        "TestBasic marshal: got {:?}, want {:?}",
-        raw, raw_pkt
+        "TestBasic marshal: got {raw:?}, want {raw_pkt:?}"
     );
 
     Ok(())
@@ -226,7 +228,7 @@ fn test_rfc_8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
     if let Some(ext1) = ext1 {
         assert_eq!(ext1, ext1_expect);
     } else {
-        assert!(false, "ext1 is none");
+        panic!("ext1 is none");
     }
 
     let ext2 = p.header.get_extension(2);
@@ -234,7 +236,7 @@ fn test_rfc_8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
     if let Some(ext2) = ext2 {
         assert_eq!(ext2, ext2_expect);
     } else {
-        assert!(false, "ext2 is none");
+        panic!("ext2 is none");
     }
 
     // Test Marshal
@@ -332,8 +334,7 @@ fn test_rfc_8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
         assert_eq!(
             &buf[..size],
             &raw_pkg_marshal[..],
-            "Marshalled fields are not equal for {}.",
-            name
+            "Marshalled fields are not equal for {name}."
         );
 
         Ok(())
@@ -403,9 +404,7 @@ fn test_rfc_8285_one_byte_multiple_extension() -> Result<()> {
     assert_eq!(
         &dst_data[..],
         raw_pkt,
-        "Marshal failed raw \nMarshaled:\n{:?}\nrawPkt:\n{:?}",
-        dst_data,
-        raw_pkt,
+        "Marshal failed raw \nMarshaled:\n{dst_data:?}\nrawPkt:\n{raw_pkt:?}",
     );
 
     Ok(())
@@ -446,8 +445,7 @@ fn test_rfc_8285_two_byte_extension() -> Result<()> {
     let dst_data = p.marshal()?;
     assert_eq!(
         dst_data, raw_pkt,
-        "Marshal failed raw \nMarshaled:\n{:?}\nrawPkt:\n{:?}",
-        dst_data, raw_pkt
+        "Marshal failed raw \nMarshaled:\n{dst_data:?}\nrawPkt:\n{raw_pkt:?}"
     );
     Ok(())
 }
@@ -477,24 +475,21 @@ fn test_rfc8285_two_byte_multiple_extension_with_padding() -> Result<()> {
     let ext_expect = Some(Bytes::from_static(&[]));
     assert_eq!(
         ext, ext_expect,
-        "Extension has incorrect data. Got: {:?}, Expected: {:?}",
-        ext, ext_expect
+        "Extension has incorrect data. Got: {ext:?}, Expected: {ext_expect:?}"
     );
 
     let ext = p.header.get_extension(2);
     let ext_expect = Some(Bytes::from_static(&[0xBB]));
     assert_eq!(
         ext, ext_expect,
-        "Extension has incorrect data. Got: {:?}, Expected: {:?}",
-        ext, ext_expect
+        "Extension has incorrect data. Got: {ext:?}, Expected: {ext_expect:?}"
     );
 
     let ext = p.header.get_extension(3);
     let ext_expect = Some(Bytes::from_static(&[0xCC, 0xCC, 0xCC, 0xCC]));
     assert_eq!(
         ext, ext_expect,
-        "Extension has incorrect data. Got: {:?}, Expected: {:?}",
-        ext, ext_expect
+        "Extension has incorrect data. Got: {ext:?}, Expected: {ext_expect:?}"
     );
 
     Ok(())
@@ -562,9 +557,7 @@ fn test_rfc8285_two_byte_multiple_extension_with_large_extension() -> Result<()>
     assert_eq!(
         dst_data,
         raw_pkt[..],
-        "Marshal failed raw \nMarshaled: {:?}, \nraw_pkt:{:?}",
-        dst_data,
-        raw_pkt
+        "Marshal failed raw \nMarshaled: {dst_data:?}, \nraw_pkt:{raw_pkt:?}"
     );
 
     Ok(())
@@ -671,7 +664,7 @@ fn test_rfc8285_get_extension_ids() {
     };
 
     let ids = p.header.get_extension_ids();
-    assert!(!ids.is_empty(), "Extenstions should exist");
+    assert!(!ids.is_empty(), "Extensions should exist");
 
     assert_eq!(
         ids.len(),
@@ -683,7 +676,7 @@ fn test_rfc8285_get_extension_ids() {
 
     for id in ids {
         let ext = p.header.get_extension(id);
-        assert!(ext.is_some(), "Extension should exist for id: {}", id)
+        assert!(ext.is_some(), "Extension should exist for id: {id}")
     }
 }
 
@@ -706,10 +699,10 @@ fn test_rfc8285_get_extension_ids_return_empty_when_extension_disabled() {
     };
 
     let ids = p.header.get_extension_ids();
-    assert!(ids.is_empty(), "Extenstions should not exist");
+    assert!(ids.is_empty(), "Extensions should not exist");
 }
 
-fn test_rfc8285_del_extension_returns_error_when_extenstions_disabled() {
+fn test_rfc8285_del_extension_returns_error_when_extensions_disabled() {
     let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
@@ -756,7 +749,7 @@ fn test_rfc8285_one_byte_set_extension_should_enable_extension_when_adding() {
     let result = p.header.set_extension(1, extension.clone());
     assert!(result.is_ok(), "Error setting extension");
 
-    assert_eq!(p.header.extension, true, "Extension should be set to true");
+    assert!(p.header.extension, "Extension should be set to true");
     assert_eq!(
         p.header.extension_profile, 0xBEDE,
         "Extension profile should be set to 0xBEDE"
@@ -967,7 +960,7 @@ fn test_rfc8285_two_bytes_set_extension_should_enable_extension_when_adding() ->
 
     p.header.set_extension(1, extension.clone())?;
 
-    assert_eq!(p.header.extension, true, "Extension should be set to true");
+    assert!(p.header.extension, "Extension should be set to true");
     assert_eq!(
         p.header.extension_profile, 0x1000,
         "Extension profile should be set to 0xBEDE"
@@ -1109,7 +1102,7 @@ fn test_rfc3550_set_extension_should_error_when_non_zero() -> Result<()> {
     assert_eq!(
         res,
         Some(Bytes::from_static(&[0xBB])),
-        "p.get_extenstion returned incorrect value"
+        "p.get_extension returned incorrect value"
     );
 
     Ok(())
@@ -1238,8 +1231,7 @@ fn test_round_trip() -> Result<()> {
 
     assert_eq!(
         raw_pkt, buf,
-        "buf must be the same as raw_pkt. \n buf: {:?},\nraw_pkt: {:?}",
-        buf, raw_pkt,
+        "buf must be the same as raw_pkt. \n buf: {buf:?},\nraw_pkt: {raw_pkt:?}",
     );
     assert_eq!(
         payload, p.payload,

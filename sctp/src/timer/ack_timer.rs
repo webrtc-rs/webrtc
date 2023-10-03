@@ -1,11 +1,12 @@
-use async_trait::async_trait;
 use std::sync::Weak;
+
+use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
 pub(crate) const ACK_INTERVAL: Duration = Duration::from_millis(200);
 
-/// ackTimerObserver is the inteface to an ack timer observer.
+/// ackTimerObserver is the interface to an ack timer observer.
 #[async_trait]
 pub(crate) trait AckTimerObserver {
     async fn on_ack_timeout(&mut self);

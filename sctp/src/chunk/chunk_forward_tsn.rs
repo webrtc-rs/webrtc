@@ -1,7 +1,10 @@
-use super::{chunk_header::*, chunk_type::*, *};
+use std::fmt;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::fmt;
+
+use super::chunk_header::*;
+use super::chunk_type::*;
+use super::*;
 
 ///This chunk shall be used by the data sender to inform the data
 ///receiver to adjust its cumulative received TSN point forward because

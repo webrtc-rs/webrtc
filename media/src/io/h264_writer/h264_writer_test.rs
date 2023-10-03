@@ -1,6 +1,8 @@
-use super::*;
-use bytes::Bytes;
 use std::io::Cursor;
+
+use bytes::Bytes;
+
+use super::*;
 
 #[test]
 fn test_is_key_frame() -> Result<()> {
@@ -26,7 +28,7 @@ fn test_is_key_frame() -> Result<()> {
 
     for (name, payload, want) in tests {
         let got = is_key_frame(&payload);
-        assert_eq!(want, got, "{} failed", name);
+        assert_eq!(got, want, "{name} failed");
     }
 
     Ok(())
@@ -86,7 +88,7 @@ fn test_write_rtp() -> Result<()> {
             h264writer.close()?;
         }
 
-        assert_eq!(want_bytes, writer);
+        assert_eq!(writer, want_bytes);
     }
 
     Ok(())
@@ -119,7 +121,7 @@ fn test_write_rtp_fu() -> Result<()> {
         }
         h264writer.close()?;
     }
-    assert_eq!(want_bytes, writer);
+    assert_eq!(writer, want_bytes);
 
     Ok(())
 }

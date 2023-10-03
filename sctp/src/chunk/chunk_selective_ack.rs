@@ -1,7 +1,10 @@
-use super::{chunk_header::*, chunk_type::*, *};
+use std::fmt;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::fmt;
+
+use super::chunk_header::*;
+use super::chunk_type::*;
+use super::*;
 
 ///chunkSelectiveAck represents an SCTP Chunk of type SACK
 ///
@@ -65,10 +68,10 @@ impl fmt::Display for ChunkSelectiveAck {
         );
 
         for gap in &self.gap_ack_blocks {
-            res += format!("\n gap ack: {}", gap).as_str();
+            res += format!("\n gap ack: {gap}").as_str();
         }
 
-        write!(f, "{}", res)
+        write!(f, "{res}")
     }
 }
 

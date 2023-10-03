@@ -1,7 +1,7 @@
+use std::net::Ipv4Addr;
+
 use super::*;
 use crate::error::Result;
-
-use std::net::Ipv4Addr;
 
 #[test]
 fn test_addr_from_socket_addr() -> Result<()> {
@@ -74,7 +74,7 @@ fn test_five_tuple_equal() -> Result<()> {
 
     for (name, a, b, r) in tests {
         let v = a == b;
-        assert_eq!(v, r, "({}) {} [{}!={}] {}", name, a, v, r, b);
+        assert_eq!(v, r, "({name}) {a} [{v}!={r}] {b}");
     }
 
     Ok(())

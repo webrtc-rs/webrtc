@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod extmap_test;
 
+use std::{fmt, io};
+
+use url::Url;
+
 use super::direction::*;
 use super::error::{Error, Result};
 use crate::description::common::*;
-
-use std::fmt;
-use std::io;
-use url::Url;
 
 /// Default ext values
 pub const DEF_EXT_MAP_VALUE_ABS_SEND_TIME: usize = 1;
@@ -40,14 +40,14 @@ impl fmt::Display for ExtMap {
         }
 
         if let Some(uri) = &self.uri {
-            output += format!(" {}", uri).as_str();
+            output += format!(" {uri}").as_str();
         }
 
         if let Some(ext_attr) = &self.ext_attr {
-            output += format!(" {}", ext_attr).as_str();
+            output += format!(" {ext_attr}").as_str();
         }
 
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 

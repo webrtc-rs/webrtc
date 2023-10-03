@@ -4,10 +4,12 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
+use dtls_role::*;
 use interceptor::stream_info::StreamInfo;
 use interceptor::{Interceptor, RTCPReader, RTPReader};
 use sha2::{Digest, Sha256};
@@ -16,8 +18,6 @@ use srtp::session::Session;
 use srtp::stream::Stream;
 use tokio::sync::{mpsc, Mutex};
 use util::Conn;
-
-use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::dtls_transport::dtls_parameters::DTLSParameters;
@@ -67,7 +67,7 @@ pub struct RTCDtlsTransport {
     pub(crate) remote_certificate: Mutex<Bytes>,
     pub(crate) state: AtomicU8, //DTLSTransportState,
     pub(crate) srtp_protection_profile: Mutex<ProtectionProfile>,
-    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnDTLSTransportStateChangeHdlrFn>>>,
+    pub(crate) on_state_change_handler: ArcSwapOption<Mutex<OnDTLSTransportStateChangeHdlrFn>>,
     pub(crate) conn: Mutex<Option<Arc<DTLSConn>>>,
 
     pub(crate) srtp_session: Mutex<Option<Arc<Session>>>,
@@ -118,17 +118,17 @@ impl RTCDtlsTransport {
     /// state_change requires the caller holds the lock
     async fn state_change(&self, state: RTCDtlsTransportState) {
         self.state.store(state as u8, Ordering::SeqCst);
-        let mut handler = self.on_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*self.on_state_change_handler.load() {
+            let mut f = handler.lock().await;
             f(state).await;
         }
     }
 
     /// on_state_change sets a handler that is fired when the DTLS
     /// connection state changes.
-    pub async fn on_state_change(&self, f: OnDTLSTransportStateChangeHdlrFn) {
-        let mut on_state_change_handler = self.on_state_change_handler.lock().await;
-        *on_state_change_handler = Some(f);
+    pub fn on_state_change(&self, f: OnDTLSTransportStateChangeHdlrFn) {
+        self.on_state_change_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// state returns the current dtls_transport transport state.
@@ -357,6 +357,7 @@ impl RTCDtlsTransport {
                 },
                 client_auth: ClientAuthType::RequireAnyClientCert,
                 insecure_skip_verify: true,
+                insecure_verification: self.setting_engine.allow_insecure_verification_algorithm,
                 ..Default::default()
             },
         ))
@@ -545,7 +546,7 @@ impl RTCDtlsTransport {
             let mut h = Sha256::new();
             h.update(remote_cert);
             let hashed = h.finalize();
-            let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
+            let values: Vec<String> = hashed.iter().map(|x| format! {"{x:02x}"}).collect();
             let remote_value = values.join(":").to_lowercase();
 
             if remote_value == fp.value.to_lowercase() {
@@ -580,10 +581,10 @@ impl RTCDtlsTransport {
         stream_info: &StreamInfo,
         interceptor: &Arc<dyn Interceptor + Send + Sync>,
     ) -> Result<(
-        Option<Arc<srtp::stream::Stream>>,
-        Option<Arc<dyn RTPReader + Send + Sync>>,
-        Option<Arc<srtp::stream::Stream>>,
-        Option<Arc<dyn RTCPReader + Send + Sync>>,
+        Arc<srtp::stream::Stream>,
+        Arc<dyn RTPReader + Send + Sync>,
+        Arc<srtp::stream::Stream>,
+        Arc<dyn RTCPReader + Send + Sync>,
     )> {
         let srtp_session = self
             .get_srtp_session()
@@ -606,10 +607,10 @@ impl RTCDtlsTransport {
         let rtcp_interceptor = interceptor.bind_rtcp_reader(rtcp_stream_reader).await;
 
         Ok((
-            Some(rtp_read_stream),
-            Some(rtp_interceptor),
-            Some(rtcp_read_stream),
-            Some(rtcp_interceptor),
+            rtp_read_stream,
+            rtp_interceptor,
+            rtcp_read_stream,
+            rtcp_interceptor,
         ))
     }
 }

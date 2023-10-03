@@ -1,12 +1,14 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// BundlePolicy affects which media tracks are negotiated if the remote
 /// endpoint is not bundle-aware, and what ICE candidates are gathered. If the
 /// remote endpoint is bundle-aware, all media tracks and data channels are
 /// bundled onto the same transport.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCBundlePolicy {
+    #[default]
     Unspecified = 0,
 
     /// BundlePolicyBalanced indicates to gather ICE candidates for each
@@ -27,12 +29,6 @@ pub enum RTCBundlePolicy {
     /// one media track.
     #[serde(rename = "max-bundle")]
     MaxBundle = 3,
-}
-
-impl Default for RTCBundlePolicy {
-    fn default() -> Self {
-        RTCBundlePolicy::Unspecified
-    }
 }
 
 /// This is done this way because of a linter.
@@ -56,9 +52,9 @@ impl From<&str> for RTCBundlePolicy {
 impl fmt::Display for RTCBundlePolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCBundlePolicy::Balanced => write!(f, "{}", BUNDLE_POLICY_BALANCED_STR),
-            RTCBundlePolicy::MaxCompat => write!(f, "{}", BUNDLE_POLICY_MAX_COMPAT_STR),
-            RTCBundlePolicy::MaxBundle => write!(f, "{}", BUNDLE_POLICY_MAX_BUNDLE_STR),
+            RTCBundlePolicy::Balanced => write!(f, "{BUNDLE_POLICY_BALANCED_STR}"),
+            RTCBundlePolicy::MaxCompat => write!(f, "{BUNDLE_POLICY_MAX_COMPAT_STR}"),
+            RTCBundlePolicy::MaxBundle => write!(f, "{BUNDLE_POLICY_MAX_BUNDLE_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -78,7 +74,7 @@ mod test {
         ];
 
         for (policy_string, expected_policy) in tests {
-            assert_eq!(expected_policy, RTCBundlePolicy::from(policy_string));
+            assert_eq!(RTCBundlePolicy::from(policy_string), expected_policy);
         }
     }
 
@@ -92,7 +88,7 @@ mod test {
         ];
 
         for (policy, expected_string) in tests {
-            assert_eq!(expected_string, policy.to_string());
+            assert_eq!(policy.to_string(), expected_string);
         }
     }
 }

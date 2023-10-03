@@ -1,16 +1,17 @@
-use turn::auth::*;
-use turn::relay::relay_static::*;
-use turn::server::{config::*, *};
-use turn::Error;
-
-use clap::{App, AppSettings, Arg};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
+
+use clap::{App, AppSettings, Arg};
 use tokio::net::UdpSocket;
 use tokio::signal;
 use tokio::time::Duration;
+use turn::auth::*;
+use turn::relay::relay_static::*;
+use turn::server::config::*;
+use turn::server::*;
+use turn::Error;
 use util::vnet::net::*;
 
 struct MyAuthHandler {
@@ -110,7 +111,7 @@ async fn main() -> Result<(), Error> {
     // Create a UDP listener to pass into pion/turn
     // turn itself doesn't allocate any UDP sockets, but lets the user pass them in
     // this allows us to add logging, storage or modify inbound/outbound traffic
-    let conn = Arc::new(UdpSocket::bind(format!("0.0.0.0:{}", port)).await?);
+    let conn = Arc::new(UdpSocket::bind(format!("0.0.0.0:{port}")).await?);
     println!("listening {}...", conn.local_addr()?);
 
     let server = Server::new(ServerConfig {
@@ -125,6 +126,7 @@ async fn main() -> Result<(), Error> {
         realm: realm.to_owned(),
         auth_handler: Arc::new(MyAuthHandler::new(cred_map)),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 

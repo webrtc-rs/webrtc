@@ -1,17 +1,25 @@
-use super::*;
-
-use crate::api::media_engine::MIME_TYPE_VP8;
-use crate::api::APIBuilder;
-use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
-use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
-use crate::stats::StatsReportType;
-use bytes::Bytes;
-use media::Sample;
 use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
+
+use bytes::Bytes;
+use interceptor::registry::Registry;
+use media::Sample;
 use tokio::time::Duration;
 use util::vnet::net::{Net, NetConfig};
 use util::vnet::router::{Router, RouterConfig};
 use waitgroup::WaitGroup;
+
+use super::*;
+use crate::api::interceptor_registry::register_default_interceptors;
+use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
+use crate::api::APIBuilder;
+use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
+use crate::ice_transport::ice_server::RTCIceServer;
+use crate::peer_connection::configuration::RTCConfiguration;
+use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use crate::stats::StatsReportType;
+use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use crate::Error;
 
 pub(crate) async fn create_vnet_pair(
 ) -> Result<(RTCPeerConnection, RTCPeerConnection, Arc<Mutex<Router>>)> {
@@ -176,7 +184,7 @@ pub(crate) async fn close_pair(
 
     tokio::select! {
         _ = timeout.as_mut() =>{
-            assert!(false, "close_pair timed out waiting for done signal");
+            panic!("close_pair timed out waiting for done signal");
         }
         _ = done_rx.recv() =>{
             close_pair_now(pc1, pc2).await;
@@ -255,8 +263,7 @@ pub(crate) async fn until_connection_state(
                 worker.take();
             }
         })
-    }))
-    .await;
+    }));
 }
 
 #[tokio::test]
@@ -269,18 +276,16 @@ async fn test_get_stats() -> Result<()> {
 
     let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
     let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
-    pc_answer
-        .on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
-            let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
-            Box::pin(async move {
-                if ice_state == RTCIceConnectionState::Connected {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    let mut done = ice_complete_tx2.lock().await;
-                    done.take();
-                }
-            })
-        }))
-        .await;
+    pc_answer.on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
+        let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
+        Box::pin(async move {
+            if ice_state == RTCIceConnectionState::Connected {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                let mut done = ice_complete_tx2.lock().await;
+                done.take();
+            }
+        })
+    }));
 
     let sender_called_candidate_change = Arc::new(AtomicU32::new(0));
     let sender_called_candidate_change2 = Arc::clone(&sender_called_candidate_change);
@@ -291,8 +296,7 @@ async fn test_get_stats() -> Result<()> {
         .on_selected_candidate_pair_change(Box::new(move |_: RTCIceCandidatePair| {
             sender_called_candidate_change2.store(1, Ordering::SeqCst);
             Box::pin(async {})
-        }))
-        .await;
+        }));
     let track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
@@ -307,32 +311,22 @@ async fn test_get_stats() -> Result<()> {
         .expect("Failed to add track");
     let (packet_tx, packet_rx) = mpsc::channel(1);
 
-    pc_answer
-        .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
-                let packet_tx = packet_tx.clone();
-                let result = Box::pin(async move {});
-                let track = match track {
-                    Some(t) => t,
-                    None => return result,
-                };
+    pc_answer.on_track(Box::new(move |track, _, _| {
+        let packet_tx = packet_tx.clone();
+        tokio::spawn(async move {
+            while let Ok((pkt, _)) = track.read_rtp().await {
+                dbg!(&pkt);
+                let last = pkt.payload[pkt.payload.len() - 1];
 
-                tokio::spawn(async move {
-                    while let Ok((pkt, _)) = track.read_rtp().await {
-                        dbg!(&pkt);
-                        let last = pkt.payload[pkt.payload.len() - 1];
+                if last == 0xAA {
+                    let _ = packet_tx.send(()).await;
+                    break;
+                }
+            }
+        });
 
-                        if last == 0xAA {
-                            let _ = packet_tx.send(()).await;
-                            break;
-                        }
-                    }
-                });
-
-                Box::pin(async move {})
-            },
-        ))
-        .await;
+        Box::pin(async move {})
+    }));
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 
@@ -384,6 +378,46 @@ async fn test_get_stats() -> Result<()> {
     assert_eq!(inbound_stats.header_bytes_received, 12);
 
     close_pair_now(&pc_offer, &pc_answer).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_peer_connection_close_is_send() -> Result<()> {
+    let handle = tokio::spawn(async move { peer().await });
+    tokio::join!(handle).0.unwrap()
+}
+
+async fn peer() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let mut registry = Registry::new();
+    registry = register_default_interceptors(registry, &mut m)?;
+    let api = APIBuilder::new()
+        .with_media_engine(m)
+        .with_interceptor_registry(registry)
+        .build();
+
+    let config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let peer_connection = Arc::new(api.new_peer_connection(config).await?);
+
+    let offer = peer_connection.create_offer(None).await?;
+    let mut gather_complete = peer_connection.gathering_complete_promise().await;
+    peer_connection.set_local_description(offer).await?;
+    let _ = gather_complete.recv().await;
+
+    if peer_connection.local_description().await.is_some() {
+        //TODO?
+    }
+
+    peer_connection.close().await?;
 
     Ok(())
 }

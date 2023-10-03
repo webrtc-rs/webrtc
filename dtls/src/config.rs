@@ -1,12 +1,13 @@
+use std::sync::Arc;
+
+use tokio::time::Duration;
+
 use crate::cipher_suite::*;
 use crate::crypto::*;
 use crate::error::*;
 use crate::extension::extension_use_srtp::SrtpProtectionProfile;
 use crate::handshaker::VerifyPeerCertificateFn;
 use crate::signature_hash_algorithm::SignatureScheme;
-
-use std::sync::Arc;
-use tokio::time::Duration;
 
 /// Config is used to configure a DTLS client or server.
 /// After a Config is passed to a DTLS function it must not be modified.
@@ -58,6 +59,9 @@ pub struct Config {
     /// to be vulnerable.
     pub insecure_hashes: bool,
 
+    /// insecure_verification allows the use of verification algorithms that are
+    /// known to be vulnerable or deprecated
+    pub insecure_verification: bool,
     /// VerifyPeerCertificate, if not nil, is called after normal
     /// certificate verification by either a client or server. It
     /// receives the certificate provided by the peer and also a flag
@@ -112,6 +116,7 @@ impl Default for Config {
             psk_identity_hint: None,
             insecure_skip_verify: false,
             insecure_hashes: false,
+            insecure_verification: false,
             verify_peer_certificate: None,
             roots_cas: rustls::RootCertStore::empty(),
             client_cas: rustls::RootCertStore::empty(),
@@ -130,8 +135,9 @@ pub(crate) type PskCallback = Arc<dyn (Fn(&[u8]) -> Result<Vec<u8>>) + Send + Sy
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum ClientAuthType {
+    #[default]
     NoClientCert = 0,
     RequestClientCert = 1,
     RequireAnyClientCert = 2,
@@ -139,25 +145,14 @@ pub enum ClientAuthType {
     RequireAndVerifyClientCert = 4,
 }
 
-impl Default for ClientAuthType {
-    fn default() -> Self {
-        ClientAuthType::NoClientCert
-    }
-}
-
 // ExtendedMasterSecretType declares the policy the client and server
 // will follow for the Extended Master Secret extension
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Copy, Clone)]
 pub enum ExtendedMasterSecretType {
+    #[default]
     Request = 0,
     Require = 1,
     Disable = 2,
-}
-
-impl Default for ExtendedMasterSecretType {
-    fn default() -> Self {
-        ExtendedMasterSecretType::Request
-    }
 }
 
 pub(crate) fn validate_config(is_client: bool, config: &Config) -> Result<()> {

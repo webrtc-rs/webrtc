@@ -1,3 +1,9 @@
+use std::time::SystemTime;
+
+use rand::Rng;
+use util::conn::conn_pipe::*;
+use util::KeyingMaterialExporter;
+
 use super::*;
 use crate::cipher_suite::cipher_suite_aes_128_gcm_sha256::*;
 use crate::cipher_suite::*;
@@ -8,6 +14,7 @@ use crate::error::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_supported_signature_algorithms::*;
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use crate::extension::*;
 use crate::handshake::handshake_message_certificate::*;
 use crate::handshake::handshake_message_client_hello::*;
@@ -17,12 +24,6 @@ use crate::handshake::handshake_message_server_hello_done::*;
 use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
-
-use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
-use rand::Rng;
-use std::time::SystemTime;
-use util::conn::conn_pipe::*;
-use util::KeyingMaterialExporter;
 
 const ERR_TEST_PSK_INVALID_IDENTITY: &str = "TestPSK: Server got invalid identity";
 const ERR_PSK_REJECTED: &str = "PSK Rejected";
@@ -205,7 +206,7 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<()> {
             Error::ErrSequenceNumberOverflow.to_string()
         );
     } else {
-        assert!(false, "Expected error but it is OK");
+        panic!("Expected error but it is OK");
     }
 
     cb.close().await?;
@@ -216,7 +217,7 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<()> {
             Error::ErrSequenceNumberOverflow.to_string()
         );
     } else {
-        assert!(false, "Expected error but it is OK");
+        panic!("Expected error but it is OK");
     }
 
     {
@@ -281,7 +282,7 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<()> {
             Error::ErrSequenceNumberOverflow.to_string()
         );
     } else {
-        assert!(false, "Expected error but it is OK");
+        panic!("Expected error but it is OK");
     }
 
     cb.close().await?;
@@ -363,17 +364,10 @@ async fn test_handshake_with_alert() -> Result<()> {
             assert_eq!(
                 err.to_string(),
                 err_server.to_string(),
-                "{} Server error exp({}) failed({})",
-                name,
-                err_server,
-                err
+                "{name} Server error exp({err_server}) failed({err})"
             );
         } else {
-            assert!(
-                false,
-                "{} expected error but create_test_server return OK",
-                name
-            );
+            panic!("{name} expected error but create_test_server return OK");
         }
 
         let result_client = client_err_rx.recv().await;
@@ -382,17 +376,10 @@ async fn test_handshake_with_alert() -> Result<()> {
                 assert_eq!(
                     err.to_string(),
                     err_client.to_string(),
-                    "{} Client error exp({}) failed({})",
-                    name,
-                    err_client,
-                    err
+                    "{name} Client error exp({err_client}) failed({err})"
                 );
             } else {
-                assert!(
-                    false,
-                    "{} expected error but create_test_client return OK",
-                    name
-                );
+                panic!("{name} expected error but create_test_client return OK");
             }
         }
     }
@@ -462,7 +449,7 @@ async fn test_export_keying_material() -> Result<()> {
             err,
         );
     } else {
-        assert!(false, "expect error but export_keying_material returns OK");
+        panic!("expect error but export_keying_material returns OK");
     }
 
     c.set_local_epoch(1);
@@ -476,7 +463,7 @@ async fn test_export_keying_material() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expect error but export_keying_material returns OK");
+        panic!("expect error but export_keying_material returns OK");
     }
 
     for k in INVALID_KEYING_LABELS.iter() {
@@ -490,7 +477,7 @@ async fn test_export_keying_material() -> Result<()> {
                 err,
             );
         } else {
-            assert!(false, "expect error but export_keying_material returns OK");
+            panic!("expect error but export_keying_material returns OK");
         }
     }
 
@@ -568,19 +555,14 @@ async fn test_psk() -> Result<()> {
         let actual_psk_identity_hint = &server.connection_state().await.identity_hint;
         assert_eq!(
             actual_psk_identity_hint, client_identity,
-            "TestPSK: Server ClientPSKIdentity Mismatch '{}': expected({:?}) actual({:?})",
-            name, client_identity, actual_psk_identity_hint,
+            "TestPSK: Server ClientPSKIdentity Mismatch '{name}': expected({client_identity:?}) actual({actual_psk_identity_hint:?})",
         );
 
         if let Some(result) = client_res_rx.recv().await {
             if let Ok(client) = result {
                 client.close().await?;
             } else {
-                assert!(
-                    false,
-                    "{}: Expected create_test_client successfully, but got error",
-                    name,
-                );
+                panic!("{name}: Expected create_test_client successfully, but got error",);
             }
         }
 
@@ -638,7 +620,7 @@ async fn test_psk_hint_fail() -> Result<()> {
             server_err,
         );
     } else {
-        assert!(false, "Expected server error, but got OK");
+        panic!("Expected server error, but got OK");
     }
 
     let result = client_res_rx.recv().await;
@@ -646,12 +628,10 @@ async fn test_psk_hint_fail() -> Result<()> {
         if let Err(client_err) = client {
             assert!(
                 client_err.to_string().contains(ERR_PSK_REJECTED),
-                "TestPSK: Client error exp({}) failed({})",
-                ERR_PSK_REJECTED,
-                client_err,
+                "TestPSK: Client error exp({ERR_PSK_REJECTED}) failed({client_err})",
             );
         } else {
-            assert!(false, "Expected client error, but got OK");
+            panic!("Expected client error, but got OK");
         }
     }
 
@@ -691,15 +671,7 @@ async fn test_client_timeout() -> Result<()> {
     // no server!
     let result = client_res_rx.recv().await;
     if let Some(client_timeout_result) = result {
-        if let Err(err) = client_timeout_result {
-            assert!(
-                true,
-                "Client error exp(Temporary network error) failed({})",
-                err
-            );
-        } else {
-            assert!(false, "Expected Error but got Ok");
-        }
+        assert!(client_timeout_result.is_err(), "Expected Error but got Ok");
     }
 
     Ok(())
@@ -724,6 +696,7 @@ async fn test_srtp_configuration() -> Result<()> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
+    #[allow(clippy::type_complexity)]
     let tests: Vec<(
         &str,
         Vec<SrtpProtectionProfile>,
@@ -820,24 +793,20 @@ async fn test_srtp_configuration() -> Result<()> {
                 assert_eq!(
                     err.to_string(),
                     expected_err.to_string(),
-                    "{} TestPSK: Server error exp({}) failed({})",
-                    name,
-                    expected_err,
-                    err,
+                    "{name} TestPSK: Server error exp({expected_err}) failed({err})",
                 );
             } else {
-                assert!(false, "{} expected error, but got ok", name);
+                panic!("{name} expected error, but got ok");
             }
         } else {
             match result {
                 Ok(server) => {
                     let actual_server_srtp = server.selected_srtpprotection_profile();
                     assert_eq!(actual_server_srtp, expected_profile,
-                               "test_srtp_configuration: Server SRTPProtectionProfile Mismatch '{}': expected({:?}) actual({:?})",
-                               name, expected_profile, actual_server_srtp);
+                               "test_srtp_configuration: Server SRTPProtectionProfile Mismatch '{name}': expected({expected_profile:?}) actual({actual_server_srtp:?})");
                 }
                 Err(err) => {
-                    assert!(false, "{} expected no error: {}", name, err);
+                    panic!("{name} expected no error: {err}");
                 }
             };
         }
@@ -849,23 +818,20 @@ async fn test_srtp_configuration() -> Result<()> {
                     assert_eq!(
                         err.to_string(),
                         expected_err.to_string(),
-                        "TestPSK: Client error exp({}) failed({})",
-                        expected_err,
-                        err,
+                        "TestPSK: Client error exp({expected_err}) failed({err})",
                     );
                 } else {
-                    assert!(false, "{} expected error, but got ok", name);
+                    panic!("{name} expected error, but got ok");
                 }
             } else if let Ok(client) = result {
                 let actual_client_srtp = client.selected_srtpprotection_profile();
                 assert_eq!(actual_client_srtp, expected_profile,
-                           "test_srtp_configuration: Client SRTPProtectionProfile Mismatch '{}': expected({:?}) actual({:?})",
-                           name, expected_profile, actual_client_srtp);
+                           "test_srtp_configuration: Client SRTPProtectionProfile Mismatch '{name}': expected({expected_profile:?}) actual({actual_client_srtp:?})");
             } else {
-                assert!(false, "{} expected no error", name);
+                panic!("{name} expected no error");
             }
         } else {
-            assert!(false, "{} expected client, but got none", name);
+            panic!("{name} expected client, but got none");
         }
     }
 
@@ -1071,7 +1037,7 @@ async fn test_client_certificate() -> Result<()> {
             if result.is_err() {
                 continue;
             }
-            assert!(false, "{} Error expected", name);
+            panic!("{name} Error expected");
         }
 
         assert!(
@@ -1080,7 +1046,7 @@ async fn test_client_certificate() -> Result<()> {
             name,
             result.err().unwrap()
         );
-        assert!(client_result.is_some(), "{}, expected client conn", name);
+        assert!(client_result.is_some(), "{name}, expected client conn");
 
         let res = client_result.unwrap();
         assert!(
@@ -1099,31 +1065,27 @@ async fn test_client_certificate() -> Result<()> {
         {
             assert!(
                 !actual_client_cert.is_empty(),
-                "{} Client did not provide a certificate",
-                name,
+                "{name} Client did not provide a certificate",
             );
             //if actual_client_cert.len() != len(tt.clientCfg.Certificates[0].Certificate) || !bytes.Equal(tt.clientCfg.Certificates[0].Certificate[0], actual_client_cert[0]) {
             assert_eq!(
                 actual_client_cert[0],
                 client_cfg.certificates[0].certificate[0].as_ref(),
-                "{} Client certificate was not communicated correctly",
-                name,
+                "{name} Client certificate was not communicated correctly",
             );
         }
 
         if server_cfg.client_auth == ClientAuthType::NoClientCert {
             assert!(
                 actual_client_cert.is_empty(),
-                "{} Client certificate wasn't expected",
-                name,
+                "{name} Client certificate wasn't expected",
             );
         }
 
         let actual_server_cert = &client.connection_state().await.peer_certificates;
         assert!(
             !actual_server_cert.is_empty(),
-            "{} Server did not provide a certificate",
-            name,
+            "{name} Server did not provide a certificate",
         );
 
         /*if len(actual_server_cert) != len(tt.serverCfg.Certificates[0].Certificate)
@@ -1134,14 +1096,12 @@ async fn test_client_certificate() -> Result<()> {
         assert_eq!(
             actual_server_cert[0].len(),
             server_cfg.certificates[0].certificate[0].as_ref().len(),
-            "{} Server certificate was not communicated correctly",
-            name,
+            "{name} Server certificate was not communicated correctly",
         );
         assert_eq!(
             actual_server_cert[0],
             server_cfg.certificates[0].certificate[0].as_ref(),
-            "{} Server certificate was not communicated correctly",
-            name,
+            "{name} Server certificate was not communicated correctly",
         );
     }
 
@@ -1296,7 +1256,7 @@ async fn test_extended_master_secret() -> Result<()> {
 
         let result = create_test_server(Arc::new(cb), server_cfg.clone(), true).await;
         let client_result = client_res_rx.recv().await;
-        assert!(client_result.is_some(), "{}, expected client conn", name);
+        assert!(client_result.is_some(), "{name}, expected client conn");
         let res = client_result.unwrap();
 
         if let Some(client_err) = expected_client_err {
@@ -1304,15 +1264,13 @@ async fn test_extended_master_secret() -> Result<()> {
                 assert_eq!(
                     err.to_string(),
                     client_err.to_string(),
-                    "Client error expected: \"{}\" but got \"{}\"",
-                    client_err,
-                    err,
+                    "Client error expected: \"{client_err}\" but got \"{err}\"",
                 );
             } else {
-                assert!(false, "{} expected err, but got ok", name);
+                panic!("{name} expected err, but got ok");
             }
         } else {
-            assert!(res.is_ok(), "{} expected ok, but got err", name);
+            assert!(res.is_ok(), "{name} expected ok, but got err");
         }
 
         if let Some(server_err) = expected_server_err {
@@ -1320,15 +1278,13 @@ async fn test_extended_master_secret() -> Result<()> {
                 assert_eq!(
                     err.to_string(),
                     server_err.to_string(),
-                    "Server error expected: \"{}\" but got \"{}\"",
-                    server_err,
-                    err,
+                    "Server error expected: \"{server_err}\" but got \"{err}\"",
                 );
             } else {
-                assert!(false, "{} expected err, but got ok", name);
+                panic!("{name} expected err, but got ok");
             }
         } else {
-            assert!(result.is_ok(), "{} expected ok, but got err", name);
+            assert!(result.is_ok(), "{name} expected ok, but got err");
         }
     }
 
@@ -1509,15 +1465,10 @@ async fn test_server_certificate() -> Result<()> {
         let cli_result = DTLSConn::new(Arc::new(ca), client_cfg, true, None).await;
 
         if !want_err && cli_result.is_err() {
-            assert!(
-                false,
-                "{}: Client failed({})",
-                name,
-                cli_result.err().unwrap()
-            );
+            panic!("{}: Client failed({})", name, cli_result.err().unwrap());
         }
         if want_err && cli_result.is_ok() {
-            assert!(false, "{}: Error expected", name);
+            panic!("{name}: Error expected");
         }
 
         let _ = res_rx.recv().await;
@@ -1636,16 +1587,13 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                 assert_eq!(
                     err.to_string(),
                     expected_err.to_string(),
-                    "{} test_cipher_suite_configuration: Server error exp({}) failed({})",
-                    name,
-                    expected_err,
-                    err,
+                    "{name} test_cipher_suite_configuration: Server error exp({expected_err}) failed({err})",
                 );
             } else {
-                assert!(false, "{} expected error, but got ok", name);
+                panic!("{name} expected error, but got ok");
             }
         } else {
-            assert!(result.is_ok(), "{} expected ok, but got error", name)
+            assert!(result.is_ok(), "{name} expected ok, but got error")
         }
 
         let client_result = client_res_rx.recv().await;
@@ -1655,24 +1603,17 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                     assert_eq!(
                         err.to_string(),
                         expected_err.to_string(),
-                        "{} test_cipher_suite_configuration: Client error exp({}) failed({})",
-                        name,
-                        expected_err,
-                        err,
+                        "{name} test_cipher_suite_configuration: Client error exp({expected_err}) failed({err})",
                     );
                 } else {
-                    assert!(false, "{} expected error, but got ok", name);
+                    panic!("{name} expected error, but got ok");
                 }
             } else {
-                assert!(result.is_ok(), "{} expected ok, but got error", name);
+                assert!(result.is_ok(), "{name} expected ok, but got error");
                 let client = result.unwrap();
                 if let Some(want_cs) = want_selected_cipher_suite {
                     let cipher_suite = client.state.cipher_suite.lock().await;
-                    assert!(
-                        cipher_suite.is_some(),
-                        "{} expected some, but got none",
-                        name
-                    );
+                    assert!(cipher_suite.is_some(), "{name} expected some, but got none");
                     if let Some(cs) = &*cipher_suite {
                         assert_eq!(cs.id(), want_cs,
                                    "test_cipher_suite_configuration: Server Selected Bad Cipher Suite '{}': expected({}) actual({})", 
@@ -1681,7 +1622,7 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                 }
             }
         } else {
-            assert!(false, "{} expected Some, but got None", name);
+            panic!("{name} expected Some, but got None");
         }
     }
 
@@ -1801,16 +1742,13 @@ async fn test_psk_configuration() -> Result<()> {
                 assert_eq!(
                     err.to_string(),
                     expected_err.to_string(),
-                    "{} test_psk_configuration: Server error exp({}) failed({})",
-                    name,
-                    expected_err,
-                    err,
+                    "{name} test_psk_configuration: Server error exp({expected_err}) failed({err})",
                 );
             } else {
-                assert!(false, "{} expected error, but got ok", name);
+                panic!("{name} expected error, but got ok");
             }
         } else {
-            assert!(result.is_ok(), "{} expected ok, but got error", name)
+            assert!(result.is_ok(), "{name} expected ok, but got error")
         }
 
         let client_result = client_res_rx.recv().await;
@@ -1820,19 +1758,16 @@ async fn test_psk_configuration() -> Result<()> {
                     assert_eq!(
                         err.to_string(),
                         expected_err.to_string(),
-                        "{} test_psk_configuration: Client error exp({}) failed({})",
-                        name,
-                        expected_err,
-                        err,
+                        "{name} test_psk_configuration: Client error exp({expected_err}) failed({err})",
                     );
                 } else {
-                    assert!(false, "{} expected error, but got ok", name);
+                    panic!("{name} expected error, but got ok");
                 }
             } else {
-                assert!(result.is_ok(), "{} expected ok, but got error", name);
+                assert!(result.is_ok(), "{name} expected ok, but got error");
             }
         } else {
-            assert!(false, "{} expected Some, but got None", name);
+            panic!("{name} expected Some, but got None");
         }
     }
 
@@ -1983,15 +1918,7 @@ async fn test_server_timeout() -> Result<()> {
         create_test_server(Arc::new(cb), config, true),
     )
     .await;
-    if let Err(err) = result {
-        assert!(
-            true,
-            "Sever error exp(Temporary network error) failed({})",
-            err
-        );
-    } else {
-        assert!(false, "Expected Error but got Ok");
-    }
+    assert!(result.is_err(), "Expected Error but got Ok");
 
     // Wait a little longer to ensure no additional messages have been sent by the server
     //tokio::time::sleep(Duration::from_millis(300)).await;
@@ -2134,11 +2061,11 @@ async fn test_protocol_version_validation() -> Result<()> {
                                 err,
                             );
                         } else {
-                            assert!(false, "{} expected error, but got ok", name);
+                            panic!("{name} expected error, but got ok");
                         }
                     }
                     Err(err) => {
-                        assert!(false, "server timeout {}", err);
+                        panic!("server timeout {err}");
                     }
                 };
             });
@@ -2274,11 +2201,11 @@ async fn test_protocol_version_validation() -> Result<()> {
                                 err,
                             );
                         } else {
-                            assert!(false, "{} expected error, but got ok", name);
+                            panic!("{name} expected error, but got ok");
                         }
                     }
                     Err(err) => {
-                        assert!(false, "server timeout {}", err);
+                        panic!("server timeout {err}");
                     }
                 };
             });
@@ -2390,9 +2317,9 @@ async fn test_multiple_hello_verify_request() -> Result<()> {
                         i, &client_hello.cookie, cookie
                     );
                 }
-                _ => assert!(false, "unexpected handshake message"),
+                _ => panic!("unexpected handshake message"),
             },
-            _ => assert!(false, "unexpected content"),
+            _ => panic!("unexpected content"),
         };
 
         if packets.len() <= i {
@@ -2447,7 +2374,7 @@ async fn send_client_hello(
 // a ClientHello contained that extension or not
 #[cfg(not(target_os = "windows"))] // this times out in CI on windows.
 #[tokio::test]
-async fn test_renegotation_info() -> Result<()> {
+async fn test_renegotiation_info() -> Result<()> {
     let mut resp = vec![0u8; 1024];
 
     let tests = vec![
@@ -2480,13 +2407,11 @@ async fn test_renegotation_info() -> Result<()> {
             Content::Handshake(h) => match h.handshake_message {
                 HandshakeMessage::HelloVerifyRequest(hvr) => hvr,
                 _ => {
-                    assert!(false, "unexpected handshake message");
-                    return Ok(());
+                    panic!("unexpected handshake message");
                 }
             },
             _ => {
-                assert!(false, "unexpected content");
-                return Ok(());
+                panic!("unexpected content");
             }
         };
 
@@ -2507,30 +2432,22 @@ async fn test_renegotation_info() -> Result<()> {
             Content::Handshake(h) => match h.handshake_message {
                 HandshakeMessage::ServerHello(sh) => sh,
                 _ => {
-                    assert!(false, "unexpected handshake message");
-                    return Ok(());
+                    panic!("unexpected handshake message");
                 }
             },
             _ => {
-                assert!(false, "unexpected content");
-                return Ok(());
+                panic!("unexpected content");
             }
         };
 
-        let mut got_negotation_info = false;
-        for v in &server_hello.extensions {
-            match v {
-                Extension::RenegotiationInfo(_) => {
-                    got_negotation_info = true;
-                }
-                _ => {}
-            }
-        }
+        let got_negotiation_info = server_hello
+            .extensions
+            .iter()
+            .any(|v| matches!(v, Extension::RenegotiationInfo(_)));
 
         assert!(
-            got_negotation_info,
-            "{}: Received ServerHello without RenegotiationInfo",
-            name
+            got_negotiation_info,
+            "{name}: Received ServerHello without RenegotiationInfo"
         );
 
         ca.close().await?;

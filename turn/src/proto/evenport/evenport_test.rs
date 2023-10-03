@@ -6,16 +6,14 @@ fn test_even_port_string() -> Result<(), stun::Error> {
     assert_eq!(
         p.to_string(),
         "reserve: false",
-        "bad value {} for reselve: false",
-        p
+        "bad value {p} for reselve: false"
     );
 
     p.reserve_port = true;
     assert_eq!(
         p.to_string(),
         "reserve: true",
-        "bad value {} for reselve: true",
-        p
+        "bad value {p} for reselve: true"
     );
 
     Ok(())
@@ -51,7 +49,7 @@ fn test_even_port_add_to() -> Result<(), stun::Error> {
         decoded.write(&m.raw)?;
         let mut port = EvenPort::default();
         port.get_from(&decoded)?;
-        assert_eq!(port, p, "Decoded {}, expected {}", port, p);
+        assert_eq!(port, p, "Decoded {port}, expected {p}");
 
         //"HandleErr"
         {
@@ -61,8 +59,7 @@ fn test_even_port_add_to() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             }
             m.add(ATTR_EVEN_PORT, &[1, 2, 3]);
@@ -72,7 +69,7 @@ fn test_even_port_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
         }
     }

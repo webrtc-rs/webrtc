@@ -4,10 +4,9 @@ mod prf_test;
 use std::convert::TryInto;
 use std::fmt;
 
-use hmac::{Hmac, Mac, NewMac};
+use hmac::{Hmac, Mac};
 use sha1::Sha1;
-use sha2::Digest;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha1 = Hmac<Sha1>;
@@ -47,7 +46,7 @@ impl fmt::Display for EncryptionKeys {
         out += format!("- client_write_iv: {:?}\n", self.client_write_iv).as_str();
         out += format!("- server_write_iv: {:?}\n", self.server_write_iv).as_str();
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 
@@ -143,7 +142,7 @@ fn elliptic_curve_pre_master_secret(
 fn hmac_sha(h: CipherSuiteHash, key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     let mut mac = match h {
         CipherSuiteHash::Sha256 => {
-            HmacSha256::new_varkey(key).map_err(|e| Error::Other(e.to_string()))?
+            HmacSha256::new_from_slice(key).map_err(|e| Error::Other(e.to_string()))?
         }
     };
     mac.update(data);
@@ -298,7 +297,7 @@ pub(crate) fn prf_mac(
     payload: &[u8],
     key: &[u8],
 ) -> Result<Vec<u8>> {
-    let mut hmac = HmacSha1::new_varkey(key).map_err(|e| Error::Other(e.to_string()))?;
+    let mut hmac = HmacSha1::new_from_slice(key).map_err(|e| Error::Other(e.to_string()))?;
 
     let mut msg = vec![0u8; 13];
     msg[..2].copy_from_slice(&epoch.to_be_bytes());

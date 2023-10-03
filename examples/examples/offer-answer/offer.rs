@@ -1,11 +1,12 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -16,10 +17,9 @@ use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit}
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
+use webrtc::peer_connection::{math_rand_alpha, RTCPeerConnection};
 
 #[macro_use]
 extern crate lazy_static;
@@ -36,16 +36,16 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
     );*/
-    let payload = c.to_json().await?.candidate;
+    let payload = c.to_json()?.candidate;
     let req = match Request::builder()
         .method(Method::POST)
-        .uri(format!("http://{}/candidate", addr))
+        .uri(format!("http://{addr}/candidate"))
         .header("content-type", "application/json; charset=utf-8")
         .body(Body::from(payload))
     {
         Ok(req) => req,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };
@@ -53,7 +53,7 @@ async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     let _resp = match Client::new().request(req).await {
         Ok(resp) => resp,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };
@@ -238,30 +238,28 @@ async fn main() -> Result<()> {
     let pc = Arc::downgrade(&peer_connection);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = answer_addr.clone();
-    peer_connection
-        .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            //println!("on_ice_candidate {:?}", c);
+    peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+        //println!("on_ice_candidate {:?}", c);
 
-            let pc2 = pc.clone();
-            let pending_candidates3 = Arc::clone(&pending_candidates2);
-            let addr3 = addr2.clone();
-            Box::pin(async move {
-                if let Some(c) = c {
-                    if let Some(pc) = pc2.upgrade() {
-                        let desc = pc.remote_description().await;
-                        if desc.is_none() {
-                            let mut cs = pending_candidates3.lock().await;
-                            cs.push(c);
-                        } else if let Err(err) = signal_candidate(&addr3, &c).await {
-                            assert!(false, "{}", err);
-                        }
+        let pc2 = pc.clone();
+        let pending_candidates3 = Arc::clone(&pending_candidates2);
+        let addr3 = addr2.clone();
+        Box::pin(async move {
+            if let Some(c) = c {
+                if let Some(pc) = pc2.upgrade() {
+                    let desc = pc.remote_description().await;
+                    if desc.is_none() {
+                        let mut cs = pending_candidates3.lock().await;
+                        cs.push(c);
+                    } else if let Err(err) = signal_candidate(&addr3, &c).await {
+                        panic!("{}", err);
                     }
                 }
-            })
-        }))
-        .await;
+            }
+        })
+    }));
 
-    println!("Listening on http://{}", offer_addr);
+    println!("Listening on http://{offer_addr}");
     {
         let mut pcm = PEER_CONNECTION_MUTEX.lock().await;
         *pcm = Some(Arc::clone(&peer_connection));
@@ -274,7 +272,7 @@ async fn main() -> Result<()> {
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 
@@ -285,21 +283,19 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Register channel opening handling
     let d1 = Arc::clone(&data_channel);
@@ -316,23 +312,21 @@ async fn main() -> Result<()> {
                 tokio::select! {
                     _ = timeout.as_mut() =>{
                         let message = math_rand_alpha(15);
-                        println!("Sending '{}'", message);
+                        println!("Sending '{message}'");
                         result = d2.send_text(message).await.map_err(Into::into);
                     }
                 };
             }
         })
-    })).await;
+    }));
 
     // Register text message handling
     let d_label = data_channel.label().to_owned();
-    data_channel
-        .on_message(Box::new(move |msg: DataChannelMessage| {
-            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-            println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
-            Box::pin(async {})
-        }))
-        .await;
+    data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
+        let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+        println!("Message from DataChannel '{d_label}': '{msg_str}'");
+        Box::pin(async {})
+    }));
 
     // Create an offer to send to the other process
     let offer = peer_connection.create_offer(None).await?;
@@ -350,7 +344,7 @@ async fn main() -> Result<()> {
     //println!("Post: {}", format!("http://{}/sdp", answer_addr));
     let req = match Request::builder()
         .method(Method::POST)
-        .uri(format!("http://{}/sdp", answer_addr))
+        .uri(format!("http://{answer_addr}/sdp"))
         .header("content-type", "application/json; charset=utf-8")
         .body(Body::from(payload))
     {
@@ -361,7 +355,7 @@ async fn main() -> Result<()> {
     let _resp = match Client::new().request(req).await {
         Ok(resp) => resp,
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             return Err(err.into());
         }
     };
@@ -373,7 +367,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 

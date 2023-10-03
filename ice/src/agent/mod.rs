@@ -14,35 +14,41 @@ pub mod agent_selector;
 pub mod agent_stats;
 pub mod agent_transport;
 
+use std::collections::HashMap;
+use std::future::Future;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::pin::Pin;
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use agent_config::*;
+use agent_internal::*;
+use agent_stats::*;
+use mdns::conn::*;
+use stun::agent::*;
+use stun::attributes::*;
+use stun::fingerprint::*;
+use stun::integrity::*;
+use stun::message::*;
+use stun::xoraddr::*;
+use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::time::{Duration, Instant};
+use util::vnet::net::*;
+use util::Buffer;
+
+use crate::agent::agent_gather::GatherCandidatesInternalParams;
 use crate::candidate::*;
 use crate::error::*;
 use crate::external_ip_mapper::*;
 use crate::mdns::*;
 use crate::network_type::*;
+use crate::rand::*;
 use crate::state::*;
+use crate::tcp_type::TcpType;
 use crate::udp_mux::UDPMux;
 use crate::udp_network::UDPNetwork;
 use crate::url::*;
-use agent_config::*;
-use agent_internal::*;
-use agent_stats::*;
-
-use mdns::conn::*;
-use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr};
-use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xoraddr::*};
-use util::{vnet::net::*, Buffer};
-
-use crate::agent::agent_gather::GatherCandidatesInternalParams;
-use crate::rand::*;
-use crate::tcp_type::TcpType;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::sync::{broadcast, mpsc, Mutex};
-use tokio::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub(crate) struct BindingRequest {
@@ -125,10 +131,7 @@ impl Agent {
             return Err(Error::ErrInvalidMulticastDnshostName);
         }
 
-        let mut mdns_mode = config.multicast_dns_mode;
-        if mdns_mode == MulticastDnsMode::Unspecified {
-            mdns_mode = MulticastDnsMode::QueryOnly;
-        }
+        let mdns_mode = config.multicast_dns_mode;
 
         let mdns_conn =
             match create_multicast_dns(mdns_mode, &mdns_name, &config.multicast_dns_dest_addr) {
@@ -210,14 +213,11 @@ impl Agent {
             gather_candidate_cancel: None, //TODO: add cancel
         };
 
-        agent
-            .internal
-            .start_on_connection_state_change_routine(
-                chan_state_rx,
-                chan_candidate_rx,
-                chan_candidate_pair_rx,
-            )
-            .await;
+        agent.internal.start_on_connection_state_change_routine(
+            chan_state_rx,
+            chan_candidate_rx,
+            chan_candidate_pair_rx,
+        );
 
         // Restart is also used to initialize the agent for the first time
         if let Err(err) = agent.restart(config.local_ufrag, config.local_pwd).await {
@@ -229,40 +229,38 @@ impl Agent {
         Ok(agent)
     }
 
-    pub async fn get_bytes_received(&self) -> usize {
+    pub fn get_bytes_received(&self) -> usize {
         self.internal.agent_conn.bytes_received()
     }
 
-    pub async fn get_bytes_sent(&self) -> usize {
+    pub fn get_bytes_sent(&self) -> usize {
         self.internal.agent_conn.bytes_sent()
     }
 
     /// Sets a handler that is fired when the connection state changes.
-    pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
-        let mut on_connection_state_change_hdlr =
-            self.internal.on_connection_state_change_hdlr.lock().await;
-        *on_connection_state_change_hdlr = Some(f);
+    pub fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
+        self.internal
+            .on_connection_state_change_hdlr
+            .store(Some(Arc::new(Mutex::new(f))))
     }
 
     /// Sets a handler that is fired when the final candidate pair is selected.
-    pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
-        let mut on_selected_candidate_pair_change_hdlr = self
-            .internal
+    pub fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
+        self.internal
             .on_selected_candidate_pair_change_hdlr
-            .lock()
-            .await;
-        *on_selected_candidate_pair_change_hdlr = Some(f);
+            .store(Some(Arc::new(Mutex::new(f))))
     }
 
     /// Sets a handler that is fired when new candidates gathered. When the gathering process
     /// complete the last candidate is nil.
-    pub async fn on_candidate(&self, f: OnCandidateHdlrFn) {
-        let mut on_candidate_hdlr = self.internal.on_candidate_hdlr.lock().await;
-        *on_candidate_hdlr = Some(f);
+    pub fn on_candidate(&self, f: OnCandidateHdlrFn) {
+        self.internal
+            .on_candidate_hdlr
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// Adds a new remote candidate.
-    pub async fn add_remote_candidate(&self, c: &Arc<dyn Candidate + Send + Sync>) -> Result<()> {
+    pub fn add_remote_candidate(&self, c: &Arc<dyn Candidate + Send + Sync>) -> Result<()> {
         // cannot check for network yet because it might not be applied
         // when mDNS hostame is used.
         if c.tcp_type() == TcpType::Active {
@@ -353,8 +351,8 @@ impl Agent {
     }
 
     /// Returns the selected pair or nil if there is none
-    pub async fn get_selected_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
-        self.internal.agent_conn.get_selected_pair().await
+    pub fn get_selected_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
+        self.internal.agent_conn.get_selected_pair()
     }
 
     /// Sets the credentials of the remote agent.
@@ -437,16 +435,13 @@ impl Agent {
     }
 
     /// Initiates the trickle based gathering process.
-    pub async fn gather_candidates(&self) -> Result<()> {
+    pub fn gather_candidates(&self) -> Result<()> {
         if self.gathering_state.load(Ordering::SeqCst) != GatheringState::New as u8 {
             return Err(Error::ErrMultipleGatherAttempted);
         }
 
-        {
-            let on_candidate_hdlr = self.internal.on_candidate_hdlr.lock().await;
-            if on_candidate_hdlr.is_none() {
-                return Err(Error::ErrNoOnCandidateHandler);
-            }
+        if self.internal.on_candidate_hdlr.load().is_none() {
+            return Err(Error::ErrNoOnCandidateHandler);
         }
 
         if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
@@ -506,7 +501,7 @@ impl Agent {
             }
         };
 
-        c.set_ip(&src.ip()).await?;
+        c.set_ip(&src.ip())?;
 
         Ok(c)
     }

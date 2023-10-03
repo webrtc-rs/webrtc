@@ -89,17 +89,16 @@ fn test_parse_url_success() -> Result<()> {
     {
         let url = Url::parse_url(raw_url)?;
 
-        assert_eq!(expected_scheme, url.scheme, "testCase: {:?}", raw_url);
+        assert_eq!(url.scheme, expected_scheme, "testCase: {raw_url:?}");
         assert_eq!(
             expected_url_string,
             url.to_string(),
-            "testCase: {:?}",
-            raw_url
+            "testCase: {raw_url:?}"
         );
-        assert_eq!(expected_secure, url.is_secure(), "testCase: {:?}", raw_url);
-        assert_eq!(expected_host, url.host, "testCase: {:?}", raw_url);
-        assert_eq!(expected_port, url.port, "testCase: {:?}", raw_url);
-        assert_eq!(expected_proto, url.proto, "testCase: {:?}", raw_url);
+        assert_eq!(url.is_secure(), expected_secure, "testCase: {raw_url:?}");
+        assert_eq!(url.host, expected_host, "testCase: {raw_url:?}");
+        assert_eq!(url.port, expected_port, "testCase: {raw_url:?}");
+        assert_eq!(url.proto, expected_proto, "testCase: {raw_url:?}");
     }
 
     Ok(())
@@ -132,10 +131,7 @@ fn test_parse_url_failure() -> Result<()> {
             assert_eq!(
                 err.to_string(),
                 expected_err.to_string(),
-                "testCase: '{}', expected err '{}', but got err '{}'",
-                raw_url,
-                expected_err,
-                err
+                "testCase: '{raw_url}', expected err '{expected_err}', but got err '{err}'"
             );
         } else {
             panic!("expected error, but got ok");

@@ -12,13 +12,12 @@ fn test_new_api() -> Result<()> {
         .with_media_engine(m)
         .build();
 
-    assert_eq!(
-        api.setting_engine.detach.data_channels, true,
+    assert!(
+        api.setting_engine.detach.data_channels,
         "Failed to set settings engine"
     );
-    assert_eq!(
-        api.media_engine.audio_codecs.is_empty(),
-        false,
+    assert!(
+        !api.media_engine.audio_codecs.is_empty(),
         "Failed to set media engine"
     );
 

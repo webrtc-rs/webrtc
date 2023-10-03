@@ -15,7 +15,7 @@ fn test_message_integrity_add_to_simple() -> Result<()> {
         0x84, 0x93, 0xfb, 0xc5, 0x3b, 0xa5, 0x82, 0xfb, 0x4c, 0x04, 0x4c, 0x45, 0x6b, 0xdc, 0x40,
         0xeb,
     ];
-    assert_eq!(expected, i.0, "{}", Error::ErrIntegrityMismatch);
+    assert_eq!(i.0, expected, "{}", Error::ErrIntegrityMismatch);
 
     //"Check"
     {
@@ -55,7 +55,7 @@ fn test_message_integrity_with_fingerprint() -> Result<()> {
     a.add_to(&mut m)?;
 
     let i = MessageIntegrity::new_short_term_integrity("pwd".to_owned());
-    assert_eq!(i.to_string(), "KEY: 0x[70, 77, 64]", "bad string {}", i);
+    assert_eq!(i.to_string(), "KEY: 0x[70, 77, 64]", "bad string {i}");
     let result = i.check(&mut m);
     assert!(result.is_err(), "should error");
 

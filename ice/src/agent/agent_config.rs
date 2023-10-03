@@ -1,14 +1,14 @@
+use std::net::IpAddr;
+use std::time::Duration;
+
+use util::vnet::net::*;
+
 use super::*;
 use crate::error::*;
 use crate::mdns::*;
 use crate::network_type::*;
 use crate::udp_network::UDPNetwork;
 use crate::url::*;
-
-use util::vnet::net::*;
-
-use std::net::IpAddr;
-use std::time::Duration;
 
 /// The interval at which the agent performs candidate checks in the connecting phase.
 pub(crate) const DEFAULT_CHECK_INTERVAL: Duration = Duration::from_millis(200);
@@ -119,7 +119,7 @@ pub struct AgentConfig {
     /// It is used along with nat1to1ips to specify which candidate type the 1:1 NAT IP addresses
     /// should be mapped to. If unspecified or CandidateTypeHost, nat1to1ips are used to replace
     /// host candidate IPs. If CandidateTypeServerReflexive, it will insert a srflx candidate (as
-    /// if it was dervied from a STUN server) with its port number being the one for the actual host
+    /// if it was derived from a STUN server) with its port number being the one for the actual host
     /// candidate.  Other values will result in an error.
     pub nat_1to1_ip_candidate_type: CandidateType,
 

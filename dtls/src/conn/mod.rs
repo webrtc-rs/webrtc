@@ -1,6 +1,19 @@
 #[cfg(test)]
 mod conn_test;
 
+use std::io::{BufReader, BufWriter};
+use std::marker::{Send, Sync};
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use log::*;
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::Duration;
+use util::replay_detector::*;
+use util::Conn;
+
 use crate::alert::*;
 use crate::application_data::*;
 use crate::cipher_suite::*;
@@ -23,18 +36,6 @@ use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::parse_signature_schemes;
 use crate::state::*;
-
-use util::{replay_detector::*, Conn};
-
-use async_trait::async_trait;
-use log::*;
-use std::io::{BufReader, BufWriter};
-use std::marker::{Send, Sync};
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::Duration;
 
 pub(crate) const INITIAL_TICKER_INTERVAL: Duration = Duration::from_secs(1);
 pub(crate) const COOKIE_LENGTH: usize = 20;
@@ -114,7 +115,7 @@ impl Conn for DTLSConn {
         self.read(buf, None).await.map_err(util::Error::from_std)
     }
     async fn recv_from(&self, buf: &mut [u8]) -> UtilResult<(usize, SocketAddr)> {
-        if let Some(raddr) = self.conn.remote_addr().await {
+        if let Some(raddr) = self.conn.remote_addr() {
             let n = self.read(buf, None).await.map_err(util::Error::from_std)?;
             Ok((n, raddr))
         } else {
@@ -129,11 +130,11 @@ impl Conn for DTLSConn {
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> UtilResult<usize> {
         Err(util::Error::Other("Not applicable".to_owned()))
     }
-    async fn local_addr(&self) -> UtilResult<SocketAddr> {
-        self.conn.local_addr().await
+    fn local_addr(&self) -> UtilResult<SocketAddr> {
+        self.conn.local_addr()
     }
-    async fn remote_addr(&self) -> Option<SocketAddr> {
-        self.conn.remote_addr().await
+    fn remote_addr(&self) -> Option<SocketAddr> {
+        self.conn.remote_addr()
     }
     async fn close(&self) -> UtilResult<()> {
         self.close().await.map_err(util::Error::from_std)
@@ -191,7 +192,7 @@ impl DTLSConn {
 
         // Use host from conn address when server_name is not provided
         if is_client && server_name.is_empty() {
-            if let Some(remote_addr) = conn.remote_addr().await {
+            if let Some(remote_addr) = conn.remote_addr() {
                 server_name = remote_addr.ip().to_string();
             } else {
                 log::warn!("conn.remote_addr is empty, please set explicitly server_name in Config! Use default \"localhost\" as server_name now");
@@ -210,15 +211,21 @@ impl DTLSConn {
             client_auth: config.client_auth,
             local_certificates: config.certificates.clone(),
             insecure_skip_verify: config.insecure_skip_verify,
+            insecure_verification: config.insecure_verification,
             verify_peer_certificate: config.verify_peer_certificate.take(),
-            roots_cas: config.roots_cas,
             client_cert_verifier: if config.client_auth as u8
                 >= ClientAuthType::VerifyClientCertIfGiven as u8
             {
-                Some(rustls::AllowAnyAuthenticatedClient::new(config.client_cas))
+                Some(Arc::new(rustls::server::AllowAnyAuthenticatedClient::new(
+                    config.client_cas,
+                )))
             } else {
                 None
             },
+            server_cert_verifier: Arc::new(rustls::client::WebPkiVerifier::new(
+                config.roots_cas,
+                None,
+            )),
             retransmit_interval,
             //log: logger,
             initial_epoch: 0,
@@ -967,7 +974,20 @@ impl DTLSConn {
                     Ok(pkt) => pkt,
                     Err(err) => {
                         debug!("{}: decrypt failed: {}", srv_cli_str(ctx.is_client), err);
-                        return (false, None, None);
+
+                        // If we get an error for PSK we need to return an error.
+                        if cipher_suite.is_psk() {
+                            return (
+                                false,
+                                Some(Alert {
+                                    alert_level: AlertLevel::Fatal,
+                                    alert_description: AlertDescription::UnknownPskIdentity,
+                                }),
+                                None,
+                            );
+                        } else {
+                            return (false, None, None);
+                        }
                     }
                 };
             }
@@ -1051,7 +1071,7 @@ impl DTLSConn {
                 return (
                     false,
                     Some(a),
-                    Some(Error::Other(format!("Error of Alert {}", a))),
+                    Some(Error::Other(format!("Error of Alert {a}"))),
                 );
             }
             Content::ChangeCipherSpec(_) => {

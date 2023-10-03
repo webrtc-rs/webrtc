@@ -11,6 +11,26 @@ pub mod policy;
 pub mod sdp;
 pub mod signaling_state;
 
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use ::ice::candidate::candidate_base::unmarshal_candidate;
+use ::ice::candidate::Candidate;
+use ::sdp::description::session::*;
+use ::sdp::util::ConnectionRole;
+use arc_swap::ArcSwapOption;
+use async_trait::async_trait;
+use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
+use peer_connection_internal::*;
+use rand::{thread_rng, Rng};
+use rcgen::KeyPair;
+use smol_str::SmolStr;
+use srtp::stream::Stream;
+use tokio::sync::{mpsc, Mutex};
+
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
@@ -28,10 +48,9 @@ use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
-use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
 use crate::ice_transport::ice_gatherer::{
     OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
-    RTCIceGatherer,
+    RTCIceGatherOptions, RTCIceGatherer,
 };
 use crate::ice_transport::ice_gatherer_state::RTCIceGathererState;
 use crate::ice_transport::ice_gathering_state::RTCIceGatheringState;
@@ -58,32 +77,14 @@ use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::rtp_transceiver::{
     find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
+    RTCRtpTransceiverInit, SSRC,
 };
-use crate::rtp_transceiver::{RTCRtpTransceiverInit, SSRC};
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::sctp_transport::RTCSctpTransport;
 use crate::stats::StatsReport;
-use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
-
-use ::ice::candidate::candidate_base::unmarshal_candidate;
-use ::ice::candidate::Candidate;
-use ::sdp::description::session::*;
-use ::sdp::util::ConnectionRole;
-use async_trait::async_trait;
-use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
-use peer_connection_internal::*;
-use rand::{thread_rng, Rng};
-use rcgen::KeyPair;
-use srtp::stream::Stream;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, Mutex};
 
 /// SIMULCAST_PROBE_COUNT is the amount of RTP Packets
 /// that handleUndeclaredSSRC will read and try to dispatch from
@@ -98,7 +99,7 @@ pub(crate) const MEDIA_SECTION_APPLICATION: &str = "application";
 
 const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-/// math_rand_alpha generates a mathmatical random alphabet sequence of the requested length.
+/// math_rand_alpha generates a mathematical random alphabet sequence of the requested length.
 pub fn math_rand_alpha(n: usize) -> String {
     let mut rng = thread_rng();
 
@@ -138,8 +139,9 @@ pub type OnDataChannelHdlrFn = Box<
 
 pub type OnTrackHdlrFn = Box<
     dyn (FnMut(
-            Option<Arc<TrackRemote>>,
-            Option<Arc<RTCRtpReceiver>>,
+            Arc<TrackRemote>,
+            Arc<RTCRtpReceiver>,
+            Arc<RTCRtpTransceiver>,
         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
@@ -168,7 +170,7 @@ struct CheckNegotiationNeededParams {
 
 #[derive(Clone)]
 struct NegotiationNeededParams {
-    on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
+    on_negotiation_needed_handler: Arc<ArcSwapOption<Mutex<OnNegotiationNeededHdlrFn>>>,
     is_closed: Arc<AtomicBool>,
     ops: Arc<Operations>,
     negotiation_needed_state: Arc<AtomicU8>,
@@ -286,33 +288,34 @@ impl RTCPeerConnection {
 
     /// on_signaling_state_change sets an event handler which is invoked when the
     /// peer connection's signaling state changes
-    pub async fn on_signaling_state_change(&self, f: OnSignalingStateChangeHdlrFn) {
-        let mut on_signaling_state_change_handler =
-            self.internal.on_signaling_state_change_handler.lock().await;
-        *on_signaling_state_change_handler = Some(f);
+    pub fn on_signaling_state_change(&self, f: OnSignalingStateChangeHdlrFn) {
+        self.internal
+            .on_signaling_state_change_handler
+            .store(Some(Arc::new(Mutex::new(f))))
     }
 
     async fn do_signaling_state_change(&self, new_state: RTCSignalingState) {
         log::info!("signaling state changed to {}", new_state);
-        let mut handler = self.internal.on_signaling_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*self.internal.on_signaling_state_change_handler.load() {
+            let mut f = handler.lock().await;
             f(new_state).await;
         }
     }
 
     /// on_data_channel sets an event handler which is invoked when a data
     /// channel message arrives from a remote peer.
-    pub async fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
-        let mut on_data_channel_handler = self.internal.on_data_channel_handler.lock().await;
-        *on_data_channel_handler = Some(f);
+    pub fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
+        self.internal
+            .on_data_channel_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// on_negotiation_needed sets an event handler which is invoked when
     /// a change has occurred which requires session negotiation
-    pub async fn on_negotiation_needed(&self, f: OnNegotiationNeededHdlrFn) {
-        let mut on_negotiation_needed_handler =
-            self.internal.on_negotiation_needed_handler.lock().await;
-        *on_negotiation_needed_handler = Some(f);
+    pub fn on_negotiation_needed(&self, f: OnNegotiationNeededHdlrFn) {
+        self.internal
+            .on_negotiation_needed_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     fn do_negotiation_needed_inner(params: &NegotiationNeededParams) -> bool {
@@ -372,11 +375,9 @@ impl RTCPeerConnection {
 
     async fn negotiation_needed_op(params: NegotiationNeededParams) -> bool {
         // Don't run NegotiatedNeeded checks if on_negotiation_needed is not set
-        {
-            let handler = params.on_negotiation_needed_handler.lock().await;
-            if handler.is_none() {
-                return false;
-            }
+        let handler = &*params.on_negotiation_needed_handler.load();
+        if handler.is_none() {
+            return false;
         }
 
         // https://www.w3.org/TR/webrtc/#updating-the-negotiation-needed-flag
@@ -415,11 +416,9 @@ impl RTCPeerConnection {
         params.is_negotiation_needed.store(true, Ordering::SeqCst);
 
         // Step 2.7
-        {
-            let mut handler = params.on_negotiation_needed_handler.lock().await;
-            if let Some(f) = &mut *handler {
-                f().await;
-            }
+        if let Some(handler) = handler {
+            let mut f = handler.lock().await;
+            f().await;
         }
 
         RTCPeerConnection::after_negotiation_needed_op(params).await
@@ -455,13 +454,16 @@ impl RTCPeerConnection {
                 // if t.stopping && !t.stopped {
                 // 	return true
                 // }
-                let mid = t.mid().await;
-                let m = get_by_mid(&mid, local_desc);
+                let mid = t.mid();
+                let m = mid
+                    .as_ref()
+                    .and_then(|mid| get_by_mid(mid.as_str(), local_desc));
                 // Step 5.2
-                if !t.stopped.load(Ordering::SeqCst) && m.is_none() {
-                    return true;
-                }
                 if !t.stopped.load(Ordering::SeqCst) {
+                    if m.is_none() {
+                        return true;
+                    }
+
                     if let Some(m) = m {
                         // Step 5.3.1
                         if t.direction().has_send() {
@@ -470,17 +472,7 @@ impl RTCPeerConnection {
                                 None => return true, // doesn't contain a single a=msid line
                             };
 
-                            let sender = match t.sender().await {
-                                Some(s) => s.clone(),
-                                None => {
-                                    log::warn!(
-                                        "RtpSender missing for transeceiver with sending direction {} for mid {}",
-                                        t.direction(),
-                                        mid
-                                    );
-                                    continue;
-                                }
-                            };
+                            let sender = t.sender().await;
                             // (...)or the number of MSIDs from the a=msid lines in this m= section,
                             // or the MSID values themselves, differ from what is in
                             // transceiver.sender.[[AssociatedMediaStreamIds]], return true.
@@ -504,8 +496,9 @@ impl RTCPeerConnection {
                             RTCSdpType::Offer => {
                                 // Step 5.3.2
                                 if let Some(remote_desc) = &current_remote_description {
-                                    if let Some(rm) =
-                                        get_by_mid(t.mid().await.as_str(), remote_desc)
+                                    if let Some(rm) = t
+                                        .mid()
+                                        .and_then(|mid| get_by_mid(mid.as_str(), remote_desc))
                                     {
                                         if get_peer_direction(m) != t.direction()
                                             && get_peer_direction(rm) != t.direction().reverse()
@@ -522,18 +515,20 @@ impl RTCPeerConnection {
                                     Some(d) => d,
                                     None => return true,
                                 };
-                                let offered_direction =
-                                    match get_by_mid(t.mid().await.as_str(), remote_desc) {
-                                        Some(d) => {
-                                            let dir = get_peer_direction(d);
-                                            if dir == RTCRtpTransceiverDirection::Unspecified {
-                                                RTCRtpTransceiverDirection::Inactive
-                                            } else {
-                                                dir
-                                            }
+                                let offered_direction = match t
+                                    .mid()
+                                    .and_then(|mid| get_by_mid(mid.as_str(), remote_desc))
+                                {
+                                    Some(d) => {
+                                        let dir = get_peer_direction(d);
+                                        if dir == RTCRtpTransceiverDirection::Unspecified {
+                                            RTCRtpTransceiverDirection::Inactive
+                                        } else {
+                                            dir
                                         }
-                                        None => RTCRtpTransceiverDirection::Inactive,
-                                    };
+                                    }
+                                    None => RTCRtpTransceiverDirection::Inactive,
+                                };
 
                                 let current_direction = get_peer_direction(m);
                                 // Step 5.3.3
@@ -548,14 +543,15 @@ impl RTCPeerConnection {
                     }
                 }
                 // Step 5.4
-                if t.stopped.load(Ordering::SeqCst) && !t.mid().await.is_empty() {
-                    let current_remote_description = params.current_remote_description.lock().await;
-                    if let Some(remote_desc) = &*current_remote_description {
-                        if get_by_mid(t.mid().await.as_str(), local_desc).is_some()
-                            || get_by_mid(t.mid().await.as_str(), remote_desc).is_some()
-                        {
-                            return true;
-                        }
+                if t.stopped.load(Ordering::SeqCst) {
+                    let search_mid = match t.mid() {
+                        Some(mid) => mid,
+                        None => return false,
+                    };
+
+                    if let Some(remote_desc) = &*params.current_remote_description.lock().await {
+                        return get_by_mid(search_mid.as_str(), local_desc).is_some()
+                            || get_by_mid(search_mid.as_str(), remote_desc).is_some();
                     }
                 }
             }
@@ -570,88 +566,78 @@ impl RTCPeerConnection {
     /// candidate is found.
     /// Take note that the handler is gonna be called with a nil pointer when
     /// gathering is finished.
-    pub async fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        self.internal.ice_gatherer.on_local_candidate(f).await
+    pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
+        self.internal.ice_gatherer.on_local_candidate(f)
     }
 
     /// on_ice_gathering_state_change sets an event handler which is invoked when the
     /// ICE candidate gathering state has changed.
-    pub async fn on_ice_gathering_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
-        self.internal.ice_gatherer.on_state_change(f).await
+    pub fn on_ice_gathering_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
+        self.internal.ice_gatherer.on_state_change(f)
     }
 
     /// on_track sets an event handler which is called when remote track
     /// arrives from a remote peer.
-    pub async fn on_track(&self, f: OnTrackHdlrFn) {
-        let mut on_track_handler = self.internal.on_track_handler.lock().await;
-        *on_track_handler = Some(f);
+    pub fn on_track(&self, f: OnTrackHdlrFn) {
+        self.internal
+            .on_track_handler
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
-    async fn do_track(
-        on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
-        t: Option<Arc<TrackRemote>>,
-        r: Option<Arc<RTCRtpReceiver>>,
+    fn do_track(
+        on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
+        track: Arc<TrackRemote>,
+        receiver: Arc<RTCRtpReceiver>,
+        transceiver: Arc<RTCRtpTransceiver>,
     ) {
-        log::debug!("got new track: {:?}", t);
+        log::debug!("got new track: {:?}", track);
 
-        if t.is_some() {
-            tokio::spawn(async move {
-                let mut handler = on_track_handler.lock().await;
-                if let Some(f) = &mut *handler {
-                    f(t, r).await;
-                } else {
-                    log::warn!("on_track unset, unable to handle incoming media streams");
-                }
-            });
-        }
+        tokio::spawn(async move {
+            if let Some(handler) = &*on_track_handler.load() {
+                let mut f = handler.lock().await;
+                f(track, receiver, transceiver).await;
+            } else {
+                log::warn!("on_track unset, unable to handle incoming media streams");
+            }
+        });
     }
 
     /// on_ice_connection_state_change sets an event handler which is called
     /// when an ICE connection state is changed.
-    pub async fn on_ice_connection_state_change(&self, f: OnICEConnectionStateChangeHdlrFn) {
-        let mut on_ice_connection_state_change_handler = self
-            .internal
+    pub fn on_ice_connection_state_change(&self, f: OnICEConnectionStateChangeHdlrFn) {
+        self.internal
             .on_ice_connection_state_change_handler
-            .lock()
-            .await;
-        *on_ice_connection_state_change_handler = Some(f);
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     async fn do_ice_connection_state_change(
-        on_ice_connection_state_change_handler: &Arc<
-            Mutex<Option<OnICEConnectionStateChangeHdlrFn>>,
-        >,
+        handler: &Arc<ArcSwapOption<Mutex<OnICEConnectionStateChangeHdlrFn>>>,
         ice_connection_state: &Arc<AtomicU8>,
         cs: RTCIceConnectionState,
     ) {
         ice_connection_state.store(cs as u8, Ordering::SeqCst);
 
         log::info!("ICE connection state changed: {}", cs);
-        let mut handler = on_ice_connection_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*handler.load() {
+            let mut f = handler.lock().await;
             f(cs).await;
         }
     }
 
     /// on_peer_connection_state_change sets an event handler which is called
     /// when the PeerConnectionState has changed
-    pub async fn on_peer_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
-        let mut on_peer_connection_state_change_handler = self
-            .internal
+    pub fn on_peer_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
+        self.internal
             .on_peer_connection_state_change_handler
-            .lock()
-            .await;
-        *on_peer_connection_state_change_handler = Some(f);
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     async fn do_peer_connection_state_change(
-        on_peer_connection_state_change_handler: &Arc<
-            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
-        >,
+        handler: &Arc<ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>>,
         cs: RTCPeerConnectionState,
     ) {
-        let mut handler = on_peer_connection_state_change_handler.lock().await;
-        if let Some(f) = &mut *handler {
+        if let Some(handler) = &*handler.load() {
+            let mut f = handler.lock().await;
             f(cs).await;
         }
     }
@@ -798,7 +784,7 @@ impl RTCPeerConnection {
                 }
             }
             for t in &current_transceivers {
-                if !t.mid().await.is_empty() {
+                if t.mid().is_some() {
                     continue;
                 }
 
@@ -815,10 +801,10 @@ impl RTCPeerConnection {
                         }
                     }
 
-                    t.set_mid(mid).await?;
+                    t.set_mid(SmolStr::from(mid))?;
                 } else {
                     let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
-                    t.set_mid(format!("{}", greater_mid + 1)).await?;
+                    t.set_mid(SmolStr::from(format!("{}", greater_mid + 1)))?;
                 }
             }
 
@@ -877,35 +863,35 @@ impl RTCPeerConnection {
     /// <https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum>
     async fn update_connection_state(
         on_peer_connection_state_change_handler: &Arc<
-            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
+            ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>,
         >,
         is_closed: &Arc<AtomicBool>,
         peer_connection_state: &Arc<AtomicU8>,
         ice_connection_state: RTCIceConnectionState,
         dtls_transport_state: RTCDtlsTransportState,
     ) {
-        let  connection_state =
-        // The RTCPeerConnection object's [[IsClosed]] slot is true.
-        if is_closed.load(Ordering::SeqCst) {
-             RTCPeerConnectionState::Closed
-        }else if ice_connection_state == RTCIceConnectionState::Failed || dtls_transport_state == RTCDtlsTransportState::Failed {
-            // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
-             RTCPeerConnectionState::Failed
-        }else if ice_connection_state == RTCIceConnectionState::Disconnected {
-            // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
-            // state and none of them are in the "failed" or "connecting" or "checking" state.
-            RTCPeerConnectionState::Disconnected
-        }else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == RTCDtlsTransportState::Connected {
-            // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
-            // state and at least one of them is in the "connected" or "completed" state.
-            RTCPeerConnectionState::Connected
-        }else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == RTCDtlsTransportState::Connecting{
-        //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
-        // "checking" state and none of them is in the "failed" state.
-             RTCPeerConnectionState::Connecting
-        }else{
-            RTCPeerConnectionState::New
-        };
+        let connection_state =
+            // The RTCPeerConnection object's [[IsClosed]] slot is true.
+            if is_closed.load(Ordering::SeqCst) {
+                RTCPeerConnectionState::Closed
+            } else if ice_connection_state == RTCIceConnectionState::Failed || dtls_transport_state == RTCDtlsTransportState::Failed {
+                // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
+                RTCPeerConnectionState::Failed
+            } else if ice_connection_state == RTCIceConnectionState::Disconnected {
+                // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
+                // state and none of them are in the "failed" or "connecting" or "checking" state.
+                RTCPeerConnectionState::Disconnected
+            } else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == RTCDtlsTransportState::Connected {
+                // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
+                // state and at least one of them is in the "connected" or "completed" state.
+                RTCPeerConnectionState::Connected
+            } else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == RTCDtlsTransportState::Connecting {
+                //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
+                // "checking" state and none of them is in the "failed" state.
+                RTCPeerConnectionState::Connecting
+            } else {
+                RTCPeerConnectionState::New
+            };
 
         if peer_connection_state.load(Ordering::SeqCst) == connection_state as u8 {
             return;
@@ -927,9 +913,14 @@ impl RTCPeerConnection {
         _options: Option<RTCAnswerOptions>,
     ) -> Result<RTCSessionDescription> {
         let use_identity = self.idp_login_url.is_some();
-        if self.remote_description().await.is_none() {
+        let remote_desc = self.remote_description().await;
+        let remote_description: RTCSessionDescription;
+        if let Some(desc) = remote_desc {
+            remote_description = desc;
+        } else {
             return Err(Error::ErrNoRemoteDescription);
-        } else if use_identity {
+        }
+        if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented);
         } else if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
@@ -946,6 +937,11 @@ impl RTCPeerConnection {
             .to_connection_role();
         if connection_role == ConnectionRole::Unspecified {
             connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
+            if let Some(parsed) = remote_description.parsed {
+                if Self::is_lite_set(&parsed) && !self.internal.setting_engine.candidates.ice_lite {
+                    connection_role = DTLSRole::Server.to_connection_role();
+                }
+            }
         }
 
         let local_transceivers = self.get_transceivers().await;
@@ -1316,13 +1312,22 @@ impl RTCPeerConnection {
         self.current_local_description().await
     }
 
+    pub fn is_lite_set(desc: &SessionDescription) -> bool {
+        for a in &desc.attributes {
+            if a.key.trim() == ATTR_KEY_ICELITE {
+                return true;
+            }
+        }
+        false
+    }
+
     /// set_remote_description sets the SessionDescription of the remote peer
     pub async fn set_remote_description(&self, mut desc: RTCSessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
         }
 
-        let is_renegotation = {
+        let is_renegotiation = {
             let current_remote_description = self.internal.current_remote_description.lock().await;
             current_remote_description.is_some()
         };
@@ -1377,18 +1382,10 @@ impl RTCPeerConnection {
                         };
 
                         if let Some(t) = t {
-                            if t.mid().await.is_empty() {
-                                t.set_mid(mid_value.to_owned()).await?;
+                            if t.mid().is_none() {
+                                t.set_mid(SmolStr::from(mid_value))?;
                             }
                         } else {
-                            let receiver = Arc::new(RTCRtpReceiver::new(
-                                self.internal.setting_engine.get_receive_mtu(),
-                                kind,
-                                Arc::clone(&self.internal.dtls_transport),
-                                Arc::clone(&self.internal.media_engine),
-                                Arc::clone(&self.interceptor),
-                            ));
-
                             let local_direction =
                                 if direction == RTCRtpTransceiverDirection::Recvonly {
                                     RTCRtpTransceiverDirection::Sendonly
@@ -1396,9 +1393,31 @@ impl RTCPeerConnection {
                                     RTCRtpTransceiverDirection::Recvonly
                                 };
 
+                            let receive_mtu = self.internal.setting_engine.get_receive_mtu();
+
+                            let receiver = Arc::new(RTCRtpReceiver::new(
+                                receive_mtu,
+                                kind,
+                                Arc::clone(&self.internal.dtls_transport),
+                                Arc::clone(&self.internal.media_engine),
+                                Arc::clone(&self.interceptor),
+                            ));
+
+                            let sender = Arc::new(
+                                RTCRtpSender::new(
+                                    receive_mtu,
+                                    None,
+                                    Arc::clone(&self.internal.dtls_transport),
+                                    Arc::clone(&self.internal.media_engine),
+                                    Arc::clone(&self.interceptor),
+                                    false,
+                                )
+                                .await,
+                            );
+
                             let t = RTCRtpTransceiver::new(
-                                Some(receiver),
-                                None,
+                                receiver,
+                                sender,
                                 local_direction,
                                 kind,
                                 vec![],
@@ -1409,8 +1428,8 @@ impl RTCPeerConnection {
 
                             self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
-                            if t.mid().await.is_empty() {
-                                t.set_mid(mid_value.to_owned()).await?;
+                            if t.mid().is_none() {
+                                t.set_mid(SmolStr::from(mid_value))?;
                             }
                         }
                     }
@@ -1472,7 +1491,7 @@ impl RTCPeerConnection {
 
             let (remote_ufrag, remote_pwd, candidates) = extract_ice_details(parsed).await?;
 
-            if is_renegotation
+            if is_renegotiation
                 && self
                     .internal
                     .ice_transport
@@ -1497,7 +1516,7 @@ impl RTCPeerConnection {
                     .await?;
             }
 
-            if is_renegotation {
+            if is_renegotiation {
                 if we_offer {
                     self.start_rtp_senders().await?;
 
@@ -1521,13 +1540,7 @@ impl RTCPeerConnection {
                 return Ok(());
             }
 
-            let mut remote_is_lite = false;
-            for a in &parsed.attributes {
-                if a.key.trim() == ATTR_KEY_ICELITE {
-                    remote_is_lite = true;
-                    break;
-                }
-            }
+            let remote_is_lite = Self::is_lite_set(parsed);
 
             let (fingerprint, fingerprint_hash) = extract_fingerprint(parsed)?;
 
@@ -1591,10 +1604,9 @@ impl RTCPeerConnection {
     pub(crate) async fn start_rtp_senders(&self) -> Result<()> {
         let current_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*current_transceivers {
-            if let Some(sender) = transceiver.sender().await {
-                if sender.is_negotiated() && !sender.has_sent().await {
-                    sender.send(&sender.get_parameters().await).await?;
-                }
+            let sender = transceiver.sender().await;
+            if sender.is_negotiated() && !sender.has_sent() {
+                sender.send(&sender.get_parameters().await).await?;
             }
         }
 
@@ -1623,7 +1635,7 @@ impl RTCPeerConnection {
 
         let ice_candidate = if !candidate_value.is_empty() {
             let candidate: Arc<dyn Candidate + Send + Sync> =
-                Arc::new(unmarshal_candidate(candidate_value).await?);
+                Arc::new(unmarshal_candidate(candidate_value)?);
 
             Some(RTCIceCandidate::from(&candidate))
         } else {
@@ -1650,9 +1662,8 @@ impl RTCPeerConnection {
         let mut senders = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            if let Some(sender) = transceiver.sender().await {
-                senders.push(sender);
-            }
+            let sender = transceiver.sender().await;
+            senders.push(sender);
         }
         senders
     }
@@ -1662,9 +1673,7 @@ impl RTCPeerConnection {
         let mut receivers = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
-            if let Some(receiver) = transceiver.receiver().await {
-                receivers.push(receiver);
-            }
+            receivers.push(transceiver.receiver().await);
         }
         receivers
     }
@@ -1689,32 +1698,23 @@ impl RTCPeerConnection {
             for t in &*rtp_transceivers {
                 if !t.stopped.load(Ordering::SeqCst)
                     && t.kind == track.kind()
-                    && t.sender().await.is_none()
+                    && track.id() == t.sender().await.id
                 {
-                    let sender = Arc::new(
-                        RTCRtpSender::new(
-                            self.internal.setting_engine.get_receive_mtu(),
-                            Arc::clone(&track),
-                            Arc::clone(&self.internal.dtls_transport),
-                            Arc::clone(&self.internal.media_engine),
-                            Arc::clone(&self.interceptor),
-                            false, // adding a track sets a send direction.
-                        )
-                        .await,
-                    );
+                    let sender = t.sender().await;
+                    if sender.track().await.is_none() {
+                        if let Err(err) = sender.replace_track(Some(track)).await {
+                            let _ = sender.stop().await;
+                            return Err(err);
+                        }
 
-                    if let Err(err) = t
-                        .set_sender_track(Some(Arc::clone(&sender)), Some(Arc::clone(&track)))
-                        .await
-                    {
-                        let _ = sender.stop().await;
-                        t.set_sender(None).await;
-                        return Err(err);
+                        t.set_direction_internal(RTCRtpTransceiverDirection::from_send_recv(
+                            true,
+                            t.direction().has_recv(),
+                        ));
+
+                        self.internal.trigger_negotiation_needed().await;
+                        return Ok(sender);
                     }
-
-                    self.internal.trigger_negotiation_needed().await;
-
-                    return Ok(sender);
                 }
             }
         }
@@ -1727,10 +1727,7 @@ impl RTCPeerConnection {
             .add_rtp_transceiver(Arc::clone(&transceiver))
             .await;
 
-        match transceiver.sender().await {
-            Some(sender) => Ok(sender),
-            None => Err(Error::ErrRTPSenderNil),
-        }
+        Ok(transceiver.sender().await)
     }
 
     /// remove_track removes a Track from the PeerConnection
@@ -1743,11 +1740,12 @@ impl RTCPeerConnection {
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if let Some(s) = t.sender().await {
-                    if s.id == sender.id {
-                        transceiver = Some(t.clone());
-                        break;
+                if t.sender().await.id == sender.id {
+                    if sender.track().await.is_none() {
+                        return Ok(());
                     }
+                    transceiver = Some(t.clone());
+                    break;
                 }
             }
         }
@@ -1776,26 +1774,24 @@ impl RTCPeerConnection {
     pub async fn add_transceiver_from_kind(
         &self,
         kind: RTPCodecType,
-        init: &[RTCRtpTransceiverInit],
+        init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<RTCRtpTransceiver>> {
         self.internal.add_transceiver_from_kind(kind, init).await
     }
 
     /// add_transceiver_from_track Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
-    pub async fn add_transceiver_from_track<'a>(
-        &'a self,
+    pub async fn add_transceiver_from_track(
+        &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
-        init: &'a [RTCRtpTransceiverInit],
+        init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
         }
 
-        let direction = match init.len() {
-            0 => RTCRtpTransceiverDirection::Sendrecv,
-            1 => init[0].direction,
-            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackOnlyAcceptsOne),
-        };
+        let direction = init
+            .map(|init| init.direction)
+            .unwrap_or(RTCRtpTransceiverDirection::Sendrecv);
 
         let t = self
             .internal
@@ -1927,7 +1923,7 @@ impl RTCPeerConnection {
         let mut close_errs = vec![];
 
         if let Err(err) = self.interceptor.close().await {
-            close_errs.push(Error::new(format!("interceptor: {}", err)));
+            close_errs.push(Error::new(format!("interceptor: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)
@@ -1935,7 +1931,7 @@ impl RTCPeerConnection {
             let mut rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if let Err(err) = t.stop().await {
-                    close_errs.push(Error::new(format!("rtp_transceivers: {}", err)));
+                    close_errs.push(Error::new(format!("rtp_transceivers: {err}")));
                 }
             }
             rtp_transceivers.clear();
@@ -1946,7 +1942,7 @@ impl RTCPeerConnection {
             let mut data_channels = self.internal.sctp_transport.data_channels.lock().await;
             for d in &*data_channels {
                 if let Err(err) = d.close().await {
-                    close_errs.push(Error::new(format!("data_channels: {}", err)));
+                    close_errs.push(Error::new(format!("data_channels: {err}")));
                 }
             }
             data_channels.clear();
@@ -1954,17 +1950,17 @@ impl RTCPeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)
         if let Err(err) = self.internal.sctp_transport.stop().await {
-            close_errs.push(Error::new(format!("sctp_transport: {}", err)));
+            close_errs.push(Error::new(format!("sctp_transport: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #7)
         if let Err(err) = self.internal.dtls_transport.stop().await {
-            close_errs.push(Error::new(format!("dtls_transport: {}", err)));
+            close_errs.push(Error::new(format!("dtls_transport: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #8, #9, #10)
         if let Err(err) = self.internal.ice_transport.stop().await {
-            close_errs.push(Error::new(format!("dtls_transport: {}", err)));
+            close_errs.push(Error::new(format!("dtls_transport: {err}")));
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
@@ -1978,7 +1974,7 @@ impl RTCPeerConnection {
         .await;
 
         if let Err(err) = self.internal.ops.close().await {
-            close_errs.push(Error::new(format!("ops: {}", err)));
+            close_errs.push(Error::new(format!("ops: {err}")));
         }
 
         flatten_errs(close_errs)
@@ -2082,16 +2078,14 @@ impl RTCPeerConnection {
         // state has changed to complete so that we don't block the caller forever.
         let done = Arc::new(Mutex::new(Some(gathering_complete_tx)));
         let done2 = Arc::clone(&done);
-        self.internal
-            .set_gather_complete_handler(Box::new(move || {
-                log::trace!("setGatherCompleteHandler");
-                let done3 = Arc::clone(&done2);
-                Box::pin(async move {
-                    let mut d = done3.lock().await;
-                    d.take();
-                })
-            }))
-            .await;
+        self.internal.set_gather_complete_handler(Box::new(move || {
+            log::trace!("setGatherCompleteHandler");
+            let done3 = Arc::clone(&done2);
+            Box::pin(async move {
+                let mut d = done3.lock().await;
+                d.take();
+            })
+        }));
 
         if self.ice_gathering_state() == RTCIceGatheringState::Complete {
             log::trace!("ICEGatheringState::Complete");
@@ -2100,5 +2094,15 @@ impl RTCPeerConnection {
         }
 
         gathering_complete_rx
+    }
+
+    /// Returns the internal [`RTCDtlsTransport`].
+    pub fn dtls_transport(&self) -> Arc<RTCDtlsTransport> {
+        Arc::clone(&self.internal.dtls_transport)
+    }
+
+    /// Adds the specified [`RTCRtpTransceiver`] to this [`RTCPeerConnection`].
+    pub async fn add_transceiver(&self, t: Arc<RTCRtpTransceiver>) {
+        self.internal.add_rtp_transceiver(t).await
     }
 }

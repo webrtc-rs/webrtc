@@ -1,22 +1,26 @@
 #[cfg(test)]
 mod compound_packet_test;
 
-use crate::{
-    error::Error, header::*, packet::*, receiver_report::*, sender_report::*,
-    source_description::*, util::*,
-};
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
-
-use bytes::{Buf, Bytes};
 use std::any::Any;
 use std::fmt;
+
+use bytes::{Buf, Bytes};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
+use crate::packet::*;
+use crate::receiver_report::*;
+use crate::sender_report::*;
+use crate::source_description::*;
+use crate::util::*;
 
 type Result<T> = std::result::Result<T, util::Error>;
 
 /// A CompoundPacket is a collection of RTCP packets transmitted as a single packet with
 /// the underlying protocol (for example UDP).
 ///
-/// To maximize the resolution of receiption statistics, the first Packet in a CompoundPacket
+/// To maximize the resolution of reception statistics, the first Packet in a CompoundPacket
 /// must always be either a SenderReport or a ReceiverReport.  This is true even if no data
 /// has been sent or received, in which case an empty ReceiverReport must be sent, and even
 /// if the only other RTCP packet in the compound packet is a Goodbye.
@@ -30,7 +34,7 @@ pub struct CompoundPacket(pub Vec<Box<dyn Packet + Send + Sync>>);
 
 impl fmt::Display for CompoundPacket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

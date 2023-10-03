@@ -1,45 +1,37 @@
 #[cfg(test)]
 mod data_channel_test;
 
-use crate::error::Result;
-use crate::{
-    error::Error, message::message_channel_ack::*, message::message_channel_open::*, message::*,
-};
-
-use sctp::{
-    association::Association, chunk::chunk_payload_data::PayloadProtocolIdentifier, stream::*,
-};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use util::marshal::*;
-
-use bytes::{Buf, Bytes};
-use derive_builder::Builder;
 use std::borrow::Borrow;
-use std::fmt;
 use std::future::Future;
-use std::io;
 use std::net::Shutdown;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::{fmt, io};
+
+use bytes::{Buf, Bytes};
+use sctp::association::Association;
+use sctp::chunk::chunk_payload_data::PayloadProtocolIdentifier;
+use sctp::stream::*;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use util::marshal::*;
+
+use crate::error::{Error, Result};
+use crate::message::message_channel_ack::*;
+use crate::message::message_channel_open::*;
+use crate::message::*;
 
 const RECEIVE_MTU: usize = 8192;
 
 /// Config is used to configure the data channel.
-#[derive(Eq, PartialEq, Default, Clone, Debug, Builder)]
+#[derive(Eq, PartialEq, Default, Clone, Debug)]
 pub struct Config {
-    #[builder(default)]
     pub channel_type: ChannelType,
-    #[builder(default)]
     pub negotiated: bool,
-    #[builder(default)]
     pub priority: u16,
-    #[builder(default)]
     pub reliability_parameter: u32,
-    #[builder(default)]
     pub label: String,
-    #[builder(default)]
     pub protocol: String,
 }
 
@@ -345,8 +337,8 @@ impl DataChannel {
 
     /// OnBufferedAmountLow sets the callback handler which would be called when the
     /// number of bytes of outgoing data buffered is lower than the threshold.
-    pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
-        self.stream.on_buffered_amount_low(f).await
+    pub fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+        self.stream.on_buffered_amount_low(f)
     }
 
     fn commit_reliability_params(&self) {

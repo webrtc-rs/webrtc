@@ -1,11 +1,13 @@
+use regex::Regex;
+use tokio::sync::{mpsc, Mutex};
+
 use super::*;
-use crate::agent::{agent_config::*, agent_vnet_test::*, *};
+use crate::agent::agent_config::*;
+use crate::agent::agent_vnet_test::*;
+use crate::agent::*;
 use crate::candidate::*;
 use crate::error::Error;
 use crate::network_type::*;
-
-use regex::Regex;
-use tokio::sync::{mpsc, Mutex};
 
 #[tokio::test]
 // This test is disabled on Windows for now because it gets stuck and never finishes.
@@ -23,7 +25,7 @@ async fn test_multicast_dns_only_connection() -> Result<()> {
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
     let (a_notifier, mut a_connected) = on_connected();
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
@@ -34,7 +36,7 @@ async fn test_multicast_dns_only_connection() -> Result<()> {
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
     let (b_notifier, mut b_connected) = on_connected();
-    b_agent.on_connection_state_change(b_notifier).await;
+    b_agent.on_connection_state_change(b_notifier);
 
     connect_with_vnet(&a_agent, &b_agent).await?;
     let _ = a_connected.recv().await;
@@ -57,7 +59,7 @@ async fn test_multicast_dns_mixed_connection() -> Result<()> {
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
     let (a_notifier, mut a_connected) = on_connected();
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
@@ -68,7 +70,7 @@ async fn test_multicast_dns_mixed_connection() -> Result<()> {
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
     let (b_notifier, mut b_connected) = on_connected();
-    b_agent.on_connection_state_change(b_notifier).await;
+    b_agent.on_connection_state_change(b_notifier);
 
     connect_with_vnet(&a_agent, &b_agent).await?;
     let _ = a_connected.recv().await;
@@ -90,7 +92,7 @@ async fn test_multicast_dns_static_host_name() -> Result<()> {
         ..Default::default()
     };
     if let Err(err) = Agent::new(cfg0).await {
-        assert_eq!(Error::ErrInvalidMulticastDnshostName, err);
+        assert_eq!(err, Error::ErrInvalidMulticastDnshostName);
     } else {
         panic!("expected error, but got ok");
     }
@@ -117,10 +119,9 @@ async fn test_multicast_dns_static_host_name() -> Result<()> {
                 }
             })
         },
-    ))
-    .await;
+    ));
 
-    a.gather_candidates().await?;
+    a.gather_candidates()?;
 
     log::debug!("wait for gathering is done...");
     let _ = done_rx.recv().await;
@@ -140,8 +141,7 @@ fn test_generate_multicast_dnsname() -> Result<()> {
     if let Ok(re) = re {
         assert!(
             re.is_match(&name),
-            "mDNS name must be UUID v4 + \".local\" suffix, got {}",
-            name
+            "mDNS name must be UUID v4 + \".local\" suffix, got {name}"
         );
     } else {
         panic!("expected ok, but got err");

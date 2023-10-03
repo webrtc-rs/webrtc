@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use std::io;
-use std::net;
 use std::num::ParseIntError;
 use std::string::FromUtf8Error;
+use std::{io, net};
+
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -48,7 +48,7 @@ pub enum Error {
     #[error("no address assigned")]
     ErrNoAddressAssigned,
     #[error("1:1 NAT requires more than one mapping")]
-    ErrNatRequriesMapping,
+    ErrNatRequiresMapping,
     #[error("length mismtach between mappedIPs and localIPs")]
     ErrMismatchLengthIp,
     #[error("non-udp translation is not supported yet")]

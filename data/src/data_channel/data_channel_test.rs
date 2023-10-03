@@ -1,14 +1,11 @@
-use crate::error::Result;
-
-use super::*;
-
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::{broadcast, mpsc};
+use tokio::time::Duration;
 use util::conn::conn_bridge::*;
 use util::conn::*;
 
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::{broadcast, mpsc};
-use tokio::time::Duration;
+use super::*;
+use crate::error::Result;
 
 async fn bridge_process_at_least_one(br: &Arc<Bridge>) {
     let mut n_sum = 0;
@@ -282,7 +279,7 @@ async fn test_data_channel_channel_type_reliable_ordered() -> Result<()> {
     assert_eq!(dc0.config, cfg, "local config should match");
     assert_eq!(dc1.config, cfg, "remote config should match");
 
-    br.reorder_next_nwrites(0, 2).await; // reordering on the wire
+    br.reorder_next_nwrites(0, 2); // reordering on the wire
 
     sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
     let n = dc0.write(&Bytes::from(sbuf.clone())).await?;
@@ -450,12 +447,12 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     }
 
     let n = dc0.write(&Bytes::new()).await?;
-    assert_eq!(0, n, "data length should match");
-    assert_eq!(1, dc0.buffered_amount(), "incorrect bufferedAmount");
+    assert_eq!(n, 0, "data length should match");
+    assert_eq!(dc0.buffered_amount(), 1, "incorrect bufferedAmount");
 
     let n = dc0.write(&Bytes::from_static(&[0])).await?;
-    assert_eq!(1, n, "data length should match");
-    assert_eq!(2, dc0.buffered_amount(), "incorrect bufferedAmount");
+    assert_eq!(n, 1, "data length should match");
+    assert_eq!(dc0.buffered_amount(), 2, "incorrect bufferedAmount");
 
     bridge_process_at_least_one(&br).await;
 
@@ -467,16 +464,15 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
 
     dc0.set_buffered_amount_low_threshold(1500);
     assert_eq!(
-        1500,
         dc0.buffered_amount_low_threshold(),
+        1500,
         "incorrect bufferedAmountLowThreshold"
     );
     let n_cbs2 = Arc::clone(&n_cbs);
     dc0.on_buffered_amount_low(Box::new(move || {
         n_cbs2.fetch_add(1, Ordering::SeqCst);
         Box::pin(async {})
-    }))
-    .await;
+    }));
 
     // Write 10 1000-byte packets (total 10,000 bytes)
     for i in 0..10 {
@@ -550,28 +546,28 @@ async fn test_stats() -> Result<()> {
     let mut bytes_sent = 0;
 
     let n = dc0.write(&Bytes::from(sbuf.clone())).await?;
-    assert_eq!(sbuf.len(), n, "data length should match");
+    assert_eq!(n, sbuf.len(), "data length should match");
     bytes_sent += n;
 
     assert_eq!(dc0.bytes_sent(), bytes_sent);
     assert_eq!(dc0.messages_sent(), 1);
 
     let n = dc0.write(&Bytes::from(sbuf.clone())).await?;
-    assert_eq!(sbuf.len(), n, "data length should match");
+    assert_eq!(n, sbuf.len(), "data length should match");
     bytes_sent += n;
 
     assert_eq!(dc0.bytes_sent(), bytes_sent);
     assert_eq!(dc0.messages_sent(), 2);
 
     let n = dc0.write(&Bytes::from_static(&[0])).await?;
-    assert_eq!(1, n, "data length should match");
+    assert_eq!(n, 1, "data length should match");
     bytes_sent += n;
 
     assert_eq!(dc0.bytes_sent(), bytes_sent);
     assert_eq!(dc0.messages_sent(), 3);
 
     let n = dc0.write(&Bytes::from_static(&[])).await?;
-    assert_eq!(0, n, "data length should match");
+    assert_eq!(n, 0, "data length should match");
     bytes_sent += n;
 
     assert_eq!(dc0.bytes_sent(), bytes_sent);
@@ -582,28 +578,28 @@ async fn test_stats() -> Result<()> {
     let mut bytes_read = 0;
 
     let n = dc1.read(&mut rbuf[..]).await?;
-    assert_eq!(sbuf.len(), n, "data length should match");
+    assert_eq!(n, sbuf.len(), "data length should match");
     bytes_read += n;
 
     assert_eq!(dc1.bytes_received(), bytes_read);
     assert_eq!(dc1.messages_received(), 1);
 
     let n = dc1.read(&mut rbuf[..]).await?;
-    assert_eq!(sbuf.len(), n, "data length should match");
+    assert_eq!(n, sbuf.len(), "data length should match");
     bytes_read += n;
 
     assert_eq!(dc1.bytes_received(), bytes_read);
     assert_eq!(dc1.messages_received(), 2);
 
     let n = dc1.read(&mut rbuf[..]).await?;
-    assert_eq!(1, n, "data length should match");
+    assert_eq!(n, 1, "data length should match");
     bytes_read += n;
 
     assert_eq!(dc1.bytes_received(), bytes_read);
     assert_eq!(dc1.messages_received(), 3);
 
     let n = dc1.read(&mut rbuf[..]).await?;
-    assert_eq!(0, n, "data length should match");
+    assert_eq!(n, 0, "data length should match");
     bytes_read += n;
 
     assert_eq!(dc1.bytes_received(), bytes_read);

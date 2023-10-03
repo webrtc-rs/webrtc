@@ -1,15 +1,15 @@
+use std::net::Shutdown;
+use std::sync::Arc;
+
+use bytes::Bytes;
+use clap::{App, AppSettings, Arg};
+use tokio::net::UdpSocket;
+use tokio::signal;
+use tokio::sync::mpsc;
 use webrtc_sctp::association::*;
 use webrtc_sctp::chunk::chunk_payload_data::PayloadProtocolIdentifier;
 use webrtc_sctp::stream::*;
 use webrtc_sctp::Error;
-
-use bytes::Bytes;
-use clap::{App, AppSettings, Arg};
-use std::net::Shutdown;
-use std::sync::Arc;
-use tokio::net::UdpSocket;
-use tokio::signal;
-use tokio::sync::mpsc;
 
 // RUST_LOG=trace cargo run --color=always --package webrtc-sctp --example ping -- --server 0.0.0.0:5678
 
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Error> {
 
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await.unwrap());
     conn.connect(server).await.unwrap();
-    println!("connecting {}..", server);
+    println!("connecting {server}..");
 
     let config = Config {
         net_conn: conn,
@@ -74,15 +74,15 @@ async fn main() -> Result<(), Error> {
     let stream = a.open_stream(0, PayloadProtocolIdentifier::String).await?;
     println!("opened a stream");
 
-    // set unordered = true and 10ms treshold for dropping packets
+    // set unordered = true and 10ms threshold for dropping packets
     stream.set_reliability_params(true, ReliabilityType::Timed, 10);
 
     let stream_tx = Arc::clone(&stream);
     tokio::spawn(async move {
         let mut ping_seq_num = 0;
         while ping_seq_num < 10 {
-            let ping_msg = format!("ping {}", ping_seq_num);
-            println!("sent: {}", ping_msg);
+            let ping_msg = format!("ping {ping_seq_num}");
+            println!("sent: {ping_msg}");
             stream_tx.write(&Bytes::from(ping_msg)).await?;
 
             ping_seq_num += 1;
@@ -98,7 +98,7 @@ async fn main() -> Result<(), Error> {
         let mut buff = vec![0u8; 1024];
         while let Ok(n) = stream_rx.read(&mut buff).await {
             let pong_msg = String::from_utf8(buff[..n].to_vec()).unwrap();
-            println!("received: {}", pong_msg);
+            println!("received: {pong_msg}");
         }
 
         println!("finished recv pong");

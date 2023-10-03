@@ -1,8 +1,11 @@
-use super::{chunk_header::*, chunk_type::*, *};
-use crate::error_cause::*;
+use std::fmt;
 
 use bytes::{Bytes, BytesMut};
-use std::fmt;
+
+use super::chunk_header::*;
+use super::chunk_type::*;
+use super::*;
+use crate::error_cause::*;
 
 ///Abort represents an SCTP Chunk of type ABORT
 ///
@@ -34,7 +37,7 @@ impl fmt::Display for ChunkAbort {
         let mut res = vec![self.header().to_string()];
 
         for cause in &self.error_causes {
-            res.push(format!(" - {}", cause));
+            res.push(format!(" - {cause}"));
         }
 
         write!(f, "{}", res.join("\n"))

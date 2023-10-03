@@ -1,12 +1,16 @@
 #[cfg(test)]
 mod goodbye_test;
 
-use crate::{error::Error, header::*, packet::*, util::*};
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
-
-use bytes::{Buf, BufMut, Bytes};
 use std::any::Any;
 use std::fmt;
+
+use bytes::{Buf, BufMut, Bytes};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
+use crate::packet::*;
+use crate::util::*;
 
 type Result<T> = std::result::Result<T, util::Error>;
 
@@ -27,7 +31,7 @@ impl fmt::Display for Goodbye {
         }
         out += format!("\tReason: {:?}\n", self.reason).as_str();
 
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 
@@ -158,7 +162,7 @@ impl Unmarshal for Goodbye {
             return Err(Error::PacketTooShort.into());
         }
 
-        let reason_offset = (HEADER_LENGTH + header.count as usize * SSRC_LENGTH) as usize;
+        let reason_offset = HEADER_LENGTH + header.count as usize * SSRC_LENGTH;
 
         if reason_offset > raw_packet_len {
             return Err(Error::PacketTooShort.into());

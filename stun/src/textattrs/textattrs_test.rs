@@ -1,8 +1,8 @@
+use std::io::BufReader;
+
 use super::*;
 use crate::checks::*;
 use crate::error::*;
-
-use std::io::BufReader;
 
 #[test]
 fn test_software_get_from() -> Result<()> {
@@ -19,17 +19,13 @@ fn test_software_get_from() -> Result<()> {
     let mut reader = BufReader::new(m.raw.as_slice());
     m2.read_from(&mut reader)?;
     let software = TextAttribute::get_from_as(&m, ATTR_SOFTWARE)?;
-    assert_eq!(software.to_string(), v, "Expected {}, got {}.", v, software);
+    assert_eq!(software.to_string(), v, "Expected {v}, got {software}.");
 
     let (s_attr, ok) = m.attributes.get(ATTR_SOFTWARE);
     assert!(ok, "sowfware attribute should be found");
 
     let s = s_attr.to_string();
-    assert!(
-        s.starts_with("SOFTWARE:"),
-        "bad string representation {}",
-        s
-    );
+    assert!(s.starts_with("SOFTWARE:"), "bad string representation {s}");
 
     Ok(())
 }
@@ -45,11 +41,10 @@ fn test_software_add_to_invalid() -> Result<()> {
     if let Err(err) = result {
         assert!(
             is_attr_size_overflow(&err),
-            "add_to should return AttrOverflowErr, got: {}",
-            err
+            "add_to should return AttrOverflowErr, got: {err}"
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = TextAttribute::get_from_as(&m, ATTR_SOFTWARE);
@@ -62,7 +57,7 @@ fn test_software_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -103,11 +98,10 @@ fn test_username() -> Result<()> {
         if let Err(err) = result {
             assert!(
                 is_attr_size_overflow(&err),
-                "add_to should return *AttrOverflowErr, got: {}",
-                err
+                "add_to should return *AttrOverflowErr, got: {err}"
             );
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
     //"add_to"
@@ -120,9 +114,7 @@ fn test_username() -> Result<()> {
             assert_eq!(
                 got.to_string(),
                 username,
-                "expedted: {}, got: {}",
-                username,
-                got
+                "expedted: {username}, got: {got}"
             );
             //"Not found"
             {
@@ -131,7 +123,7 @@ fn test_username() -> Result<()> {
                 if let Err(err) = result {
                     assert_eq!(Error::ErrAttributeNotFound, err, "Should error");
                 } else {
-                    assert!(false, "expected error, but got ok");
+                    panic!("expected error, but got ok");
                 }
             }
         }
@@ -175,20 +167,20 @@ fn test_realm_get_from() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "Expected error, but got ok");
+        panic!("Expected error, but got ok");
     }
 
     let mut reader = BufReader::new(m.raw.as_slice());
     m2.read_from(&mut reader)?;
 
     let r = TextAttribute::get_from_as(&m, ATTR_REALM)?;
-    assert_eq!(r.to_string(), v, "Expected {}, got {}.", v, r);
+    assert_eq!(r.to_string(), v, "Expected {v}, got {r}.");
 
     let (r_attr, ok) = m.attributes.get(ATTR_REALM);
     assert!(ok, "realm attribute should be found");
 
     let s = r_attr.to_string();
-    assert!(s.starts_with("REALM:"), "bad string representation {}", s);
+    assert!(s.starts_with("REALM:"), "bad string representation {s}");
 
     Ok(())
 }
@@ -204,11 +196,10 @@ fn test_realm_add_to_invalid() -> Result<()> {
     if let Err(err) = result {
         assert!(
             is_attr_size_overflow(&err),
-            "add_to should return AttrOverflowErr, got: {}",
-            err
+            "add_to should return AttrOverflowErr, got: {err}"
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = TextAttribute::get_from_as(&m, ATTR_REALM);
@@ -221,7 +212,7 @@ fn test_realm_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -249,20 +240,20 @@ fn test_nonce_get_from() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "Expected error, but got ok");
+        panic!("Expected error, but got ok");
     }
 
     let mut reader = BufReader::new(m.raw.as_slice());
     m2.read_from(&mut reader)?;
 
     let r = TextAttribute::get_from_as(&m, ATTR_NONCE)?;
-    assert_eq!(r.to_string(), v, "Expected {}, got {}.", v, r);
+    assert_eq!(r.to_string(), v, "Expected {v}, got {r}.");
 
     let (r_attr, ok) = m.attributes.get(ATTR_NONCE);
     assert!(ok, "realm attribute should be found");
 
     let s = r_attr.to_string();
-    assert!(s.starts_with("NONCE:"), "bad string representation {}", s);
+    assert!(s.starts_with("NONCE:"), "bad string representation {s}");
 
     Ok(())
 }
@@ -278,11 +269,10 @@ fn test_nonce_add_to_invalid() -> Result<()> {
     if let Err(err) = result {
         assert!(
             is_attr_size_overflow(&err),
-            "add_to should return AttrOverflowErr, got: {}",
-            err
+            "add_to should return AttrOverflowErr, got: {err}"
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let result = TextAttribute::get_from_as(&m, ATTR_NONCE);
@@ -295,7 +285,7 @@ fn test_nonce_add_to_invalid() -> Result<()> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -311,7 +301,7 @@ fn test_nonce_add_to() -> Result<()> {
     n.add_to(&mut m)?;
 
     let v = m.get(ATTR_NONCE)?;
-    assert_eq!(v.as_slice(), b"example.org", "bad nonce {:?}", v);
+    assert_eq!(v.as_slice(), b"example.org", "bad nonce {v:?}");
 
     Ok(())
 }

@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod ivf_writer_test;
 
-use crate::error::Result;
-use crate::io::ivf_reader::IVFFileHeader;
-use crate::io::Writer;
+use std::io::{Seek, SeekFrom, Write};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::{Bytes, BytesMut};
 use rtp::packetizer::Depacketizer;
-use std::io::{Seek, SeekFrom, Write};
+
+use crate::error::Result;
+use crate::io::ivf_reader::IVFFileHeader;
+use crate::io::Writer;
 
 /// IVFWriter is used to take RTP packets and write them to an IVF on disk
 pub struct IVFWriter<W: Write + Seek> {
@@ -57,9 +58,9 @@ impl<W: Write + Seek> Writer for IVFWriter<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
         let mut depacketizer: Box<dyn Depacketizer> = if self.is_vp9 {
-            Box::new(rtp::codecs::vp9::Vp9Packet::default())
+            Box::<rtp::codecs::vp9::Vp9Packet>::default()
         } else {
-            Box::new(rtp::codecs::vp8::Vp8Packet::default())
+            Box::<rtp::codecs::vp8::Vp8Packet>::default()
         };
 
         let payload = depacketizer.depacketize(&packet.payload)?;

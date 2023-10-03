@@ -1,9 +1,8 @@
-use super::*;
-
 ///////////////////////////////////////////////////////////////////
 //chunk_type_test
 ///////////////////////////////////////////////////////////////////
 use super::chunk_type::*;
+use super::*;
 
 #[test]
 fn test_chunk_type_string() -> Result<()> {
@@ -32,9 +31,7 @@ fn test_chunk_type_string() -> Result<()> {
         assert_eq!(
             ct.to_string(),
             expected,
-            "failed to stringify chunkType {}, expected {}",
-            ct,
-            expected
+            "failed to stringify chunkType {ct}, expected {expected}"
         );
     }
 
@@ -59,10 +56,10 @@ fn test_abort_chunk_one_error_cause() -> Result<()> {
     let b = abort1.marshal()?;
     let abort2 = ChunkAbort::unmarshal(&b)?;
 
-    assert_eq!(1, abort2.error_causes.len(), "should have only one cause");
+    assert_eq!(abort2.error_causes.len(), 1, "should have only one cause");
     assert_eq!(
-        abort1.error_causes[0].error_cause_code(),
         abort2.error_causes[0].error_cause_code(),
+        abort1.error_causes[0].error_cause_code(),
         "errorCause code should match"
     );
 
@@ -90,11 +87,11 @@ fn test_abort_chunk_many_error_causes() -> Result<()> {
 
     let b = abort1.marshal()?;
     let abort2 = ChunkAbort::unmarshal(&b)?;
-    assert_eq!(3, abort2.error_causes.len(), "should have only one cause");
+    assert_eq!(abort2.error_causes.len(), 3, "should have only one cause");
     for (i, error_cause) in abort1.error_causes.iter().enumerate() {
         assert_eq!(
-            error_cause.error_cause_code(),
             abort2.error_causes[i].error_cause_code(),
+            error_cause.error_cause_code(),
             "errorCause code should match"
         );
     }
@@ -105,9 +102,10 @@ fn test_abort_chunk_many_error_causes() -> Result<()> {
 ///////////////////////////////////////////////////////////////////
 //chunk_error_test
 ///////////////////////////////////////////////////////////////////
-use super::chunk_error::*;
 use bytes::BufMut;
 use lazy_static::lazy_static;
+
+use super::chunk_error::*;
 
 const CHUNK_FLAGS: u8 = 0x00;
 static ORG_UNRECOGNIZED_CHUNK: Bytes =
@@ -127,13 +125,13 @@ lazy_static! {
 #[test]
 fn test_chunk_error_unrecognized_chunk_type_unmarshal() -> Result<()> {
     let c = ChunkError::unmarshal(&RAW_IN)?;
-    assert_eq!(CT_ERROR, c.header().typ, "chunk type should be ERROR");
-    assert_eq!(1, c.error_causes.len(), "there should be on errorCause");
+    assert_eq!(c.header().typ, CT_ERROR, "chunk type should be ERROR");
+    assert_eq!(c.error_causes.len(), 1, "there should be on errorCause");
 
     let ec = &c.error_causes[0];
     assert_eq!(
-        UNRECOGNIZED_CHUNK_TYPE,
         ec.error_cause_code(),
+        UNRECOGNIZED_CHUNK_TYPE,
         "cause code should be unrecognizedChunkType"
     );
     assert_eq!(
@@ -201,7 +199,7 @@ fn test_chunk_forward_tsn_success() -> Result<()> {
     for binary in tests {
         let actual = ChunkForwardTsn::unmarshal(&binary)?;
         let b = actual.marshal()?;
-        assert_eq!(binary, b, "test not equal");
+        assert_eq!(b, binary, "test not equal");
     }
 
     Ok(())
@@ -225,7 +223,7 @@ fn test_chunk_forward_tsn_unmarshal_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkForwardTsn::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -245,7 +243,7 @@ static TEST_CHUNK_RECONFIG_PARAM_B: Bytes = Bytes::from_static(&[
     0x0, 0xd, 0x0, 0x10, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x3,
 ]);
 
-static TEST_CHUNK_RECONFIG_RESPONCE: Bytes =
+static TEST_CHUNK_RECONFIG_RESPONSE: Bytes =
     Bytes::from_static(&[0x0, 0x10, 0x0, 0xc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1]);
 
 lazy_static! {
@@ -266,7 +264,7 @@ lazy_static! {
         {
             let mut test = BytesMut::new();
             test.extend(vec![0x82, 0x0, 0x0, 0x10]);
-            test.extend(TEST_CHUNK_RECONFIG_RESPONCE.clone());
+            test.extend(TEST_CHUNK_RECONFIG_RESPONSE.clone());
             tests.push(test.freeze());
         }
         {
@@ -321,7 +319,7 @@ fn test_chunk_reconfig_unmarshal_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkReconfig::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -341,7 +339,7 @@ fn test_chunk_shutdown_success() -> Result<()> {
     for binary in tests {
         let actual = ChunkShutdown::unmarshal(&binary)?;
         let b = actual.marshal()?;
-        assert_eq!(binary, b, "test not equal");
+        assert_eq!(b, binary, "test not equal");
     }
 
     Ok(())
@@ -374,7 +372,7 @@ fn test_chunk_shutdown_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkShutdown::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -414,7 +412,7 @@ fn test_chunk_shutdown_ack_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkShutdownAck::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -432,7 +430,7 @@ fn test_chunk_shutdown_complete_success() -> Result<()> {
     for binary in tests {
         let actual = ChunkShutdownComplete::unmarshal(&binary)?;
         let b = actual.marshal()?;
-        assert_eq!(binary, b, "test not equal");
+        assert_eq!(b, binary, "test not equal");
     }
 
     Ok(())
@@ -454,7 +452,7 @@ fn test_chunk_shutdown_complete_failure() -> Result<()> {
 
     for (name, binary) in tests {
         let result = ChunkShutdownComplete::unmarshal(&binary);
-        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+        assert!(result.is_err(), "expected unmarshal: {name} to fail.");
     }
 
     Ok(())
@@ -502,7 +500,7 @@ fn test_init_chunk() -> Result<()> {
             3899461680u32, c.initial_tsn
         );
     } else {
-        assert!(false, "Failed to cast Chunk -> Init");
+        panic!("Failed to cast Chunk -> Init");
     }
 
     Ok(())
@@ -537,7 +535,7 @@ fn test_chrome_chunk1_init() -> Result<()> {
     ]);
     let pkt = Packet::unmarshal(&raw_pkt)?;
     let raw_pkt2 = pkt.marshal()?;
-    assert_eq!(raw_pkt, raw_pkt2);
+    assert_eq!(raw_pkt2, raw_pkt);
 
     Ok(())
 }
@@ -576,7 +574,7 @@ fn test_chrome_chunk2_init_ack() -> Result<()> {
     ]);
     let pkt = Packet::unmarshal(&raw_pkt)?;
     let raw_pkt2 = pkt.marshal()?;
-    assert_eq!(raw_pkt, raw_pkt2);
+    assert_eq!(raw_pkt2, raw_pkt);
 
     Ok(())
 }
@@ -627,7 +625,7 @@ fn test_init_marshal_unmarshal() -> Result<()> {
             123, c.initial_tsn
         );
     } else {
-        assert!(false, "Failed to cast Chunk -> InitAck");
+        panic!("Failed to cast Chunk -> InitAck");
     }
 
     Ok(())
@@ -694,7 +692,7 @@ fn test_reconfig_chunk() -> Result<()> {
             "unexpected stream identifier"
         );
     } else {
-        assert!(false, "Failed to cast Chunk -> Reconfig");
+        panic!("Failed to cast Chunk -> Reconfig");
     }
 
     Ok(())
@@ -717,7 +715,7 @@ fn test_forward_tsn_chunk() -> Result<()> {
             c.new_cumulative_tsn
         );
     } else {
-        assert!(false, "Failed to cast Chunk -> Forward TSN");
+        panic!("Failed to cast Chunk -> Forward TSN");
     }
 
     Ok(())

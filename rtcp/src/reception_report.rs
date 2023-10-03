@@ -1,9 +1,13 @@
-use crate::{error::Error, header::*, packet::*, util::*};
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
-
-use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
+
+use bytes::{Buf, BufMut};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
+use crate::packet::*;
+use crate::util::*;
 
 pub(crate) const RECEPTION_REPORT_LENGTH: usize = 24;
 pub(crate) const FRACTION_LOST_OFFSET: usize = 4;
@@ -27,10 +31,9 @@ pub struct ReceptionReport {
     /// The total number of RTP data packets from source SSRC that have
     /// been lost since the beginning of reception.
     pub total_lost: u32,
-    /// The low 16 bits contain the highest sequence number received in an
-    /// RTP data packet from source SSRC, and the most significant 16
-    /// bits extend that sequence number with the corresponding count of
-    /// sequence number cycles.
+    /// The least significant 16 bits contain the highest sequence number received
+    /// in an RTP data packet from source SSRC, and the most significant 16 bits extend
+    /// that sequence number with the corresponding count of sequence number cycles.
     pub last_sequence_number: u32,
     /// An estimate of the statistical variance of the RTP data packet
     /// interarrival time, measured in timestamp units and expressed as an
@@ -48,7 +51,7 @@ pub struct ReceptionReport {
 
 impl fmt::Display for ReceptionReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

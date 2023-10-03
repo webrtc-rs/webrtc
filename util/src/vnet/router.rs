@@ -1,16 +1,6 @@
 #[cfg(test)]
 mod router_test;
 
-use crate::error::*;
-use crate::vnet::chunk::*;
-use crate::vnet::chunk_queue::*;
-use crate::vnet::interface::*;
-use crate::vnet::nat::*;
-use crate::vnet::net::*;
-use crate::vnet::resolver::*;
-
-use async_trait::async_trait;
-use ipnet::*;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -20,8 +10,19 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
+
+use async_trait::async_trait;
+use ipnet::*;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
+
+use crate::error::*;
+use crate::vnet::chunk::*;
+use crate::vnet::chunk_queue::*;
+use crate::vnet::interface::*;
+use crate::vnet::nat::*;
+use crate::vnet::net::*;
+use crate::vnet::resolver::*;
 
 const DEFAULT_ROUTER_QUEUE_SIZE: usize = 0; // unlimited
 
@@ -32,7 +33,7 @@ lazy_static! {
 // Generate a unique router name
 fn assign_router_name() -> String {
     let n = ROUTER_ID_CTR.fetch_add(1, Ordering::SeqCst);
-    format!("router{}", n)
+    format!("router{n}")
 }
 
 // RouterConfig ...
@@ -343,7 +344,7 @@ impl Router {
         });
 
         let children = self.children.clone();
-        Box::pin(async move { Router::start_childen(children).await })
+        Box::pin(async move { Router::start_children(children).await })
     }
 
     // Stop ...
@@ -355,10 +356,10 @@ impl Router {
         self.done.take();
 
         let children = self.children.clone();
-        Box::pin(async move { Router::stop_childen(children).await })
+        Box::pin(async move { Router::stop_children(children).await })
     }
 
-    async fn start_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<()> {
+    async fn start_children(children: Vec<Arc<Mutex<Router>>>) -> Result<()> {
         for child in children {
             let mut c = child.lock().await;
             c.start().await?;
@@ -367,7 +368,7 @@ impl Router {
         Ok(())
     }
 
-    async fn stop_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<()> {
+    async fn stop_children(children: Vec<Arc<Mutex<Router>>>) -> Result<()> {
         for child in children {
             let mut c = child.lock().await;
             c.stop().await?;

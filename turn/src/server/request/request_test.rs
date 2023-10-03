@@ -1,12 +1,12 @@
+use std::net::IpAddr;
+use std::str::FromStr;
+
+use tokio::net::UdpSocket;
+use tokio::time::{Duration, Instant};
+use util::vnet::net::*;
+
 use super::*;
 use crate::relay::relay_none::*;
-
-use std::{net::IpAddr, str::FromStr};
-use tokio::{
-    net::UdpSocket,
-    time::{Duration, Instant},
-};
-use util::vnet::net::*;
 
 const STATIC_KEY: &str = "ABC";
 
@@ -27,8 +27,7 @@ async fn test_allocation_lifetime_parsing() -> Result<()> {
     let lifetime_duration = allocation_lifetime(&m);
     assert_eq!(
         lifetime_duration, lifetime.0,
-        "Expect lifetime_duration is {}, but {:?}",
-        lifetime, lifetime_duration
+        "Expect lifetime_duration is {lifetime}, but {lifetime_duration:?}"
     );
 
     Ok(())
@@ -44,8 +43,7 @@ async fn test_allocation_lifetime_overflow() -> Result<()> {
     let lifetime_duration = allocation_lifetime(&m2);
     assert_eq!(
         lifetime_duration, DEFAULT_LIFETIME,
-        "Expect lifetime_duration is {:?}, but {:?}",
-        DEFAULT_LIFETIME, lifetime_duration
+        "Expect lifetime_duration is {DEFAULT_LIFETIME:?}, but {lifetime_duration:?}"
     );
 
     Ok(())
@@ -69,6 +67,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
             address: "0.0.0.0".to_owned(),
             net: Arc::new(Net::new(None)),
         }),
+        alloc_close_notify: None,
     }));
 
     let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1")?, 5000);
@@ -82,17 +81,18 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
 
     let five_tuple = FiveTuple {
         src_addr: r.src_addr,
-        dst_addr: r.conn.local_addr().await?,
+        dst_addr: r.conn.local_addr()?,
         protocol: PROTO_UDP,
     };
 
     r.allocation_manager
         .create_allocation(
-            five_tuple.clone(),
+            five_tuple,
             Arc::clone(&r.conn),
             0,
             Duration::from_secs(3600),
             TextAttribute::new(ATTR_USERNAME, "user".into()),
+            true,
         )
         .await?;
     assert!(r

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* Implement from and tryfrom string traits for SessionDescription.
+
+## v0.5.3
+
 * Increased minimum support rust version to `1.60.0`.
 
 ## v0.5.2

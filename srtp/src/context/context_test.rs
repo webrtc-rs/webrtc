@@ -1,8 +1,8 @@
-use super::*;
-use crate::key_derivation::*;
-
 use bytes::Bytes;
 use lazy_static::lazy_static;
+
+use super::*;
+use crate::key_derivation::*;
 
 const CIPHER_CONTEXT_ALGO: ProtectionProfile = ProtectionProfile::Aes128CmHmacSha1_80;
 const DEFAULT_SSRC: u32 = 0;
@@ -26,9 +26,9 @@ fn test_context_roc() -> Result<()> {
     c.set_roc(123, 100);
     let roc = c.get_roc(123);
     if let Some(r) = roc {
-        assert_eq!(r, 100, "ROC is set to 100, but returned {}", r)
+        assert_eq!(r, 100, "ROC is set to 100, but returned {r}")
     } else {
-        assert!(false, "ROC must return value for used SSRC");
+        panic!("ROC must return value for used SSRC");
     }
 
     Ok(())
@@ -53,9 +53,9 @@ fn test_context_index() -> Result<()> {
     c.set_index(123, 100);
     let index = c.get_index(123);
     if let Some(i) = index {
-        assert_eq!(i, 100, "Index is set to 100, but returned {}", i);
+        assert_eq!(i, 100, "Index is set to 100, but returned {i}");
     } else {
-        assert!(false, "Index must return true for used SSRC")
+        panic!("Index must return true for used SSRC")
     }
 
     Ok(())
@@ -109,15 +109,14 @@ fn test_valid_packet_counter() -> Result<()> {
         ssrc: 4160032510,
         ..Default::default()
     };
-    let expected_counter = vec![
+    let expected_counter = [
         0xcf, 0x90, 0x1e, 0xa5, 0xda, 0xd3, 0x2c, 0x15, 0x00, 0xa2, 0x24, 0xae, 0xae, 0xaf, 0x00,
         0x00,
     ];
-    let counter = generate_counter(32846, s.rollover_counter, s.ssrc, &srtp_session_salt)?;
+    let counter = generate_counter(32846, s.rollover_counter, s.ssrc, &srtp_session_salt);
     assert_eq!(
         counter, expected_counter,
-        "Session Key {:?} does not match expected {:?}",
-        counter, expected_counter,
+        "Session Key {counter:?} does not match expected {expected_counter:?}",
     );
 
     Ok(())
@@ -199,8 +198,7 @@ fn test_rollover_count() -> Result<()> {
     let roc = s.next_rollover_count(0);
     assert_eq!(
         roc, 2,
-        "rolloverCounter must be incremented after wrapping, got {}",
-        roc
+        "rolloverCounter must be incremented after wrapping, got {roc}"
     );
 
     Ok(())

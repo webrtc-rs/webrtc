@@ -1,10 +1,14 @@
-use super::{chunk_header::*, chunk_type::*, *};
-use crate::param::param_supported_extensions::ParamSupportedExtensions;
-use crate::param::{param_header::*, *};
-use crate::util::get_padding_size;
+use std::fmt;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::fmt;
+
+use super::chunk_header::*;
+use super::chunk_type::*;
+use super::*;
+use crate::param::param_header::*;
+use crate::param::param_supported_extensions::ParamSupportedExtensions;
+use crate::param::*;
+use crate::util::get_padding_size;
 
 ///chunkInitCommon represents an SCTP Chunk body of type INIT and INIT ACK
 ///
@@ -110,7 +114,7 @@ impl fmt::Display for ChunkInit {
         );
 
         for (i, param) in self.params.iter().enumerate() {
-            res += format!("Param {}:\n {}", i, param).as_str();
+            res += format!("Param {i}:\n {param}").as_str();
         }
         write!(f, "{} {}", self.header(), res)
     }
@@ -169,7 +173,7 @@ impl Chunk for ChunkInit {
         let mut params = vec![];
         let mut offset = CHUNK_HEADER_SIZE + INIT_CHUNK_MIN_LENGTH;
         let mut remaining = raw.len() as isize - offset as isize;
-        while remaining > INIT_OPTIONAL_VAR_HEADER_LENGTH as isize {
+        while remaining >= INIT_OPTIONAL_VAR_HEADER_LENGTH as isize {
             let p = build_param(&raw.slice(offset..CHUNK_HEADER_SIZE + header.value_length()))?;
             let p_len = PARAM_HEADER_LENGTH + p.value_length();
             let len_plus_padding = p_len + get_padding_size(p_len);
@@ -231,7 +235,7 @@ impl Chunk for ChunkInit {
         // to be 0, the receiver MUST treat it as an error and close the
         // association by transmitting an ABORT.
         if self.initiate_tag == 0 {
-            return Err(Error::ErrChunkTypeInitInitateTagZero);
+            return Err(Error::ErrChunkTypeInitInitiateTagZero);
         }
 
         // Defines the maximum number of streams the sender of this INIT

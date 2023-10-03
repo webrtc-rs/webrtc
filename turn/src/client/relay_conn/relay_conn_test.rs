@@ -1,7 +1,7 @@
+use std::net::Ipv4Addr;
+
 use super::*;
 use crate::error::Result;
-
-use std::net::Ipv4Addr;
 
 struct DummyRelayConnObserver {
     turn_server_addr: String,
@@ -77,7 +77,7 @@ async fn test_relay_conn() -> Result<()> {
     {
         assert!(Error::ErrUnexpectedResponse != err);
     } else {
-        assert!(false, "should fail");
+        panic!("should fail");
     }
 
     Ok(())

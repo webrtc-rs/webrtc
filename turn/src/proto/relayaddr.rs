@@ -3,16 +3,17 @@ mod relayaddr_test;
 
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr};
+
 use stun::attributes::*;
 use stun::message::*;
 use stun::xoraddr::*;
 
-// RelayedAddress implements XOR-RELAYED-ADDRESS attribute.
-//
-// It specifies the address and port that the server allocated to the
-// client. It is encoded in the same way as XOR-MAPPED-ADDRESS.
-//
-// RFC 5766 Section 14.5
+/// `RelayedAddress` implements `XOR-RELAYED-ADDRESS` attribute.
+///
+/// It specifies the address and port that the server allocated to the
+/// client. It is encoded in the same way as `XOR-MAPPED-ADDRESS`.
+///
+/// [RFC 5766 Section 14.5](https://www.rfc-editor.org/rfc/rfc5766#section-14.5).
 #[derive(PartialEq, Eq, Debug)]
 pub struct RelayedAddress {
     pub ip: IpAddr,
@@ -38,7 +39,7 @@ impl fmt::Display for RelayedAddress {
 }
 
 impl Setter for RelayedAddress {
-    // AddTo adds XOR-PEER-ADDRESS to message.
+    /// Adds `XOR-PEER-ADDRESS` to message.
     fn add_to(&self, m: &mut Message) -> Result<(), stun::Error> {
         let a = XorMappedAddress {
             ip: self.ip,
@@ -49,7 +50,7 @@ impl Setter for RelayedAddress {
 }
 
 impl Getter for RelayedAddress {
-    // GetFrom decodes XOR-PEER-ADDRESS from message.
+    /// Decodes `XOR-PEER-ADDRESS` from message.
     fn get_from(&mut self, m: &Message) -> Result<(), stun::Error> {
         let mut a = XorMappedAddress::default();
         a.get_from_as(m, ATTR_XOR_RELAYED_ADDRESS)?;
@@ -59,10 +60,10 @@ impl Getter for RelayedAddress {
     }
 }
 
-// XORRelayedAddress implements XOR-RELAYED-ADDRESS attribute.
-//
-// It specifies the address and port that the server allocated to the
-// client. It is encoded in the same way as XOR-MAPPED-ADDRESS.
-//
-// RFC 5766 Section 14.5
+/// `XorRelayedAddress` implements `XOR-RELAYED-ADDRESS` attribute.
+///
+/// It specifies the address and port that the server allocated to the
+/// client. It is encoded in the same way as `XOR-MAPPED-ADDRESS`.
+///
+/// [RFC 5766 Section 14.5](https://www.rfc-editor.org/rfc/rfc5766#section-14.5).
 pub type XorRelayedAddress = RelayedAddress;

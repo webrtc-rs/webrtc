@@ -1,11 +1,12 @@
-use super::*;
+use std::net::Ipv4Addr;
 
-use crate::{allocation::*, error::Result};
-
+use stun::attributes::ATTR_USERNAME;
+use stun::textattrs::TextAttribute;
 use tokio::net::UdpSocket;
 
-use std::net::Ipv4Addr;
-use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
+use super::*;
+use crate::allocation::*;
+use crate::error::Result;
 
 async fn create_channel_bind(lifetime: Duration) -> Result<Allocation> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
@@ -17,6 +18,7 @@ async fn create_channel_bind(lifetime: Duration) -> Result<Allocation> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr = SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0);
@@ -35,7 +37,7 @@ async fn test_channel_bind() -> Result<()> {
     if let Some(addr) = result {
         assert_eq!(addr.ip().to_string(), "0.0.0.0");
     } else {
-        assert!(false, "expected some, but got none");
+        panic!("expected some, but got none");
     }
 
     Ok(())

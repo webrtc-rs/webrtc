@@ -55,16 +55,16 @@ impl fmt::Display for RTCRtpTransceiverDirection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             RTCRtpTransceiverDirection::Sendrecv => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR}")
             }
             RTCRtpTransceiverDirection::Sendonly => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR}")
             }
             RTCRtpTransceiverDirection::Recvonly => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR}")
             }
             RTCRtpTransceiverDirection::Inactive => {
-                write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR)
+                write!(f, "{RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR}")
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
@@ -121,7 +121,7 @@ mod test {
         ];
 
         for (ct_str, expected_type) in tests {
-            assert_eq!(expected_type, RTCRtpTransceiverDirection::from(ct_str));
+            assert_eq!(RTCRtpTransceiverDirection::from(ct_str), expected_type);
         }
     }
 
@@ -136,7 +136,7 @@ mod test {
         ];
 
         for (d, expected_string) in tests {
-            assert_eq!(expected_string, d.to_string());
+            assert_eq!(d.to_string(), expected_string);
         }
     }
 
@@ -151,7 +151,7 @@ mod test {
         ];
 
         for (d, expected_value) in tests {
-            assert_eq!(expected_value, d.has_send());
+            assert_eq!(d.has_send(), expected_value);
         }
     }
 
@@ -166,7 +166,7 @@ mod test {
         ];
 
         for (d, expected_value) in tests {
-            assert_eq!(expected_value, d.has_recv());
+            assert_eq!(d.has_recv(), expected_value);
         }
     }
 
@@ -181,8 +181,8 @@ mod test {
 
         for (expected_value, (send, recv)) in tests {
             assert_eq!(
-                expected_value,
-                RTCRtpTransceiverDirection::from_send_recv(send, recv)
+                RTCRtpTransceiverDirection::from_send_recv(send, recv),
+                expected_value
             );
         }
     }
@@ -204,7 +204,7 @@ mod test {
         ];
 
         for ((a, b), expected_direction) in tests {
-            assert_eq!(expected_direction, a.intersect(b));
+            assert_eq!(a.intersect(b), expected_direction);
         }
     }
 }

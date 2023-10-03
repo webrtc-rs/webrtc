@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod control_test;
 
+use std::fmt;
+
 use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;
-
-use std::fmt;
 
 /// Common helper for ICE-{CONTROLLED,CONTROLLING} and represents the so-called Tiebreaker number.
 #[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
@@ -17,7 +17,7 @@ impl TieBreaker {
     /// Adds Tiebreaker value to m as t attribute.
     pub fn add_to_as(self, m: &mut Message, t: AttrType) -> Result<(), stun::Error> {
         let mut v = vec![0; TIE_BREAKER_SIZE];
-        v.copy_from_slice(&(self.0 as u64).to_be_bytes());
+        v.copy_from_slice(&self.0.to_be_bytes());
         m.add(t, &v);
         Ok(())
     }
@@ -138,6 +138,6 @@ impl fmt::Display for Role {
             Self::Controlled => "controlled",
             Self::Unspecified => "unspecified",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }

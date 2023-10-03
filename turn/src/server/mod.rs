@@ -4,25 +4,23 @@ mod server_test;
 pub mod config;
 pub mod request;
 
-use crate::{
-    allocation::{allocation_manager::*, five_tuple::FiveTuple, AllocationInfo},
-    auth::AuthHandler,
-    error::*,
-    proto::lifetime::DEFAULT_LIFETIME,
-};
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use config::*;
 use request::*;
-
-use std::{collections::HashMap, sync::Arc};
-
-use tokio::{
-    sync::{
-        broadcast::{self, error::RecvError},
-        mpsc, oneshot, Mutex,
-    },
-    time::{Duration, Instant},
-};
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::{self};
+use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::time::{Duration, Instant};
 use util::Conn;
+
+use crate::allocation::allocation_manager::*;
+use crate::allocation::five_tuple::FiveTuple;
+use crate::allocation::AllocationInfo;
+use crate::auth::AuthHandler;
+use crate::error::*;
+use crate::proto::lifetime::DEFAULT_LIFETIME;
 
 const INBOUND_MTU: usize = 1500;
 
@@ -36,7 +34,7 @@ pub struct Server {
 }
 
 impl Server {
-    /// creates the TURN server
+    /// creates a new TURN server
     pub async fn new(config: ServerConfig) -> Result<Self> {
         config.validate()?;
 
@@ -62,6 +60,7 @@ impl Server {
             let conn = p.conn;
             let allocation_manager = Arc::new(Manager::new(ManagerConfig {
                 relay_addr_generator: p.relay_addr_generator,
+                alloc_close_notify: config.alloc_close_notify.clone(),
             }));
 
             tokio::spawn(Server::read_loop(
@@ -78,7 +77,9 @@ impl Server {
         Ok(s)
     }
 
-    /// Deletes all existing [`crate::allocation::Allocation`]s by the provided `username`.
+    /// Deletes all existing [`Allocation`][`Allocation`]s by the provided `username`.
+    ///
+    /// [`Allocation`]: crate::allocation::Allocation
     pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
         let tx = {
             let command_tx = self.command_tx.lock().await;
@@ -97,13 +98,13 @@ impl Server {
         }
     }
 
-    /// Get information of [`Allocation`]s by specified [`FiveTuple`]s.
+    /// Get information of [`Allocation`][`Allocation`]s by specified [`FiveTuple`]s.
     ///
     /// If `five_tuples` is:
     /// - [`None`]:               It returns information about the all
-    ///                           [`Allocation`]s.
+    ///                           [`Allocation`][`Allocation`]s.
     /// - [`Some`] and not empty: It returns information about
-    ///                           the [`Allocation`]s associated with
+    ///                           the [`Allocation`][`Allocation`]s associated with
     ///                           the specified [`FiveTuples`].
     /// - [`Some`], but empty:    It returns an empty [`HashMap`].
     ///
@@ -217,7 +218,7 @@ impl Server {
         let _ = conn.close().await;
     }
 
-    /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
+    /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing.
     pub async fn close(&self) -> Result<()> {
         let tx = {
             let mut command_tx = self.command_tx.lock().await;
@@ -239,16 +240,17 @@ impl Server {
 }
 
 /// The protocol to communicate between the [`Server`]'s public methods
-/// and the tasks spawned in the [`read_loop`] method.
+/// and the tasks spawned in the [`Server::read_loop`] method.
 #[derive(Clone)]
 enum Command {
-    /// Command to delete [`crate::allocation::Allocation`] by provided
-    /// `username`.
+    /// Command to delete [`Allocation`][`Allocation`] by provided `username`.
+    ///
+    /// [`Allocation`]: `crate::allocation::Allocation`
     DeleteAllocations(String, Arc<mpsc::Receiver<()>>),
 
-    /// Command to get information of [`Allocation`]s by provided [`FiveTuple`]s.
+    /// Command to get information of [`Allocation`][`Allocation`]s by provided [`FiveTuple`]s.
     ///
-    /// [`Allocation`]: [`crate::allocation::Allocation`]
+    /// [`Allocation`]: `crate::allocation::Allocation`
     GetAllocationsInfo(
         Option<Vec<FiveTuple>>,
         mpsc::Sender<HashMap<FiveTuple, AllocationInfo>>,

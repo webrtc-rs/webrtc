@@ -1,8 +1,9 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
@@ -16,10 +17,8 @@ use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndicat
 use webrtc::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
 };
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::track::track_remote::TrackRemote;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -164,7 +163,7 @@ async fn main() -> Result<()> {
                 },
                 ..Default::default()
             },
-            format!("track-{}", s),
+            format!("track-{s}"),
             "webrtc-rs".to_owned(),
         ));
 
@@ -180,7 +179,7 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             let mut rtcp_buf = vec![0u8; 1500];
             while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-            println!("{} rtp_sender.read loop exit", m);
+            println!("{m} rtp_sender.read loop exit");
             Result::<()>::Ok(())
         });
 
@@ -198,96 +197,89 @@ async fn main() -> Result<()> {
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
     let pc = Arc::downgrade(&peer_connection);
-    peer_connection
-        .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
-                if let Some(track) = track {
-                    // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-                    // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
-                    let media_ssrc = track.ssrc();
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+        // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
+        let media_ssrc = track.ssrc();
 
-                    if track.kind() == RTPCodecType::Video {
-                        let pc2 = pc.clone();
-                        tokio::spawn(async move {
-                            let mut result = Result::<usize>::Ok(0);
-                            while result.is_ok() {
-                                let timeout = tokio::time::sleep(Duration::from_secs(3));
-                                tokio::pin!(timeout);
+        if track.kind() == RTPCodecType::Video {
+            let pc2 = pc.clone();
+            tokio::spawn(async move {
+                let mut result = Result::<usize>::Ok(0);
+                while result.is_ok() {
+                    let timeout = tokio::time::sleep(Duration::from_secs(3));
+                    tokio::pin!(timeout);
 
-                                tokio::select! {
-                                    _ = timeout.as_mut() =>{
-                                        if let Some(pc) = pc2.upgrade(){
-                                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                                    sender_ssrc: 0,
-                                                    media_ssrc,
-                                            })]).await.map_err(Into::into);
-                                        }else{
-                                            break;
-                                        }
-                                    }
-                                };
-                            }
-                        });
-                    }
-
-                    let kind = if track.kind() == RTPCodecType::Audio {
-                        "audio"
-                    } else {
-                        "video"
-                    };
-                    let output_track = if let Some(output_track) = output_tracks.get(kind) {
-                        Arc::clone(output_track)
-                    } else {
-                        println!("output_track not found for type = {}", kind);
-                        return Box::pin(async {});
-                    };
-
-                    let output_track2 = Arc::clone(&output_track);
-                    tokio::spawn(async move {
-                        println!(
-                            "Track has started, of type {}: {}",
-                            track.payload_type(),
-                            track.codec().await.capability.mime_type
-                        );
-                        // Read RTP packets being sent to webrtc-rs
-                        while let Ok((rtp, _)) = track.read_rtp().await {
-                            if let Err(err) = output_track2.write_rtp(&rtp).await {
-                                println!("output track write_rtp got error: {}", err);
+                    tokio::select! {
+                        _ = timeout.as_mut() =>{
+                            if let Some(pc) = pc2.upgrade(){
+                                result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                        sender_ssrc: 0,
+                                        media_ssrc,
+                                })]).await.map_err(Into::into);
+                            }else{
                                 break;
                             }
                         }
-
-                        println!(
-                            "on_track finished, of type {}: {}",
-                            track.payload_type(),
-                            track.codec().await.capability.mime_type
-                        );
-                    });
+                    };
                 }
-                Box::pin(async {})
-            },
-        ))
-        .await;
+            });
+        }
+
+        let kind = if track.kind() == RTPCodecType::Audio {
+            "audio"
+        } else {
+            "video"
+        };
+        let output_track = if let Some(output_track) = output_tracks.get(kind) {
+            Arc::clone(output_track)
+        } else {
+            println!("output_track not found for type = {kind}");
+            return Box::pin(async {});
+        };
+
+        let output_track2 = Arc::clone(&output_track);
+        tokio::spawn(async move {
+            println!(
+                "Track has started, of type {}: {}",
+                track.payload_type(),
+                track.codec().capability.mime_type
+            );
+            // Read RTP packets being sent to webrtc-rs
+            while let Ok((rtp, _)) = track.read_rtp().await {
+                if let Err(err) = output_track2.write_rtp(&rtp).await {
+                    println!("output track write_rtp got error: {err}");
+                    break;
+                }
+            }
+
+            println!(
+                "on_track finished, of type {}: {}",
+                track.payload_type(),
+                track.codec().capability.mime_type
+            );
+        });
+
+        Box::pin(async {})
+    }));
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Create an answer
     let answer = peer_connection.create_answer(None).await?;
@@ -307,7 +299,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -324,7 +316,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 

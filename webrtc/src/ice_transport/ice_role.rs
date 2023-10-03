@@ -2,8 +2,9 @@ use std::fmt;
 
 /// ICERole describes the role ice.Agent is playing in selecting the
 /// preferred the candidate pair.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceRole {
+    #[default]
     Unspecified,
 
     /// ICERoleControlling indicates that the ICE agent that is responsible
@@ -15,12 +16,6 @@ pub enum RTCIceRole {
     /// ICERoleControlled indicates that an ICE agent that waits for the
     /// controlling agent to select the final choice of candidate pairs.
     Controlled,
-}
-
-impl Default for RTCIceRole {
-    fn default() -> Self {
-        RTCIceRole::Unspecified
-    }
 }
 
 const ICE_ROLE_CONTROLLING_STR: &str = "controlling";
@@ -39,8 +34,8 @@ impl From<&str> for RTCIceRole {
 impl fmt::Display for RTCIceRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceRole::Controlling => write!(f, "{}", ICE_ROLE_CONTROLLING_STR),
-            RTCIceRole::Controlled => write!(f, "{}", ICE_ROLE_CONTROLLED_STR),
+            RTCIceRole::Controlling => write!(f, "{ICE_ROLE_CONTROLLING_STR}"),
+            RTCIceRole::Controlled => write!(f, "{ICE_ROLE_CONTROLLED_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -59,7 +54,7 @@ mod test {
         ];
 
         for (role_string, expected_role) in tests {
-            assert_eq!(expected_role, RTCIceRole::from(role_string));
+            assert_eq!(RTCIceRole::from(role_string), expected_role);
         }
     }
 
@@ -72,7 +67,7 @@ mod test {
         ];
 
         for (proto, expected_string) in tests {
-            assert_eq!(expected_string, proto.to_string());
+            assert_eq!(proto.to_string(), expected_string);
         }
     }
 }

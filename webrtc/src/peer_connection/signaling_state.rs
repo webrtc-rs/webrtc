@@ -1,18 +1,13 @@
+use std::fmt;
+
 use crate::error::{Error, Result};
 use crate::peer_connection::sdp::sdp_type::RTCSdpType;
 
-use std::fmt;
-
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum StateChangeOp {
+    #[default]
     SetLocal,
     SetRemote,
-}
-
-impl Default for StateChangeOp {
-    fn default() -> Self {
-        StateChangeOp::SetLocal
-    }
 }
 
 impl fmt::Display for StateChangeOp {
@@ -26,8 +21,9 @@ impl fmt::Display for StateChangeOp {
 }
 
 /// SignalingState indicates the signaling state of the offer/answer process.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCSignalingState {
+    #[default]
     Unspecified = 0,
 
     /// SignalingStateStable indicates there is no offer/answer exchange in
@@ -57,12 +53,6 @@ pub enum RTCSignalingState {
     Closed,
 }
 
-impl Default for RTCSignalingState {
-    fn default() -> Self {
-        RTCSignalingState::Unspecified
-    }
-}
-
 const SIGNALING_STATE_STABLE_STR: &str = "stable";
 const SIGNALING_STATE_HAVE_LOCAL_OFFER_STR: &str = "have-local-offer";
 const SIGNALING_STATE_HAVE_REMOTE_OFFER_STR: &str = "have-remote-offer";
@@ -87,20 +77,20 @@ impl From<&str> for RTCSignalingState {
 impl fmt::Display for RTCSignalingState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCSignalingState::Stable => write!(f, "{}", SIGNALING_STATE_STABLE_STR),
+            RTCSignalingState::Stable => write!(f, "{SIGNALING_STATE_STABLE_STR}"),
             RTCSignalingState::HaveLocalOffer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_LOCAL_OFFER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_LOCAL_OFFER_STR}")
             }
             RTCSignalingState::HaveRemoteOffer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_REMOTE_OFFER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_REMOTE_OFFER_STR}")
             }
             RTCSignalingState::HaveLocalPranswer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR}")
             }
             RTCSignalingState::HaveRemotePranswer => {
-                write!(f, "{}", SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR)
+                write!(f, "{SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR}")
             }
-            RTCSignalingState::Closed => write!(f, "{}", SIGNALING_STATE_CLOSED_STR),
+            RTCSignalingState::Closed => write!(f, "{SIGNALING_STATE_CLOSED_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -166,6 +156,11 @@ pub(crate) fn check_next_signaling_state(
                     }
                     _ => {}
                 }
+            } else if op == StateChangeOp::SetLocal
+                && sdp_type == RTCSdpType::Offer
+                && next == RTCSignalingState::HaveLocalOffer
+            {
+                return Ok(next);
             }
         }
         RTCSignalingState::HaveRemotePranswer => {
@@ -239,7 +234,7 @@ mod test {
         ];
 
         for (state_string, expected_state) in tests {
-            assert_eq!(expected_state, RTCSignalingState::from(state_string));
+            assert_eq!(RTCSignalingState::from(state_string), expected_state);
         }
     }
 
@@ -259,7 +254,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string());
+            assert_eq!(state.to_string(), expected_string);
         }
     }
 
@@ -356,17 +351,13 @@ mod test {
             let result = check_next_signaling_state(cur, next, op, sdp_type);
             match (&result, &expected_err) {
                 (Ok(got), None) => {
-                    assert_eq!(*got, next, "{} state mismatch", desc);
+                    assert_eq!(*got, next, "{desc} state mismatch");
                 }
                 (Err(got), Some(err)) => {
-                    assert_eq!(err.to_string(), got.to_string(), "{} error mismatch", desc);
+                    assert_eq!(got.to_string(), err.to_string(), "{desc} error mismatch");
                 }
                 _ => {
-                    assert!(
-                        false,
-                        "{}: expected {:?}, but got {:?}",
-                        desc, expected_err, result
-                    );
+                    panic!("{desc}: expected {expected_err:?}, but got {result:?}");
                 }
             };
         }

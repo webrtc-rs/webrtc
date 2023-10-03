@@ -1,3 +1,6 @@
+// Silence warning on `for i in 0..vec.len() { … }`:
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 
 #[test]
@@ -142,13 +145,13 @@ fn test_h264_packet_unmarshal() -> Result<()> {
     let payload = pkt.depacketize(&single_payload)?;
     assert_eq!(
         payload, single_payload_unmarshaled,
-        "Unmarshaling a single payload shouldn't modify the payload"
+        "Unmarshalling a single payload shouldn't modify the payload"
     );
 
     let payload = avc_pkt.depacketize(&single_payload)?;
     assert_eq!(
         payload, single_payload_unmarshaled_avc,
-        "Unmarshaling a single payload into avc stream shouldn't modify the payload"
+        "Unmarshalling a single payload into avc stream shouldn't modify the payload"
     );
 
     let mut large_payload_result = BytesMut::new();

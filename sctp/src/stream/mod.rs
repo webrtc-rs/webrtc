@@ -1,43 +1,35 @@
 #[cfg(test)]
 mod stream_test;
 
+use std::future::Future;
+use std::net::Shutdown;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::{fmt, io};
+
+use arc_swap::ArcSwapOption;
+use bytes::Bytes;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::sync::{mpsc, Mutex, Notify};
+
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::{Error, Result};
 use crate::queue::pending_queue::PendingQueue;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
-use bytes::Bytes;
-use std::{
-    fmt,
-    future::Future,
-    io,
-    net::Shutdown,
-    pin::Pin,
-    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering},
-    sync::Arc,
-    task::{Context, Poll},
-};
-use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf},
-    sync::{mpsc, Mutex, Notify},
-};
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub enum ReliabilityType {
     /// ReliabilityTypeReliable is used for reliable transmission
+    #[default]
     Reliable = 0,
     /// ReliabilityTypeRexmit is used for partial reliability by retransmission count
     Rexmit = 1,
     /// ReliabilityTypeTimed is used for partial reliability by retransmission duration
     Timed = 2,
-}
-
-impl Default for ReliabilityType {
-    fn default() -> Self {
-        ReliabilityType::Reliable
-    }
 }
 
 impl fmt::Display for ReliabilityType {
@@ -47,7 +39,7 @@ impl fmt::Display for ReliabilityType {
             ReliabilityType::Rexmit => "Rexmit",
             ReliabilityType::Timed => "Timed",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -87,7 +79,7 @@ pub struct Stream {
     pub(crate) reliability_value: AtomicU32,
     pub(crate) buffered_amount: AtomicUsize,
     pub(crate) buffered_amount_low: AtomicUsize,
-    pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
+    pub(crate) on_buffered_amount_low: ArcSwapOption<Mutex<OnBufferedAmountLowFn>>,
     pub(crate) name: String,
 }
 
@@ -143,7 +135,7 @@ impl Stream {
             reliability_value: AtomicU32::new(0),
             buffered_amount: AtomicUsize::new(0),
             buffered_amount_low: AtomicUsize::new(0),
-            on_buffered_amount_low: Mutex::new(None),
+            on_buffered_amount_low: ArcSwapOption::empty(),
             name,
         }
     }
@@ -199,7 +191,7 @@ impl Stream {
             };
 
             match result {
-                Ok(_) | Err(Error::ErrShortBuffer) => return result,
+                Ok(_) | Err(Error::ErrShortBuffer { .. }) => return result,
                 Err(_) => {
                     // wait for the next chunk to become available
                     self.read_notifier.notified().await;
@@ -277,6 +269,18 @@ impl Stream {
     ///
     /// Returns an error if the write half of this stream is shutdown or `p` is too large.
     pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
+        let chunks = self.prepare_write(p, ppi)?;
+        self.send_payload_data(chunks).await?;
+
+        Ok(p.len())
+    }
+
+    /// common stuff for write and try_write
+    fn prepare_write(
+        &self,
+        p: &Bytes,
+        ppi: PayloadProtocolIdentifier,
+    ) -> Result<Vec<ChunkPayloadData>> {
         if self.write_shutdown.load(Ordering::SeqCst) {
             return Err(Error::ErrStreamClosed);
         }
@@ -294,10 +298,7 @@ impl Stream {
             _ => {}
         };
 
-        let chunks = self.packetize(p, ppi);
-        self.send_payload_data(chunks).await?;
-
-        Ok(p.len())
+        Ok(self.packetize(p, ppi))
     }
 
     fn packetize(&self, raw: &Bytes, ppi: PayloadProtocolIdentifier) -> Vec<ChunkPayloadData> {
@@ -415,9 +416,9 @@ impl Stream {
 
     /// on_buffered_amount_low sets the callback handler which would be called when the number of
     /// bytes of outgoing data buffered is lower than the threshold.
-    pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
-        let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
-        *on_buffered_amount_low = Some(f);
+    pub fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+        self.on_buffered_amount_low
+            .store(Some(Arc::new(Mutex::new(f))));
     }
 
     /// This method is called by association's read_loop (go-)routine to notify this stream
@@ -455,8 +456,8 @@ impl Stream {
         );
 
         if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
-            let mut handler = self.on_buffered_amount_low.lock().await;
-            if let Some(f) = &mut *handler {
+            if let Some(handler) = &*self.on_buffered_amount_low.load() {
+                let mut f = handler.lock().await;
                 f().await;
             }
         }
@@ -531,6 +532,16 @@ enum ReadFut {
     RemainingData(Vec<u8>),
 }
 
+enum ShutdownFut {
+    /// Nothing in progress.
+    Idle,
+    /// Reading data from the underlying stream.
+    ShuttingDown(Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>>),
+    /// Shutdown future has run
+    Done,
+    Errored(crate::error::Error),
+}
+
 impl ReadFut {
     /// Gets a mutable reference to the future stored inside `Reading(future)`.
     ///
@@ -545,6 +556,22 @@ impl ReadFut {
     }
 }
 
+impl ShutdownFut {
+    /// Gets a mutable reference to the future stored inside `ShuttingDown(future)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ShutdownFut` variant is not `ShuttingDown`.
+    fn get_shutting_down_mut(
+        &mut self,
+    ) -> &mut Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>> {
+        match self {
+            ShutdownFut::ShuttingDown(ref mut fut) => fut,
+            _ => panic!("expected ShutdownFut to be ShuttingDown"),
+        }
+    }
+}
+
 /// A wrapper around around [`Stream`], which implements [`AsyncRead`] and
 /// [`AsyncWrite`].
 ///
@@ -554,8 +581,8 @@ pub struct PollStream {
     stream: Arc<Stream>,
 
     read_fut: ReadFut,
-    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send>>>,
-    shutdown_fut: Option<Pin<Box<dyn Future<Output = Result<()>> + Send>>>,
+    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
+    shutdown_fut: ShutdownFut,
 
     read_buf_cap: usize,
 }
@@ -577,7 +604,7 @@ impl PollStream {
             stream,
             read_fut: ReadFut::Idle,
             write_fut: None,
-            shutdown_fut: None,
+            shutdown_fut: ShutdownFut::Idle,
             read_buf_cap: DEFAULT_READ_BUF_SIZE,
         }
     }
@@ -775,25 +802,27 @@ impl AsyncWrite for PollStream {
             Poll::Pending => return Poll::Pending,
             Poll::Ready(_) => {}
         }
-
-        let fut = match self.shutdown_fut.as_mut() {
-            Some(fut) => fut,
-            None => {
+        let fut = match self.shutdown_fut {
+            ShutdownFut::Done => return Poll::Ready(Ok(())),
+            ShutdownFut::Errored(ref err) => return Poll::Ready(Err(err.clone().into())),
+            ShutdownFut::ShuttingDown(ref mut fut) => fut,
+            ShutdownFut::Idle => {
                 let stream = self.stream.clone();
-                self.shutdown_fut.get_or_insert(Box::pin(async move {
+                self.shutdown_fut = ShutdownFut::ShuttingDown(Box::pin(async move {
                     stream.shutdown(Shutdown::Write).await
-                }))
+                }));
+                self.shutdown_fut.get_shutting_down_mut()
             }
         };
 
         match fut.as_mut().poll(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Err(e)) => {
-                self.shutdown_fut = None;
+                self.shutdown_fut = ShutdownFut::Errored(e.clone());
                 Poll::Ready(Err(e.into()))
             }
             Poll::Ready(Ok(_)) => {
-                self.shutdown_fut = None;
+                self.shutdown_fut = ShutdownFut::Done;
                 Poll::Ready(Ok(()))
             }
         }

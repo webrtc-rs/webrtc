@@ -4,6 +4,19 @@ mod association_test;
 mod association_internal;
 mod association_stats;
 
+use std::collections::{HashMap, VecDeque};
+use std::fmt;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use association_internal::*;
+use association_stats::*;
+use bytes::{Bytes, BytesMut};
+use rand::random;
+use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
+use util::Conn;
+
 use crate::chunk::chunk_abort::ChunkAbort;
 use crate::chunk::chunk_cookie_ack::ChunkCookieAck;
 use crate::chunk::chunk_cookie_echo::ChunkCookieEcho;
@@ -36,19 +49,6 @@ use crate::stream::*;
 use crate::timer::ack_timer::*;
 use crate::timer::rtx_timer::*;
 use crate::util::*;
-
-use association_internal::*;
-use association_stats::*;
-
-use bytes::Bytes;
-use rand::random;
-use std::collections::{HashMap, VecDeque};
-use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::sync::{broadcast, mpsc, Mutex};
-use util::Conn;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 /// MTU for inbound packet (from DTLS)
@@ -102,24 +102,19 @@ impl fmt::Display for AssociationState {
             AssociationState::ShutdownReceived => "ShutdownReceived",
             AssociationState::ShutdownAckSent => "ShutdownAckSent",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
 /// retransmission timer IDs
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum RtxTimerId {
+    #[default]
     T1Init,
     T1Cookie,
     T2Shutdown,
     T3RTX,
     Reconfig,
-}
-
-impl Default for RtxTimerId {
-    fn default() -> Self {
-        RtxTimerId::T1Init
-    }
 }
 
 impl fmt::Display for RtxTimerId {
@@ -131,21 +126,17 @@ impl fmt::Display for RtxTimerId {
             RtxTimerId::T3RTX => "T3RTX",
             RtxTimerId::Reconfig => "Reconfig",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
 /// ack mode (for testing)
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum AckMode {
+    #[default]
     Normal,
     NoDelay,
     AlwaysDelay,
-}
-impl Default for AckMode {
-    fn default() -> Self {
-        AckMode::Normal
-    }
 }
 
 impl fmt::Display for AckMode {
@@ -155,22 +146,17 @@ impl fmt::Display for AckMode {
             AckMode::NoDelay => "NoDelay",
             AckMode::AlwaysDelay => "AlwaysDelay",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
 /// ack transmission state
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum AckState {
-    Idle,      // ack timer is off
+    #[default]
+    Idle, // ack timer is off
     Immediate, // will send ack immediately
     Delay,     // ack timer is on (ack is being delayed)
-}
-
-impl Default for AckState {
-    fn default() -> Self {
-        AckState::Idle
-    }
 }
 
 impl fmt::Display for AckState {
@@ -180,7 +166,7 @@ impl fmt::Display for AckState {
             AckState::Immediate => "Immediate",
             AckState::Delay => "Delay",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -498,28 +484,60 @@ impl Association {
         mut awake_write_loop_ch: mpsc::Receiver<()>,
     ) {
         log::debug!("[{}] write_loop entered", name);
-        let mut done = false;
-        while !done {
+        let done = Arc::new(AtomicBool::new(false));
+        let name = Arc::new(name);
+
+        let limit = {
+            #[cfg(test)]
+            {
+                1
+            }
+            #[cfg(not(test))]
+            {
+                8
+            }
+        };
+
+        let sem = Arc::new(Semaphore::new(limit));
+        while !done.load(Ordering::Relaxed) {
             //log::debug!("[{}] gather_outbound begin", name);
-            let (raw_packets, mut ok) = {
+            let (packets, continue_loop) = {
                 let mut ai = association_internal.lock().await;
                 ai.gather_outbound().await
             };
-            //log::debug!("[{}] gather_outbound done with {}", name, raw_packets.len());
+            //log::debug!("[{}] gather_outbound done with {}", name, packets.len());
 
-            for raw in &raw_packets {
-                log::debug!("[{}] sending {} bytes", name, raw.len());
-                if let Err(err) = net_conn.send(raw).await {
-                    log::warn!("[{}] failed to write packets on net_conn: {}", name, err);
-                    ok = false;
-                    break;
-                } else {
-                    bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+            // We schedule a new task here for a reason:
+            // If we don't tokio tends to run the write_loop and read_loop of one connection on the same OS thread
+            // This means that even though we release the lock above, the read_loop isn't able to take it, simply because it is not being scheduled by tokio
+            // Doing it this way, tokio schedules this to a new thread, this future is suspended, and the read_loop can make progress
+            let net_conn = Arc::clone(&net_conn);
+            let bytes_sent = Arc::clone(&bytes_sent);
+            let name2 = Arc::clone(&name);
+            let done2 = Arc::clone(&done);
+            let sem = Arc::clone(&sem);
+            sem.acquire().await.unwrap().forget();
+            tokio::task::spawn(async move {
+                let mut buf = BytesMut::with_capacity(16 * 1024);
+                for raw in packets {
+                    buf.clear();
+                    if let Err(err) = raw.marshal_to(&mut buf) {
+                        log::warn!("[{}] failed to serialize a packet: {:?}", name2, err);
+                    } else {
+                        let raw = buf.as_ref();
+                        if let Err(err) = net_conn.send(raw.as_ref()).await {
+                            log::warn!("[{}] failed to write packets on net_conn: {}", name2, err);
+                            done2.store(true, Ordering::Relaxed)
+                        } else {
+                            bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
+                        }
+                    }
+                    //log::debug!("[{}] sending {} bytes done", name, raw.len());
                 }
-                //log::debug!("[{}] sending {} bytes done", name, raw.len());
-            }
+                sem.add_permits(1);
+            });
 
-            if !ok {
+            if !continue_loop {
                 break;
             }
 
@@ -527,7 +545,7 @@ impl Association {
             tokio::select! {
                 _ = awake_write_loop_ch.recv() =>{}
                 _ = close_loop_ch.recv() => {
-                    done = true;
+                    done.store(true, Ordering::Relaxed);
                 }
             };
             //log::debug!("[{}] wait awake_write_loop_ch done", name);

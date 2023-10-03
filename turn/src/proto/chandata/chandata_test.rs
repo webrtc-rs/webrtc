@@ -86,7 +86,7 @@ fn test_channel_data_equal() -> Result<()> {
 
     for (name, a, b, r) in tests {
         let v = a == b;
-        assert_eq!(v, r, "unexpected: ({}) {} != {}", name, r, r);
+        assert_eq!(v, r, "unexpected: ({name}) {r} != {r}");
     }
 
     Ok(())
@@ -119,13 +119,9 @@ fn test_channel_data_decode() -> Result<()> {
             ..Default::default()
         };
         if let Err(err) = m.decode() {
-            assert_eq!(
-                want_err, err,
-                "unexpected: ({}) {} != {}",
-                name, want_err, err
-            );
+            assert_eq!(want_err, err, "unexpected: ({name}) {want_err} != {err}");
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 
@@ -158,7 +154,7 @@ fn test_is_channel_data() -> Result<()> {
 
     for (name, buf, r) in tests {
         let v = ChannelData::is_channel_data(&buf);
-        assert_eq!(v, r, "unexpected: ({}) {} != {}", name, r, v);
+        assert_eq!(v, r, "unexpected: ({name}) {r} != {v}");
     }
 
     Ok(())
@@ -186,8 +182,11 @@ fn test_chrome_channel_data() -> Result<()> {
     // All hex streams decoded to raw binary format and stored in data slice.
     // Decoding packets to messages.
     for packet in data {
-        let mut m = ChannelData::default();
-        m.raw = packet;
+        let mut m = ChannelData {
+            raw: packet,
+            ..Default::default()
+        };
+
         m.decode()?;
         let mut encoded = ChannelData {
             data: m.data.clone(),
@@ -195,8 +194,12 @@ fn test_chrome_channel_data() -> Result<()> {
             ..Default::default()
         };
         encoded.encode();
-        let mut decoded = ChannelData::default();
-        decoded.raw = encoded.raw.clone();
+
+        let mut decoded = ChannelData {
+            raw: encoded.raw.clone(),
+            ..Default::default()
+        };
+
         decoded.decode()?;
         assert_eq!(decoded, m, "should be equal");
 

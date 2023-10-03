@@ -1,7 +1,8 @@
-use crate::error::{Error, Result};
+use std::fmt;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::fmt;
+
+use crate::error::{Error, Result};
 
 /// errorCauseCode is a cause code that appears in either a ERROR or ABORT chunk
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
@@ -42,7 +43,7 @@ impl fmt::Display for ErrorCauseCode {
             PROTOCOL_VIOLATION => "Protocol Violation",
             _ => others.as_str(),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

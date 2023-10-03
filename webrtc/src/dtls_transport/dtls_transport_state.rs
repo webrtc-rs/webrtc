@@ -1,8 +1,9 @@
 use std::fmt;
 
 /// DTLSTransportState indicates the DTLS transport establishment state.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCDtlsTransportState {
+    #[default]
     Unspecified = 0,
 
     /// DTLSTransportStateNew indicates that DTLS has not started negotiating
@@ -26,12 +27,6 @@ pub enum RTCDtlsTransportState {
     /// the result of an error (such as receipt of an error alert or failure to
     /// validate the remote fingerprint).
     Failed = 5,
-}
-
-impl Default for RTCDtlsTransportState {
-    fn default() -> Self {
-        RTCDtlsTransportState::Unspecified
-    }
 }
 
 const DTLS_TRANSPORT_STATE_NEW_STR: &str = "new";
@@ -76,7 +71,7 @@ impl fmt::Display for RTCDtlsTransportState {
             RTCDtlsTransportState::Failed => DTLS_TRANSPORT_STATE_FAILED_STR,
             RTCDtlsTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -97,10 +92,9 @@ mod test {
 
         for (state_string, expected_state) in tests {
             assert_eq!(
-                expected_state,
                 RTCDtlsTransportState::from(state_string),
-                "testCase: {}",
                 expected_state,
+                "testCase: {expected_state}",
             );
         }
     }
@@ -117,7 +111,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string(),)
+            assert_eq!(state.to_string(), expected_string)
         }
     }
 }

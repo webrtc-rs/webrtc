@@ -1,3 +1,13 @@
+use std::io::{BufWriter, Cursor};
+use std::marker::{Send, Sync};
+use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
+use util::{KeyingMaterialExporter, KeyingMaterialExporterError};
+
 use super::cipher_suite::*;
 use super::conn::*;
 use super::curve::named_curve::*;
@@ -5,16 +15,6 @@ use super::extension::extension_use_srtp::SrtpProtectionProfile;
 use super::handshake::handshake_random::*;
 use super::prf::*;
 use crate::error::*;
-
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use std::io::{BufWriter, Cursor};
-use std::marker::{Send, Sync};
-use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use util::KeyingMaterialExporter;
-use util::KeyingMaterialExporterError;
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
 pub struct State {

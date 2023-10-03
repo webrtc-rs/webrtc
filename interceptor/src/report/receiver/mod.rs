@@ -2,15 +2,16 @@ mod receiver_stream;
 #[cfg(test)]
 mod receiver_test;
 
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
+
+use receiver_stream::ReceiverStream;
+use tokio::sync::{mpsc, Mutex};
+use waitgroup::WaitGroup;
+
 use super::*;
 use crate::error::Error;
 use crate::*;
-use receiver_stream::ReceiverStream;
-
-use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
-use tokio::sync::{mpsc, Mutex};
-use waitgroup::WaitGroup;
 
 pub(crate) struct ReceiverReportInternal {
     pub(crate) interval: Duration,
@@ -26,11 +27,12 @@ pub(crate) struct ReceiverReportRtcpReader {
 
 #[async_trait]
 impl RTCPReader for ReceiverReportRtcpReader {
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = self.parent_rtcp_reader.read(buf, a).await?;
-
-        let mut b = &buf[..n];
-        let pkts = rtcp::packet::unmarshal(&mut b)?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+        let (pkts, attr) = self.parent_rtcp_reader.read(buf, a).await?;
 
         let now = if let Some(f) = &self.internal.now {
             f()
@@ -53,7 +55,7 @@ impl RTCPReader for ReceiverReportRtcpReader {
             }
         }
 
-        Ok((n, attr))
+        Ok((pkts, attr))
     }
 }
 

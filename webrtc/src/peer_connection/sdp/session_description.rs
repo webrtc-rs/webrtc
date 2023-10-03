@@ -1,10 +1,10 @@
-use crate::error::Result;
-
-use super::sdp_type::RTCSdpType;
+use std::io::Cursor;
 
 use sdp::description::session::SessionDescription;
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+
+use super::sdp_type::RTCSdpType;
+use crate::error::Result;
 
 /// SessionDescription is used to expose local and remote session descriptions.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -128,12 +128,12 @@ mod test {
 
         for (desc, expected_string) in tests {
             let result = serde_json::to_string(&desc);
-            assert!(result.is_ok(), "testCase: marshal err: {:?}", result);
+            assert!(result.is_ok(), "testCase: marshal err: {result:?}");
             let desc_data = result.unwrap();
             assert_eq!(desc_data, expected_string, "string is not expected");
 
             let result = serde_json::from_str::<RTCSessionDescription>(&desc_data);
-            assert!(result.is_ok(), "testCase: unmarshal err: {:?}", result);
+            assert!(result.is_ok(), "testCase: unmarshal err: {result:?}");
             if let Ok(sd) = result {
                 assert!(sd.sdp == desc.sdp && sd.sdp_type == desc.sdp_type);
             }

@@ -1,8 +1,9 @@
 use std::fmt;
 
 /// PeerConnectionState indicates the state of the PeerConnection.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCPeerConnectionState {
+    #[default]
     Unspecified,
 
     /// PeerConnectionStateNew indicates that any of the ICETransports or
@@ -33,12 +34,6 @@ pub enum RTCPeerConnectionState {
     /// PeerConnectionStateClosed indicates the peer connection is closed
     /// and the isClosed member variable of PeerConnection is true.
     Closed,
-}
-
-impl Default for RTCPeerConnectionState {
-    fn default() -> Self {
-        RTCPeerConnectionState::Unspecified
-    }
 }
 
 const PEER_CONNECTION_STATE_NEW_STR: &str = "new";
@@ -87,24 +82,19 @@ impl fmt::Display for RTCPeerConnectionState {
             RTCPeerConnectionState::Closed => PEER_CONNECTION_STATE_CLOSED_STR,
             RTCPeerConnectionState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub(crate) enum NegotiationNeededState {
     /// NegotiationNeededStateEmpty not running and queue is empty
+    #[default]
     Empty,
     /// NegotiationNeededStateEmpty running and queue is empty
     Run,
     /// NegotiationNeededStateEmpty running and queue
     Queue,
-}
-
-impl Default for NegotiationNeededState {
-    fn default() -> Self {
-        NegotiationNeededState::Empty
-    }
 }
 
 impl From<u8> for NegotiationNeededState {
@@ -135,10 +125,9 @@ mod test {
 
         for (state_string, expected_state) in tests {
             assert_eq!(
-                expected_state,
                 RTCPeerConnectionState::from(state_string),
-                "testCase: {}",
                 expected_state,
+                "testCase: {expected_state}",
             );
         }
     }
@@ -156,7 +145,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string(),)
+            assert_eq!(state.to_string(), expected_string)
         }
     }
 }

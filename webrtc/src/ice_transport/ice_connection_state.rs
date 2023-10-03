@@ -1,8 +1,9 @@
 use std::fmt;
 
 /// RTCIceConnectionState indicates signaling state of the ICE Connection.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceConnectionState {
+    #[default]
     Unspecified,
 
     /// ICEConnectionStateNew indicates that any of the ICETransports are
@@ -38,12 +39,6 @@ pub enum RTCIceConnectionState {
     /// ICEConnectionStateClosed indicates that the PeerConnection's
     /// isClosed is true.
     Closed,
-}
-
-impl Default for RTCIceConnectionState {
-    fn default() -> Self {
-        RTCIceConnectionState::Unspecified
-    }
 }
 
 const ICE_CONNECTION_STATE_NEW_STR: &str = "new";
@@ -97,7 +92,7 @@ impl fmt::Display for RTCIceConnectionState {
             RTCIceConnectionState::Closed => ICE_CONNECTION_STATE_CLOSED_STR,
             RTCIceConnectionState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -120,10 +115,9 @@ mod test {
 
         for (state_string, expected_state) in tests {
             assert_eq!(
-                expected_state,
                 RTCIceConnectionState::from(state_string),
-                "testCase: {}",
                 expected_state,
+                "testCase: {expected_state}",
             );
         }
     }
@@ -142,7 +136,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string(),)
+            assert_eq!(state.to_string(), expected_string)
         }
     }
 }

@@ -1,10 +1,11 @@
+use std::io::Cursor;
+
+use url::Url;
+
 use super::common::*;
 use super::media::*;
 use super::session::*;
 use crate::error::{Error, Result};
-
-use std::io::Cursor;
-use url::Url;
 
 const CANONICAL_MARSHAL_SDP: &str = "v=0\r\n\
      o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
@@ -172,10 +173,8 @@ fn test_marshal() -> Result<()> {
 
     let actual = sd.marshal();
     assert!(
-        &actual == CANONICAL_MARSHAL_SDP,
-        "error:\n\nEXPECTED:\n{}\nACTUAL:\n{}!!!!\n",
-        CANONICAL_MARSHAL_SDP,
-        actual
+        actual == CANONICAL_MARSHAL_SDP,
+        "error:\n\nEXPECTED:\n{CANONICAL_MARSHAL_SDP}\nACTUAL:\n{actual}!!!!\n"
     );
 
     Ok(())
@@ -403,6 +402,15 @@ m=audio 54400 RTP/SAVPF 0 96\r\n\
 b=X-YZ:128\r\n\
 b=AS:12345\r\n";
 
+const MEDIA_TRANSPORT_BANDWIDTH_SDP: &str = "v=0\r\n\
+o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+s=SDP Seminar\r\n\
+t=2873397496 2873404696\r\n\
+m=video 51372 RTP/AVP 99\r\n\
+m=audio 54400 RTP/SAVPF 0 96\r\n\
+b=AS:12345\r\n\
+b=TIAS:12345\r\n";
+
 const MEDIA_ENCRYPTION_KEY_SDP: &str = "v=0\r\n\
 o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
 s=SDP Seminar\r\n\
@@ -521,6 +529,11 @@ fn test_round_trip() -> Result<()> {
             Some(MEDIA_DESCRIPTION_OUT_OF_ORDER_SDPACTUAL),
         ),
         ("MediaBandwidth", MEDIA_BANDWIDTH_SDP, None),
+        (
+            "MediaTransportBandwidth",
+            MEDIA_TRANSPORT_BANDWIDTH_SDP,
+            None,
+        ),
         ("MediaEncryptionKey", MEDIA_ENCRYPTION_KEY_SDP, None),
         (
             "MediaEncryptionKeyExtraCRLF",
@@ -537,12 +550,12 @@ fn test_round_trip() -> Result<()> {
         if let Ok(sdp) = sdp {
             let actual = sdp.marshal();
             if let Some(expected) = expected {
-                assert_eq!(actual.as_str(), expected, "{}\n{}", name, sdp_str);
+                assert_eq!(actual.as_str(), expected, "{name}\n{sdp_str}");
             } else {
-                assert_eq!(actual.as_str(), sdp_str, "{}\n{}", name, sdp_str);
+                assert_eq!(actual.as_str(), sdp_str, "{name}\n{sdp_str}");
             }
         } else {
-            assert!(false, "{}\n{}", name, sdp_str);
+            panic!("{name}\n{sdp_str}");
         }
     }
 
@@ -588,7 +601,7 @@ fn test_unmarshal_non_nil_address() -> Result<()> {
         let output = sdp.marshal();
         assert_eq!(output.as_str(), input);
     } else {
-        assert!(false, "{}", input);
+        panic!("{}", input);
     }
     Ok(())
 }

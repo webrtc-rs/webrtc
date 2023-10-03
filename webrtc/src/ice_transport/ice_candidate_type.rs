@@ -1,10 +1,12 @@
-use ice::candidate::CandidateType;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use ice::candidate::CandidateType;
+use serde::{Deserialize, Serialize};
+
 /// ICECandidateType represents the type of the ICE candidate used.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCIceCandidateType {
+    #[default]
     Unspecified,
 
     /// ICECandidateTypeHost indicates that the candidate is of Host type as
@@ -36,12 +38,6 @@ pub enum RTCIceCandidateType {
     /// candidate type obtained from a relay server, such as a TURN server.
     #[serde(rename = "relay")]
     Relay,
-}
-
-impl Default for RTCIceCandidateType {
-    fn default() -> Self {
-        RTCIceCandidateType::Unspecified
-    }
 }
 
 const ICE_CANDIDATE_TYPE_HOST_STR: &str = "host";
@@ -77,10 +73,10 @@ impl From<CandidateType> for RTCIceCandidateType {
 impl fmt::Display for RTCIceCandidateType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceCandidateType::Host => write!(f, "{}", ICE_CANDIDATE_TYPE_HOST_STR),
-            RTCIceCandidateType::Srflx => write!(f, "{}", ICE_CANDIDATE_TYPE_SRFLX_STR),
-            RTCIceCandidateType::Prflx => write!(f, "{}", ICE_CANDIDATE_TYPE_PRFLX_STR),
-            RTCIceCandidateType::Relay => write!(f, "{}", ICE_CANDIDATE_TYPE_RELAY_STR),
+            RTCIceCandidateType::Host => write!(f, "{ICE_CANDIDATE_TYPE_HOST_STR}"),
+            RTCIceCandidateType::Srflx => write!(f, "{ICE_CANDIDATE_TYPE_SRFLX_STR}"),
+            RTCIceCandidateType::Prflx => write!(f, "{ICE_CANDIDATE_TYPE_PRFLX_STR}"),
+            RTCIceCandidateType::Relay => write!(f, "{ICE_CANDIDATE_TYPE_RELAY_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -102,7 +98,7 @@ mod test {
 
         for (type_string, expected_type) in tests {
             let actual = RTCIceCandidateType::from(type_string);
-            assert_eq!(expected_type, actual);
+            assert_eq!(actual, expected_type);
         }
     }
 
@@ -117,7 +113,7 @@ mod test {
         ];
 
         for (ctype, expected_string) in tests {
-            assert_eq!(expected_string, ctype.to_string());
+            assert_eq!(ctype.to_string(), expected_string);
         }
     }
 }

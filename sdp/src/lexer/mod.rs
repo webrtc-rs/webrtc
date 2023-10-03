@@ -1,8 +1,8 @@
-use super::description::session::SessionDescription;
-use super::error::{Error, Result};
-
 use std::io;
 use std::io::SeekFrom;
+
+use super::description::session::SessionDescription;
+use super::error::{Error, Result};
 
 pub(crate) const END_LINE: &str = "\r\n";
 
@@ -59,7 +59,7 @@ pub fn index_of(element: &str, data: &[&str]) -> i32 {
 
 pub fn key_value_build(key: &str, value: Option<&String>) -> String {
     if let Some(val) = value {
-        format!("{}{}{}", key, val, END_LINE)
+        format!("{key}{val}{END_LINE}")
     } else {
         "".to_string()
     }

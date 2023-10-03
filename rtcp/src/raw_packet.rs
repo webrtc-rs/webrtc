@@ -1,10 +1,13 @@
-use crate::{error::Error, header::*, packet::Packet, util::*};
-
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
-
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
+use crate::packet::Packet;
+use crate::util::*;
 
 /// RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
 /// a packet with an unknown type is encountered.
@@ -13,7 +16,7 @@ pub struct RawPacket(pub Bytes);
 
 impl fmt::Display for RawPacket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RawPacket: {:?}", self)
+        write!(f, "RawPacket: {self:?}")
     }
 }
 
@@ -131,10 +134,7 @@ mod test {
             assert_eq!(
                 result.is_err(),
                 unmarshal_error.is_some(),
-                "Unmarshal {}: err = {:?}, want {:?}",
-                name,
-                result,
-                unmarshal_error
+                "Unmarshal {name}: err = {result:?}, want {unmarshal_error:?}"
             );
 
             if result.is_err() {
@@ -148,10 +148,7 @@ mod test {
             assert_eq!(
                 result.is_err(),
                 unmarshal_error.is_some(),
-                "Unmarshal {}: err = {:?}, want {:?}",
-                name,
-                result,
-                unmarshal_error
+                "Unmarshal {name}: err = {result:?}, want {unmarshal_error:?}"
             );
 
             if result.is_err() {
@@ -162,8 +159,7 @@ mod test {
 
             assert_eq!(
                 decoded, pkt,
-                "{} raw round trip: got {:?}, want {:?}",
-                name, decoded, pkt
+                "{name} raw round trip: got {decoded:?}, want {pkt:?}"
             )
         }
 

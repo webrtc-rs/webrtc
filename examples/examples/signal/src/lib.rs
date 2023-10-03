@@ -1,12 +1,15 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
-use anyhow::Result;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use anyhow::Result;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use tokio::sync::{mpsc, Mutex};
 
 #[macro_use]
@@ -58,13 +61,13 @@ pub async fn http_sdp_server(port: u16) -> mpsc::Receiver<String> {
     }
 
     tokio::spawn(async move {
-        let addr = SocketAddr::from_str(&format!("0.0.0.0:{}", port)).unwrap();
+        let addr = SocketAddr::from_str(&format!("0.0.0.0:{port}")).unwrap();
         let service =
             make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(remote_handler)) });
         let server = Server::bind(&addr).serve(service);
         // Run this server for... forever!
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
 
@@ -92,13 +95,13 @@ pub fn encode(b: &str) -> String {
     //    b = zip(b)
     //}
 
-    base64::encode(b)
+    BASE64_STANDARD.encode(b)
 }
 
 /// decode decodes the input from base64
 /// It can optionally unzip the input after decoding
 pub fn decode(s: &str) -> Result<String> {
-    let b = base64::decode(s)?;
+    let b = BASE64_STANDARD.decode(s)?;
 
     //if COMPRESS {
     //    b = unzip(b)

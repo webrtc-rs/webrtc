@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod textattrs_test;
 
+use std::fmt;
+
 use crate::attributes::*;
 use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
 
 const MAX_USERNAME_B: usize = 513;
 const MAX_REALM_B: usize = 763;
@@ -78,14 +78,14 @@ impl TextAttribute {
         TextAttribute { attr, text }
     }
 
-    // get_from_as gets t attribute from m and appends its value to reseted v.
+    // get_from_as gets t attribute from m and appends its value to reset v.
     pub fn get_from_as(m: &Message, attr: AttrType) -> Result<Self> {
         match attr {
             ATTR_USERNAME => {}
             ATTR_REALM => {}
             ATTR_SOFTWARE => {}
             ATTR_NONCE => {}
-            _ => return Err(Error::Other(format!("Unsupported AttrType {}", attr))),
+            _ => return Err(Error::Other(format!("Unsupported AttrType {attr}"))),
         };
 
         let a = m.get(attr)?;

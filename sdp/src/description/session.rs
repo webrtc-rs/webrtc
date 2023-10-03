@@ -1,14 +1,15 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, io};
-use url::Url;
 
-use crate::error::{Error, Result};
-use crate::lexer::*;
-use crate::util::*;
+use url::Url;
 
 use super::common::*;
 use super::media::*;
+use crate::error::{Error, Result};
+use crate::lexer::*;
+use crate::util::*;
 
 /// Constants for SDP attributes used in JSEP
 pub const ATTR_KEY_CANDIDATE: &str = "candidate";
@@ -151,7 +152,7 @@ impl fmt::Display for RepeatTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fields = vec![format!("{}", self.interval), format!("{}", self.duration)];
         for value in &self.offsets {
-            fields.push(format!("{}", value));
+            fields.push(format!("{value}"));
         }
         write!(f, "{}", fields.join(" "))
     }
@@ -407,7 +408,7 @@ impl SessionDescription {
         result += key_value_build("i=", self.session_information.as_ref()).as_str();
 
         if let Some(uri) = &self.uri {
-            result += key_value_build("u=", Some(&format!("{}", uri))).as_str();
+            result += key_value_build("u=", Some(&format!("{uri}"))).as_str();
         }
         result += key_value_build("e=", self.email_address.as_ref()).as_str();
         result += key_value_build("p=", self.phone_number.as_ref()).as_str();
@@ -560,6 +561,21 @@ impl SessionDescription {
         }
 
         Ok(lexer.desc)
+    }
+}
+
+impl From<SessionDescription> for String {
+    fn from(sdp: SessionDescription) -> String {
+        sdp.marshal()
+    }
+}
+
+impl TryFrom<String> for SessionDescription {
+    type Error = Error;
+    fn try_from(sdp_string: String) -> Result<Self> {
+        let mut reader = io::Cursor::new(sdp_string.as_bytes());
+        let session_description = SessionDescription::unmarshal(&mut reader)?;
+        Ok(session_description)
     }
 }
 
@@ -912,7 +928,7 @@ fn unmarshal_origin<'a, R: io::BufRead + io::Seek>(
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() != 6 {
-        return Err(Error::SdpInvalidSyntax(format!("`o={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`o={value}`")));
     }
 
     let session_id = fields[1].parse::<u64>()?;
@@ -997,7 +1013,7 @@ fn unmarshal_session_connection_information<'a, R: io::BufRead + io::Seek>(
 fn unmarshal_connection_information(value: &str) -> Result<Option<ConnectionInformation>> {
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 2 {
-        return Err(Error::SdpInvalidSyntax(format!("`c={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`c={value}`")));
     }
 
     // Set according to currently registered with IANA
@@ -1042,7 +1058,7 @@ fn unmarshal_session_bandwidth<'a, R: io::BufRead + io::Seek>(
 fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth> {
     let mut parts: Vec<&str> = value.split(':').collect();
     if parts.len() != 2 {
-        return Err(Error::SdpInvalidSyntax(format!("`b={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`b={value}`")));
     }
 
     let experimental = parts[0].starts_with("X-");
@@ -1050,8 +1066,9 @@ fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth> {
         parts[0] = parts[0].trim_start_matches("X-");
     } else {
         // Set according to currently registered with IANA
-        // https://tools.ietf.org/html/rfc4566#section-5.8
-        let i = index_of(parts[0], &["CT", "AS"]);
+        // https://tools.ietf.org/html/rfc4566#section-5.8 and
+        // https://datatracker.ietf.org/doc/html/rfc3890
+        let i = index_of(parts[0], &["CT", "AS", "TIAS"]);
         if i == -1 {
             return Err(Error::SdpInvalidValue(parts[0].to_owned()));
         }
@@ -1073,7 +1090,7 @@ fn unmarshal_timing<'a, R: io::BufRead + io::Seek>(
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 2 {
-        return Err(Error::SdpInvalidSyntax(format!("`t={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`t={value}`")));
     }
 
     let start_time = fields[0].parse::<u64>()?;
@@ -1097,7 +1114,7 @@ fn unmarshal_repeat_times<'a, R: io::BufRead + io::Seek>(
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 3 {
-        return Err(Error::SdpInvalidSyntax(format!("`r={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`r={value}`")));
     }
 
     if let Some(latest_time_desc) = lexer.desc.time_descriptions.last_mut() {
@@ -1130,7 +1147,7 @@ fn unmarshal_time_zones<'a, R: io::BufRead + io::Seek>(
     // so we are making sure that there are actually multiple of 2 total.
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() % 2 != 0 {
-        return Err(Error::SdpInvalidSyntax(format!("`t={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`t={value}`")));
     }
 
     for i in (0..fields.len()).step_by(2) {
@@ -1183,7 +1200,7 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 4 {
-        return Err(Error::SdpInvalidSyntax(format!("`m={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`m={value}`")));
     }
 
     // <media>

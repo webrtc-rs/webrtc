@@ -1,8 +1,10 @@
-use crate::association::RtxTimerId;
-use async_trait::async_trait;
 use std::sync::{Arc, Weak};
+
+use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
+
+use crate::association::RtxTimerId;
 
 pub(crate) const RTO_INITIAL: u64 = 3000; // msec
 pub(crate) const RTO_MIN: u64 = 1000; // msec
@@ -51,10 +53,7 @@ impl RtoManager {
             self.srtt = ((RTO_BASE - RTO_ALPHA) * self.srtt + RTO_ALPHA * rtt) / RTO_BASE;
         }
 
-        self.rto = std::cmp::min(
-            std::cmp::max(self.srtt + (4.0 * self.rttvar) as u64, RTO_MIN),
-            RTO_MAX,
-        );
+        self.rto = (self.srtt + (4.0 * self.rttvar) as u64).clamp(RTO_MIN, RTO_MAX);
 
         self.srtt
     }
@@ -95,7 +94,7 @@ pub(crate) fn calculate_next_timeout(rto: u64, n_rtos: usize) -> u64 {
     }
 }
 
-/// rtxTimerObserver is the inteface to a timer observer.
+/// rtxTimerObserver is the interface to a timer observer.
 /// NOTE: Observers MUST NOT call start() or stop() method on rtxTimer
 /// from within these callbacks.
 #[async_trait]

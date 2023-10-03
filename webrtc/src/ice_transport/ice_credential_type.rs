@@ -1,9 +1,12 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 /// ICECredentialType indicates the type of credentials used to connect to
 /// an ICE server.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum RTCIceCredentialType {
+    #[default]
     Unspecified,
 
     /// ICECredential::Password describes username and password based
@@ -14,12 +17,6 @@ pub enum RTCIceCredentialType {
     /// in <https://tools.ietf.org/html/rfc7635>.
     /// Not supported in WebRTC 1.0 spec
     Oauth,
-}
-
-impl Default for RTCIceCredentialType {
-    fn default() -> Self {
-        RTCIceCredentialType::Password
-    }
 }
 
 const ICE_CREDENTIAL_TYPE_PASSWORD_STR: &str = "password";
@@ -38,8 +35,8 @@ impl From<&str> for RTCIceCredentialType {
 impl fmt::Display for RTCIceCredentialType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTCIceCredentialType::Password => write!(f, "{}", ICE_CREDENTIAL_TYPE_PASSWORD_STR),
-            RTCIceCredentialType::Oauth => write!(f, "{}", ICE_CREDENTIAL_TYPE_OAUTH_STR),
+            RTCIceCredentialType::Password => write!(f, "{ICE_CREDENTIAL_TYPE_PASSWORD_STR}"),
+            RTCIceCredentialType::Oauth => write!(f, "{ICE_CREDENTIAL_TYPE_OAUTH_STR}"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -58,7 +55,7 @@ mod test {
         ];
 
         for (ct_str, expected_ct) in tests {
-            assert_eq!(expected_ct, RTCIceCredentialType::from(ct_str));
+            assert_eq!(RTCIceCredentialType::from(ct_str), expected_ct);
         }
     }
 
@@ -71,7 +68,7 @@ mod test {
         ];
 
         for (ct, expected_string) in tests {
-            assert_eq!(expected_string, ct.to_string());
+            assert_eq!(ct.to_string(), expected_string);
         }
     }
 }

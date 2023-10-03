@@ -1,8 +1,8 @@
+use std::io::{BufReader, BufWriter};
+
 use super::record_layer_header::*;
 use super::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
-
-use std::io::{BufReader, BufWriter};
 
 #[test]
 fn test_udp_decode() -> Result<()> {
@@ -57,24 +57,15 @@ fn test_udp_decode() -> Result<()> {
             if let Err(dtls) = dtls_pkts {
                 assert_eq!(err.to_string(), dtls.to_string());
             } else {
-                assert!(
-                    false,
-                    "something wrong for {} when wanted_err is Some",
-                    name
-                );
+                panic!("something wrong for {name} when wanted_err is Some");
             }
         } else if let Ok(pkts) = dtls_pkts {
             assert_eq!(
                 wanted, pkts,
-                "{} UDP decode: got {:?}, want {:?}",
-                name, pkts, wanted,
+                "{name} UDP decode: got {pkts:?}, want {wanted:?}",
             );
         } else {
-            assert!(
-                false,
-                "something wrong for {} when wanted_err is None",
-                name
-            );
+            panic!("something wrong for {name} when wanted_err is None");
         }
     }
 
@@ -109,8 +100,7 @@ fn test_record_layer_round_trip() -> Result<()> {
 
         assert_eq!(
             want, r,
-            "{} recordLayer.unmarshal: got {:?}, want {:?}",
-            name, r, want
+            "{name} recordLayer.unmarshal: got {r:?}, want {want:?}"
         );
 
         let mut data2 = vec![];
@@ -120,8 +110,7 @@ fn test_record_layer_round_trip() -> Result<()> {
         }
         assert_eq!(
             data, data2,
-            "{} recordLayer.marshal: got {:?}, want {:?}",
-            name, data2, data
+            "{name} recordLayer.marshal: got {data2:?}, want {data:?}"
         );
     }
 

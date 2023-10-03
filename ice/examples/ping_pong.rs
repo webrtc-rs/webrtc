@@ -1,22 +1,23 @@
-use tokio::net::UdpSocket;
-use webrtc_ice as ice;
-
-use ice::agent::agent_config::AgentConfig;
-use ice::agent::Agent;
-use ice::candidate::{candidate_base::*, *};
-use ice::state::*;
-use ice::Error;
-use ice::{network_type::*, udp_network::UDPNetwork};
+use std::io;
+use std::sync::Arc;
+use std::time::Duration;
 
 use clap::{App, AppSettings, Arg};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
+use ice::agent::agent_config::AgentConfig;
+use ice::agent::Agent;
+use ice::candidate::candidate_base::*;
+use ice::candidate::*;
+use ice::network_type::*;
+use ice::state::*;
+use ice::udp_network::UDPNetwork;
+use ice::Error;
 use rand::{thread_rng, Rng};
-use std::io;
-use std::sync::Arc;
-use std::time::Duration;
+use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch, Mutex};
 use util::Conn;
+use webrtc_ice as ice;
 
 #[macro_use]
 extern crate lazy_static;
@@ -146,7 +147,7 @@ async fn main() -> Result<(), Error> {
     let (weak_conn, weak_agent) = {
         let (done_tx, done_rx) = watch::channel(());
 
-        println!("Listening on http://localhost:{}", local_http_port);
+        println!("Listening on http://localhost:{local_http_port}");
         let mut done_http_server = done_rx.clone();
         tokio::spawn(async move {
             let addr = ([0, 0, 0, 0], local_http_port).into();
@@ -160,7 +161,7 @@ async fn main() -> Result<(), Error> {
                 result = server => {
                     // Run this server for... forever!
                     if let Err(e) = result {
-                        eprintln!("server error: {}", e);
+                        eprintln!("server error: {e}");
                     }
                     println!("exit http server!");
                 }
@@ -201,83 +202,78 @@ async fn main() -> Result<(), Error> {
 
         // When we have gathered a new ICE Candidate send it to the remote peer
         let client2 = Arc::clone(&client);
-        ice_agent
-            .on_candidate(Box::new(
-                move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-                    let client3 = Arc::clone(&client2);
-                    Box::pin(async move {
-                        if let Some(c) = c {
-                            println!("posting remoteCandidate with {}", c.marshal());
+        ice_agent.on_candidate(Box::new(
+            move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
+                let client3 = Arc::clone(&client2);
+                Box::pin(async move {
+                    if let Some(c) = c {
+                        println!("posting remoteCandidate with {}", c.marshal());
 
-                            let req = match Request::builder()
-                                .method(Method::POST)
-                                .uri(format!(
-                                    "http://localhost:{}/remoteCandidate",
-                                    remote_http_port
-                                ))
-                                .body(Body::from(c.marshal()))
-                            {
-                                Ok(req) => req,
-                                Err(err) => {
-                                    println!("{}", err);
-                                    return;
-                                }
-                            };
-                            let resp = match client3.request(req).await {
-                                Ok(resp) => resp,
-                                Err(err) => {
-                                    println!("{}", err);
-                                    return;
-                                }
-                            };
-                            println!("Response from remoteCandidate: {}", resp.status());
-                        }
-                    })
-                },
-            ))
-            .await;
+                        let req = match Request::builder()
+                            .method(Method::POST)
+                            .uri(format!(
+                                "http://localhost:{remote_http_port}/remoteCandidate"
+                            ))
+                            .body(Body::from(c.marshal()))
+                        {
+                            Ok(req) => req,
+                            Err(err) => {
+                                println!("{err}");
+                                return;
+                            }
+                        };
+                        let resp = match client3.request(req).await {
+                            Ok(resp) => resp,
+                            Err(err) => {
+                                println!("{err}");
+                                return;
+                            }
+                        };
+                        println!("Response from remoteCandidate: {}", resp.status());
+                    }
+                })
+            },
+        ));
 
         let (ice_done_tx, mut ice_done_rx) = mpsc::channel::<()>(1);
         // When ICE Connection state has change print to stdout
-        ice_agent
-            .on_connection_state_change(Box::new(move |c: ConnectionState| {
-                println!("ICE Connection State has changed: {}", c);
-                if c == ConnectionState::Failed {
-                    let _ = ice_done_tx.try_send(());
-                }
-                Box::pin(async move {})
-            }))
-            .await;
+        ice_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+            println!("ICE Connection State has changed: {c}");
+            if c == ConnectionState::Failed {
+                let _ = ice_done_tx.try_send(());
+            }
+            Box::pin(async move {})
+        }));
 
         // Get the local auth details and send to remote peer
         let (local_ufrag, local_pwd) = ice_agent.get_local_user_credentials().await;
 
-        println!("posting remoteAuth with {}:{}", local_ufrag, local_pwd);
+        println!("posting remoteAuth with {local_ufrag}:{local_pwd}");
         let req = match Request::builder()
             .method(Method::POST)
-            .uri(format!("http://localhost:{}/remoteAuth", remote_http_port))
-            .body(Body::from(format!("{}:{}", local_ufrag, local_pwd)))
+            .uri(format!("http://localhost:{remote_http_port}/remoteAuth"))
+            .body(Body::from(format!("{local_ufrag}:{local_pwd}")))
         {
             Ok(req) => req,
-            Err(err) => return Err(Error::Other(format!("{}", err))),
+            Err(err) => return Err(Error::Other(format!("{err}"))),
         };
         let resp = match client.request(req).await {
             Ok(resp) => resp,
-            Err(err) => return Err(Error::Other(format!("{}", err))),
+            Err(err) => return Err(Error::Other(format!("{err}"))),
         };
         println!("Response from remoteAuth: {}", resp.status());
 
         let (remote_ufrag, remote_pwd) = {
             let mut rx = REMOTE_AUTH_CHANNEL.1.lock().await;
             if let Some(s) = rx.recv().await {
-                println!("received: {}", s);
+                println!("received: {s}");
                 let fields: Vec<String> = s.split(':').map(|s| s.to_string()).collect();
                 (fields[0].clone(), fields[1].clone())
             } else {
                 panic!("rx.recv() empty");
             }
         };
-        println!("remote_ufrag: {}, remote_pwd: {}", remote_ufrag, remote_pwd);
+        println!("remote_ufrag: {remote_ufrag}, remote_pwd: {remote_pwd}");
 
         let ice_agent2 = Arc::clone(&ice_agent);
         let mut done_cand = done_rx.clone();
@@ -291,10 +287,10 @@ async fn main() -> Result<(), Error> {
                     }
                     result = rx.recv() => {
                         if let Some(s) = result {
-                            if let Ok(c) = unmarshal_candidate(&s).await {
-                                println!("add_remote_candidate: {}", c);
+                            if let Ok(c) = unmarshal_candidate(&s) {
+                                println!("add_remote_candidate: {c}");
                                 let c: Arc<dyn Candidate + Send + Sync> = Arc::new(c);
-                                let _ = ice_agent2.add_remote_candidate(&c).await;
+                                let _ = ice_agent2.add_remote_candidate(&c);
                             }else{
                                 println!("unmarshal_candidate error!");
                                 break;
@@ -308,7 +304,7 @@ async fn main() -> Result<(), Error> {
             }
         });
 
-        ice_agent.gather_candidates().await?;
+        ice_agent.gather_candidates()?;
         println!("Connecting...");
 
         let (_cancel_tx, cancel_rx) = mpsc::channel(1);
@@ -345,10 +341,10 @@ async fn main() -> Result<(), Error> {
                     }
                     result = conn_tx.send(val.as_bytes()) => {
                         if let Err(err) = result {
-                            eprintln!("conn_tx send error: {}", err);
+                            eprintln!("conn_tx send error: {err}");
                             break;
                         }else{
-                            println!("Sent: '{}'", val);
+                            println!("Sent: '{val}'");
                         }
                     }
                 };
@@ -371,7 +367,7 @@ async fn main() -> Result<(), Error> {
                                 println!("Received: '{}'", std::str::from_utf8(&buf[..n]).unwrap());
                             }
                             Err(err) => {
-                                eprintln!("conn_tx send error: {}", err);
+                                eprintln!("conn_tx send error: {err}");
                                 break;
                             }
                         };
@@ -399,7 +395,7 @@ async fn main() -> Result<(), Error> {
                 let _ = done_tx.send(());
             }
             _ = tokio::signal::ctrl_c() => {
-                println!("");
+                println!();
                 let _ = done_tx.send(());
             }
         };

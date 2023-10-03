@@ -1,9 +1,11 @@
-use super::*;
-
-use crate::proto::lifetime::DEFAULT_LIFETIME;
 use std::str::FromStr;
-use stun::{attributes::ATTR_USERNAME, textattrs::TextAttribute};
+
+use stun::attributes::ATTR_USERNAME;
+use stun::textattrs::TextAttribute;
 use tokio::net::UdpSocket;
+
+use super::*;
+use crate::proto::lifetime::DEFAULT_LIFETIME;
 
 #[tokio::test]
 async fn test_has_permission() -> Result<()> {
@@ -16,6 +18,7 @@ async fn test_has_permission() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr1 = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -53,6 +56,7 @@ async fn test_add_permission() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -76,6 +80,7 @@ async fn test_remove_permission() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -108,6 +113,7 @@ async fn test_add_channel_bind() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -141,6 +147,7 @@ async fn test_get_channel_by_number() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -176,6 +183,7 @@ async fn test_get_channel_by_addr() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -207,6 +215,7 @@ async fn test_remove_channel_bind() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
@@ -243,6 +252,7 @@ async fn test_allocation_refresh() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     a.start(DEFAULT_LIFETIME).await;
@@ -264,6 +274,7 @@ async fn test_allocation_close() -> Result<()> {
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        None,
     );
 
     // add mock lifetimeTimer

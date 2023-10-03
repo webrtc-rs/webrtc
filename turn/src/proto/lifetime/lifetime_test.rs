@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn test_lifetime_string() -> Result<(), stun::Error> {
     let l = Lifetime(Duration::from_secs(10));
-    assert_eq!(l.to_string(), "10s", "bad string {}, expected 10s", l);
+    assert_eq!(l.to_string(), "10s", "bad string {l}, expected 10s");
 
     Ok(())
 }
@@ -22,7 +22,7 @@ fn test_lifetime_add_to() -> Result<(), stun::Error> {
 
         let mut life = Lifetime::default();
         life.get_from(&decoded)?;
-        assert_eq!(life, l, "Decoded {}, expected {}", life, l);
+        assert_eq!(life, l, "Decoded {life}, expected {l}");
 
         //"HandleErr"
         {
@@ -32,11 +32,10 @@ fn test_lifetime_add_to() -> Result<(), stun::Error> {
                 assert_eq!(
                     stun::Error::ErrAttributeNotFound,
                     err,
-                    "{} should be not found",
-                    err
+                    "{err} should be not found"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
             m.add(ATTR_LIFETIME, &[1, 2, 3]);
 
@@ -46,7 +45,7 @@ fn test_lifetime_add_to() -> Result<(), stun::Error> {
                     "IsAttrSizeInvalid should be true"
                 );
             } else {
-                assert!(false, "expected error, but got ok");
+                panic!("expected error, but got ok");
             }
         }
     }

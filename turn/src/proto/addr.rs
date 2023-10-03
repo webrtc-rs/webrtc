@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod addr_test;
 
-use super::*;
-
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-// Addr is ip:port.
+use super::*;
+
+/// `Addr` is `ip:port`.
 #[derive(PartialEq, Eq, Debug)]
 pub struct Addr {
     ip: IpAddr,
@@ -28,12 +28,12 @@ impl fmt::Display for Addr {
 }
 
 impl Addr {
-    // Network implements net.Addr.
+    /// Returns this network.
     pub fn network(&self) -> String {
         "turn".to_owned()
     }
 
-    // sets addr.
+    /// Creates a new [`Addr`] from `n`.
     pub fn from_socket_addr(n: &SocketAddr) -> Self {
         let ip = n.ip();
         let port = n.port();
@@ -41,7 +41,7 @@ impl Addr {
         Addr { ip, port }
     }
 
-    // EqualIP returns true if a and b have equal IP addresses.
+    /// Returns `true` if the `other` has the same IP address.
     pub fn equal_ip(&self, other: &Addr) -> bool {
         self.ip == other.ip
     }

@@ -1,7 +1,6 @@
 use std::io::{Cursor, Read};
 
 use byteorder::{ByteOrder, ReadBytesExt};
-
 #[cfg(test)]
 use nearly_eq::NearlyEq;
 
@@ -120,9 +119,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use nearly_eq::assert_nearly_eq;
+
+    use super::*;
 
     #[test]
     fn sample_i16_from_i16() {

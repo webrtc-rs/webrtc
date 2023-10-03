@@ -53,7 +53,7 @@ fn test_h264_fmtp_parse() {
 
     for (name, input, expected) in tests {
         let f = parse("video/h264", input);
-        assert_eq!(&expected, &f, "{} failed", name);
+        assert_eq!(&f, &expected, "{name} failed");
 
         assert_eq!(f.mime_type(), "video/h264");
     }

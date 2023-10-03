@@ -8,21 +8,20 @@
 // https://github.com/RustCrypto/AEADs
 // https://docs.rs/ccm/0.3.0/ccm/ Or https://crates.io/crates/aes-ccm?
 
-use rand::Rng;
-
 use std::io::Cursor;
+
+use aes::Aes128;
+use ccm::aead::generic_array::GenericArray;
+use ccm::aead::AeadInPlace;
+use ccm::consts::{U12, U16, U8};
+use ccm::Ccm;
+use ccm::KeyInit;
+use rand::Rng;
 
 use super::*;
 use crate::content::*;
 use crate::error::*;
 use crate::record_layer::record_layer_header::*;
-
-use aes::Aes128;
-use ccm::aead::{generic_array::GenericArray, AeadInPlace, NewAead};
-use ccm::{
-    consts::{U12, U16, U8},
-    Ccm,
-};
 
 const CRYPTO_CCM_8_TAG_LENGTH: usize = 8;
 const CRYPTO_CCM_TAG_LENGTH: usize = 16;

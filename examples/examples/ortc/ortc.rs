@@ -1,8 +1,9 @@
+use std::io::Write;
+use std::sync::Arc;
+
 use anyhow::Result;
 use clap::{AppSettings, Arg, Command};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::time::Duration;
 use webrtc::api::APIBuilder;
@@ -103,7 +104,7 @@ async fn main() -> Result<()> {
     sctp.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
-        println!("New DataChannel {} {}", d_label, d_id);
+        println!("New DataChannel {d_label} {d_id}");
 
         let done_answer1 = done_answer.clone();
         // Register the handlers
@@ -122,30 +123,25 @@ async fn main() -> Result<()> {
 
                     println!("exit data answer");
                 })
-            }))
-            .await;
+            }));
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
                 let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+                println!("Message from DataChannel '{d_label}': '{msg_str}'");
                 Box::pin(async {})
-            }))
-            .await;
+            }));
         })
-    }))
-    .await;
+    }));
 
     let (gather_finished_tx, mut gather_finished_rx) = tokio::sync::mpsc::channel::<()>(1);
     let mut gather_finished_tx = Some(gather_finished_tx);
-    gatherer
-        .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            if c.is_none() {
-                gather_finished_tx.take();
-            }
-            Box::pin(async {})
-        }))
-        .await;
+    gatherer.on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
+        if c.is_none() {
+            gather_finished_tx.take();
+        }
+        Box::pin(async {})
+    }));
 
     // Gather candidates
     gatherer.gather().await?;
@@ -170,7 +166,7 @@ async fn main() -> Result<()> {
     // Exchange the information
     let json_str = serde_json::to_string(&local_signal)?;
     let b64 = signal::encode(&json_str);
-    println!("{}", b64);
+    println!("{b64}");
 
     let line = signal::must_read_stdin()?;
     let json_str = signal::decode(line.as_str())?;
@@ -227,10 +223,9 @@ async fn main() -> Result<()> {
         let d_label = d.label().to_owned();
         d.on_message(Box::new(move |msg: DataChannelMessage| {
             let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-            println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+            println!("Message from DataChannel '{d_label}': '{msg_str}'");
             Box::pin(async {})
-        }))
-        .await;
+        }));
     }
 
     println!("Press ctrl-c to stop");
@@ -273,7 +268,7 @@ async fn handle_on_open(d: Arc<RTCDataChannel>) -> Result<()> {
         tokio::select! {
             _ = timeout.as_mut() =>{
                 let message = math_rand_alpha(15);
-                println!("Sending '{}'", message);
+                println!("Sending '{message}'");
                 result = d.send_text(message).await.map_err(Into::into);
             }
         };

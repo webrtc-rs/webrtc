@@ -2,6 +2,7 @@
 mod channnum_test;
 
 use std::fmt;
+
 use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;
@@ -16,12 +17,11 @@ const CHANNEL_NUMBER_SIZE: usize = 4;
 pub const MIN_CHANNEL_NUMBER: u16 = 0x4000;
 pub const MAX_CHANNEL_NUMBER: u16 = 0x7FFF;
 
-// ChannelNumber represents CHANNEL-NUMBER attribute.
-//
-// The CHANNEL-NUMBER attribute contains the number of the channel.
-//
-// RFC 5766 Section 14.1
-// encoded as uint16
+/// `ChannelNumber` represents `CHANNEL-NUMBER` attribute. Encoded as `u16`.
+///
+/// The `CHANNEL-NUMBER` attribute contains the number of the channel.
+///
+/// [RFC 5766 Section 14.1](https://www.rfc-editor.org/rfc/rfc5766#section-14.1).
 #[derive(Default, Eq, PartialEq, Debug, Copy, Clone, Hash)]
 pub struct ChannelNumber(pub u16);
 
@@ -32,7 +32,7 @@ impl fmt::Display for ChannelNumber {
 }
 
 impl Setter for ChannelNumber {
-    // AddTo adds CHANNEL-NUMBER to message.
+    /// Adds `CHANNEL-NUMBER` to message.
     fn add_to(&self, m: &mut Message) -> Result<(), stun::Error> {
         let mut v = vec![0; CHANNEL_NUMBER_SIZE];
         v[..2].copy_from_slice(&self.0.to_be_bytes());
@@ -43,7 +43,7 @@ impl Setter for ChannelNumber {
 }
 
 impl Getter for ChannelNumber {
-    // GetFrom decodes CHANNEL-NUMBER from message.
+    /// Decodes `CHANNEL-NUMBER` from message.
     fn get_from(&mut self, m: &Message) -> Result<(), stun::Error> {
         let v = m.get(ATTR_CHANNEL_NUMBER)?;
 
@@ -57,12 +57,13 @@ impl Getter for ChannelNumber {
 }
 
 impl ChannelNumber {
-    // is_channel_number_valid returns true if c in [0x4000, 0x7FFF].
+    /// Returns true if c in `[0x4000, 0x7FFF]`.
     fn is_channel_number_valid(&self) -> bool {
         self.0 >= MIN_CHANNEL_NUMBER && self.0 <= MAX_CHANNEL_NUMBER
     }
 
-    // Valid returns true if channel number has correct value that complies RFC 5766 Section 11 range.
+    /// returns `true` if channel number has correct value that complies
+    /// [RFC 5766 Section 11](https://www.rfc-editor.org/rfc/rfc5766#section-11) range.
     pub fn valid(&self) -> bool {
         self.is_channel_number_valid()
     }

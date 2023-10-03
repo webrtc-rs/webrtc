@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod association_internal_test;
 
-use super::*;
+use std::sync::atomic::AtomicBool;
 
+use async_trait::async_trait;
+
+use super::*;
+use crate::param::param_forward_tsn_supported::ParamForwardTsnSupported;
 use crate::param::param_type::ParamType;
 use crate::param::param_unrecognized::ParamUnrecognized;
-use async_trait::async_trait;
-use std::sync::atomic::AtomicBool;
 
 #[derive(Default)]
 pub struct AssociationInternal {
@@ -155,7 +157,11 @@ impl AssociationInternal {
         //  o  The initial cwnd before DATA transmission or after a sufficiently
         //     long idle period MUST be set to min(4*MTU, max (2*MTU, 4380
         //     bytes)).
-        a.cwnd = std::cmp::min(4 * a.mtu, std::cmp::max(2 * a.mtu, 4380));
+        //     TODO: Consider whether this should use `clamp`
+        #[allow(clippy::manual_clamp)]
+        {
+            a.cwnd = std::cmp::min(4 * a.mtu, std::cmp::max(2 * a.mtu, 4380));
+        }
         log::trace!(
             "[{}] updated cwnd={} ssthresh={} inflight={} (INI)",
             a.name,
@@ -178,7 +184,7 @@ impl AssociationInternal {
             let outbound = Packet {
                 source_port: self.source_port,
                 destination_port: self.destination_port,
-                verification_tag: self.peer_verification_tag,
+                verification_tag: 0,
                 chunks: vec![Box::new(stored_init)],
             };
 
@@ -326,20 +332,12 @@ impl AssociationInternal {
         }
 
         self.handle_chunk_end();
-
         Ok(())
     }
 
-    fn gather_data_packets_to_retransmit(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
-        for p in &self.get_data_packets_to_retransmit() {
-            if let Ok(raw) = p.marshal() {
-                raw_packets.push(raw);
-            } else {
-                log::warn!(
-                    "[{}] failed to serialize a DATA packet to be retransmitted",
-                    self.name
-                );
-            }
+    fn gather_data_packets_to_retransmit(&mut self, mut raw_packets: Vec<Packet>) -> Vec<Packet> {
+        for p in self.get_data_packets_to_retransmit() {
+            raw_packets.push(p);
         }
 
         raw_packets
@@ -347,8 +345,8 @@ impl AssociationInternal {
 
     async fn gather_outbound_data_and_reconfig_packets(
         &mut self,
-        mut raw_packets: Vec<Bytes>,
-    ) -> Vec<Bytes> {
+        mut raw_packets: Vec<Packet>,
+    ) -> Vec<Packet> {
         // Pop unsent data chunks from the pending queue to send as much as
         // cwnd and rwnd allow.
         let (chunks, sis_to_reset) = self.pop_pending_data_chunks_to_send().await;
@@ -358,12 +356,8 @@ impl AssociationInternal {
             if let Some(t3rtx) = &self.t3rtx {
                 t3rtx.start(self.rto_mgr.get_rto()).await;
             }
-            for p in &self.bundle_data_chunks_into_packets(chunks) {
-                if let Ok(raw) = p.marshal() {
-                    raw_packets.push(raw);
-                } else {
-                    log::warn!("[{}] failed to serialize a DATA packet", self.name);
-                }
+            for p in self.bundle_data_chunks_into_packets(chunks) {
+                raw_packets.push(p);
             }
         }
 
@@ -377,14 +371,7 @@ impl AssociationInternal {
                 );
                 for c in self.reconfigs.values() {
                     let p = self.create_packet(vec![Box::new(c.clone())]);
-                    if let Ok(raw) = p.marshal() {
-                        raw_packets.push(raw);
-                    } else {
-                        log::warn!(
-                            "[{}] failed to serialize a RECONFIG packet to be retransmitted",
-                            self.name,
-                        );
-                    }
+                    raw_packets.push(p);
                 }
             }
 
@@ -411,14 +398,7 @@ impl AssociationInternal {
                 self.reconfigs.insert(rsn, c.clone()); // store in the map for retransmission
 
                 let p = self.create_packet(vec![Box::new(c)]);
-                if let Ok(raw) = p.marshal() {
-                    raw_packets.push(raw);
-                } else {
-                    log::warn!(
-                        "[{}] failed to serialize a RECONFIG packet to be transmitted",
-                        self.name
-                    );
-                }
+                raw_packets.push(p);
             }
 
             if !self.reconfigs.is_empty() {
@@ -433,8 +413,8 @@ impl AssociationInternal {
 
     fn gather_outbound_fast_retransmission_packets(
         &mut self,
-        mut raw_packets: Vec<Bytes>,
-    ) -> Vec<Bytes> {
+        mut raw_packets: Vec<Packet>,
+    ) -> Vec<Packet> {
         if self.will_retransmit_fast {
             self.will_retransmit_fast = false;
 
@@ -487,36 +467,27 @@ impl AssociationInternal {
             }
 
             if !to_fast_retrans.is_empty() {
-                if let Ok(raw) = self.create_packet(to_fast_retrans).marshal() {
-                    raw_packets.push(raw);
-                } else {
-                    log::warn!(
-                        "[{}] failed to serialize a DATA packet to be fast-retransmitted",
-                        self.name
-                    );
-                }
+                let p = self.create_packet(to_fast_retrans);
+                raw_packets.push(p);
             }
         }
 
         raw_packets
     }
 
-    async fn gather_outbound_sack_packets(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
+    async fn gather_outbound_sack_packets(&mut self, mut raw_packets: Vec<Packet>) -> Vec<Packet> {
         if self.ack_state == AckState::Immediate {
             self.ack_state = AckState::Idle;
             let sack = self.create_selective_ack_chunk().await;
             log::debug!("[{}] sending SACK: {}", self.name, sack);
-            if let Ok(raw) = self.create_packet(vec![Box::new(sack)]).marshal() {
-                raw_packets.push(raw);
-            } else {
-                log::warn!("[{}] failed to serialize a SACK packet", self.name);
-            }
+            let p = self.create_packet(vec![Box::new(sack)]);
+            raw_packets.push(p);
         }
 
         raw_packets
     }
 
-    fn gather_outbound_forward_tsn_packets(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
+    fn gather_outbound_forward_tsn_packets(&mut self, mut raw_packets: Vec<Packet>) -> Vec<Packet> {
         /*log::debug!(
             "[{}] gatherOutboundForwardTSNPackets {}",
             self.name,
@@ -529,11 +500,8 @@ impl AssociationInternal {
                 self.cumulative_tsn_ack_point,
             ) {
                 let fwd_tsn = self.create_forward_tsn();
-                if let Ok(raw) = self.create_packet(vec![Box::new(fwd_tsn)]).marshal() {
-                    raw_packets.push(raw);
-                } else {
-                    log::warn!("[{}] failed to serialize a Forward TSN packet", self.name);
-                }
+                let p = self.create_packet(vec![Box::new(fwd_tsn)]);
+                raw_packets.push(p);
             }
         }
 
@@ -542,8 +510,8 @@ impl AssociationInternal {
 
     async fn gather_outbound_shutdown_packets(
         &mut self,
-        mut raw_packets: Vec<Bytes>,
-    ) -> (Vec<Bytes>, bool) {
+        mut raw_packets: Vec<Packet>,
+    ) -> (Vec<Packet>, bool) {
         let mut ok = true;
 
         if self.will_send_shutdown.load(Ordering::SeqCst) {
@@ -553,44 +521,29 @@ impl AssociationInternal {
                 cumulative_tsn_ack: self.cumulative_tsn_ack_point,
             };
 
-            if let Ok(raw) = self.create_packet(vec![Box::new(shutdown)]).marshal() {
-                if let Some(t2shutdown) = &self.t2shutdown {
-                    t2shutdown.start(self.rto_mgr.get_rto()).await;
-                }
-                raw_packets.push(raw);
-            } else {
-                log::warn!("[{}] failed to serialize a Shutdown packet", self.name);
+            let p = self.create_packet(vec![Box::new(shutdown)]);
+            if let Some(t2shutdown) = &self.t2shutdown {
+                t2shutdown.start(self.rto_mgr.get_rto()).await;
             }
+            raw_packets.push(p);
         } else if self.will_send_shutdown_ack {
             self.will_send_shutdown_ack = false;
 
             let shutdown_ack = ChunkShutdownAck {};
 
-            if let Ok(raw) = self.create_packet(vec![Box::new(shutdown_ack)]).marshal() {
-                if let Some(t2shutdown) = &self.t2shutdown {
-                    t2shutdown.start(self.rto_mgr.get_rto()).await;
-                }
-                raw_packets.push(raw);
-            } else {
-                log::warn!("[{}] failed to serialize a ShutdownAck packet", self.name);
+            let p = self.create_packet(vec![Box::new(shutdown_ack)]);
+            if let Some(t2shutdown) = &self.t2shutdown {
+                t2shutdown.start(self.rto_mgr.get_rto()).await;
             }
+            raw_packets.push(p);
         } else if self.will_send_shutdown_complete {
             self.will_send_shutdown_complete = false;
 
             let shutdown_complete = ChunkShutdownComplete {};
+            ok = false;
+            let p = self.create_packet(vec![Box::new(shutdown_complete)]);
 
-            if let Ok(raw) = self
-                .create_packet(vec![Box::new(shutdown_complete)])
-                .marshal()
-            {
-                raw_packets.push(raw);
-                ok = false;
-            } else {
-                log::warn!(
-                    "[{}] failed to serialize a ShutdownComplete packet",
-                    self.name
-                );
-            }
+            raw_packets.push(p);
         }
 
         (raw_packets, ok)
@@ -598,17 +551,12 @@ impl AssociationInternal {
 
     /// gather_outbound gathers outgoing packets. The returned bool value set to
     /// false means the association should be closed down after the final send.
-    pub(crate) async fn gather_outbound(&mut self) -> (Vec<Bytes>, bool) {
-        let mut raw_packets = vec![];
+    pub(crate) async fn gather_outbound(&mut self) -> (Vec<Packet>, bool) {
+        let mut raw_packets = Vec::with_capacity(16);
 
         if !self.control_queue.is_empty() {
             for p in self.control_queue.drain(..) {
-                if let Ok(raw) = p.marshal() {
-                    raw_packets.push(raw);
-                } else {
-                    log::warn!("[{}] failed to serialize a control packet", self.name);
-                    continue;
-                }
+                raw_packets.push(p);
             }
         }
 
@@ -823,6 +771,12 @@ impl AssociationInternal {
                         self.use_forward_tsn = true;
                     }
                 }
+            } else if param
+                .as_any()
+                .downcast_ref::<ParamForwardTsnSupported>()
+                .is_some()
+            {
+                self.use_forward_tsn = true;
             }
         }
         if !self.use_forward_tsn {
@@ -1021,9 +975,7 @@ impl AssociationInternal {
             let rst_reqs: Vec<ParamOutgoingResetRequest> =
                 self.reconfig_requests.values().cloned().collect();
             for rst_req in rst_reqs {
-                let resp = self.reset_streams_if_any(&rst_req);
-                log::debug!("[{}] RESET RESPONSE: {}", self.name, resp);
-                reply.push(resp);
+                self.reset_streams_if_any(&rst_req, false, &mut reply)?;
             }
         }
 
@@ -1642,7 +1594,7 @@ impl AssociationInternal {
 
         let mut stream_str = String::new();
         for (si, ssn) in &stream_map {
-            stream_str += format!("(si={} ssn={})", si, ssn).as_str();
+            stream_str += format!("(si={si} ssn={ssn})").as_str();
             fwd_tsn.streams.push(ChunkForwardTsnStream {
                 identifier: *si,
                 sequence: *ssn,
@@ -1676,15 +1628,11 @@ impl AssociationInternal {
         let mut pp = vec![];
 
         if let Some(param_a) = &c.param_a {
-            if let Some(p) = self.handle_reconfig_param(param_a).await? {
-                pp.push(p);
-            }
+            self.handle_reconfig_param(param_a, &mut pp).await?;
         }
 
         if let Some(param_b) = &c.param_b {
-            if let Some(p) = self.handle_reconfig_param(param_b).await? {
-                pp.push(p);
-            }
+            self.handle_reconfig_param(param_b, &mut pp).await?;
         }
 
         Ok(pp)
@@ -1797,11 +1745,13 @@ impl AssociationInternal {
     async fn handle_reconfig_param(
         &mut self,
         raw: &Box<dyn Param + Send + Sync>,
-    ) -> Result<Option<Packet>> {
+        reply: &mut Vec<Packet>,
+    ) -> Result<()> {
         if let Some(p) = raw.as_any().downcast_ref::<ParamOutgoingResetRequest>() {
             self.reconfig_requests
                 .insert(p.reconfig_request_sequence_number, p.clone());
-            Ok(Some(self.reset_streams_if_any(p)))
+            self.reset_streams_if_any(p, true, reply)?;
+            Ok(())
         } else if let Some(p) = raw.as_any().downcast_ref::<ParamReconfigResponse>() {
             self.reconfigs.remove(&p.reconfig_response_sequence_number);
             if self.reconfigs.is_empty() {
@@ -1809,14 +1759,21 @@ impl AssociationInternal {
                     treconfig.stop().await;
                 }
             }
-            Ok(None)
+            Ok(())
         } else {
-            Err(Error::ErrParamterType)
+            Err(Error::ErrParameterType)
         }
     }
 
-    fn reset_streams_if_any(&mut self, p: &ParamOutgoingResetRequest) -> Packet {
+    fn reset_streams_if_any(
+        &mut self,
+        p: &ParamOutgoingResetRequest,
+        respond: bool,
+        reply: &mut Vec<Packet>,
+    ) -> Result<()> {
         let mut result = ReconfigResult::SuccessPerformed;
+        let mut sis_to_reset = vec![];
+
         if sna32lte(p.sender_last_tsn, self.peer_last_tsn) {
             log::debug!(
                 "[{}] resetStream(): senderLastTSN={} <= peer_last_tsn={}",
@@ -1827,6 +1784,9 @@ impl AssociationInternal {
             for id in &p.stream_identifiers {
                 if let Some(s) = self.streams.get(id) {
                     let stream_identifier = s.stream_identifier;
+                    if respond {
+                        sis_to_reset.push(*id);
+                    }
                     self.unregister_stream(stream_identifier);
                 }
             }
@@ -1842,13 +1802,41 @@ impl AssociationInternal {
             result = ReconfigResult::InProgress;
         }
 
-        self.create_packet(vec![Box::new(ChunkReconfig {
+        // Answer incoming reset requests with the same reset request, but with
+        // reconfig_response_sequence_number.
+        if !sis_to_reset.is_empty() {
+            let rsn = self.generate_next_rsn();
+            let tsn = self.my_next_tsn - 1;
+
+            let c = ChunkReconfig {
+                param_a: Some(Box::new(ParamOutgoingResetRequest {
+                    reconfig_request_sequence_number: rsn,
+                    reconfig_response_sequence_number: p.reconfig_request_sequence_number,
+                    sender_last_tsn: tsn,
+                    stream_identifiers: sis_to_reset,
+                })),
+                ..Default::default()
+            };
+
+            self.reconfigs.insert(rsn, c.clone()); // store in the map for retransmission
+
+            let p = self.create_packet(vec![Box::new(c)]);
+            reply.push(p);
+        }
+
+        let packet = self.create_packet(vec![Box::new(ChunkReconfig {
             param_a: Some(Box::new(ParamReconfigResponse {
                 reconfig_response_sequence_number: p.reconfig_request_sequence_number,
                 result,
             })),
             param_b: None,
-        })])
+        })]);
+
+        log::debug!("[{}] RESET RESPONSE: {}", self.name, packet);
+
+        reply.push(packet);
+
+        Ok(())
     }
 
     /// Move the chunk peeked with self.pending_queue.peek() to the inflight_queue.
@@ -1857,8 +1845,8 @@ impl AssociationInternal {
         beginning_fragment: bool,
         unordered: bool,
     ) -> Option<ChunkPayloadData> {
-        if let Some(mut c) = self.pending_queue.pop(beginning_fragment, unordered).await {
-            // Mark all fragements are in-flight now
+        if let Some(mut c) = self.pending_queue.pop(beginning_fragment, unordered) {
+            // Mark all fragments are in-flight now
             if c.ending_fragment {
                 c.set_all_inflight();
             }
@@ -1897,67 +1885,67 @@ impl AssociationInternal {
     async fn pop_pending_data_chunks_to_send(&mut self) -> (Vec<ChunkPayloadData>, Vec<u16>) {
         let mut chunks = vec![];
         let mut sis_to_reset = vec![]; // stream identifiers to reset
-        let is_empty = self.pending_queue.len() == 0;
-        if !is_empty {
-            // RFC 4960 sec 6.1.  Transmission of DATA Chunks
-            //   A) At any given time, the data sender MUST NOT transmit new data to
-            //      any destination transport address if its peer's rwnd indicates
-            //      that the peer has no buffer space (i.e., rwnd is 0; see Section
-            //      6.2.1).  However, regardless of the value of rwnd (including if it
-            //      is 0), the data sender can always have one DATA chunk in flight to
-            //      the receiver if allowed by cwnd (see rule B, below).
 
-            while let Some(c) = self.pending_queue.peek().await {
-                let (beginning_fragment, unordered, data_len, stream_identifier) = (
-                    c.beginning_fragment,
-                    c.unordered,
-                    c.user_data.len(),
-                    c.stream_identifier,
-                );
+        if self.pending_queue.len() == 0 {
+            return (chunks, sis_to_reset);
+        }
 
-                if data_len == 0 {
-                    sis_to_reset.push(stream_identifier);
-                    if self
-                        .pending_queue
-                        .pop(beginning_fragment, unordered)
-                        .await
-                        .is_none()
-                    {
-                        log::error!("failed to pop from pending queue");
-                    }
-                    continue;
+        // RFC 4960 sec 6.1.  Transmission of DATA Chunks
+        //   A) At any given time, the data sender MUST NOT transmit new data to
+        //      any destination transport address if its peer's rwnd indicates
+        //      that the peer has no buffer space (i.e., rwnd is 0; see Section
+        //      6.2.1).  However, regardless of the value of rwnd (including if it
+        //      is 0), the data sender can always have one DATA chunk in flight to
+        //      the receiver if allowed by cwnd (see rule B, below).
+        while let Some(c) = self.pending_queue.peek() {
+            let (beginning_fragment, unordered, data_len, stream_identifier) = (
+                c.beginning_fragment,
+                c.unordered,
+                c.user_data.len(),
+                c.stream_identifier,
+            );
+
+            if data_len == 0 {
+                sis_to_reset.push(stream_identifier);
+                if self
+                    .pending_queue
+                    .pop(beginning_fragment, unordered)
+                    .is_none()
+                {
+                    log::error!("failed to pop from pending queue");
                 }
+                continue;
+            }
 
-                if self.inflight_queue.get_num_bytes() + data_len > self.cwnd as usize {
-                    break; // would exceeds cwnd
-                }
+            if self.inflight_queue.get_num_bytes() + data_len > self.cwnd as usize {
+                break; // would exceed cwnd
+            }
 
-                if data_len > self.rwnd as usize {
-                    break; // no more rwnd
-                }
+            if data_len > self.rwnd as usize {
+                break; // no more rwnd
+            }
 
-                self.rwnd -= data_len as u32;
+            self.rwnd -= data_len as u32;
+
+            if let Some(chunk) = self
+                .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                .await
+            {
+                chunks.push(chunk);
+            }
+        }
+
+        // the data sender can always have one DATA chunk in flight to the receiver
+        if chunks.is_empty() && self.inflight_queue.is_empty() {
+            // Send zero window probe
+            if let Some(c) = self.pending_queue.peek() {
+                let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
                 if let Some(chunk) = self
                     .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
                     .await
                 {
                     chunks.push(chunk);
-                }
-            }
-
-            // the data sender can always have one DATA chunk in flight to the receiver
-            if chunks.is_empty() && self.inflight_queue.is_empty() {
-                // Send zero window probe
-                if let Some(c) = self.pending_queue.peek().await {
-                    let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
-
-                    if let Some(chunk) = self
-                        .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
-                        .await
-                    {
-                        chunks.push(chunk);
-                    }
                 }
             }
         }

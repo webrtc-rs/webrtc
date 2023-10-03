@@ -1,8 +1,9 @@
+use std::io::Write;
+use std::sync::Arc;
+
 use anyhow::Result;
 use bytes::Bytes;
 use clap::{AppSettings, Arg, Command};
-use std::io::Write;
-use std::sync::Arc;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
@@ -113,51 +114,47 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Register channel opening handling
     let d = Arc::clone(&data_channel);
-    data_channel
-        .on_open(Box::new(move || {
-            println!("Data channel '{}'-'{}' open.", d.label(), d.id());
+    data_channel.on_open(Box::new(move || {
+        println!("Data channel '{}'-'{}' open.", d.label(), d.id());
 
-            let d2 = Arc::clone(&d);
-            Box::pin(async move {
-                let raw = match d2.detach().await {
-                    Ok(raw) => raw,
-                    Err(err) => {
-                        println!("data channel detach got err: {}", err);
-                        return;
-                    }
-                };
+        let d2 = Arc::clone(&d);
+        Box::pin(async move {
+            let raw = match d2.detach().await {
+                Ok(raw) => raw,
+                Err(err) => {
+                    println!("data channel detach got err: {err}");
+                    return;
+                }
+            };
 
-                // Handle reading from the data channel
-                let r = Arc::clone(&raw);
-                tokio::spawn(async move {
-                    let _ = read_loop(r).await;
-                });
+            // Handle reading from the data channel
+            let r = Arc::clone(&raw);
+            tokio::spawn(async move {
+                let _ = read_loop(r).await;
+            });
 
-                // Handle writing to the data channel
-                tokio::spawn(async move {
-                    let _ = write_loop(raw).await;
-                });
-            })
-        }))
-        .await;
+            // Handle writing to the data channel
+            tokio::spawn(async move {
+                let _ = write_loop(raw).await;
+            });
+        })
+    }));
 
     // Create an offer to send to the browser
     let offer = peer_connection.create_offer(None).await?;
@@ -177,7 +174,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -196,7 +193,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 
@@ -212,7 +209,7 @@ async fn read_loop(d: Arc<webrtc::data::data_channel::DataChannel>) -> Result<()
         let n = match d.read(&mut buffer).await {
             Ok(n) => n,
             Err(err) => {
-                println!("Datachannel closed; Exit the read_loop: {}", err);
+                println!("Datachannel closed; Exit the read_loop: {err}");
                 return Ok(());
             }
         };
@@ -234,7 +231,7 @@ async fn write_loop(d: Arc<webrtc::data::data_channel::DataChannel>) -> Result<(
         tokio::select! {
             _ = timeout.as_mut() =>{
                 let message = math_rand_alpha(15);
-                println!("Sending '{}'", message);
+                println!("Sending '{message}'");
                 result = d.write(&Bytes::from(message)).await.map_err(Into::into);
             }
         };

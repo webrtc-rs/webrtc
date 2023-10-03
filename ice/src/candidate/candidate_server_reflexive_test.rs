@@ -1,11 +1,13 @@
+use std::time::Duration;
+
+use tokio::net::UdpSocket;
+
 use super::candidate_relay_test::OptimisticAuthHandler;
 use super::*;
 use crate::agent::agent_config::AgentConfig;
 use crate::agent::agent_vnet_test::{connect_with_vnet, on_connected};
 use crate::agent::Agent;
 use crate::url::{SchemeType, Url};
-use std::time::Duration;
-use tokio::net::UdpSocket;
 
 //use std::io::Write;
 
@@ -40,6 +42,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
             }),
         }],
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 
@@ -57,7 +60,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
     let (a_notifier, mut a_connected) = on_connected();
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
@@ -73,7 +76,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
     let (b_notifier, mut b_connected) = on_connected();
-    b_agent.on_connection_state_change(b_notifier).await;
+    b_agent.on_connection_state_change(b_notifier);
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 

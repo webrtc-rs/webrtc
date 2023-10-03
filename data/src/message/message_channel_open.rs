@@ -230,8 +230,9 @@ impl Unmarshal for DataChannelOpen {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bytes::{Bytes, BytesMut};
+
+    use super::*;
 
     #[test]
     fn test_channel_type_unmarshal_success() -> Result<()> {

@@ -4,6 +4,7 @@ use super::*;
 fn test_replay_detector() {
     const LARGE_SEQ: u64 = 0x100000000000;
 
+    #[allow(clippy::type_complexity)]
     let tests: Vec<(&str, usize, u64, Vec<u64>, Vec<bool>, Vec<u64>, Vec<u64>)> = vec![
         (
             "Continuous",
@@ -271,7 +272,7 @@ fn test_replay_detector() {
                 }
             }
 
-            assert_eq!(&out, exp, "{} failed", name);
+            assert_eq!(&out, exp, "{name} failed");
         }
     }
 }

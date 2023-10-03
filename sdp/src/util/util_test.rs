@@ -157,7 +157,7 @@ fn test_new_session_id() -> Result<()> {
         let r = new_session_id();
 
         if r > (1 << 63) - 1 {
-            assert!(false, "Session ID must be less than 2**64-1, got {}", r)
+            panic!("Session ID must be less than 2**64-1, got {r}")
         }
         if r < min {
             min = r
@@ -167,10 +167,10 @@ fn test_new_session_id() -> Result<()> {
         }
     }
     if min > 0x1000000000000000 {
-        assert!(false, "Value around lower boundary was not generated")
+        panic!("Value around lower boundary was not generated")
     }
     if max < 0x7000000000000000 {
-        assert!(false, "Value around upper boundary was not generated")
+        panic!("Value around upper boundary was not generated")
     }
 
     Ok(())

@@ -1,10 +1,10 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+use std::io;
+
 use async_trait::async_trait;
 use thiserror::Error;
-
-use std::io;
 
 #[cfg(feature = "vnet")]
 #[macro_use]
@@ -34,7 +34,7 @@ pub trait KeyingMaterialExporter {
 /// Possible errors while exporting keying material.
 ///
 /// These errors might have been more logically kept in the dtls
-/// crate, but that would have required a direct depdency between
+/// crate, but that would have required a direct dependency between
 /// srtp and dtls.
 #[derive(Debug, Error, PartialEq)]
 #[non_exhaustive]
@@ -76,10 +76,8 @@ pub mod marshal;
 
 #[cfg(feature = "buffer")]
 pub use crate::buffer::Buffer;
-
 #[cfg(feature = "conn")]
 pub use crate::conn::Conn;
-
 #[cfg(feature = "marshal")]
 pub use crate::marshal::{exact_size_buf::ExactSizeBuf, Marshal, MarshalSize, Unmarshal};
 

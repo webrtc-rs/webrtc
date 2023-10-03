@@ -1,13 +1,13 @@
-use webrtc_mdns as mdns;
-
-use mdns::Error;
-use mdns::{config::*, conn::*};
-
-use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
+
+use clap::{App, AppSettings, Arg};
+use mdns::config::*;
+use mdns::conn::*;
+use mdns::Error;
 use tokio::sync::mpsc;
+use webrtc_mdns as mdns;
 
 // For interop with webrtc-rs/mdns_server
 // cargo run --color=always --package webrtc-mdns --example mdns_query
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Error> {
 
     let (answer, src) = server.query(local_name, b).await.unwrap();
     log::info!("dns queried");
-    println!("answer = {}, src = {}", answer, src);
+    println!("answer = {answer}, src = {src}");
 
     server.close().await.unwrap();
     Ok(())

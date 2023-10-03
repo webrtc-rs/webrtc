@@ -1,12 +1,12 @@
-use super::*;
-
-use dtls::crypto::{Certificate, CryptoPrivateKey};
-use rcgen::KeyPair;
-use rustls::internal::pemfile::certs;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::PathBuf;
+
+use dtls::crypto::{Certificate, CryptoPrivateKey};
+use rcgen::KeyPair;
 use thiserror::Error;
+
+use super::*;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum Error {
@@ -45,7 +45,7 @@ pub async fn chat(conn: Arc<dyn Conn + Send + Sync>) -> Result<(), Error> {
 
         while let Ok(n) = conn_rx.recv(&mut b).await {
             let msg = String::from_utf8(b[..n].to_vec()).expect("utf8");
-            print!("Got message: {}", msg);
+            print!("Got message: {msg}");
         }
 
         Result::<(), Error>::Ok(())
@@ -58,7 +58,7 @@ pub async fn chat(conn: Arc<dyn Conn + Send + Sync>) -> Result<(), Error> {
         match reader.read_line(&mut msg) {
             Ok(0) => return Ok(()),
             Err(err) => {
-                println!("stdin read err: {}", err);
+                println!("stdin read err: {err}");
                 return Ok(());
             }
             _ => {}
@@ -88,7 +88,7 @@ pub fn load_key_and_certificate(
 
 /// load_key Load/read key from file
 pub fn load_key(path: PathBuf) -> Result<CryptoPrivateKey, Error> {
-    let f = File::open(&path)?;
+    let f = File::open(path)?;
     let mut reader = BufReader::new(f);
     let mut buf = vec![];
     reader.read_to_end(&mut buf)?;
@@ -102,11 +102,11 @@ pub fn load_key(path: PathBuf) -> Result<CryptoPrivateKey, Error> {
 
 /// load_certificate Load/read certificate(s) from file
 pub fn load_certificate(path: PathBuf) -> Result<Vec<rustls::Certificate>, Error> {
-    let f = File::open(&path)?;
+    let f = File::open(path)?;
 
     let mut reader = BufReader::new(f);
-    match certs(&mut reader) {
-        Ok(ders) => Ok(ders),
+    match rustls_pemfile::certs(&mut reader) {
+        Ok(certs) => Ok(certs.into_iter().map(rustls::Certificate).collect()),
         Err(_) => Err(Error::ErrNoCertificateFound),
     }
 }

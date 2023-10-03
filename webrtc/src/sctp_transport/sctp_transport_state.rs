@@ -1,9 +1,10 @@
 use std::fmt;
 
 /// SCTPTransportState indicates the state of the SCTP transport.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum RTCSctpTransportState {
+    #[default]
     Unspecified,
 
     /// SCTPTransportStateConnecting indicates the SCTPTransport is in the
@@ -20,12 +21,6 @@ pub enum RTCSctpTransportState {
     /// such as by closing the peer connection or applying a remote description
     /// that rejects data or changes the SCTP port.
     Closed,
-}
-
-impl Default for RTCSctpTransportState {
-    fn default() -> Self {
-        RTCSctpTransportState::Unspecified
-    }
 }
 
 const SCTP_TRANSPORT_STATE_CONNECTING_STR: &str = "connecting";
@@ -62,7 +57,7 @@ impl fmt::Display for RTCSctpTransportState {
             RTCSctpTransportState::Closed => SCTP_TRANSPORT_STATE_CLOSED_STR,
             RTCSctpTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -81,10 +76,9 @@ mod test {
 
         for (state_string, expected_state) in tests {
             assert_eq!(
-                expected_state,
                 RTCSctpTransportState::from(state_string),
-                "testCase: {}",
                 expected_state,
+                "testCase: {expected_state}",
             );
         }
     }
@@ -99,7 +93,7 @@ mod test {
         ];
 
         for (state, expected_string) in tests {
-            assert_eq!(expected_string, state.to_string(),)
+            assert_eq!(state.to_string(), expected_string)
         }
     }
 }

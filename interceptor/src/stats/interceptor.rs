@@ -3,7 +3,6 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use super::{inbound, outbound, StatsContainer};
 use async_trait::async_trait;
 use rtcp::extended_report::{DLRRReportBlock, ExtendedReport};
 use rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
@@ -14,10 +13,10 @@ use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
 use rtp::extension::abs_send_time_extension::unix2ntp;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Duration;
-
 use util::sync::Mutex;
-use util::{MarshalSize, Unmarshal};
+use util::MarshalSize;
 
+use super::{inbound, outbound, StatsContainer};
 use crate::error::Result;
 use crate::stream_info::StreamInfo;
 use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
@@ -69,14 +68,14 @@ enum StatsUpdate {
     /// An extended sequence number sent in an SR.
     OutboundSRExtSeqNum { seq_num: u32 },
     /// Stats collected from received Receiver Reports i.e. where we have an outbound RTP stream.
-    InboundRecieverReport {
+    InboundReceiverReport {
         ext_seq_num: u32,
         total_lost: u32,
         jitter: u32,
         rtt_ms: Option<f64>,
         fraction_lost: u8,
     },
-    /// Stats collected from recieved Sender Reports i.e. where we have an inbound RTP stream.
+    /// Stats collected from received Sender Reports i.e. where we have an inbound RTP stream.
     InboundSenderRerport {
         packets_and_bytes_sent: Option<(u32, u32)>,
         rtt_ms: Option<f64>,
@@ -263,7 +262,7 @@ fn handle_stats_update(ssrc_stats: &mut StatsContainer, ssrc: u32, update: Stats
             stats.record_sr_ext_seq_num(seq_num);
             stats.mark_updated();
         }
-        StatsUpdate::InboundRecieverReport {
+        StatsUpdate::InboundReceiverReport {
             ext_seq_num,
             total_lost,
             jitter,
@@ -392,11 +391,13 @@ where
     F: Fn() -> SystemTime + Send + Sync,
 {
     /// read a batch of rtcp packets
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attributes) = self.rtcp_reader.read(buf, attributes).await?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+        let (pkts, attributes) = self.rtcp_reader.read(buf, attributes).await?;
 
-        let mut b = &buf[..n];
-        let pkts = rtcp::packet::unmarshal(&mut b)?;
         // Middle 32 bits
         let now = (unix2ntp((self.now_gen)()) >> 16) as u32;
 
@@ -450,8 +451,11 @@ where
                     for recp in &rr.reports {
                         let e = acc.entry(recp.ssrc).or_default();
 
-                        let rtt_ms = (recp.delay != 0)
-                            .then(|| calculate_rtt_ms(now, recp.delay, recp.last_sender_report));
+                        let rtt_ms = if recp.delay != 0 {
+                            calculate_rtt_ms(now, recp.delay, recp.last_sender_report)
+                        } else {
+                            None
+                        };
 
                         e.receiver_reports.push(ReceiverReportEntry {
                             ext_seq_num: recp.last_sequence_number,
@@ -561,7 +565,7 @@ where
             let futures = receiver_reports.into_iter().map(|rr| {
                 self.tx.send(Message::StatUpdate {
                     ssrc,
-                    update: StatsUpdate::InboundRecieverReport {
+                    update: StatsUpdate::InboundReceiverReport {
                         ext_seq_num: rr.ext_seq_num,
                         total_lost: rr.total_lost,
                         jitter: rr.jitter,
@@ -578,7 +582,7 @@ where
             let futures = sender_reports.into_iter().map(|sr| {
                 let rtt_ms = match (sr.dlrr_last_rr, sr.dlrr_delay_rr, sr.sr_packets_sent) {
                     (Some(last_rr), Some(delay_rr), Some(_)) if last_rr != 0 && delay_rr != 0 => {
-                        Some(calculate_rtt_ms(now, delay_rr, last_rr))
+                        calculate_rtt_ms(now, delay_rr, last_rr)
                     }
                     _ => None,
                 };
@@ -599,7 +603,7 @@ where
             }
         }
 
-        Ok((n, attributes))
+        Ok((pkts, attributes))
     }
 }
 
@@ -718,27 +722,27 @@ impl fmt::Debug for RTPReadRecorder {
 
 #[async_trait]
 impl RTPReader for RTPReadRecorder {
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
-        let (bytes_read, attributes) = self.rtp_reader.read(buf, attributes).await?;
-        // TODO: This parsing happens redundantly in several interceptors, would be good if we
-        // could not do this.
-        let mut b = &buf[..bytes_read];
-        let packet = rtp::packet::Packet::unmarshal(&mut b)?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
+        let (pkt, attributes) = self.rtp_reader.read(buf, attributes).await?;
 
         let _ = self
             .tx
             .send(Message::StatUpdate {
-                ssrc: packet.header.ssrc,
+                ssrc: pkt.header.ssrc,
                 update: StatsUpdate::InboundRTP {
                     packets: 1,
-                    header_bytes: (bytes_read - packet.payload.len()) as u64,
-                    payload_bytes: packet.payload.len() as u64,
+                    header_bytes: pkt.header.marshal_size() as u64,
+                    payload_bytes: pkt.payload.len() as u64,
                     last_packet_timestamp: SystemTime::now(),
                 },
             })
             .await;
 
-        Ok((bytes_read, attributes))
+        Ok((pkt, attributes))
     }
 }
 
@@ -790,7 +794,7 @@ impl RTPWriter for RTPWriteRecorder {
 /// - `now` the current middle 32 bits of an NTP timestamp for the current time.
 /// - `delay` the delay(`DLSR`) since last sender report expressed as fractions of a second in 32 bits.
 /// - `last_report` the middle 32 bits of an NTP timestamp for the most recent sender report(LSR) or Receiver Report(LRR).
-fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> f64 {
+fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> Option<f64> {
     // [10 Nov 1995 11:33:25.125 UTC]       [10 Nov 1995 11:33:36.5 UTC]
     // n                 SR(n)              A=b710:8000 (46864.500 s)
     // ---------------------------------------------------------------->
@@ -809,29 +813,31 @@ fn calculate_rtt_ms(now: u32, delay: u32, last_report: u32) -> f64 {
     // -------------------------------
     // delay 0x0006:2000 (    6.125 s)
 
-    let rtt = now - delay - last_report;
+    let rtt = now.checked_sub(delay)?.checked_sub(last_report)?;
     let rtt_seconds = rtt >> 16;
     let rtt_fraction = (rtt & (u16::MAX as u32)) as f64 / (u16::MAX as u32) as f64;
 
-    rtt_seconds as f64 * 1000.0 + (rtt_fraction as f64) * 1000.0
+    Some(rtt_seconds as f64 * 1000.0 + rtt_fraction * 1000.0)
 }
 
 #[cfg(test)]
 mod test {
+    // Silence warning on `..Default::default()` with no effect:
+    #![allow(clippy::needless_update)]
+
     macro_rules! assert_feq {
         ($left: expr, $right: expr) => {
             assert_feq!($left, $right, 0.01);
         };
         ($left: expr, $right: expr, $eps: expr) => {
             if ($left - $right).abs() >= $eps {
-                assert!(
-                    false,
-                    "{:?} was not within {:?} of {:?}",
-                    $left, $eps, $right
-                );
+                panic!("{:?} was not within {:?} of {:?}", $left, $eps, $right);
             }
         };
     }
+
+    use std::sync::Arc;
+    use std::time::{Duration, SystemTime};
 
     use bytes::Bytes;
     use rtcp::extended_report::{DLRRReport, DLRRReportBlock, ExtendedReport};
@@ -842,14 +848,10 @@ mod test {
     use rtcp::sender_report::SenderReport;
     use rtcp::transport_feedbacks::transport_layer_nack::{NackPair, TransportLayerNack};
 
-    use std::sync::Arc;
-    use std::time::{Duration, SystemTime};
-
+    use super::StatsInterceptor;
     use crate::error::Result;
     use crate::mock::mock_stream::MockStream;
     use crate::stream_info::StreamInfo;
-
-    use super::StatsInterceptor;
 
     #[tokio::test]
     async fn test_stats_interceptor_rtp() -> Result<()> {
@@ -873,7 +875,7 @@ mod test {
         )
         .await;
 
-        let _ = recv_stream
+        recv_stream
             .receive_rtp(rtp::packet::Packet {
                 header: rtp::header::Header {
                     ssrc: 123456,
@@ -1181,7 +1183,7 @@ mod test {
         assert_eq!(recv_snapshot.remote_bytes_sent(), 10351);
         let rtt_ms = recv_snapshot
             .remote_round_trip_time()
-            .expect("After reciving SR and DLRR we should have a round trip time ");
+            .expect("After receiving SR and DLRR we should have a round trip time ");
         assert_feq!(rtt_ms, 6125.0);
         assert_eq!(recv_snapshot.remote_reports_sent(), 2);
         assert_eq!(recv_snapshot.remote_round_trip_time_measurements(), 1);

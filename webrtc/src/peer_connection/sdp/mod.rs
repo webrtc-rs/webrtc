@@ -12,14 +12,16 @@ use crate::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
 };
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
-use crate::rtp_transceiver::RTCRtpTransceiver;
-use crate::rtp_transceiver::{PayloadType, RTCPFeedback, SSRC};
+use crate::rtp_transceiver::{PayloadType, RTCPFeedback, RTCRtpTransceiver, SSRC};
 
 pub mod sdp_type;
 pub mod session_description;
 
-use crate::peer_connection::MEDIA_SECTION_APPLICATION;
-use crate::SDP_ATTRIBUTE_RID;
+use std::collections::HashMap;
+use std::convert::From;
+use std::io::BufReader;
+use std::sync::Arc;
+
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::description::common::{Address, ConnectionInformation};
@@ -27,23 +29,23 @@ use sdp::description::media::{MediaDescription, MediaName, RangedPort};
 use sdp::description::session::*;
 use sdp::extmap::ExtMap;
 use sdp::util::ConnectionRole;
-use std::collections::HashMap;
-use std::convert::From;
-use std::io::BufReader;
-use std::sync::Arc;
+use smol_str::SmolStr;
 use url::Url;
+
+use crate::peer_connection::MEDIA_SECTION_APPLICATION;
+use crate::SDP_ATTRIBUTE_RID;
 
 /// TrackDetails represents any media source that can be represented in a SDP
 /// This isn't keyed by SSRC because it also needs to support rid based sources
 #[derive(Default, Debug, Clone)]
 pub(crate) struct TrackDetails {
-    pub(crate) mid: String,
+    pub(crate) mid: SmolStr,
     pub(crate) kind: RTPCodecType,
     pub(crate) stream_id: String,
     pub(crate) id: String,
     pub(crate) ssrcs: Vec<SSRC>,
     pub(crate) repair_ssrc: SSRC,
-    pub(crate) rids: Vec<String>,
+    pub(crate) rids: Vec<SmolStr>,
 }
 
 pub(crate) fn track_details_for_ssrc(
@@ -55,7 +57,7 @@ pub(crate) fn track_details_for_ssrc(
 
 pub(crate) fn track_details_for_rid(
     track_details: &[TrackDetails],
-    rid: String,
+    rid: SmolStr,
 ) -> Option<&TrackDetails> {
     track_details.iter().find(|x| x.rids.contains(&rid))
 }
@@ -185,7 +187,7 @@ pub(crate) fn track_details_from_sdp(
                         }
 
                         if track_idx < tracks_in_media_section.len() {
-                            tracks_in_media_section[track_idx].mid = mid_value.to_owned();
+                            tracks_in_media_section[track_idx].mid = SmolStr::from(mid_value);
                             tracks_in_media_section[track_idx].kind = codec_type;
                             tracks_in_media_section[track_idx].stream_id = stream_id.to_owned();
                             tracks_in_media_section[track_idx].id = track_id.to_owned();
@@ -193,7 +195,7 @@ pub(crate) fn track_details_from_sdp(
                             tracks_in_media_section[track_idx].repair_ssrc = repair_ssrc;
                         } else {
                             let track_details = TrackDetails {
-                                mid: mid_value.to_owned(),
+                                mid: SmolStr::from(mid_value),
                                 kind: codec_type,
                                 stream_id: stream_id.to_owned(),
                                 id: track_id.to_owned(),
@@ -212,7 +214,7 @@ pub(crate) fn track_details_from_sdp(
         let rids = get_rids(media);
         if !rids.is_empty() && !track_id.is_empty() && !stream_id.is_empty() {
             let mut simulcast_track = TrackDetails {
-                mid: mid_value.to_owned(),
+                mid: SmolStr::from(mid_value),
                 kind: codec_type,
                 stream_id: stream_id.to_owned(),
                 id: track_id.to_owned(),
@@ -220,7 +222,7 @@ pub(crate) fn track_details_from_sdp(
                 ..Default::default()
             };
             for rid in rids.keys() {
-                simulcast_track.rids.push(rid.to_owned());
+                simulcast_track.rids.push(SmolStr::from(rid));
             }
             if simulcast_track.rids.len() == tracks_in_media_section.len() {
                 for track in &tracks_in_media_section {
@@ -269,7 +271,7 @@ pub(crate) async fn add_candidates_to_media_descriptions(
     };
 
     for c in candidates {
-        let candidate = c.to_ice().await?;
+        let candidate = c.to_ice()?;
 
         candidate.set_component(1);
         m = append_candidate_if_new(&candidate, m);
@@ -461,7 +463,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
     if codecs.is_empty() {
         // If we are sender and we have no codecs throw an error early
-        if t.sender().await.is_some() {
+        if t.sender().await.track().await.is_some() {
             return Err(Error::ErrSenderWithNoCodecs);
         }
 
@@ -502,9 +504,7 @@ pub(crate) async fn add_transceiver_sdp(
         return Ok((d, false));
     }
 
-    let parameters = media_engine
-        .get_rtp_parameters_by_kind(t.kind, t.direction())
-        .await;
+    let parameters = media_engine.get_rtp_parameters_by_kind(t.kind, t.direction());
     for rtp_extension in &parameters.header_extensions {
         let ext_url = Url::parse(rtp_extension.uri.as_str())?;
         media = media.with_extmap(sdp::extmap::ExtMap {
@@ -530,51 +530,46 @@ pub(crate) async fn add_transceiver_sdp(
     }
 
     for mt in transceivers {
-        if let Some(sender) = mt.sender().await {
-            if let Some(track) = sender.track().await {
-                media = media.with_media_source(
-                    sender.ssrc,
-                    track.stream_id().to_owned(), /* cname */
-                    track.stream_id().to_owned(), /* streamLabel */
-                    track.id().to_owned(),
-                );
+        let sender = mt.sender().await;
+        if let Some(track) = sender.track().await {
+            media = media.with_media_source(
+                sender.ssrc,
+                track.stream_id().to_owned(), /* cname */
+                track.stream_id().to_owned(), /* streamLabel */
+                track.id().to_owned(),
+            );
 
-                // Send msid based on the configured track if we haven't already
-                // sent on this sender. If we have sent we must keep the msid line consistent, this
-                // is handled below.
-                if sender.initial_track_id().is_none() {
-                    for stream_id in sender.associated_media_stream_ids() {
-                        media = media.with_property_attribute(format!(
-                            "msid:{} {}",
-                            stream_id,
-                            track.id()
-                        ));
-                    }
-
-                    sender.set_initial_track_id(track.id().to_string())?;
-                    break;
-                }
-            }
-
-            if let Some(track_id) = sender.initial_track_id() {
-                // After we have include an msid attribute in an offer it must stay the same for
-                // all subsequent offer even if the track or transceiver direction changes.
-                //
-                // [RFC 8829 Section 5.2.2](https://datatracker.ietf.org/doc/html/rfc8829#section-5.2.2)
-                //
-                // For RtpTransceivers that are not stopped, the "a=msid" line or
-                // lines MUST stay the same if they are present in the current
-                // description, regardless of changes to the transceiver's direction
-                // or track.  If no "a=msid" line is present in the current
-                // description, "a=msid" line(s) MUST be generated according to the
-                // same rules as for an initial offer.
+            // Send msid based on the configured track if we haven't already
+            // sent on this sender. If we have sent we must keep the msid line consistent, this
+            // is handled below.
+            if sender.initial_track_id().is_none() {
                 for stream_id in sender.associated_media_stream_ids() {
                     media =
-                        media.with_property_attribute(format!("msid:{} {}", stream_id, track_id));
+                        media.with_property_attribute(format!("msid:{} {}", stream_id, track.id()));
                 }
 
+                sender.set_initial_track_id(track.id().to_string())?;
                 break;
             }
+        }
+
+        if let Some(track_id) = sender.initial_track_id() {
+            // After we have include an msid attribute in an offer it must stay the same for
+            // all subsequent offer even if the track or transceiver direction changes.
+            //
+            // [RFC 8829 Section 5.2.2](https://datatracker.ietf.org/doc/html/rfc8829#section-5.2.2)
+            //
+            // For RtpTransceivers that are not stopped, the "a=msid" line or
+            // lines MUST stay the same if they are present in the current
+            // description, regardless of changes to the transceiver's direction
+            // or track.  If no "a=msid" line is present in the current
+            // description, "a=msid" line(s) MUST be generated according to the
+            // same rules as for an initial offer.
+            for stream_id in sender.associated_media_stream_ids() {
+                media = media.with_property_attribute(format!("msid:{stream_id} {track_id}"));
+            }
+
+            break;
         }
     }
 
@@ -810,8 +805,7 @@ pub(crate) async fn extract_ice_details(
         for a in &m.attributes {
             if a.is_ice_candidate() {
                 if let Some(value) = &a.value {
-                    let c: Arc<dyn Candidate + Send + Sync> =
-                        Arc::new(unmarshal_candidate(value).await?);
+                    let c: Arc<dyn Candidate + Send + Sync> = Arc::new(unmarshal_candidate(value)?);
                     let candidate = RTCIceCandidate::from(&c);
                     candidates.push(candidate);
                 }
@@ -850,13 +844,13 @@ pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool 
     false
 }
 
-pub(crate) fn get_by_mid<'a, 'b>(
-    search_mid: &'a str,
-    desc: &'b session_description::RTCSessionDescription,
-) -> Option<&'b MediaDescription> {
+pub(crate) fn get_by_mid<'a>(
+    search_mid: &str,
+    desc: &'a session_description::RTCSessionDescription,
+) -> Option<&'a MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
-            if let Some(mid) = m.attribute(ATTR_KEY_MID).and_then(|o| o) {
+            if let Some(mid) = m.attribute(ATTR_KEY_MID).flatten() {
                 if mid == search_mid {
                     return Some(m);
                 }

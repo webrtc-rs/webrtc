@@ -54,23 +54,18 @@ pub struct StatisticsSummaryReportBlock {
 
 impl fmt::Display for StatisticsSummaryReportBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 /// TTLorHopLimitType encodes values for the ToH field in
 /// a StatisticsSummaryReportBlock
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TTLorHopLimitType {
+    #[default]
     Missing = 0,
     IPv4 = 1,
     IPv6 = 2,
-}
-
-impl Default for TTLorHopLimitType {
-    fn default() -> Self {
-        TTLorHopLimitType::Missing
-    }
 }
 
 impl From<u8> for TTLorHopLimitType {
@@ -90,7 +85,7 @@ impl fmt::Display for TTLorHopLimitType {
             TTLorHopLimitType::IPv4 => "[ToH = IPv4]",
             TTLorHopLimitType::IPv6 => "[ToH = IPv6]",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

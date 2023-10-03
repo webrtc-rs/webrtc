@@ -1,16 +1,13 @@
-use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, NewAead, Payload},
-    Aes128Gcm, Nonce,
-};
+use aes_gcm::aead::generic_array::GenericArray;
+use aes_gcm::aead::{Aead, Payload};
+use aes_gcm::{Aes128Gcm, KeyInit, Nonce};
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Bytes, BytesMut};
+use util::marshal::*;
 
 use super::Cipher;
-use crate::{
-    error::{Error, Result},
-    key_derivation::*,
-};
-use util::marshal::*;
+use crate::error::{Error, Result};
+use crate::key_derivation::*;
 
 pub const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
 
@@ -36,18 +33,18 @@ impl Cipher for CipherAeadAesGcm {
         roc: u32,
     ) -> Result<Bytes> {
         // Grow the given buffer to fit the output.
-        let mut writer =
-            BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
+        let header_len = header.marshal_size();
+        let mut writer = BytesMut::with_capacity(payload.len() + self.auth_tag_len());
 
-        let data = header.marshal()?;
-        writer.extend(data);
+        // Copy header unencrypted.
+        writer.extend_from_slice(&payload[..header_len]);
 
         let nonce = self.rtp_initialization_vector(header, roc);
 
         let encrypted = self.srtp_cipher.encrypt(
             Nonce::from_slice(&nonce),
             Payload {
-                msg: payload,
+                msg: &payload[header_len..],
                 aad: &writer,
             },
         )?;

@@ -1,12 +1,16 @@
 #[cfg(test)]
 mod full_intra_request_test;
 
-use crate::{error::Error, header::*, packet::*, util::*};
-use util::marshal::{Marshal, MarshalSize, Unmarshal};
-
-use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
+
+use bytes::{Buf, BufMut};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
+use crate::error::Error;
+use crate::header::*;
+use crate::packet::*;
+use crate::util::*;
 
 type Result<T> = std::result::Result<T, util::Error>;
 
@@ -35,7 +39,7 @@ impl fmt::Display for FullIntraRequest {
         for e in &self.fir {
             out += format!(" ({} {})", e.ssrc, e.sequence_number).as_str();
         }
-        write!(f, "{}", out)
+        write!(f, "{out}")
     }
 }
 

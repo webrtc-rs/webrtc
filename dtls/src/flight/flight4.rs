@@ -1,3 +1,9 @@
+use std::fmt;
+use std::io::BufWriter;
+
+use async_trait::async_trait;
+use log::*;
+
 use super::flight6::*;
 use super::*;
 use crate::cipher_suite::*;
@@ -13,6 +19,7 @@ use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_use_extended_master_secret::*;
 use crate::extension::extension_use_srtp::*;
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use crate::extension::*;
 use crate::handshake::handshake_message_certificate::*;
 use crate::handshake::handshake_message_certificate_request::*;
@@ -24,12 +31,6 @@ use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
-
-use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
-use async_trait::async_trait;
-use log::*;
-use std::fmt;
-use std::io::BufWriter;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Flight4;
@@ -214,6 +215,7 @@ impl Flight for Flight4 {
                 &h.algorithm,
                 &h.signature,
                 &state.peer_certificates,
+                cfg.insecure_verification,
             ) {
                 return Err((
                     Some(Alert {
@@ -267,7 +269,7 @@ impl Flight for Flight4 {
             state.peer_certificates_verified = verified
         } else if !state.peer_certificates.is_empty() {
             // A certificate was received, but we haven't seen a CertificateVerify
-            // keep reading until we receieve one
+            // keep reading until we receive one
             return Err((None, None));
         }
 
@@ -724,10 +726,12 @@ impl Flight for Flight4 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use tokio::sync::Mutex;
+
     use super::*;
     use crate::error::Result;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
 
     struct MockCipherSuite {}
 
@@ -775,8 +779,10 @@ mod tests {
     // is missing.
     #[tokio::test]
     async fn test_flight4_process_certificateverify() {
-        let mut state = State::default();
-        state.cipher_suite = Arc::new(Mutex::new(Some(Box::new(MockCipherSuite {}))));
+        let mut state = State {
+            cipher_suite: Arc::new(Mutex::new(Some(Box::new(MockCipherSuite {})))),
+            ..Default::default()
+        };
 
         let raw_certificate = vec![
             0x0b, 0x00, 0x01, 0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x9b, 0x00, 0x01,

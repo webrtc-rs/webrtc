@@ -78,7 +78,7 @@ fn test_fragment_buffer() -> Result<()> {
             0,
         ),
         (
-            "Multiple Handshakes in Signle Fragment",
+            "Multiple Handshakes in Single Fragment",
             vec![vec![
                 0x16, 0xfe, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
                 0x30, /* record header */
@@ -124,10 +124,9 @@ fn test_fragment_buffer() -> Result<()> {
         let mut fragment_buffer = FragmentBuffer::new();
         for frag in inputs {
             let status = fragment_buffer.push(&frag)?;
-            assert_eq!(
-                true, status,
-                "fragment_buffer didn't accept fragments for '{}'",
-                name
+            assert!(
+                status,
+                "fragment_buffer didn't accept fragments for '{name}'"
             );
         }
 
@@ -135,22 +134,19 @@ fn test_fragment_buffer() -> Result<()> {
             let (out, epoch) = fragment_buffer.pop()?;
             assert_eq!(
                 out, expected,
-                "fragment_buffer '{}' push/pop: got {:?}, want {:?}",
-                name, out, expected
+                "fragment_buffer '{name}' push/pop: got {out:?}, want {expected:?}"
             );
 
             assert_eq!(
                 epoch, expected_epoch,
-                "fragment_buffer returned wrong epoch: got {}, want {}",
-                epoch, expected_epoch
+                "fragment_buffer returned wrong epoch: got {epoch}, want {expected_epoch}"
             );
         }
 
         let result = fragment_buffer.pop();
         assert!(
             result.is_err(),
-            "fragment_buffer popped single buffer multiple times for '{}'",
-            name
+            "fragment_buffer popped single buffer multiple times for '{name}'"
         );
     }
 

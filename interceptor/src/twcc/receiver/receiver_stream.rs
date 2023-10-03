@@ -30,19 +30,20 @@ impl ReceiverStream {
 #[async_trait]
 impl RTPReader for ReceiverStream {
     /// read a rtp packet
-    async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = self.parent_rtp_reader.read(buf, attributes).await?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        attributes: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
+        let (pkt, attr) = self.parent_rtp_reader.read(buf, attributes).await?;
 
-        let mut b = &buf[..n];
-        let p = rtp::packet::Packet::unmarshal(&mut b)?;
-
-        if let Some(mut ext) = p.header.get_extension(self.hdr_ext_id) {
+        if let Some(mut ext) = pkt.header.get_extension(self.hdr_ext_id) {
             let tcc_ext = TransportCcExtension::unmarshal(&mut ext)?;
 
             let _ = self
                 .packet_chan_tx
                 .send(Packet {
-                    hdr: p.header,
+                    hdr: pkt.header.clone(),
                     sequence_number: tcc_ext.transport_sequence,
                     arrival_time: (tokio::time::Instant::now() - self.start_time).as_micros()
                         as i64,
@@ -51,6 +52,6 @@ impl RTPReader for ReceiverStream {
                 .await;
         }
 
-        Ok((n, attr))
+        Ok((pkt, attr))
     }
 }

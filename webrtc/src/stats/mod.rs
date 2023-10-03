@@ -1,3 +1,16 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
+use ice::agent::Agent;
+use ice::candidate::{CandidatePairState, CandidateType};
+use ice::network_type::NetworkType;
+use serde::{Serialize, Serializer};
+use smol_str::SmolStr;
+use stats_collector::StatsCollector;
+use tokio::time::Instant;
+
 use crate::data_channel::data_channel_state::RTCDataChannelState;
 use crate::data_channel::RTCDataChannel;
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
@@ -5,18 +18,6 @@ use crate::peer_connection::certificate::RTCCertificate;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 use crate::rtp_transceiver::{PayloadType, SSRC};
 use crate::sctp_transport::RTCSctpTransport;
-
-use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
-use ice::agent::Agent;
-use ice::candidate::{CandidatePairState, CandidateType};
-use ice::network_type::NetworkType;
-use stats_collector::StatsCollector;
-
-use serde::{Serialize, Serializer};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::time::Instant;
 
 mod serialize;
 pub mod stats_collector;
@@ -271,11 +272,11 @@ pub struct ICETransportStats {
 }
 
 impl ICETransportStats {
-    pub(crate) async fn new(id: String, agent: Arc<Agent>) -> Self {
+    pub(crate) fn new(id: String, agent: Arc<Agent>) -> Self {
         ICETransportStats {
             id,
-            bytes_received: agent.get_bytes_received().await,
-            bytes_sent: agent.get_bytes_sent().await,
+            bytes_received: agent.get_bytes_received(),
+            bytes_sent: agent.get_bytes_sent(),
             stats_type: RTCStatsType::Transport,
             timestamp: Instant::now(),
         }
@@ -447,19 +448,19 @@ pub struct InboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCReceivedRtpStreamStats
     pub packets_received: u64,
     // TODO: packetsLost
-    // TOOD: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
+    // TODO: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
     // NB: `framesDropped` can't be produced since we aren't decoding, might be worth introducing a
     // way for consumers to control this in the future.
 
     // RTCInboundRtpStreamStats
     pub track_identifier: String,
-    pub mid: String,
+    pub mid: SmolStr,
     // TODO: `remoteId`
     // NB: `framesDecoded`, `frameWidth`, frameHeight`, `framesPerSecond`, `qpSum`,
     // `totalDecodeTime`, `totalInterFrameDelay`, and `totalSquaredInterFrameDelay` are all decoder
@@ -494,7 +495,7 @@ pub struct OutboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCSentRtpStreamStats
@@ -504,9 +505,9 @@ pub struct OutboundRTPStats {
     // RTCOutboundRtpStreamStats
     // NB: non-canon in browsers this is available via `RTCMediaSourceStats` which we are unlikely to implement
     pub track_identifier: String,
-    pub mid: String,
+    pub mid: SmolStr,
     // TODO: `mediaSourceId` and `remoteId`
-    pub rid: Option<String>,
+    pub rid: Option<SmolStr>,
     pub header_bytes_sent: u64,
     // TODO: `retransmittedPacketsSent` and `retransmittedPacketsSent`
     // NB: `targetBitrate`, `totalEncodedBytesTarget`, `frameWidth` `frameHeight`, `framesPerSecond`, `framesSent`,
@@ -537,13 +538,13 @@ pub struct RemoteInboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCReceivedRtpStreamStats
     pub packets_received: u64,
     pub packets_lost: i64,
-    // TOOD: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
+    // TODO: jitter(maybe, might be uattainable for the same reason as `framesDropped`)
     // NB: `framesDropped` can't be produced since we aren't decoding, might be worth introducing a
     // way for consumers to control this in the future.
 
@@ -568,7 +569,7 @@ pub struct RemoteOutboundRTPStats {
     // RTCRtpStreamStats
     pub ssrc: SSRC,
     pub kind: &'static str, // Either "video" or "audio"
-    // TODO: Add tranportId
+    // TODO: Add transportId
     // TODO: Add codecId
 
     // RTCSentRtpStreamStats

@@ -1,13 +1,16 @@
 #[cfg(test)]
 mod message_test;
 
+use std::fmt;
+use std::io::{Read, Write};
+
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use rand::Rng;
+
 use crate::agent::*;
 use crate::attributes::*;
 use crate::error::*;
-
-use rand::Rng;
-use std::fmt;
-use std::io::{Read, Write};
 
 // MAGIC_COOKIE is fixed value that aids in distinguishing STUN packets
 // from packets of other protocols when STUN is multiplexed with those
@@ -64,7 +67,7 @@ pub struct Message {
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let t_id = base64::encode(self.transaction_id.0);
+        let t_id = BASE64_STANDARD.encode(self.transaction_id.0);
         write!(
             f,
             "{} l={} attrs={} id={}",
@@ -283,8 +286,7 @@ impl Message {
 
         if cookie != MAGIC_COOKIE {
             return Err(Error::Other(format!(
-                "{:x} is invalid magic cookie (should be {:x})",
-                cookie, MAGIC_COOKIE
+                "{cookie:x} is invalid magic cookie (should be {MAGIC_COOKIE:x})"
             )));
         }
         if buf.len() < full_size {
@@ -465,7 +467,7 @@ impl fmt::Display for MessageClass {
             _ => "unknown message class",
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -507,7 +509,7 @@ impl fmt::Display for Method {
             _ => unknown.as_str(),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

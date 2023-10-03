@@ -1,6 +1,16 @@
 #[cfg(test)]
 mod rtp_receiver_test;
 
+use std::fmt;
+use std::sync::Arc;
+
+use arc_swap::ArcSwapOption;
+use interceptor::stream_info::RTPHeaderExtension;
+use interceptor::{Attributes, Interceptor};
+use log::trace;
+use smol_str::SmolStr;
+use tokio::sync::{watch, Mutex, RwLock};
+
 use crate::api::media_engine::MediaEngine;
 use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{flatten_errs, Error, Result};
@@ -15,14 +25,6 @@ use crate::rtp_transceiver::{
 };
 use crate::track::track_remote::TrackRemote;
 use crate::track::{TrackStream, TrackStreams};
-
-use interceptor::stream_info::RTPHeaderExtension;
-use interceptor::{Attributes, Interceptor};
-use log::trace;
-use std::fmt;
-
-use std::sync::Arc;
-use tokio::sync::{watch, Mutex, RwLock};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
@@ -151,7 +153,7 @@ pub struct RTPReceiverInternal {
 
     tracks: RwLock<Vec<TrackStreams>>,
 
-    transceiver_codecs: Mutex<Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>>,
+    transceiver_codecs: ArcSwapOption<Mutex<Vec<RTCRtpCodecParameters>>>,
 
     transport: Arc<RTCDtlsTransport>,
     media_engine: Arc<MediaEngine>,
@@ -160,7 +162,10 @@ pub struct RTPReceiverInternal {
 
 impl RTPReceiverInternal {
     /// read reads incoming RTCP for this RTPReceiver
-    async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    async fn read(
+        &self,
+        b: &mut [u8],
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut state_watch_rx = self.state_tx.subscribe();
         // Ensure we are running or paused. When paused we still receive RTCP even if RTP traffic
         // isn't flowing.
@@ -189,10 +194,14 @@ impl RTPReceiverInternal {
     }
 
     /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
-    async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
+    async fn read_simulcast(
+        &self,
+        b: &mut [u8],
+        rid: &str,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut state_watch_rx = self.state_tx.subscribe();
 
-        // Ensure we are running or paused. When paused we still recevie RTCP even if RTP traffic
+        // Ensure we are running or paused. When paused we still receive RTCP even if RTP traffic
         // isn't flowing.
         State::wait_for(&mut state_watch_rx, &[State::Started, State::Paused]).await?;
 
@@ -227,10 +236,7 @@ impl RTPReceiverInternal {
         receive_mtu: usize,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; receive_mtu];
-        let (n, attributes) = self.read(&mut b).await?;
-
-        let mut buf = &b[..n];
-        let pkts = rtcp::packet::unmarshal(&mut buf)?;
+        let (pkts, attributes) = self.read(&mut b).await?;
 
         Ok((pkts, attributes))
     }
@@ -242,15 +248,16 @@ impl RTPReceiverInternal {
         receive_mtu: usize,
     ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         let mut b = vec![0u8; receive_mtu];
-        let (n, attributes) = self.read_simulcast(&mut b, rid).await?;
-
-        let mut buf = &b[..n];
-        let pkts = rtcp::packet::unmarshal(&mut buf)?;
+        let (pkts, attributes) = self.read_simulcast(&mut b, rid).await?;
 
         Ok((pkts, attributes))
     }
 
-    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: usize) -> Result<(usize, Attributes)> {
+    pub(crate) async fn read_rtp(
+        &self,
+        b: &mut [u8],
+        tid: usize,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
         let mut state_watch_rx = self.state_tx.subscribe();
 
         // Ensure we are running.
@@ -312,25 +319,24 @@ impl RTPReceiverInternal {
     async fn get_parameters(&self) -> RTCRtpParameters {
         let mut parameters = self
             .media_engine
-            .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly)
-            .await;
+            .get_rtp_parameters_by_kind(self.kind, RTCRtpTransceiverDirection::Recvonly);
 
-        let transceiver_codecs = self.transceiver_codecs.lock().await;
+        let transceiver_codecs = self.transceiver_codecs.load();
         if let Some(codecs) = &*transceiver_codecs {
             let mut c = codecs.lock().await;
             parameters.codecs =
-                RTPReceiverInternal::get_codecs(&mut c, self.kind, &self.media_engine).await;
+                RTPReceiverInternal::get_codecs(&mut c, self.kind, &self.media_engine);
         }
 
         parameters
     }
 
-    pub(crate) async fn get_codecs(
+    pub(crate) fn get_codecs(
         codecs: &mut [RTCRtpCodecParameters],
         kind: RTPCodecType,
         media_engine: &Arc<MediaEngine>,
     ) -> Vec<RTCRtpCodecParameters> {
-        let media_engine_codecs = media_engine.get_codecs_by_kind(kind).await;
+        let media_engine_codecs = media_engine.get_codecs_by_kind(kind);
         if codecs.is_empty() {
             return media_engine_codecs;
         }
@@ -427,7 +433,7 @@ impl RTCRtpReceiver {
                 state_tx,
                 state_rx,
 
-                transceiver_codecs: Mutex::new(None),
+                transceiver_codecs: ArcSwapOption::new(None),
             }),
         }
     }
@@ -436,12 +442,11 @@ impl RTCRtpReceiver {
         self.kind
     }
 
-    pub(crate) async fn set_transceiver_codecs(
+    pub(crate) fn set_transceiver_codecs(
         &self,
         codecs: Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>,
     ) {
-        let mut transceiver_codecs = self.internal.transceiver_codecs.lock().await;
-        *transceiver_codecs = codecs;
+        self.internal.transceiver_codecs.store(codecs);
     }
 
     /// transport returns the currently-configured *DTLSTransport or nil
@@ -477,8 +482,8 @@ impl RTCRtpReceiver {
             }
 
             let current_track = &t.track;
-            current_track.set_codec(codec.clone()).await;
-            current_track.set_params(params.clone()).await;
+            current_track.set_codec(codec.clone());
+            current_track.set_params(params.clone());
         }
     }
 
@@ -540,10 +545,10 @@ impl RTCRtpReceiver {
 
                     (
                         Some(stream_info),
-                        rtp_read_stream,
-                        rtp_interceptor,
-                        rtcp_read_stream,
-                        rtcp_interceptor,
+                        Some(rtp_read_stream),
+                        Some(rtp_interceptor),
+                        Some(rtcp_read_stream),
+                        Some(rtcp_interceptor),
                     )
                 } else {
                     (None, None, None, None, None)
@@ -600,10 +605,10 @@ impl RTCRtpReceiver {
                     "".to_owned(),
                     TrackStream {
                         stream_info: Some(stream_info),
-                        rtp_read_stream,
-                        rtp_interceptor,
-                        rtcp_read_stream,
-                        rtcp_interceptor,
+                        rtp_read_stream: Some(rtp_read_stream),
+                        rtp_interceptor: Some(rtp_interceptor),
+                        rtcp_read_stream: Some(rtcp_read_stream),
+                        rtcp_interceptor: Some(rtcp_interceptor),
                     },
                 )
                 .await?;
@@ -614,12 +619,19 @@ impl RTCRtpReceiver {
     }
 
     /// read reads incoming RTCP for this RTPReceiver
-    pub async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    pub async fn read(
+        &self,
+        b: &mut [u8],
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read(b).await
     }
 
     /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
-    pub async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
+    pub async fn read_simulcast(
+        &self,
+        b: &mut [u8],
+        rid: &str,
+    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
         self.internal.read_simulcast(b, rid).await
     }
 
@@ -672,8 +684,8 @@ impl RTCRtpReceiver {
         // is received from the SDP.
         let is_unpaused = self.current_state() == State::Started;
         for track_remote in &self.tracks().await {
-            track_remote.set_id(incoming.id.clone()).await;
-            track_remote.set_stream_id(incoming.stream_id.clone()).await;
+            track_remote.set_id(incoming.id.clone());
+            track_remote.set_stream_id(incoming.stream_id.clone());
 
             if is_unpaused {
                 track_remote.fire_onunmute().await;
@@ -735,7 +747,11 @@ impl RTCRtpReceiver {
     }
 
     /// read_rtp should only be called by a track, this only exists so we can keep state in one place
-    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: usize) -> Result<(usize, Attributes)> {
+    pub(crate) async fn read_rtp(
+        &self,
+        b: &mut [u8],
+        tid: usize,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
         self.internal.read_rtp(b, tid).await
     }
 
@@ -743,18 +759,18 @@ impl RTCRtpReceiver {
     /// It populates all the internal state for the given RID
     pub(crate) async fn receive_for_rid(
         &self,
-        rid: String,
+        rid: SmolStr,
         params: RTCRtpParameters,
         stream: TrackStream,
     ) -> Result<Arc<TrackRemote>> {
         let mut tracks = self.internal.tracks.write().await;
         for t in &mut *tracks {
-            if t.track.rid() == rid {
+            if *t.track.rid() == rid {
                 t.track.set_kind(self.kind);
                 if let Some(codec) = params.codecs.first() {
-                    t.track.set_codec(codec.clone()).await;
+                    t.track.set_codec(codec.clone());
                 }
-                t.track.set_params(params.clone()).await;
+                t.track.set_params(params.clone());
                 t.track
                     .set_ssrc(stream.stream_info.as_ref().map_or(0, |s| s.ssrc));
                 t.stream = stream;

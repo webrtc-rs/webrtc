@@ -16,11 +16,9 @@ fn test_connected_state_string() -> Result<()> {
 
     for (connection_state, expected_string) in tests {
         assert_eq!(
-            expected_string,
             connection_state.to_string(),
-            "testCase: {} vs {}",
             expected_string,
-            connection_state,
+            "testCase: {expected_string} vs {connection_state}",
         )
     }
 
@@ -38,11 +36,9 @@ fn test_gathering_state_string() -> Result<()> {
 
     for (gathering_state, expected_string) in tests {
         assert_eq!(
-            expected_string,
             gathering_state.to_string(),
-            "testCase: {} vs {}",
             expected_string,
-            gathering_state,
+            "testCase: {expected_string} vs {gathering_state}",
         )
     }
 

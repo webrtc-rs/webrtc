@@ -1,14 +1,17 @@
-use super::*;
-
-use crate::candidate::candidate_base::unmarshal_candidate;
-use async_trait::async_trait;
 use std::net::{IpAddr, Ipv4Addr};
 use std::result::Result;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU64;
+
+use async_trait::async_trait;
 use util::vnet::chunk::Chunk;
-use util::{vnet::router::Nic, vnet::*, Conn};
+use util::vnet::router::Nic;
+use util::vnet::*;
+use util::Conn;
 use waitgroup::WaitGroup;
+
+use super::*;
+use crate::candidate::candidate_base::unmarshal_candidate;
 
 pub(crate) struct MockConn;
 
@@ -29,10 +32,10 @@ impl Conn for MockConn {
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize, util::Error> {
         Ok(0)
     }
-    async fn local_addr(&self) -> Result<SocketAddr, util::Error> {
+    fn local_addr(&self) -> Result<SocketAddr, util::Error> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
-    async fn remote_addr(&self) -> Option<SocketAddr> {
+    fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
     async fn close(&self) -> Result<(), util::Error> {
@@ -84,7 +87,7 @@ pub(crate) async fn build_simple_vnet(
 
     // LAN
     let lan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
-        cidr: format!("{}/{}", VNET_LOCAL_IPA, VNET_LOCAL_SUBNET_MASK_A),
+        cidr: format!("{VNET_LOCAL_IPA}/{VNET_LOCAL_SUBNET_MASK_A}"),
         ..Default::default()
     })?));
 
@@ -134,11 +137,11 @@ pub(crate) async fn build_vnet(
     // LAN 0
     let lan0 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         static_ips: if nat_type0.mode == nat::NatMode::Nat1To1 {
-            vec![format!("{}/{}", VNET_GLOBAL_IPA, VNET_LOCAL_IPA)]
+            vec![format!("{VNET_GLOBAL_IPA}/{VNET_LOCAL_IPA}")]
         } else {
             vec![VNET_GLOBAL_IPA.to_owned()]
         },
-        cidr: format!("{}/{}", VNET_LOCAL_IPA, VNET_LOCAL_SUBNET_MASK_A),
+        cidr: format!("{VNET_LOCAL_IPA}/{VNET_LOCAL_SUBNET_MASK_A}"),
         nat_type: Some(nat_type0),
         ..Default::default()
     })?));
@@ -154,11 +157,11 @@ pub(crate) async fn build_vnet(
     // LAN 1
     let lan1 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         static_ips: if nat_type1.mode == nat::NatMode::Nat1To1 {
-            vec![format!("{}/{}", VNET_GLOBAL_IPB, VNET_LOCAL_IPB)]
+            vec![format!("{VNET_GLOBAL_IPB}/{VNET_LOCAL_IPB}")]
         } else {
             vec![VNET_GLOBAL_IPB.to_owned()]
         },
-        cidr: format!("{}/{}", VNET_LOCAL_IPB, VNET_LOCAL_SUBNET_MASK_B),
+        cidr: format!("{VNET_LOCAL_IPB}/{VNET_LOCAL_SUBNET_MASK_B}"),
         nat_type: Some(nat_type1),
         ..Default::default()
     })?));
@@ -219,8 +222,7 @@ pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server
     // Run TURN(STUN) server
     let conn = wan_net
         .bind(SocketAddr::from_str(&format!(
-            "{}:{}",
-            VNET_STUN_SERVER_IP, VNET_STUN_SERVER_PORT
+            "{VNET_STUN_SERVER_IP}:{VNET_STUN_SERVER_PORT}"
         ))?)
         .await?;
 
@@ -238,6 +240,7 @@ pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server
         realm: "webrtc.rs".to_owned(),
         auth_handler: Arc::new(TestAuthHandler::new()),
         channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
     })
     .await?;
 
@@ -308,7 +311,7 @@ pub(crate) async fn pipe_with_vnet(
     };
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier).await;
+    a_agent.on_connection_state_change(a_notifier);
 
     let nat_1to1_ips = if a1test_config.nat_1to1_ip_candidate_type != CandidateType::Unspecified {
         vec![VNET_GLOBAL_IPB.to_owned()]
@@ -326,7 +329,7 @@ pub(crate) async fn pipe_with_vnet(
     };
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier).await;
+    b_agent.on_connection_state_change(b_notifier);
 
     let (a_conn, b_conn) = connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -360,51 +363,47 @@ pub(crate) async fn gather_and_exchange_candidates(
     let wg = WaitGroup::new();
 
     let w1 = Arc::new(Mutex::new(Some(wg.worker())));
-    a_agent
-        .on_candidate(Box::new(
-            move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-                let w3 = Arc::clone(&w1);
-                Box::pin(async move {
-                    if candidate.is_none() {
-                        let mut w = w3.lock().await;
-                        w.take();
-                    }
-                })
-            },
-        ))
-        .await;
-    a_agent.gather_candidates().await?;
+    a_agent.on_candidate(Box::new(
+        move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
+            let w3 = Arc::clone(&w1);
+            Box::pin(async move {
+                if candidate.is_none() {
+                    let mut w = w3.lock().await;
+                    w.take();
+                }
+            })
+        },
+    ));
+    a_agent.gather_candidates()?;
 
     let w2 = Arc::new(Mutex::new(Some(wg.worker())));
-    b_agent
-        .on_candidate(Box::new(
-            move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-                let w3 = Arc::clone(&w2);
-                Box::pin(async move {
-                    if candidate.is_none() {
-                        let mut w = w3.lock().await;
-                        w.take();
-                    }
-                })
-            },
-        ))
-        .await;
-    b_agent.gather_candidates().await?;
+    b_agent.on_candidate(Box::new(
+        move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
+            let w3 = Arc::clone(&w2);
+            Box::pin(async move {
+                if candidate.is_none() {
+                    let mut w = w3.lock().await;
+                    w.take();
+                }
+            })
+        },
+    ));
+    b_agent.gather_candidates()?;
 
     wg.wait().await;
 
     let candidates = a_agent.get_local_candidates().await?;
     for c in candidates {
         let c2: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(unmarshal_candidate(c.marshal().as_str()).await?);
-        b_agent.add_remote_candidate(&c2).await?;
+            Arc::new(unmarshal_candidate(c.marshal().as_str())?);
+        b_agent.add_remote_candidate(&c2)?;
     }
 
     let candidates = b_agent.get_local_candidates().await?;
     for c in candidates {
         let c2: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(unmarshal_candidate(c.marshal().as_str()).await?);
-        a_agent.add_remote_candidate(&c2).await?;
+            Arc::new(unmarshal_candidate(c.marshal().as_str())?);
+        a_agent.add_remote_candidate(&c2)?;
     }
 
     Ok(())
@@ -822,26 +821,22 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
     let (controlling_state_changes_tx, mut controlling_state_changes_rx) =
         mpsc::channel::<ConnectionState>(100);
     let controlling_state_changes_tx = Arc::new(controlling_state_changes_tx);
-    controlling_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let controlling_state_changes_tx_clone = Arc::clone(&controlling_state_changes_tx);
-            Box::pin(async move {
-                let _ = controlling_state_changes_tx_clone.try_send(c);
-            })
-        }))
-        .await;
+    controlling_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let controlling_state_changes_tx_clone = Arc::clone(&controlling_state_changes_tx);
+        Box::pin(async move {
+            let _ = controlling_state_changes_tx_clone.try_send(c);
+        })
+    }));
 
     let (controlled_state_changes_tx, mut controlled_state_changes_rx) =
         mpsc::channel::<ConnectionState>(100);
     let controlled_state_changes_tx = Arc::new(controlled_state_changes_tx);
-    controlled_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let controlled_state_changes_tx_clone = Arc::clone(&controlled_state_changes_tx);
-            Box::pin(async move {
-                let _ = controlled_state_changes_tx_clone.try_send(c);
-            })
-        }))
-        .await;
+    controlled_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
+        let controlled_state_changes_tx_clone = Arc::clone(&controlled_state_changes_tx);
+        Box::pin(async move {
+            let _ = controlled_state_changes_tx_clone.try_send(c);
+        })
+    }));
 
     connect_with_vnet(&controlling_agent, &controlled_agent).await?;
 

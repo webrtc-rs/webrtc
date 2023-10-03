@@ -1,8 +1,9 @@
-use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
 use std::io::Write;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::{AppSettings, Arg, Command};
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -115,28 +116,26 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {}", s);
+    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+        println!("Peer Connection State has changed: {s}");
 
-            if s == RTCPeerConnectionState::Failed {
-                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-                println!("Peer Connection has gone to failed exiting");
-                let _ = done_tx.try_send(());
-            }
+        if s == RTCPeerConnectionState::Failed {
+            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+            println!("Peer Connection has gone to failed exiting");
+            let _ = done_tx.try_send(());
+        }
 
-            Box::pin(async {})
-        }))
-        .await;
+        Box::pin(async {})
+    }));
 
     // Register data channel creation handling
     peer_connection
         .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             let d_label = d.label().to_owned();
             let d_id = d.id();
-            println!("New DataChannel {} {}", d_label, d_id);
+            println!("New DataChannel {d_label} {d_id}");
 
             let close_after2 = Arc::clone(&close_after);
 
@@ -146,18 +145,18 @@ async fn main() -> Result<()> {
                 let d_label2 = d_label.clone();
                 let d_id2 = d_id;
                 d.on_open(Box::new(move || {
-                    println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
+                    println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
                     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
                     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
                     Box::pin(async move {
                         d2.on_close(Box::new(move || {
-                            println!("Data channel '{}'-'{}' closed.", d_label2, d_id2);
+                            println!("Data channel '{d_label2}'-'{d_id2}' closed.");
                             let done_tx2 = Arc::clone(&done_tx);
                             Box::pin(async move{
                                 let mut done = done_tx2.lock().await;
                                 done.take();
                             })
-                        })).await;
+                        }));
 
                         let mut result = Result::<usize>::Ok(0);
                         while result.is_ok() {
@@ -170,12 +169,12 @@ async fn main() -> Result<()> {
                                 }
                                 _ = timeout.as_mut() =>{
                                     let message = math_rand_alpha(15);
-                                    println!("Sending '{}'", message);
+                                    println!("Sending '{message}'");
                                     result = d2.send_text(message).await.map_err(Into::into);
 
                                     let cnt = close_after2.fetch_sub(1, Ordering::SeqCst);
                                     if cnt <= 0 {
-                                        println!("Sent times out. Closing data channel '{}'-'{}'.", d2.label(), d2.id());                                       
+                                        println!("Sent times out. Closing data channel '{}'-'{}'.", d2.label(), d2.id());
                                         let _ = d2.close().await;
                                         break;
                                     }
@@ -183,17 +182,16 @@ async fn main() -> Result<()> {
                             };
                         }
                     })
-                })).await;
+                }));
 
                 // Register text message handling
                 d.on_message(Box::new(move |msg: DataChannelMessage| {
                     let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                    println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+                    println!("Message from DataChannel '{d_label}': '{msg_str}'");
                     Box::pin(async {})
-                })).await;
+                }));
             })
-        }))
-        .await;
+        }));
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;
@@ -221,7 +219,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{}", b64);
+        println!("{b64}");
     } else {
         println!("generate local_description failed!");
     }
@@ -232,7 +230,7 @@ async fn main() -> Result<()> {
             println!("received done signal!");
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            println!();
         }
     };
 

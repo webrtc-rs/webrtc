@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod attributes_test;
 
+use std::fmt;
+
 use crate::error::*;
 use crate::message::*;
-
-use std::fmt;
 
 /// Attributes is list of message attributes.
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
@@ -69,7 +69,7 @@ impl fmt::Display for AttrType {
             _ => other.as_str(),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

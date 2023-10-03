@@ -167,11 +167,7 @@ fn test_vp8_payload() -> Result<()> {
     for (name, mut pck, mtu, payloads, expected) in tests {
         for (i, payload) in payloads.iter().enumerate() {
             let actual = pck.payload(mtu, payload)?;
-            assert_eq!(
-                expected[i], actual,
-                "{}: Generated packet[{}] differs",
-                name, i
-            );
+            assert_eq!(expected[i], actual, "{name}: Generated packet[{i}] differs");
         }
     }
 
@@ -179,7 +175,7 @@ fn test_vp8_payload() -> Result<()> {
 }
 
 #[test]
-fn test_vp8_payload_eror() -> Result<()> {
+fn test_vp8_payload_error() -> Result<()> {
     let mut pck = Vp8Payloader::default();
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);

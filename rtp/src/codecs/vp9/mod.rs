@@ -1,14 +1,13 @@
 #[cfg(test)]
 mod vp9_test;
 
-use crate::{
-    error::{Error, Result},
-    packetizer::{Depacketizer, Payloader},
-};
-
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::sync::Arc;
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+use crate::error::{Error, Result};
+use crate::packetizer::{Depacketizer, Payloader};
 
 /// Flexible mode 15 bit picture ID
 const VP9HEADER_SIZE: usize = 3;
@@ -107,7 +106,7 @@ impl Payloader for Vp9Payloader {
             let current_fragment_size =
                 std::cmp::min(max_fragment_size as usize, payload_data_remaining);
             let mut out = BytesMut::with_capacity(VP9HEADER_SIZE + current_fragment_size);
-            let mut buf = vec![0u8; VP9HEADER_SIZE];
+            let mut buf = [0u8; VP9HEADER_SIZE];
             buf[0] = 0x90; // F=1 I=1
             if payload_data_index == 0 {
                 buf[0] |= 0x08; // B=1
@@ -196,7 +195,7 @@ pub struct Vp9Packet {
     pub pgtid: Vec<u8>,
     /// Switching up point of pictures in a Picture Group
     pub pgu: Vec<bool>,
-    /// Reference indecies of pictures in a Picture Group
+    /// Reference indices of pictures in a Picture Group
     pub pgpdiff: Vec<Vec<u8>>,
 }
 

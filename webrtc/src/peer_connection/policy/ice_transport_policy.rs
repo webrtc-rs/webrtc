@@ -1,10 +1,12 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// ICETransportPolicy defines the ICE candidate policy surface the
 /// permitted candidates. Only these candidates are used for connectivity checks.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCIceTransportPolicy {
+    #[default]
     Unspecified = 0,
 
     /// ICETransportPolicyAll indicates any type of candidate is used.
@@ -15,12 +17,6 @@ pub enum RTCIceTransportPolicy {
     /// as candidates passing through a TURN server are used.
     #[serde(rename = "relay")]
     Relay = 2,
-}
-
-impl Default for RTCIceTransportPolicy {
-    fn default() -> Self {
-        RTCIceTransportPolicy::Unspecified
-    }
 }
 
 /// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy
@@ -47,7 +43,7 @@ impl fmt::Display for RTCIceTransportPolicy {
             RTCIceTransportPolicy::All => ICE_TRANSPORT_POLICY_ALL_STR,
             RTCIceTransportPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -63,7 +59,7 @@ mod test {
         ];
 
         for (policy_string, expected_policy) in tests {
-            assert_eq!(expected_policy, RTCIceTransportPolicy::from(policy_string));
+            assert_eq!(RTCIceTransportPolicy::from(policy_string), expected_policy);
         }
     }
 
@@ -75,7 +71,7 @@ mod test {
         ];
 
         for (policy, expected_string) in tests {
-            assert_eq!(expected_string, policy.to_string());
+            assert_eq!(policy.to_string(), expected_string);
         }
     }
 }

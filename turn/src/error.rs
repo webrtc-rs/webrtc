@@ -1,9 +1,8 @@
-use thiserror::Error;
-
-use std::io;
-use std::net;
 use std::num::ParseIntError;
 use std::time::SystemTimeError;
+use std::{io, net};
+
+use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -64,6 +63,8 @@ pub enum Error {
     ErrUnexpectedEof,
     #[error("invalid value for requested family attribute")]
     ErrInvalidRequestedFamilyValue,
+    #[error("error code 443: peer address family mismatch")]
+    ErrPeerAddressFamilyMismatch,
     #[error("fake error")]
     ErrFakeErr,
     #[error("try again")]
@@ -142,6 +143,8 @@ pub enum Error {
     ErrNoDontFragmentSupport,
     #[error("Request must not contain RESERVATION-TOKEN and EVEN-PORT")]
     ErrRequestWithReservationTokenAndEvenPort,
+    #[error("Request must not contain RESERVATION-TOKEN and REQUESTED-ADDRESS-FAMILY")]
+    ErrRequestWithReservationTokenAndReqAddressFamily,
     #[error("no allocation found")]
     ErrNoAllocationFound,
     #[error("unable to handle send-indication, no permission added")]

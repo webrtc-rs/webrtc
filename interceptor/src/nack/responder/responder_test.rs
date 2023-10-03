@@ -1,10 +1,10 @@
+use rtcp::transport_feedbacks::transport_layer_nack::{NackPair, TransportLayerNack};
+use tokio::time::Duration;
+
 use super::*;
 use crate::mock::mock_stream::MockStream;
 use crate::stream_info::RTCPFeedback;
 use crate::test::timeout_or_fail;
-use tokio::time::Duration;
-
-use rtcp::transport_feedbacks::transport_layer_nack::{NackPair, TransportLayerNack};
 
 #[tokio::test]
 async fn test_responder_interceptor() -> Result<()> {
@@ -38,7 +38,7 @@ async fn test_responder_interceptor() -> Result<()> {
         let p = timeout_or_fail(Duration::from_millis(10), stream.written_rtp())
             .await
             .expect("A packet");
-        assert_eq!(seq_num, p.header.sequence_number);
+        assert_eq!(p.header.sequence_number, seq_num);
     }
 
     stream
@@ -58,16 +58,12 @@ async fn test_responder_interceptor() -> Result<()> {
     for seq_num in [11, 12, 15] {
         if let Ok(r) = tokio::time::timeout(Duration::from_millis(50), stream.written_rtp()).await {
             if let Some(p) = r {
-                assert_eq!(seq_num, p.header.sequence_number);
+                assert_eq!(p.header.sequence_number, seq_num);
             } else {
-                assert!(
-                    false,
-                    "seq_num {} is not sent due to channel closed",
-                    seq_num
-                );
+                panic!("seq_num {seq_num} is not sent due to channel closed");
             }
         } else {
-            assert!(false, "seq_num {} is not sent yet", seq_num);
+            panic!("seq_num {seq_num} is not sent yet");
         }
     }
 

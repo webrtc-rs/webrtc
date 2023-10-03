@@ -1,5 +1,6 @@
 use std::io;
 use std::string::FromUtf8Error;
+
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -56,6 +57,15 @@ impl PartialEq<util::Error> for Error {
     fn eq(&self, other: &util::Error) -> bool {
         if let Some(down) = other.downcast_ref::<Error>() {
             return self == down;
+        }
+        false
+    }
+}
+
+impl PartialEq<Error> for util::Error {
+    fn eq(&self, other: &Error) -> bool {
+        if let Some(down) = self.downcast_ref::<Error>() {
+            return other == down;
         }
         false
     }

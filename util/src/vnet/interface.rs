@@ -1,7 +1,8 @@
-use crate::error::*;
-use ipnet::*;
 use std::net::SocketAddr;
-use std::str::FromStr;
+
+use ipnet::*;
+
+use crate::error::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct Interface {
@@ -26,35 +27,11 @@ impl Interface {
     }
 
     pub fn convert(addr: SocketAddr, mask: Option<SocketAddr>) -> Result<IpNet> {
-        let prefix = if let Some(mask) = mask {
-            match (addr, mask) {
-                (SocketAddr::V4(_), SocketAddr::V4(mask)) => {
-                    let octets = mask.ip().octets();
-                    let mut prefix = 0;
-                    for octet in &octets {
-                        for i in 0..8 {
-                            prefix += (*octet >> (7 - i)) & 0x1;
-                        }
-                    }
-                    prefix
-                }
-                (SocketAddr::V6(_), SocketAddr::V6(mask)) => {
-                    let octets = mask.ip().octets();
-                    let mut prefix = 0;
-                    for octet in &octets {
-                        for i in 0..8 {
-                            prefix += (*octet >> (7 - i)) & 0x1;
-                        }
-                    }
-                    prefix
-                }
-                _ => return Err(Error::ErrInvalidMask),
-            }
+        if let Some(mask) = mask {
+            Ok(IpNet::with_netmask(addr.ip(), mask.ip()).map_err(|_| Error::ErrInvalidMask)?)
         } else {
-            32
-        };
-        let s = format!("{}/{}", addr.ip(), prefix);
-
-        Ok(IpNet::from_str(&s)?)
+            Ok(IpNet::new(addr.ip(), if addr.is_ipv4() { 32 } else { 128 })
+                .expect("ipv4 should always work with prefix 32 and ipv6 with prefix 128"))
+        }
     }
 }

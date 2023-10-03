@@ -1,10 +1,7 @@
-use std::sync::Mutex;
+use util::sync::Mutex;
 
 use super::*;
-
 use crate::nack::UINT16SIZE_HALF;
-
-use util::Unmarshal;
 
 struct GeneratorStreamInternal {
     packets: Vec<u64>,
@@ -139,12 +136,12 @@ impl GeneratorStream {
     }
 
     pub(super) fn missing_seq_numbers(&self, skip_last_n: u16) -> Vec<u16> {
-        let internal = self.internal.lock().unwrap();
+        let internal = self.internal.lock();
         internal.missing_seq_numbers(skip_last_n)
     }
 
     pub(super) fn add(&self, seq: u16) {
-        let mut internal = self.internal.lock().unwrap();
+        let mut internal = self.internal.lock();
         internal.add(seq);
     }
 }
@@ -153,14 +150,16 @@ impl GeneratorStream {
 #[async_trait]
 impl RTPReader for GeneratorStream {
     /// read a rtp packet
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = self.parent_rtp_reader.read(buf, a).await?;
+    async fn read(
+        &self,
+        buf: &mut [u8],
+        a: &Attributes,
+    ) -> Result<(rtp::packet::Packet, Attributes)> {
+        let (pkt, attr) = self.parent_rtp_reader.read(buf, a).await?;
 
-        let mut b = &buf[..n];
-        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
         self.add(pkt.header.sequence_number);
 
-        Ok((n, attr))
+        Ok((pkt, attr))
     }
 }
 
@@ -191,7 +190,7 @@ mod test {
             let join = |parts: &[&[u16]]| -> Vec<u16> {
                 let mut result = vec![];
                 for p in parts {
-                    result.extend_from_slice(*p);
+                    result.extend_from_slice(p);
                 }
                 result
             };
@@ -206,7 +205,7 @@ mod test {
             let assert_get = |rl: &GeneratorStreamInternal, nums: &[u16]| {
                 for n in nums {
                     let seq = start.wrapping_add(*n);
-                    assert!(rl.get(seq), "not found: {}", seq);
+                    assert!(rl.get(seq), "not found: {seq}");
                 }
             };
 

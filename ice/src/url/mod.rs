@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod url_test;
 
-use crate::error::*;
-
 use std::borrow::Cow;
 use std::convert::From;
 use std::fmt;
+
+use crate::error::*;
 
 /// The type of server used in the ice.URL structure.
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
@@ -55,7 +55,7 @@ impl fmt::Display for SchemeType {
             SchemeType::Turns => "turns",
             SchemeType::Unknown => "unknown",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -98,7 +98,7 @@ impl fmt::Display for ProtoType {
             Self::Tcp => "tcp",
             Self::Unknown => "unknown",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

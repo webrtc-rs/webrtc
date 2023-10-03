@@ -1,11 +1,12 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 /// SDPSemantics determines which style of SDP offers and answers
 /// can be used.
 ///
-/// This is unsused, we only support UnifiedPlan.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+/// This is unused, we only support UnifiedPlan.
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCSdpSemantics {
     Unspecified = 0,
 
@@ -13,6 +14,7 @@ pub enum RTCSdpSemantics {
     /// (the default in Chrome since M72)
     /// <https://tools.ietf.org/html/draft-roach-mmusic-unified-plan-00>
     #[serde(rename = "unified-plan")]
+    #[default]
     UnifiedPlan = 1,
 
     /// PlanB uses plan-b offers and answers
@@ -26,12 +28,6 @@ pub enum RTCSdpSemantics {
     /// with a plan-b answer
     #[serde(rename = "unified-plan-with-fallback")]
     UnifiedPlanWithFallback = 3,
-}
-
-impl Default for RTCSdpSemantics {
-    fn default() -> Self {
-        RTCSdpSemantics::UnifiedPlan
-    }
 }
 
 const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "unified-plan-with-fallback";
@@ -57,17 +53,18 @@ impl fmt::Display for RTCSdpSemantics {
             RTCSdpSemantics::PlanB => SDP_SEMANTICS_PLAN_B,
             RTCSdpSemantics::Unspecified => crate::UNSPECIFIED_STR,
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use std::collections::HashSet;
 
     use sdp::description::media::MediaDescription;
     use sdp::description::session::{SessionDescription, ATTR_KEY_SSRC};
-    use std::collections::HashSet;
+
+    use super::*;
 
     #[test]
     fn test_sdp_semantics_string() {
@@ -82,7 +79,7 @@ mod test {
         ];
 
         for (value, expected_string) in tests {
-            assert_eq!(expected_string, value.to_string());
+            assert_eq!(value.to_string(), expected_string);
         }
     }
 

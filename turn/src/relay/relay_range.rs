@@ -1,25 +1,26 @@
+use std::net::IpAddr;
+
+use async_trait::async_trait;
+use util::vnet::net::*;
+
 use super::*;
 use crate::error::*;
 
-use async_trait::async_trait;
-use std::net::IpAddr;
-use util::vnet::net::*;
-
-// RelayAddressGeneratorRanges can be used to only allocate connections inside a defined port range
+/// `RelayAddressGeneratorRanges` can be used to only allocate connections inside a defined port range.
 pub struct RelayAddressGeneratorRanges {
-    // relay_address is the IP returned to the user when the relay is created
+    /// `relay_address` is the IP returned to the user when the relay is created.
     pub relay_address: IpAddr,
 
-    // min_port the minimum port to allocate
+    /// `min_port` the minimum port to allocate.
     pub min_port: u16,
 
-    // max_port the maximum (inclusive) port to allocate
+    /// `max_port` the maximum (inclusive) port to allocate.
     pub max_port: u16,
 
-    // max_retries the amount of tries to allocate a random port in the defined range
+    /// `max_retries` the amount of tries to allocate a random port in the defined range.
     pub max_retries: u16,
 
-    // Address is passed to Listen/ListenPacket when creating the Relay
+    /// `address` is passed to Listen/ListenPacket when creating the Relay.
     pub address: String,
 
     pub net: Arc<Net>,
@@ -27,7 +28,6 @@ pub struct RelayAddressGeneratorRanges {
 
 #[async_trait]
 impl RelayAddressGenerator for RelayAddressGeneratorRanges {
-    // validate confirms that the RelayAddressGenerator is properly initialized
     fn validate(&self) -> Result<()> {
         if self.min_port == 0 {
             Err(Error::ErrMinPortNotZero)
@@ -42,7 +42,6 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         }
     }
 
-    // Allocate a PacketConn (UDP) relay_address
     async fn allocate_conn(
         &self,
         use_ipv4: bool,
@@ -60,7 +59,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
                 .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))
                 .await?;
             let conn = self.net.bind(addr).await?;
-            let mut relay_addr = conn.local_addr().await?;
+            let mut relay_addr = conn.local_addr()?;
             relay_addr.set_ip(self.relay_address);
             return Ok((conn, relay_addr));
         }
@@ -76,7 +75,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
                 Err(_) => continue,
             };
 
-            let mut relay_addr = conn.local_addr().await?;
+            let mut relay_addr = conn.local_addr()?;
             relay_addr.set_ip(self.relay_address);
             return Ok((conn, relay_addr));
         }

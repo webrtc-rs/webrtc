@@ -1,6 +1,6 @@
-use super::*;
-
 use std::time::UNIX_EPOCH;
+
+use super::*;
 
 #[test]
 fn test_candidate_priority() -> Result<()> {
@@ -8,7 +8,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             2130706431,
@@ -16,7 +16,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp4 as u8),
                 tcp_type: TcpType::Active,
                 ..Default::default()
@@ -26,7 +26,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp4 as u8),
                 tcp_type: TcpType::Passive,
                 ..Default::default()
@@ -36,7 +36,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Host,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp4 as u8),
                 tcp_type: TcpType::SimultaneousOpen,
                 ..Default::default()
@@ -46,7 +46,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             1862270975,
@@ -54,7 +54,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp6 as u8),
                 tcp_type: TcpType::SimultaneousOpen,
                 ..Default::default()
@@ -64,7 +64,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp6 as u8),
                 tcp_type: TcpType::Active,
                 ..Default::default()
@@ -74,7 +74,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::PeerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 network_type: AtomicU8::new(NetworkType::Tcp6 as u8),
                 tcp_type: TcpType::Passive,
                 ..Default::default()
@@ -84,7 +84,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::ServerReflexive,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             1694498815,
@@ -92,7 +92,7 @@ fn test_candidate_priority() -> Result<()> {
         (
             CandidateBase {
                 candidate_type: CandidateType::Relay,
-                component: AtomicU16::new(COMPONENT_RTP as u16),
+                component: AtomicU16::new(COMPONENT_RTP),
                 ..Default::default()
             },
             16777215,
@@ -103,8 +103,7 @@ fn test_candidate_priority() -> Result<()> {
         let got = candidate.priority();
         assert_eq!(
             got, want,
-            "Candidate({}).Priority() = {}, want {}",
-            candidate, got, want
+            "Candidate({candidate}).Priority() = {got}, want {want}"
         );
     }
 
@@ -263,7 +262,7 @@ fn test_candidate_pair_state_to_string() {
     ];
 
     for (candidate_pair_state, expected_string) in tests {
-        assert_eq!(expected_string, candidate_pair_state.to_string());
+        assert_eq!(candidate_pair_state.to_string(), expected_string);
     }
 }
 
@@ -279,8 +278,8 @@ fn test_candidate_type_serialization() {
 
     for (candidate_type, expected_string) in tests {
         assert_eq!(
-            expected_string.to_string(),
-            serde_json::to_string(&candidate_type).unwrap()
+            serde_json::to_string(&candidate_type).unwrap(),
+            expected_string.to_string()
         );
     }
 }
@@ -296,12 +295,12 @@ fn test_candidate_type_to_string() {
     ];
 
     for (candidate_type, expected_string) in tests {
-        assert_eq!(expected_string, candidate_type.to_string());
+        assert_eq!(candidate_type.to_string(), expected_string);
     }
 }
 
-#[tokio::test]
-async fn test_candidate_marshal() -> Result<()> {
+#[test]
+fn test_candidate_marshal() -> Result<()> {
     let tests = vec![
        (
             Some(CandidateBase{
@@ -332,7 +331,7 @@ async fn test_candidate_marshal() -> Result<()> {
                     address:        "191.228.238.68".to_owned(),
                     port:           53991,
                     related_address: Some(CandidateRelatedAddress{
-                        address: "192.168.0.274".to_owned(), 
+                        address: "192.168.0.274".to_owned(),
                         port:53991
                     }),
                 ..Default::default()
@@ -347,7 +346,7 @@ async fn test_candidate_marshal() -> Result<()> {
                     port:           5000,
                     related_address: Some(
                         CandidateRelatedAddress{
-                            address: "192.168.0.1".to_owned(), 
+                            address: "192.168.0.1".to_owned(),
                             port:5001}
                     ),
                 ..Default::default()
@@ -373,7 +372,7 @@ async fn test_candidate_marshal() -> Result<()> {
                     port:          60542,
                 ..Default::default()
             }),
-            "1380287402 1 udp 2130706431 e2494022-4d9a-4c1e-a750-cc48d4f8d6ee.local 60542 typ host", 
+            "1380287402 1 udp 2130706431 e2494022-4d9a-4c1e-a750-cc48d4f8d6ee.local 60542 typ host",
         ),
         // Invalid candidates
         (None, ""),
@@ -390,7 +389,7 @@ async fn test_candidate_marshal() -> Result<()> {
     ];
 
     for (candidate, marshaled) in tests {
-        let actual_candidate = unmarshal_candidate(marshaled).await;
+        let actual_candidate = unmarshal_candidate(marshaled);
         if let Some(candidate) = candidate {
             if let Ok(actual_candidate) = actual_candidate {
                 assert!(

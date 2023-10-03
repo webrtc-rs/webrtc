@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 
 use tokio::time::Instant;
 
-//  Chanel number:
+//  Channel number:
 //    0x4000 through 0x7FFF: These values are the allowed channel
 //    numbers (16,383 possible values).
 const MIN_CHANNEL_NUMBER: u16 = 0x4000;
@@ -48,7 +48,7 @@ impl Binding {
         self.refreshed_at
     }
 }
-// Thread-safe Binding map
+/// Thread-safe Binding map.
 #[derive(Default)]
 pub(crate) struct BindingManager {
     chan_map: HashMap<u16, String>,

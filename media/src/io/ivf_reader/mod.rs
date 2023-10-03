@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod ivf_reader_test;
 
-use crate::error::{Error, Result};
-use crate::io::ResetFn;
+use std::io::Read;
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::BytesMut;
-use std::io::Read;
+
+use crate::error::{Error, Result};
+use crate::io::ResetFn;
 
 pub const IVF_FILE_HEADER_SIGNATURE: &[u8] = b"DKIF";
 pub const IVF_FILE_HEADER_SIZE: usize = 32;

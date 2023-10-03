@@ -1,11 +1,11 @@
+use std::sync::Arc;
+
+use clap::{App, Arg};
 use stun::agent::*;
 use stun::client::*;
 use stun::message::*;
 use stun::xoraddr::*;
 use stun::Error;
-
-use clap::{App, Arg};
-use std::sync::Arc;
 use tokio::net::UdpSocket;
 
 #[tokio::main]
@@ -42,16 +42,13 @@ async fn main() -> Result<(), Error> {
     let conn = UdpSocket::bind("0:0").await?;
     println!("Local address: {}", conn.local_addr()?);
 
-    println!("Connecting to: {}", server);
+    println!("Connecting to: {server}");
     conn.connect(server).await?;
 
     let mut client = ClientBuilder::new().with_conn(Arc::new(conn)).build()?;
 
     let mut msg = Message::new();
-    msg.build(&[
-        Box::new(TransactionId::default()),
-        Box::new(BINDING_REQUEST),
-    ])?;
+    msg.build(&[Box::<TransactionId>::default(), Box::new(BINDING_REQUEST)])?;
 
     client.send(&msg, Some(Arc::new(handler_tx))).await?;
 
@@ -59,7 +56,7 @@ async fn main() -> Result<(), Error> {
         let msg = event.event_body?;
         let mut xor_addr = XorMappedAddress::default();
         xor_addr.get_from(&msg)?;
-        println!("Got response: {}", xor_addr);
+        println!("Got response: {xor_addr}");
     }
 
     client.close().await?;
