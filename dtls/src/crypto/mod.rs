@@ -12,7 +12,7 @@ use der_parser::oid;
 use der_parser::oid::Oid;
 use rcgen::KeyPair;
 use ring::rand::SystemRandom;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
 
 use crate::curve::named_curve::*;
 use crate::error::*;
@@ -139,7 +139,7 @@ pub(crate) fn value_key_message(
 pub enum CryptoPrivateKeyKind {
     Ed25519(Ed25519KeyPair),
     Ecdsa256(EcdsaKeyPair),
-    Rsa256(rsa::KeyPair),
+    Rsa256(ring::rsa::KeyPair),
 }
 
 /// Private key.
@@ -195,7 +195,7 @@ impl Clone for CryptoPrivateKey {
             },
             CryptoPrivateKeyKind::Rsa256(_) => CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
-                    rsa::KeyPair::from_pkcs8(&self.serialized_der).unwrap(),
+                    ring::rsa::KeyPair::from_pkcs8(&self.serialized_der).unwrap(),
                 ),
                 serialized_der: self.serialized_der.clone(),
             },
@@ -237,7 +237,7 @@ impl CryptoPrivateKey {
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             Ok(CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
-                    rsa::KeyPair::from_pkcs8(&serialized_der)
+                    ring::rsa::KeyPair::from_pkcs8(&serialized_der)
                         .map_err(|e| Error::Other(e.to_string()))?,
                 ),
                 serialized_der,
