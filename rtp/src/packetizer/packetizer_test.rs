@@ -41,7 +41,7 @@ fn test_packetizer_abs_send_time() -> Result<()> {
         let loc = FixedOffset::west_opt(5 * 60 * 60).unwrap(); // UTC-5
         let t = loc.with_ymd_and_hms(1985, 6, 23, 4, 0, 0).unwrap();
         UNIX_EPOCH
-            .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
+            .checked_add(Duration::from_nanos(t.timestamp_nanos_opt().unwrap() as u64))
             .unwrap_or(UNIX_EPOCH)
     }));
 
