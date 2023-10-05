@@ -23,7 +23,7 @@ rand = "0.8"
 base64 = "0.21"
 subtle = "2.4"
 crc = "3"
-ring = "0.16"
+ring = "0.17"
 md-5 = "0.10"
 thiserror = "1"
 

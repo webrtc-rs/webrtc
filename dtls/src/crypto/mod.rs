@@ -12,7 +12,7 @@ use der_parser::oid;
 use der_parser::oid::Oid;
 use rcgen::KeyPair;
 use ring::rand::SystemRandom;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
 
 use crate::curve::named_curve::*;
 use crate::error::*;
@@ -139,7 +139,7 @@ pub(crate) fn value_key_message(
 pub enum CryptoPrivateKeyKind {
     Ed25519(Ed25519KeyPair),
     Ecdsa256(EcdsaKeyPair),
-    Rsa256(RsaKeyPair),
+    Rsa256(ring::rsa::KeyPair),
 }
 
 /// Private key.
@@ -187,6 +187,7 @@ impl Clone for CryptoPrivateKey {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &self.serialized_der,
+                        &SystemRandom::new(),
                     )
                     .unwrap(),
                 ),
@@ -194,7 +195,7 @@ impl Clone for CryptoPrivateKey {
             },
             CryptoPrivateKeyKind::Rsa256(_) => CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
-                    RsaKeyPair::from_pkcs8(&self.serialized_der).unwrap(),
+                    ring::rsa::KeyPair::from_pkcs8(&self.serialized_der).unwrap(),
                 ),
                 serialized_der: self.serialized_der.clone(),
             },
@@ -206,37 +207,7 @@ impl TryFrom<&KeyPair> for CryptoPrivateKey {
     type Error = Error;
 
     fn try_from(key_pair: &KeyPair) -> Result<Self> {
-        let serialized_der = key_pair.serialize_der();
-        if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
-            Ok(CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ed25519(
-                    Ed25519KeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            })
-        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
-            Ok(CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ecdsa256(
-                    EcdsaKeyPair::from_pkcs8(
-                        &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-                        &serialized_der,
-                    )
-                    .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            })
-        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
-            Ok(CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Rsa256(
-                    RsaKeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::Other(e.to_string()))?,
-                ),
-                serialized_der,
-            })
-        } else {
-            Err(Error::Other("Unsupported key_pair".to_owned()))
-        }
+        Self::from_key_pair(key_pair)
     }
 }
 
@@ -257,6 +228,7 @@ impl CryptoPrivateKey {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
+                        &SystemRandom::new(),
                     )
                     .map_err(|e| Error::Other(e.to_string()))?,
                 ),
@@ -265,7 +237,7 @@ impl CryptoPrivateKey {
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             Ok(CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
-                    RsaKeyPair::from_pkcs8(&serialized_der)
+                    ring::rsa::KeyPair::from_pkcs8(&serialized_der)
                         .map_err(|e| Error::Other(e.to_string()))?,
                 ),
                 serialized_der,
@@ -300,7 +272,7 @@ pub(crate) fn generate_key_signature(
         }
         CryptoPrivateKeyKind::Rsa256(kp) => {
             let system_random = SystemRandom::new();
-            let mut signature = vec![0; kp.public_modulus_len()];
+            let mut signature = vec![0; kp.public().modulus_len()];
             kp.sign(
                 &ring::signature::RSA_PKCS1_SHA256,
                 &system_random,
@@ -422,7 +394,7 @@ pub(crate) fn generate_certificate_verify(
         }
         CryptoPrivateKeyKind::Rsa256(kp) => {
             let system_random = SystemRandom::new();
-            let mut signature = vec![0; kp.public_modulus_len()];
+            let mut signature = vec![0; kp.public().modulus_len()];
             kp.sign(
                 &ring::signature::RSA_PKCS1_SHA256,
                 &system_random,
@@ -537,7 +509,7 @@ mod test {
 
     #[cfg(feature = "pem")]
     #[test]
-    fn test_certificate_serialize_pem_and_from_pem() -> Result<()> {
+    fn test_certificate_serialize_pem_and_from_pem() -> crate::error::Result<()> {
         let cert = Certificate::generate_self_signed(vec!["webrtc.rs".to_owned()])?;
 
         let pem = cert.serialize_pem();

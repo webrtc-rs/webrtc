@@ -3,7 +3,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
 use rcgen::{CertificateParams, KeyPair};
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+use ring::rand::SystemRandom;
+use ring::rsa;
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
 use sha2::{Digest, Sha256};
 
 use crate::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
@@ -58,6 +60,7 @@ impl RTCCertificate {
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
+                        &SystemRandom::new(),
                     )
                     .map_err(|e| Error::new(e.to_string()))?,
                 ),
@@ -66,7 +69,7 @@ impl RTCCertificate {
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
-                    RsaKeyPair::from_pkcs8(&serialized_der)
+                    rsa::KeyPair::from_pkcs8(&serialized_der)
                         .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,

@@ -19,7 +19,7 @@ async-trait = "0.1"
 log = "0.4"
 base64 = "0.21"
 rand = "0.8"
-ring = "0.16"
+ring = "0.17"
 md-5 = "0.10"
 thiserror = "1"
 
