@@ -132,13 +132,49 @@ impl NAL {
 const NAL_PREFIX_3BYTES: [u8; 3] = [0, 0, 1];
 const NAL_PREFIX_4BYTES: [u8; 4] = [0, 0, 0, 1];
 
+/// Wrapper class around reading buffer
+struct ReadBuffer {
+    buffer: Box<[u8]>,
+    read_end: usize,
+    filled_end: usize,
+}
+
+impl ReadBuffer {
+    fn new(capacity: usize) -> ReadBuffer {
+        Self {
+            buffer: vec![0u8; capacity].into_boxed_slice(),
+            read_end: 0,
+            filled_end: 0,
+        }
+    }
+
+    #[inline]
+    fn in_buffer(&self) -> usize {
+        self.filled_end - self.read_end
+    }
+
+    fn consume(&mut self, consume: usize) -> &[u8] {
+        debug_assert!(self.read_end + consume <= self.filled_end);
+        let result = &self.buffer[self.read_end..][..consume];
+        self.read_end += consume;
+        result
+    }
+
+    pub(crate) fn fill_buffer(&mut self, reader: &mut impl Read) -> Result<()> {
+        debug_assert_eq!(self.read_end, self.filled_end);
+
+        self.read_end = 0;
+        self.filled_end = reader.read(&mut self.buffer)?;
+
+        Ok(())
+    }
+}
+
 /// H264Reader reads data from stream and constructs h264 nal units
 pub struct H264Reader<R: Read> {
     reader: R,
     // reading buffers
-    temp_buf: Box<[u8]>,
-    buf_read_end: usize,
-    buf_filled_end: usize,
+    buffer: ReadBuffer,
     // for reading
     nal_prefix_parsed: bool,
     count_of_consecutive_zero_bytes: usize,
@@ -151,9 +187,7 @@ impl<R: Read> H264Reader<R> {
         H264Reader {
             reader,
             nal_prefix_parsed: false,
-            temp_buf: vec![0u8; capacity].into_boxed_slice(),
-            buf_read_end: 0,
-            buf_filled_end: 0,
+            buffer: ReadBuffer::new(capacity),
             count_of_consecutive_zero_bytes: 0,
             nal_buffer: BytesMut::new(),
         }
@@ -163,45 +197,35 @@ impl<R: Read> H264Reader<R> {
         let mut result = [0u8; 4];
         let mut result_filled = 0;
         loop {
-            let in_buffer = self.buf_filled_end - self.buf_read_end;
+            let in_buffer = self.buffer.in_buffer();
 
             if in_buffer + result_filled >= 4 {
                 let consume = 4 - result_filled;
-                result[result_filled..].copy_from_slice(&self.temp_buf[self.buf_read_end..][..consume]);
-                self.buf_read_end += consume;
+                result[result_filled..].copy_from_slice(self.buffer.consume(consume));
                 return Ok((result, 4));
             }
 
-            result[result_filled..][..in_buffer].copy_from_slice(&self.temp_buf[self.buf_read_end..self.buf_filled_end]);
+            result[result_filled..][..in_buffer].copy_from_slice(self.buffer.consume(in_buffer));
             result_filled += in_buffer;
 
-            self.buf_read_end = 0;
-            self.buf_filled_end = self.reader.read(&mut self.temp_buf)?;
+            self.buffer.fill_buffer(&mut self.reader)?;
 
-            if self.buf_filled_end == 0 {
+            if self.buffer.in_buffer() == 0 {
                 return Ok((result, result_filled));
             }
         }
     }
 
     fn read1(&mut self) -> Result<Option<u8>> {
-        let in_buffer = self.buf_filled_end - self.buf_read_end;
-        if in_buffer != 0 {
-            let value = self.temp_buf[self.buf_read_end];
-            self.buf_read_end += 1;
-            return Ok(Some(value));
+        if self.buffer.in_buffer() == 0 {
+            self.buffer.fill_buffer(&mut self.reader)?;
+
+            if self.buffer.in_buffer() == 0 {
+                return Ok(None);
+            }
         }
 
-        self.buf_read_end = 0;
-        self.buf_filled_end = self.reader.read(&mut self.temp_buf)?;
-
-        if self.buf_filled_end == 0 {
-            return Ok(None);
-        }
-
-        let value = self.temp_buf[self.buf_read_end];
-        self.buf_read_end += 1;
-        return Ok(Some(value));
+        Ok(Some(self.buffer.consume(1)[0]))
     }
 
     fn bit_stream_starts_with_h264prefix(&mut self) -> Result<usize> {
