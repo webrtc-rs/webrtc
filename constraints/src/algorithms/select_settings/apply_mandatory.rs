@@ -38,9 +38,7 @@ where
             }
             Err(error) => {
                 for (property, setting_error) in error.setting_errors {
-                    let entry = failed_constraints
-                        .entry(property)
-                        .or_insert_with(Default::default);
+                    let entry = failed_constraints.entry(property).or_default();
                     entry.failures += 1;
                     entry.errors.insert(setting_error);
                 }

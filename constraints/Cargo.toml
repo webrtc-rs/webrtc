@@ -12,7 +12,7 @@ repository = "https://github.com/webrtc-rs/constraints"
 [dependencies]
 indexmap = "2"
 serde = { version = "1", features = ["derive"], optional = true }
-ordered-float = { version = "3", default-features = false }
+ordered-float = { version = "4", default-features = false }
 thiserror = "1"
 
 [dev-dependencies]
