@@ -273,7 +273,7 @@ impl<R: Read> H264Reader<R> {
 
         loop {
             let Some(read_byte) = self.read1()? else {
-                break
+                break;
             };
 
             let nal_found = self.process_byte(read_byte);

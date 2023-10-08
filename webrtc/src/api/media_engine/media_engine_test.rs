@@ -765,7 +765,7 @@ a=rtpmap:111 opus/48000/2
 
     let params =
         m.get_rtp_parameters_by_kind(RTPCodecType::Video, RTCRtpTransceiverDirection::Sendonly);
-    dbg!(&params);
+    //dbg!(&params);
 
     let orientation = params
         .header_extensions

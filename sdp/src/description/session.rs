@@ -1233,7 +1233,7 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
         let i = index_of(
             proto,
             &[
-                "UDP", "RTP", "AVP", "SAVP", "SAVPF", "TLS", "DTLS", "SCTP", "AVPF", "udptl"
+                "UDP", "RTP", "AVP", "SAVP", "SAVPF", "TLS", "DTLS", "SCTP", "AVPF", "udptl",
             ],
         );
         if i == -1 {
