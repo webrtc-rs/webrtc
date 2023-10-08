@@ -4,7 +4,7 @@ mod h264_reader_test;
 use std::fmt;
 use std::io::Read;
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 
 use crate::error::{Error, Result};
 
@@ -135,11 +135,14 @@ const NAL_PREFIX_4BYTES: [u8; 4] = [0, 0, 0, 1];
 /// H264Reader reads data from stream and constructs h264 nal units
 pub struct H264Reader<R: Read> {
     reader: R,
-    nal_buffer: BytesMut,
-    count_of_consecutive_zero_bytes: usize,
+    // reading buffers
+    temp_buf: Box<[u8]>,
+    buf_read_end: usize,
+    buf_filled_end: usize,
+    // for reading
     nal_prefix_parsed: bool,
-    read_buffer: Vec<u8>,
-    temp_buf: Vec<u8>,
+    count_of_consecutive_zero_bytes: usize,
+    nal_buffer: BytesMut,
 }
 
 impl<R: Read> H264Reader<R> {
@@ -147,47 +150,63 @@ impl<R: Read> H264Reader<R> {
     pub fn new(reader: R, capacity: usize) -> H264Reader<R> {
         H264Reader {
             reader,
-            nal_buffer: BytesMut::new(),
-            count_of_consecutive_zero_bytes: 0,
             nal_prefix_parsed: false,
-            read_buffer: vec![],
-            temp_buf: vec![0u8; capacity],
+            temp_buf: vec![0u8; capacity].into_boxed_slice(),
+            buf_read_end: 0,
+            buf_filled_end: 0,
+            count_of_consecutive_zero_bytes: 0,
+            nal_buffer: BytesMut::new(),
         }
     }
 
-    fn read(&mut self, num_to_read: usize) -> Result<Bytes> {
-        let buf = &mut self.temp_buf;
-        while self.read_buffer.len() < num_to_read {
-            let n = match self.reader.read(buf) {
-                Ok(n) => {
-                    if n == 0 {
-                        break;
-                    }
-                    n
-                }
-                Err(e) => return Err(Error::Io(e.into())),
-            };
+    fn read4(&mut self) -> Result<([u8; 4], usize)> {
+        let mut result = [0u8; 4];
+        let mut result_filled = 0;
+        loop {
+            let in_buffer = self.buf_filled_end - self.buf_read_end;
 
-            self.read_buffer.extend_from_slice(&buf[0..n]);
+            if in_buffer + result_filled >= 4 {
+                let consume = 4 - result_filled;
+                result[result_filled..].copy_from_slice(&self.temp_buf[self.buf_read_end..][..consume]);
+                self.buf_read_end += consume;
+                return Ok((result, 4));
+            }
+
+            result[result_filled..][..in_buffer].copy_from_slice(&self.temp_buf[self.buf_read_end..self.buf_filled_end]);
+            result_filled += in_buffer;
+
+            self.buf_read_end = 0;
+            self.buf_filled_end = self.reader.read(&mut self.temp_buf)?;
+
+            if self.buf_filled_end == 0 {
+                return Ok((result, result_filled));
+            }
+        }
+    }
+
+    fn read1(&mut self) -> Result<Option<u8>> {
+        let in_buffer = self.buf_filled_end - self.buf_read_end;
+        if in_buffer != 0 {
+            let value = self.temp_buf[self.buf_read_end];
+            self.buf_read_end += 1;
+            return Ok(Some(value));
         }
 
-        let num_should_read = if num_to_read <= self.read_buffer.len() {
-            num_to_read
-        } else {
-            self.read_buffer.len()
-        };
+        self.buf_read_end = 0;
+        self.buf_filled_end = self.reader.read(&mut self.temp_buf)?;
 
-        Ok(Bytes::from(
-            self.read_buffer
-                .drain(..num_should_read)
-                .collect::<Vec<u8>>(),
-        ))
+        if self.buf_filled_end == 0 {
+            return Ok(None);
+        }
+
+        let value = self.temp_buf[self.buf_read_end];
+        self.buf_read_end += 1;
+        return Ok(Some(value));
     }
 
     fn bit_stream_starts_with_h264prefix(&mut self) -> Result<usize> {
-        let prefix_buffer = self.read(4)?;
+        let (prefix_buffer, n) = self.read4()?;
 
-        let n = prefix_buffer.len();
         if n == 0 {
             return Err(Error::ErrIoEOF);
         }
@@ -229,13 +248,10 @@ impl<R: Read> H264Reader<R> {
         }
 
         loop {
-            let buffer = self.read(1)?;
-            let n = buffer.len();
+            let Some(read_byte) = self.read1()? else {
+                break
+            };
 
-            if n != 1 {
-                break;
-            }
-            let read_byte = buffer[0];
             let nal_found = self.process_byte(read_byte);
             if nal_found {
                 let nal_unit_type = NalUnitType::from(self.nal_buffer[0] & 0x1F);
