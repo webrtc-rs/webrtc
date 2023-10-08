@@ -388,11 +388,10 @@ impl Agent {
 
         let udp_mux = Arc::clone(&udp_mux);
 
-        // There's actually only one, but `local_interfaces` requires a slice.
         let local_ips =
             local_interfaces(&net, &interface_filter, &ip_filter, &relevant_network_types).await;
 
-        let candidate_ip = ext_ip_mapper
+        let candidate_ips: Vec<std::net::IpAddr> = ext_ip_mapper
             .as_ref() // Arc
             .as_ref() // Option
             .and_then(|mapper| {
@@ -400,26 +399,28 @@ impl Agent {
                     return None;
                 }
 
-                local_ips
-                    .iter()
-                    .find_map(|ip| match mapper.find_external_ip(&ip.to_string()) {
-                        Ok(ip) => Some(ip),
-                        Err(err) => {
-                            log::warn!(
+                Some(
+                    local_ips
+                        .iter()
+                        .filter_map(|ip| match mapper.find_external_ip(&ip.to_string()) {
+                            Ok(ip) => Some(ip),
+                            Err(err) => {
+                                log::warn!(
                             "1:1 NAT mapping is enabled but not external IP is found for {}: {}",
                             ip,
                             err
                         );
-                            None
-                        }
-                    })
+                                None
+                            }
+                        })
+                        .collect(),
+                )
             })
-            .or_else(|| local_ips.iter().copied().next());
+            .unwrap_or_else(|| local_ips.iter().copied().collect());
 
-        let candidate_ip = match candidate_ip {
-            None => return Err(Error::ErrCandidateIpNotFound),
-            Some(ip) => ip,
-        };
+        if candidate_ips.is_empty() {
+            return Err(Error::ErrCandidateIpNotFound);
+        }
 
         let ufrag = {
             let ufrag_pwd = agent_internal.ufrag_pwd.lock().await;
@@ -430,22 +431,24 @@ impl Agent {
         let conn = udp_mux.get_conn(&ufrag).await?;
         let port = conn.local_addr()?.port();
 
-        let host_config = CandidateHostConfig {
-            base_config: CandidateBaseConfig {
-                network: UDP.to_owned(),
-                address: candidate_ip.to_string(),
-                port,
-                conn: Some(conn),
-                component: COMPONENT_RTP,
-                ..Default::default()
-            },
-            tcp_type: TcpType::Unspecified,
-        };
+        for candidate_ip in candidate_ips {
+            let host_config = CandidateHostConfig {
+                base_config: CandidateBaseConfig {
+                    network: UDP.to_owned(),
+                    address: candidate_ip.to_string(),
+                    port,
+                    conn: Some(conn.clone()),
+                    component: COMPONENT_RTP,
+                    ..Default::default()
+                },
+                tcp_type: TcpType::Unspecified,
+            };
 
-        let candidate: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(host_config.new_candidate_host()?);
+            let candidate: Arc<dyn Candidate + Send + Sync> =
+                Arc::new(host_config.new_candidate_host()?);
 
-        agent_internal.add_candidate(&candidate).await?;
+            agent_internal.add_candidate(&candidate).await?;
+        }
 
         Ok(())
     }
