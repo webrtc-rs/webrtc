@@ -351,6 +351,9 @@ async fn run(
         }
     }
 
+    // There might be more than MAX_MESSAGE_RECORDS questions, so skip the rest
+    let _ = p.skip_all_questions();
+
     for _ in 0..=MAX_MESSAGE_RECORDS {
         let a = match p.answer_header() {
             Ok(a) => a,
