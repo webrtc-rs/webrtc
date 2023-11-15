@@ -522,7 +522,7 @@ impl Association {
                             bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
                         }
 
-                        // Reuse allocation. Have to use options, since spawn blocking can't borrow, has to take owernship.
+                        // Reuse allocation. Have to use options, since spawn blocking can't borrow, has to take ownership.
                         buf.clear();
                         buffer = Some(buf);
                     }
