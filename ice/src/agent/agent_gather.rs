@@ -820,8 +820,8 @@ impl Agent {
                     return Ok(());
                 }
 
-                let relay_conn = match client.allocate().await {
-                    Ok(conn) => conn,
+                let relay_conn: Arc<dyn Conn + Send + Sync> = match client.allocate().await {
+                    Ok(conn) => Arc::new(conn),
                     Err(err) => {
                         let _ = client.close().await;
                         log::warn!(
@@ -841,7 +841,7 @@ impl Agent {
                         address: raddr.ip().to_string(),
                         port: raddr.port(),
                         component: COMPONENT_RTP,
-                        conn: Some(Arc::new(relay_conn)),
+                        conn: Some(Arc::clone(&relay_conn)),
                         ..CandidateBaseConfig::default()
                     },
                     rel_addr,
@@ -853,6 +853,7 @@ impl Agent {
                     match relay_config.new_candidate_relay() {
                         Ok(candidate) => Arc::new(candidate),
                         Err(err) => {
+                            let _ = relay_conn.close().await;
                             let _ = client.close().await;
                             log::warn!(
                                 "[{}]: Failed to create relay candidate: {} {}: {}",
