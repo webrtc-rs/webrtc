@@ -24,7 +24,10 @@ use stun::integrity::*;
 use stun::message::*;
 use stun::textattrs::*;
 use stun::xoraddr::*;
+use tokio::pin;
+use tokio::select;
 use tokio::sync::{mpsc, Mutex};
+use tokio_util::sync::CancellationToken;
 use transaction::*;
 use util::conn::*;
 use util::vnet::net::*;
@@ -78,6 +81,7 @@ struct ClientInternal {
     binding_mgr: Arc<Mutex<BindingManager>>,
     rto_in_ms: u16,
     read_ch_tx: Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
+    close_notify: CancellationToken,
 }
 
 #[async_trait]
@@ -210,6 +214,7 @@ impl ClientInternal {
             },
             integrity: MessageIntegrity::new_short_term_integrity(String::new()),
             read_ch_tx: Arc::new(Mutex::new(None)),
+            close_notify: CancellationToken::new(),
         })
     }
 
@@ -227,33 +232,51 @@ impl ClientInternal {
         let tr_map = Arc::clone(&self.tr_map);
         let read_ch_tx = Arc::clone(&self.read_ch_tx);
         let binding_mgr = Arc::clone(&self.binding_mgr);
+        let close_notify = self.close_notify.clone();
 
         tokio::spawn(async move {
             let mut buf = vec![0u8; MAX_DATA_BUFFER_SIZE];
+            let wait_cancel = close_notify.cancelled();
+            pin!(wait_cancel);
+
             loop {
-                //TODO: gracefully exit loop
-                let (n, from) = match conn.recv_from(&mut buf).await {
-                    Ok((n, from)) => (n, from),
-                    Err(err) => {
-                        log::debug!("exiting read loop: {}", err);
+                let (n, from) = select! {
+                    biased;
+
+                    _ = &mut wait_cancel => {
+                        log::debug!("exiting read loop");
                         break;
+                    },
+                    result = conn.recv_from(&mut buf) => match result {
+                        Ok((n, from)) => (n, from),
+                        Err(err) => {
+                            log::debug!("exiting read loop: {}", err);
+                            break;
+                        }
                     }
                 };
-
                 log::debug!("received {} bytes of udp from {}", n, from);
 
-                if let Err(err) = ClientInternal::handle_inbound(
-                    &read_ch_tx,
-                    &buf[..n],
-                    from,
-                    &stun_serv_str,
-                    &tr_map,
-                    &binding_mgr,
-                )
-                .await
-                {
-                    log::debug!("exiting read loop: {}", err);
-                    break;
+                select! {
+                    biased;
+
+                    _ = &mut wait_cancel => {
+                        log::debug!("exiting read loop");
+                        break;
+                    },
+                    result = ClientInternal::handle_inbound(
+                        &read_ch_tx,
+                        &buf[..n],
+                        from,
+                        &stun_serv_str,
+                        &tr_map,
+                        &binding_mgr,
+                    ) => {
+                        if let Err(err) = result {
+                            log::debug!("exiting read loop: {}", err);
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -430,6 +453,7 @@ impl ClientInternal {
 
     /// Closes this client.
     async fn close(&mut self) {
+        self.close_notify.cancel();
         {
             let mut read_ch_tx = self.read_ch_tx.lock().await;
             read_ch_tx.take();
