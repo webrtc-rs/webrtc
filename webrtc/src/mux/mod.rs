@@ -7,13 +7,16 @@ pub mod mux_func;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::sync::{mpsc, Mutex};
+use tokio::time::sleep;
 use util::{Buffer, Conn};
 
 use crate::error::Result;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
+use crate::util::Error;
 
 /// mux multiplexes packets on a single socket (RFC7983)
 
@@ -64,8 +67,6 @@ impl Mux {
 
         let id = self.id.fetch_add(1, Ordering::SeqCst);
         // Set a maximum size of the buffer in bytes.
-        // NOTE: We actually won't get anywhere close to this limit.
-        // SRTP will constantly read from the endpoint and drop packets if it's full.
         let e = Arc::new(Endpoint {
             id,
             buffer: Buffer::new(0, MAX_BUFFER_SIZE),
@@ -135,7 +136,15 @@ impl Mux {
         }
 
         if let Some(ep) = endpoint {
-            ep.buffer.write(buf).await?;
+            loop {
+                match ep.buffer.write(buf).await
+                {
+                    Err(Error::ErrBufferFull) => (),
+                    Ok(_) => break,
+                    Err(e) => return Err(crate::Error::Util(e)),
+                }
+                sleep(20 * Duration::from_millis(20)).await;
+            }
         } else if !buf.is_empty() {
             log::warn!(
                 "Warning: mux: no endpoint for packet starting with {}",
