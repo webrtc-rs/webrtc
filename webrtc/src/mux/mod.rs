@@ -7,10 +7,8 @@ pub mod mux_func;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::sleep;
 use util::{Buffer, Conn};
 
 use crate::error::Result;
@@ -136,14 +134,12 @@ impl Mux {
         }
 
         if let Some(ep) = endpoint {
-            loop {
-                match ep.buffer.write(buf).await
-                {
-                    Err(Error::ErrBufferFull) => (),
-                    Ok(_) => break,
-                    Err(e) => return Err(crate::Error::Util(e)),
-                }
-                sleep(20 * Duration::from_millis(20)).await;
+            match ep.buffer.write(buf).await
+            {
+                // Expected when bytes are received faster than the endpoint can process them
+                Err(Error::ErrBufferFull) => log::info!("mux: endpoint buffer is full, dropping packet"),
+                Ok(_) => (),
+                Err(e) => return Err(crate::Error::Util(e)),
             }
         } else if !buf.is_empty() {
             log::warn!(
