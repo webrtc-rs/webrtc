@@ -1991,22 +1991,19 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
     let done_ch_tx0 = Arc::clone(&done_ch_tx);
     tokio::spawn(async move {
         let mut buf = vec![0u8; 32];
-        loop {
-            log::debug!("s.read_sctp begin");
-            match s0.read_sctp(&mut buf).await {
-                Ok((0, PayloadProtocolIdentifier::Unknown)) => {
-                    log::debug!("s0.read_sctp EOF");
-                    let _ = done_ch_tx0.send(Some(Error::ErrEof)).await;
-                    break;
-                }
-                Ok(_) => {
-                    panic!("must be error");
-                }
-                Err(err) => {
-                    log::debug!("s0.read_sctp err {:?}", err);
-                    let _ = done_ch_tx0.send(Some(err)).await;
-                    break;
-                }
+
+        log::debug!("s.read_sctp begin");
+        match s0.read_sctp(&mut buf).await {
+            Ok((0, PayloadProtocolIdentifier::Unknown)) => {
+                log::debug!("s0.read_sctp EOF");
+                let _ = done_ch_tx0.send(Some(Error::ErrEof)).await;
+            }
+            Ok(_) => {
+                panic!("must be error");
+            }
+            Err(err) => {
+                log::debug!("s0.read_sctp err {:?}", err);
+                let _ = done_ch_tx0.send(Some(err)).await;
             }
         }
     });

@@ -1125,7 +1125,7 @@ mod test {
                     })],
                 }),
                 Box::new(SenderReport {
-                    /// NB: Different SSRC
+                    // NB: Different SSRC
                     ssrc: 9999999,
                     ntp_time: 99999, // Used for ordering
                     packet_count: 1231,
