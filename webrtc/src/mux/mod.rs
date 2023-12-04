@@ -134,10 +134,11 @@ impl Mux {
         }
 
         if let Some(ep) = endpoint {
-            match ep.buffer.write(buf).await
-            {
+            match ep.buffer.write(buf).await {
                 // Expected when bytes are received faster than the endpoint can process them
-                Err(Error::ErrBufferFull) => log::info!("mux: endpoint buffer is full, dropping packet"),
+                Err(Error::ErrBufferFull) => {
+                    log::info!("mux: endpoint buffer is full, dropping packet")
+                }
                 Ok(_) => (),
                 Err(e) => return Err(crate::Error::Util(e)),
             }
