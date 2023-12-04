@@ -14,6 +14,7 @@ util = { version = "0.8", path = "../util", package = "webrtc-util", default-fea
 stun = { version = "0.5", path = "../stun" }
 
 tokio = { version = "1.32.0", features = ["full"] }
+tokio-util = "0.7"
 futures = "0.3"
 async-trait = "0.1"
 log = "0.4"
