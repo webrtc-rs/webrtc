@@ -546,7 +546,7 @@ impl MediaEngine {
         typ: RTPCodecType,
     ) -> Result<()> {
         let mut negotiated_header_extensions = self.negotiated_header_extensions.lock();
-        let mut propsed_header_extensions = self.proposed_header_extensions.lock();
+        let mut proposed_header_extensions = self.proposed_header_extensions.lock();
 
         for local_extension in &self.header_extensions {
             if local_extension.uri != extension {
@@ -584,7 +584,7 @@ impl MediaEngine {
             }
 
             // Clear any proposals we had for this id
-            propsed_header_extensions.remove(&id);
+            proposed_header_extensions.remove(&id);
         }
         Ok(())
     }
