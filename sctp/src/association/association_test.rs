@@ -1991,6 +1991,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
     let done_ch_tx0 = Arc::clone(&done_ch_tx);
     tokio::spawn(async move {
         let mut buf = vec![0u8; 32];
+
         log::debug!("s.read_sctp begin");
         match s0.read_sctp(&mut buf).await {
             Ok((0, PayloadProtocolIdentifier::Unknown)) => {
