@@ -14,6 +14,7 @@ use util::{Buffer, Conn};
 use crate::error::Result;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
+use crate::util::Error;
 
 /// mux multiplexes packets on a single socket (RFC7983)
 
@@ -64,8 +65,6 @@ impl Mux {
 
         let id = self.id.fetch_add(1, Ordering::SeqCst);
         // Set a maximum size of the buffer in bytes.
-        // NOTE: We actually won't get anywhere close to this limit.
-        // SRTP will constantly read from the endpoint and drop packets if it's full.
         let e = Arc::new(Endpoint {
             id,
             buffer: Buffer::new(0, MAX_BUFFER_SIZE),
@@ -135,7 +134,14 @@ impl Mux {
         }
 
         if let Some(ep) = endpoint {
-            ep.buffer.write(buf).await?;
+            match ep.buffer.write(buf).await {
+                // Expected when bytes are received faster than the endpoint can process them
+                Err(Error::ErrBufferFull) => {
+                    log::info!("mux: endpoint buffer is full, dropping packet")
+                }
+                Ok(_) => (),
+                Err(e) => return Err(crate::Error::Util(e)),
+            }
         } else if !buf.is_empty() {
             log::warn!(
                 "Warning: mux: no endpoint for packet starting with {}",
