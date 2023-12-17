@@ -1,186 +1,79 @@
-use std::ffi::CStr;
-use std::net::IpAddr;
-use std::{net, ptr};
-
-use ::std::io::{Error, ErrorKind};
-
 use crate::ifaces::{Interface, Kind, NextHop};
 
-// https://github.com/Exa-Networks/exaproxy/blob/master/lib/exaproxy/util/interfaces.py
+use nix::sys::socket::{AddressFamily, SockaddrLike, SockaddrStorage};
+use std::io::Error;
+use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 
-pub const AF_INET: i32 = nix::sys::socket::AddressFamily::Inet as i32;
-pub const AF_INET6: i32 = nix::sys::socket::AddressFamily::Inet6 as i32;
-
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd"
-))]
-pub const AF_LINK: i32 = nix::libc::AF_LINK;
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd"
-))]
-pub const AF_PACKET: i32 = -1;
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub const AF_LINK: i32 = -1;
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub const AF_PACKET: i32 = nix::libc::AF_PACKET;
-
-#[allow(dead_code, non_camel_case_types)]
-#[repr(C)]
-pub enum SiocgifFlags {
-    Up = 0x1,           /* Interface is up.  */
-    Broadcast = 0x2,    /* Broadcast address valid.  */
-    Debug = 0x4,        /* Turn on debugging.  */
-    Loopback = 0x8,     /* Is a loopback net.  */
-    Pointopoint = 0x10, /* Interface is point-to-point link.  */
-    Notrailers = 0x20,  /* Avoid use of trailers.  */
-    Running = 0x40,     /* Resources allocated.  */
-    Noarp = 0x80,       /* No address resolution protocol.  */
-    Promisc = 0x100,    /* Receive all packets.  */
-
-    /* Not supported */
-    Allmulti = 0x200, /* Receive all multicast packets.  */
-
-    Master = 0x400, /* Master of a load balancer.  */
-    Slave = 0x800,  /* Slave of a load balancer.  */
-
-    Multicast = 0x1000, /* Supports multicast.  */
-
-    Portsel = 0x2000,   /* Can set media type.  */
-    Automedia = 0x4000, /* Auto media select active.  */
-    Dynamic = 0x8000,   /* Dialup device with changing addresses.  */
-}
-
-#[repr(C)]
-pub struct union_ifa_ifu {
-    pub data: *mut ::std::os::raw::c_void,
-}
-impl union_ifa_ifu {
-    pub fn ifu_broadaddr(&mut self) -> *mut nix::sys::socket::sockaddr {
-        self.data as *mut nix::sys::socket::sockaddr
+fn ss_to_netsa(ss: &SockaddrStorage) -> Option<SocketAddr> {
+    match ss.family() {
+        Some(AddressFamily::Inet) => ss.as_sockaddr_in().map(|sin| {
+            SocketAddr::V4(SocketAddrV4::new(
+                std::net::Ipv4Addr::from(sin.ip()),
+                sin.port(),
+            ))
+        }),
+        Some(AddressFamily::Inet6) => ss.as_sockaddr_in6().map(|sin6| {
+            SocketAddr::V6(SocketAddrV6::new(
+                sin6.ip(),
+                sin6.port(),
+                sin6.flowinfo(),
+                sin6.scope_id(),
+            ))
+        }),
+        _ => None,
     }
-    pub fn ifu_dstaddr(&mut self) -> *mut nix::sys::socket::sockaddr {
-        self.data as *mut nix::sys::socket::sockaddr
-    }
-}
-
-#[repr(C)]
-pub struct ifaddrs {
-    pub ifa_next: *mut ifaddrs,
-    pub ifa_name: *mut ::std::os::raw::c_char,
-    pub ifa_flags: ::std::os::raw::c_uint,
-    pub ifa_addr: *mut nix::sys::socket::sockaddr,
-    pub ifa_netmask: *mut nix::sys::socket::sockaddr,
-    pub ifa_ifu: union_ifa_ifu,
-    pub ifa_data: *mut ::std::os::raw::c_void,
-}
-
-extern "C" {
-    pub fn getifaddrs(ifap: *mut *mut ifaddrs) -> ::std::os::raw::c_int;
-    pub fn freeifaddrs(ifa: *mut ifaddrs) -> ::std::os::raw::c_void;
-    #[allow(dead_code)]
-    pub fn if_nametoindex(ifname: *const ::std::os::raw::c_char) -> ::std::os::raw::c_uint;
-}
-
-pub fn nix_socketaddr_to_sockaddr(sa: *mut nix::sys::socket::sockaddr) -> Option<net::SocketAddr> {
-    if sa.is_null() {
-        return None;
-    }
-
-    let (addr, port) = match unsafe { *sa }.sa_family as i32 {
-        AF_INET => {
-            let sa: *const nix::sys::socket::sockaddr_in = sa as *const nix::libc::sockaddr_in;
-            let sa = &unsafe { *sa };
-            let (addr, port) = (sa.sin_addr.s_addr, sa.sin_port);
-            (IpAddr::V4(Into::into(u32::from_be(addr))), port)
-        }
-        AF_INET6 => {
-            let sa: *const nix::sys::socket::sockaddr_in6 = sa as *const nix::libc::sockaddr_in6;
-            let sa = &unsafe { *sa };
-            let (addr, port) = (sa.sin6_addr.s6_addr, sa.sin6_port);
-            (Into::into(addr), port)
-        }
-        _ => return None,
-    };
-    Some(net::SocketAddr::new(addr, port))
 }
 
 /// Query the local system for all interface addresses.
 pub fn ifaces() -> Result<Vec<Interface>, Error> {
-    let mut ifaddrs_ptr: *mut ifaddrs = ptr::null_mut();
-    match unsafe { getifaddrs(&mut ifaddrs_ptr as *mut _) } {
-        0 => {
-            let mut ret = Vec::new();
-            let mut item: *mut ifaddrs = ifaddrs_ptr;
-            loop {
-                if item.is_null() {
-                    break;
-                }
-                let name = String::from_utf8(
-                    unsafe { CStr::from_ptr((*item).ifa_name) }
-                        .to_bytes()
-                        .to_vec(),
-                );
-                unsafe {
-                    if name.is_err() || (*item).ifa_addr.is_null() {
-                        item = (*item).ifa_next;
-                        continue;
-                    }
-                }
-                let kind = match unsafe { (*(*item).ifa_addr).sa_family as i32 } {
-                    AF_INET => Some(Kind::Ipv4),
-                    AF_INET6 => Some(Kind::Ipv6),
-                    AF_PACKET => Some(Kind::Packet),
-                    AF_LINK => Some(Kind::Link),
-                    code => Some(Kind::Unknow(code)),
-                };
-                if kind.is_none() {
-                    item = unsafe { (*item).ifa_next };
-                    continue;
-                }
+    let mut ret = Vec::new();
+    for ifa in nix::ifaddrs::getifaddrs()? {
+        if let Some(kind) = ifa
+            .address
+            .as_ref()
+            .and_then(SockaddrStorage::family)
+            .and_then(|af| match af {
+                AddressFamily::Inet => Some(Kind::Ipv4),
+                AddressFamily::Inet6 => Some(Kind::Ipv6),
+                #[cfg(any(
+                    target_os = "android",
+                    target_os = "linux",
+                    target_os = "illumos",
+                    target_os = "fuchsia",
+                    target_os = "solaris"
+                ))]
+                AddressFamily::Packet => Some(Kind::Packet),
+                #[cfg(any(
+                    target_os = "dragonfly",
+                    target_os = "freebsd",
+                    target_os = "ios",
+                    target_os = "macos",
+                    target_os = "illumos",
+                    target_os = "netbsd",
+                    target_os = "openbsd"
+                ))]
+                AddressFamily::Link => Some(Kind::Link),
+                _ => None,
+            })
+        {
+            let name = ifa.interface_name;
+            let dst = ifa.destination.as_ref().and_then(ss_to_netsa);
+            let broadcast = ifa.broadcast.as_ref().and_then(ss_to_netsa);
+            let hop = dst
+                .map(NextHop::Destination)
+                .or(broadcast.map(NextHop::Broadcast));
+            let addr = ifa.address.as_ref().and_then(ss_to_netsa);
+            let mask = ifa.netmask.as_ref().and_then(ss_to_netsa);
 
-                let addr = nix_socketaddr_to_sockaddr(unsafe { (*item).ifa_addr });
-                let mask = nix_socketaddr_to_sockaddr(unsafe { (*item).ifa_netmask });
-                let hop = unsafe {
-                    if (*item).ifa_flags & SiocgifFlags::Broadcast as ::std::os::raw::c_uint
-                        == SiocgifFlags::Broadcast as ::std::os::raw::c_uint
-                    {
-                        nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_broadaddr())
-                            .map(NextHop::Broadcast)
-                    } else {
-                        nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_dstaddr())
-                            .map(NextHop::Destination)
-                    }
-                };
-
-                if let Some(kind) = kind {
-                    match kind {
-                        Kind::Unknow(_) => {}
-                        _ => {
-                            ret.push(Interface {
-                                name: name.unwrap(),
-                                kind,
-                                addr,
-                                mask,
-                                hop,
-                            });
-                        }
-                    };
-                };
-
-                item = unsafe { (*item).ifa_next };
-            }
-            unsafe { freeifaddrs(ifaddrs_ptr) };
-            Ok(ret)
+            ret.push(Interface {
+                name,
+                kind,
+                addr,
+                mask,
+                hop,
+            });
         }
-        _ => Err(Error::new(ErrorKind::Other, "Oh, no ...")), // Err(nix::errno::Errno::last());
     }
+
+    Ok(ret)
 }
