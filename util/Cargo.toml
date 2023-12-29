@@ -22,7 +22,7 @@ sync = []
 tokio = { version = "1.32.0", features = ["full"] }
 lazy_static = "1"
 async-trait = "0.1"
-ipnet = "2"
+ipnet = "2.6.0"
 log = "0.4"
 rand = "0.8"
 bytes = "1"
