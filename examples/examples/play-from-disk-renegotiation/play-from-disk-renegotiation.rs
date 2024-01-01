@@ -212,9 +212,12 @@ async fn remove_video(
     r: Request<Body>,
 ) -> Result<Response<Body>, hyper::Error> {
     let senders = pc.get_senders().await;
+
     if !senders.is_empty() {
-        if let Err(err) = pc.remove_track(&senders[0]).await {
-            panic!("{}", err);
+        if let Some(track) = senders[0].track().await {
+            if let Err(err) = pc.remove_track(track).await {
+                panic!("{}", err);
+            }
         }
     }
 
