@@ -104,7 +104,7 @@ impl Marshal for FullIntraRequest {
         buf.put_u32(self.sender_ssrc);
         buf.put_u32(self.media_ssrc);
 
-        for (_, fir) in self.fir.iter().enumerate() {
+        for fir in self.fir.iter() {
             buf.put_u32(fir.ssrc);
             buf.put_u8(fir.sequence_number);
             buf.put_u8(0);

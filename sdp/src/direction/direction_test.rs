@@ -17,7 +17,7 @@ fn test_new_direction() {
         let dir = Direction::new(u.0);
         assert!(u.1 == dir, "{}: {}", i, u.0);
     }
-    for (_, &u) in failingtests.iter().enumerate() {
+    for &u in failingtests.iter() {
         let dir = Direction::new(u);
         assert!(dir == Direction::Unspecified);
     }
