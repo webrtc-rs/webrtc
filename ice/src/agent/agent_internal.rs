@@ -36,10 +36,7 @@ pub struct AgentInternal {
     pub(crate) chan_candidate_pair_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) chan_state_tx: Mutex<Option<mpsc::Sender<ConnectionState>>>,
 
-    pub(crate) on_connection_state_change_hdlr: ArcSwapOption<Mutex<OnConnectionStateChangeHdlrFn>>,
-    pub(crate) on_selected_candidate_pair_change_hdlr:
-        ArcSwapOption<Mutex<OnSelectedCandidatePairChangeHdlrFn>>,
-    pub(crate) on_candidate_hdlr: ArcSwapOption<Mutex<OnCandidateHdlrFn>>,
+    pub(crate) events_handler: ArcSwapOption<Mutex<Box<dyn InlineAgentEventHandler + Send + Sync>>>,
 
     pub(crate) tie_breaker: AtomicU64,
     pub(crate) is_controlling: AtomicBool,
@@ -108,9 +105,7 @@ impl AgentInternal {
             chan_candidate_pair_tx: Mutex::new(Some(chan_candidate_pair_tx)),
             chan_state_tx: Mutex::new(Some(chan_state_tx)),
 
-            on_connection_state_change_hdlr: ArcSwapOption::empty(),
-            on_selected_candidate_pair_change_hdlr: ArcSwapOption::empty(),
-            on_candidate_hdlr: ArcSwapOption::empty(),
+            events_handler: ArcSwapOption::empty(),
 
             tie_breaker: AtomicU64::new(rand::random::<u64>()),
             is_controlling: AtomicBool::new(config.is_controlling),
@@ -1052,7 +1047,7 @@ impl AgentInternal {
     }
 
     pub(super) fn start_on_connection_state_change_routine(
-        self: &Arc<Self>,
+        self: &mut Arc<Self>,
         mut chan_state_rx: mpsc::Receiver<ConnectionState>,
         mut chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
         mut chan_candidate_pair_rx: mpsc::Receiver<()>,
@@ -1063,11 +1058,10 @@ impl AgentInternal {
             // Blocking one by the other one causes deadlock.
             while chan_candidate_pair_rx.recv().await.is_some() {
                 if let (Some(cb), Some(p)) = (
-                    &*ai.on_selected_candidate_pair_change_hdlr.load(),
+                    &*ai.events_handler.load(),
                     &*ai.agent_conn.selected_pair.load(),
                 ) {
-                    let mut f = cb.lock().await;
-                    f(&p.local, &p.remote).await;
+                    cb.lock().await.inline_on_selected_candidate_pair_change(p.local.clone(), p.remote.clone()).await;
                 }
             }
         });
@@ -1077,32 +1071,28 @@ impl AgentInternal {
             loop {
                 tokio::select! {
                     opt_state = chan_state_rx.recv() => {
-                        if let Some(s) = opt_state {
-                            if let Some(handler) = &*ai.on_connection_state_change_hdlr.load() {
-                                let mut f = handler.lock().await;
-                                f(s).await;
+                        if let Some(state) = opt_state {
+                            if let Some(handler) = &*ai.events_handler.load() {
+                                handler.lock().await.inline_on_connection_state_change(state).await;
                             }
                         } else {
-                            while let Some(c) = chan_candidate_rx.recv().await {
-                                if let Some(handler) = &*ai.on_candidate_hdlr.load() {
-                                    let mut f = handler.lock().await;
-                                    f(c).await;
+                            while let Some(candidate) = chan_candidate_rx.recv().await {
+                                if let Some(handler) = &*ai.events_handler.load() {
+                                    handler.lock().await.inline_on_candidate(candidate).await;
                                 }
                             }
                             break;
                         }
                     },
                     opt_cand = chan_candidate_rx.recv() => {
-                        if let Some(c) = opt_cand {
-                            if let Some(handler) = &*ai.on_candidate_hdlr.load() {
-                                let mut f = handler.lock().await;
-                                f(c).await;
+                        if let Some(candidate) = opt_cand {
+                            if let Some(handler) = &*ai.events_handler.load() {
+                                handler.lock().await.inline_on_candidate(candidate).await;
                             }
                         } else {
-                            while let Some(s) = chan_state_rx.recv().await {
-                                if let Some(handler) = &*ai.on_connection_state_change_hdlr.load() {
-                                    let mut f = handler.lock().await;
-                                    f(s).await;
+                            while let Some(state) = chan_state_rx.recv().await {
+                                if let Some(handler) = &*ai.events_handler.load() {
+                                    handler.lock().await.inline_on_connection_state_change(state).await;
                                 }
                             }
                             break;

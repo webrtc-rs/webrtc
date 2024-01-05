@@ -57,11 +57,72 @@ pub struct RTCIceGatherer {
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
     pub(crate) agent: Mutex<Option<Arc<ice::agent::Agent>>>,
 
-    pub(crate) on_local_candidate_handler: Arc<ArcSwapOption<Mutex<OnLocalCandidateHdlrFn>>>,
-    pub(crate) on_state_change_handler: Arc<ArcSwapOption<Mutex<OnICEGathererStateChangeHdlrFn>>>,
+    gatherer_state: GathererState,
+}
 
-    // Used for gathering_complete_promise
-    pub(crate) on_gathering_complete_handler: Arc<ArcSwapOption<Mutex<OnGatheringCompleteHdlrFn>>>,
+#[derive(Default, Clone)]
+#[repr(transparent)]
+struct GathererState {
+    inner: Arc<GathererStateInner>
+}
+
+#[derive(Default)]
+struct GathererStateInner {
+    state: Arc<AtomicU8>,
+    event_handler: Arc<ArcSwapOption<Mutex<Box<dyn InlineIceGathererEventHandler + Send + Sync>>>>,
+}
+
+impl crate::ice::agent::AgentEventHandler for GathererState {
+    fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send { 
+        async move {
+            match (candidate, &*self.inner.event_handler.load()) {
+                (Some(candidate), Some(handler)) => {
+                    let cand = RTCIceCandidate::from(&candidate);
+                    handler.lock().await.inline_on_local_candidate(Some(RTCIceCandidate::from(&candidate.clone()))).await;
+                }
+                (_, maybe_handler) => {
+                    self.inner.state.store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
+                    if let Some(handler) = maybe_handler {
+                        let mut handler = handler.lock().await;
+                        handler.inline_on_state_change(RTCIceGathererState::Complete).await;
+                        handler.inline_on_gathering_complete().await;
+                        handler.inline_on_local_candidate(None).await;
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub trait IceGathererEventHandler: Send {
+    /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
+    /// Take note that the handler is gonna be called with a nil pointer when gathering is finished.
+    fn on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send { async { } }
+
+    /// on_state_change sets an event handler which fires any time the ICEGatherer changes
+    fn on_state_change(&mut self, state: RTCIceGathererState) -> impl Future<Output = ()> + Send { async { } }
+
+    /// on_gathering_complete sets an event handler which fires any time the ICEGatherer changes
+    fn on_gathering_complete(&mut self) -> impl Future<Output = ()> + Send { async {}}
+}
+
+trait InlineIceGathererEventHandler: Send {
+    fn inline_on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> crate::ice::agent::FutureUnit<'_>;
+    fn inline_on_state_change(&mut self, state: RTCIceGathererState) -> crate::ice::agent::FutureUnit<'_>;
+    fn inline_on_gathering_complete(&mut self) -> crate::ice::agent::FutureUnit<'_>;
+}
+
+impl <T> InlineIceGathererEventHandler for T where T: IceGathererEventHandler {
+    fn inline_on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> crate::ice::agent::FutureUnit<'_> {
+        Box::pin(async move { self.on_local_candidate(candidate).await })
+    }
+    fn inline_on_state_change(&mut self, state: RTCIceGathererState) -> crate::ice::agent::FutureUnit<'_> {
+        Box::pin(async move { self.on_state_change(state).await })
+    }
+
+    fn inline_on_gathering_complete(&mut self) -> crate::ice::agent::FutureUnit<'_> {
+        Box::pin(async move { self.on_gathering_complete().await })
+    }
 }
 
 impl RTCIceGatherer {
@@ -155,48 +216,7 @@ impl RTCIceGatherer {
         self.set_state(RTCIceGathererState::Gathering).await;
 
         if let Some(agent) = self.get_agent().await {
-            let state = Arc::clone(&self.state);
-            let on_local_candidate_handler = Arc::clone(&self.on_local_candidate_handler);
-            let on_state_change_handler = Arc::clone(&self.on_state_change_handler);
-            let on_gathering_complete_handler = Arc::clone(&self.on_gathering_complete_handler);
-
-            agent.on_candidate(Box::new(
-                move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-                    let state_clone = Arc::clone(&state);
-                    let on_local_candidate_handler_clone = Arc::clone(&on_local_candidate_handler);
-                    let on_state_change_handler_clone = Arc::clone(&on_state_change_handler);
-                    let on_gathering_complete_handler_clone =
-                        Arc::clone(&on_gathering_complete_handler);
-
-                    Box::pin(async move {
-                        if let Some(cand) = candidate {
-                            if let Some(handler) = &*on_local_candidate_handler_clone.load() {
-                                let mut f = handler.lock().await;
-                                f(Some(RTCIceCandidate::from(&cand))).await;
-                            }
-                        } else {
-                            state_clone
-                                .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
-
-                            if let Some(handler) = &*on_state_change_handler_clone.load() {
-                                let mut f = handler.lock().await;
-                                f(RTCIceGathererState::Complete).await;
-                            }
-
-                            if let Some(handler) = &*on_gathering_complete_handler_clone.load() {
-                                let mut f = handler.lock().await;
-                                f().await;
-                            }
-
-                            if let Some(handler) = &*on_local_candidate_handler_clone.load() {
-                                let mut f = handler.lock().await;
-                                f(None).await;
-                            }
-                        }
-                    })
-                },
-            ));
-
+            agent.with_event_handler(self.gatherer_state.clone());
             agent.gather_candidates()?;
         }
 
@@ -249,25 +269,6 @@ impl RTCIceGatherer {
         Ok(rtc_ice_candidates_from_ice_candidates(&ice_candidates))
     }
 
-    /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
-    /// Take note that the handler is gonna be called with a nil pointer when gathering is finished.
-    pub fn on_local_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        self.on_local_candidate_handler
-            .store(Some(Arc::new(Mutex::new(f))));
-    }
-
-    /// on_state_change sets an event handler which fires any time the ICEGatherer changes
-    pub fn on_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
-        self.on_state_change_handler
-            .store(Some(Arc::new(Mutex::new(f))));
-    }
-
-    /// on_gathering_complete sets an event handler which fires any time the ICEGatherer changes
-    pub fn on_gathering_complete(&self, f: OnGatheringCompleteHdlrFn) {
-        self.on_gathering_complete_handler
-            .store(Some(Arc::new(Mutex::new(f))));
-    }
-
     /// State indicates the current state of the ICE gatherer.
     pub fn state(&self) -> RTCIceGathererState {
         self.state.load(Ordering::SeqCst).into()
@@ -276,9 +277,9 @@ impl RTCIceGatherer {
     pub async fn set_state(&self, s: RTCIceGathererState) {
         self.state.store(s as u8, Ordering::SeqCst);
 
-        if let Some(handler) = &*self.on_state_change_handler.load() {
-            let mut f = handler.lock().await;
-            f(s).await;
+        if let Some(handler) = &*self.gatherer_state.inner.event_handler.load() {
+            let mut handler = handler.lock().await;
+            handler.inline_on_state_change(s).await;
         }
     }
 

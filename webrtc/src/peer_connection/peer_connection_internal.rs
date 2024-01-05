@@ -27,7 +27,9 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) last_offer: Mutex<String>,
     pub(super) last_answer: Mutex<String>,
 
+    /*
     pub(super) on_negotiation_needed_handler: Arc<ArcSwapOption<Mutex<OnNegotiationNeededHdlrFn>>>,
+    */
     pub(super) is_closed: Arc<AtomicBool>,
 
     /// ops is an operations queue which will ensure the enqueued actions are
@@ -40,20 +42,25 @@ pub(crate) struct PeerConnectionInternal {
 
     pub(super) ice_transport: Arc<RTCIceTransport>,
     pub(super) dtls_transport: Arc<RTCDtlsTransport>,
+    /*
     pub(super) on_peer_connection_state_change_handler:
         Arc<ArcSwapOption<Mutex<OnPeerConnectionStateChangeHdlrFn>>>,
+    */
     pub(super) peer_connection_state: Arc<AtomicU8>,
     pub(super) ice_connection_state: Arc<AtomicU8>,
 
     pub(super) sctp_transport: Arc<RTCSctpTransport>,
     pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
 
+    /*
     pub(super) on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
     pub(super) on_signaling_state_change_handler:
         ArcSwapOption<Mutex<OnSignalingStateChangeHdlrFn>>,
     pub(super) on_ice_connection_state_change_handler:
         Arc<ArcSwapOption<Mutex<OnICEConnectionStateChangeHdlrFn>>>,
     pub(super) on_data_channel_handler: Arc<ArcSwapOption<Mutex<OnDataChannelHdlrFn>>>,
+    */
+    pub(super) events_handler: Arc<ArcSwapOption<Mutex<Box<dyn InlinePeerConnectionEventHandler>>>>,
 
     pub(super) ice_gatherer: Arc<RTCIceGatherer>,
 
@@ -69,6 +76,40 @@ pub(crate) struct PeerConnectionInternal {
     stats_interceptor: Arc<stats::StatsInterceptor>,
 }
 
+use crate::ice_transport::IceTransportEventHandler;
+
+impl IceTransportEventHandler for PeerConnectionInternal {
+    fn on_connection_state_change(&mut self, state: RTCIceTransportState) -> impl Future<Output = ()> + Send {
+        async move {
+            //FIXME: this should be moved into a seperate fn
+            let conn_state = match state {
+                RTCIceTransportState::New => RTCIceConnectionState::New,
+                RTCIceTransportState::Checking => RTCIceConnectionState::Checking,
+                RTCIceTransportState::Connected => RTCIceConnectionState::Connected,
+                RTCIceTransportState::Completed => RTCIceConnectionState::Completed,
+                RTCIceTransportState::Failed => RTCIceConnectionState::Failed,
+                RTCIceTransportState::Disconnected => RTCIceConnectionState::Disconnected,
+                RTCIceTransportState::Closed => RTCIceConnectionState::Closed,
+                _ => {
+                    log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
+                    return;
+                }
+            };
+
+            if let Some(handler) = &*self.events_handler.load() {
+                let mut handler = handler.lock().await;
+                if self.ice_connection_state.load(Ordering::SeqCst) != conn_state as u8 {
+                    self.ice_connection_state.store(conn_state as u8, Ordering::SeqCst);
+                    handler.inline_on_ice_connection_state_change(conn_state).await
+                }
+                if let Some(changed_state) = RTCPeerConnection::updated_connection_state(&self.is_closed, &self.peer_connection_state, conn_state, self.dtls_transport.state()) {
+                    handler.inline_on_peer_connection_state_change(changed_state).await;
+                }
+            }
+        }
+    }
+}
+
 impl PeerConnectionInternal {
     pub(super) async fn new(
         api: &API,
@@ -82,7 +123,7 @@ impl PeerConnectionInternal {
             last_offer: Mutex::new("".to_owned()),
             last_answer: Mutex::new("".to_owned()),
 
-            on_negotiation_needed_handler: Arc::new(ArcSwapOption::empty()),
+            //on_negotiation_needed_handler: Arc::new(ArcSwapOption::empty()),
             ops: Arc::new(Operations::new()),
             is_closed: Arc::new(AtomicBool::new(false)),
             is_negotiation_needed: Arc::new(AtomicBool::new(false)),
@@ -93,10 +134,10 @@ impl PeerConnectionInternal {
             ice_connection_state: Arc::new(AtomicU8::new(RTCIceConnectionState::New as u8)),
             sctp_transport: Arc::new(Default::default()),
             rtp_transceivers: Arc::new(Default::default()),
-            on_track_handler: Arc::new(ArcSwapOption::empty()),
-            on_signaling_state_change_handler: ArcSwapOption::empty(),
-            on_ice_connection_state_change_handler: Arc::new(ArcSwapOption::empty()),
-            on_data_channel_handler: Arc::new(Default::default()),
+            //on_track_handler: Arc::new(ArcSwapOption::empty()),
+            //on_signaling_state_change_handler: ArcSwapOption::empty(),
+            //on_ice_connection_state_change_handler: Arc::new(ArcSwapOption::empty()),
+            //on_data_channel_handler: Arc::new(Default::default()),
             ice_gatherer: Arc::new(Default::default()),
             current_local_description: Arc::new(Default::default()),
             current_remote_description: Arc::new(Default::default()),
@@ -111,7 +152,8 @@ impl PeerConnectionInternal {
             },
             interceptor,
             stats_interceptor,
-            on_peer_connection_state_change_handler: Arc::new(ArcSwapOption::empty()),
+            events_handler: Arc::new(ArcSwapOption::empty()),
+            //on_peer_connection_state_change_handler: Arc::new(ArcSwapOption::empty()),
             pending_remote_description: Arc::new(Default::default()),
         };
 
@@ -133,6 +175,7 @@ impl PeerConnectionInternal {
         pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
 
         // Wire up the on datachannel handler
+        /*
         let on_data_channel_handler = Arc::clone(&pc.on_data_channel_handler);
         pc.sctp_transport
             .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
@@ -144,7 +187,7 @@ impl PeerConnectionInternal {
                     }
                 })
             }));
-
+        */
         Ok((Arc::new(pc), configuration))
     }
 
@@ -369,6 +412,7 @@ impl PeerConnectionInternal {
                 if receiver.have_received().await {
                     continue;
                 }
+                /* TODO:
                 PeerConnectionInternal::start_receiver(
                     self.setting_engine.get_receive_mtu(),
                     incoming_track,
@@ -377,6 +421,7 @@ impl PeerConnectionInternal {
                     Arc::clone(&self.on_track_handler),
                 )
                 .await;
+                */
                 track_handled = true;
             }
 
@@ -551,7 +596,7 @@ impl PeerConnectionInternal {
     /// Creates the parameters needed to trigger a negotiation needed.
     fn create_negotiation_needed_params(&self) -> NegotiationNeededParams {
         NegotiationNeededParams {
-            on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
+            //on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.is_closed),
             ops: Arc::clone(&self.ops),
             negotiation_needed_state: Arc::clone(&self.negotiation_needed_state),
@@ -590,7 +635,7 @@ impl PeerConnectionInternal {
     }
 
     pub(super) fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
-        self.ice_gatherer.on_gathering_complete(f);
+        //self.ice_gatherer.on_gathering_complete(f);
     }
 
     /// Start all transports. PeerConnection now has enough state
@@ -631,14 +676,20 @@ impl PeerConnectionInternal {
                 }],
             })
             .await;
-        RTCPeerConnection::update_connection_state(
-            &self.on_peer_connection_state_change_handler,
+
+        match (&*self.events_handler.load(), RTCPeerConnection::updated_connection_state(
             &self.is_closed,
             &self.peer_connection_state,
             self.ice_connection_state.load(Ordering::SeqCst).into(),
             self.dtls_transport.state(),
-        )
-        .await;
+        )) {
+            (Some(handler), Some(changed_state)) => {
+                let mut handler = handler.lock().await;
+                handler.inline_on_peer_connection_state_change(changed_state).await;
+            }
+            _ => (),
+        }
+
         if let Err(err) = result {
             log::warn!("Failed to start manager dtls: {}", err);
         }
@@ -889,6 +940,7 @@ impl PeerConnectionInternal {
             .await?;
 
         let receiver = t.receiver().await;
+        /*TODO
         PeerConnectionInternal::start_receiver(
             self.setting_engine.get_receive_mtu(),
             &incoming,
@@ -897,6 +949,7 @@ impl PeerConnectionInternal {
             Arc::clone(&self.on_track_handler),
         )
         .await;
+        */
         Ok(true)
     }
 
@@ -1042,12 +1095,10 @@ impl PeerConnectionInternal {
                     .await?;
                 track.prepopulate_peeked_data(buffered_packets).await;
 
-                RTCPeerConnection::do_track(
-                    Arc::clone(&self.on_track_handler),
-                    track,
-                    receiver,
-                    Arc::clone(t),
-                );
+                if let Some(handler) = &*self.events_handler.load() {
+                    let mut handler = handler.lock().await;
+                    handler.inline_on_track(track, receiver, t.clone()).await
+                }
                 return Ok(());
             }
         }
@@ -1109,6 +1160,7 @@ impl PeerConnectionInternal {
     pub(super) async fn create_ice_transport(&self, api: &API) -> Arc<RTCIceTransport> {
         let ice_transport = Arc::new(api.new_ice_transport(Arc::clone(&self.ice_gatherer)));
 
+        /*
         let ice_connection_state = Arc::clone(&self.ice_connection_state);
         let peer_connection_state = Arc::clone(&self.peer_connection_state);
         let is_closed = Arc::clone(&self.is_closed);
@@ -1117,6 +1169,8 @@ impl PeerConnectionInternal {
             Arc::clone(&self.on_ice_connection_state_change_handler);
         let on_peer_connection_state_change_handler =
             Arc::clone(&self.on_peer_connection_state_change_handler);
+
+        //TODO: a couple of callbacks are nested in here
 
         ice_transport.on_connection_state_change(Box::new(move |state: RTCIceTransportState| {
             let cs = match state {
@@ -1159,6 +1213,7 @@ impl PeerConnectionInternal {
                 .await;
             })
         }));
+        */
 
         ice_transport
     }
