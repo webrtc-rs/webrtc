@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 
 use arc_swap::ArcSwapOption;
 use util::sync::Mutex as SyncMutex;
+use util::EventHandler;
 
 use super::agent_transport::*;
 use super::*;
@@ -36,7 +37,7 @@ pub struct AgentInternal {
     pub(crate) chan_candidate_pair_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) chan_state_tx: Mutex<Option<mpsc::Sender<ConnectionState>>>,
 
-    pub(crate) events_handler: ArcSwapOption<Mutex<Box<dyn InlineAgentEventHandler + Send + Sync>>>,
+    pub(crate) events_handler: EventHandler<dyn InlineAgentEventHandler + Send + Sync>,
 
     pub(crate) tie_breaker: AtomicU64,
     pub(crate) is_controlling: AtomicBool,
@@ -105,7 +106,7 @@ impl AgentInternal {
             chan_candidate_pair_tx: Mutex::new(Some(chan_candidate_pair_tx)),
             chan_state_tx: Mutex::new(Some(chan_state_tx)),
 
-            events_handler: ArcSwapOption::empty(),
+            events_handler: EventHandler::empty(),
 
             tie_breaker: AtomicU64::new(rand::random::<u64>()),
             is_controlling: AtomicBool::new(config.is_controlling),
@@ -1047,7 +1048,7 @@ impl AgentInternal {
     }
 
     pub(super) fn start_on_connection_state_change_routine(
-        self: &mut Arc<Self>,
+        self: &Arc<Self>,
         mut chan_state_rx: mpsc::Receiver<ConnectionState>,
         mut chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
         mut chan_candidate_pair_rx: mpsc::Receiver<()>,

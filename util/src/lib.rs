@@ -16,6 +16,11 @@ extern crate bitflags;
 
 pub mod fixed_big_int;
 pub mod replay_detector;
+pub mod event_handler;
+pub mod future;
+
+pub use event_handler::EventHandler;
+pub use future::FutureUnit;
 
 /// KeyingMaterialExporter to extract keying material.
 ///

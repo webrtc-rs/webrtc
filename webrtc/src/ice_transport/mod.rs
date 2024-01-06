@@ -11,7 +11,7 @@ use ice_candidate_pair::RTCIceCandidatePair;
 use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
 use tokio::sync::{mpsc, Mutex};
-use util::Conn;
+use util::{Conn, EventHandler, FutureUnit};
 
 use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
@@ -82,7 +82,7 @@ struct TransportState {
 #[derive(Default)]
 struct TransportStateInner {
     state: Arc<AtomicU8>,
-    events_handler: ArcSwapOption<Mutex<Box<dyn InlineIceTransportEventHandler + Send + Sync>>>,
+    events_handler: Arc<EventHandler<dyn InlineIceTransportEventHandler + Send + Sync>>,
 }
 
 pub trait IceTransportEventHandler: Send {
@@ -95,16 +95,16 @@ pub trait IceTransportEventHandler: Send {
 }
 
 trait InlineIceTransportEventHandler: Send {
-    fn inline_on_connection_state_change(&mut self, state: RTCIceTransportState) -> crate::ice::agent::FutureUnit<'_>;
-    fn inline_on_selected_candidate_pair_change(&mut self, candidate_pair: RTCIceCandidatePair) -> crate::ice::agent::FutureUnit<'_>;
+    fn inline_on_connection_state_change(&mut self, state: RTCIceTransportState) -> FutureUnit<'_>;
+    fn inline_on_selected_candidate_pair_change(&mut self, candidate_pair: RTCIceCandidatePair) -> FutureUnit<'_>;
 }
 
 impl <T> InlineIceTransportEventHandler for T where T: IceTransportEventHandler {
-    fn inline_on_connection_state_change(&mut self, state: RTCIceTransportState) -> crate::ice::agent::FutureUnit<'_> {
-        Box::pin(async move { self.on_connection_state_change(state).await })
+    fn inline_on_connection_state_change(&mut self, state: RTCIceTransportState) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_connection_state_change(state).await })
     }
-    fn inline_on_selected_candidate_pair_change(&mut self, candidate_pair: RTCIceCandidatePair) -> crate::ice::agent::FutureUnit<'_> {
-        Box::pin(async move { self.on_selected_candidate_pair_change(candidate_pair).await })
+    fn inline_on_selected_candidate_pair_change(&mut self, candidate_pair: RTCIceCandidatePair) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_selected_candidate_pair_change(candidate_pair).await })
     }
 }
 
@@ -263,21 +263,8 @@ impl RTCIceTransport {
     }
 
     pub fn with_event_handler(&self, handler: impl IceTransportEventHandler + Send + Sync + 'static) {
-        self.transport_state.inner.events_handler.store(Some(Arc::new(Mutex::new(Box::new(handler)))))
+        self.transport_state.inner.events_handler.store(Box::new(handler))
     }
-    /*
-    /// on_selected_candidate_pair_change sets a handler that is invoked when a new
-    /// ICE candidate pair is selected
-    pub fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
-        self.on_selected_candidate_pair_change_handler
-            .store(Some(Arc::new(Mutex::new(f))));
-    }
-
-    pub fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
-        self.on_connection_state_change_handler
-            .store(Some(Arc::new(Mutex::new(f))));
-    }
-    */
 
     /// Role indicates the current role of the ICE transport.
     pub async fn role(&self) -> RTCIceRole {

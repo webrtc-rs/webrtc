@@ -21,6 +21,7 @@ use data_channel_state::RTCDataChannelState;
 use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::{Mutex, Notify};
 use util::sync::Mutex as SyncMutex;
+use util::{EventHandler, FutureUnit};
 
 use crate::api::setting_engine::SettingEngine;
 use crate::error::{Error, OnErrorHdlrFn, Result};
@@ -67,10 +68,7 @@ pub struct RTCDataChannel {
     // is created, the binaryType attribute MUST be initialized to the string
     // "blob". This attribute controls how binary data is exposed to scripts.
     // binaryType                 string
-    pub(crate) on_message_handler: Arc<ArcSwapOption<Mutex<OnMessageHdlrFn>>>,
-    pub(crate) on_open_handler: SyncMutex<Option<OnOpenHdlrFn>>,
-    pub(crate) on_close_handler: Arc<ArcSwapOption<Mutex<OnCloseHdlrFn>>>,
-    pub(crate) on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
+    events_handler: Arc<EventHandler<dyn InlineRTCDataChannelEventHandler + Send + Sync>>,
 
     pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
 
@@ -81,6 +79,55 @@ pub struct RTCDataChannel {
 
     // A reference to the associated api object used by this datachannel
     pub(crate) setting_engine: Arc<SettingEngine>,
+}
+
+pub trait RTCDataChannelEventHandler: Send {
+    /// on_message sets an event handler which is invoked on a binary
+    /// message arrival over the sctp transport from a remote peer.
+    /// OnMessage can currently receive messages up to 16384 bytes
+    /// in size. Check out the detach API if you want to use larger
+    /// message sizes. Note that browser support for larger messages
+    /// is also limited.
+    fn on_message(&mut self, message: DataChannelMessage) -> impl Future<Output = ()> + Send { async {}}
+    /// on_error sets an event handler which is invoked when
+    /// the underlying data transport cannot be read.
+    fn on_error(&mut self, err: crate::error::Error) -> impl Future<Output = ()> + Send { async {}}
+    /// on_open sets an event handler which is invoked when
+    /// the underlying data transport has been established (or re-established).
+    fn on_open(&mut self) -> impl Future<Output = ()> + Send {async {}}
+    /// on_close sets an event handler which is invoked when
+    /// the underlying data transport has been closed.
+    fn on_close(&mut self) -> impl Future<Output = ()> + Send {async {}}
+    /// on_buffered_amount_low sets an event handler which is invoked when
+    /// the number of bytes of outgoing data becomes lower than the
+    /// buffered_amount_low_threshold.
+    fn on_buffered_amount_low(&mut self, amt: ()) -> impl Future<Output = ()> + Send {async {}}
+}
+
+trait InlineRTCDataChannelEventHandler: Send{
+    fn inline_on_message(&mut self, message: DataChannelMessage) -> FutureUnit<'_>;
+    fn inline_on_error(&mut self, err: crate::error::Error) -> FutureUnit<'_>;
+    fn inline_on_open(&mut self) -> FutureUnit<'_>;
+    fn inline_on_close(&mut self) -> FutureUnit<'_>;
+    fn inline_on_buffered_amount_low(&mut self, amt: ()) -> FutureUnit<'_>;
+}
+
+impl <T> InlineRTCDataChannelEventHandler for T where T: RTCDataChannelEventHandler {
+    fn inline_on_message(&mut self, message: DataChannelMessage) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_message(message).await})
+    }
+    fn inline_on_error(&mut self, err: crate::error::Error) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_error(err).await})
+    }
+    fn inline_on_open(&mut self) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_open().await})
+    }
+    fn inline_on_close(&mut self) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_close().await})
+    }
+    fn inline_on_buffered_amount_low(&mut self, amt: ()) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move {self.on_buffered_amount_low(amt).await})
+    }
 }
 
 impl RTCDataChannel {
@@ -198,61 +245,36 @@ impl RTCDataChannel {
         sctp_transport.clone()
     }
 
-    /// on_open sets an event handler which is invoked when
-    /// the underlying data transport has been established (or re-established).
-    pub fn on_open(&self, f: OnOpenHdlrFn) {
-        let _ = self.on_open_handler.lock().replace(f);
+    pub fn with_event_handler(&self, handler: impl RTCDataChannelEventHandler + Send + Sync + 'static) {
+        self.events_handler.store(Box::new(handler));
 
         if self.ready_state() == RTCDataChannelState::Open {
             self.do_open();
         }
+
+        //TODO: on_buffered_amount low attatches to the inner datachannel if it exists,
+        //which aquiring it is async...
     }
 
     fn do_open(&self) {
-        let on_open_handler = self.on_open_handler.lock().take();
-        if on_open_handler.is_none() {
-            return;
-        }
-
+        let Some(handler) = &*self.events_handler.load() else { return };
+        let handler = handler.clone();
         let detach_data_channels = self.setting_engine.detach.data_channels;
         let detach_called = Arc::clone(&self.detach_called);
-        tokio::spawn(async move {
-            if let Some(f) = on_open_handler {
-                f().await;
 
-                // self.check_detach_after_open();
-                // After onOpen is complete check that the user called detach
-                // and provide an error message if the call was missed
-                if detach_data_channels && !detach_called.load(Ordering::SeqCst) {
-                    log::warn!(
-                        "webrtc.DetachDataChannels() enabled but didn't Detach, call Detach from OnOpen"
-                    );
-                }
+        tokio::spawn(async move {
+            let mut handle = handler.lock().await;
+            handle.inline_on_open().await;
+
+            // self.check_detach_after_open();
+            // After onOpen is complete check that the user called detach
+            // and provide an error message if the call was missed
+            if detach_data_channels && !detach_called.load(Ordering::SeqCst) {
+                log::warn!(
+                    "webrtc.DetachDataChannels() enabled but didn't Detach, call Detach from OnOpen"
+                );
             }
         });
-    }
-
-    /// on_close sets an event handler which is invoked when
-    /// the underlying data transport has been closed.
-    pub fn on_close(&self, f: OnCloseHdlrFn) {
-        self.on_close_handler.store(Some(Arc::new(Mutex::new(f))));
-    }
-
-    /// on_message sets an event handler which is invoked on a binary
-    /// message arrival over the sctp transport from a remote peer.
-    /// OnMessage can currently receive messages up to 16384 bytes
-    /// in size. Check out the detach API if you want to use larger
-    /// message sizes. Note that browser support for larger messages
-    /// is also limited.
-    pub fn on_message(&self, f: OnMessageHdlrFn) {
-        self.on_message_handler.store(Some(Arc::new(Mutex::new(f))));
-    }
-
-    async fn do_message(&self, msg: DataChannelMessage) {
-        if let Some(handler) = &*self.on_message_handler.load() {
-            let mut f = handler.lock().await;
-            f(msg).await;
-        }
     }
 
     pub(crate) async fn handle_open(&self, dc: Arc<data::data_channel::DataChannel>) {
@@ -265,40 +287,29 @@ impl RTCDataChannel {
         self.do_open();
 
         if !self.setting_engine.detach.data_channels {
-            let ready_state = Arc::clone(&self.ready_state);
-            let on_message_handler = Arc::clone(&self.on_message_handler);
-            let on_close_handler = Arc::clone(&self.on_close_handler);
-            let on_error_handler = Arc::clone(&self.on_error_handler);
+            let ready_state = self.ready_state.clone();
             let notify_rx = self.notify_tx.clone();
+            let events_handler = self.events_handler.clone();
             tokio::spawn(async move {
                 RTCDataChannel::read_loop(
                     notify_rx,
                     dc,
                     ready_state,
-                    on_message_handler,
-                    on_close_handler,
-                    on_error_handler,
+                    events_handler,
                 )
                 .await;
             });
         }
     }
 
-    /// on_error sets an event handler which is invoked when
-    /// the underlying data transport cannot be read.
-    pub fn on_error(&self, f: OnErrorHdlrFn) {
-        self.on_error_handler.store(Some(Arc::new(Mutex::new(f))));
-    }
-
     async fn read_loop(
         notify_rx: Arc<Notify>,
         data_channel: Arc<data::data_channel::DataChannel>,
         ready_state: Arc<AtomicU8>,
-        on_message_handler: Arc<ArcSwapOption<Mutex<OnMessageHdlrFn>>>,
-        on_close_handler: Arc<ArcSwapOption<Mutex<OnCloseHdlrFn>>>,
-        on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
+        events_handler: Arc<EventHandler<dyn InlineRTCDataChannelEventHandler + Send + Sync>>,
     ) {
         let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
+
         loop {
             let (n, is_string) = tokio::select! {
                 _ = notify_rx.notified() => break,
@@ -310,11 +321,11 @@ impl RTCDataChannel {
                         {
                             ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
 
-                            let on_close_handler2 = Arc::clone(&on_close_handler);
+                            let events_handler = events_handler.clone();
                             tokio::spawn(async move {
-                                if let Some(handler) = &*on_close_handler2.load() {
-                                    let mut f = handler.lock().await;
-                                    f().await;
+                                if let Some(handler) = &*events_handler.load() {
+                                    let mut handle = handler.lock().await;
+                                    handle.inline_on_close().await;
                                 }
                             });
 
@@ -324,19 +335,19 @@ impl RTCDataChannel {
                         Err(err) => {
                             ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
 
-                            let on_error_handler2 = Arc::clone(&on_error_handler);
+                            let error_handler = events_handler.clone();
                             tokio::spawn(async move {
-                                if let Some(handler) = &*on_error_handler2.load() {
-                                    let mut f = handler.lock().await;
-                                    f(err.into()).await;
+                                if let Some(handler) = &*error_handler.load() {
+                                    let mut handle = handler.lock().await;
+                                    handle.inline_on_error(err.into()).await;
                                 }
                             });
 
-                            let on_close_handler2 = Arc::clone(&on_close_handler);
+                            let close_handler = events_handler.clone();
                             tokio::spawn(async move {
-                                if let Some(handler) = &*on_close_handler2.load() {
-                                    let mut f = handler.lock().await;
-                                    f().await;
+                                if let Some(handler) = &*close_handler.load() {
+                                    let mut handle = handler.lock().await;
+                                    handle.inline_on_close().await;
                                 }
                             });
 
@@ -346,13 +357,13 @@ impl RTCDataChannel {
                 }
             };
 
-            if let Some(handler) = &*on_message_handler.load() {
-                let mut f = handler.lock().await;
-                f(DataChannelMessage {
+            if let Some(handler) = &*events_handler.load() {
+                let mut handle = handler.lock().await;
+                let msg = DataChannelMessage {
                     is_string,
                     data: Bytes::from(buffer[..n].to_vec()),
-                })
-                .await;
+                };
+                handle.inline_on_message(msg).await
             }
         }
     }
@@ -531,7 +542,10 @@ impl RTCDataChannel {
     /// the number of bytes of outgoing data becomes lower than the
     /// buffered_amount_low_threshold.
     pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+        //RTCDataChannel and DataChannel both have this callback
         let data_channel = self.data_channel.lock().await;
+        //should be able to clone the arc and put the handler in both
+        //the data channel inner and this currnent? i dont see why not.
         if let Some(dc) = &*data_channel {
             dc.on_buffered_amount_low(f);
         } else {

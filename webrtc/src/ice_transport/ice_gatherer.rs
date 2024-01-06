@@ -21,6 +21,7 @@ use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::SourceStatsType::*;
 use crate::stats::{ICECandidatePairStats, StatsReportType};
+use util::{FutureUnit, EventHandler};
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
@@ -69,7 +70,7 @@ struct GathererState {
 #[derive(Default)]
 struct GathererStateInner {
     state: Arc<AtomicU8>,
-    event_handler: Arc<ArcSwapOption<Mutex<Box<dyn InlineIceGathererEventHandler + Send + Sync>>>>,
+    event_handler: EventHandler<dyn InlineIceGathererEventHandler + Send + Sync>,
 }
 
 impl crate::ice::agent::AgentEventHandler for GathererState {
@@ -107,21 +108,21 @@ pub trait IceGathererEventHandler: Send {
 }
 
 trait InlineIceGathererEventHandler: Send {
-    fn inline_on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> crate::ice::agent::FutureUnit<'_>;
-    fn inline_on_state_change(&mut self, state: RTCIceGathererState) -> crate::ice::agent::FutureUnit<'_>;
-    fn inline_on_gathering_complete(&mut self) -> crate::ice::agent::FutureUnit<'_>;
+    fn inline_on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> FutureUnit<'_>;
+    fn inline_on_state_change(&mut self, state: RTCIceGathererState) -> FutureUnit<'_>;
+    fn inline_on_gathering_complete(&mut self) -> FutureUnit<'_>;
 }
 
 impl <T> InlineIceGathererEventHandler for T where T: IceGathererEventHandler {
-    fn inline_on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> crate::ice::agent::FutureUnit<'_> {
-        Box::pin(async move { self.on_local_candidate(candidate).await })
+    fn inline_on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_local_candidate(candidate).await })
     }
-    fn inline_on_state_change(&mut self, state: RTCIceGathererState) -> crate::ice::agent::FutureUnit<'_> {
-        Box::pin(async move { self.on_state_change(state).await })
+    fn inline_on_state_change(&mut self, state: RTCIceGathererState) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_state_change(state).await })
     }
 
-    fn inline_on_gathering_complete(&mut self) -> crate::ice::agent::FutureUnit<'_> {
-        Box::pin(async move { self.on_gathering_complete().await })
+    fn inline_on_gathering_complete(&mut self) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_gathering_complete().await })
     }
 }
 
@@ -267,6 +268,10 @@ impl RTCIceGatherer {
         };
 
         Ok(rtc_ice_candidates_from_ice_candidates(&ice_candidates))
+    }
+
+    pub fn with_event_handler(&self, handler: impl InlineIceGathererEventHandler + Send + Sync + 'static) {
+        self.gatherer_state.inner.event_handler.store(Box::new(handler))
     }
 
     /// State indicates the current state of the ICE gatherer.

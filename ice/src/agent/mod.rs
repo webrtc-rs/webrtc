@@ -35,7 +35,7 @@ use stun::xoraddr::*;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 use util::vnet::net::*;
-use util::Buffer;
+use util::{Buffer, EventHandler, FutureUnit};
 
 use crate::agent::agent_gather::GatherCandidatesInternalParams;
 use crate::candidate::*;
@@ -132,32 +132,6 @@ pub trait AgentEventHandler: Send {
     fn on_selected_candidate_pair_change(&mut self, local_candidate: Arc<dyn Candidate + Send + Sync>, remote_candidate: Arc<dyn Candidate + Send + Sync>) -> impl Future<Output = ()> + Send { async {}}
 }
 
-//use static_box::Box as SmallBox;
-
-pub type FutureUnit<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
-
-
-//TODO: move this into a seperate file, and have the implementation for this
-// instead of type casting as then can hide implementation if decide to 
-// move it to stack alloc etc.
-/*
-// FIXME: these (optimistically) should be switched to a stack since were only storing a unit type
-// here. Since async fns in dyn traits are still being formalized, it might be awhile until it can
-// be used without having to have a seperate imlpementation.
-// However, I(jumbeldliam) would prefer to have a more ergonomic api upfront which can be changed
-// later.
-#[repr(transparent)]
-struct FutureUnit<'a> {
-    inner: Pin<Box<dyn Future<Output = ()> + Send + 'a>>,
-}
-
-impl <'a> FutureUnit<'a> {
-    fn from_async(ac: impl Future<Output = ()> + Send + 'a) -> Self {
-        Self { inner: ac }
-    }
-}
-*/
-
 pub trait InlineAgentEventHandler: Send {
     fn inline_on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> FutureUnit<'_>;
 
@@ -168,15 +142,15 @@ pub trait InlineAgentEventHandler: Send {
 
 impl <T> InlineAgentEventHandler for T where T: AgentEventHandler {
     fn inline_on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> FutureUnit<'_> {
-        Box::pin(async move { self.on_candidate(candidate).await })
+        FutureUnit::from_async(async move { self.on_candidate(candidate).await })
     }
 
     fn inline_on_connection_state_change(&mut self, connection_state: ConnectionState) -> FutureUnit<'_> {
-        Box::pin(async move { self.on_connection_state_change(connection_state).await})
+        FutureUnit::from_async(async move { self.on_connection_state_change(connection_state).await})
     }
 
     fn inline_on_selected_candidate_pair_change(&mut self, local_candidate: Arc<dyn Candidate + Send + Sync>, remote_candidate: Arc<dyn Candidate + Send + Sync>) -> FutureUnit<'_> {
-        Box::pin(async move { self.on_selected_candidate_pair_change(local_candidate, remote_candidate).await})
+        FutureUnit::from_async(async move { self.on_selected_candidate_pair_change(local_candidate, remote_candidate).await})
     }
 }
 
@@ -301,7 +275,7 @@ impl Agent {
     }
 
     pub fn with_event_handler(&self, handler: impl AgentEventHandler + Send + Sync + 'static) {
-        self.internal.events_handler.store(Some(Arc::new(Mutex::new(Box::new(handler)))));
+        self.internal.events_handler.store(Box::new(handler));
     }
 
     /// Adds a new remote candidate.

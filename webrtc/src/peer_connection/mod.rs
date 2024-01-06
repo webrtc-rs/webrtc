@@ -85,6 +85,7 @@ use crate::sctp_transport::RTCSctpTransport;
 use crate::stats::StatsReport;
 use crate::track::track_local::TrackLocal;
 use crate::track::track_remote::TrackRemote;
+use util::{EventHandler, FutureUnit};
 
 /// SIMULCAST_PROBE_COUNT is the amount of RTP Packets
 /// that handleUndeclaredSSRC will read and try to dispatch from
@@ -179,6 +180,8 @@ struct NegotiationNeededParams {
     check_negotiation_needed_params: CheckNegotiationNeededParams,
 }
 
+//TODO: move the rest of the impl stuff over to the new FutureUnit
+
 /// PeerConnection represents a WebRTC connection that establishes a
 /// peer-to-peer communications with another PeerConnection instance in a
 /// browser, or to another endpoint implementing the required protocols.
@@ -250,7 +253,16 @@ pub trait PeerConnectionEventHandler: Send {
     fn on_negotiation_needed(&mut self) -> impl Future<Output = ()> + Send { async { } }
 }
 
-use crate::ice::agent::FutureUnit;
+impl crate::sctp_transport::SctpTransportEventHandler for Arc<EventHandler<dyn InlinePeerConnectionEventHandler + Send + Sync>> {
+    fn on_data_channel(&mut self, data_channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
+        async move {
+            if let Some(handle) = &*self.load() {
+                let mut handle = handle.lock().await;
+                handle.inline_on_data_channel(data_channel).await
+            }
+        }
+    }
+}
 
 trait InlinePeerConnectionEventHandler: Send {
     fn inline_on_track(&mut self, track_remote: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>) -> FutureUnit<'_>;
@@ -263,22 +275,22 @@ trait InlinePeerConnectionEventHandler: Send {
 
 impl <T> InlinePeerConnectionEventHandler for T where T: PeerConnectionEventHandler {
     fn inline_on_track(&mut self, track_remote: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>) -> FutureUnit<'_> {
-        Box::pin(async move {self.on_track(track_remote, receiver, transceiver).await})
+        FutureUnit::from_async(async move {self.on_track(track_remote, receiver, transceiver).await})
     }
     fn inline_on_ice_connection_state_change(&mut self, state: RTCIceConnectionState) -> FutureUnit<'_> {
-        Box::pin(async move {self.on_ice_connection_state_change(state).await})
+        FutureUnit::from_async(async move {self.on_ice_connection_state_change(state).await})
     }
     fn inline_on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> FutureUnit<'_> {
-        Box::pin(async move { self.on_peer_connection_state_change(state).await})
+        FutureUnit::from_async(async move { self.on_peer_connection_state_change(state).await})
     }
     fn inline_on_signaling_state_change(&mut self, state: RTCSignalingState) -> FutureUnit<'_> {
-        Box::pin(async move {self.on_signaling_state_change(state).await})
+        FutureUnit::from_async(async move {self.on_signaling_state_change(state).await})
     }
     fn inline_on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_> {
-        Box::pin(async move {self.on_data_channel(channel).await})
+        FutureUnit::from_async(async move {self.on_data_channel(channel).await})
     }
     fn inline_on_negotiation_needed(&mut self) -> FutureUnit<'_> {
-        Box::pin(async move {self.on_negotiation_needed().await})
+        FutureUnit::from_async(async move {self.on_negotiation_needed().await})
     }
 }
 
@@ -368,8 +380,8 @@ impl RTCPeerConnection {
         Ok(())
     }
 
-    pub fn with_event_handler(&self, handler: impl PeerConnectionEventHandler + 'static) {
-        self.internal.events_handler.store(Some(Arc::new(Mutex::new(Box::new(handler)))))
+    pub fn with_event_handler(&self, handler: impl PeerConnectionEventHandler + Send + Sync + 'static) {
+        self.internal.events_handler.store(Box::new(handler))
     }
 
     async fn do_signaling_state_change(&self, new_state: RTCSignalingState) {

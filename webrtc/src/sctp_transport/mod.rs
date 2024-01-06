@@ -16,7 +16,7 @@ use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;
 use sctp_transport_state::RTCSctpTransportState;
 use tokio::sync::{Mutex, Notify};
-use util::Conn;
+use util::{Conn, EventHandler, FutureUnit};
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data_channel::data_channel_parameters::DataChannelParameters;
@@ -48,9 +48,7 @@ struct AcceptDataChannelParams {
     notify_rx: Arc<Notify>,
     sctp_association: Arc<Association>,
     data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
-    on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
-    on_data_channel_handler: Arc<ArcSwapOption<Mutex<OnDataChannelHdlrFn>>>,
-    on_data_channel_opened_handler: Arc<ArcSwapOption<Mutex<OnDataChannelOpenedHdlrFn>>>,
+    events_handler: Arc<EventHandler<dyn InlineSctpTransportEventHandler + Send + Sync>>,
     data_channels_opened: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
     setting_engine: Arc<SettingEngine>,
@@ -78,9 +76,7 @@ pub struct RTCSctpTransport {
 
     sctp_association: Mutex<Option<Arc<Association>>>,
 
-    on_error_handler: Arc<ArcSwapOption<Mutex<OnErrorHdlrFn>>>,
-    on_data_channel_handler: Arc<ArcSwapOption<Mutex<OnDataChannelHdlrFn>>>,
-    on_data_channel_opened_handler: Arc<ArcSwapOption<Mutex<OnDataChannelOpenedHdlrFn>>>,
+    events_handler: Arc<EventHandler<dyn InlineSctpTransportEventHandler + Send + Sync>>,
 
     // DataChannels
     pub(crate) data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
@@ -91,6 +87,36 @@ pub struct RTCSctpTransport {
     notify_tx: Arc<Notify>,
 
     setting_engine: Arc<SettingEngine>,
+}
+
+pub trait SctpTransportEventHandler: Send {
+    /// on_error sets an event handler which is invoked when
+    /// the SCTP connection error occurs.
+    fn on_error(&mut self, err: crate::error::Error) -> impl Future<Output = ()> + Send { async {}}
+    /// on_data_channel sets an event handler which is invoked when a data
+    /// channel message arrives from a remote peer.
+    fn on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {async{}}
+    /// on_data_channel_opened sets an event handler which is invoked when a data
+    /// channel is opened
+    fn on_data_channel_opened(&mut self, channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {async{}}
+}
+
+trait InlineSctpTransportEventHandler: Send {
+    fn inline_on_error(&mut self, err: crate::error::Error) -> FutureUnit<'_>;
+    fn inline_on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_>;
+    fn inline_on_data_channel_opened(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_>;
+}
+
+impl <T> InlineSctpTransportEventHandler for T where T: SctpTransportEventHandler {
+    fn inline_on_error(&mut self, err: crate::error::Error) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_error(err).await})
+    }
+    fn inline_on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move {self.on_data_channel(channel).await})
+    }
+    fn inline_on_data_channel_opened(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move {self.on_data_channel_opened(channel).await})
+    }
 }
 
 impl RTCSctpTransport {
@@ -105,9 +131,7 @@ impl RTCSctpTransport {
             max_message_size: RTCSctpTransport::calc_message_size(65536, 65536),
             max_channels: SCTP_MAX_CHANNELS,
             sctp_association: Mutex::new(None),
-            on_error_handler: Arc::new(ArcSwapOption::empty()),
-            on_data_channel_handler: Arc::new(ArcSwapOption::empty()),
-            on_data_channel_opened_handler: Arc::new(ArcSwapOption::empty()),
+            events_handler: Arc::new(EventHandler::empty()),
 
             data_channels: Arc::new(Mutex::new(vec![])),
             data_channels_opened: Arc::new(AtomicU32::new(0)),
@@ -175,9 +199,7 @@ impl RTCSctpTransport {
                 notify_rx: self.notify_tx.clone(),
                 sctp_association,
                 data_channels: Arc::clone(&self.data_channels),
-                on_error_handler: Arc::clone(&self.on_error_handler),
-                on_data_channel_handler: Arc::clone(&self.on_data_channel_handler),
-                on_data_channel_opened_handler: Arc::clone(&self.on_data_channel_opened_handler),
+                events_handler: Arc::clone(&self.events_handler),
                 data_channels_opened: Arc::clone(&self.data_channels_opened),
                 data_channels_accepted: Arc::clone(&self.data_channels_accepted),
                 setting_engine: Arc::clone(&self.setting_engine),
@@ -210,14 +232,15 @@ impl RTCSctpTransport {
     }
 
     async fn accept_data_channels(param: AcceptDataChannelParams) {
-        let dcs = param.data_channels.lock().await;
         let mut existing_data_channels = Vec::new();
-        for dc in dcs.iter() {
-            if let Some(dc) = dc.data_channel.lock().await.clone() {
-                existing_data_channels.push(dc);
+        {
+            let dcs = param.data_channels.lock().await;
+            for dc in dcs.iter() {
+                if let Some(dc) = dc.data_channel.lock().await.clone() {
+                    existing_data_channels.push(dc);
+                }
             }
-        }
-        drop(dcs);
+        } //we want to drop `dcs` here to free the mutex lock before looping
 
         loop {
             let dc = tokio::select! {
@@ -232,9 +255,9 @@ impl RTCSctpTransport {
                         Err(err) => {
                             if data::Error::ErrStreamClosed == err {
                                 log::error!("Failed to accept data channel: {}", err);
-                                if let Some(handler) = &*param.on_error_handler.load() {
-                                    let mut f = handler.lock().await;
-                                    f(err.into()).await;
+                                if let Some(handle) = &*param.events_handler.load() {
+                                    let mut handle = handle.lock().await;
+                                    handle.inline_on_error(err.into()).await;
                                 }
                             }
                             break;
@@ -248,6 +271,7 @@ impl RTCSctpTransport {
             let val = dc.config.reliability_parameter as u16;
             let ordered;
 
+            //FIXME: this should be moved into its own fn.
             match dc.config.channel_type {
                 ChannelType::Reliable => {
                     ordered = true;
@@ -290,10 +314,9 @@ impl RTCSctpTransport {
                 Arc::clone(&param.setting_engine),
             ));
 
-            if let Some(handler) = &*param.on_data_channel_handler.load() {
-                let mut f = handler.lock().await;
-                f(Arc::clone(&rtc_dc)).await;
-
+            if let Some(handle) = &*param.events_handler.load() {
+                let mut handle = handle.lock().await;
+                handle.inline_on_data_channel(rtc_dc.clone()).await;
                 param.data_channels_accepted.fetch_add(1, Ordering::SeqCst);
 
                 let mut dcs = param.data_channels.lock().await;
@@ -302,32 +325,16 @@ impl RTCSctpTransport {
 
             rtc_dc.handle_open(Arc::new(dc)).await;
 
-            if let Some(handler) = &*param.on_data_channel_opened_handler.load() {
-                let mut f = handler.lock().await;
-                f(rtc_dc).await;
+            if let Some(handle) = &*param.events_handler.load() {
+                let mut handle = handle.lock().await;
+                handle.inline_on_data_channel_opened(rtc_dc).await;
                 param.data_channels_opened.fetch_add(1, Ordering::SeqCst);
             }
         }
     }
 
-    /// on_error sets an event handler which is invoked when
-    /// the SCTP connection error occurs.
-    pub fn on_error(&self, f: OnErrorHdlrFn) {
-        self.on_error_handler.store(Some(Arc::new(Mutex::new(f))));
-    }
-
-    /// on_data_channel sets an event handler which is invoked when a data
-    /// channel message arrives from a remote peer.
-    pub fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
-        self.on_data_channel_handler
-            .store(Some(Arc::new(Mutex::new(f))));
-    }
-
-    /// on_data_channel_opened sets an event handler which is invoked when a data
-    /// channel is opened
-    pub fn on_data_channel_opened(&self, f: OnDataChannelOpenedHdlrFn) {
-        self.on_data_channel_opened_handler
-            .store(Some(Arc::new(Mutex::new(f))));
+    pub fn with_event_handler(&self, handler: impl SctpTransportEventHandler + Send + Sync + 'static) {
+        self.events_handler.store(Box::new(handler))
     }
 
     fn calc_message_size(remote_max_message_size: usize, can_send_size: usize) -> usize {
