@@ -9,6 +9,7 @@ use interceptor::{Attributes, Interceptor};
 use smol_str::SmolStr;
 use tokio::sync::Mutex;
 use util::sync::Mutex as SyncMutex;
+use util::{EventHandler, FutureUnit};
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::{Error, Result};
@@ -27,6 +28,25 @@ pub type OnMuteHdlrFn = Box<
 struct Handlers {
     on_mute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
     on_unmute: ArcSwapOption<Mutex<OnMuteHdlrFn>>,
+}
+
+pub trait TrackRemoteEventHandler: Send {
+    fn on_mute(&mut self) -> impl Future<Output = ()> + Send { async {}}
+    fn on_unmute(&mut self) -> impl Future<Output = ()> + Send {async {}}
+}
+
+trait InlineTrackRemoteEventHandler: Send {
+    fn inline_on_mute(&mut self) -> FutureUnit<'_>;
+    fn inline_on_unmute(&mut self) -> FutureUnit<'_>;
+}
+
+impl <T> InlineTrackRemoteEventHandler for T where T: TrackRemoteEventHandler {
+    fn inline_on_mute(&mut self) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_mute().await})
+    }
+    fn inline_on_unmute(&mut self) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move {self.on_unmute().await})
+    }
 }
 
 #[derive(Default)]
@@ -52,7 +72,7 @@ pub struct TrackRemote {
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
 
-    handlers: Arc<Handlers>,
+    events_handler: Arc<EventHandler<dyn InlineTrackRemoteEventHandler + Send + Sync>>,
 
     receiver: Option<Weak<RTPReceiverInternal>>,
     internal: Mutex<TrackRemoteInternal>,
@@ -97,8 +117,7 @@ impl TrackRemote {
             receiver: Some(receiver),
             media_engine,
             interceptor,
-            handlers: Default::default(),
-
+            events_handler: Default::default(),
             internal: Default::default(),
         }
     }
@@ -191,22 +210,8 @@ impl TrackRemote {
         *p = params;
     }
 
-    pub fn onmute<F>(&self, handler: F)
-    where
-        F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
-    {
-        self.handlers
-            .on_mute
-            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
-    }
-
-    pub fn onunmute<F>(&self, handler: F)
-    where
-        F: FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static + Sync,
-    {
-        self.handlers
-            .on_unmute
-            .store(Some(Arc::new(Mutex::new(Box::new(handler)))));
+    pub fn with_event_handler(&self, handler: impl TrackRemoteEventHandler + Send + Sync + 'static) {
+        self.events_handler.store(Box::new(handler));
     }
 
     /// Reads data from the track.
@@ -303,18 +308,16 @@ impl TrackRemote {
     }
 
     pub(crate) async fn fire_onmute(&self) {
-        let on_mute = self.handlers.on_mute.load();
-
-        if let Some(f) = on_mute.as_ref() {
-            (f.lock().await)().await
-        };
+        if let Some(handler) = &*self.events_handler.load() {
+            let mut handle = handler.lock().await;
+            handle.inline_on_mute().await;
+        }
     }
 
     pub(crate) async fn fire_onunmute(&self) {
-        let on_unmute = self.handlers.on_unmute.load();
-
-        if let Some(f) = on_unmute.as_ref() {
-            (f.lock().await)().await
-        };
+        if let Some(handler) = &*self.events_handler.load() {
+            let mut handle = handler.lock().await;
+            handle.inline_on_unmute().await;
+        }
     }
 }

@@ -22,7 +22,7 @@ pub(crate) async fn pipe(
     cfg0.network_types = supported_network_types();
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let mut cfg1 = if let Some(cfg) = default_config1 {
         cfg
@@ -33,7 +33,7 @@ pub(crate) async fn pipe(
     cfg1.network_types = supported_network_types();
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier);
+    b_agent.with_event_handler(b_notifier);
 
     let (a_conn, b_conn) = connect_with_vnet(&a_agent, &b_agent).await?;
 

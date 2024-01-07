@@ -119,7 +119,6 @@ pub struct Agent {
     pub(crate) gather_candidate_cancel: Option<GatherCandidateCancelFn>,
 }
 
-//TODO?: implement the stuff talked about in dyner
 pub trait AgentEventHandler: Send {
     /// Sets a handler that is fired when new candidates gathered. When the gathering process
     /// complete the last candidate is None.

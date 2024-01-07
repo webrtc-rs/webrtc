@@ -388,16 +388,14 @@ impl PeerConnectionInternal {
                 if receiver.have_received().await {
                     continue;
                 }
-                /* TODO:
                 PeerConnectionInternal::start_receiver(
                     self.setting_engine.get_receive_mtu(),
                     incoming_track,
                     receiver,
-                    Arc::clone(t),
-                    Arc::clone(&self.on_track_handler),
+                    t.clone(),
+                    self.events_handler.clone(),
                 )
                 .await;
-                */
                 track_handled = true;
             }
 
@@ -573,6 +571,7 @@ impl PeerConnectionInternal {
     fn create_negotiation_needed_params(&self) -> NegotiationNeededParams {
         NegotiationNeededParams {
             //on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
+            events_handler: self.events_handler.clone(),
             is_closed: Arc::clone(&self.is_closed),
             ops: Arc::clone(&self.ops),
             negotiation_needed_state: Arc::clone(&self.negotiation_needed_state),
@@ -916,16 +915,14 @@ impl PeerConnectionInternal {
             .await?;
 
         let receiver = t.receiver().await;
-        /*TODO
         PeerConnectionInternal::start_receiver(
             self.setting_engine.get_receive_mtu(),
             &incoming,
             receiver,
             t,
-            Arc::clone(&self.on_track_handler),
+            self.events_handler.clone(),
         )
         .await;
-        */
         Ok(true)
     }
 
@@ -1092,7 +1089,7 @@ impl PeerConnectionInternal {
         incoming: &TrackDetails,
         receiver: Arc<RTCRtpReceiver>,
         transceiver: Arc<RTCRtpTransceiver>,
-        on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
+        events_handler: Arc<EventHandler<dyn InlinePeerConnectionEventHandler + Send + Sync>>,
     ) {
         receiver.start(incoming).await;
         for t in receiver.tracks().await {
@@ -1102,7 +1099,7 @@ impl PeerConnectionInternal {
 
             let receiver = Arc::clone(&receiver);
             let transceiver = Arc::clone(&transceiver);
-            let on_track_handler = Arc::clone(&on_track_handler);
+            let track_handler = events_handler.clone();
             tokio::spawn(async move {
                 if let Some(track) = receiver.track().await {
                     let mut b = vec![0u8; receive_mtu];
@@ -1127,7 +1124,10 @@ impl PeerConnectionInternal {
                         return;
                     }
 
-                    RTCPeerConnection::do_track(on_track_handler, track, receiver, transceiver);
+                    if let Some(handler) = &*track_handler.load() {
+                        let mut handle = handler.lock().await;
+                        handle.inline_on_track(track, receiver, transceiver).await;
+                    }
                 }
             });
         }

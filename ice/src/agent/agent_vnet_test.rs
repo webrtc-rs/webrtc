@@ -8,7 +8,7 @@ use util::vnet::chunk::Chunk;
 use util::vnet::router::Nic;
 use util::vnet::*;
 use util::Conn;
-use waitgroup::WaitGroup;
+use waitgroup::{WaitGroup, Worker};
 
 use super::*;
 use crate::candidate::candidate_base::unmarshal_candidate;
@@ -311,7 +311,7 @@ pub(crate) async fn pipe_with_vnet(
     };
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let nat_1to1_ips = if a1test_config.nat_1to1_ip_candidate_type != CandidateType::Unspecified {
         vec![VNET_GLOBAL_IPB.to_owned()]
@@ -329,7 +329,7 @@ pub(crate) async fn pipe_with_vnet(
     };
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier);
+    b_agent.with_event_handler(b_notifier);
 
     let (a_conn, b_conn) = connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -341,19 +341,24 @@ pub(crate) async fn pipe_with_vnet(
     Ok((a_conn, b_conn))
 }
 
-pub(crate) fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
+struct ConnectionStateNotifier {
+    done_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+}
+
+impl AgentEventHandler for ConnectionStateNotifier {
+    fn on_connection_state_change(&mut self, state: ConnectionState) -> impl Future<Output = ()> + Send {
+        if state == ConnectionState::Connected {
+            let mut tx = self.done_tx.lock().await;
+            tx.take();
+        }
+    }
+}
+
+pub(crate) fn on_connected() -> (ConnectionStateNotifier, mpsc::Receiver<()>) {
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    let hdlr_fn: OnConnectionStateChangeHdlrFn = Box::new(move |state: ConnectionState| {
-        let done_tx_clone = Arc::clone(&done_tx);
-        Box::pin(async move {
-            if state == ConnectionState::Connected {
-                let mut tx = done_tx_clone.lock().await;
-                tx.take();
-            }
-        })
-    });
-    (hdlr_fn, done_rx)
+    let handler = ConnectionStateNotifier { done_tx };
+    (handler, done_rx)
 }
 
 pub(crate) async fn gather_and_exchange_candidates(
@@ -362,32 +367,25 @@ pub(crate) async fn gather_and_exchange_candidates(
 ) -> Result<(), Error> {
     let wg = WaitGroup::new();
 
-    let w1 = Arc::new(Mutex::new(Some(wg.worker())));
-    a_agent.on_candidate(Box::new(
-        move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-            let w3 = Arc::clone(&w1);
-            Box::pin(async move {
-                if candidate.is_none() {
-                    let mut w = w3.lock().await;
-                    w.take();
-                }
-            })
-        },
-    ));
+    struct CandidateHandler {
+        worker: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl AgentEventHandler for CandidateHandler {
+        fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send {
+            if candidate.is_none() {
+                let mut worker = self.worker.lock().await;
+                worker.take();
+            }
+        }
+    }
+
+    let candidate_handler_1 = CandidateHandler { worker: Arc::new(Mutex::new(Some(wg.worker())))};
+    a_agent.with_event_handler(candidate_handler_1);
     a_agent.gather_candidates()?;
 
-    let w2 = Arc::new(Mutex::new(Some(wg.worker())));
-    b_agent.on_candidate(Box::new(
-        move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-            let w3 = Arc::clone(&w2);
-            Box::pin(async move {
-                if candidate.is_none() {
-                    let mut w = w3.lock().await;
-                    w.take();
-                }
-            })
-        },
-    ));
+    let candidate_handler_2 = CandidateHandler { worker: Arc::new(Mutex::new(Some(wg.worker())))};
+    b_agent.with_event_handler(candidate_handler_2);
     b_agent.gather_candidates()?;
 
     wg.wait().await;
@@ -821,22 +819,25 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
     let (controlling_state_changes_tx, mut controlling_state_changes_rx) =
         mpsc::channel::<ConnectionState>(100);
     let controlling_state_changes_tx = Arc::new(controlling_state_changes_tx);
-    controlling_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let controlling_state_changes_tx_clone = Arc::clone(&controlling_state_changes_tx);
-        Box::pin(async move {
-            let _ = controlling_state_changes_tx_clone.try_send(c);
-        })
-    }));
 
     let (controlled_state_changes_tx, mut controlled_state_changes_rx) =
         mpsc::channel::<ConnectionState>(100);
     let controlled_state_changes_tx = Arc::new(controlled_state_changes_tx);
-    controlled_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let controlled_state_changes_tx_clone = Arc::clone(&controlled_state_changes_tx);
-        Box::pin(async move {
-            let _ = controlled_state_changes_tx_clone.try_send(c);
-        })
-    }));
+    struct AgentStateHandler {
+        changes_tx: Arc<mpsc::Sender<ConnectionState>>,
+    }
+
+    impl AgentEventHandler for AgentStateHandler {
+        fn on_connection_state_change(&mut self, state: ConnectionState) -> impl Future<Output = ()> + Send {
+            let _ = self.changes_tx.try_send(state);
+        }
+    }
+
+    let controlling_state_handler = AgentStateHandler { changes_tx: controlling_state_changes_tx };
+    let controlled_state_handler = AgentStateHandler { changes_tx: controlled_state_changes_tx };
+
+    controlling_agent.with_event_handler(controlling_state_handler);
+    controlled_agent.with_event_handler(controlled_state_handler);
 
     connect_with_vnet(&controlling_agent, &controlled_agent).await?;
 

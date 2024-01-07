@@ -10,7 +10,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 
-use arc_swap::ArcSwapOption;
 use data::data_channel::DataChannel;
 use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;

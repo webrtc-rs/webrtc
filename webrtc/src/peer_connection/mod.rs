@@ -171,7 +171,7 @@ struct CheckNegotiationNeededParams {
 
 #[derive(Clone)]
 struct NegotiationNeededParams {
-    //on_negotiation_needed_handler: Arc<ArcSwapOption<Mutex<OnNegotiationNeededHdlrFn>>>,
+    events_handler: Arc<EventHandler<dyn InlinePeerConnectionEventHandler + Send + Sync>>,
     is_closed: Arc<AtomicBool>,
     ops: Arc<Operations>,
     negotiation_needed_state: Arc<AtomicU8>,
@@ -293,8 +293,6 @@ impl <T> InlinePeerConnectionEventHandler for T where T: PeerConnectionEventHand
         FutureUnit::from_async(async move {self.on_negotiation_needed().await})
     }
 }
-
-//TODO: inline variant of trait and its blanket impl and adding the field to the fn.
 
 impl <T> IceGathererEventHandler for T where T: PeerConnectionEventHandler {
     fn on_state_change(&mut self, state: RTCIceGathererState) -> impl Future<Output = ()> + Send {
@@ -449,12 +447,7 @@ impl RTCPeerConnection {
 
     async fn negotiation_needed_op(params: NegotiationNeededParams) -> bool {
         // Don't run NegotiatedNeeded checks if on_negotiation_needed is not set
-        /*TODO:
-        let handler = &*params.on_negotiation_needed_handler.load();
-        if handler.is_none() {
-            return false;
-        }
-        */
+        let Some(handler) = &*params.events_handler.load() else { return false };
 
         // https://www.w3.org/TR/webrtc/#updating-the-negotiation-needed-flag
         // Step 2.1
@@ -492,12 +485,8 @@ impl RTCPeerConnection {
         params.is_negotiation_needed.store(true, Ordering::SeqCst);
 
         // Step 2.7
-        /* TODO
-        if let Some(handler) = handler {
-            let mut f = handler.lock().await;
-            f().await;
-        }
-        */
+        let mut handle = handler.lock().await;
+        handle.inline_on_negotiation_needed().await;
 
         RTCPeerConnection::after_negotiation_needed_op(params).await
     }
