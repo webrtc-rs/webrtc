@@ -17,7 +17,7 @@ use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
 use srtp::stream::Stream;
 use tokio::sync::{mpsc, Mutex};
-use util::Conn;
+use util::{Conn, EventHandler, FutureUnit};
 
 use crate::api::setting_engine::SettingEngine;
 use crate::dtls_transport::dtls_parameters::DTLSParameters;
@@ -67,7 +67,7 @@ pub struct RTCDtlsTransport {
     pub(crate) remote_certificate: Mutex<Bytes>,
     pub(crate) state: AtomicU8, //DTLSTransportState,
     pub(crate) srtp_protection_profile: Mutex<ProtectionProfile>,
-    pub(crate) on_state_change_handler: ArcSwapOption<Mutex<OnDTLSTransportStateChangeHdlrFn>>,
+    pub(crate) events_handler: EventHandler<dyn InlineDtlsTransportEventHandler + Send + Sync>,
     pub(crate) conn: Mutex<Option<Arc<DTLSConn>>>,
 
     pub(crate) srtp_session: Mutex<Option<Arc<Session>>>,
@@ -82,6 +82,23 @@ pub struct RTCDtlsTransport {
     pub(crate) srtp_ready_rx: Mutex<Option<mpsc::Receiver<()>>>,
 
     pub(crate) dtls_matcher: Option<MatchFunc>,
+}
+
+pub trait DtlsTransportEventHandler: Send {
+    /// on_state_change sets a handler that is fired when the DTLS
+    /// connection state changes.
+    fn on_state_change(&mut self, state: RTCDtlsTransportState) -> impl Future<Output = ()> + Send { async {}}
+}
+
+trait InlineDtlsTransportEventHandler: Send {
+    fn inline_on_state_change(&mut self, state: RTCDtlsTransportState) -> FutureUnit<'_>;
+}
+
+impl <T> InlineDtlsTransportEventHandler for T where T: DtlsTransportEventHandler {
+    fn inline_on_state_change(&mut self, state: RTCDtlsTransportState) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_state_change(state).await})
+    }
+
 }
 
 impl RTCDtlsTransport {
@@ -118,18 +135,16 @@ impl RTCDtlsTransport {
     /// state_change requires the caller holds the lock
     async fn state_change(&self, state: RTCDtlsTransportState) {
         self.state.store(state as u8, Ordering::SeqCst);
-        if let Some(handler) = &*self.on_state_change_handler.load() {
-            let mut f = handler.lock().await;
-            f(state).await;
+        if let Some(handler) = &*self.events_handler.load() {
+            let mut handle = handler.lock().await;
+            handle.inline_on_state_change(state).await;
         }
     }
 
-    /// on_state_change sets a handler that is fired when the DTLS
-    /// connection state changes.
-    pub fn on_state_change(&self, f: OnDTLSTransportStateChangeHdlrFn) {
-        self.on_state_change_handler
-            .store(Some(Arc::new(Mutex::new(f))));
+    pub fn with_event_handler(&self, handler: impl DtlsTransportEventHandler + Send + Sync + 'static) {
+        self.events_handler.store(Box::new(handler));
     }
+
 
     /// state returns the current dtls_transport transport state.
     pub fn state(&self) -> RTCDtlsTransportState {

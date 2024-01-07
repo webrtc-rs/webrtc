@@ -6,6 +6,7 @@ use crate::api::APIBuilder;
 use crate::dtls_transport::RTCDtlsTransport;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::peer_connection_test::{close_pair_now, create_vnet_pair};
+use crate::peer_connection::PeerConnectionEventHandler;
 
 #[tokio::test]
 async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
@@ -259,15 +260,17 @@ async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> 
 
     let count = Arc::new(AtomicUsize::new(0));
 
-    {
-        let count = count.clone();
-        offer_pc.on_negotiation_needed(Box::new(move || {
-            let count = count.clone();
-            Box::pin(async move {
-                count.fetch_add(1, Ordering::SeqCst);
-            })
-        }));
+    struct NegotiationCounter {
+        count: Arc<AtomicUsize>,
     }
+
+    impl PeerConnectionEventHandler for NegotiationCounter {
+        fn on_negotiation_needed(&mut self) -> impl Future<Output = ()> + Send {
+            self.count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    offer_pc.with_event_handler(NegotiationCounter{ count: count.clone()});
 
     let offer_transceiver = offer_pc
         .add_transceiver_from_kind(RTPCodecType::Video, None)

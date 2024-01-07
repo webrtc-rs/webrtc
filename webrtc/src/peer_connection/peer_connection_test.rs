@@ -7,7 +7,7 @@ use media::Sample;
 use tokio::time::Duration;
 use util::vnet::net::{Net, NetConfig};
 use util::vnet::router::{Router, RouterConfig};
-use waitgroup::WaitGroup;
+use waitgroup::{WaitGroup, Worker};
 
 use super::*;
 use crate::api::interceptor_registry::register_default_interceptors;
@@ -15,6 +15,7 @@ use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
 use crate::ice_transport::ice_server::RTCIceServer;
+use crate::ice_transport::IceTransportEventHandler;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use crate::stats::StatsReportType;
@@ -249,12 +250,16 @@ pub(crate) async fn send_video_until_done(
     }
 }
 
+/*
 pub(crate) async fn until_connection_state(
     pc: &mut RTCPeerConnection,
     wg: &WaitGroup,
     state: RTCPeerConnectionState,
 ) {
     let w = Arc::new(Mutex::new(Some(wg.worker())));
+
+
+
     pc.on_peer_connection_state_change(Box::new(move |pcs: RTCPeerConnectionState| {
         let w2 = Arc::clone(&w);
         Box::pin(async move {
@@ -264,6 +269,22 @@ pub(crate) async fn until_connection_state(
             }
         })
     }));
+}
+*/
+
+pub struct StateHandler {
+    pub worker: Arc<Mutex<Option<Worker>>>,
+}
+
+impl PeerConnectionEventHandler for StateHandler {
+    fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+        async move {
+            if state == RTCPeerConnectionState::Connected {
+                let mut worker = self.worker.lock().await;
+                worker.take();
+            }
+        }
+    }
 }
 
 #[tokio::test]
@@ -276,27 +297,51 @@ async fn test_get_stats() -> Result<()> {
 
     let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
     let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
-    pc_answer.on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
-        let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
-        Box::pin(async move {
-            if ice_state == RTCIceConnectionState::Connected {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                let mut done = ice_complete_tx2.lock().await;
-                done.take();
-            }
-        })
-    }));
+
+    struct AnswerHandler {
+        ice_complete_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+        packet_tx: mpsc::Sender<()>,
+    }
+
+    impl PeerConnectionEventHandler for AnswerHandler {
+        fn on_ice_connection_state_change(&mut self, state: RTCIceConnectionState) -> impl Future<Output = ()> + Send {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            let mut done = self.ice_complete_tx.lock().await;
+            done.take();
+        }
+
+        fn on_track(&mut self, track: Arc<TrackRemote>, _: _, _: _) -> impl Future<Output = ()> + Send {
+            tokio::spawn(async move {
+                while let Ok((pkt, _)) = track.read_rtp().await {
+                    dbg!(&pkt);
+                    let last = pkt.payload[pkt.payload.len() - 1];
+
+                    if last == 0xAA {
+                        let _ = self.packet_tx.send(()).await;
+                        break;
+                    }
+                }
+            });
+        }
+    }
+    pc_answer.with_event_handler(AnswerHandler { ice_complete_tx, packet_tx});
+
+    struct OfferHandler {
+        sender_called_candidate_change: Arc<AtomicU32>,
+    }
+
+    impl IceTransportEventHandler for OfferHandler {
+        fn on_selected_candidate_pair_change(&mut self, _: _) {
+            self.sender_called_candidate_change.store(1, Ordering::SeqCst);
+        }
+    }
 
     let sender_called_candidate_change = Arc::new(AtomicU32::new(0));
-    let sender_called_candidate_change2 = Arc::clone(&sender_called_candidate_change);
     pc_offer
         .sctp()
         .transport()
         .ice_transport()
-        .on_selected_candidate_pair_change(Box::new(move |_: RTCIceCandidatePair| {
-            sender_called_candidate_change2.store(1, Ordering::SeqCst);
-            Box::pin(async {})
-        }));
+        .with_event_handler(OfferHandler{ sender_called_candidate_change });
     let track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
@@ -310,23 +355,6 @@ async fn test_get_stats() -> Result<()> {
         .await
         .expect("Failed to add track");
     let (packet_tx, packet_rx) = mpsc::channel(1);
-
-    pc_answer.on_track(Box::new(move |track, _, _| {
-        let packet_tx = packet_tx.clone();
-        tokio::spawn(async move {
-            while let Ok((pkt, _)) = track.read_rtp().await {
-                dbg!(&pkt);
-                let last = pkt.payload[pkt.payload.len() - 1];
-
-                if last == 0xAA {
-                    let _ = packet_tx.send(()).await;
-                    break;
-                }
-            }
-        });
-
-        Box::pin(async move {})
-    }));
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 

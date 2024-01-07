@@ -2,15 +2,17 @@ use bytes::Bytes;
 use media::Sample;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
-use waitgroup::WaitGroup;
+use waitgroup::{WaitGroup, Worker};
+use std::future::Future;
 
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use crate::error::Result;
 use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
-    close_pair_now, create_vnet_pair, signal_pair, until_connection_state,
+    StateHandler, close_pair_now, create_vnet_pair, signal_pair,
 };
+use crate::peer_connection::PeerConnectionEventHandler;
 use crate::rtp_transceiver::rtp_codec::RTCRtpHeaderExtensionParameters;
 use crate::rtp_transceiver::RTCPFeedback;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
@@ -87,15 +89,18 @@ async fn test_set_rtp_parameters() -> Result<()> {
 
     let (seen_packet_tx, mut seen_packet_rx) = mpsc::channel::<()>(1);
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
-    receiver.on_track(Box::new(move |_, receiver, _| {
-        let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
-        Box::pin(async move {
+
+    struct TrackHandler {
+        seen_packet_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+        worker: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl PeerConnectionEventHandler for TrackHandler {
+        fn on_track(&mut self, _: _, receiver: Arc<RTCRtpReceiver>, _: _) -> impl Future<Output = ()> + Send {
             receiver.set_rtp_parameters(P.clone()).await;
-
-            if let Some(t) = receiver.track().await {
-                let incoming_track_codecs = t.codec();
-
-                assert_eq!(P.header_extensions, t.params().header_extensions);
+            if let Some(track) = receiver.track().await {
+                let incoming_track_codecs = track.codec();
+                assert_eq!(P.header_extensions, track.params().header_extensions);
                 assert_eq!(
                     P.codecs[0].capability.mime_type,
                     incoming_track_codecs.capability.mime_type
@@ -118,18 +123,22 @@ async fn test_set_rtp_parameters() -> Result<()> {
                 );
                 assert_eq!(P.codecs[0].payload_type, incoming_track_codecs.payload_type);
 
-                {
-                    let mut done = seen_packet_tx2.lock().await;
-                    done.take();
-                }
+                let done = self.seen_packet_tx.lock().await;
+                done.take();
             }
-        })
-    }));
+        }
+
+        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+            if state == RTCPeerConnectionState::Connected {
+                let mut worker = self.worker.lock().await;
+                worker.take();
+            }
+        }
+    }
 
     let wg = WaitGroup::new();
-
-    until_connection_state(&mut sender, &wg, RTCPeerConnectionState::Connected).await;
-    until_connection_state(&mut receiver, &wg, RTCPeerConnectionState::Connected).await;
+    receiver.with_event_handler( TrackHandler { seen_packet_tx: seen_packet_tx.clone(), worker: Arc::new(Mutex::new(Some(wg.worker())))});
+    sender.with_event_handler(StateHandler{worker: Arc::new(Mutex::new(Some(wg.worker())))});
 
     signal_pair(&mut sender, &mut receiver).await?;
 
@@ -178,9 +187,14 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
 
     let (seen_packet_tx, mut seen_packet_rx) = mpsc::channel::<()>(1);
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
-    receiver.on_track(Box::new(move |track, receiver, _| {
-        let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
-        Box::pin(async move {
+
+    struct TrackHandler {
+        seen_packet_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+        worker: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl PeerConnectionEventHandler for TrackHandler {
+        fn on_track(&mut self, track: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, _: _) -> impl Future<Output = ()> + Send {
             // First call will not error because we cache for probing
             let result = tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
             assert!(
@@ -194,16 +208,22 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
             let result = tokio::time::timeout(Duration::from_secs(1), receiver.read_rtcp()).await;
             assert!(result.is_err());
 
-            {
-                let mut done = seen_packet_tx2.lock().await;
-                done.take();
+            let mut done = self.seen_packet_tx.lock().await;
+            done.take();
+        }
+        
+        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+            if state == RTCPeerConnectionState::Connected {
+                let mut worker = self.worker.lock().await;
+                worker.take();
             }
-        })
-    }));
+        }
+    }
 
     let wg = WaitGroup::new();
-    until_connection_state(&mut sender, &wg, RTCPeerConnectionState::Connected).await;
-    until_connection_state(&mut receiver, &wg, RTCPeerConnectionState::Connected).await;
+    receiver.with_event_handler(TrackHandler{ seen_packet_tx: seen_packet_tx.clone(), worker: Arc::new(Mutex::new(Some(wg.worker())))});
+
+    sender.with_event_handler(StateHandler{worker: Arc::new(Mutex::new(Some(wg.worker())))});
 
     signal_pair(&mut sender, &mut receiver).await?;
 

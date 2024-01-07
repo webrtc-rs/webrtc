@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU32;
 
 use tokio::time::Duration;
-use waitgroup::WaitGroup;
+use waitgroup::{WaitGroup, Worker};
 
 use super::*;
 use crate::api::media_engine::MediaEngine;
@@ -10,8 +10,9 @@ use crate::error::Result;
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
 use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
-    close_pair_now, new_pair, signal_pair, until_connection_state,
+    close_pair_now, new_pair, signal_pair,
 };
+use crate::peer_connection::PeerConnectionEventHandler;
 
 #[tokio::test]
 async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
@@ -68,18 +69,21 @@ async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
     let (mut offerer, mut answerer) = new_pair(&api).await?;
 
     let peer_connection_connected = WaitGroup::new();
-    until_connection_state(
-        &mut offerer,
-        &peer_connection_connected,
-        RTCPeerConnectionState::Connected,
-    )
-    .await;
-    until_connection_state(
-        &mut answerer,
-        &peer_connection_connected,
-        RTCPeerConnectionState::Connected,
-    )
-    .await;
+
+    struct ConnectionStateHandler {
+        worker: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionStateHandler {
+        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+            if state == RTCPeerConnectionState::Connected {
+                let mut worker = self.worker.lock().await;
+                worker.take();
+            }
+        }
+    }
+    offerer.with_event_handler(ConnectionStateHandler { worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker())))});
+    answerer.with_event_handler(ConnectionStateHandler { worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker())))});
 
     let offerer_selected_pair = offerer
         .sctp()

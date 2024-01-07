@@ -347,9 +347,11 @@ struct ConnectionStateNotifier {
 
 impl AgentEventHandler for ConnectionStateNotifier {
     fn on_connection_state_change(&mut self, state: ConnectionState) -> impl Future<Output = ()> + Send {
-        if state == ConnectionState::Connected {
-            let mut tx = self.done_tx.lock().await;
-            tx.take();
+        async move {
+            if state == ConnectionState::Connected {
+                let mut tx = self.done_tx.lock().await;
+                tx.take();
+            }
         }
     }
 }
@@ -373,9 +375,11 @@ pub(crate) async fn gather_and_exchange_candidates(
 
     impl AgentEventHandler for CandidateHandler {
         fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send {
-            if candidate.is_none() {
-                let mut worker = self.worker.lock().await;
-                worker.take();
+            async move {
+                if candidate.is_none() {
+                    let mut worker = self.worker.lock().await;
+                    worker.take();
+                }
             }
         }
     }
@@ -829,7 +833,9 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
 
     impl AgentEventHandler for AgentStateHandler {
         fn on_connection_state_change(&mut self, state: ConnectionState) -> impl Future<Output = ()> + Send {
-            let _ = self.changes_tx.try_send(state);
+            async move {
+                let _ = self.changes_tx.try_send(state);
+            }
         }
     }
 

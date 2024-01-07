@@ -2,7 +2,7 @@ use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 use regex::Regex;
 use tokio::time::Duration;
-use waitgroup::WaitGroup;
+use waitgroup::{WaitGroup, Worker};
 
 use super::*;
 use crate::api::media_engine::MediaEngine;
@@ -14,6 +14,7 @@ use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
+use crate::peer_connection::PeerConnectionEventHandler;
 
 //use log::LevelFilter;
 //use std::io::Write;
@@ -42,36 +43,49 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
-    pc_answer.on_data_channel(Box::new(|_: Arc<RTCDataChannel>| {
-        panic!("A DataChannel must not be created when Fingerprint verification fails");
-    }));
+    struct AnswerHandler {
+        worker: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl PeerConnectionEventHandler for AnswerHandler {
+        fn on_data_channel(&mut self, _: _) -> impl Future<Output = ()> + Send {
+            panic!("A DataChannel must not be created when Fingerprint verification fails");
+        }
+
+        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+            if state == RTCPeerConnectionState::Failed {
+                let mut worker = self.worker.lock().await;
+                worker.take();
+            }
+        }
+    }
+
+    struct OfferHandler {
+        offer_chan_tx: Arc<mpsc::Sender<()>>,
+        worker: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl PeerConnectionEventHandler for OfferHandler {
+        fn on_ice_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send {
+            if candidate.is_none() {
+                let _ = self.offer_chan_tx.try_send(()).await;
+            }
+        }
+
+        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+            if state == RTCPeerConnectionState::Failed {
+                let mut worker = self.worker.lock().await;
+                worker.take();
+            }
+        }
+    }
 
     let (offer_chan_tx, mut offer_chan_rx) = mpsc::channel::<()>(1);
-
     let offer_chan_tx = Arc::new(offer_chan_tx);
-    pc_offer.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-        let offer_chan_tx2 = Arc::clone(&offer_chan_tx);
-        Box::pin(async move {
-            if candidate.is_none() {
-                let _ = offer_chan_tx2.send(()).await;
-            }
-        })
-    }));
 
     let offer_connection_has_failed = WaitGroup::new();
-    until_connection_state(
-        &mut pc_offer,
-        &offer_connection_has_failed,
-        RTCPeerConnectionState::Failed,
-    )
-    .await;
-    let answer_connection_has_failed = WaitGroup::new();
-    until_connection_state(
-        &mut pc_answer,
-        &answer_connection_has_failed,
-        RTCPeerConnectionState::Failed,
-    )
-    .await;
+    pc_offer.with_event_handler(OfferHandler{offer_chan_tx, worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker())))});
+    pc_offer.with_event_handler(AnswerHandler{worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker())))});
 
     let _ = pc_offer
         .create_data_channel("unusedDataChannel", None)

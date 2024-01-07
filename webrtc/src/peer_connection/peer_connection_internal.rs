@@ -610,6 +610,7 @@ impl PeerConnectionInternal {
     }
 
     pub(super) fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
+        //TODO: 
         //self.ice_gatherer.on_gathering_complete(f);
     }
 

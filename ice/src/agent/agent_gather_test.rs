@@ -111,6 +111,21 @@ async fn test_vnet_gather_listen_udp() -> Result<()> {
     Ok(())
 }
 
+struct CandidateHandler {
+    done_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+}
+
+impl AgentEventHandler for CandidateHandler {
+    fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send {
+        async move {
+            if candidate.is_some() {
+                let mut tx = self.done_tx.lock().await;
+                tx.take();
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
     let external_ip0 = "1.2.3.4";
@@ -154,17 +169,8 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    a.on_candidate(Box::new(
-        move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-            let done_tx_clone = Arc::clone(&done_tx);
-            Box::pin(async move {
-                if c.is_none() {
-                    let mut tx = done_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        },
-    ));
+
+    a.with_event_handler(CandidateHandler{ done_tx });
 
     a.gather_candidates()?;
 
@@ -271,17 +277,8 @@ async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<()> {
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    a.on_candidate(Box::new(
-        move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-            let done_tx_clone = Arc::clone(&done_tx);
-            Box::pin(async move {
-                if c.is_none() {
-                    let mut tx = done_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        },
-    ));
+
+    a.with_event_handler(CandidateHandler{ done_tx });
 
     a.gather_candidates()?;
 
@@ -455,17 +452,8 @@ async fn test_vnet_gather_muxed_udp() -> Result<()> {
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    a.on_candidate(Box::new(
-        move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-            let done_tx_clone = Arc::clone(&done_tx);
-            Box::pin(async move {
-                if c.is_none() {
-                    let mut tx = done_tx_clone.lock().await;
-                    tx.take();
-                }
-            })
-        },
-    ));
+
+    a.with_event_handler(CandidateHandler{ done_tx });
 
     a.gather_candidates()?;
 
