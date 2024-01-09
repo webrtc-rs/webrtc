@@ -703,7 +703,26 @@ async fn test_populate_sdp() -> Result<()> {
         .await;
 
         let mut rid_map = HashMap::new();
-        rid_map.insert("ridkey".to_owned(), "some".to_owned());
+        let rid_id = "ridkey".to_owned();
+        rid_map.insert(
+            rid_id.to_owned(),
+            SimulcastRid {
+                id: rid_id,
+                direction: SimulcastDirection::Recv,
+                params: "some".to_owned(),
+                paused: false,
+            },
+        );
+        let rid_id = "ridpaused".to_owned();
+        rid_map.insert(
+            rid_id.to_owned(),
+            SimulcastRid {
+                id: rid_id,
+                direction: SimulcastDirection::Recv,
+                params: "some2".to_owned(),
+                paused: true,
+            },
+        );
         let media_sections = vec![MediaSection {
             id: "video".to_owned(),
             transceivers: vec![tr],
@@ -732,23 +751,33 @@ async fn test_populate_sdp() -> Result<()> {
         .await?;
 
         // Test contains rid map keys
-        let mut found = false;
+        let mut found = 0;
         for desc in &offer_sdp.media_descriptions {
             if desc.media_name.media != "video" {
                 continue;
             }
-            for a in &desc.attributes {
-                if a.key == SDP_ATTRIBUTE_RID {
-                    if let Some(value) = &a.value {
-                        if value.contains("ridkey") {
-                            found = true;
-                            break;
-                        }
-                    }
-                }
+
+            let rid_map = get_rids(desc);
+            if let Some(rid) = rid_map.get("ridkey") {
+                assert!(!rid.paused, "Rid should be active");
+                assert_eq!(
+                    rid.direction,
+                    SimulcastDirection::Send,
+                    "Rid should be send"
+                );
+                found += 1;
+            }
+            if let Some(rid) = rid_map.get("ridpaused") {
+                assert!(rid.paused, "Rid should be paused");
+                assert_eq!(
+                    rid.direction,
+                    SimulcastDirection::Send,
+                    "Rid should be send"
+                );
+                found += 1;
             }
         }
-        assert!(found, "Rid key should be present");
+        assert_eq!(found, 2, "All Rid key should be present");
     }
 
     //"SetCodecPreferences"

@@ -33,7 +33,7 @@ use smol_str::SmolStr;
 use url::Url;
 
 use crate::peer_connection::MEDIA_SECTION_APPLICATION;
-use crate::SDP_ATTRIBUTE_RID;
+use crate::{SDP_ATTRIBUTE_RID, SDP_ATTRIBUTE_SIMULCAST};
 
 /// TrackDetails represents any media source that can be represented in a SDP
 /// This isn't keyed by SSRC because it also needs to support rid based sources
@@ -239,16 +239,49 @@ pub(crate) fn track_details_from_sdp(
     incoming_tracks
 }
 
-pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
+pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, SimulcastRid> {
     let mut rids = HashMap::new();
+    let mut simulcast_attr: Option<String> = None;
     for attr in &media.attributes {
         if attr.key.as_str() == SDP_ATTRIBUTE_RID {
-            if let Some(value) = &attr.value {
-                let split: Vec<&str> = value.split(' ').collect();
-                rids.insert(split[0].to_owned(), value.to_owned());
+            if let Err(err) = attr
+                .value
+                .as_ref()
+                .ok_or(SimulcastRidParseError::SyntaxIdDirSplit)
+                .and_then(SimulcastRid::try_from)
+                .map(|rid| rids.insert(rid.id.to_owned(), rid))
+            {
+                log::warn!("Failed to parse RID: {}", err);
+            }
+        } else if attr.key.as_str() == SDP_ATTRIBUTE_SIMULCAST {
+            simulcast_attr = attr.value.clone();
+        }
+    }
+
+    if let Some(attr) = simulcast_attr {
+        let mut split = attr.split(' ');
+        loop {
+            let _dir = split.next();
+            let sc_str_list = split.next();
+            if let Some(list) = sc_str_list {
+                let sc_list: Vec<&str> = list.split(';').flat_map(|alt| alt.split(',')).collect();
+                for sc_id in sc_list {
+                    let (sc_id, paused) = if let Some(sc_id) = sc_id.strip_prefix('~') {
+                        (sc_id, true)
+                    } else {
+                        (sc_id, false)
+                    };
+
+                    if let Some(rid) = rids.get_mut(sc_id) {
+                        rid.paused = paused;
+                    }
+                }
+            } else {
+                break;
             }
         }
     }
+
     rids
 }
 
@@ -515,18 +548,42 @@ pub(crate) async fn add_transceiver_sdp(
     }
 
     if !media_section.rid_map.is_empty() {
-        let mut recv_rids: Vec<String> = vec![];
+        let mut recv_sc_list: Vec<String> = vec![];
+        let mut send_sc_list: Vec<String> = vec![];
 
-        for rid in media_section.rid_map.keys() {
-            media =
-                media.with_value_attribute(SDP_ATTRIBUTE_RID.to_owned(), rid.to_owned() + " recv");
-            recv_rids.push(rid.to_owned());
+        for rid in media_section.rid_map.values() {
+            let rid_syntax = match rid.direction {
+                SimulcastDirection::Send => {
+                    // If Send rid, then reply with a recv rid
+                    if rid.paused {
+                        recv_sc_list.push(format!("~{}", rid.id));
+                    } else {
+                        recv_sc_list.push(rid.id.to_owned());
+                    }
+                    format!("{} recv", rid.id)
+                }
+                SimulcastDirection::Recv => {
+                    // If Recv rid, then reply with a send rid
+                    if rid.paused {
+                        send_sc_list.push(format!("~{}", rid.id));
+                    } else {
+                        send_sc_list.push(rid.id.to_owned());
+                    }
+                    format!("{} send", rid.id)
+                }
+            };
+            media = media.with_value_attribute(SDP_ATTRIBUTE_RID.to_owned(), rid_syntax);
         }
+
         // Simulcast
-        media = media.with_value_attribute(
-            "simulcast".to_owned(),
-            "recv ".to_owned() + recv_rids.join(";").as_str(),
-        );
+        let mut sc_attr = String::new();
+        if !recv_sc_list.is_empty() {
+            sc_attr.push_str(&format!("recv {}", recv_sc_list.join(";")));
+        }
+        if !send_sc_list.is_empty() {
+            sc_attr.push_str(&format!("send {}", send_sc_list.join(";")));
+        }
+        media = media.with_value_attribute(SDP_ATTRIBUTE_SIMULCAST.to_owned(), sc_attr);
     }
 
     for mt in transceivers {
@@ -628,12 +685,71 @@ pub(crate) async fn add_transceiver_sdp(
     Ok((d.with_media(media), true))
 }
 
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub(crate) enum SimulcastRidParseError {
+    /// SyntaxIdDirSplit indicates rid-syntax could not be parsed.
+    #[error("RFC8851 mandates rid-syntax        = %s\"a=rid:\" rid-id SP rid-dir")]
+    SyntaxIdDirSplit,
+    /// UnknownDirection indicates rid-dir was not parsed. Should be "send" or "recv".
+    #[error("RFC8851 mandates rid-dir           = %s\"send\" / %s\"recv\"")]
+    UnknownDirection,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) enum SimulcastDirection {
+    Send,
+    Recv,
+}
+
+impl TryFrom<&str> for SimulcastDirection {
+    type Error = SimulcastRidParseError;
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "send" => Ok(SimulcastDirection::Send),
+            "recv" => Ok(SimulcastDirection::Recv),
+            _ => Err(SimulcastRidParseError::UnknownDirection),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SimulcastRid {
+    pub(crate) id: String,
+    pub(crate) direction: SimulcastDirection,
+    pub(crate) params: String,
+    pub(crate) paused: bool,
+}
+
+impl TryFrom<&String> for SimulcastRid {
+    type Error = SimulcastRidParseError;
+    fn try_from(value: &String) -> std::result::Result<Self, Self::Error> {
+        let mut split = value.split(' ');
+        let id = split
+            .next()
+            .ok_or(SimulcastRidParseError::SyntaxIdDirSplit)?
+            .to_owned();
+        let direction = SimulcastDirection::try_from(
+            split
+                .next()
+                .ok_or(SimulcastRidParseError::SyntaxIdDirSplit)?,
+        )?;
+        let params = split.collect();
+
+        Ok(Self {
+            id,
+            direction,
+            params,
+            paused: false,
+        })
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct MediaSection {
     pub(crate) id: String,
     pub(crate) transceivers: Vec<Arc<RTCRtpTransceiver>>,
     pub(crate) data: bool,
-    pub(crate) rid_map: HashMap<String, String>,
+    pub(crate) rid_map: HashMap<String, SimulcastRid>,
     pub(crate) offered_direction: Option<RTCRtpTransceiverDirection>,
 }
 
