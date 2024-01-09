@@ -87,18 +87,22 @@ pub struct RTCDtlsTransport {
 pub trait DtlsTransportEventHandler: Send {
     /// on_state_change sets a handler that is fired when the DTLS
     /// connection state changes.
-    fn on_state_change(&mut self, state: RTCDtlsTransportState) -> impl Future<Output = ()> + Send { async {}}
+    fn on_state_change(&mut self, state: RTCDtlsTransportState) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 trait InlineDtlsTransportEventHandler: Send {
     fn inline_on_state_change(&mut self, state: RTCDtlsTransportState) -> FutureUnit<'_>;
 }
 
-impl <T> InlineDtlsTransportEventHandler for T where T: DtlsTransportEventHandler {
+impl<T> InlineDtlsTransportEventHandler for T
+where
+    T: DtlsTransportEventHandler,
+{
     fn inline_on_state_change(&mut self, state: RTCDtlsTransportState) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_state_change(state).await})
+        FutureUnit::from_async(async move { self.on_state_change(state).await })
     }
-
 }
 
 impl RTCDtlsTransport {
@@ -141,10 +145,12 @@ impl RTCDtlsTransport {
         }
     }
 
-    pub fn with_event_handler(&self, handler: impl DtlsTransportEventHandler + Send + Sync + 'static) {
+    pub fn with_event_handler(
+        &self,
+        handler: impl DtlsTransportEventHandler + Send + Sync + 'static,
+    ) {
         self.events_handler.store(Box::new(handler));
     }
-
 
     /// state returns the current dtls_transport transport state.
     pub fn state(&self) -> RTCDtlsTransportState {

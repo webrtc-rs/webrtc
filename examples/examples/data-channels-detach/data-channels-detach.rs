@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -10,12 +11,14 @@ use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::RTCDataChannel;
+use webrtc::data_channel::RTCDataChannelEventHandler;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::PeerConnectionEventHandler;
 
 const MESSAGE_SIZE: usize = 1500;
 
@@ -110,59 +113,79 @@ async fn main() -> Result<()> {
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
+    struct ConnectionHandler {
+        done_tx: tokio::sync::mpsc::Sender<()>,
+    }
 
-        if s == RTCPeerConnectionState::Failed {
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting");
-            let _ = done_tx.try_send(());
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        // Set the handler for Peer connection state
+        // This will notify you when the peer has connected/disconnected
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            println!("Peer Connection State has changed: {state}");
+
+            if state == RTCPeerConnectionState::Failed {
+                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                println!("Peer Connection has gone to failed exiting");
+                let _ = self.done_tx.try_send(());
+            }
+            async {}
         }
 
-        Box::pin(async {})
-    }));
+        // Register data channel creation handling
+        fn on_data_channel(
+            &mut self,
+            data_channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                let d_label = data_channel.label().to_owned();
+                let d_id = data_channel.id();
+                println!("New DataChannel {d_label} {d_id}");
+                data_channel.with_event_handler(ChannelHandler {
+                    label: d_label,
+                    id: d_id,
+                    data_channel: data_channel.clone(),
+                });
+            }
+        }
+    }
+    struct ChannelHandler {
+        label: String,
+        id: u16,
+        data_channel: Arc<RTCDataChannel>,
+    }
 
-    // Register data channel creation handling
-    peer_connection.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        let d_label = d.label().to_owned();
-        let d_id = d.id();
-        println!("New DataChannel {d_label} {d_id}");
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            println!("Data channel '{}'-'{}' open.", self.label, self.id);
 
-        // Register channel opening handling
-        Box::pin(async move {
-            let d2 = Arc::clone(&d);
-            let d_label2 = d_label.clone();
-            let d_id2 = d_id;
-            d.on_open(Box::new(move || {
-                println!("Data channel '{d_label2}'-'{d_id2}' open.");
+            Box::pin(async move {
+                let raw = match self.data_channel.detach().await {
+                    Ok(raw) => raw,
+                    Err(err) => {
+                        println!("data channel detach got err: {err}");
+                        return;
+                    }
+                };
 
-                Box::pin(async move {
-                    let raw = match d2.detach().await {
-                        Ok(raw) => raw,
-                        Err(err) => {
-                            println!("data channel detach got err: {err}");
-                            return;
-                        }
-                    };
+                // Handle reading from the data channel
+                let r = Arc::clone(&raw);
+                tokio::spawn(async move {
+                    let _ = read_loop(r).await;
+                });
 
-                    // Handle reading from the data channel
-                    let r = Arc::clone(&raw);
-                    tokio::spawn(async move {
-                        let _ = read_loop(r).await;
-                    });
-
-                    // Handle writing to the data channel
-                    tokio::spawn(async move {
-                        let _ = write_loop(raw).await;
-                    });
-                })
-            }));
-        })
-    }));
+                // Handle writing to the data channel
+                tokio::spawn(async move {
+                    let _ = write_loop(raw).await;
+                });
+            })
+        }
+    }
+    peer_connection.with_event_handler(ConnectionHandler { done_tx });
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;

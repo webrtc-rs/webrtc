@@ -9,8 +9,9 @@ use super::*;
 use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::peer_connection::configuration::RTCConfiguration;
-use crate::peer_connection::PeerConnectionEventHandler;
 use crate::peer_connection::peer_connection_test::*;
+use crate::peer_connection::PeerConnectionEventHandler;
+use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 
 // If a remote doesn't support a Codec used by a `TrackLocalStatic`
 // an error should be returned to the user
@@ -264,17 +265,26 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         fired_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     }
 
-    impl PeerConnectionEventHandler for OfferHandler  {
-        fn on_track(&mut self, track: Arc<crate::track::TrackRemote>, _: _, _: _) -> impl std::future::Future<Output = ()> + Send {
-            assert_eq!(track.payload_type(), 100);
-            assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
-            log::debug!("onTrackFiredFunc!!!");
-            let mut done = self.fired_tx.lock().await;
-            done.take();
+    impl PeerConnectionEventHandler for OfferHandler {
+        fn on_track(
+            &mut self,
+            track: Arc<crate::track::TrackRemote>,
+            _: Arc<RTCRtpReceiver>,
+            _: Arc<RTCRtpTransceiver>,
+        ) -> impl std::future::Future<Output = ()> + Send {
+            async {
+                assert_eq!(track.payload_type(), 100);
+                assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
+                log::debug!("onTrackFiredFunc!!!");
+                let mut done = self.fired_tx.lock().await;
+                done.take();
+            }
         }
     }
 
-    offerer.with_event_handler(OfferHandler{ fired_tx: on_track_fired_tx});
+    offerer.with_event_handler(OfferHandler {
+        fired_tx: on_track_fired_tx,
+    });
 
     signal_pair(&mut offerer, &mut answerer).await?;
 

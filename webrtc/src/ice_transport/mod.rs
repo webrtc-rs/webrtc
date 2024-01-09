@@ -88,44 +88,82 @@ struct TransportStateInner {
 pub trait IceTransportEventHandler: Send {
     /// on_connection_state_change sets a handler that is fired when the ICE
     /// connection state changes.
-    fn on_connection_state_change(&mut self, state: RTCIceTransportState) -> impl Future<Output = ()> + Send { async { } }
+    fn on_connection_state_change(
+        &mut self,
+        state: RTCIceTransportState,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
     /// on_selected_candidate_pair_change sets a handler that is invoked when a new
     /// ICE candidate pair is selected
-    fn on_selected_candidate_pair_change(&mut self, candidate_pair: RTCIceCandidatePair) -> impl Future<Output = ()> + Send { async { } }
+    fn on_selected_candidate_pair_change(
+        &mut self,
+        candidate_pair: RTCIceCandidatePair,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 trait InlineIceTransportEventHandler: Send {
     fn inline_on_connection_state_change(&mut self, state: RTCIceTransportState) -> FutureUnit<'_>;
-    fn inline_on_selected_candidate_pair_change(&mut self, candidate_pair: RTCIceCandidatePair) -> FutureUnit<'_>;
+    fn inline_on_selected_candidate_pair_change(
+        &mut self,
+        candidate_pair: RTCIceCandidatePair,
+    ) -> FutureUnit<'_>;
 }
 
-impl <T> InlineIceTransportEventHandler for T where T: IceTransportEventHandler {
+impl<T> InlineIceTransportEventHandler for T
+where
+    T: IceTransportEventHandler,
+{
     fn inline_on_connection_state_change(&mut self, state: RTCIceTransportState) -> FutureUnit<'_> {
         FutureUnit::from_async(async move { self.on_connection_state_change(state).await })
     }
-    fn inline_on_selected_candidate_pair_change(&mut self, candidate_pair: RTCIceCandidatePair) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_selected_candidate_pair_change(candidate_pair).await })
+    fn inline_on_selected_candidate_pair_change(
+        &mut self,
+        candidate_pair: RTCIceCandidatePair,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move {
+            self.on_selected_candidate_pair_change(candidate_pair).await
+        })
     }
 }
 
 impl ice::agent::AgentEventHandler for TransportState {
-    fn on_connection_state_change(&mut self, state: ConnectionState) -> impl Future<Output = ()> + Send {
+    fn on_connection_state_change(
+        &mut self,
+        state: ConnectionState,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             let ice_state = RTCIceTransportState::from(state);
             self.inner.state.store(ice_state as u8, Ordering::SeqCst);
 
             if let Some(handler) = &*self.inner.events_handler.load() {
-                handler.lock().await.inline_on_connection_state_change(ice_state).await
+                handler
+                    .lock()
+                    .await
+                    .inline_on_connection_state_change(ice_state)
+                    .await
             }
         }
     }
 
-    fn on_selected_candidate_pair_change(&mut self, local_candidate: Arc<dyn Candidate + Send + Sync>, remote_candidate: Arc<dyn Candidate + Send + Sync>) -> impl Future<Output = ()> + Send { 
+    fn on_selected_candidate_pair_change(
+        &mut self,
+        local_candidate: Arc<dyn Candidate + Send + Sync>,
+        remote_candidate: Arc<dyn Candidate + Send + Sync>,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             if let Some(handler) = &*self.inner.events_handler.load() {
                 let local = RTCIceCandidate::from(&local_candidate);
                 let remote = RTCIceCandidate::from(&remote_candidate);
-                handler.lock().await.inline_on_selected_candidate_pair_change(RTCIceCandidatePair::new(local, remote)).await
+                handler
+                    .lock()
+                    .await
+                    .inline_on_selected_candidate_pair_change(RTCIceCandidatePair::new(
+                        local, remote,
+                    ))
+                    .await
             }
         }
     }
@@ -262,8 +300,14 @@ impl RTCIceTransport {
         flatten_errs(errs)
     }
 
-    pub fn with_event_handler(&self, handler: impl IceTransportEventHandler + Send + Sync + 'static) {
-        self.transport_state.inner.events_handler.store(Box::new(handler))
+    pub fn with_event_handler(
+        &self,
+        handler: impl IceTransportEventHandler + Send + Sync + 'static,
+    ) {
+        self.transport_state
+            .inner
+            .events_handler
+            .store(Box::new(handler))
     }
 
     /// Role indicates the current role of the ICE transport.

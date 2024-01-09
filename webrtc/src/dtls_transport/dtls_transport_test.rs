@@ -48,11 +48,14 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     }
 
     impl PeerConnectionEventHandler for AnswerHandler {
-        fn on_data_channel(&mut self, _: _) -> impl Future<Output = ()> + Send {
+        fn on_data_channel(&mut self, _: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
             panic!("A DataChannel must not be created when Fingerprint verification fails");
         }
 
-        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
             if state == RTCPeerConnectionState::Failed {
                 let mut worker = self.worker.lock().await;
                 worker.take();
@@ -66,13 +69,19 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     }
 
     impl PeerConnectionEventHandler for OfferHandler {
-        fn on_ice_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send {
+        fn on_ice_candidate(
+            &mut self,
+            candidate: Option<RTCIceCandidate>,
+        ) -> impl Future<Output = ()> + Send {
             if candidate.is_none() {
                 let _ = self.offer_chan_tx.try_send(()).await;
             }
         }
 
-        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
             if state == RTCPeerConnectionState::Failed {
                 let mut worker = self.worker.lock().await;
                 worker.take();
@@ -84,8 +93,13 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     let offer_chan_tx = Arc::new(offer_chan_tx);
 
     let offer_connection_has_failed = WaitGroup::new();
-    pc_offer.with_event_handler(OfferHandler{offer_chan_tx, worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker())))});
-    pc_offer.with_event_handler(AnswerHandler{worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker())))});
+    pc_offer.with_event_handler(OfferHandler {
+        offer_chan_tx,
+        worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker()))),
+    });
+    pc_offer.with_event_handler(AnswerHandler {
+        worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker()))),
+    });
 
     let _ = pc_offer
         .create_data_channel("unusedDataChannel", None)

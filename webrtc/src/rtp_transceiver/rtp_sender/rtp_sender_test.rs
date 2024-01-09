@@ -11,11 +11,12 @@ use crate::api::APIBuilder;
 use crate::error::Result;
 use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
-    StateHandler, close_pair_now, create_vnet_pair, new_pair, send_video_until_done, signal_pair,
-    until_connection_state,
+    close_pair_now, create_vnet_pair, new_pair, send_video_until_done, signal_pair, StateHandler,
 };
 use crate::peer_connection::PeerConnectionEventHandler;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use crate::rtp_transceiver::{RTCRtpReceiver, RTCRtpTransceiver};
+
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 
 #[tokio::test]
@@ -69,30 +70,41 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
     }
 
     impl PeerConnectionEventHandler for TrackHandler {
-        fn on_track(&mut self, track: Arc<crate::track::track_remote::TrackRemote>, _: _, _: _) -> impl std::future::Future<Output = ()> + Send {
-            assert_eq!(self.track_count.fetch_add(1, Ordering::SeqCst), 0);
-            let pkt = match track.read_rtp().await {
-                Ok((pkt, _)) => pkt,
-                Err(err) => {
-                    //assert!(errors.Is(io.EOF, err))
-                    log::debug!("{}", err);
-                    return;
-                }
-            };
+        fn on_track(
+            &mut self,
+            track: Arc<crate::track::track_remote::TrackRemote>,
+            _: Arc<RTCRtpReceiver>,
+            _: Arc<RTCRtpTransceiver>,
+        ) -> impl std::future::Future<Output = ()> + Send {
+            async {
+                assert_eq!(self.track_count.fetch_add(1, Ordering::SeqCst), 0);
+                let pkt = match track.read_rtp().await {
+                    Ok((pkt, _)) => pkt,
+                    Err(err) => {
+                        //assert!(errors.Is(io.EOF, err))
+                        log::debug!("{}", err);
+                        return;
+                    }
+                };
 
-            let last = pkt.payload[pkt.payload.len() - 1];
-            if last == 0xAA {
-                assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
-                let _ = self.seen_packet_a.send(()).await;
-            } else if last == 0xBB {
-                assert_eq!(track.codec().capability.mime_type, MIME_TYPE_H264);
-                let _ = self.seen_packet_b.send(()).await;
-            } else {
-                panic!("Unexpected RTP Data {last:02x}");
+                let last = pkt.payload[pkt.payload.len() - 1];
+                if last == 0xAA {
+                    assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
+                    let _ = self.seen_packet_a.send(()).await;
+                } else if last == 0xBB {
+                    assert_eq!(track.codec().capability.mime_type, MIME_TYPE_H264);
+                    let _ = self.seen_packet_b.send(()).await;
+                } else {
+                    panic!("Unexpected RTP Data {last:02x}");
+                }
             }
         }
     }
-    receiver.with_event_handler( TrackHandler { seen_packet_a, seen_packet_b, track_count: on_track_count.clone()});
+    receiver.with_event_handler(TrackHandler {
+        seen_packet_a,
+        seen_packet_b,
+        track_count: on_track_count.clone(),
+    });
 
     signal_pair(&mut sender, &mut receiver).await?;
 
@@ -170,8 +182,12 @@ async fn test_rtp_sender_set_read_deadline() -> Result<()> {
         .await?;
 
     let peer_connections_connected = WaitGroup::new();
-    sender.with_event_handler(StateHandler{worker: Arc::new(Mutex::new(Some(peer_connections_connected.worker())))});
-    receiver.with_event_handler(StateHandler{worker: Arc::new(Mutex::new(Some(peer_connections_connected.worker())))});
+    sender.with_event_handler(StateHandler {
+        worker: Arc::new(Mutex::new(Some(peer_connections_connected.worker()))),
+    });
+    receiver.with_event_handler(StateHandler {
+        worker: Arc::new(Mutex::new(Some(peer_connections_connected.worker()))),
+    });
 
     signal_pair(&mut sender, &mut receiver).await?;
 
@@ -194,8 +210,13 @@ struct TrackPacketHandler {
 }
 
 impl PeerConnectionEventHandler for TrackPacketHandler {
-    fn on_track(&mut self, _: _, _: _, _: _) -> impl std::future::Future<Output = ()> + Send {
-        self.seen_packet_tx.send(()).await
+    fn on_track(
+        &mut self,
+        _: Arc<crate::track::track_remote::TrackRemote>,
+        _: Arc<RTCRtpReceiver>,
+        _: Arc<RTCRtpTransceiver>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async { self.seen_packet_tx.send(()).await }
     }
 }
 
@@ -312,7 +333,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     let (seen_packet_tx, seen_packet_rx) = mpsc::channel::<()>(1);
     let seen_packet_tx = Arc::new(seen_packet_tx);
 
-    receiver.with_event_handler( TrackPacketHandler { seen_packet_tx });
+    receiver.with_event_handler(TrackPacketHandler { seen_packet_tx });
 
     tokio::spawn(async move {
         send_video_until_done(

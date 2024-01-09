@@ -5,7 +5,7 @@ use std::sync::Weak;
 use arc_swap::ArcSwapOption;
 use smol_str::SmolStr;
 use tokio::time::Instant;
-use util::{Unmarshal, EventHandler};
+use util::{EventHandler, Unmarshal};
 
 use super::*;
 use crate::rtp_transceiver::create_stream_info;
@@ -45,7 +45,8 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) sctp_transport: Arc<RTCSctpTransport>,
     pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
 
-    pub(super) events_handler: Arc<EventHandler<dyn InlinePeerConnectionEventHandler + Send + Sync>>,
+    pub(super) events_handler:
+        Arc<EventHandler<dyn InlinePeerConnectionEventHandler + Send + Sync>>,
 
     pub(super) ice_gatherer: Arc<RTCIceGatherer>,
 
@@ -72,7 +73,10 @@ struct IceTransportHandler {
 }
 
 impl IceTransportEventHandler for IceTransportHandler {
-    fn on_connection_state_change(&mut self, state: RTCIceTransportState) -> impl Future<Output = ()> + Send {
+    fn on_connection_state_change(
+        &mut self,
+        state: RTCIceTransportState,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             //FIXME: this should be moved into a seperate fn
             let conn_state = match state {
@@ -92,11 +96,21 @@ impl IceTransportEventHandler for IceTransportHandler {
             if let Some(handler) = &*self.events_handler.load() {
                 let mut handler = handler.lock().await;
                 if self.ice_connection_state.load(Ordering::SeqCst) != conn_state as u8 {
-                    self.ice_connection_state.store(conn_state as u8, Ordering::SeqCst);
-                    handler.inline_on_ice_connection_state_change(conn_state).await
+                    self.ice_connection_state
+                        .store(conn_state as u8, Ordering::SeqCst);
+                    handler
+                        .inline_on_ice_connection_state_change(conn_state)
+                        .await
                 }
-                if let Some(changed_state) = RTCPeerConnection::updated_connection_state(&self.is_closed, &self.peer_connection_state, conn_state, self.dtls_transport.state()) {
-                    handler.inline_on_peer_connection_state_change(changed_state).await;
+                if let Some(changed_state) = RTCPeerConnection::updated_connection_state(
+                    &self.is_closed,
+                    &self.peer_connection_state,
+                    conn_state,
+                    self.dtls_transport.state(),
+                ) {
+                    handler
+                        .inline_on_peer_connection_state_change(changed_state)
+                        .await;
                 }
             }
         }
@@ -162,7 +176,8 @@ impl PeerConnectionInternal {
         pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
 
         // Wire up the on datachannel handler
-        pc.sctp_transport.with_event_handler(pc.events_handler.clone());
+        pc.sctp_transport
+            .with_event_handler(pc.events_handler.clone());
 
         Ok((Arc::new(pc), configuration))
     }
@@ -610,7 +625,7 @@ impl PeerConnectionInternal {
     }
 
     pub(super) fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
-        //TODO: 
+        //TODO:
         //self.ice_gatherer.on_gathering_complete(f);
     }
 
@@ -653,15 +668,20 @@ impl PeerConnectionInternal {
             })
             .await;
 
-        match (&*self.events_handler.load(), RTCPeerConnection::updated_connection_state(
-            &self.is_closed,
-            &self.peer_connection_state,
-            self.ice_connection_state.load(Ordering::SeqCst).into(),
-            self.dtls_transport.state(),
-        )) {
+        match (
+            &*self.events_handler.load(),
+            RTCPeerConnection::updated_connection_state(
+                &self.is_closed,
+                &self.peer_connection_state,
+                self.ice_connection_state.load(Ordering::SeqCst).into(),
+                self.dtls_transport.state(),
+            ),
+        ) {
             (Some(handler), Some(changed_state)) => {
                 let mut handler = handler.lock().await;
-                handler.inline_on_peer_connection_state_change(changed_state).await;
+                handler
+                    .inline_on_peer_connection_state_change(changed_state)
+                    .await;
             }
             _ => (),
         }

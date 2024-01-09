@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -9,15 +10,17 @@ use tokio::time::Duration;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::data_channel_parameters::DataChannelParameters;
-use webrtc::data_channel::RTCDataChannel;
+use webrtc::data_channel::{RTCDataChannel, RTCDataChannelEventHandler};
 use webrtc::dtls_transport::dtls_parameters::DTLSParameters;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_gatherer::IceGathererEventHandler;
 use webrtc::ice_transport::ice_gatherer::RTCIceGatherOptions;
 use webrtc::ice_transport::ice_parameters::RTCIceParameters;
 use webrtc::ice_transport::ice_role::RTCIceRole;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::math_rand_alpha;
 use webrtc::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use webrtc::sctp_transport::SctpTransportEventHandler;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -100,48 +103,81 @@ async fn main() -> Result<()> {
     let done_answer = done.clone();
     let done_offer = done.clone();
 
-    // Handle incoming data channels
-    sctp.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        let d_label = d.label().to_owned();
-        let d_id = d.id();
-        println!("New DataChannel {d_label} {d_id}");
+    struct TransportHandler {
+        done_answer: Arc<Notify>,
+    }
 
-        let done_answer1 = done_answer.clone();
-        // Register the handlers
-        Box::pin(async move {
-            // no need to downgrade this to Weak, since on_open is FnOnce callback
-            let d2 = Arc::clone(&d);
-            let done_answer2 = done_answer1.clone();
-            d.on_open(Box::new(move || {
-                Box::pin(async move {
-                    tokio::select! {
-                        _ = done_answer2.notified() => {
-                            println!("received done_answer signal!");
-                        }
-                        _ = handle_on_open(d2) => {}
-                    };
+    impl SctpTransportEventHandler for TransportHandler {
+        // Handle incoming data channels
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            let d_label = channel.label().to_owned();
+            let d_id = channel.id();
+            println!("New DataChannel {d_label} {d_id}");
 
-                    println!("exit data answer");
-                })
-            }));
+            channel.with_event_handler(ChannelHandler {
+                done_answer: self.done_answer.clone(),
+                id: d_id,
+                label: d_label,
+                channel: channel.clone(),
+            });
+            async {}
+        }
+    }
 
-            // Register text message handling
-            d.on_message(Box::new(move |msg: DataChannelMessage| {
-                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                println!("Message from DataChannel '{d_label}': '{msg_str}'");
-                Box::pin(async {})
-            }));
-        })
-    }));
+    struct ChannelHandler {
+        done_answer: Arc<Notify>,
+        channel: Arc<RTCDataChannel>,
+        label: String,
+        id: u16,
+    }
+
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                tokio::select! {
+                    _ = self.done_answer.notified() => {
+                        println!("received done_answer signal!");
+                    }
+                    _ = handle_on_open(self.channel.clone()) => {}
+                };
+                println!("exit data answer");
+            }
+        }
+
+        // Register text message handling
+        fn on_message(&mut self, msg: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+            println!("Message from DataChannel '{}': '{msg_str}'", self.label);
+            async {}
+        }
+    }
+
+    sctp.with_event_handler(TransportHandler { done_answer });
+
+    struct GathererHandler {
+        finished: Option<tokio::sync::mpsc::Sender<()>>,
+    }
+
+    impl IceGathererEventHandler for GathererHandler {
+        fn on_local_candidate(
+            &mut self,
+            candidate: Option<RTCIceCandidate>,
+        ) -> impl Future<Output = ()> + Send {
+            if candidate.is_none() {
+                self.finished.take();
+            }
+            async {}
+        }
+    }
 
     let (gather_finished_tx, mut gather_finished_rx) = tokio::sync::mpsc::channel::<()>(1);
     let mut gather_finished_tx = Some(gather_finished_tx);
-    gatherer.on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-        if c.is_none() {
-            gather_finished_tx.take();
-        }
-        Box::pin(async {})
-    }));
+    gatherer.with_event_handler(GathererHandler {
+        finished: gather_finished_tx,
+    });
 
     // Gather candidates
     gatherer.gather().await?;
@@ -220,12 +256,20 @@ async fn main() -> Result<()> {
             println!("exit data offer");
         });
 
-        let d_label = d.label().to_owned();
-        d.on_message(Box::new(move |msg: DataChannelMessage| {
-            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-            println!("Message from DataChannel '{d_label}': '{msg_str}'");
-            Box::pin(async {})
-        }));
+        struct MessageHandler {
+            label: String,
+        }
+
+        impl RTCDataChannelEventHandler for MessageHandler {
+            fn on_message(&mut self, msg: DataChannelMessage) -> impl Future<Output = ()> + Send {
+                let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+                println!("Message from DataChannel '{}': '{msg_str}'", self.label);
+                async {}
+            }
+        }
+        d.with_event_handler(MessageHandler {
+            label: d.label().to_owned(),
+        });
     }
 
     println!("Press ctrl-c to stop");

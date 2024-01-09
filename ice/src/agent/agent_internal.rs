@@ -1062,7 +1062,10 @@ impl AgentInternal {
                     &*ai.events_handler.load(),
                     &*ai.agent_conn.selected_pair.load(),
                 ) {
-                    cb.lock().await.inline_on_selected_candidate_pair_change(p.local.clone(), p.remote.clone()).await;
+                    cb.lock()
+                        .await
+                        .inline_on_selected_candidate_pair_change(p.local.clone(), p.remote.clone())
+                        .await;
                 }
             }
         });

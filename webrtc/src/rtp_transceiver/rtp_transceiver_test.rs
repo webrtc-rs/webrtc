@@ -270,7 +270,9 @@ async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> 
         }
     }
 
-    offer_pc.with_event_handler(NegotiationCounter{ count: count.clone()});
+    offer_pc.with_event_handler(NegotiationCounter {
+        count: count.clone(),
+    });
 
     let offer_transceiver = offer_pc
         .add_transceiver_from_kind(RTPCodecType::Video, None)

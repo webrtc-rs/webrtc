@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -9,12 +10,14 @@ use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
+use webrtc::data_channel::RTCDataChannelEventHandler;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::PeerConnectionEventHandler;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -98,67 +101,84 @@ async fn main() -> Result<()> {
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
+    struct ConnectionHandler {
+        done_tx: tokio::sync::mpsc::Sender<()>,
+    }
 
-        if s == RTCPeerConnectionState::Failed {
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting");
-            let _ = done_tx.try_send(());
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        // Set the handler for Peer connection state
+        // This will notify you when the peer has connected/disconnected
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            println!("Peer Connection State has changed: {state}");
+            async move {
+                if state == RTCPeerConnectionState::Failed {
+                    // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                    // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                    // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                    println!("Peer Connection has gone to failed exiting");
+                    let _ = self.done_tx.try_send(());
+                }
+            }
         }
 
-        Box::pin(async {})
-    }));
-
-    // Register data channel creation handling
-    peer_connection
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            let d_label = d.label().to_owned();
-            let d_id = d.id();
+        // Register data channel creation handling
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            let d_label = channel.label().to_owned();
+            let d_id = channel.id();
             println!("New DataChannel {d_label} {d_id}");
-
             // Register channel opening handling
-            Box::pin(async move {
-                let d2 = Arc::clone(&d);
-                let d_label2 = d_label.clone();
-                let d_id2 = d_id;
-                d.on_close(Box::new(move || {
-                    println!("Data channel closed");
-                    Box::pin(async {})
-                }));
+            channel.with_event_handler(ChannelHandler {
+                label: d_label,
+                id: d_id,
+                channel: channel.clone(),
+            });
+            async {}
+        }
+    }
 
-                d.on_open(Box::new(move || {
-                    println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
+    struct ChannelHandler {
+        label: String,
+        id: u16,
+        channel: Arc<RTCDataChannel>,
+    }
 
-                    Box::pin(async move {
-                        let mut result = Result::<usize>::Ok(0);
-                        while result.is_ok() {
-                            let timeout = tokio::time::sleep(Duration::from_secs(5));
-                            tokio::pin!(timeout);
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_close(&mut self) -> impl Future<Output = ()> + Send {
+            println!("Data channel closed");
+            async {}
+        }
 
-                            tokio::select! {
-                                _ = timeout.as_mut() =>{
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", self.label, self.id);
+            async move {
+                let mut result = Result::<usize>::Ok(0);
+                while result.is_ok() {
+                    let timeout = tokio::time::sleep(Duration::from_secs(5));
+                    tokio::pin!(timeout);
+                    tokio::select! {
+                        _ = timeout.as_mut() => {
                                     let message = math_rand_alpha(15);
                                     println!("Sending '{message}'");
-                                    result = d2.send_text(message).await.map_err(Into::into);
-                                }
-                            };
+                                    result = self.channel.send_text(message).await.map_err(Into::into);
                         }
-                    })
-                }));
+                    }
+                }
+            }
+        }
 
-                // Register text message handling
-                d.on_message(Box::new(move |msg: DataChannelMessage| {
-                    let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                    println!("Message from DataChannel '{d_label}': '{msg_str}'");
-                    Box::pin(async {})
-                }));
-            })
-        }));
+        // Register text message handling
+        fn on_message(&mut self, msg: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+            println!("Message from DataChannel '{}': '{msg_str}'", self.label);
+            async {}
+        }
+    }
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;

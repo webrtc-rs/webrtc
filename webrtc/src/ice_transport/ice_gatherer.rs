@@ -21,7 +21,7 @@ use crate::peer_connection::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::SourceStatsType::*;
 use crate::stats::{ICECandidatePairStats, StatsReportType};
-use util::{FutureUnit, EventHandler};
+use util::{EventHandler, FutureUnit};
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
@@ -64,7 +64,7 @@ pub struct RTCIceGatherer {
 #[derive(Default, Clone)]
 #[repr(transparent)]
 struct GathererState {
-    inner: Arc<GathererStateInner>
+    inner: Arc<GathererStateInner>,
 }
 
 #[derive(Default)]
@@ -74,18 +74,29 @@ struct GathererStateInner {
 }
 
 impl crate::ice::agent::AgentEventHandler for GathererState {
-    fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send { 
+    fn on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             match (candidate, &*self.inner.event_handler.load()) {
                 (Some(candidate), Some(handler)) => {
                     let cand = RTCIceCandidate::from(&candidate);
-                    handler.lock().await.inline_on_local_candidate(Some(RTCIceCandidate::from(&candidate.clone()))).await;
+                    handler
+                        .lock()
+                        .await
+                        .inline_on_local_candidate(Some(RTCIceCandidate::from(&candidate.clone())))
+                        .await;
                 }
                 (_, maybe_handler) => {
-                    self.inner.state.store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
+                    self.inner
+                        .state
+                        .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
                     if let Some(handler) = maybe_handler {
                         let mut handler = handler.lock().await;
-                        handler.inline_on_state_change(RTCIceGathererState::Complete).await;
+                        handler
+                            .inline_on_state_change(RTCIceGathererState::Complete)
+                            .await;
                         handler.inline_on_gathering_complete().await;
                         handler.inline_on_local_candidate(None).await;
                     }
@@ -98,13 +109,22 @@ impl crate::ice::agent::AgentEventHandler for GathererState {
 pub trait IceGathererEventHandler: Send {
     /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
     /// Take note that the handler is gonna be called with a nil pointer when gathering is finished.
-    fn on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send { async { } }
+    fn on_local_candidate(
+        &mut self,
+        candidate: Option<RTCIceCandidate>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_state_change sets an event handler which fires any time the ICEGatherer changes
-    fn on_state_change(&mut self, state: RTCIceGathererState) -> impl Future<Output = ()> + Send { async { } }
+    fn on_state_change(&mut self, state: RTCIceGathererState) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_gathering_complete sets an event handler which fires any time the ICEGatherer changes
-    fn on_gathering_complete(&mut self) -> impl Future<Output = ()> + Send { async {}}
+    fn on_gathering_complete(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 trait InlineIceGathererEventHandler: Send {
@@ -113,7 +133,10 @@ trait InlineIceGathererEventHandler: Send {
     fn inline_on_gathering_complete(&mut self) -> FutureUnit<'_>;
 }
 
-impl <T> InlineIceGathererEventHandler for T where T: IceGathererEventHandler {
+impl<T> InlineIceGathererEventHandler for T
+where
+    T: IceGathererEventHandler,
+{
     fn inline_on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> FutureUnit<'_> {
         FutureUnit::from_async(async move { self.on_local_candidate(candidate).await })
     }
@@ -270,8 +293,14 @@ impl RTCIceGatherer {
         Ok(rtc_ice_candidates_from_ice_candidates(&ice_candidates))
     }
 
-    pub fn with_event_handler(&self, handler: impl InlineIceGathererEventHandler + Send + Sync + 'static) {
-        self.gatherer_state.inner.event_handler.store(Box::new(handler))
+    pub fn with_event_handler(
+        &self,
+        handler: impl InlineIceGathererEventHandler + Send + Sync + 'static,
+    ) {
+        self.gatherer_state
+            .inner
+            .event_handler
+            .store(Box::new(handler))
     }
 
     /// State indicates the current state of the ICE gatherer.

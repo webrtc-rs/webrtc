@@ -116,7 +116,10 @@ struct CandidateHandler {
 }
 
 impl AgentEventHandler for CandidateHandler {
-    fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send {
+    fn on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             if candidate.is_some() {
                 let mut tx = self.done_tx.lock().await;
@@ -170,7 +173,7 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
 
-    a.with_event_handler(CandidateHandler{ done_tx });
+    a.with_event_handler(CandidateHandler { done_tx });
 
     a.gather_candidates()?;
 
@@ -278,7 +281,7 @@ async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<()> {
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
 
-    a.with_event_handler(CandidateHandler{ done_tx });
+    a.with_event_handler(CandidateHandler { done_tx });
 
     a.gather_candidates()?;
 
@@ -453,7 +456,7 @@ async fn test_vnet_gather_muxed_udp() -> Result<()> {
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
 
-    a.with_event_handler(CandidateHandler{ done_tx });
+    a.with_event_handler(CandidateHandler { done_tx });
 
     a.gather_candidates()?;
 

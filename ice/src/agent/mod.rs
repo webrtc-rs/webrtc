@@ -122,38 +122,80 @@ pub struct Agent {
 pub trait AgentEventHandler: Send {
     /// Sets a handler that is fired when new candidates gathered. When the gathering process
     /// complete the last candidate is None.
-    fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send { async {} }
+    fn on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// Sets a handler that is fired when the connection state changes.
-    fn on_connection_state_change(&mut self, connection_state: ConnectionState) -> impl Future<Output = ()> + Send { async {} }
+    fn on_connection_state_change(
+        &mut self,
+        connection_state: ConnectionState,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// Sets a handler that is fired when the final candidate pair is selected.
-    fn on_selected_candidate_pair_change(&mut self, local_candidate: Arc<dyn Candidate + Send + Sync>, remote_candidate: Arc<dyn Candidate + Send + Sync>) -> impl Future<Output = ()> + Send { async {}}
+    fn on_selected_candidate_pair_change(
+        &mut self,
+        local_candidate: Arc<dyn Candidate + Send + Sync>,
+        remote_candidate: Arc<dyn Candidate + Send + Sync>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 pub trait InlineAgentEventHandler: Send {
-    fn inline_on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> FutureUnit<'_>;
+    fn inline_on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> FutureUnit<'_>;
 
-    fn inline_on_connection_state_change(&mut self, connection_state: ConnectionState) -> FutureUnit<'_>;
+    fn inline_on_connection_state_change(
+        &mut self,
+        connection_state: ConnectionState,
+    ) -> FutureUnit<'_>;
 
-    fn inline_on_selected_candidate_pair_change(&mut self, local_candidate: Arc<dyn Candidate + Send + Sync>, remote_candidate: Arc<dyn Candidate + Send + Sync>) -> FutureUnit<'_>;
+    fn inline_on_selected_candidate_pair_change(
+        &mut self,
+        local_candidate: Arc<dyn Candidate + Send + Sync>,
+        remote_candidate: Arc<dyn Candidate + Send + Sync>,
+    ) -> FutureUnit<'_>;
 }
 
-impl <T> InlineAgentEventHandler for T where T: AgentEventHandler {
-    fn inline_on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> FutureUnit<'_> {
+impl<T> InlineAgentEventHandler for T
+where
+    T: AgentEventHandler,
+{
+    fn inline_on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> FutureUnit<'_> {
         FutureUnit::from_async(async move { self.on_candidate(candidate).await })
     }
 
-    fn inline_on_connection_state_change(&mut self, connection_state: ConnectionState) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_connection_state_change(connection_state).await})
+    fn inline_on_connection_state_change(
+        &mut self,
+        connection_state: ConnectionState,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(
+            async move { self.on_connection_state_change(connection_state).await },
+        )
     }
 
-    fn inline_on_selected_candidate_pair_change(&mut self, local_candidate: Arc<dyn Candidate + Send + Sync>, remote_candidate: Arc<dyn Candidate + Send + Sync>) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_selected_candidate_pair_change(local_candidate, remote_candidate).await})
+    fn inline_on_selected_candidate_pair_change(
+        &mut self,
+        local_candidate: Arc<dyn Candidate + Send + Sync>,
+        remote_candidate: Arc<dyn Candidate + Send + Sync>,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move {
+            self.on_selected_candidate_pair_change(local_candidate, remote_candidate)
+                .await
+        })
     }
 }
-
-
 
 impl Agent {
     /// Creates a new Agent.

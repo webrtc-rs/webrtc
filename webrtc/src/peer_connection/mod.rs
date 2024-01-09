@@ -49,8 +49,8 @@ use crate::error::{flatten_errs, Error, Result};
 use crate::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
 use crate::ice_transport::ice_gatherer::{
-    OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
-    RTCIceGatherOptions, RTCIceGatherer, IceGathererEventHandler,
+    IceGathererEventHandler, OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn,
+    OnLocalCandidateHdlrFn, RTCIceGatherOptions, RTCIceGatherer,
 };
 use crate::ice_transport::ice_gatherer_state::RTCIceGathererState;
 use crate::ice_transport::ice_gathering_state::RTCIceGatheringState;
@@ -222,39 +222,80 @@ pub trait PeerConnectionEventHandler: Send {
     /// candidate is found.
     /// Take note that the handler is gonna be called with a nil pointer when
     /// gathering is finished.
-    fn on_ice_candidate(&mut self, ice_candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send { async { } }
+    fn on_ice_candidate(
+        &mut self,
+        ice_candidate: Option<RTCIceCandidate>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_ice_gathering_state_change sets an event handler which is invoked when the
     /// ICE candidate gathering state has changed.
-    fn on_ice_gathering_state_change(&mut self, state: RTCIceGathererState) -> impl Future<Output = ()> + Send { async { } }
+    fn on_ice_gathering_state_change(
+        &mut self,
+        state: RTCIceGathererState,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_track sets an event handler which is called when remote track
     /// arrives from a remote peer.
-    fn on_track(&mut self, track_remote: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>) -> impl Future<Output = ()> + Send { async { } }
+    fn on_track(
+        &mut self,
+        track_remote: Arc<TrackRemote>,
+        receiver: Arc<RTCRtpReceiver>,
+        transceiver: Arc<RTCRtpTransceiver>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_ice_connection_state_change sets an event handler which is called
     /// when an ICE connection state is changed.
-    fn on_ice_connection_state_change(&mut self, state: RTCIceConnectionState) -> impl Future<Output = ()> + Send { async { } }
+    fn on_ice_connection_state_change(
+        &mut self,
+        state: RTCIceConnectionState,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_peer_connection_state_change sets an event handler which is called
     /// when the PeerConnectionState has changed
-    fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send { async { } }
+    fn on_peer_connection_state_change(
+        &mut self,
+        state: RTCPeerConnectionState,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_signaling_state_change sets an event handler which is invoked when the
     /// peer connection's signaling state changes
-    fn on_signaling_state_change(&mut self, state: RTCSignalingState) -> impl Future<Output = ()> + Send { async {} }
+    fn on_signaling_state_change(
+        &mut self,
+        state: RTCSignalingState,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_data_channel sets an event handler which is invoked when a data
     /// channel message arrives from a remote peer.
-    fn on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send { async { } }
+    fn on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 
     /// on_negotiation_needed sets an event handler which is invoked when
     /// a change has occurred which requires session negotiation
-    fn on_negotiation_needed(&mut self) -> impl Future<Output = ()> + Send { async { } }
+    fn on_negotiation_needed(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
-impl crate::sctp_transport::SctpTransportEventHandler for Arc<EventHandler<dyn InlinePeerConnectionEventHandler + Send + Sync>> {
-    fn on_data_channel(&mut self, data_channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
+impl crate::sctp_transport::SctpTransportEventHandler
+    for Arc<EventHandler<dyn InlinePeerConnectionEventHandler + Send + Sync>>
+{
+    fn on_data_channel(
+        &mut self,
+        data_channel: Arc<RTCDataChannel>,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             if let Some(handle) = &*self.load() {
                 let mut handle = handle.lock().await;
@@ -265,41 +306,74 @@ impl crate::sctp_transport::SctpTransportEventHandler for Arc<EventHandler<dyn I
 }
 
 trait InlinePeerConnectionEventHandler: Send {
-    fn inline_on_track(&mut self, track_remote: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>) -> FutureUnit<'_>;
-    fn inline_on_ice_connection_state_change(&mut self, state: RTCIceConnectionState) -> FutureUnit<'_>;
-    fn inline_on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> FutureUnit<'_>;
+    fn inline_on_track(
+        &mut self,
+        track_remote: Arc<TrackRemote>,
+        receiver: Arc<RTCRtpReceiver>,
+        transceiver: Arc<RTCRtpTransceiver>,
+    ) -> FutureUnit<'_>;
+    fn inline_on_ice_connection_state_change(
+        &mut self,
+        state: RTCIceConnectionState,
+    ) -> FutureUnit<'_>;
+    fn inline_on_peer_connection_state_change(
+        &mut self,
+        state: RTCPeerConnectionState,
+    ) -> FutureUnit<'_>;
     fn inline_on_signaling_state_change(&mut self, state: RTCSignalingState) -> FutureUnit<'_>;
     fn inline_on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_>;
     fn inline_on_negotiation_needed(&mut self) -> FutureUnit<'_>;
 }
 
-impl <T> InlinePeerConnectionEventHandler for T where T: PeerConnectionEventHandler {
-    fn inline_on_track(&mut self, track_remote: Arc<TrackRemote>, receiver: Arc<RTCRtpReceiver>, transceiver: Arc<RTCRtpTransceiver>) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_track(track_remote, receiver, transceiver).await})
+impl<T> InlinePeerConnectionEventHandler for T
+where
+    T: PeerConnectionEventHandler,
+{
+    fn inline_on_track(
+        &mut self,
+        track_remote: Arc<TrackRemote>,
+        receiver: Arc<RTCRtpReceiver>,
+        transceiver: Arc<RTCRtpTransceiver>,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(
+            async move { self.on_track(track_remote, receiver, transceiver).await },
+        )
     }
-    fn inline_on_ice_connection_state_change(&mut self, state: RTCIceConnectionState) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_ice_connection_state_change(state).await})
+    fn inline_on_ice_connection_state_change(
+        &mut self,
+        state: RTCIceConnectionState,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_ice_connection_state_change(state).await })
     }
-    fn inline_on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_peer_connection_state_change(state).await})
+    fn inline_on_peer_connection_state_change(
+        &mut self,
+        state: RTCPeerConnectionState,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_peer_connection_state_change(state).await })
     }
     fn inline_on_signaling_state_change(&mut self, state: RTCSignalingState) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_signaling_state_change(state).await})
+        FutureUnit::from_async(async move { self.on_signaling_state_change(state).await })
     }
     fn inline_on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_data_channel(channel).await})
+        FutureUnit::from_async(async move { self.on_data_channel(channel).await })
     }
     fn inline_on_negotiation_needed(&mut self) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_negotiation_needed().await})
+        FutureUnit::from_async(async move { self.on_negotiation_needed().await })
     }
 }
 
-impl <T> IceGathererEventHandler for T where T: PeerConnectionEventHandler {
+impl<T> IceGathererEventHandler for T
+where
+    T: PeerConnectionEventHandler,
+{
     fn on_state_change(&mut self, state: RTCIceGathererState) -> impl Future<Output = ()> + Send {
         self.on_ice_gathering_state_change(state)
     }
 
-    fn on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send {
+    fn on_local_candidate(
+        &mut self,
+        candidate: Option<RTCIceCandidate>,
+    ) -> impl Future<Output = ()> + Send {
         self.on_ice_candidate(candidate)
     }
 }
@@ -378,7 +452,10 @@ impl RTCPeerConnection {
         Ok(())
     }
 
-    pub fn with_event_handler(&self, handler: impl PeerConnectionEventHandler + Send + Sync + 'static) {
+    pub fn with_event_handler(
+        &self,
+        handler: impl PeerConnectionEventHandler + Send + Sync + 'static,
+    ) {
         self.internal.events_handler.store(Box::new(handler))
     }
 
@@ -447,7 +524,9 @@ impl RTCPeerConnection {
 
     async fn negotiation_needed_op(params: NegotiationNeededParams) -> bool {
         // Don't run NegotiatedNeeded checks if on_negotiation_needed is not set
-        let Some(handler) = &*params.events_handler.load() else { return false };
+        let Some(handler) = &*params.events_handler.load() else {
+            return false;
+        };
 
         // https://www.w3.org/TR/webrtc/#updating-the-negotiation-needed-flag
         // Step 2.1
@@ -1003,7 +1082,7 @@ impl RTCPeerConnection {
         };
         */
         if peer_connection_state.load(Ordering::SeqCst) == connection_state as u8 {
-            return None
+            return None;
         }
         Some(connection_state)
     }
@@ -2065,17 +2144,22 @@ impl RTCPeerConnection {
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
-        match (&*self.internal.events_handler.load(), RTCPeerConnection::updated_connection_state(
-            &self.internal.is_closed,
-            &self.internal.peer_connection_state,
-            self.ice_connection_state(),
-            self.internal.dtls_transport.state(),
-        )) {
+        match (
+            &*self.internal.events_handler.load(),
+            RTCPeerConnection::updated_connection_state(
+                &self.internal.is_closed,
+                &self.internal.peer_connection_state,
+                self.ice_connection_state(),
+                self.internal.dtls_transport.state(),
+            ),
+        ) {
             (Some(handler), Some(changed_state)) => {
                 let mut handler = handler.lock().await;
-                handler.inline_on_peer_connection_state_change(changed_state).await;
+                handler
+                    .inline_on_peer_connection_state_change(changed_state)
+                    .await;
             }
-            _ => ()
+            _ => (),
         }
 
         if let Err(err) = self.internal.ops.close().await {

@@ -346,7 +346,10 @@ struct ConnectionStateNotifier {
 }
 
 impl AgentEventHandler for ConnectionStateNotifier {
-    fn on_connection_state_change(&mut self, state: ConnectionState) -> impl Future<Output = ()> + Send {
+    fn on_connection_state_change(
+        &mut self,
+        state: ConnectionState,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             if state == ConnectionState::Connected {
                 let mut tx = self.done_tx.lock().await;
@@ -374,7 +377,10 @@ pub(crate) async fn gather_and_exchange_candidates(
     }
 
     impl AgentEventHandler for CandidateHandler {
-        fn on_candidate(&mut self, candidate: Option<Arc<dyn Candidate + Send + Sync>>) -> impl Future<Output = ()> + Send {
+        fn on_candidate(
+            &mut self,
+            candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+        ) -> impl Future<Output = ()> + Send {
             async move {
                 if candidate.is_none() {
                     let mut worker = self.worker.lock().await;
@@ -384,11 +390,15 @@ pub(crate) async fn gather_and_exchange_candidates(
         }
     }
 
-    let candidate_handler_1 = CandidateHandler { worker: Arc::new(Mutex::new(Some(wg.worker())))};
+    let candidate_handler_1 = CandidateHandler {
+        worker: Arc::new(Mutex::new(Some(wg.worker()))),
+    };
     a_agent.with_event_handler(candidate_handler_1);
     a_agent.gather_candidates()?;
 
-    let candidate_handler_2 = CandidateHandler { worker: Arc::new(Mutex::new(Some(wg.worker())))};
+    let candidate_handler_2 = CandidateHandler {
+        worker: Arc::new(Mutex::new(Some(wg.worker()))),
+    };
     b_agent.with_event_handler(candidate_handler_2);
     b_agent.gather_candidates()?;
 
@@ -832,15 +842,22 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
     }
 
     impl AgentEventHandler for AgentStateHandler {
-        fn on_connection_state_change(&mut self, state: ConnectionState) -> impl Future<Output = ()> + Send {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
             async move {
                 let _ = self.changes_tx.try_send(state);
             }
         }
     }
 
-    let controlling_state_handler = AgentStateHandler { changes_tx: controlling_state_changes_tx };
-    let controlled_state_handler = AgentStateHandler { changes_tx: controlled_state_changes_tx };
+    let controlling_state_handler = AgentStateHandler {
+        changes_tx: controlling_state_changes_tx,
+    };
+    let controlled_state_handler = AgentStateHandler {
+        changes_tx: controlled_state_changes_tx,
+    };
 
     controlling_agent.with_event_handler(controlling_state_handler);
     controlled_agent.with_event_handler(controlled_state_handler);

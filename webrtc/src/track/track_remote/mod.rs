@@ -31,8 +31,12 @@ struct Handlers {
 }
 
 pub trait TrackRemoteEventHandler: Send {
-    fn on_mute(&mut self) -> impl Future<Output = ()> + Send { async {}}
-    fn on_unmute(&mut self) -> impl Future<Output = ()> + Send {async {}}
+    fn on_mute(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+    fn on_unmute(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 trait InlineTrackRemoteEventHandler: Send {
@@ -40,12 +44,15 @@ trait InlineTrackRemoteEventHandler: Send {
     fn inline_on_unmute(&mut self) -> FutureUnit<'_>;
 }
 
-impl <T> InlineTrackRemoteEventHandler for T where T: TrackRemoteEventHandler {
+impl<T> InlineTrackRemoteEventHandler for T
+where
+    T: TrackRemoteEventHandler,
+{
     fn inline_on_mute(&mut self) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_mute().await})
+        FutureUnit::from_async(async move { self.on_mute().await })
     }
     fn inline_on_unmute(&mut self) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_unmute().await})
+        FutureUnit::from_async(async move { self.on_unmute().await })
     }
 }
 
@@ -210,7 +217,10 @@ impl TrackRemote {
         *p = params;
     }
 
-    pub fn with_event_handler(&self, handler: impl TrackRemoteEventHandler + Send + Sync + 'static) {
+    pub fn with_event_handler(
+        &self,
+        handler: impl TrackRemoteEventHandler + Send + Sync + 'static,
+    ) {
         self.events_handler.store(Box::new(handler));
     }
 

@@ -91,13 +91,22 @@ pub struct RTCSctpTransport {
 pub trait SctpTransportEventHandler: Send {
     /// on_error sets an event handler which is invoked when
     /// the SCTP connection error occurs.
-    fn on_error(&mut self, err: crate::error::Error) -> impl Future<Output = ()> + Send { async {}}
+    fn on_error(&mut self, err: crate::error::Error) -> impl Future<Output = ()> + Send {
+        async {}
+    }
     /// on_data_channel sets an event handler which is invoked when a data
     /// channel message arrives from a remote peer.
-    fn on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {async{}}
+    fn on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
+        async {}
+    }
     /// on_data_channel_opened sets an event handler which is invoked when a data
     /// channel is opened
-    fn on_data_channel_opened(&mut self, channel: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {async{}}
+    fn on_data_channel_opened(
+        &mut self,
+        channel: Arc<RTCDataChannel>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 trait InlineSctpTransportEventHandler: Send {
@@ -106,15 +115,18 @@ trait InlineSctpTransportEventHandler: Send {
     fn inline_on_data_channel_opened(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_>;
 }
 
-impl <T> InlineSctpTransportEventHandler for T where T: SctpTransportEventHandler {
+impl<T> InlineSctpTransportEventHandler for T
+where
+    T: SctpTransportEventHandler,
+{
     fn inline_on_error(&mut self, err: crate::error::Error) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_error(err).await})
+        FutureUnit::from_async(async move { self.on_error(err).await })
     }
     fn inline_on_data_channel(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_data_channel(channel).await})
+        FutureUnit::from_async(async move { self.on_data_channel(channel).await })
     }
     fn inline_on_data_channel_opened(&mut self, channel: Arc<RTCDataChannel>) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_data_channel_opened(channel).await})
+        FutureUnit::from_async(async move { self.on_data_channel_opened(channel).await })
     }
 }
 
@@ -332,7 +344,10 @@ impl RTCSctpTransport {
         }
     }
 
-    pub fn with_event_handler(&self, handler: impl SctpTransportEventHandler + Send + Sync + 'static) {
+    pub fn with_event_handler(
+        &self,
+        handler: impl SctpTransportEventHandler + Send + Sync + 'static,
+    ) {
         self.events_handler.store(Box::new(handler))
     }
 

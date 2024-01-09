@@ -14,10 +14,10 @@ extern crate lazy_static;
 #[macro_use]
 extern crate bitflags;
 
-pub mod fixed_big_int;
-pub mod replay_detector;
 pub mod event_handler;
+pub mod fixed_big_int;
 pub mod future;
+pub mod replay_detector;
 
 pub use event_handler::EventHandler;
 pub use future::FutureUnit;

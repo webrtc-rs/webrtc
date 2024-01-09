@@ -9,9 +9,7 @@ use crate::api::APIBuilder;
 use crate::error::Result;
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
 use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use crate::peer_connection::peer_connection_test::{
-    close_pair_now, new_pair, signal_pair,
-};
+use crate::peer_connection::peer_connection_test::{close_pair_now, new_pair, signal_pair};
 use crate::peer_connection::PeerConnectionEventHandler;
 
 #[tokio::test]
@@ -75,15 +73,22 @@ async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
     }
 
     impl PeerConnectionEventHandler for ConnectionStateHandler {
-        fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
             if state == RTCPeerConnectionState::Connected {
                 let mut worker = self.worker.lock().await;
                 worker.take();
             }
         }
     }
-    offerer.with_event_handler(ConnectionStateHandler { worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker())))});
-    answerer.with_event_handler(ConnectionStateHandler { worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker())))});
+    offerer.with_event_handler(ConnectionStateHandler {
+        worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker()))),
+    });
+    answerer.with_event_handler(ConnectionStateHandler {
+        worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker()))),
+    });
 
     let offerer_selected_pair = offerer
         .sctp()

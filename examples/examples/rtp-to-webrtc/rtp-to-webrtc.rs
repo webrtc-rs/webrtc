@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::PeerConnectionEventHandler;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
@@ -123,35 +125,43 @@ async fn main() -> Result<()> {
 
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
 
-    let done_tx1 = done_tx.clone();
-    // Set the handler for ICE connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_ice_connection_state_change(Box::new(
-        move |connection_state: RTCIceConnectionState| {
-            println!("Connection State has changed {connection_state}");
-            if connection_state == RTCIceConnectionState::Failed {
-                let _ = done_tx1.try_send(());
+    struct ConnectionHandler {
+        done_tx: tokio::sync::mpsc::Sender<()>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        // Set the handler for ICE connection state
+        // This will notify you when the peer has connected/disconnected
+        fn on_ice_connection_state_change(
+            &mut self,
+            state: RTCIceConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            println!("Connection State has changed {state}");
+            if state == RTCIceConnectionState::Failed {
+                let _ = self.done_tx.try_send(());
             }
-            Box::pin(async {})
-        },
-    ));
-
-    let done_tx2 = done_tx.clone();
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
-
-        if s == RTCPeerConnectionState::Failed {
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting: Done forwarding");
-            let _ = done_tx2.try_send(());
+            async {}
         }
 
-        Box::pin(async {})
-    }));
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            println!("Peer Connection State has changed: {state}");
+
+            if state == RTCPeerConnectionState::Failed {
+                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                println!("Peer Connection has gone to failed exiting: Done forwarding");
+                let _ = self.done_tx.try_send(());
+            }
+            async {}
+        }
+    }
+    peer_connection.with_event_handler(ConnectionHandler {
+        done_tx: done_tx.clone(),
+    });
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;

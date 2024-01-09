@@ -88,23 +88,33 @@ pub trait RTCDataChannelEventHandler: Send {
     /// in size. Check out the detach API if you want to use larger
     /// message sizes. Note that browser support for larger messages
     /// is also limited.
-    fn on_message(&mut self, message: DataChannelMessage) -> impl Future<Output = ()> + Send { async {}}
+    fn on_message(&mut self, message: DataChannelMessage) -> impl Future<Output = ()> + Send {
+        async {}
+    }
     /// on_error sets an event handler which is invoked when
     /// the underlying data transport cannot be read.
-    fn on_error(&mut self, err: crate::error::Error) -> impl Future<Output = ()> + Send { async {}}
+    fn on_error(&mut self, err: crate::error::Error) -> impl Future<Output = ()> + Send {
+        async {}
+    }
     /// on_open sets an event handler which is invoked when
     /// the underlying data transport has been established (or re-established).
-    fn on_open(&mut self) -> impl Future<Output = ()> + Send {async {}}
+    fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
     /// on_close sets an event handler which is invoked when
     /// the underlying data transport has been closed.
-    fn on_close(&mut self) -> impl Future<Output = ()> + Send {async {}}
+    fn on_close(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
     /// on_buffered_amount_low sets an event handler which is invoked when
     /// the number of bytes of outgoing data becomes lower than the
     /// buffered_amount_low_threshold.
-    fn on_buffered_amount_low(&mut self, amt: ()) -> impl Future<Output = ()> + Send {async {}}
+    fn on_buffered_amount_low(&mut self, amt: ()) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
-trait InlineRTCDataChannelEventHandler: Send{
+trait InlineRTCDataChannelEventHandler: Send {
     fn inline_on_message(&mut self, message: DataChannelMessage) -> FutureUnit<'_>;
     fn inline_on_error(&mut self, err: crate::error::Error) -> FutureUnit<'_>;
     fn inline_on_open(&mut self) -> FutureUnit<'_>;
@@ -112,21 +122,24 @@ trait InlineRTCDataChannelEventHandler: Send{
     fn inline_on_buffered_amount_low(&mut self, amt: ()) -> FutureUnit<'_>;
 }
 
-impl <T> InlineRTCDataChannelEventHandler for T where T: RTCDataChannelEventHandler {
+impl<T> InlineRTCDataChannelEventHandler for T
+where
+    T: RTCDataChannelEventHandler,
+{
     fn inline_on_message(&mut self, message: DataChannelMessage) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_message(message).await})
+        FutureUnit::from_async(async move { self.on_message(message).await })
     }
     fn inline_on_error(&mut self, err: crate::error::Error) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_error(err).await})
+        FutureUnit::from_async(async move { self.on_error(err).await })
     }
     fn inline_on_open(&mut self) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_open().await})
+        FutureUnit::from_async(async move { self.on_open().await })
     }
     fn inline_on_close(&mut self) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move { self.on_close().await})
+        FutureUnit::from_async(async move { self.on_close().await })
     }
     fn inline_on_buffered_amount_low(&mut self, amt: ()) -> FutureUnit<'_> {
-        FutureUnit::from_async(async move {self.on_buffered_amount_low(amt).await})
+        FutureUnit::from_async(async move { self.on_buffered_amount_low(amt).await })
     }
 }
 
@@ -245,7 +258,10 @@ impl RTCDataChannel {
         sctp_transport.clone()
     }
 
-    pub fn with_event_handler(&self, handler: impl RTCDataChannelEventHandler + Send + Sync + 'static) {
+    pub fn with_event_handler(
+        &self,
+        handler: impl RTCDataChannelEventHandler + Send + Sync + 'static,
+    ) {
         self.events_handler.store(Box::new(handler));
 
         if self.ready_state() == RTCDataChannelState::Open {
@@ -257,7 +273,9 @@ impl RTCDataChannel {
     }
 
     fn do_open(&self) {
-        let Some(handler) = &*self.events_handler.load() else { return };
+        let Some(handler) = &*self.events_handler.load() else {
+            return;
+        };
         let handler = handler.clone();
         let detach_data_channels = self.setting_engine.detach.data_channels;
         let detach_called = Arc::clone(&self.detach_called);
@@ -291,13 +309,7 @@ impl RTCDataChannel {
             let notify_rx = self.notify_tx.clone();
             let events_handler = self.events_handler.clone();
             tokio::spawn(async move {
-                RTCDataChannel::read_loop(
-                    notify_rx,
-                    dc,
-                    ready_state,
-                    events_handler,
-                )
-                .await;
+                RTCDataChannel::read_loop(notify_rx, dc, ready_state, events_handler).await;
             });
         }
     }

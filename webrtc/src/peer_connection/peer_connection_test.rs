@@ -277,7 +277,10 @@ pub struct StateHandler {
 }
 
 impl PeerConnectionEventHandler for StateHandler {
-    fn on_peer_connection_state_change(&mut self, state: RTCPeerConnectionState) -> impl Future<Output = ()> + Send {
+    fn on_peer_connection_state_change(
+        &mut self,
+        state: RTCPeerConnectionState,
+    ) -> impl Future<Output = ()> + Send {
         async move {
             if state == RTCPeerConnectionState::Connected {
                 let mut worker = self.worker.lock().await;
@@ -304,13 +307,21 @@ async fn test_get_stats() -> Result<()> {
     }
 
     impl PeerConnectionEventHandler for AnswerHandler {
-        fn on_ice_connection_state_change(&mut self, state: RTCIceConnectionState) -> impl Future<Output = ()> + Send {
+        fn on_ice_connection_state_change(
+            &mut self,
+            state: RTCIceConnectionState,
+        ) -> impl Future<Output = ()> + Send {
             tokio::time::sleep(Duration::from_secs(1)).await;
             let mut done = self.ice_complete_tx.lock().await;
             done.take();
         }
 
-        fn on_track(&mut self, track: Arc<TrackRemote>, _: _, _: _) -> impl Future<Output = ()> + Send {
+        fn on_track(
+            &mut self,
+            track: Arc<TrackRemote>,
+            _: Arc<RTCRtpReceiver>,
+            _: Arc<RTCRtpTransceiver>,
+        ) -> impl Future<Output = ()> + Send {
             tokio::spawn(async move {
                 while let Ok((pkt, _)) = track.read_rtp().await {
                     dbg!(&pkt);
@@ -324,15 +335,19 @@ async fn test_get_stats() -> Result<()> {
             });
         }
     }
-    pc_answer.with_event_handler(AnswerHandler { ice_complete_tx, packet_tx});
+    pc_answer.with_event_handler(AnswerHandler {
+        ice_complete_tx,
+        packet_tx,
+    });
 
     struct OfferHandler {
         sender_called_candidate_change: Arc<AtomicU32>,
     }
 
     impl IceTransportEventHandler for OfferHandler {
-        fn on_selected_candidate_pair_change(&mut self, _: _) {
-            self.sender_called_candidate_change.store(1, Ordering::SeqCst);
+        fn on_selected_candidate_pair_change(&mut self, _: RTCIceCandidatePair) {
+            self.sender_called_candidate_change
+                .store(1, Ordering::SeqCst);
         }
     }
 
@@ -341,7 +356,9 @@ async fn test_get_stats() -> Result<()> {
         .sctp()
         .transport()
         .ice_transport()
-        .with_event_handler(OfferHandler{ sender_called_candidate_change });
+        .with_event_handler(OfferHandler {
+            sender_called_candidate_change,
+        });
     let track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),

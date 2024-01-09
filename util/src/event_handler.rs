@@ -1,6 +1,6 @@
-use tokio::sync::Mutex;
 use arc_swap::{ArcSwapOption, Guard};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct EventHandler<T: ?Sized> {
     // FIXME: it would be preferred if we didnt have to double allocate here
@@ -13,13 +13,17 @@ pub struct EventHandler<T: ?Sized> {
     inner: ArcSwapOption<Mutex<Box<T>>>,
 }
 
-impl <T: ?Sized> EventHandler<T> {
+impl<T: ?Sized> EventHandler<T> {
     pub fn empty() -> Self {
-        Self{ inner: ArcSwapOption::empty() }
+        Self {
+            inner: ArcSwapOption::empty(),
+        }
     }
 
     pub fn with_handler(handler: Box<T>) -> Self {
-        Self { inner: Some(Arc::new(Mutex::new(handler))).into()}
+        Self {
+            inner: Some(Arc::new(Mutex::new(handler))).into(),
+        }
     }
 
     pub fn load(&self) -> Guard<Option<Arc<Mutex<Box<T>>>>> {
@@ -37,7 +41,7 @@ impl <T: ?Sized> EventHandler<T> {
     }
 }
 
-impl <T: ?Sized> Default for EventHandler<T> {
+impl<T: ?Sized> Default for EventHandler<T> {
     fn default() -> Self {
         Self::empty()
     }
