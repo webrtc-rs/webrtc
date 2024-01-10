@@ -267,6 +267,7 @@ async fn test_rtp_transceiver_set_direction_causing_negotiation() -> Result<()> 
     impl PeerConnectionEventHandler for NegotiationCounter {
         fn on_negotiation_needed(&mut self) -> impl Future<Output = ()> + Send {
             self.count.fetch_add(1, Ordering::SeqCst);
+            async {}
         }
     }
 

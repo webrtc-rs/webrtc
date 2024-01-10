@@ -272,7 +272,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
             _: Arc<RTCRtpReceiver>,
             _: Arc<RTCRtpTransceiver>,
         ) -> impl std::future::Future<Output = ()> + Send {
-            async {
+            async move {
                 assert_eq!(track.payload_type(), 100);
                 assert_eq!(track.codec().capability.mime_type, MIME_TYPE_VP8);
                 log::debug!("onTrackFiredFunc!!!");

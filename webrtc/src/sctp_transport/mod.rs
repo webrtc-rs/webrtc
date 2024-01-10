@@ -75,7 +75,7 @@ pub struct RTCSctpTransport {
 
     sctp_association: Mutex<Option<Arc<Association>>>,
 
-    events_handler: Arc<EventHandler<dyn InlineSctpTransportEventHandler + Send + Sync>>,
+    pub(crate) events_handler: Arc<EventHandler<dyn InlineSctpTransportEventHandler + Send + Sync>>,
 
     // DataChannels
     pub(crate) data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,

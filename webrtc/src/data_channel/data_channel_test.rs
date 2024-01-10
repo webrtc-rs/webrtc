@@ -9,6 +9,7 @@ use waitgroup::WaitGroup;
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::{APIBuilder, API};
+use crate::data::data_channel::DataChannel;
 use crate::data_channel::data_channel_init::RTCDataChannelInit;
 //use log::LevelFilter;
 //use std::io::Write;
@@ -17,14 +18,17 @@ use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::flatten_errs;
 use crate::ice_transport::ice_candidate::RTCIceCandidate;
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
-use crate::ice_transport::ice_gatherer::{RTCIceGatherOptions, RTCIceGatherer};
+use crate::ice_transport::ice_gatherer::{
+    IceGathererEventHandler, RTCIceGatherOptions, RTCIceGatherer,
+};
 use crate::ice_transport::ice_parameters::RTCIceParameters;
 use crate::ice_transport::ice_role::RTCIceRole;
 use crate::ice_transport::RTCIceTransport;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::peer_connection_test::*;
-use crate::peer_connection::RTCPeerConnection;
+use crate::peer_connection::{PeerConnectionEventHandler, RTCPeerConnection};
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use crate::sctp_transport::SctpTransportEventHandler;
 
 // EXPECTED_LABEL represents the label of the data channel we are trying to test.
 // Some other channels may have been created during initialization (in the Wasm
@@ -140,41 +144,75 @@ async fn test_data_channel_open() -> Result<()> {
 
         let open_calls_tx = Arc::new(open_calls_tx);
         let done_tx = Arc::new(done_tx);
-        answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            if d.label() == EXPECTED_LABEL {
-                let open_calls_tx2 = Arc::clone(&open_calls_tx);
-                let done_tx2 = Arc::clone(&done_tx);
-                Box::pin(async move {
-                    d.on_open(Box::new(move || {
-                        Box::pin(async move {
-                            let _ = open_calls_tx2.send(()).await;
-                        })
-                    }));
-                    d.on_message(Box::new(move |_: DataChannelMessage| {
-                        let done_tx3 = Arc::clone(&done_tx2);
+
+        struct ChannelHandler {
+            open_calls_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+            done_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+        }
+
+        impl PeerConnectionEventHandler for ChannelHandler {
+            fn on_data_channel(
+                &mut self,
+                channel: Arc<RTCDataChannel>,
+            ) -> impl Future<Output = ()> + Send {
+                struct DataHandler {
+                    open_calls_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+                    done_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+                }
+
+                impl RTCDataChannelEventHandler for DataHandler {
+                    fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+                        async move {
+                            let _ = self.open_calls_tx.send(()).await;
+                        }
+                    }
+
+                    fn on_message(
+                        &mut self,
+                        _: DataChannelMessage,
+                    ) -> impl Future<Output = ()> + Send {
+                        let done_tx = self.done_tx.clone();
                         tokio::spawn(async move {
                             // Wait a little bit to ensure all messages are processed.
                             tokio::time::sleep(Duration::from_millis(100)).await;
-                            let _ = done_tx3.send(()).await;
+                            let _ = done_tx.send(()).await;
                         });
-                        Box::pin(async {})
-                    }));
-                })
-            } else {
-                Box::pin(async {})
+                        async {}
+                    }
+                }
+
+                async move {
+                    if channel.label() != EXPECTED_LABEL {
+                        return;
+                    }
+                    channel.with_event_handler(DataHandler {
+                        open_calls_tx: self.open_calls_tx.clone(),
+                        done_tx: self.done_tx.clone(),
+                    })
+                }
             }
-        }));
+        }
+        answer_pc.with_event_handler(ChannelHandler {
+            open_calls_tx,
+            done_tx,
+        });
 
         let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
         let dc2 = Arc::clone(&dc);
-        dc.on_open(Box::new(move || {
-            Box::pin(async move {
-                let result = dc2.send_text("Ping".to_owned()).await;
-                assert!(result.is_ok(), "Failed to send string on data channel");
-            })
-        }));
 
+        struct DataChannelHandler {
+            channel: Arc<RTCDataChannel>,
+        }
+
+        impl RTCDataChannelEventHandler for DataChannelHandler {
+            fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+                async move {
+                    let result = self.channel.send_text("Ping".to_owned()).await;
+                    assert!(result.is_ok(), "Failed to send string on data channel");
+                }
+            }
+        }
         signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
         close_pair(&offer_pc, &answer_pc, done_rx).await;
@@ -195,47 +233,74 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
 
     let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        // Make sure this is the data channel we were looking for. (Not the one
-        // created in signalPair).
-        if d.label() != EXPECTED_LABEL {
-            return Box::pin(async {});
+    impl PeerConnectionEventHandler for ChannelHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                // Make sure this is the data channel we were looking for. (Not the one
+                // created in signalPair).
+                if channel.label() != EXPECTED_LABEL {
+                    return;
+                }
+
+                struct MessageHandler {
+                    channel: Arc<RTCDataChannel>,
+                }
+
+                impl RTCDataChannelEventHandler for MessageHandler {
+                    fn on_message(
+                        &mut self,
+                        _: DataChannelMessage,
+                    ) -> impl Future<Output = ()> + Send {
+                        async move {
+                            let result = self.channel.send(&Bytes::from(b"Pong".to_vec())).await;
+                            assert!(result.is_ok(), "Failed to send string on data channel");
+                        }
+                    }
+                }
+
+                channel.with_event_handler(MessageHandler {
+                    channel: channel.clone(),
+                });
+
+                assert!(channel.ordered(), "Ordered should be set to true");
+            }
         }
-        Box::pin(async move {
-            let d2 = Arc::clone(&d);
-            d.on_message(Box::new(move |_: DataChannelMessage| {
-                let d3 = Arc::clone(&d2);
-                Box::pin(async move {
-                    let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
-                    assert!(result.is_ok(), "Failed to send string on data channel");
-                })
-            }));
-            assert!(d.ordered(), "Ordered should be set to true");
-        })
-    }));
+    }
 
     let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
     assert!(dc.ordered(), "Ordered should be set to true");
 
-    let dc2 = Arc::clone(&dc);
-    dc.on_open(Box::new(move || {
-        let dc3 = Arc::clone(&dc2);
-        Box::pin(async move {
-            let result = dc3.send_text("Ping".to_owned()).await;
-            assert!(result.is_ok(), "Failed to send string on data channel");
-        })
-    }));
+    struct ChannelHandler {
+        channel: Arc<RTCDataChannel>,
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                let result = self.channel.send_text("Ping".to_owned()).await;
+                assert!(result.is_ok(), "Failed to send string on data channel");
+            }
+        }
+
+        fn on_message(&mut self, _: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            async move {
+                let mut done = self.done_tx.lock().await;
+                done.take();
+            }
+        }
+    }
 
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    dc.on_message(Box::new(move |_: DataChannelMessage| {
-        let done_tx2 = Arc::clone(&done_tx);
-        Box::pin(async move {
-            let mut done = done_tx2.lock().await;
-            done.take();
-        })
-    }));
+    dc.with_event_handler(ChannelHandler {
+        channel: dc.clone(),
+        done_tx,
+    });
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -251,25 +316,119 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
 
     let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        // Make sure this is the data channel we were looking for. (Not the one
-        // created in signalPair).
-        if d.label() != EXPECTED_LABEL {
-            return Box::pin(async {});
-        }
-        Box::pin(async move {
-            let d2 = Arc::clone(&d);
-            d.on_message(Box::new(move |_: DataChannelMessage| {
-                let d3 = Arc::clone(&d2);
+    struct ConnectionHandler {
+        channel: Arc<RTCDataChannel>,
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
 
-                Box::pin(async move {
-                    let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
-                    assert!(result.is_ok(), "Failed to send string on data channel");
-                })
-            }));
-            assert!(d.ordered(), "Ordered should be set to true");
-        })
-    }));
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if channel.label() != EXPECTED_LABEL {
+                    return;
+                }
+
+                struct MessageHandler {
+                    channel: Arc<RTCDataChannel>,
+                }
+
+                impl RTCDataChannelEventHandler for MessageHandler {
+                    fn on_message(
+                        &mut self,
+                        _: DataChannelMessage,
+                    ) -> impl Future<Output = ()> + Send {
+                        async move {
+                            let result = self.channel.send(&Bytes::from(b"Pong".to_vec())).await;
+                            assert!(result.is_ok(), "Failed to send string on data channel");
+                        }
+                    }
+                }
+                channel.with_event_handler(MessageHandler {
+                    channel: channel.clone(),
+                });
+                assert!(channel.ordered(), "Ordered should be set to true");
+            }
+        }
+
+        fn on_ice_connection_state_change(
+            &mut self,
+            state: RTCIceConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state != RTCIceConnectionState::Connected
+                    && state != RTCIceConnectionState::Completed
+                {
+                    return;
+                }
+                // wasm fires completed state multiple times
+                /*once.Do(func()*/
+                {
+                    assert!(self.channel.ordered(), "Ordered should be set to true");
+
+                    struct MessageHandler {
+                        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+                    }
+
+                    fn take_tx<'a>(
+                        tx: &'a Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+                    ) -> impl Future<Output = ()> + Send + 'a {
+                        async move {
+                            let mut done = tx.lock().await;
+                            done.take();
+                        }
+                    }
+
+                    impl RTCDataChannelEventHandler for MessageHandler {
+                        fn on_message(
+                            &mut self,
+                            _: DataChannelMessage,
+                        ) -> impl Future<Output = ()> + Send {
+                            take_tx(&self.done_tx)
+                        }
+                    }
+
+                    self.channel.with_event_handler(MessageHandler {
+                        done_tx: self.done_tx.clone(),
+                    });
+
+                    if self.channel.send_text("Ping".to_owned()).await.is_err() {
+                        // wasm binding doesn't fire OnOpen (we probably already missed it)
+                        struct LateMessageHandler {
+                            channel: Arc<RTCDataChannel>,
+                            done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+                        }
+
+                        impl RTCDataChannelEventHandler for LateMessageHandler {
+                            fn on_message(
+                                &mut self,
+                                _: DataChannelMessage,
+                            ) -> impl Future<Output = ()> + Send {
+                                take_tx(&self.done_tx)
+                            }
+
+                            fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+                                async move {
+                                    let result = self.channel.send_text("Ping".to_owned()).await;
+                                    assert!(
+                                        result.is_ok(),
+                                        "Failed to send string on data channel"
+                                    );
+                                }
+                            }
+                        }
+
+                        self.channel.with_event_handler(LateMessageHandler {
+                            channel: self.channel.clone(),
+                            done_tx: self.done_tx.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
 
     let dc = offer_pc
         .create_data_channel(EXPECTED_LABEL, None)
@@ -280,41 +439,10 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
 
     //once := &sync.Once{}
-    offer_pc.on_ice_connection_state_change(Box::new(move |state: RTCIceConnectionState| {
-        let done_tx1 = Arc::clone(&done_tx);
-        let dc1 = Arc::clone(&dc);
-        Box::pin(async move {
-            if state == RTCIceConnectionState::Connected
-                || state == RTCIceConnectionState::Completed
-            {
-                // wasm fires completed state multiple times
-                /*once.Do(func()*/
-                {
-                    assert!(dc1.ordered(), "Ordered should be set to true");
-
-                    dc1.on_message(Box::new(move |_: DataChannelMessage| {
-                        let done_tx2 = Arc::clone(&done_tx1);
-                        Box::pin(async move {
-                            let mut done = done_tx2.lock().await;
-                            done.take();
-                        })
-                    }));
-
-                    if dc1.send_text("Ping".to_owned()).await.is_err() {
-                        // wasm binding doesn't fire OnOpen (we probably already missed it)
-                        let dc2 = Arc::clone(&dc1);
-                        dc1.on_open(Box::new(move || {
-                            let dc3 = Arc::clone(&dc2);
-                            Box::pin(async move {
-                                let result = dc3.send_text("Ping".to_owned()).await;
-                                assert!(result.is_ok(), "Failed to send string on data channel");
-                            })
-                        }));
-                    }
-                }
-            }
-        })
-    }));
+    offer_pc.with_event_handler(ConnectionHandler {
+        channel: dc.clone(),
+        done_tx,
+    });
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -382,28 +510,40 @@ async fn test_data_channel_parameters_max_packet_life_time_exchange() -> Result<
     );
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        if d.label() != EXPECTED_LABEL {
-            return Box::pin(async {});
-        }
-        // Check if parameters are correctly set
-        assert_eq!(
-            d.ordered(),
-            ordered,
-            "Ordered should be same value as set in DataChannelInit"
-        );
-        assert_eq!(
-            d.max_packet_lifetime(),
-            max_packet_life_time,
-            "should match"
-        );
-        let done_tx2 = Arc::clone(&done_tx);
-        Box::pin(async move {
-            let mut done = done_tx2.lock().await;
-            done.take();
-        })
-    }));
 
+    struct ConnectionHandler {
+        expected_ordered: bool,
+        expected_max_packet_lifetime: u16,
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if channel.label() != EXPECTED_LABEL {
+                    return;
+                }
+
+                // Check if parameters are correctly set
+                assert_eq!(
+                    channel.ordered(),
+                    self.expected_ordered,
+                    "Ordered should be same value as set in DataChannelInit"
+                );
+                assert_eq!(
+                    channel.max_packet_lifetime(),
+                    self.expected_max_packet_lifetime,
+                    "should match"
+                );
+
+                let mut done = self.done_tx.lock().await;
+                done.take();
+            }
+        }
+    }
     close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
     Ok(())
@@ -431,22 +571,39 @@ async fn test_data_channel_parameters_max_retransmits_exchange() -> Result<()> {
     assert_eq!(dc.max_retransmits(), max_retransmits, "should match");
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        // Make sure this is the data channel we were looking for. (Not the one
-        // created in signalPair).
-        if d.label() != EXPECTED_LABEL {
-            return Box::pin(async {});
-        }
 
-        // Check if parameters are correctly set
-        assert!(!d.ordered(), "Ordered should be set to false");
-        assert_eq!(max_retransmits, d.max_retransmits(), "should match");
-        let done_tx2 = Arc::clone(&done_tx);
-        Box::pin(async move {
-            let mut done = done_tx2.lock().await;
-            done.take();
-        })
-    }));
+    struct ConnectionHandler {
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        expected_max_retransmits: u16,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                // Make sure this is the data channel we were looking for. (Not the one
+                // created in signalPair).
+                if channel.label() != EXPECTED_LABEL {
+                    return;
+                }
+                assert!(!channel.ordered(), "Ordered should be set to false");
+                assert_eq!(
+                    self.expected_max_retransmits,
+                    channel.max_retransmits(),
+                    "should match"
+                );
+                let mut done = self.done_tx.lock().await;
+                done.take();
+            }
+        }
+    }
+
+    answer_pc.with_event_handler(ConnectionHandler {
+        done_tx,
+        expected_max_retransmits: max_retransmits,
+    });
 
     close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
@@ -476,25 +633,36 @@ async fn test_data_channel_parameters_protocol_exchange() -> Result<()> {
     );
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        // Make sure this is the data channel we were looking for. (Not the one
-        // created in signalPair).
-        if d.label() != EXPECTED_LABEL {
-            return Box::pin(async {});
-        }
-        // Check if parameters are correctly set
-        assert_eq!(
-            protocol,
-            d.protocol(),
-            "Protocol should match what channel creator declared"
-        );
 
-        let done_tx2 = Arc::clone(&done_tx);
-        Box::pin(async move {
-            let mut done = done_tx2.lock().await;
-            done.take();
-        })
-    }));
+    struct ConnectionHandler {
+        expected_protocol: String,
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                // Make sure this is the data channel we were looking for. (Not the one
+                // created in signalPair).
+                if channel.label() != EXPECTED_LABEL {
+                    return;
+                }
+
+                // Check if parameters are correctly set
+                assert_eq!(
+                    self.expected_protocol,
+                    channel.protocol(),
+                    "Protocol should match what channel creator declared"
+                );
+
+                let mut done = self.done_tx.lock().await;
+                done.take();
+            }
+        }
+    }
 
     close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
@@ -522,37 +690,58 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
         .create_data_channel(EXPECTED_LABEL, Some(options))
         .await?;
 
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        // Ignore our default channel, exists to force ICE candidates. See signalPair for more info
-        if d.label() == "initial_data_channel" {
-            return Box::pin(async {});
-        }
-        panic!("OnDataChannel must not be fired when negotiated == true");
-    }));
+    struct AnswerChannelHandler;
 
-    offer_pc.on_data_channel(Box::new(move |_d: Arc<RTCDataChannel>| {
-        panic!("OnDataChannel must not be fired when negotiated == true");
-    }));
+    impl PeerConnectionEventHandler for AnswerChannelHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                // Ignore our default channel, exists to force ICE candidates. See signalPair for more info
+                if channel.label() == "initial_data_channel" {
+                    return;
+                }
+                panic!("OnDataChannel must not be fired when negotiated == true");
+            }
+        }
+    }
+
+    struct OfferChannelHandler;
+
+    impl PeerConnectionEventHandler for OfferChannelHandler {
+        fn on_data_channel(&mut self, _: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
+            async {
+                panic!("OnDataChannel must not be fired when negotiated == true");
+            }
+        }
+    }
+
+    answer_pc.with_event_handler(AnswerChannelHandler);
+    offer_pc.with_event_handler(OfferChannelHandler);
 
     let seen_answer_message = Arc::new(AtomicBool::new(false));
     let seen_offer_message = Arc::new(AtomicBool::new(false));
 
-    let seen_answer_message2 = Arc::clone(&seen_answer_message);
-    answer_datachannel.on_message(Box::new(move |msg: DataChannelMessage| {
-        if msg.is_string && msg.data == EXPECTED_MESSAGE {
-            seen_answer_message2.store(true, Ordering::SeqCst);
-        }
+    struct DataHandler {
+        seen_message: Arc<AtomicBool>,
+    }
 
-        Box::pin(async {})
-    }));
-
-    let seen_offer_message2 = Arc::clone(&seen_offer_message);
-    offer_datachannel.on_message(Box::new(move |msg: DataChannelMessage| {
-        if msg.is_string && msg.data == EXPECTED_MESSAGE {
-            seen_offer_message2.store(true, Ordering::SeqCst);
+    impl RTCDataChannelEventHandler for DataHandler {
+        fn on_message(&mut self, msg: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            if msg.is_string && msg.data == EXPECTED_MESSAGE {
+                self.seen_message.store(true, Ordering::SeqCst);
+            }
+            async {}
         }
-        Box::pin(async {})
-    }));
+    }
+
+    answer_datachannel.with_event_handler(DataHandler {
+        seen_message: seen_answer_message.clone(),
+    });
+    offer_datachannel.with_event_handler(DataHandler {
+        seen_message: seen_offer_message.clone(),
+    });
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     tokio::spawn(async move {
@@ -604,26 +793,36 @@ async fn test_data_channel_event_handlers() -> Result<()> {
     dc.do_open();
 
     let on_open_called_tx = Arc::new(Mutex::new(Some(on_open_called_tx)));
-    dc.on_open(Box::new(move || {
-        let on_open_called_tx2 = Arc::clone(&on_open_called_tx);
-        Box::pin(async move {
-            let mut done = on_open_called_tx2.lock().await;
-            done.take();
-        })
-    }));
 
+    struct ChannelHandler {
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        on_message_called_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                let mut done = self.done_tx.lock().await;
+                done.take();
+            }
+        }
+
+        fn on_message(&mut self, _: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            async move {
+                let mut called = self.on_message_called_tx.lock().await;
+                called.take();
+            }
+        }
+    }
     let on_message_called_tx = Arc::new(Mutex::new(Some(on_message_called_tx)));
-    dc.on_message(Box::new(move |_: DataChannelMessage| {
-        let on_message_called_tx2 = Arc::clone(&on_message_called_tx);
-        Box::pin(async move {
-            let mut done = on_message_called_tx2.lock().await;
-            done.take();
-        })
-    }));
+    dc.with_event_handler(ChannelHandler {
+        done_tx: on_open_called_tx,
+        on_message_called_tx,
+    });
 
     // Verify that the set handlers are called
     dc.do_open();
-    dc.do_message(DataChannelMessage {
+    dc.loop_back_message(DataChannelMessage {
         is_string: false,
         data: Bytes::from_static(b"o hai"),
     })
@@ -650,55 +849,52 @@ async fn test_data_channel_messages_are_ordered() -> Result<()> {
 
     let out_tx = Arc::new(out_tx);
 
-    let out_tx1 = Arc::clone(&out_tx);
-    dc.on_message(Box::new(move |msg: DataChannelMessage| {
-        let out_tx2 = Arc::clone(&out_tx1);
+    struct MessageHandler {
+        out_tx: Arc<tokio::sync::mpsc::Sender<u64>>,
+        iter: u64,
+    }
 
-        Box::pin(async move {
-            // randomly sleep
-            let r = rand::random::<u64>() % m;
-            tokio::time::sleep(Duration::from_millis(r)).await;
+    impl RTCDataChannelEventHandler for MessageHandler {
+        fn on_message(&mut self, msg: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            async move {
+                // randomly sleep
+                let r = rand::random::<u64>() % self.iter;
+                tokio::time::sleep(Duration::from_millis(r)).await;
 
-            let mut buf = [0u8; 8];
-            for i in 0..8 {
-                buf[i] = msg.data[i];
+                let mut buf = [0u8; 8];
+                for i in 0..8 {
+                    buf[i] = msg.data[i];
+                }
+                let s = u64::from_be_bytes(buf);
+
+                let _ = self.out_tx.send(s).await;
             }
-            let s = u64::from_be_bytes(buf);
+        }
+    }
 
-            let _ = out_tx2.send(s).await;
-        })
-    }));
+    dc.with_event_handler(MessageHandler {
+        out_tx: out_tx.clone(),
+        iter: 0,
+    });
 
     tokio::spawn(async move {
         for j in 1..=m {
             let buf = j.to_be_bytes().to_vec();
 
-            dc.do_message(DataChannelMessage {
+            dc.loop_back_message(DataChannelMessage {
                 is_string: false,
                 data: Bytes::from(buf),
             })
             .await;
+
             // Change the registered handler a couple of times to make sure
             // that everything continues to work, we don't lose messages, etc.
             if j % 2 == 0 {
                 let out_tx1 = Arc::clone(&out_tx);
-                dc.on_message(Box::new(move |msg: DataChannelMessage| {
-                    let out_tx2 = Arc::clone(&out_tx1);
-
-                    Box::pin(async move {
-                        // randomly sleep
-                        let r = rand::random::<u64>() % m;
-                        tokio::time::sleep(Duration::from_millis(r)).await;
-
-                        let mut buf = [0u8; 8];
-                        for i in 0..8 {
-                            buf[i] = msg.data[i];
-                        }
-                        let s = u64::from_be_bytes(buf);
-
-                        let _ = out_tx2.send(s).await;
-                    })
-                }));
+                dc.with_event_handler(MessageHandler {
+                    out_tx: out_tx.clone(),
+                    iter: j,
+                });
             }
         }
     });
@@ -749,27 +945,40 @@ async fn test_data_channel_parameters_go() -> Result<()> {
         );
 
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-        answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.label() != EXPECTED_LABEL {
-                return Box::pin(async {});
+        struct ConnectionHandler {
+            max_packet_lifetime: u16,
+            done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        }
+
+        impl PeerConnectionEventHandler for ConnectionHandler {
+            fn on_data_channel(
+                &mut self,
+                channel: Arc<RTCDataChannel>,
+            ) -> impl Future<Output = ()> + Send {
+                async move {
+                    // Make sure this is the data channel we were looking for. (Not the one
+                    // created in signalPair).
+                    if channel.label() != EXPECTED_LABEL {
+                        return;
+                    }
+
+                    // Check if parameters are correctly set
+                    assert!(channel.ordered, "Ordered should be set to true");
+                    assert_eq!(
+                        self.max_packet_lifetime,
+                        channel.max_packet_lifetime(),
+                        "should match"
+                    );
+
+                    let mut done = self.done_tx.lock().await;
+                    done.take();
+                }
             }
-
-            // Check if parameters are correctly set
-            assert!(d.ordered, "Ordered should be set to true");
-            assert_eq!(
-                max_packet_life_time,
-                d.max_packet_lifetime(),
-                "should match"
-            );
-
-            let done_tx2 = Arc::clone(&done_tx);
-            Box::pin(async move {
-                let mut done = done_tx2.lock().await;
-                done.take();
-            })
-        }));
+        }
+        answer_pc.with_event_handler(ConnectionHandler {
+            max_packet_lifetime: max_packet_life_time,
+            done_tx,
+        });
 
         close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
     }
@@ -834,69 +1043,103 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     let n_packets_received = Arc::new(AtomicU16::new(0));
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        // Make sure this is the data channel we were looking for. (Not the one
-        // created in signalPair).
-        if d.label() != EXPECTED_LABEL {
-            return Box::pin(async {});
-        }
 
-        let done_tx2 = Arc::clone(&done_tx);
-        let n_packets_received2 = Arc::clone(&n_packets_received);
-        Box::pin(async move {
-            d.on_message(Box::new(move |_msg: DataChannelMessage| {
-                let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
-                if n == 9 {
-                    let done_tx3 = Arc::clone(&done_tx2);
-                    tokio::spawn(async move {
-                        tokio::time::sleep(Duration::from_millis(10)).await;
-                        let mut done = done_tx3.lock().await;
-                        done.take();
-                    });
+    struct ConnectionHandler {
+        packets_recieved: Arc<AtomicU16>,
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                // Make sure this is the data channel we were looking for. (Not the one
+                // created in signalPair).
+                if channel.label() != EXPECTED_LABEL {
+                    return;
                 }
 
-                Box::pin(async {})
-            }));
+                channel.with_event_handler(MessageHandler {
+                    packets_recieved: self.packets_recieved.clone(),
+                    done_tx: self.done_tx.clone(),
+                });
+                struct MessageHandler {
+                    packets_recieved: Arc<AtomicU16>,
+                    done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+                }
 
-            assert!(d.ordered(), "Ordered should be set to true");
-        })
-    }));
-
+                impl RTCDataChannelEventHandler for MessageHandler {
+                    fn on_message(
+                        &mut self,
+                        _: DataChannelMessage,
+                    ) -> impl Future<Output = ()> + Send {
+                        let packets_recieved = self.packets_recieved.fetch_add(1, Ordering::SeqCst);
+                        if packets_recieved == 9 {
+                            let done_tx = self.done_tx.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(Duration::from_millis(10)).await;
+                                let mut done = done_tx.lock().await;
+                                done.take();
+                            });
+                        }
+                        async {}
+                    }
+                }
+                assert!(channel.ordered(), "Ordered should be set to true");
+            }
+        }
+    }
     let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
     assert!(dc.ordered(), "Ordered should be set to true");
 
     let dc2 = Arc::clone(&dc);
-    dc.on_open(Box::new(move || {
-        let dc3 = Arc::clone(&dc2);
-        Box::pin(async move {
-            for _ in 0..10 {
-                assert!(
-                    dc3.send(&buf).await.is_ok(),
-                    "Failed to send string on data channel"
-                );
-                assert_eq!(
-                    1500,
-                    dc3.buffered_amount_low_threshold().await,
-                    "value mismatch"
-                );
-            }
-        })
-    }));
 
-    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})));
+    struct ChannelHandler {
+        channel: Arc<RTCDataChannel>,
+        buf: Bytes,
+        callbacks: Arc<AtomicU16>,
+    }
+
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                for _ in 0..10 {
+                    assert!(
+                        self.channel.send(&self.buf).await.is_ok(),
+                        "Failed to send string on data channel"
+                    );
+                    assert_eq!(
+                        1500,
+                        self.channel.buffered_amount_low_threshold().await,
+                        "value mismatch"
+                    );
+                }
+            }
+        }
+
+        fn on_message(&mut self, _: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            async {}
+        }
+
+        fn on_buffered_amount_low(&mut self, _: ()) -> impl Future<Output = ()> + Send {
+            self.callbacks.fetch_add(1, Ordering::SeqCst);
+            async {}
+        }
+    }
 
     // The value is temporarily stored in the dc object
     // until the dc gets opened
     dc.set_buffered_amount_low_threshold(1500).await;
     // The callback function is temporarily stored in the dc object
     // until the dc gets opened
-    let n_cbs2 = Arc::clone(&n_cbs);
-    dc.on_buffered_amount_low(Box::new(move || {
-        n_cbs2.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async {})
-    }))
-    .await;
+    dc.with_event_handler(ChannelHandler {
+        channel: dc.clone(),
+        buf,
+        callbacks: n_cbs.clone(),
+    });
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -925,67 +1168,102 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     let n_packets_received = Arc::new(AtomicU16::new(0));
-    answer_pc.on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-        // Make sure this is the data channel we were looking for. (Not the one
-        // created in signalPair).
-        if d.label() != EXPECTED_LABEL {
-            return Box::pin(async {});
-        }
 
-        let done_tx2 = Arc::clone(&done_tx);
-        let n_packets_received2 = Arc::clone(&n_packets_received);
-        Box::pin(async move {
-            d.on_message(Box::new(move |_msg: DataChannelMessage| {
-                let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
-                if n == 9 {
-                    let done_tx3 = Arc::clone(&done_tx2);
-                    tokio::spawn(async move {
-                        tokio::time::sleep(Duration::from_millis(10)).await;
-                        let mut done = done_tx3.lock().await;
-                        done.take();
-                    });
+    struct ConnectionHandler {
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        packets_recieved: Arc<AtomicU16>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                // Make sure this is the data channel we were looking for. (Not the one
+                // created in signalPair).
+                if channel.label() != EXPECTED_LABEL {}
+
+                struct MessageHandler {
+                    done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+                    packets_recieved: Arc<AtomicU16>,
                 }
 
-                Box::pin(async {})
-            }));
+                impl RTCDataChannelEventHandler for MessageHandler {
+                    fn on_message(
+                        &mut self,
+                        _: DataChannelMessage,
+                    ) -> impl Future<Output = ()> + Send {
+                        let packets_recieved = self.packets_recieved.fetch_add(1, Ordering::SeqCst);
+                        if packets_recieved == 9 {
+                            let done_tx = self.done_tx.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(Duration::from_millis(10)).await;
+                                let mut done = done_tx.lock().await;
+                                done.take();
+                            });
+                        }
+                        async {}
+                    }
+                }
 
-            assert!(d.ordered(), "Ordered should be set to true");
-        })
-    }));
+                channel.with_event_handler(MessageHandler {
+                    done_tx: self.done_tx.clone(),
+                    packets_recieved: self.packets_recieved.clone(),
+                });
+            }
+        }
+    }
+    answer_pc.with_event_handler(ConnectionHandler {
+        done_tx,
+        packets_recieved: n_packets_received,
+    });
 
     let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
-
     assert!(dc.ordered(), "Ordered should be set to true");
+
+    struct ChannelHandler {
+        channel: Arc<RTCDataChannel>,
+        callbacks: Arc<AtomicU16>,
+        buf: Bytes,
+    }
+
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                // The value should directly be passed to sctp
+                self.channel.set_buffered_amount_low_threshold(1500).await;
+                // The callback function should directly be passed to sctp
+
+                for _ in 0..10 {
+                    assert!(
+                        self.channel.send(&self.buf).await.is_ok(),
+                        "Failed to send string on data channel"
+                    );
+                    assert_eq!(
+                        1500,
+                        self.channel.buffered_amount_low_threshold().await,
+                        "value mismatch"
+                    );
+                }
+            }
+        }
+        fn on_buffered_amount_low(&mut self, _: ()) -> impl Future<Output = ()> + Send {
+            self.callbacks.fetch_add(1, Ordering::SeqCst);
+            async {}
+        }
+        fn on_message(&mut self, _: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            async {}
+        }
+    }
 
     let dc2 = Arc::clone(&dc);
     let n_cbs2 = Arc::clone(&n_cbs);
-    dc.on_open(Box::new(move || {
-        let dc3 = Arc::clone(&dc2);
-        Box::pin(async move {
-            // The value should directly be passed to sctp
-            dc3.set_buffered_amount_low_threshold(1500).await;
-            // The callback function should directly be passed to sctp
-            dc3.on_buffered_amount_low(Box::new(move || {
-                n_cbs2.fetch_add(1, Ordering::SeqCst);
-                Box::pin(async {})
-            }))
-            .await;
-
-            for _ in 0..10 {
-                assert!(
-                    dc3.send(&buf).await.is_ok(),
-                    "Failed to send string on data channel"
-                );
-                assert_eq!(
-                    1500,
-                    dc3.buffered_amount_low_threshold().await,
-                    "value mismatch"
-                );
-            }
-        })
-    }));
-
-    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})));
+    dc.with_event_handler(ChannelHandler {
+        channel: dc.clone(),
+        callbacks: n_cbs.clone(),
+        buf,
+    });
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
@@ -1017,32 +1295,47 @@ async fn test_eof_detach() -> Result<()> {
 
     let (dc_chan_tx, mut dc_chan_rx) = mpsc::channel(1);
     let dc_chan_tx = Arc::new(dc_chan_tx);
-    pcb.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
-        if dc.label() != label {
-            return Box::pin(async {});
-        }
-        log::debug!("OnDataChannel was called");
-        let dc_chan_tx2 = Arc::clone(&dc_chan_tx);
-        let dc2 = Arc::clone(&dc);
-        Box::pin(async move {
-            let dc3 = Arc::clone(&dc2);
-            dc2.on_open(Box::new(move || {
-                let dc_chan_tx3 = Arc::clone(&dc_chan_tx2);
-                let dc4 = Arc::clone(&dc3);
-                Box::pin(async move {
-                    let detached = match dc4.detach().await {
-                        Ok(detached) => detached,
-                        Err(err) => {
-                            log::debug!("Detach failed: {}", err);
-                            panic!();
-                        }
-                    };
 
-                    let _ = dc_chan_tx3.send(detached).await;
-                })
-            }));
-        })
-    }));
+    struct ConnectionHandler<'a> {
+        label: &'a str,
+        detached_chan_tx: Arc<tokio::sync::mpsc::Sender<Arc<DataChannel>>>,
+    }
+    impl PeerConnectionEventHandler for ConnectionHandler<'_> {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if channel.label() != self.label {
+                    return;
+                }
+
+                struct ChannelHandler {
+                    channel: Arc<RTCDataChannel>,
+                    detached_chan_tx: Arc<tokio::sync::mpsc::Sender<Arc<DataChannel>>>,
+                }
+
+                impl RTCDataChannelEventHandler for ChannelHandler {
+                    fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+                        async move {
+                            let detached = match self.channel.detach().await {
+                                Ok(detached) => detached,
+                                Err(err) => {
+                                    log::debug!("Detach failed: {err}");
+                                    panic!();
+                                }
+                            };
+                            let _ = self.detached_chan_tx.send(detached).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    pcb.with_event_handler(ConnectionHandler {
+        label,
+        detached_chan_tx: dc_chan_tx,
+    });
 
     let w = wg.worker();
     tokio::spawn(async move {
@@ -1072,12 +1365,19 @@ async fn test_eof_detach() -> Result<()> {
     log::debug!("Waiting for data channel to open");
     let (open_tx, mut open_rx) = mpsc::channel::<()>(1);
     let open_tx = Arc::new(open_tx);
-    attached.on_open(Box::new(move || {
-        let open_tx2 = Arc::clone(&open_tx);
-        Box::pin(async move {
-            let _ = open_tx2.send(()).await;
-        })
-    }));
+
+    struct ChannelHandler {
+        open_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+    }
+
+    impl RTCDataChannelEventHandler for ChannelHandler {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                self.open_tx.send(()).await;
+            }
+        }
+    }
+    attached.with_event_handler(ChannelHandler { open_tx });
 
     let _ = open_rx.recv().await;
     log::debug!("data channel opened");
@@ -1123,71 +1423,94 @@ async fn test_eof_no_detach() -> Result<()> {
     let (dcb_closed_ch_tx, mut dcb_closed_ch_rx) = mpsc::channel::<()>(1);
 
     let dcb_closed_ch_tx = Arc::new(dcb_closed_ch_tx);
-    pcb.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
-        if dc.label() != label {
-            return Box::pin(async {});
-        }
 
-        log::debug!("pcb: new datachannel: {}", dc.label());
+    struct ConnectionHandler<'a> {
+        label: &'a str,
+        channel_closed: Arc<tokio::sync::mpsc::Sender<()>>,
+    }
 
-        let dcb_closed_ch_tx2 = Arc::clone(&dcb_closed_ch_tx);
-        Box::pin(async move {
-            // Register channel opening handling
-            dc.on_open(Box::new(move || {
-                log::debug!("pcb: datachannel opened");
-                Box::pin(async {})
-            }));
+    impl PeerConnectionEventHandler for ConnectionHandler<'_> {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if channel.label() != self.label {
+                    return;
+                }
 
-            dc.on_close(Box::new(move || {
-                // (2)
-                log::debug!("pcb: data channel closed");
-                let dcb_closed_ch_tx3 = Arc::clone(&dcb_closed_ch_tx2);
-                Box::pin(async move {
-                    let _ = dcb_closed_ch_tx3.send(()).await;
+                struct ChannelHandler {
+                    channel_closed: Arc<tokio::sync::mpsc::Sender<()>>,
+                }
+
+                impl RTCDataChannelEventHandler for ChannelHandler {
+                    fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+                        log::debug!("pcb: datachannel opened");
+                        async {}
+                    }
+
+                    fn on_close(&mut self) -> impl Future<Output = ()> + Send {
+                        async move {
+                            log::debug!("pcb: data channel closed");
+                            self.channel_closed.send(()).await;
+                        }
+                    }
+
+                    fn on_message(
+                        &mut self,
+                        msg: DataChannelMessage,
+                    ) -> impl Future<Output = ()> + Send {
+                        let test_data: &'static [u8] = b"this is some test data";
+                        log::debug!("pcb: received ping: {:?}", msg.data);
+                        assert_eq!(&msg.data[..], test_data, "data mismatch");
+                        async {}
+                    }
+                }
+                channel.with_event_handler(ChannelHandler {
+                    channel_closed: self.channel_closed.clone(),
                 })
-            }));
-
-            // Register the OnMessage to handle incoming messages
-            log::debug!("pcb: registering onMessage callback");
-            dc.on_message(Box::new(|dc_msg: DataChannelMessage| {
-                let test_data: &'static [u8] = b"this is some test data";
-                log::debug!("pcb: received ping: {:?}", dc_msg.data);
-                assert_eq!(&dc_msg.data[..], test_data, "data mismatch");
-                Box::pin(async {})
-            }));
-        })
-    }));
+            }
+        }
+    }
 
     let dca = pca.create_data_channel(label, None).await?;
     let dca2 = Arc::clone(&dca);
-    dca.on_open(Box::new(move || {
-        log::debug!("pca: data channel opened");
-        log::debug!("pca: sending {:?}", test_data);
-        let dca3 = Arc::clone(&dca2);
-        Box::pin(async move {
-            let _ = dca3.send(&Bytes::from_static(test_data)).await;
-            log::debug!("pca: sent ping");
-            assert!(dca3.close().await.is_ok(), "should succeed"); // <-- dca closes
-        })
-    }));
 
-    let dca_closed_ch_tx = Arc::new(dca_closed_ch_tx);
-    dca.on_close(Box::new(move || {
-        // (1)
-        log::debug!("pca: data channel closed");
-        let dca_closed_ch_tx2 = Arc::clone(&dca_closed_ch_tx);
-        Box::pin(async move {
-            let _ = dca_closed_ch_tx2.send(()).await;
-        })
-    }));
+    struct DataChannelAccept {
+        channel: Arc<RTCDataChannel>,
+        test_data: &'static [u8],
+        closed_channel_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+    }
 
-    // Register the OnMessage to handle incoming messages
-    log::debug!("pca: registering onMessage callback");
-    dca.on_message(Box::new(move |dc_msg: DataChannelMessage| {
-        log::debug!("pca: received pong: {:?}", &dc_msg.data[..]);
-        assert_eq!(&dc_msg.data[..], test_data, "data mismatch");
-        Box::pin(async {})
-    }));
+    impl RTCDataChannelEventHandler for DataChannelAccept {
+        fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                log::debug!("pca: data channel opened");
+                log::debug!("pca: sending {:?}", self.test_data);
+                let _ = self.channel.send(&Bytes::from_static(self.test_data)).await;
+                log::debug!("pca: sent ping");
+                assert!(self.channel.close().await.is_ok(), "should succeed"); // <-- dca closes
+            }
+        }
+
+        fn on_close(&mut self) -> impl Future<Output = ()> + Send {
+            async move {
+                log::debug!("pca: data channel closed");
+                self.closed_channel_tx.send(()).await;
+            }
+        }
+
+        fn on_message(&mut self, msg: DataChannelMessage) -> impl Future<Output = ()> + Send {
+            log::debug!("pca: received pong: {:?}", &msg.data[..]);
+            assert_eq!(&msg.data[..], self.test_data, "data mismatch");
+            async {}
+        }
+    }
+    dca.with_event_handler(DataChannelAccept {
+        channel: dca.clone(),
+        test_data,
+        closed_channel_tx: Arc::new(dca_closed_ch_tx),
+    });
 
     signal_pair(&mut pca, &mut pcb).await?;
 
@@ -1216,12 +1539,20 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
 
     let (on_data_channel_called_tx, mut on_data_channel_called_rx) = mpsc::channel::<()>(1);
     let on_data_channel_called_tx = Arc::new(on_data_channel_called_tx);
-    answer_pc.on_data_channel(Box::new(move |_: Arc<RTCDataChannel>| {
-        let on_data_channel_called_tx2 = Arc::clone(&on_data_channel_called_tx);
-        Box::pin(async move {
-            let _ = on_data_channel_called_tx2.send(()).await;
-        })
-    }));
+    struct ConnectionHandler {
+        data_channel_called: Arc<tokio::sync::mpsc::Sender<()>>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_data_channel(&mut self, _: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
+            async move {
+                self.data_channel_called.send(()).await;
+            }
+        }
+    }
+    answer_pc.with_event_handler(ConnectionHandler {
+        data_channel_called: on_data_channel_called_tx,
+    });
 
     let offer = offer_pc.create_offer(None).await?;
 
@@ -1327,16 +1658,24 @@ impl TestOrtcStack {
     async fn get_signal(&self) -> Result<TestOrtcSignal> {
         let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
         let gather_finished_tx = Arc::new(gather_finished_tx);
-        self.gatherer
-            .on_local_candidate(Box::new(move |i: Option<RTCIceCandidate>| {
-                let gather_finished_tx2 = Arc::clone(&gather_finished_tx);
-                Box::pin(async move {
-                    if i.is_none() {
-                        let _ = gather_finished_tx2.send(()).await;
-                    }
-                })
-            }));
+        struct GathererHandler {
+            gather_finished_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+        }
 
+        impl IceGathererEventHandler for GathererHandler {
+            fn on_local_candidate(
+                &mut self,
+                candidate: Option<RTCIceCandidate>,
+            ) -> impl Future<Output = ()> + Send {
+                async move {
+                    if candidate.is_none() {
+                        self.gather_finished_tx.send(()).await;
+                    }
+                }
+            }
+        }
+        self.gatherer
+            .with_event_handler(GathererHandler { gather_finished_tx });
         self.gatherer.gather().await?;
 
         let _ = gather_finished_rx.recv().await;
@@ -1420,28 +1759,53 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
     let await_setup_tx = Arc::new(await_setup_tx);
     let await_string_tx = Arc::new(await_string_tx);
     let await_binary_tx = Arc::new(await_binary_tx);
-    stack_b
-        .sctp
-        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-            let await_setup_tx2 = Arc::clone(&await_setup_tx);
-            let await_string_tx2 = Arc::clone(&await_string_tx);
-            let await_binary_tx2 = Arc::clone(&await_binary_tx);
-            Box::pin(async move {
-                let _ = await_setup_tx2.send(()).await;
 
-                d.on_message(Box::new(move |msg: DataChannelMessage| {
-                    let await_string_tx3 = Arc::clone(&await_string_tx2);
-                    let await_binary_tx3 = Arc::clone(&await_binary_tx2);
-                    Box::pin(async move {
-                        if msg.is_string {
-                            let _ = await_string_tx3.send(()).await;
-                        } else {
-                            let _ = await_binary_tx3.send(()).await;
+    struct TransportHandler {
+        await_setup_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+        await_string_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+        await_binary_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+    }
+
+    impl SctpTransportEventHandler for TransportHandler {
+        fn on_data_channel(
+            &mut self,
+            channel: Arc<RTCDataChannel>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                self.await_setup_tx.send(()).await;
+
+                struct MessageHandler {
+                    await_string_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+                    await_binary_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+                }
+
+                impl RTCDataChannelEventHandler for MessageHandler {
+                    fn on_message(
+                        &mut self,
+                        msg: DataChannelMessage,
+                    ) -> impl Future<Output = ()> + Send {
+                        async move {
+                            if msg.is_string {
+                                let _ = self.await_string_tx.send(()).await;
+                            } else {
+                                let _ = self.await_binary_tx.send(()).await;
+                            }
                         }
-                    })
-                }));
-            })
-        }));
+                    }
+                }
+                channel.with_event_handler(MessageHandler {
+                    await_string_tx: self.await_string_tx.clone(),
+                    await_binary_tx: self.await_binary_tx.clone(),
+                });
+            }
+        }
+    }
+
+    stack_b.sctp.with_event_handler(TransportHandler {
+        await_setup_tx,
+        await_string_tx,
+        await_binary_tx,
+    });
 
     signal_ortc_pair(Arc::clone(&stack_a), Arc::clone(&stack_b)).await?;
 

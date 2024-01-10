@@ -1,6 +1,7 @@
 use std::sync::atomic::AtomicU64;
 
 use bytes::Bytes;
+use std::future::Future;
 use tokio::time::Duration;
 use waitgroup::WaitGroup;
 
@@ -75,8 +76,8 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
             track: Arc<crate::track::track_remote::TrackRemote>,
             _: Arc<RTCRtpReceiver>,
             _: Arc<RTCRtpTransceiver>,
-        ) -> impl std::future::Future<Output = ()> + Send {
-            async {
+        ) -> impl Future<Output = ()> + Send {
+            async move {
                 assert_eq!(self.track_count.fetch_add(1, Ordering::SeqCst), 0);
                 let pkt = match track.read_rtp().await {
                     Ok((pkt, _)) => pkt,
@@ -101,8 +102,8 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
         }
     }
     receiver.with_event_handler(TrackHandler {
-        seen_packet_a,
-        seen_packet_b,
+        seen_packet_a: seen_packet_a_tx,
+        seen_packet_b: seen_packet_b_tx,
         track_count: on_track_count.clone(),
     });
 
@@ -215,8 +216,10 @@ impl PeerConnectionEventHandler for TrackPacketHandler {
         _: Arc<crate::track::track_remote::TrackRemote>,
         _: Arc<RTCRtpReceiver>,
         _: Arc<RTCRtpTransceiver>,
-    ) -> impl std::future::Future<Output = ()> + Send {
-        async { self.seen_packet_tx.send(()).await }
+    ) -> impl Future<Output = ()> + Send {
+        async move {
+            let _ = self.seen_packet_tx.send(()).await;
+        }
     }
 }
 

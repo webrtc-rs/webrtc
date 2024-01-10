@@ -309,11 +309,13 @@ async fn test_get_stats() -> Result<()> {
     impl PeerConnectionEventHandler for AnswerHandler {
         fn on_ice_connection_state_change(
             &mut self,
-            state: RTCIceConnectionState,
+            _: RTCIceConnectionState,
         ) -> impl Future<Output = ()> + Send {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            let mut done = self.ice_complete_tx.lock().await;
-            done.take();
+            async move {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                let mut done = self.ice_complete_tx.lock().await;
+                done.take();
+            }
         }
 
         fn on_track(
@@ -322,19 +324,22 @@ async fn test_get_stats() -> Result<()> {
             _: Arc<RTCRtpReceiver>,
             _: Arc<RTCRtpTransceiver>,
         ) -> impl Future<Output = ()> + Send {
+            let packet_tx = self.packet_tx.clone();
             tokio::spawn(async move {
                 while let Ok((pkt, _)) = track.read_rtp().await {
                     dbg!(&pkt);
                     let last = pkt.payload[pkt.payload.len() - 1];
 
                     if last == 0xAA {
-                        let _ = self.packet_tx.send(()).await;
+                        let _ = packet_tx.send(()).await;
                         break;
                     }
                 }
             });
+            async {}
         }
     }
+    let (packet_tx, packet_rx) = mpsc::channel(1);
     pc_answer.with_event_handler(AnswerHandler {
         ice_complete_tx,
         packet_tx,
@@ -345,9 +350,13 @@ async fn test_get_stats() -> Result<()> {
     }
 
     impl IceTransportEventHandler for OfferHandler {
-        fn on_selected_candidate_pair_change(&mut self, _: RTCIceCandidatePair) {
+        fn on_selected_candidate_pair_change(
+            &mut self,
+            _: RTCIceCandidatePair,
+        ) -> impl Future<Output = ()> + Send {
             self.sender_called_candidate_change
                 .store(1, Ordering::SeqCst);
+            async {}
         }
     }
 
@@ -371,7 +380,6 @@ async fn test_get_stats() -> Result<()> {
         .add_track(track.clone())
         .await
         .expect("Failed to add track");
-    let (packet_tx, packet_rx) = mpsc::channel(1);
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 

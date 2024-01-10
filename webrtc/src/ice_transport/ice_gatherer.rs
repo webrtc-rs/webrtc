@@ -357,6 +357,7 @@ mod test {
     use super::*;
     use crate::api::APIBuilder;
     use crate::ice_transport::ice_gatherer::RTCIceGatherOptions;
+    use crate::ice_transport::ice_gatherer::IceGathererEventHandler;
     use crate::ice_transport::ice_server::RTCIceServer;
 
     #[tokio::test]
@@ -379,15 +380,22 @@ mod test {
 
         let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
         let gather_finished_tx = Arc::new(Mutex::new(Some(gather_finished_tx)));
-        gatherer.on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            let gather_finished_tx_clone = Arc::clone(&gather_finished_tx);
-            Box::pin(async move {
-                if c.is_none() {
-                    let mut tx = gather_finished_tx_clone.lock().await;
-                    tx.take();
+
+        struct GatherHandler {
+            gather_finished_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+        }
+
+        impl IceGathererEventHandler for GatherHandler {
+            fn on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send {
+                async move {
+                    if candidate.is_none() {
+                        let mut finished = self.gather_finished_tx.lock().await;
+                        finished.take();
+                    }
                 }
-            })
-        }));
+            }
+        }
+        gatherer.with_event_handler(GatherHandler {gather_finished_tx});
 
         gatherer.gather().await?;
 
@@ -421,17 +429,24 @@ mod test {
 
         let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-        gatherer.on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-            let done_tx_clone = Arc::clone(&done_tx);
-            Box::pin(async move {
-                if let Some(c) = c {
+
+        struct GatherHandler {
+            done_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+        }
+
+        impl IceGathererEventHandler for GatherHandler {
+            fn on_local_candidate(&mut self, candidate: Option<RTCIceCandidate>) -> impl Future<Output = ()> + Send {
+                async move {
+                if let Some(c) = candidate {
                     if c.address.ends_with(".local") {
-                        let mut tx = done_tx_clone.lock().await;
+                        let mut tx = self.done_tx.lock().await;
                         tx.take();
                     }
                 }
-            })
-        }));
+                }
+            }
+        }
+        gatherer.with_event_handler(GatherHandler{done_tx});
 
         gatherer.gather().await?;
 

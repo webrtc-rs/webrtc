@@ -12,7 +12,7 @@ use crate::ice_transport::ice_candidate::RTCIceCandidate;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::peer_connection::peer_connection_test::{
-    close_pair_now, new_pair, signal_pair, until_connection_state,
+    close_pair_now, new_pair, signal_pair, StateHandler,
 };
 use crate::peer_connection::PeerConnectionEventHandler;
 
@@ -49,16 +49,20 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
     impl PeerConnectionEventHandler for AnswerHandler {
         fn on_data_channel(&mut self, _: Arc<RTCDataChannel>) -> impl Future<Output = ()> + Send {
-            panic!("A DataChannel must not be created when Fingerprint verification fails");
+            async move {
+                panic!("A DataChannel must not be created when Fingerprint verification fails");
+            }
         }
 
         fn on_peer_connection_state_change(
             &mut self,
             state: RTCPeerConnectionState,
         ) -> impl Future<Output = ()> + Send {
-            if state == RTCPeerConnectionState::Failed {
-                let mut worker = self.worker.lock().await;
-                worker.take();
+            async move {
+                if state == RTCPeerConnectionState::Failed {
+                    let mut worker = self.worker.lock().await;
+                    worker.take();
+                }
             }
         }
     }
@@ -73,8 +77,10 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
             &mut self,
             candidate: Option<RTCIceCandidate>,
         ) -> impl Future<Output = ()> + Send {
-            if candidate.is_none() {
-                let _ = self.offer_chan_tx.try_send(()).await;
+            async move {
+                if candidate.is_none() {
+                    let _ = self.offer_chan_tx.try_send(());
+                }
             }
         }
 
@@ -82,9 +88,11 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
             &mut self,
             state: RTCPeerConnectionState,
         ) -> impl Future<Output = ()> + Send {
-            if state == RTCPeerConnectionState::Failed {
-                let mut worker = self.worker.lock().await;
-                worker.take();
+            async move {
+                if state == RTCPeerConnectionState::Failed {
+                    let mut worker = self.worker.lock().await;
+                    worker.take();
+                }
             }
         }
     }
@@ -93,11 +101,12 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     let offer_chan_tx = Arc::new(offer_chan_tx);
 
     let offer_connection_has_failed = WaitGroup::new();
+    let answer_connection_has_failed = WaitGroup::new();
     pc_offer.with_event_handler(OfferHandler {
         offer_chan_tx,
         worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker()))),
     });
-    pc_offer.with_event_handler(AnswerHandler {
+    pc_answer.with_event_handler(AnswerHandler {
         worker: Arc::new(Mutex::new(Some(offer_connection_has_failed.worker()))),
     });
 
@@ -183,7 +192,9 @@ async fn run_test(r: DTLSRole) -> Result<()> {
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
     let wg = WaitGroup::new();
-    until_connection_state(&mut answer_pc, &wg, RTCPeerConnectionState::Connected).await;
+    answer_pc.with_event_handler(StateHandler {
+        worker: Arc::new(Mutex::new(Some(wg.worker()))),
+    });
     wg.wait().await;
 
     close_pair_now(&offer_pc, &answer_pc).await;

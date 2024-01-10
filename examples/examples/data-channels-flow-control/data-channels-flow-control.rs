@@ -108,7 +108,7 @@ async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
     dc.with_event_handler(ChannelHandler {
         data_channel: dc.clone(),
         more_can_be_sent,
-        maybe_more_can_be_sent: Arc::new(maybe_more_can_be_sent),
+        maybe_more_can_be_sent: Arc::new(tokio::sync::Mutex::new(maybe_more_can_be_sent)),
     });
 
     dc.set_buffered_amount_low_threshold(BUFFERED_AMOUNT_LOW_THRESHOLD)
@@ -117,62 +117,12 @@ async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
     Ok(pc)
 }
 
-async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
-    // Create a peer connection first
-    let pc = create_peer_connection().await?;
-
-    // Set a data channel handler so that we can receive data
-    pc.on_data_channel(Box::new(move |dc| {
-        Box::pin(async move {
-            let total_bytes_received = Arc::new(AtomicUsize::new(0));
-
-            let shared_total_bytes_received = total_bytes_received.clone();
-            dc.on_open(Box::new(move || {
-                Box::pin(async {
-                    // This callback shouldn't be blocked for a long time, so we spawn our handler
-                    tokio::spawn(async move {
-                        let start = SystemTime::now();
-
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        println!();
-
-                        loop {
-                            let total_bytes_received =
-                                shared_total_bytes_received.load(Ordering::Relaxed);
-
-                            let elapsed = SystemTime::now().duration_since(start);
-                            let bps =
-                                (total_bytes_received * 8) as f64 / elapsed.unwrap().as_secs_f64();
-
-                            println!(
-                                "Throughput is about {:.03} Mbps",
-                                bps / (1024 * 1024) as f64
-                            );
-                            tokio::time::sleep(Duration::from_secs(1)).await;
-                        }
-                    });
-                })
-            }));
-
-            dc.on_message(Box::new(move |msg| {
-                let total_bytes_received = total_bytes_received.clone();
-
-                Box::pin(async move {
-                    total_bytes_received.fetch_add(msg.data.len(), Ordering::Relaxed);
-                })
-            }));
-        })
-    }));
-
-    Ok(pc)
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let requester = Arc::new(create_requester().await?);
-    let responder = Arc::new(create_responder().await?);
+    let requester = Arc::new(create_peer_connection().await?);
+    let responder = Arc::new(create_peer_connection().await?);
 
     struct ResponderHandler {
         maybe_responder: std::sync::Weak<RTCPeerConnection>,

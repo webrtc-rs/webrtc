@@ -341,7 +341,7 @@ pub(crate) async fn pipe_with_vnet(
     Ok((a_conn, b_conn))
 }
 
-struct ConnectionStateNotifier {
+pub(crate) struct ConnectionStateNotifier {
     done_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
 }
 

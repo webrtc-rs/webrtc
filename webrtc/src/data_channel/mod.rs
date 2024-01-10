@@ -68,7 +68,7 @@ pub struct RTCDataChannel {
     // is created, the binaryType attribute MUST be initialized to the string
     // "blob". This attribute controls how binary data is exposed to scripts.
     // binaryType                 string
-    events_handler: Arc<EventHandler<dyn InlineRTCDataChannelEventHandler + Send + Sync>>,
+    pub(crate) events_handler: Arc<EventHandler<dyn InlineRTCDataChannelEventHandler + Send + Sync>>,
 
     pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
 
@@ -270,6 +270,14 @@ impl RTCDataChannel {
 
         //TODO: on_buffered_amount low attatches to the inner datachannel if it exists,
         //which aquiring it is async...
+    }
+
+    // calls [on_message] on itself
+    async fn loop_back_message(&self, msg: DataChannelMessage) {
+        if let Some(handler) = &*self.events_handler.load() {
+            let mut handle = handler.lock().await;
+            handle.inline_on_message(msg).await;
+        }
     }
 
     fn do_open(&self) {

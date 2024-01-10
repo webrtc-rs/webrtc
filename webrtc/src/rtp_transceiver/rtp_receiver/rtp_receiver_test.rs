@@ -103,34 +103,36 @@ async fn test_set_rtp_parameters() -> Result<()> {
             receiver: Arc<RTCRtpReceiver>,
             _: Arc<RTCRtpTransceiver>,
         ) -> impl Future<Output = ()> + Send {
-            receiver.set_rtp_parameters(P.clone()).await;
-            if let Some(track) = receiver.track().await {
-                let incoming_track_codecs = track.codec();
-                assert_eq!(P.header_extensions, track.params().header_extensions);
-                assert_eq!(
-                    P.codecs[0].capability.mime_type,
-                    incoming_track_codecs.capability.mime_type
-                );
-                assert_eq!(
-                    P.codecs[0].capability.clock_rate,
-                    incoming_track_codecs.capability.clock_rate
-                );
-                assert_eq!(
-                    P.codecs[0].capability.channels,
-                    incoming_track_codecs.capability.channels
-                );
-                assert_eq!(
-                    P.codecs[0].capability.sdp_fmtp_line,
-                    incoming_track_codecs.capability.sdp_fmtp_line
-                );
-                assert_eq!(
-                    P.codecs[0].capability.rtcp_feedback,
-                    incoming_track_codecs.capability.rtcp_feedback
-                );
-                assert_eq!(P.codecs[0].payload_type, incoming_track_codecs.payload_type);
+            async move {
+                receiver.set_rtp_parameters(P.clone()).await;
+                if let Some(track) = receiver.track().await {
+                    let incoming_track_codecs = track.codec();
+                    assert_eq!(P.header_extensions, track.params().header_extensions);
+                    assert_eq!(
+                        P.codecs[0].capability.mime_type,
+                        incoming_track_codecs.capability.mime_type
+                    );
+                    assert_eq!(
+                        P.codecs[0].capability.clock_rate,
+                        incoming_track_codecs.capability.clock_rate
+                    );
+                    assert_eq!(
+                        P.codecs[0].capability.channels,
+                        incoming_track_codecs.capability.channels
+                    );
+                    assert_eq!(
+                        P.codecs[0].capability.sdp_fmtp_line,
+                        incoming_track_codecs.capability.sdp_fmtp_line
+                    );
+                    assert_eq!(
+                        P.codecs[0].capability.rtcp_feedback,
+                        incoming_track_codecs.capability.rtcp_feedback
+                    );
+                    assert_eq!(P.codecs[0].payload_type, incoming_track_codecs.payload_type);
 
-                let done = self.seen_packet_tx.lock().await;
-                done.take();
+                    let mut done = self.seen_packet_tx.lock().await;
+                    done.take();
+                }
             }
         }
 
@@ -138,9 +140,11 @@ async fn test_set_rtp_parameters() -> Result<()> {
             &mut self,
             state: RTCPeerConnectionState,
         ) -> impl Future<Output = ()> + Send {
-            if state == RTCPeerConnectionState::Connected {
-                let mut worker = self.worker.lock().await;
-                worker.take();
+            async move {
+                if state == RTCPeerConnectionState::Connected {
+                    let mut worker = self.worker.lock().await;
+                    worker.take();
+                }
             }
         }
     }
@@ -214,7 +218,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
             receiver: Arc<RTCRtpReceiver>,
             _: Arc<RTCRtpTransceiver>,
         ) -> impl Future<Output = ()> + Send {
-            async {
+            async move {
                 // First call will not error because we cache for probing
                 let result = tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
                 assert!(
@@ -238,7 +242,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
             &mut self,
             state: RTCPeerConnectionState,
         ) -> impl Future<Output = ()> + Send {
-            async {
+            async move {
                 if state == RTCPeerConnectionState::Connected {
                     let mut worker = self.worker.lock().await;
                     worker.take();
