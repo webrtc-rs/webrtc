@@ -92,36 +92,38 @@ async fn test_set_rtp_parameters() -> Result<()> {
         Box::pin(async move {
             receiver.set_rtp_parameters(P.clone()).await;
 
-            if let Some(t) = receiver.track().await {
-                let incoming_track_codecs = t.codec();
+            let tracks = receiver.tracks().await;
+            assert_eq!(tracks.len(), 1);
+            let t = tracks.first().unwrap();
 
-                assert_eq!(P.header_extensions, t.params().header_extensions);
-                assert_eq!(
-                    P.codecs[0].capability.mime_type,
-                    incoming_track_codecs.capability.mime_type
-                );
-                assert_eq!(
-                    P.codecs[0].capability.clock_rate,
-                    incoming_track_codecs.capability.clock_rate
-                );
-                assert_eq!(
-                    P.codecs[0].capability.channels,
-                    incoming_track_codecs.capability.channels
-                );
-                assert_eq!(
-                    P.codecs[0].capability.sdp_fmtp_line,
-                    incoming_track_codecs.capability.sdp_fmtp_line
-                );
-                assert_eq!(
-                    P.codecs[0].capability.rtcp_feedback,
-                    incoming_track_codecs.capability.rtcp_feedback
-                );
-                assert_eq!(P.codecs[0].payload_type, incoming_track_codecs.payload_type);
+            let incoming_track_codecs = t.codec();
 
-                {
-                    let mut done = seen_packet_tx2.lock().await;
-                    done.take();
-                }
+            assert_eq!(P.header_extensions, t.params().header_extensions);
+            assert_eq!(
+                P.codecs[0].capability.mime_type,
+                incoming_track_codecs.capability.mime_type
+            );
+            assert_eq!(
+                P.codecs[0].capability.clock_rate,
+                incoming_track_codecs.capability.clock_rate
+            );
+            assert_eq!(
+                P.codecs[0].capability.channels,
+                incoming_track_codecs.capability.channels
+            );
+            assert_eq!(
+                P.codecs[0].capability.sdp_fmtp_line,
+                incoming_track_codecs.capability.sdp_fmtp_line
+            );
+            assert_eq!(
+                P.codecs[0].capability.rtcp_feedback,
+                incoming_track_codecs.capability.rtcp_feedback
+            );
+            assert_eq!(P.codecs[0].payload_type, incoming_track_codecs.payload_type);
+
+            {
+                let mut done = seen_packet_tx2.lock().await;
+                done.take();
             }
         })
     }));
