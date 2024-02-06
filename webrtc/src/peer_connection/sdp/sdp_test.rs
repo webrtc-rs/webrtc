@@ -702,27 +702,20 @@ async fn test_populate_sdp() -> Result<()> {
         )
         .await;
 
-        let mut rid_map = HashMap::new();
-        let rid_id = "ridkey".to_owned();
-        rid_map.insert(
-            rid_id.to_owned(),
+        let rid_map = vec![
             SimulcastRid {
-                id: rid_id,
+                id: "ridkey".to_owned(),
                 direction: SimulcastDirection::Recv,
                 params: "some".to_owned(),
                 paused: false,
             },
-        );
-        let rid_id = "ridpaused".to_owned();
-        rid_map.insert(
-            rid_id.to_owned(),
             SimulcastRid {
-                id: rid_id,
+                id: "ridpaused".to_owned(),
                 direction: SimulcastDirection::Recv,
                 params: "some2".to_owned(),
                 paused: true,
             },
-        );
+        ];
         let media_sections = vec![MediaSection {
             id: "video".to_owned(),
             transceivers: vec![tr],
@@ -758,7 +751,7 @@ async fn test_populate_sdp() -> Result<()> {
             }
 
             let rid_map = get_rids(desc);
-            if let Some(rid) = rid_map.get("ridkey") {
+            if let Some(rid) = rid_map.iter().find(|rid| rid.id == "ridkey") {
                 assert!(!rid.paused, "Rid should be active");
                 assert_eq!(
                     rid.direction,
@@ -767,7 +760,7 @@ async fn test_populate_sdp() -> Result<()> {
                 );
                 found += 1;
             }
-            if let Some(rid) = rid_map.get("ridpaused") {
+            if let Some(rid) = rid_map.iter().find(|rid| rid.id == "ridpaused") {
                 assert!(rid.paused, "Rid should be paused");
                 assert_eq!(
                     rid.direction,
@@ -831,7 +824,7 @@ async fn test_populate_sdp() -> Result<()> {
             id: "video".to_owned(),
             transceivers: vec![tr],
             data: false,
-            rid_map: HashMap::new(),
+            rid_map: vec![],
             ..Default::default()
         }];
 
@@ -949,14 +942,14 @@ async fn test_populate_sdp_reject() -> Result<()> {
             id: "video".to_owned(),
             transceivers: vec![trv],
             data: false,
-            rid_map: HashMap::new(),
+            rid_map: vec![],
             ..Default::default()
         },
         MediaSection {
             id: "audio".to_owned(),
             transceivers: vec![tra],
             data: false,
-            rid_map: HashMap::new(),
+            rid_map: vec![],
             ..Default::default()
         },
     ];
@@ -1035,7 +1028,8 @@ fn test_get_rids() {
 
     assert!(!rids.is_empty(), "Rid mapping should be present");
 
-    assert!(rids.get("f").is_some(), "rid values should contain 'f'");
+    let f = rids.iter().find(|rid| rid.id == "f");
+    assert!(f.is_some(), "rid values should contain 'f'");
 }
 
 #[test]
