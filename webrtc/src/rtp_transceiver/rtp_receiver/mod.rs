@@ -487,16 +487,6 @@ impl RTCRtpReceiver {
         }
     }
 
-    /// track returns the RtpTransceiver TrackRemote
-    pub async fn track(&self) -> Option<Arc<TrackRemote>> {
-        let tracks = self.internal.tracks.read().await;
-        if tracks.len() != 1 {
-            None
-        } else {
-            tracks.first().map(|t| Arc::clone(&t.track))
-        }
-    }
-
     /// tracks returns the RtpTransceiver traclockks
     /// A RTPReceiver to support Simulcast may now have multiple tracks
     pub async fn tracks(&self) -> Vec<Arc<TrackRemote>> {
