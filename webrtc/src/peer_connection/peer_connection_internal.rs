@@ -15,7 +15,7 @@ use crate::stats::{
     StatsReportType,
 };
 use crate::track::TrackStream;
-use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
+use crate::SDP_ATTRIBUTE_RID;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -940,7 +940,7 @@ impl PeerConnectionInternal {
         let (rsid_extension_id, _, _) = self
             .media_engine
             .get_header_extension_id(RTCRtpHeaderExtensionCapability {
-                uri: SDES_REPAIR_RTP_STREAM_ID_URI.to_owned(),
+                uri: ::sdp::extmap::SDES_REPAIR_RTP_STREAM_ID_URI.to_owned(),
             })
             .await;
 
