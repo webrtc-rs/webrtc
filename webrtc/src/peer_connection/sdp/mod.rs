@@ -221,8 +221,8 @@ pub(crate) fn track_details_from_sdp(
                 rids: vec![],
                 ..Default::default()
             };
-            for rid in rids.keys() {
-                simulcast_track.rids.push(SmolStr::from(rid));
+            for rid in &rids {
+                simulcast_track.rids.push(SmolStr::from(&rid.id));
             }
             if simulcast_track.rids.len() == tracks_in_media_section.len() {
                 for track in &tracks_in_media_section {
@@ -239,8 +239,8 @@ pub(crate) fn track_details_from_sdp(
     incoming_tracks
 }
 
-pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, SimulcastRid> {
-    let mut rids = HashMap::new();
+pub(crate) fn get_rids(media: &MediaDescription) -> Vec<SimulcastRid> {
+    let mut rids = vec![];
     let mut simulcast_attr: Option<String> = None;
     for attr in &media.attributes {
         if attr.key.as_str() == SDP_ATTRIBUTE_RID {
@@ -249,7 +249,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, SimulcastRid
                 .as_ref()
                 .ok_or(SimulcastRidParseError::SyntaxIdDirSplit)
                 .and_then(SimulcastRid::try_from)
-                .map(|rid| rids.insert(rid.id.to_owned(), rid))
+                .map(|rid| rids.push(rid))
             {
                 log::warn!("Failed to parse RID: {}", err);
             }
@@ -272,7 +272,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, SimulcastRid
                         (sc_id, false)
                     };
 
-                    if let Some(rid) = rids.get_mut(sc_id) {
+                    if let Some(rid) = rids.iter_mut().find(|f| f.id == sc_id) {
                         rid.paused = paused;
                     }
                 }
@@ -551,7 +551,7 @@ pub(crate) async fn add_transceiver_sdp(
         let mut recv_sc_list: Vec<String> = vec![];
         let mut send_sc_list: Vec<String> = vec![];
 
-        for rid in media_section.rid_map.values() {
+        for rid in &media_section.rid_map {
             let rid_syntax = match rid.direction {
                 SimulcastDirection::Send => {
                     // If Send rid, then reply with a recv rid
@@ -749,7 +749,7 @@ pub(crate) struct MediaSection {
     pub(crate) id: String,
     pub(crate) transceivers: Vec<Arc<RTCRtpTransceiver>>,
     pub(crate) data: bool,
-    pub(crate) rid_map: HashMap<String, SimulcastRid>,
+    pub(crate) rid_map: Vec<SimulcastRid>,
     pub(crate) offered_direction: Option<RTCRtpTransceiverDirection>,
 }
 
