@@ -35,7 +35,7 @@ impl PacketMetadata {
 /// Returns the scheme for how to aggregate or split the OBUs across RTP packets.
 /// Reference: https://aomediacodec.github.io/av1-rtp-spec/#45-payload-structure
 ///            https://aomediacodec.github.io/av1-rtp-spec/#5-packetization-rules
-pub fn packetize(obus: &Vec<Obu>, mtu: usize) -> Vec<PacketMetadata> {
+pub fn packetize(obus: &[Obu], mtu: usize) -> Vec<PacketMetadata> {
     if obus.is_empty() {
         return vec![];
     }
