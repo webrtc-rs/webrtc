@@ -1809,6 +1809,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2003,6 +2009,7 @@ dependencies = [
  "bytes",
  "chrono",
  "criterion",
+ "portable-atomic",
  "rand",
  "serde",
  "thiserror",
@@ -2767,6 +2774,7 @@ dependencies = [
  "lazy_static",
  "log",
  "pem",
+ "portable-atomic",
  "rand",
  "rcgen",
  "regex",
@@ -2879,6 +2887,7 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "log",
+ "portable-atomic",
  "rand",
  "regex",
  "serde",
@@ -2936,6 +2945,7 @@ dependencies = [
  "env_logger",
  "lazy_static",
  "log",
+ "portable-atomic",
  "rand",
  "thiserror",
  "tokio",
@@ -2984,6 +2994,7 @@ dependencies = [
  "libc",
  "log",
  "nix",
+ "portable-atomic",
  "rand",
  "thiserror",
  "tokio",

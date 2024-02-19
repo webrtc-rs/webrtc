@@ -1,11 +1,12 @@
 use std::fmt;
 use std::ops::Add;
-use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use crc::{Crc, CRC_32_ISCSI};
+use portable_atomic::{AtomicU16, AtomicU64, AtomicU8};
 use tokio::sync::{broadcast, Mutex};
 use util::sync::Mutex as SyncMutex;
 

@@ -59,6 +59,7 @@ hex = "0.4"
 pem = { version = "3", optional = true }
 time = "0.3"
 cfg-if = "1"
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"

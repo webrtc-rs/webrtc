@@ -16,6 +16,7 @@ bytes = "1"
 rand = "0.8"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
+portable-atomic = "1.6"
 
 [dev-dependencies]
 chrono = "0.4.28"

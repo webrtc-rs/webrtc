@@ -31,6 +31,7 @@ crc = "3"
 async-trait = "0.1"
 log = "0.4"
 thiserror = "1"
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"
