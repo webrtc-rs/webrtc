@@ -19,7 +19,18 @@ marshal = []
 sync = []
 
 [dependencies]
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 lazy_static = "1"
 async-trait = "0.1"
 ipnet = "2.6.0"

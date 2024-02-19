@@ -27,7 +27,18 @@ turn = { version = "0.7", path = "../turn" }
 util = { version = "0.8", path = "../util", package = "webrtc-util" }
 
 arc-swap = "1"
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 log = "0.4"
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
