@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-ice"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of ICE"
@@ -10,10 +10,10 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/ice"
 
 [dependencies]
-util = { version = "0.8", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
-turn = { version = "0.7", path = "../turn" }
-stun = { version = "0.5", path = "../stun" }
-mdns = { version = "0.6", path = "../mdns", package = "webrtc-mdns" }
+util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
+turn = { version = "0.7.1", path = "../turn" }
+stun = { version = "0.5.1", path = "../stun" }
+mdns = { version = "0.6.1", path = "../mdns", package = "webrtc-mdns" }
 
 arc-swap = "1"
 async-trait = "0.1"
