@@ -1,6 +1,6 @@
 [package]
 name = "rtcp"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2021"
 description = "A pure Rust implementation of RTCP"
@@ -10,7 +10,7 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtcp"
 
 [dependencies]
-util = { version = "0.8", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
+util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
 
 bytes = "1"
 thiserror = "1"
