@@ -19,7 +19,7 @@ util = { version = "0.8", path = "../util", package = "webrtc-util", default-fea
     "buffer",
     "marshal",
 ] }
-rtp = { version = "0.9", path = "../rtp" }
+rtp = { version = "0.10", path = "../rtp" }
 rtcp = { version = "0.10", path = "../rtcp" }
 
 byteorder = "1"
