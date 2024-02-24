@@ -14,7 +14,7 @@ readme = "../README.md"
 data = { version = "0.8.1", path = "../data", package = "webrtc-data" }
 dtls = { version = "0.9.0", path = "../dtls", package = "webrtc-dtls" }
 ice = { version = "0.10.1", path = "../ice", package = "webrtc-ice" }
-interceptor = { version = "0.10.1", path = "../interceptor" }
+interceptor = { version = "0.11.0", path = "../interceptor" }
 mdns = { version = "0.6.1", path = "../mdns", package = "webrtc-mdns" }
 media = { version = "0.7.1", path = "../media", package = "webrtc-media" }
 rtcp = { version = "0.10.1", path = "../rtcp" }
