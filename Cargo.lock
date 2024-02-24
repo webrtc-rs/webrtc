@@ -2755,7 +2755,7 @@ dependencies = [
 
 [[package]]
 name = "webrtc"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "arc-swap",
  "async-trait",
