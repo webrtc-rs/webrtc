@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "interceptor"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2755,7 +2755,7 @@ dependencies = [
 
 [[package]]
 name = "webrtc"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -2945,7 +2945,7 @@ dependencies = [
 
 [[package]]
 name = "webrtc-srtp"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "aead",
  "aes",
