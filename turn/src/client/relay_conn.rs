@@ -567,6 +567,17 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 
         let res = tr_res.msg;
 
+        if res.typ.class == CLASS_ERROR_RESPONSE {
+            let mut code = ErrorCodeAttribute::default();
+            let result = code.get_from(&res);
+            if result.is_err() {
+                return Err(Error::Other(format!("{}", res.typ)));
+            } else if code.code == CODE_STALE_NONCE {
+                self.set_nonce_from_msg(&res);
+                return Err(Error::ErrTryAgain);
+            }
+        }
+
         if res.typ != MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE) {
             return Err(Error::ErrUnexpectedResponse);
         }
