@@ -1,5 +1,4 @@
-use std::sync::atomic::AtomicU32;
-
+use portable_atomic::AtomicU32;
 use tokio::time::Duration;
 use waitgroup::WaitGroup;
 

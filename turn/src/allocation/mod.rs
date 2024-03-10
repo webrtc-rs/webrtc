@@ -9,12 +9,13 @@ pub mod permission;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use channel_bind::*;
 use five_tuple::*;
 use permission::*;
+use portable_atomic::{AtomicBool, AtomicUsize};
 use stun::agent::*;
 use stun::message::*;
 use stun::textattrs::Username;

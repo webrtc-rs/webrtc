@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use portable_atomic::AtomicU16;
 use stun::message::*;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;

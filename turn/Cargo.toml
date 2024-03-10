@@ -34,6 +34,7 @@ rand = "0.8"
 ring = "0.17"
 md-5 = "0.10"
 thiserror = "1"
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"

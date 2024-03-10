@@ -1,9 +1,9 @@
-use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
 use bytes::Bytes;
 use interceptor::registry::Registry;
 use media::Sample;
+use portable_atomic::AtomicU32;
 use tokio::time::Duration;
 use util::vnet::net::{Net, NetConfig};
 use util::vnet::router::{Router, RouterConfig};

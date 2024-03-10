@@ -1,8 +1,9 @@
 use std::io;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
+use portable_atomic::AtomicBool;
 use util::Conn;
 
 use super::*;

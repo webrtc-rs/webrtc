@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
@@ -12,6 +12,7 @@ use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use dtls_role::*;
 use interceptor::stream_info::StreamInfo;
 use interceptor::{Interceptor, RTCPReader, RTPReader};
+use portable_atomic::{AtomicBool, AtomicU8};
 use sha2::{Digest, Sha256};
 use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;

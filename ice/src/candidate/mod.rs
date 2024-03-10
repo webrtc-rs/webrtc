@@ -15,12 +15,13 @@ pub mod candidate_server_reflexive;
 
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use async_trait::async_trait;
 use candidate_base::*;
+use portable_atomic::{AtomicBool, AtomicU16, AtomicU8};
 use serde::Serialize;
 use tokio::sync::{broadcast, Mutex};
 

@@ -51,6 +51,7 @@ subtle = "2"
 log = "0.4"
 thiserror = "1"
 pem = { version = "3", optional = true }
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"
