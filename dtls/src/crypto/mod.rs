@@ -178,7 +178,7 @@ impl Clone for CryptoPrivateKey {
         match self.kind {
             CryptoPrivateKeyKind::Ed25519(_) => CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Ed25519(
-                    Ed25519KeyPair::from_pkcs8(&self.serialized_der).unwrap(),
+                    Ed25519KeyPair::from_pkcs8_maybe_unchecked(&self.serialized_der).unwrap(),
                 ),
                 serialized_der: self.serialized_der.clone(),
             },
@@ -217,7 +217,7 @@ impl CryptoPrivateKey {
         if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
             Ok(CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Ed25519(
-                    Ed25519KeyPair::from_pkcs8(&serialized_der)
+                    Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)
                         .map_err(|e| Error::Other(e.to_string()))?,
                 ),
                 serialized_der,
