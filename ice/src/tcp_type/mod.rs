@@ -4,7 +4,7 @@ mod tcp_type_test;
 use std::fmt;
 
 // TCPType is the type of ICE TCP candidate as described in
-// ttps://tools.ietf.org/html/rfc6544#section-4.5
+// https://tools.ietf.org/html/rfc6544#section-4.5
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum TcpType {
     /// The default value. For example UDP candidates do not need this field.

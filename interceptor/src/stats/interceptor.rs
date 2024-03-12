@@ -787,7 +787,7 @@ impl RTPWriter for RTPWriteRecorder {
 }
 
 /// Calculate the round trip time for a given peer as described in
-/// [RFC3550 6.4.1](https://datatracker.ietf.org/doc/html/rfc3550#section-6.4.1).
+/// [RFC3550 6.4.1](https://tools.ietf.org/html/rfc3550#section-6.4.1).
 ///
 /// ## Params
 ///

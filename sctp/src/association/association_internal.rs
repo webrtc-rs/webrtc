@@ -665,7 +665,7 @@ impl AssociationInternal {
             ..Default::default()
         };
 
-        // According to RFC https://datatracker.ietf.org/doc/html/rfc4960#section-3.2.2
+        // According to RFC https://tools.ietf.org/html/rfc4960#section-3.2.2
         // We report unknown parameters with a paramtype with bit 14 set as unrecognized
         let unrecognized_params_from_init = i
             .params
@@ -2174,7 +2174,7 @@ impl AssociationInternal {
             self.handle_shutdown_complete(c).await?
         } else {
             /*
-            https://datatracker.ietf.org/doc/html/rfc4960#section-3
+            https://tools.ietf.org/html/rfc4960#section-3
 
             00 -  Stop processing this SCTP packet and discard it, do not
                   process any further chunks within it.

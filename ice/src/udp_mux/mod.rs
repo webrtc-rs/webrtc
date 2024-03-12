@@ -137,7 +137,7 @@ impl UDPMuxDefault {
 
                 let s = match String::from_utf8(attr.value) {
                     // Per the RFC this shouldn't happen
-                    // https://datatracker.ietf.org/doc/html/rfc5389#section-15.3
+                    // https://tools.ietf.org/html/rfc5389#section-15.3
                     Err(err) => {
                         log::warn!(
                             "Failed to decode USERNAME from STUN message as UTF-8: {}",
