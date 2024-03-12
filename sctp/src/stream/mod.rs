@@ -527,7 +527,7 @@ enum ReadFut {
     /// Nothing in progress.
     Idle,
     /// Reading data from the underlying stream.
-    Reading(Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>>),
+    Reading(Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + Sync>>),
     /// Finished reading, but there's unread data in the temporary buffer.
     RemainingData(Vec<u8>),
 }
@@ -536,7 +536,9 @@ enum ShutdownFut {
     /// Nothing in progress.
     Idle,
     /// Reading data from the underlying stream.
-    ShuttingDown(Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>>),
+    ShuttingDown(
+        Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>> + Send + Sync>>,
+    ),
     /// Shutdown future has run
     Done,
     Errored(crate::error::Error),
@@ -548,7 +550,9 @@ impl ReadFut {
     /// # Panics
     ///
     /// Panics if `ReadFut` variant is not `Reading`.
-    fn get_reading_mut(&mut self) -> &mut Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>> {
+    fn get_reading_mut(
+        &mut self,
+    ) -> &mut Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send + Sync>> {
         match self {
             ReadFut::Reading(ref mut fut) => fut,
             _ => panic!("expected ReadFut to be Reading"),
@@ -564,7 +568,9 @@ impl ShutdownFut {
     /// Panics if `ShutdownFut` variant is not `ShuttingDown`.
     fn get_shutting_down_mut(
         &mut self,
-    ) -> &mut Pin<Box<dyn Future<Output = std::result::Result<(), crate::error::Error>>>> {
+    ) -> &mut Pin<
+        Box<dyn Future<Output = std::result::Result<(), crate::error::Error>> + Send + Sync>,
+    > {
         match self {
             ShutdownFut::ShuttingDown(ref mut fut) => fut,
             _ => panic!("expected ShutdownFut to be ShuttingDown"),
@@ -581,7 +587,7 @@ pub struct PollStream {
     stream: Arc<Stream>,
 
     read_fut: ReadFut,
-    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>>>>>,
+    write_fut: Option<Pin<Box<dyn Future<Output = Result<usize>> + Send + Sync>>>,
     shutdown_fut: ShutdownFut,
 
     read_buf_cap: usize,
