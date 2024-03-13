@@ -4,10 +4,11 @@ mod nat_test;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::ops::Add;
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use portable_atomic::AtomicU16;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 

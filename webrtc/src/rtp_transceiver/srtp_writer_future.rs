@@ -1,9 +1,10 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::{Attributes, RTCPReader, RTPWriter};
+use portable_atomic::AtomicBool;
 use srtp::session::Session;
 use srtp::stream::Stream;
 use tokio::sync::Mutex;

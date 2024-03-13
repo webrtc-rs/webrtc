@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod rtp_sender_test;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use ice::rand::generate_crypto_random_string;
 use interceptor::stream_info::StreamInfo;
 use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
+use portable_atomic::AtomicBool;
 use tokio::sync::{mpsc, Mutex, Notify};
 use util::sync::Mutex as SyncMutex;
 

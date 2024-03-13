@@ -442,8 +442,9 @@ async fn test_pending_queue_append() -> Result<()> {
 ///////////////////////////////////////////////////////////////////
 //reassembly_queue_test
 ///////////////////////////////////////////////////////////////////
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+
+use portable_atomic::AtomicUsize;
 
 use super::reassembly_queue::*;
 

@@ -2,8 +2,8 @@ use core::sync::atomic::Ordering;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
 
+use portable_atomic::AtomicBool;
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch, Mutex};
 

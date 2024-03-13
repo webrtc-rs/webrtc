@@ -8,7 +8,7 @@ pub mod data_channel_state;
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::SystemTime;
 
@@ -18,6 +18,7 @@ use data::message::message_channel_open::ChannelType;
 use data_channel_message::*;
 use data_channel_parameters::*;
 use data_channel_state::RTCDataChannelState;
+use portable_atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize};
 use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::{Mutex, Notify};
 use util::sync::Mutex as SyncMutex;

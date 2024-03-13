@@ -3,10 +3,11 @@
 // Silence warning on `..Default::default()` with no effect:
 #![allow(clippy::needless_update)]
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use portable_atomic::AtomicU32;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 

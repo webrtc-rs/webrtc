@@ -4,12 +4,13 @@ mod rtp_transceiver_test;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
 use interceptor::Attributes;
 use log::trace;
+use portable_atomic::{AtomicBool, AtomicU8};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use tokio::sync::{Mutex, OnceCell};

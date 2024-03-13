@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use portable_atomic::AtomicUsize;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 

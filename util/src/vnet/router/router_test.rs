@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicI32, AtomicUsize};
+use portable_atomic::{AtomicI32, AtomicUsize};
 
 use super::*;
 

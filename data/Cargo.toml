@@ -13,10 +13,22 @@ repository = "https://github.com/webrtc-rs/data"
 util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "marshal"]  }
 sctp = { version = "0.9.1", path = "../sctp", package = "webrtc-sctp" }
 
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 bytes = "1"
 log = "0.4"
 thiserror = "1"
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4" # must match the min version of the `tokio` crate above

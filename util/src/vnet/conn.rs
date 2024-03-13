@@ -2,10 +2,11 @@
 mod conn_test;
 
 use std::net::{IpAddr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use portable_atomic::AtomicBool;
 use tokio::sync::{mpsc, Mutex};
 
 use crate::conn::Conn;

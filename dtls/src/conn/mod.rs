@@ -4,11 +4,12 @@ mod conn_test;
 use std::io::{BufReader, BufWriter};
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::*;
+use portable_atomic::{AtomicBool, AtomicU16};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 use util::replay_detector::*;
