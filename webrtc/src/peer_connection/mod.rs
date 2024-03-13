@@ -13,7 +13,7 @@ pub mod signaling_state;
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -25,6 +25,7 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
+use portable_atomic::{AtomicBool, AtomicU64, AtomicU8};
 use rand::{thread_rng, Rng};
 use rcgen::KeyPair;
 use smol_str::SmolStr;

@@ -1,9 +1,10 @@
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use portable_atomic::AtomicBool;
 
 use super::chunk_header::*;
 use super::chunk_type::*;

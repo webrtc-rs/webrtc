@@ -3,9 +3,10 @@ mod media_engine_test;
 
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use portable_atomic::AtomicBool;
 use sdp::description::session::SessionDescription;
 use util::sync::Mutex as SyncMutex;
 

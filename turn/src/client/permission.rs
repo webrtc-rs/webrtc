@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+
+use portable_atomic::AtomicU8;
 
 #[derive(Default, Copy, Clone, PartialEq, Debug)]
 pub(crate) enum PermState {

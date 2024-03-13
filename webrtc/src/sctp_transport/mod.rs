@@ -7,12 +7,13 @@ pub mod sctp_transport_state;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
 use data::data_channel::DataChannel;
 use data::message::message_channel_open::ChannelType;
+use portable_atomic::{AtomicBool, AtomicU32, AtomicU8};
 use sctp::association::Association;
 use sctp_transport_state::RTCSctpTransportState;
 use tokio::sync::{Mutex, Notify};

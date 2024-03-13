@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use portable_atomic::{AtomicBool, AtomicU64};
 
 use arc_swap::ArcSwapOption;
 use util::sync::Mutex as SyncMutex;

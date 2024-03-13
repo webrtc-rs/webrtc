@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 
+use portable_atomic::{AtomicBool, AtomicUsize};
 use tokio::sync::{Mutex, Semaphore};
 use util::sync::RwLock;
 

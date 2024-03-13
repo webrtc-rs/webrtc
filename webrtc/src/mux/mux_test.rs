@@ -1,8 +1,9 @@
 use std::io;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
+use portable_atomic::AtomicUsize;
 use util::conn::conn_pipe::pipe;
 
 use super::*;

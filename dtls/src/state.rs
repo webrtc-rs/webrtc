@@ -1,9 +1,10 @@
 use std::io::{BufWriter, Cursor};
 use std::marker::{Send, Sync};
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use portable_atomic::AtomicU16;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use util::{KeyingMaterialExporter, KeyingMaterialExporterError};
