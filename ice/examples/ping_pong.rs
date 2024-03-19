@@ -1,12 +1,14 @@
+use std::future::Future;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
 use clap::{App, AppSettings, Arg};
+use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use ice::agent::agent_config::AgentConfig;
-use ice::agent::Agent;
+use ice::agent::{Agent, AgentEventHandler};
 use ice::candidate::candidate_base::*;
 use ice::candidate::*;
 use ice::network_type::*;
@@ -200,19 +202,28 @@ async fn main() -> Result<(), Error> {
 
         let client = Arc::new(Client::new());
 
-        // When we have gathered a new ICE Candidate send it to the remote peer
         let client2 = Arc::clone(&client);
-        ice_agent.on_candidate(Box::new(
-            move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-                let client3 = Arc::clone(&client2);
-                Box::pin(async move {
-                    if let Some(c) = c {
+        struct AgentHandler {
+            client: Arc<Client<HttpConnector>>,
+            remote_port: u16,
+            ice_done_tx: tokio::sync::mpsc::Sender<()>,
+        }
+
+        impl AgentEventHandler for AgentHandler {
+            // When we have gathered a new ICE Candidate send it to the remote peer
+            fn on_candidate(
+                &mut self,
+                candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+            ) -> impl Future<Output = ()> + Send {
+                async move {
+                    if let Some(c) = candidate {
                         println!("posting remoteCandidate with {}", c.marshal());
 
                         let req = match Request::builder()
                             .method(Method::POST)
                             .uri(format!(
-                                "http://localhost:{remote_http_port}/remoteCandidate"
+                                "http://localhost:{}/remoteCandidate",
+                                self.remote_port
                             ))
                             .body(Body::from(c.marshal()))
                         {
@@ -222,7 +233,7 @@ async fn main() -> Result<(), Error> {
                                 return;
                             }
                         };
-                        let resp = match client3.request(req).await {
+                        let resp = match self.client.request(req).await {
                             Ok(resp) => resp,
                             Err(err) => {
                                 println!("{err}");
@@ -231,19 +242,27 @@ async fn main() -> Result<(), Error> {
                         };
                         println!("Response from remoteCandidate: {}", resp.status());
                     }
-                })
-            },
-        ));
-
-        let (ice_done_tx, mut ice_done_rx) = mpsc::channel::<()>(1);
-        // When ICE Connection state has change print to stdout
-        ice_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-            println!("ICE Connection State has changed: {c}");
-            if c == ConnectionState::Failed {
-                let _ = ice_done_tx.try_send(());
+                }
             }
-            Box::pin(async move {})
-        }));
+
+            // When ICE Connection state has change print to stdout
+            fn on_connection_state_change(
+                &mut self,
+                state: ConnectionState,
+            ) -> impl Future<Output = ()> + Send {
+                println!("ICE Connection State has changed: {state}");
+                if state == ConnectionState::Failed {
+                    let _ = self.ice_done_tx.try_send(());
+                }
+                async {}
+            }
+        }
+        let (ice_done_tx, mut ice_done_rx) = mpsc::channel::<()>(1);
+        ice_agent.with_event_handler(AgentHandler {
+            client: client.clone(),
+            remote_port: remote_http_port,
+            ice_done_tx,
+        });
 
         // Get the local auth details and send to remote peer
         let (local_ufrag, local_pwd) = ice_agent.get_local_user_credentials().await;

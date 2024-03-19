@@ -35,7 +35,7 @@ use stun::xoraddr::*;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 use util::vnet::net::*;
-use util::Buffer;
+use util::{Buffer, EventHandler, FutureUnit};
 
 use crate::agent::agent_gather::GatherCandidatesInternalParams;
 use crate::candidate::*;
@@ -119,6 +119,84 @@ pub struct Agent {
     pub(crate) gather_candidate_cancel: Option<GatherCandidateCancelFn>,
 }
 
+pub trait AgentEventHandler: Send {
+    /// Sets a handler that is fired when new candidates gathered. When the gathering process
+    /// complete the last candidate is None.
+    fn on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Sets a handler that is fired when the connection state changes.
+    fn on_connection_state_change(
+        &mut self,
+        connection_state: ConnectionState,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Sets a handler that is fired when the final candidate pair is selected.
+    fn on_selected_candidate_pair_change(
+        &mut self,
+        local_candidate: Arc<dyn Candidate + Send + Sync>,
+        remote_candidate: Arc<dyn Candidate + Send + Sync>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+}
+
+pub trait InlineAgentEventHandler: Send {
+    fn inline_on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> FutureUnit<'_>;
+
+    fn inline_on_connection_state_change(
+        &mut self,
+        connection_state: ConnectionState,
+    ) -> FutureUnit<'_>;
+
+    fn inline_on_selected_candidate_pair_change(
+        &mut self,
+        local_candidate: Arc<dyn Candidate + Send + Sync>,
+        remote_candidate: Arc<dyn Candidate + Send + Sync>,
+    ) -> FutureUnit<'_>;
+}
+
+impl<T> InlineAgentEventHandler for T
+where
+    T: AgentEventHandler,
+{
+    fn inline_on_candidate(
+        &mut self,
+        candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move { self.on_candidate(candidate).await })
+    }
+
+    fn inline_on_connection_state_change(
+        &mut self,
+        connection_state: ConnectionState,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(
+            async move { self.on_connection_state_change(connection_state).await },
+        )
+    }
+
+    fn inline_on_selected_candidate_pair_change(
+        &mut self,
+        local_candidate: Arc<dyn Candidate + Send + Sync>,
+        remote_candidate: Arc<dyn Candidate + Send + Sync>,
+    ) -> FutureUnit<'_> {
+        FutureUnit::from_async(async move {
+            self.on_selected_candidate_pair_change(local_candidate, remote_candidate)
+                .await
+        })
+    }
+}
+
 impl Agent {
     /// Creates a new Agent.
     pub async fn new(config: AgentConfig) -> Result<Self> {
@@ -195,7 +273,7 @@ impl Agent {
             Arc::new(Net::new(None))
         };
 
-        let agent = Self {
+        let mut agent = Self {
             udp_network: config.udp_network,
             internal: Arc::new(ai),
             interface_filter: Arc::clone(&config.interface_filter),
@@ -237,26 +315,8 @@ impl Agent {
         self.internal.agent_conn.bytes_sent()
     }
 
-    /// Sets a handler that is fired when the connection state changes.
-    pub fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
-        self.internal
-            .on_connection_state_change_hdlr
-            .store(Some(Arc::new(Mutex::new(f))))
-    }
-
-    /// Sets a handler that is fired when the final candidate pair is selected.
-    pub fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
-        self.internal
-            .on_selected_candidate_pair_change_hdlr
-            .store(Some(Arc::new(Mutex::new(f))))
-    }
-
-    /// Sets a handler that is fired when new candidates gathered. When the gathering process
-    /// complete the last candidate is nil.
-    pub fn on_candidate(&self, f: OnCandidateHdlrFn) {
-        self.internal
-            .on_candidate_hdlr
-            .store(Some(Arc::new(Mutex::new(f))));
+    pub fn with_event_handler(&self, handler: impl AgentEventHandler + Send + Sync + 'static) {
+        self.internal.events_handler.store(Box::new(handler));
     }
 
     /// Adds a new remote candidate.
@@ -440,7 +500,7 @@ impl Agent {
             return Err(Error::ErrMultipleGatherAttempted);
         }
 
-        if self.internal.on_candidate_hdlr.load().is_none() {
+        if self.internal.events_handler.load().is_none() {
             return Err(Error::ErrNoOnCandidateHandler);
         }
 

@@ -191,14 +191,23 @@ async fn test_on_selected_candidate_pair_change() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
     let (callback_called_tx, mut callback_called_rx) = mpsc::channel::<()>(1);
     let callback_called_tx = Arc::new(Mutex::new(Some(callback_called_tx)));
-    let cb: OnSelectedCandidatePairChangeHdlrFn = Box::new(move |_, _| {
-        let callback_called_tx_clone = Arc::clone(&callback_called_tx);
-        Box::pin(async move {
-            let mut tx = callback_called_tx_clone.lock().await;
-            tx.take();
-        })
-    });
-    a.on_selected_candidate_pair_change(cb);
+
+    struct AgentHandler {
+        callback_called_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+    impl AgentEventHandler for AgentHandler {
+        fn on_selected_candidate_pair_change(
+            &mut self,
+            _: Arc<dyn Candidate + Send + Sync>,
+            _: Arc<dyn Candidate + Send + Sync>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                let mut tx = self.callback_called_tx.lock().await;
+                tx.take();
+            }
+        }
+    }
+    a.with_event_handler(AgentHandler { callback_called_tx });
 
     let host_config = CandidateHostConfig {
         base_config: CandidateBaseConfig {
@@ -437,7 +446,7 @@ async fn test_connectivity_on_startup() -> Result<()> {
     };
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: supported_network_types(),
@@ -450,7 +459,7 @@ async fn test_connectivity_on_startup() -> Result<()> {
     };
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier);
+    b_agent.with_event_handler(b_notifier);
 
     // Manual signaling
     let (a_ufrag, a_pwd) = a_agent.get_local_user_credentials().await;
@@ -464,15 +473,29 @@ async fn test_connectivity_on_startup() -> Result<()> {
     let (_b_cancel_tx, b_cancel_rx) = mpsc::channel(1);
 
     let accepting_tx = Arc::new(Mutex::new(Some(accepting_tx)));
-    a_agent.on_connection_state_change(Box::new(move |s: ConnectionState| {
-        let accepted_tx_clone = Arc::clone(&accepting_tx);
-        Box::pin(async move {
-            if s == ConnectionState::Checking {
-                let mut tx = accepted_tx_clone.lock().await;
-                tx.take();
+
+    struct AgentAHandler {
+        accepted_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for AgentAHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Checking {
+                    let mut tx = self.accepted_tx.lock().await;
+                    tx.take();
+                }
             }
-        })
-    }));
+        }
+    }
+
+    let accepted_tx = Arc::new(Mutex::new(Some(accepted_tx)));
+    a_agent.with_event_handler(AgentAHandler {
+        accepted_tx: accepted_tx.clone(),
+    });
 
     tokio::spawn(async move {
         let result = a_agent.accept(a_cancel_rx, b_ufrag, b_pwd).await;
@@ -545,7 +568,7 @@ async fn test_connectivity_lite() -> Result<()> {
     };
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let cfg1 = AgentConfig {
         urls: vec![],
@@ -558,7 +581,7 @@ async fn test_connectivity_lite() -> Result<()> {
     };
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
-    b_agent.on_connection_state_change(b_notifier);
+    b_agent.with_event_handler(b_notifier);
 
     let _ = connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -969,43 +992,58 @@ async fn test_connection_state_callback() -> Result<()> {
     let is_failed_tx = Arc::new(Mutex::new(Some(is_failed_tx)));
     let is_closed_tx = Arc::new(Mutex::new(Some(is_closed_tx)));
 
-    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let is_checking_tx_clone = Arc::clone(&is_checking_tx);
-        let is_connected_tx_clone = Arc::clone(&is_connected_tx);
-        let is_disconnected_tx_clone = Arc::clone(&is_disconnected_tx);
-        let is_failed_tx_clone = Arc::clone(&is_failed_tx);
-        let is_closed_tx_clone = Arc::clone(&is_closed_tx);
-        Box::pin(async move {
-            match c {
-                ConnectionState::Checking => {
-                    log::debug!("drop is_checking_tx");
-                    let mut tx = is_checking_tx_clone.lock().await;
-                    tx.take();
+    struct AgentHandler {
+        is_checking_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        is_connected_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        is_disconnected_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        is_failed_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        is_closed_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for AgentHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                match state {
+                    ConnectionState::Checking => {
+                        log::debug!("drop is_checking_tx");
+                        let mut tx = self.is_checking_tx.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Connected => {
+                        log::debug!("drop is_connected_tx");
+                        let mut tx = self.is_connected_tx.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Disconnected => {
+                        log::debug!("drop is_disconnected_tx");
+                        let mut tx = self.is_disconnected_tx.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Failed => {
+                        log::debug!("drop is_failed_tx");
+                        let mut tx = self.is_failed_tx.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Closed => {
+                        log::debug!("drop is_closed_tx");
+                        let mut tx = self.is_closed_tx.lock().await;
+                        tx.take();
+                    }
+                    _ => {}
                 }
-                ConnectionState::Connected => {
-                    log::debug!("drop is_connected_tx");
-                    let mut tx = is_connected_tx_clone.lock().await;
-                    tx.take();
-                }
-                ConnectionState::Disconnected => {
-                    log::debug!("drop is_disconnected_tx");
-                    let mut tx = is_disconnected_tx_clone.lock().await;
-                    tx.take();
-                }
-                ConnectionState::Failed => {
-                    log::debug!("drop is_failed_tx");
-                    let mut tx = is_failed_tx_clone.lock().await;
-                    tx.take();
-                }
-                ConnectionState::Closed => {
-                    log::debug!("drop is_closed_tx");
-                    let mut tx = is_closed_tx_clone.lock().await;
-                    tx.take();
-                }
-                _ => {}
-            };
-        })
-    }));
+            }
+        }
+    }
+    a_agent.with_event_handler(AgentHandler {
+        is_checking_tx,
+        is_connected_tx,
+        is_disconnected_tx,
+        is_failed_tx,
+        is_closed_tx,
+    });
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -1657,15 +1695,24 @@ async fn test_connection_state_failed_delete_all_candidates() -> Result<()> {
 
     let (is_failed_tx, mut is_failed_rx) = mpsc::channel::<()>(1);
     let is_failed_tx = Arc::new(Mutex::new(Some(is_failed_tx)));
-    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let is_failed_tx_clone = Arc::clone(&is_failed_tx);
-        Box::pin(async move {
-            if c == ConnectionState::Failed {
-                let mut tx = is_failed_tx_clone.lock().await;
-                tx.take();
+    struct AgentHandler {
+        is_failed_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for AgentHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Failed {
+                    let mut tx = self.is_failed_tx.lock().await;
+                    tx.take();
+                }
             }
-        })
-    }));
+        }
+    }
+    a_agent.with_event_handler(AgentHandler { is_failed_tx });
 
     connect_with_vnet(&a_agent, &b_agent).await?;
     let _ = is_failed_rx.recv().await;
@@ -1712,32 +1759,42 @@ async fn test_connection_state_connecting_to_failed() -> Result<()> {
     let is_failed = WaitGroup::new();
     let is_checking = WaitGroup::new();
 
-    let connection_state_check = move |wf: Worker, wc: Worker| {
-        let wf = Arc::new(Mutex::new(Some(wf)));
-        let wc = Arc::new(Mutex::new(Some(wc)));
-        let hdlr_fn: OnConnectionStateChangeHdlrFn = Box::new(move |c: ConnectionState| {
-            let wf_clone = Arc::clone(&wf);
-            let wc_clone = Arc::clone(&wc);
-            Box::pin(async move {
-                if c == ConnectionState::Failed {
-                    let mut f = wf_clone.lock().await;
+    struct AgentHandler {
+        wf: Arc<Mutex<Option<Worker>>>,
+        wc: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl AgentEventHandler for AgentHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Failed {
+                    let mut f = self.wf.lock().await;
                     f.take();
-                } else if c == ConnectionState::Checking {
-                    let mut c = wc_clone.lock().await;
+                } else if state == ConnectionState::Checking {
+                    let mut c = self.wc.lock().await;
                     c.take();
-                } else if c == ConnectionState::Connected || c == ConnectionState::Completed {
-                    panic!("Unexpected ConnectionState: {c}");
+                } else if state == ConnectionState::Connected || state == ConnectionState::Completed
+                {
+                    panic!("Unexpected ConnectionState: {state}");
                 }
-            })
-        });
-        hdlr_fn
-    };
+            }
+        }
+    }
 
     let (wf1, wc1) = (is_failed.worker(), is_checking.worker());
-    a_agent.on_connection_state_change(connection_state_check(wf1, wc1));
+    a_agent.with_event_handler(AgentHandler {
+        wf: Arc::new(Mutex::new(Some(wf1))),
+        wc: Arc::new(Mutex::new(Some(wc1))),
+    });
 
     let (wf2, wc2) = (is_failed.worker(), is_checking.worker());
-    b_agent.on_connection_state_change(connection_state_check(wf2, wc2));
+    b_agent.with_event_handler(AgentHandler {
+        wf: Arc::new(Mutex::new(Some(wf2))),
+        wc: Arc::new(Mutex::new(Some(wc2))),
+    });
 
     let agent_a = Arc::clone(&a_agent);
     tokio::spawn(async move {
@@ -1824,15 +1881,24 @@ async fn test_agent_restart_one_side() -> Result<()> {
 
     let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
     let cancel_tx = Arc::new(Mutex::new(Some(cancel_tx)));
-    agent_b.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let cancel_tx_clone = Arc::clone(&cancel_tx);
-        Box::pin(async move {
-            if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
-                let mut tx = cancel_tx_clone.lock().await;
-                tx.take();
+
+    struct AgentHandler {
+        cancel_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for AgentHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Failed || state == ConnectionState::Disconnected {
+                    let mut tx = self.cancel_tx.lock().await;
+                    tx.take();
+                }
             }
-        })
-    }));
+        }
+    }
 
     agent_a.restart("".to_owned(), "".to_owned()).await?;
 
@@ -1886,10 +1952,10 @@ async fn test_agent_restart_both_side() -> Result<()> {
         generate_candidate_address_strings(agent_b.get_local_candidates().await);
 
     let (a_notifier, mut a_connected) = on_connected();
-    agent_a.on_connection_state_change(a_notifier);
+    agent_a.with_event_handler(a_notifier);
 
     let (b_notifier, mut b_connected) = on_connected();
-    agent_b.on_connection_state_change(b_notifier);
+    agent_b.with_event_handler(b_notifier);
 
     // Restart and Re-Signal
     agent_a.restart("".to_owned(), "".to_owned()).await?;
@@ -1981,20 +2047,33 @@ async fn test_close_in_connection_state_callback() -> Result<()> {
     let (is_connected_tx, mut is_connected_rx) = mpsc::channel::<()>(1);
     let is_closed_tx = Arc::new(Mutex::new(Some(is_closed_tx)));
     let is_connected_tx = Arc::new(Mutex::new(Some(is_connected_tx)));
-    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let is_closed_tx_clone = Arc::clone(&is_closed_tx);
-        let is_connected_tx_clone = Arc::clone(&is_connected_tx);
-        Box::pin(async move {
-            if c == ConnectionState::Connected {
-                let mut tx = is_connected_tx_clone.lock().await;
-                tx.take();
-            } else if c == ConnectionState::Closed {
-                let mut tx = is_closed_tx_clone.lock().await;
-                tx.take();
-            }
-        })
-    }));
 
+    struct AgentHandler {
+        is_closed_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        is_connected_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for AgentHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Connected {
+                    let mut tx = self.is_connected_tx.lock().await;
+                    tx.take();
+                } else if state == ConnectionState::Closed {
+                    let mut tx = self.is_closed_tx.lock().await;
+                    tx.take();
+                }
+            }
+        }
+    }
+
+    a_agent.with_event_handler(AgentHandler {
+        is_closed_tx,
+        is_connected_tx,
+    });
     connect_with_vnet(&a_agent, &b_agent).await?;
 
     let _ = is_connected_rx.recv().await;
@@ -2036,15 +2115,24 @@ async fn test_run_task_in_connection_state_callback() -> Result<()> {
 
     let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
     let is_complete_tx = Arc::new(Mutex::new(Some(is_complete_tx)));
-    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let is_complete_tx_clone = Arc::clone(&is_complete_tx);
-        Box::pin(async move {
-            if c == ConnectionState::Connected {
-                let mut tx = is_complete_tx_clone.lock().await;
-                tx.take();
+    struct AgentHandler {
+        is_complete_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for AgentHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Connected {
+                    let mut tx = self.is_complete_tx.lock().await;
+                    tx.take();
+                }
             }
-        })
-    }));
+        }
+    }
+    a_agent.with_event_handler(AgentHandler { is_complete_tx });
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -2088,27 +2176,43 @@ async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()
 
     let (is_tested_tx, mut is_tested_rx) = mpsc::channel::<()>(1);
     let is_tested_tx = Arc::new(Mutex::new(Some(is_tested_tx)));
-    a_agent.on_selected_candidate_pair_change(Box::new(
-        move |_: &Arc<dyn Candidate + Send + Sync>, _: &Arc<dyn Candidate + Send + Sync>| {
-            let is_tested_tx_clone = Arc::clone(&is_tested_tx);
-            Box::pin(async move {
-                let mut tx = is_tested_tx_clone.lock().await;
-                tx.take();
-            })
-        },
-    ));
-
     let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
     let is_complete_tx = Arc::new(Mutex::new(Some(is_complete_tx)));
-    a_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let is_complete_tx_clone = Arc::clone(&is_complete_tx);
-        Box::pin(async move {
-            if c == ConnectionState::Connected {
-                let mut tx = is_complete_tx_clone.lock().await;
+
+    struct AgentHandler {
+        is_complete_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        is_tested_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for AgentHandler {
+        fn on_selected_candidate_pair_change(
+            &mut self,
+            _: Arc<dyn Candidate + Send + Sync>,
+            _: Arc<dyn Candidate + Send + Sync>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                let mut tx = self.is_tested_tx.lock().await;
                 tx.take();
             }
-        })
-    }));
+        }
+
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Connected {
+                    let mut tx = self.is_complete_tx.lock().await;
+                    tx.take();
+                }
+            }
+        }
+    }
+
+    a_agent.with_event_handler(AgentHandler {
+        is_complete_tx,
+        is_tested_tx,
+    });
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 
@@ -2137,7 +2241,7 @@ async fn test_lite_lifecycle() -> Result<()> {
         .await?,
     );
 
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let disconnected_duration = Duration::from_secs(1);
     let failed_duration = Duration::from_secs(1);
@@ -2165,24 +2269,31 @@ async fn test_lite_lifecycle() -> Result<()> {
     let b_disconnected_tx = Arc::new(Mutex::new(Some(b_disconnected_tx)));
     let b_failed_tx = Arc::new(Mutex::new(Some(b_failed_tx)));
 
-    b_agent.on_connection_state_change(Box::new(move |c: ConnectionState| {
-        let b_connected_tx_clone = Arc::clone(&b_connected_tx);
-        let b_disconnected_tx_clone = Arc::clone(&b_disconnected_tx);
-        let b_failed_tx_clone = Arc::clone(&b_failed_tx);
+    struct AgentHandler {
+        connected_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        disconnected_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+        failed_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
 
-        Box::pin(async move {
-            if c == ConnectionState::Connected {
-                let mut tx = b_connected_tx_clone.lock().await;
-                tx.take();
-            } else if c == ConnectionState::Disconnected {
-                let mut tx = b_disconnected_tx_clone.lock().await;
-                tx.take();
-            } else if c == ConnectionState::Failed {
-                let mut tx = b_failed_tx_clone.lock().await;
-                tx.take();
+    impl AgentEventHandler for AgentHandler {
+        fn on_connection_state_change(
+            &mut self,
+            state: ConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == ConnectionState::Connected {
+                    let mut tx = self.connected_tx.lock().await;
+                    tx.take();
+                } else if state == ConnectionState::Disconnected {
+                    let mut tx = self.disconnected_tx.lock().await;
+                    tx.take();
+                } else if state == ConnectionState::Failed {
+                    let mut tx = self.failed_tx.lock().await;
+                    tx.take();
+                }
             }
-        })
-    }));
+        }
+    }
 
     connect_with_vnet(&b_agent, &a_agent).await?;
 

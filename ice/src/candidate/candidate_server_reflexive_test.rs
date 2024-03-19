@@ -60,7 +60,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
     let (a_notifier, mut a_connected) = on_connected();
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
@@ -76,7 +76,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
     let (b_notifier, mut b_connected) = on_connected();
-    b_agent.on_connection_state_change(b_notifier);
+    b_agent.with_event_handler(b_notifier);
 
     connect_with_vnet(&a_agent, &b_agent).await?;
 

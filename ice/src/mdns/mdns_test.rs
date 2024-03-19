@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::future::Future;
 use tokio::sync::{mpsc, Mutex};
 
 use super::*;
@@ -25,7 +26,7 @@ async fn test_multicast_dns_only_connection() -> Result<()> {
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
     let (a_notifier, mut a_connected) = on_connected();
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
@@ -36,7 +37,7 @@ async fn test_multicast_dns_only_connection() -> Result<()> {
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
     let (b_notifier, mut b_connected) = on_connected();
-    b_agent.on_connection_state_change(b_notifier);
+    b_agent.with_event_handler(b_notifier);
 
     connect_with_vnet(&a_agent, &b_agent).await?;
     let _ = a_connected.recv().await;
@@ -59,7 +60,7 @@ async fn test_multicast_dns_mixed_connection() -> Result<()> {
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
     let (a_notifier, mut a_connected) = on_connected();
-    a_agent.on_connection_state_change(a_notifier);
+    a_agent.with_event_handler(a_notifier);
 
     let cfg1 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
@@ -70,7 +71,7 @@ async fn test_multicast_dns_mixed_connection() -> Result<()> {
 
     let b_agent = Arc::new(Agent::new(cfg1).await?);
     let (b_notifier, mut b_connected) = on_connected();
-    b_agent.on_connection_state_change(b_notifier);
+    b_agent.with_event_handler(b_notifier);
 
     connect_with_vnet(&a_agent, &b_agent).await?;
     let _ = a_connected.recv().await;
@@ -109,17 +110,26 @@ async fn test_multicast_dns_static_host_name() -> Result<()> {
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-    a.on_candidate(Box::new(
-        move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-            let done_tx_clone = Arc::clone(&done_tx);
-            Box::pin(async move {
-                if c.is_none() {
-                    let mut tx = done_tx_clone.lock().await;
+
+    struct CandidateHandler {
+        done_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl AgentEventHandler for CandidateHandler {
+        fn on_candidate(
+            &mut self,
+            candidate: Option<Arc<dyn Candidate + Send + Sync>>,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if candidate.is_none() {
+                    let mut tx = self.done_tx.lock().await;
                     tx.take();
                 }
-            })
-        },
-    ));
+            }
+        }
+    }
+
+    a.with_event_handler(CandidateHandler { done_tx });
 
     a.gather_candidates()?;
 

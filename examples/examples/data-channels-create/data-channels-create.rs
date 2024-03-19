@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -8,12 +9,73 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::{RTCDataChannel, RTCDataChannelEventHandler};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::math_rand_alpha;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::PeerConnectionEventHandler;
+
+struct ConnectionHandler {
+    done_tx: Arc<tokio::sync::mpsc::Sender<()>>,
+}
+
+impl PeerConnectionEventHandler for ConnectionHandler {
+    // Set the handler for Peer connection state
+    // This will notify you when the peer has connected/disconnected
+    fn on_peer_connection_state_change(
+        &mut self,
+        state: RTCPeerConnectionState,
+    ) -> impl Future<Output = ()> + Send {
+        async move {
+            if state == RTCPeerConnectionState::Failed {
+                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                println!("Peer Connection has gone to failed exiting");
+                let _ = self.done_tx.try_send(());
+            }
+        }
+    }
+}
+
+struct DataChannelHandler {
+    channel: Arc<RTCDataChannel>,
+    label: String,
+    id: u16,
+}
+
+impl RTCDataChannelEventHandler for DataChannelHandler {
+    // Register channel opening handling
+    fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+        async move {
+            println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", self.label, self.id);
+
+            let mut result = Result::<usize>::Ok(0);
+            while result.is_ok() {
+                let timeout = tokio::time::sleep(Duration::from_secs(5));
+                tokio::pin!(timeout);
+
+                tokio::select! {
+                    _ = timeout.as_mut() =>{
+                        let message = math_rand_alpha(15);
+                        println!("Sending '{message}'");
+                        result = self.channel.send_text(message).await.map_err(Into::into);
+                    }
+                };
+            }
+        }
+    }
+
+    // Register text message handling
+    fn on_message(&mut self, msg: DataChannelMessage) -> impl Future<Output = ()> + Send {
+        let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+        println!("Message from DataChannel '{}': '{msg_str}'", self.label);
+        async {}
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -98,54 +160,16 @@ async fn main() -> Result<()> {
     // Create a datachannel with label 'data'
     let data_channel = peer_connection.create_data_channel("data", None).await?;
 
+    data_channel.with_event_handler(DataChannelHandler {
+        channel: data_channel.clone(),
+        label: data_channel.label().to_owned(),
+        id: data_channel.id(),
+    });
+
     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let done_tx = Arc::new(done_tx);
 
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
-
-        if s == RTCPeerConnectionState::Failed {
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting");
-            let _ = done_tx.try_send(());
-        }
-
-        Box::pin(async {})
-    }));
-
-    // Register channel opening handling
-    let d1 = Arc::clone(&data_channel);
-    data_channel.on_open(Box::new(move || {
-        println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d1.label(), d1.id());
-
-        let d2 = Arc::clone(&d1);
-        Box::pin(async move {
-            let mut result = Result::<usize>::Ok(0);
-            while result.is_ok() {
-                let timeout = tokio::time::sleep(Duration::from_secs(5));
-                tokio::pin!(timeout);
-
-                tokio::select! {
-                    _ = timeout.as_mut() =>{
-                        let message = math_rand_alpha(15);
-                        println!("Sending '{message}'");
-                        result = d2.send_text(message).await.map_err(Into::into);
-                    }
-                };
-            }
-        })
-    }));
-
-    // Register text message handling
-    let d_label = data_channel.label().to_owned();
-    data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
-        let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-        println!("Message from DataChannel '{d_label}': '{msg_str}'");
-        Box::pin(async {})
-    }));
+    peer_connection.with_event_handler(ConnectionHandler { done_tx });
 
     // Create an offer to send to the browser
     let offer = peer_connection.create_offer(None).await?;

@@ -1,0 +1,25 @@
+use tokio::sync::Mutex;
+use arc_swap::ArcSwapOption;
+
+pub struct EventHandler<T: ?Sized> {
+    inner: ArcSwapOption<Mutex<Box<T>>>,
+}
+
+impl <T: ?Sized> EventHandler<T> {
+    fn empty() -> Self {
+        Self { inner: ArcSwapOption::empty() } 
+    }
+
+    async fn load(&self) -> Option<&T> {
+
+        let guard = self.inner.load();
+        let handler = guard.as_ref()?.lock().await;
+        //Some(&*handler)
+    }
+}
+
+impl <T: ?Sized> Default for EventHandler<T> {
+    fn default() -> Self {
+        Self::empty()
+    }
+}

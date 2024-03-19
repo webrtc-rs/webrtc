@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU32;
 
 use tokio::time::Duration;
-use waitgroup::WaitGroup;
+use waitgroup::{WaitGroup, Worker};
 
 use super::*;
 use crate::api::media_engine::MediaEngine;
@@ -9,9 +9,8 @@ use crate::api::APIBuilder;
 use crate::error::Result;
 use crate::ice_transport::ice_connection_state::RTCIceConnectionState;
 use crate::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use crate::peer_connection::peer_connection_test::{
-    close_pair_now, new_pair, signal_pair, until_connection_state,
-};
+use crate::peer_connection::peer_connection_test::{close_pair_now, new_pair, signal_pair};
+use crate::peer_connection::PeerConnectionEventHandler;
 
 #[tokio::test]
 async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
@@ -23,27 +22,43 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
 
     let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
     let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
-    pc_answer.on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
-        let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
-        Box::pin(async move {
-            if ice_state == RTCIceConnectionState::Connected {
+
+    struct AnswerHandler {
+        ice_complete_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
+    }
+
+    impl PeerConnectionEventHandler for AnswerHandler {
+        fn on_ice_connection_state_change(&mut self, state: RTCIceConnectionState) -> impl Future<Output = ()> + Send {
+            async move {
+
+            if state == RTCIceConnectionState::Connected {
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                let mut done = ice_complete_tx2.lock().await;
+                let mut done = self.ice_complete_tx.lock().await;
                 done.take();
             }
-        })
-    }));
+            }
+        }
+    }
+
+    pc_answer.with_event_handler(AnswerHandler{ ice_complete_tx });
+
+    struct OfferHandler {
+        candidate_changes: Arc<AtomicU32>,
+    }
+
+    impl IceTransportEventHandler for OfferHandler {
+        fn on_selected_candidate_pair_change(&mut self, _: RTCIceCandidatePair) -> impl Future<Output = ()> + Send {
+            self.candidate_changes.fetch_add(1, Ordering::SeqCst);
+            async {}
+        }
+    }
 
     let sender_called_candidate_change = Arc::new(AtomicU32::new(0));
-    let sender_called_candidate_change2 = Arc::clone(&sender_called_candidate_change);
     pc_offer
         .sctp()
         .transport()
         .ice_transport()
-        .on_selected_candidate_pair_change(Box::new(move |_: RTCIceCandidatePair| {
-            sender_called_candidate_change2.store(1, Ordering::SeqCst);
-            Box::pin(async {})
-        }));
+        .with_event_handler(OfferHandler{candidate_changes: sender_called_candidate_change.clone()});
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 
@@ -68,18 +83,30 @@ async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
     let (mut offerer, mut answerer) = new_pair(&api).await?;
 
     let peer_connection_connected = WaitGroup::new();
-    until_connection_state(
-        &mut offerer,
-        &peer_connection_connected,
-        RTCPeerConnectionState::Connected,
-    )
-    .await;
-    until_connection_state(
-        &mut answerer,
-        &peer_connection_connected,
-        RTCPeerConnectionState::Connected,
-    )
-    .await;
+
+    struct ConnectionStateHandler {
+        worker: Arc<Mutex<Option<Worker>>>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionStateHandler {
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            async move {
+                if state == RTCPeerConnectionState::Connected {
+                    let mut worker = self.worker.lock().await;
+                    worker.take();
+                }
+            }
+        }
+    }
+    offerer.with_event_handler(ConnectionStateHandler {
+        worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker()))),
+    });
+    answerer.with_event_handler(ConnectionStateHandler {
+        worker: Arc::new(Mutex::new(Some(peer_connection_connected.worker()))),
+    });
 
     let offerer_selected_pair = offerer
         .sctp()

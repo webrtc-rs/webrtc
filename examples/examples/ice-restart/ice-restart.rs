@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -13,12 +14,12 @@ use tokio_util::codec::{BytesCodec, FramedRead};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
-use webrtc::data_channel::RTCDataChannel;
+use webrtc::data_channel::{RTCDataChannel, RTCDataChannelEventHandler};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
+use webrtc::peer_connection::{PeerConnectionEventHandler, RTCPeerConnection};
 
 #[macro_use]
 extern crate lazy_static;
@@ -108,32 +109,49 @@ async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error
             };
             let pc = Arc::new(pc);
 
-            // Set the handler for ICE connection state
-            // This will notify you when the peer has connected/disconnected
-            pc.on_ice_connection_state_change(Box::new(
-                |connection_state: RTCIceConnectionState| {
-                    println!("ICE Connection State has changed: {connection_state}");
-                    Box::pin(async {})
-                },
-            ));
+            struct ConnectionHandler;
 
-            // Send the current time via a DataChannel to the remote peer every 3 seconds
-            pc.on_data_channel(Box::new(|d: Arc<RTCDataChannel>| {
-                Box::pin(async move {
-                    let d2 = Arc::clone(&d);
-                    d.on_open(Box::new(move || {
-                        Box::pin(async move {
-                            while d2
-                                .send_text(format!("{:?}", tokio::time::Instant::now()))
-                                .await
-                                .is_ok()
-                            {
-                                tokio::time::sleep(Duration::from_secs(3)).await;
-                            }
-                        })
-                    }));
-                })
-            }));
+            struct ChannelHandler {
+                channel: Arc<RTCDataChannel>,
+            }
+
+            impl RTCDataChannelEventHandler for ChannelHandler {
+                fn on_open(&mut self) -> impl Future<Output = ()> + Send {
+                    async move {
+                        while self
+                            .channel
+                            .send_text(format!("{:?}", tokio::time::Instant::now()))
+                            .await
+                            .is_ok()
+                        {
+                            tokio::time::sleep(Duration::from_secs(3)).await;
+                        }
+                    }
+                }
+            }
+
+            impl PeerConnectionEventHandler for ConnectionHandler {
+                // Set the handler for ICE connection state
+                // This will notify you when the peer has connected/disconnected
+                fn on_ice_connection_state_change(
+                    &mut self,
+                    state: RTCIceConnectionState,
+                ) -> impl Future<Output = ()> + Send {
+                    println!("ICE Connection State has changed: {state}");
+                    async {}
+                }
+
+                // Send the current time via a DataChannel to the remote peer every 3 seconds
+                fn on_data_channel(
+                    &mut self,
+                    channel: Arc<RTCDataChannel>,
+                ) -> impl Future<Output = ()> + Send {
+                    channel.with_event_handler(ChannelHandler {
+                        channel: channel.clone(),
+                    });
+                    async {}
+                }
+            }
 
             *peer_connection = Some(Arc::clone(&pc));
             pc

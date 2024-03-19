@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::future::Future;
 use std::io::{BufReader, Write};
 use std::net::SocketAddr;
 use std::path::Path;
@@ -22,6 +23,7 @@ use webrtc::media::Sample;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::PeerConnectionEventHandler;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
@@ -323,19 +325,29 @@ async fn main() -> Result<()> {
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
 
-        if s == RTCPeerConnectionState::Failed {
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting");
-            let _ = done_tx.try_send(());
+    struct ConnectionHandler {
+        done_tx: tokio::sync::mpsc::Sender<()>,
+    }
+
+    impl PeerConnectionEventHandler for ConnectionHandler {
+        fn on_peer_connection_state_change(
+            &mut self,
+            state: RTCPeerConnectionState,
+        ) -> impl Future<Output = ()> + Send {
+            println!("Peer Connection State has changed: {state}");
+
+            if state == RTCPeerConnectionState::Failed {
+                // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
+                // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
+                // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
+                println!("Peer Connection has gone to failed exiting");
+                let _ = self.done_tx.try_send(());
+            }
+            async {}
         }
-
-        Box::pin(async {})
-    }));
+    }
+    peer_connection.with_event_handler(ConnectionHandler { done_tx });
 
     {
         let mut pcm = PEER_CONNECTION_MUTEX.lock().await;
