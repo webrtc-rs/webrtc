@@ -211,26 +211,20 @@ pub(crate) fn track_details_from_sdp(
             };
         }
 
+        // If media line is using RTP Stream Identifier Source Description per RFC8851
+        // we will need to override tracks, and remove ssrcs.
+        // This is in particular important for Firefox, as it uses both 'rid', 'simulcast'
+        // and 'a=ssrc' lines.
         let rids = get_rids(media);
         if !rids.is_empty() && !track_id.is_empty() && !stream_id.is_empty() {
-            let mut simulcast_track = TrackDetails {
+            tracks_in_media_section = vec![TrackDetails {
                 mid: SmolStr::from(mid_value),
                 kind: codec_type,
                 stream_id: stream_id.to_owned(),
                 id: track_id.to_owned(),
-                rids: vec![],
+                rids: rids.iter().map(|r| SmolStr::from(&r.id)).collect(),
                 ..Default::default()
-            };
-            for rid in &rids {
-                simulcast_track.rids.push(SmolStr::from(&rid.id));
-            }
-            if simulcast_track.rids.len() == tracks_in_media_section.len() {
-                for track in &tracks_in_media_section {
-                    simulcast_track.ssrcs.extend(&track.ssrcs)
-                }
-            }
-
-            tracks_in_media_section = vec![simulcast_track];
+            }];
         }
 
         incoming_tracks.extend(tracks_in_media_section);
