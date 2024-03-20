@@ -1731,26 +1731,24 @@ impl RTCPeerConnection {
     }
 
     /// remove_track removes a Track from the PeerConnection
-    pub async fn remove_track(&self, sender: &Arc<RTCRtpSender>) -> Result<()> {
+    pub async fn remove_track(&self, track: Arc<dyn TrackLocal + Send + Sync>) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed);
         }
 
-        let mut transceiver = None;
+        let mut signals = None;
         {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
-                if t.sender().await.id == sender.id {
-                    if sender.track().await.is_none() {
-                        return Ok(());
-                    }
-                    transceiver = Some(t.clone());
+                let sender = t.sender().await;
+                if sender.id == track.id() {
+                    signals = Some((t.clone(), sender.clone()));
                     break;
                 }
             }
         }
 
-        let t = transceiver.ok_or(Error::ErrSenderNotCreatedByConnection)?;
+        let (t, s) = signals.ok_or(Error::ErrSenderNotCreatedByConnection)?;
 
         // This also happens in `set_sending_track` but we need to make sure we do this
         // before we call sender.stop to avoid a race condition when removing tracks and
@@ -1760,7 +1758,7 @@ impl RTCPeerConnection {
             t.direction().has_recv(),
         ));
         // Stop the sender
-        let sender_result = sender.stop().await;
+        let sender_result = s.stop().await;
         // This also updates direction
         let sending_track_result = t.set_sending_track(None).await;
 
