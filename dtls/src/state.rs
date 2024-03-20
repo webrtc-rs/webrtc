@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use util::{KeyingMaterialExporter, KeyingMaterialExporterError};
+use util::{conn::ConnState, KeyingMaterialExporter, KeyingMaterialExporterError};
 
 use super::cipher_suite::*;
 use super::conn::*;
@@ -62,6 +62,12 @@ struct SerializedState {
     peer_certificates: Vec<Vec<u8>>,
     identity_hint: Vec<u8>,
     is_client: bool,
+}
+
+impl ConnState for State {
+    fn psk_identity(&self) -> Option<Vec<u8>> {
+        Some(self.identity_hint.clone())
+    }
 }
 
 impl Default for State {

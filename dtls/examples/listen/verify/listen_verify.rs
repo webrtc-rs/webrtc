@@ -97,7 +97,7 @@ async fn main() -> Result<(), Error> {
                 }
                 result = listener2.accept() => {
                     match result{
-                        Ok((dtls_conn, _)) => {
+                        Ok((dtls_conn, _ctx, _)) => {
                             // Register the connection with the chat hub
                             h2.register(dtls_conn).await;
                         }

@@ -73,12 +73,20 @@ impl Listener for DTLSListener {
     /// You have to either close or read on all connection that are created.
     /// Connection handshake will timeout using ConnectContextMaker in the Config.
     /// If you want to specify the timeout duration, set ConnectContextMaker.
-    async fn accept(&self) -> UtilResult<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
-        let (conn, raddr) = self.parent.accept().await?;
+    async fn accept(
+        &self,
+    ) -> UtilResult<(
+        Arc<dyn Conn + Send + Sync>,
+        Option<Arc<dyn ConnState + Send + Sync>>,
+        SocketAddr,
+    )> {
+        let (conn, _state, raddr) = self.parent.accept().await?;
         let dtls_conn = DTLSConn::new(conn, self.config.clone(), false, None)
             .await
             .map_err(util::Error::from_std)?;
-        Ok((Arc::new(dtls_conn), raddr))
+
+        let state = Arc::new(dtls_conn.connection_state().await);
+        Ok((Arc::new(dtls_conn), Some(state), raddr))
     }
 
     /// Close closes the listener.
