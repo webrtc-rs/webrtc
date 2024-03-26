@@ -152,8 +152,7 @@ impl UDPMuxDefault {
                 let conn = s
                     .split(':')
                     .next()
-                    .and_then(|ufrag| conns.get(ufrag))
-                    .map(Clone::clone);
+                    .and_then(|ufrag| conns.get(ufrag)).cloned();
 
                 conn
             }
@@ -178,7 +177,7 @@ impl UDPMuxDefault {
                                         .address_map
                                         .read();
 
-                                    address_map.get(&addr).map(Clone::clone)
+                                    address_map.get(&addr).cloned()
                                 };
 
                                 let conn = match conn {
