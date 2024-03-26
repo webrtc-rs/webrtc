@@ -76,10 +76,13 @@ impl RTCIceCandidate {
             priority: self.priority,
             ..Default::default()
         };
-        
+
         let c = match self.typ {
             RTCIceCandidateType::Host => {
-                let config = CandidateHostConfig {base_config, ..Default::default()};
+                let config = CandidateHostConfig {
+                    base_config,
+                    ..Default::default()
+                };
                 config.new_candidate_host()?
             }
             RTCIceCandidateType::Srflx => {

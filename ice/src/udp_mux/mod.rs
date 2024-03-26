@@ -152,7 +152,8 @@ impl UDPMuxDefault {
                 let conn = s
                     .split(':')
                     .next()
-                    .and_then(|ufrag| conns.get(ufrag)).cloned();
+                    .and_then(|ufrag| conns.get(ufrag))
+                    .cloned();
 
                 conn
             }

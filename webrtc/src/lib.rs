@@ -3,7 +3,6 @@
 
 pub use {data, dtls, ice, interceptor, mdns, media, rtcp, rtp, sctp, sdp, srtp, stun, turn, util};
 
-
 /// [`peer_connection::RTCPeerConnection`] allows to establish connection between two peers given RTC configuration. Its API is similar to one in JavaScript.
 pub mod peer_connection;
 
@@ -14,7 +13,7 @@ pub mod ice_transport;
 pub mod data_channel;
 
 /// Module responsible for multiplexing data streams of different protocols on one socket. Custom [`mux::endpoint::Endpoint`] with [`mux::mux_func::MatchFunc`] can be used for parsing your application-specific byte stream.
-pub mod mux;  // TODO: why is this public? does someone really extend WebRTC stack?
+pub mod mux; // TODO: why is this public? does someone really extend WebRTC stack?
 
 /// Measuring connection statistics, such as amount of data transmitted or round trip time.
 pub mod stats;
@@ -29,7 +28,6 @@ pub mod dtls_transport;
 pub mod rtp_transceiver;
 pub mod sctp_transport;
 pub mod track;
-
 
 pub use error::Error;
 
