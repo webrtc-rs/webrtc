@@ -50,12 +50,10 @@ fn test_extract_fingerprint() -> Result<()> {
     //"No Fingerprint"
     {
         let s = SessionDescription::default();
-
-        if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(err, Error::ErrSessionDescriptionNoFingerprint);
-        } else {
-            panic!();
-        }
+        
+        assert_eq!(extract_fingerprint(&s)
+                  .expect_err("fingerprint absence must be detected"),
+            Error::ErrSessionDescriptionNoFingerprint);
     }
 
     //"Invalid Fingerprint"
@@ -68,11 +66,9 @@ fn test_extract_fingerprint() -> Result<()> {
             ..Default::default()
         };
 
-        if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(err, Error::ErrSessionDescriptionInvalidFingerprint);
-        } else {
-            panic!();
-        }
+        assert_eq!(extract_fingerprint(&s)
+                  .expect_err("invalid fingerprint text must be detected"),
+            Error::ErrSessionDescriptionInvalidFingerprint);
     }
 
     //"Conflicting Fingerprint"
@@ -92,11 +88,9 @@ fn test_extract_fingerprint() -> Result<()> {
             ..Default::default()
         };
 
-        if let Err(err) = extract_fingerprint(&s) {
-            assert_eq!(err, Error::ErrSessionDescriptionConflictingFingerprints);
-        } else {
-            panic!();
-        }
+        assert_eq!(extract_fingerprint(&s)
+                  .expect_err("mismatching fingerprint texts must be detected"),
+            Error::ErrSessionDescriptionConflictingFingerprints);
     }
 
     Ok(())
@@ -119,12 +113,10 @@ async fn test_extract_ice_details() -> Result<()> {
             }],
             ..Default::default()
         };
-
-        if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(err, Error::ErrSessionDescriptionMissingIcePwd);
-        } else {
-            panic!();
-        }
+        
+        assert_eq!(extract_ice_details(&s).await
+                  .expect_err("ICE requires password for authentication"),
+            Error::ErrSessionDescriptionMissingIcePwd);
     }
 
     //"Missing ice-ufrag"
@@ -140,11 +132,9 @@ async fn test_extract_ice_details() -> Result<()> {
             ..Default::default()
         };
 
-        if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(err, Error::ErrSessionDescriptionMissingIceUfrag);
-        } else {
-            panic!();
-        }
+        assert_eq!(extract_ice_details(&s).await
+                  .expect_err("ICE requires 'user fragment' for authentication"),
+            Error::ErrSessionDescriptionMissingIceUfrag);
     }
 
     //"ice details at session level"
@@ -216,11 +206,9 @@ async fn test_extract_ice_details() -> Result<()> {
             ..Default::default()
         };
 
-        if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(err, Error::ErrSessionDescriptionConflictingIceUfrag);
-        } else {
-            panic!();
-        }
+        assert_eq!(extract_ice_details(&s).await
+                  .expect_err("mismatching ICE ufrags must be detected"),
+            Error::ErrSessionDescriptionConflictingIceUfrag);
     }
 
     //"Conflict pwd"
@@ -246,11 +234,9 @@ async fn test_extract_ice_details() -> Result<()> {
             ..Default::default()
         };
 
-        if let Err(err) = extract_ice_details(&s).await {
-            assert_eq!(err, Error::ErrSessionDescriptionConflictingIcePwd);
-        } else {
-            panic!();
-        }
+        assert_eq!(extract_ice_details(&s).await
+                  .expect_err("mismatching ICE passwords must be detected"),
+            Error::ErrSessionDescriptionConflictingIcePwd);
     }
 
     Ok(())
