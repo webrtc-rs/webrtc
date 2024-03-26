@@ -17,8 +17,8 @@ mod packetizer;
 pub struct Av1Payloader {}
 
 impl Payloader for Av1Payloader {
-    /// Based on https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc
-    /// Reference: https://aomediacodec.github.io/av1-rtp-spec/#45-payload-structure
+    /// Based on <https://chromium.googlesource.com/external/webrtc/+/4e513346ec56c829b3a6010664998469fc237b35/modules/rtp_rtcp/source/rtp_packetizer_av1.cc>
+    /// Reference: <https://aomediacodec.github.io/av1-rtp-spec/#45-payload-structure>
     fn payload(&mut self, mtu: usize, payload: &Bytes) -> crate::error::Result<Vec<Bytes>> {
         // 0                   1                   2                   3
         // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

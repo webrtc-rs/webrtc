@@ -28,7 +28,7 @@ fn is_key_frame(data: &[u8]) -> bool {
 /// write the data to an io.Writer.
 /// Currently it only supports non-interleaved mode
 /// Therefore, only 1-23, 24 (STAP-A), 28 (FU-A) NAL types are allowed.
-/// https://tools.ietf.org/html/rfc6184#section-5.2
+/// <https://tools.ietf.org/html/rfc6184#section-5.2>
 pub struct H264Writer<W: Write + Seek> {
     writer: W,
     has_key_frame: bool,
