@@ -493,6 +493,8 @@ impl RTCRtpReceiver {
         if tracks.len() != 1 {
             None
         } else {
+            // Clippy bug (reported at https://github.com/rust-lang/rust-clippy/issues/12560) suggests .first().cloned()
+            #[allow(clippy::map_clone)]
             tracks.first().map(|t| Arc::clone(&t.track))
         }
     }

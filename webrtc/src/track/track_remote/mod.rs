@@ -212,7 +212,7 @@ impl TrackRemote {
     /// Reads data from the track.
     ///
     /// **Cancel Safety:** This method is not cancel safe. Dropping the resulting [`Future`] before
-    /// it returns [`Poll::Ready`] will cause data loss.
+    /// it returns [`std::task::Poll::Ready`] will cause data loss.
     pub async fn read(&self, b: &mut [u8]) -> Result<(rtp::packet::Packet, Attributes)> {
         {
             // Internal lock scope

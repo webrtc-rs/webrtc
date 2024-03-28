@@ -29,7 +29,7 @@ pub struct OggReader<R: Read> {
 
 /// OggHeader is the metadata from the first two pages
 /// in the file (ID and Comment)
-/// https://tools.ietf.org/html/rfc7845.html#section-3
+/// <https://tools.ietf.org/html/rfc7845.html#section-3>
 pub struct OggHeader {
     pub channel_map: u8,
     pub channels: u8,
@@ -41,7 +41,7 @@ pub struct OggHeader {
 
 /// OggPageHeader is the metadata for a Page
 /// Pages are the fundamental unit of multiplexing in an Ogg stream
-/// https://tools.ietf.org/html/rfc7845.html#section-1
+/// <https://tools.ietf.org/html/rfc7845.html#section-1>
 pub struct OggPageHeader {
     pub granule_position: u64,
 

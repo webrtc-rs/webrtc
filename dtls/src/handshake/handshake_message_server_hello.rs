@@ -42,7 +42,7 @@ impl PartialEq for HandshakeMessageServerHello {
 
 impl fmt::Debug for HandshakeMessageServerHello {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = vec![
+        let s = [
             format!("version: {:?} random: {:?}", self.version, self.random),
             format!("cipher_suites: {:?}", self.cipher_suite),
             format!("compression_method: {:?}", self.compression_method),

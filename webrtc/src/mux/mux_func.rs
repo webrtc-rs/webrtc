@@ -31,13 +31,13 @@ pub fn match_range(lower: u8, upper: u8) -> MatchFunc {
 ///              |    [128..191] -+--> forward to RTP/RTCP
 ///              +----------------+
 /// match_dtls is a MatchFunc that accepts packets with the first byte in [20..63]
-/// as defied in RFC7983
+/// as defined in RFC7983
 pub fn match_dtls(b: &[u8]) -> bool {
     match_range(20, 63)(b)
 }
 
 // match_srtp_or_srtcp is a MatchFunc that accepts packets with the first byte in [128..191]
-// as defied in RFC7983
+// as defined in RFC7983
 pub fn match_srtp_or_srtcp(b: &[u8]) -> bool {
     match_range(128, 191)(b)
 }

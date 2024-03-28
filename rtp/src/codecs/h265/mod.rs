@@ -11,15 +11,15 @@ mod h265_test;
 ///
 
 const H265NALU_HEADER_SIZE: usize = 2;
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
 const H265NALU_AGGREGATION_PACKET_TYPE: u8 = 48;
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+/// <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3>
 const H265NALU_FRAGMENTATION_UNIT_TYPE: u8 = 49;
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
+/// <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4>
 const H265NALU_PACI_PACKET_TYPE: u8 = 50;
 
 /// H265NALUHeader is a H265 NAL Unit Header
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-1.1.4
+/// <https://datatracker.ietf.org/doc/html/rfc7798#section-1.1.4>
 /// +---------------+---------------+
 ///  |0|1|2|3|4|5|6|7|0|1|2|3|4|5|6|7|
 ///  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -97,7 +97,7 @@ impl H265NALUHeader {
 ///   |                               :...OPTIONAL RTP padding        |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
+/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1>
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265SingleNALUnitPacket {
     /// payload_header is the header of the H265 packet.
@@ -186,7 +186,7 @@ impl H265SingleNALUnitPacket {
 ///   |                               :
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnitFirst {
     donl: Option<u16>,
@@ -226,7 +226,7 @@ impl H265AggregationUnitFirst {
 ///   |                               :
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnit {
     dond: Option<u8>,
@@ -266,7 +266,7 @@ impl H265AggregationUnit {
 ///   |                               :...OPTIONAL RTP padding        |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationPacket {
     first_unit: Option<H265AggregationUnitFirst>,
@@ -427,7 +427,7 @@ impl H265FragmentationUnitHeader {
 /// |                               :...OPTIONAL RTP padding        |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3>
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265FragmentationUnitPacket {
     /// payload_header is the header of the H265 packet.
@@ -526,7 +526,7 @@ impl H265FragmentationUnitPacket {
 /// |                               :...OPTIONAL RTP padding        |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
+/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4>
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265PACIPacket {
     /// payload_header is the header of the H265 packet.
@@ -655,7 +655,7 @@ impl H265PACIPacket {
 ///
 
 /// H265TSCI is a Temporal Scalability Control Information header extension.
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.5
+/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.5>
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265TSCI(pub u32);
 

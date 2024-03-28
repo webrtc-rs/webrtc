@@ -44,7 +44,7 @@ impl EphemeralUDP {
 ///
 /// In Ephemeral mode sockets are created and bound to random ports during ICE
 /// gathering. The ports to use can be restricted by setting [`EphemeralUDP::port_min`] and
-/// [`EphemeralEphemeralUDP::port_max`] in which case only ports in this range will be used.
+/// [`EphemeralUDP::port_max`] in which case only ports in this range will be used.
 ///
 /// **Muxed**
 ///

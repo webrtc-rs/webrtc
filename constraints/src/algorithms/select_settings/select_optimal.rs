@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn monotonic_increasing() {
-        let settings = vec![
+        let settings = [
             MediaTrackSettings::default(),
             MediaTrackSettings::default(),
             MediaTrackSettings::default(),
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn monotonic_decreasing() {
-        let settings = vec![
+        let settings = [
             MediaTrackSettings::default(),
             MediaTrackSettings::default(),
             MediaTrackSettings::default(),
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn alternating() {
-        let settings = vec![
+        let settings = [
             MediaTrackSettings::default(),
             MediaTrackSettings::default(),
             MediaTrackSettings::default(),

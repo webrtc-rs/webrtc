@@ -68,8 +68,8 @@ struct ReceiverInternal {
     close_rx: Mutex<Option<mpsc::Receiver<()>>>,
 }
 
-/// Receiver sends transport wide congestion control reports as specified in:
-/// https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
+/// Receiver sends transport-wide congestion control reports as specified in:
+/// <https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01>
 pub struct Receiver {
     internal: Arc<ReceiverInternal>,
 

@@ -327,16 +327,16 @@ unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> 
             // For some reason, some IpDadState::IpDadStateDeprecated addresses are return
             // These contain BOGUS interface indices and will cause problesm if used
             if curr_unicast_addr.dad_state != IpDadState::IpDadStateDeprecated {
-                if is_ipv4_enabled(&curr_unicast_addr) {
+                if is_ipv4_enabled(curr_unicast_addr) {
                     adapter_addresses.push(Interface {
                         name: "".to_string(),
                         kind: Kind::Ipv4,
-                        addr: Some(SocketAddr::V4(v4_socket_from_adapter(&curr_unicast_addr))),
+                        addr: Some(SocketAddr::V4(v4_socket_from_adapter(curr_unicast_addr))),
                         mask: None,
                         hop: None,
                     });
-                } else if is_ipv6_enabled(&curr_unicast_addr) {
-                    let mut v6_sock = v6_socket_from_adapter(&curr_unicast_addr);
+                } else if is_ipv6_enabled(curr_unicast_addr) {
+                    let mut v6_sock = v6_socket_from_adapter(curr_unicast_addr);
                     // Make sure the scope id is set for ALL interfaces, not just link-local
                     v6_sock.set_scope_id(curr_adapter_addr.xp.ipv6_if_index);
                     adapter_addresses.push(Interface {

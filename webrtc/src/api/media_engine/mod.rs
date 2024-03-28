@@ -349,7 +349,7 @@ impl MediaEngine {
     }
 
     /// Adds a header extension to the MediaEngine
-    /// To determine the negotiated value use [`get_header_extension_id`] after signaling is complete.
+    /// To determine the negotiated value use [`MediaEngine::get_header_extension_id`] after signaling is complete.
     ///
     /// The `allowed_direction` controls for which transceiver directions the extension matches. If
     /// set to `None` it matches all directions. The `SendRecv` direction would match all transceiver
@@ -417,7 +417,7 @@ impl MediaEngine {
 
     /// get_header_extension_id returns the negotiated ID for a header extension.
     /// If the Header Extension isn't enabled ok will be false
-    pub(crate) async fn get_header_extension_id(
+    pub async fn get_header_extension_id(
         &self,
         extension: RTCRtpHeaderExtensionCapability,
     ) -> (isize, bool, bool) {

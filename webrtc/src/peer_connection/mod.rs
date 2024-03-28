@@ -1,14 +1,18 @@
 #[cfg(test)]
 pub(crate) mod peer_connection_test;
 
+/// Custom media-related options, such as `voice_activity_detection`, which are negotiated while establishing connection.
+pub mod offer_answer_options;
+
+/// [`RTCSessionDescription`] - wrapper for SDP text and negotiations stage ([`RTCSdpType`]: offer - pranswer - answer - rollback).
+pub mod sdp;
+
 pub mod certificate;
 pub mod configuration;
-pub mod offer_answer_options;
 pub(crate) mod operation;
 mod peer_connection_internal;
 pub mod peer_connection_state;
 pub mod policy;
-pub mod sdp;
 pub mod signaling_state;
 
 use std::future::Future;

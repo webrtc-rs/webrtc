@@ -1449,7 +1449,7 @@ fn test_sample_builder_clean_reference() {
 
 #[test]
 fn test_sample_builder_push_max_zero() {
-    let pkts = vec![Packet {
+    let pkt = Packet {
         header: Header {
             sequence_number: 0,
             timestamp: 0,
@@ -1457,13 +1457,13 @@ fn test_sample_builder_push_max_zero() {
             ..Default::default()
         },
         payload: bytes!(0x01),
-    }];
+    };
     let d = FakeDepacketizer {
         head_checker: true,
         head_bytes: vec![bytes!(0x01)],
     };
     let mut s = SampleBuilder::new(0, d, 1);
-    s.push(pkts[0].clone());
+    s.push(pkt);
     assert!(s.pop().is_some(), "Should expect a popped sample.")
 }
 

@@ -23,11 +23,11 @@ pub struct StreamInfo {
 }
 
 /// RTCPFeedback signals the connection to use additional RTCP packet types.
-/// https://draft.ortc.org/#dom-rtcrtcpfeedback
+/// <https://draft.ortc.org/#dom-rtcrtcpfeedback>
 #[derive(Default, Debug, Clone)]
 pub struct RTCPFeedback {
     /// Type is the type of feedback.
-    /// see: https://draft.ortc.org/#dom-rtcrtcpfeedback
+    /// see: <https://draft.ortc.org/#dom-rtcrtcpfeedback>
     /// valid: ack, ccm, nack, goog-remb, transport-cc
     pub typ: String,
 
