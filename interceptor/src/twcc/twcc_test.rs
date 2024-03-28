@@ -259,7 +259,7 @@ fn test_feedback() -> Result<()> {
             pkt.packet_chunks
         );
 
-        let expected_deltas = vec![
+        let expected_deltas = [
             RecvDelta {
                 type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                 delta: 0,
@@ -338,7 +338,7 @@ fn test_feedback() -> Result<()> {
             pkt.packet_chunks
         );
 
-        let expected_deltas = vec![
+        let expected_deltas = [
             RecvDelta {
                 type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                 delta: 0,
