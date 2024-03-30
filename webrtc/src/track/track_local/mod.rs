@@ -6,11 +6,12 @@ pub mod track_local_static_sample;
 
 use std::any::Any;
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use interceptor::{Attributes, RTPWriter};
+use portable_atomic::AtomicBool;
 use tokio::sync::Mutex;
 use util::Unmarshal;
 

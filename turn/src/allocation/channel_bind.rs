@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod channel_bind_test;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use portable_atomic::AtomicBool;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
 

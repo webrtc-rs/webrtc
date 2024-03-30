@@ -22,6 +22,7 @@ thiserror = "1"
 rand = "0.8"
 waitgroup = "0.1"
 log = "0.4"
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"

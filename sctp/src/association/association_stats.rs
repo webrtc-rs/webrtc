@@ -1,4 +1,5 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use portable_atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 #[derive(Default, Debug)]
 pub(crate) struct AssociationStats {
