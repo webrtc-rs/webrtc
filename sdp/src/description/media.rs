@@ -202,7 +202,7 @@ impl MediaDescription {
 
 /// RangedPort supports special format for the media field "m=" port value. If
 /// it may be necessary to specify multiple transport ports, the protocol allows
-/// to write it as: <port>/<number of ports> where number of ports is a an
+/// to write it as: `<port>/<number of ports>` where number of ports is a an
 /// offsetting range.
 #[derive(Debug, Default, Clone)]
 pub struct RangedPort {
@@ -231,7 +231,7 @@ pub struct MediaName {
 
 impl fmt::Display for MediaName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = vec![
+        let s = [
             self.media.clone(),
             self.port.to_string(),
             self.protos.join("/"),

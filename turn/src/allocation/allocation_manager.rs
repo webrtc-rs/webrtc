@@ -76,7 +76,7 @@ impl Manager {
     /// Fetches the [`Allocation`] matching the passed [`FiveTuple`].
     pub async fn get_allocation(&self, five_tuple: &FiveTuple) -> Option<Arc<Allocation>> {
         let allocations = self.allocations.lock().await;
-        allocations.get(five_tuple).map(Arc::clone)
+        allocations.get(five_tuple).cloned()
     }
 
     /// Creates a new [`Allocation`] and starts relaying.

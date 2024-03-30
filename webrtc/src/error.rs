@@ -10,6 +10,8 @@ use tokio::sync::mpsc::error::SendError as MpscSendError;
 use crate::peer_connection::sdp::sdp_type::RTCSdpType;
 use crate::peer_connection::signaling_state::RTCSignalingState;
 use crate::rtp_transceiver::rtp_receiver;
+#[cfg(doc)]
+use crate::rtp_transceiver::rtp_sender;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -128,13 +130,13 @@ pub enum Error {
     #[error("protocol is larger then 65535 bytes")]
     ErrProtocolTooLarge,
 
-    /// ErrSenderNotCreatedByConnection indicates remove_track was called with a RtpSender not created
-    /// by this PeerConnection
+    /// ErrSenderNotCreatedByConnection indicates remove_track was called with a
+    /// [`rtp_sender::RTCRtpSender`] not created by this PeerConnection
     #[error("RtpSender not created by this PeerConnection")]
     ErrSenderNotCreatedByConnection,
 
     /// ErrSenderInitialTrackIdAlreadySet indicates a second call to
-    /// [`RtpSender::set_initial_track_id`] which is not allowed.
+    /// `RTCRtpSender::set_initial_track_id` which is not allowed. Purely internal error, should not happen in practice.
     #[error("RtpSender's initial_track_id has already been set")]
     ErrSenderInitialTrackIdAlreadySet,
 

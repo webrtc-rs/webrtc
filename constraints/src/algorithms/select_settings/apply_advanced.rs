@@ -73,7 +73,7 @@ mod tests {
             &RESIZE_MODE,
         ]);
 
-        let settings = vec![
+        let settings = [
             MediaTrackSettings::from_iter([(&DEVICE_ID, "foo".into())]),
             MediaTrackSettings::from_iter([(&DEVICE_ID, "bar".into())]),
         ];

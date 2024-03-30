@@ -301,7 +301,7 @@ impl RTCRtpTransceiver {
 
     /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or create_answer.
     pub fn mid(&self) -> Option<SmolStr> {
-        self.mid.get().map(Clone::clone)
+        self.mid.get().cloned()
     }
 
     /// kind returns RTPTransceiver's kind.

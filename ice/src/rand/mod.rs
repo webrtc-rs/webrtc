@@ -10,7 +10,7 @@ const RUNES_CANDIDATE_ID_FOUNDATION: &[u8] =
 const LEN_UFRAG: usize = 16;
 const LEN_PWD: usize = 32;
 
-//TODO: generates a random string for cryptographic usage.
+// TODO: cryptographically strong random source
 pub fn generate_crypto_random_string(n: usize, runes: &[u8]) -> String {
     let mut rng = thread_rng();
 
@@ -24,7 +24,7 @@ pub fn generate_crypto_random_string(n: usize, runes: &[u8]) -> String {
     rand_string
 }
 
-/// https://tools.ietf.org/html/rfc5245#section-15.1
+/// <https://tools.ietf.org/html/rfc5245#section-15.1>
 /// candidate-id = "candidate" ":" foundation
 /// foundation   = 1*32ice-char
 /// ice-char     = ALPHA / DIGIT / "+" / "/"
