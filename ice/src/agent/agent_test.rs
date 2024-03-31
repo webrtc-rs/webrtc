@@ -614,6 +614,10 @@ impl Conn for MockPacketConn {
     async fn close(&self) -> std::result::Result<(), util::Error> {
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 fn build_msg(c: MessageClass, username: String, key: String) -> Result<Message> {

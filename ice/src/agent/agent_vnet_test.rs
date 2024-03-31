@@ -41,6 +41,9 @@ impl Conn for MockConn {
     async fn close(&self) -> Result<(), util::Error> {
         Ok(())
     }
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 pub(crate) struct VNet {

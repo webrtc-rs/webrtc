@@ -34,6 +34,7 @@ pub trait Conn {
     fn local_addr(&self) -> Result<SocketAddr>;
     fn remote_addr(&self) -> Option<SocketAddr>;
     async fn close(&self) -> Result<()>;
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync);
 }
 
 /// A Listener is a generic network listener for connection-oriented protocols.

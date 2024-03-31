@@ -243,4 +243,8 @@ impl Conn for AgentConn {
     async fn close(&self) -> std::result::Result<(), util::Error> {
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }

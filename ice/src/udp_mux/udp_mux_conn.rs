@@ -304,6 +304,10 @@ impl Conn for UDPMuxConn {
 
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 #[inline(always)]
