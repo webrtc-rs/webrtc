@@ -21,7 +21,7 @@ use std::time::SystemTime;
 
 use async_trait::async_trait;
 use candidate_base::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, Mutex};
 
 use crate::error::Result;
@@ -88,7 +88,7 @@ pub trait Candidate: fmt::Display {
 }
 
 /// Represents the type of candidate `CandidateType` enum.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidateType {
     #[serde(rename = "unspecified")]
     Unspecified,
@@ -170,7 +170,7 @@ impl fmt::Display for CandidateRelatedAddress {
 }
 
 /// Represent the ICE candidate pair state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidatePairState {
     #[serde(rename = "unspecified")]
     Unspecified = 0,
