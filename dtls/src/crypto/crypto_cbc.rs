@@ -8,12 +8,13 @@
 
 // https://github.com/RustCrypto/block-ciphers
 
-use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use p256::elliptic_curve::subtle::ConstantTimeEq;
 use rand::Rng;
 use std::io::Cursor;
 use std::ops::Not;
 
+use super::padding::DtlsPadding;
 use crate::content::*;
 use crate::error::*;
 use crate::prf::*;
@@ -70,7 +71,7 @@ impl CryptoCbc {
         rand::thread_rng().fill(iv.as_mut_slice());
 
         let write_cbc = Aes256CbcEnc::new_from_slices(&self.local_key, &iv)?;
-        let encrypted = write_cbc.encrypt_padded_vec_mut::<Pkcs7>(&payload);
+        let encrypted = write_cbc.encrypt_padded_vec_mut::<DtlsPadding>(&payload);
 
         // Prepend unencrypte header with encrypted payload
         let mut r = vec![];
@@ -101,7 +102,7 @@ impl CryptoCbc {
         let read_cbc = Aes256CbcDec::new_from_slices(&self.remote_key, iv)?;
 
         let decrypted = read_cbc
-            .decrypt_padded_vec_mut::<Pkcs7>(body)
+            .decrypt_padded_vec_mut::<DtlsPadding>(body)
             .map_err(|_| Error::ErrInvalidPacketLength)?;
 
         let recv_mac = &decrypted[decrypted.len() - Self::MAC_SIZE..];

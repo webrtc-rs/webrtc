@@ -4,6 +4,7 @@ mod crypto_test;
 pub mod crypto_cbc;
 pub mod crypto_ccm;
 pub mod crypto_gcm;
+pub mod padding;
 
 use std::convert::TryFrom;
 use std::sync::Arc;
