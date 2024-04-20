@@ -1279,7 +1279,7 @@ impl PeerConnectionInternal {
                     stats_type: RTCStatsType::InboundRTP,
                     id: id.clone(),
                     ssrc,
-                    kind,
+                    kind: kind.to_owned(),
                     packets_received,
                     track_identifier: info.track_id,
                     mid: info.mid,
@@ -1307,7 +1307,7 @@ impl PeerConnectionInternal {
                     id,
 
                     ssrc,
-                    kind,
+                    kind: kind.to_owned(),
 
                     packets_sent: remote_packets_sent as u64,
                     bytes_sent: remote_bytes_sent as u64,
@@ -1420,7 +1420,7 @@ impl PeerConnectionInternal {
                     track_identifier,
                     id: id.clone(),
                     ssrc,
-                    kind,
+                    kind: kind.to_owned(),
                     packets_sent,
                     mid,
                     rid,
@@ -1447,7 +1447,7 @@ impl PeerConnectionInternal {
                     stats_type: RTCStatsType::RemoteInboundRTP,
                     id,
                     ssrc,
-                    kind,
+                    kind: kind.to_owned(),
 
                     packets_received: remote_inbound_packets_received,
                     packets_lost: remote_inbound_packets_lost as i64,
