@@ -39,11 +39,10 @@ impl RTCCertificate {
     /// Generates a new certificate from the given parameters.
     ///
     /// See [`rcgen::Certificate::from_params`].
-    pub fn from_params(params: CertificateParams) -> Result<Self> {
+    fn from_params(params: CertificateParams, key_pair: KeyPair) -> Result<Self> {
         let not_after = params.not_after;
-        let x509_cert = rcgen::Certificate::from_params(params)?;
 
-        let key_pair = x509_cert.get_key_pair();
+        let x509_cert = params.self_signed(&key_pair).unwrap();
         let serialized_der = key_pair.serialize_der();
 
         let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
@@ -88,7 +87,7 @@ impl RTCCertificate {
 
         Ok(Self {
             dtls_certificate: dtls::crypto::Certificate {
-                certificate: vec![rustls::Certificate(x509_cert.serialize_der()?)],
+                certificate: vec![x509_cert.der().to_owned()],
                 private_key,
             },
             expires,
@@ -98,20 +97,17 @@ impl RTCCertificate {
 
     /// Generates a new certificate with default [`CertificateParams`] using the given keypair.
     pub fn from_key_pair(key_pair: KeyPair) -> Result<Self> {
-        let mut params = CertificateParams::new(vec![math_rand_alpha(16)]);
-
-        if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
-            params.alg = &rcgen::PKCS_ED25519;
-        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
-            params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
-            params.alg = &rcgen::PKCS_RSA_SHA256;
-        } else {
+        if !(key_pair.is_compatible(&rcgen::PKCS_ED25519)
+            || key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256)
+            || key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256))
+        {
             return Err(Error::new("Unsupported key_pair".to_owned()));
-        };
-        params.key_pair = Some(key_pair);
+        }
 
-        RTCCertificate::from_params(params)
+        RTCCertificate::from_params(
+            CertificateParams::new(vec![math_rand_alpha(16)]).unwrap(),
+            key_pair,
+        )
     }
 
     /// Parses a certificate from the ASCII PEM format.
