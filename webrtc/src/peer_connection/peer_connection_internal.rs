@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicIsize;
 use std::sync::Weak;
 
 use arc_swap::ArcSwapOption;
+use portable_atomic::AtomicIsize;
 use smol_str::SmolStr;
 use tokio::time::Instant;
 use util::Unmarshal;

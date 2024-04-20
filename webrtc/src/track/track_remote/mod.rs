@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use arc_swap::ArcSwapOption;
 use interceptor::{Attributes, Interceptor};
+use portable_atomic::{AtomicU32, AtomicU8, AtomicUsize};
 use smol_str::SmolStr;
 use tokio::sync::Mutex;
 use util::sync::Mutex as SyncMutex;

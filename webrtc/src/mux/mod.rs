@@ -5,9 +5,10 @@ pub mod endpoint;
 pub mod mux_func;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use portable_atomic::AtomicUsize;
 use tokio::sync::{mpsc, Mutex};
 use util::{Buffer, Conn};
 

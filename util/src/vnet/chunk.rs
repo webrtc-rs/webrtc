@@ -5,8 +5,10 @@ use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::ops::{BitAnd, BitOr};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::SystemTime;
+
+use portable_atomic::AtomicU64;
 
 use super::net::*;
 use crate::error::Result;
