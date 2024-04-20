@@ -31,7 +31,7 @@ async-trait = "0.1"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 x509-parser = "0.15"
 der-parser = "8.1"
-rcgen = "0.11"
+rcgen = "0.12"
 ring = "0.17"
 rustls = { version = "0.21", features = ["dangerous_configuration"]}
 bincode = "1"
