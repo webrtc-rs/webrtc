@@ -29,7 +29,7 @@ ccm = "0.5"
 tokio = { version = "1.32.0", features = ["full"] }
 async-trait = "0.1"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
-x509-parser = "0.15"
+x509-parser = "0.16"
 der-parser = "8.1"
 rcgen = "0.12"
 ring = "0.17"
