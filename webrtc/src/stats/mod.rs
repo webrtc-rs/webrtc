@@ -6,7 +6,7 @@ use ice::agent::agent_stats::{CandidatePairStats, CandidateStats};
 use ice::agent::Agent;
 use ice::candidate::{CandidatePairState, CandidateType};
 use ice::network_type::NetworkType;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use smol_str::SmolStr;
 use stats_collector::StatsCollector;
 use tokio::time::Instant;
@@ -22,7 +22,7 @@ use crate::sctp_transport::RTCSctpTransport;
 mod serialize;
 pub mod stats_collector;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum RTCStatsType {
     #[serde(rename = "candidate-pair")]
     CandidatePair,
@@ -114,6 +114,84 @@ impl Serialize for StatsReportType {
     }
 }
 
+impl<'de> Deserialize<'de> for StatsReportType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let type_field = value
+            .get("type")
+            .ok_or_else(|| serde::de::Error::missing_field("type"))?;
+        let rtc_type: RTCStatsType = serde_json::from_value(type_field.clone()).map_err(|e| {
+            serde::de::Error::custom(format!(
+                "failed to deserialize RTCStatsType from the `type` field ({}): {}",
+                type_field, e
+            ))
+        })?;
+
+        match rtc_type {
+            RTCStatsType::CandidatePair => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::CandidatePair(stats))
+            }
+            RTCStatsType::Certificate => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::CertificateStats(stats))
+            }
+            RTCStatsType::Codec => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::Codec(stats))
+            }
+            RTCStatsType::CSRC => {
+                todo!()
+            }
+            RTCStatsType::DataChannel => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::DataChannel(stats))
+            }
+            RTCStatsType::InboundRTP => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::InboundRTP(stats))
+            }
+            RTCStatsType::LocalCandidate => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::LocalCandidate(stats))
+            }
+            RTCStatsType::OutboundRTP => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::OutboundRTP(stats))
+            }
+            RTCStatsType::PeerConnection => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::PeerConnection(stats))
+            }
+            RTCStatsType::Receiver => {
+                todo!()
+            }
+            RTCStatsType::RemoteCandidate => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::RemoteCandidate(stats))
+            }
+            RTCStatsType::RemoteInboundRTP => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::RemoteInboundRTP(stats))
+            }
+            RTCStatsType::RemoteOutboundRTP => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::RemoteOutboundRTP(stats))
+            }
+            RTCStatsType::Sender => {
+                todo!()
+            }
+            RTCStatsType::Transport => {
+                let stats = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(StatsReportType::Transport(stats))
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct StatsReport {
     pub reports: HashMap<String, StatsReportType>,
@@ -136,7 +214,31 @@ impl Serialize for StatsReport {
     }
 }
 
-#[derive(Debug, Serialize)]
+impl<'de> Deserialize<'de> for StatsReport {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let root = value
+            .as_object()
+            .ok_or(serde::de::Error::custom("root object missing"))?;
+
+        let mut reports = HashMap::new();
+        for (key, value) in root {
+            let report = serde_json::from_value(value.clone()).map_err(|e| {
+                serde::de::Error::custom(format!(
+                    "failed to deserialize `StatsReportType` from key={}, value={}: {}",
+                    key, value, e
+                ))
+            })?;
+            reports.insert(key.clone(), report);
+        }
+        Ok(Self { reports })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ICECandidatePairStats {
     // RTCStats
@@ -217,7 +319,7 @@ impl From<CandidatePairStats> for ICECandidatePairStats {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ICECandidateStats {
     // RTCStats
@@ -256,7 +358,7 @@ impl ICECandidateStats {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ICETransportStats {
     // RTCStats
@@ -283,7 +385,7 @@ impl ICETransportStats {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CertificateStats {
     // RTCStats
@@ -313,7 +415,7 @@ impl CertificateStats {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodecStats {
     // RTCStats
@@ -347,7 +449,7 @@ impl From<&RTCRtpCodecParameters> for CodecStats {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataChannelStats {
     // RTCStats
@@ -402,7 +504,7 @@ impl DataChannelStats {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerConnectionStats {
     // RTCStats
@@ -435,7 +537,7 @@ impl PeerConnectionStats {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InboundRTPStats {
     // RTCStats
@@ -447,7 +549,7 @@ pub struct InboundRTPStats {
 
     // RTCRtpStreamStats
     pub ssrc: SSRC,
-    pub kind: &'static str, // Either "video" or "audio"
+    pub kind: String, // Either "video" or "audio"
     // TODO: Add transportId
     // TODO: Add codecId
 
@@ -482,7 +584,7 @@ pub struct InboundRTPStats {
     // all decoder specific and can't be produced since we aren't decoding.
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutboundRTPStats {
     // RTCStats
@@ -494,7 +596,7 @@ pub struct OutboundRTPStats {
 
     // RTCRtpStreamStats
     pub ssrc: SSRC,
-    pub kind: &'static str, // Either "video" or "audio"
+    pub kind: String, // Either "video" or "audio"
     // TODO: Add transportId
     // TODO: Add codecId
 
@@ -525,7 +627,7 @@ pub struct OutboundRTPStats {
     // encoding.
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteInboundRTPStats {
     // RTCStats
@@ -537,7 +639,7 @@ pub struct RemoteInboundRTPStats {
 
     // RTCRtpStreamStats
     pub ssrc: SSRC,
-    pub kind: &'static str, // Either "video" or "audio"
+    pub kind: String, // Either "video" or "audio"
     // TODO: Add transportId
     // TODO: Add codecId
 
@@ -556,7 +658,7 @@ pub struct RemoteInboundRTPStats {
     pub round_trip_time_measurements: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteOutboundRTPStats {
     // RTCStats
@@ -568,7 +670,7 @@ pub struct RemoteOutboundRTPStats {
 
     // RTCRtpStreamStats
     pub ssrc: SSRC,
-    pub kind: &'static str, // Either "video" or "audio"
+    pub kind: String, // Either "video" or "audio"
     // TODO: Add transportId
     // TODO: Add codecId
 
