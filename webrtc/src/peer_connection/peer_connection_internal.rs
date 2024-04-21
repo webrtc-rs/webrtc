@@ -15,7 +15,7 @@ use crate::stats::{
     StatsReportType,
 };
 use crate::track::TrackStream;
-use crate::{SDES_REPAIR_RTP_STREAM_ID_URI, SDP_ATTRIBUTE_RID};
+use crate::SDP_ATTRIBUTE_RID;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -940,7 +940,7 @@ impl PeerConnectionInternal {
         let (rsid_extension_id, _, _) = self
             .media_engine
             .get_header_extension_id(RTCRtpHeaderExtensionCapability {
-                uri: SDES_REPAIR_RTP_STREAM_ID_URI.to_owned(),
+                uri: ::sdp::extmap::SDES_REPAIR_RTP_STREAM_ID_URI.to_owned(),
             })
             .await;
 
@@ -1068,8 +1068,8 @@ impl PeerConnectionInternal {
         on_track_handler: Arc<ArcSwapOption<Mutex<OnTrackHdlrFn>>>,
     ) {
         receiver.start(incoming).await;
-        for t in receiver.tracks().await {
-            if t.ssrc() == 0 {
+        for track in receiver.tracks().await {
+            if track.ssrc() == 0 {
                 return;
             }
 
@@ -1077,31 +1077,29 @@ impl PeerConnectionInternal {
             let transceiver = Arc::clone(&transceiver);
             let on_track_handler = Arc::clone(&on_track_handler);
             tokio::spawn(async move {
-                if let Some(track) = receiver.track().await {
-                    let mut b = vec![0u8; receive_mtu];
-                    let pkt = match track.peek(&mut b).await {
-                        Ok((pkt, _)) => pkt,
-                        Err(err) => {
-                            log::warn!(
-                                "Could not determine PayloadType for SSRC {} ({})",
-                                track.ssrc(),
-                                err
-                            );
-                            return;
-                        }
-                    };
-
-                    if let Err(err) = track.check_and_update_track(&pkt).await {
+                let mut b = vec![0u8; receive_mtu];
+                let pkt = match track.peek(&mut b).await {
+                    Ok((pkt, _)) => pkt,
+                    Err(err) => {
                         log::warn!(
-                            "Failed to set codec settings for track SSRC {} ({})",
+                            "Could not determine PayloadType for SSRC {} ({})",
                             track.ssrc(),
                             err
                         );
                         return;
                     }
+                };
 
-                    RTCPeerConnection::do_track(on_track_handler, track, receiver, transceiver);
+                if let Err(err) = track.check_and_update_track(&pkt).await {
+                    log::warn!(
+                        "Failed to set codec settings for track SSRC {} ({})",
+                        track.ssrc(),
+                        err
+                    );
+                    return;
                 }
+
+                RTCPeerConnection::do_track(on_track_handler, track, receiver, transceiver);
             });
         }
     }
