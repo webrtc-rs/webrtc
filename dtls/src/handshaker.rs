@@ -100,6 +100,20 @@ pub(crate) struct HandshakeConfig {
     //mu sync.Mutex
 }
 
+pub fn gen_self_signed_root_cert() -> rustls::RootCertStore {
+    let mut certs = rustls::RootCertStore::empty();
+    certs
+        .add(
+            rcgen::generate_simple_self_signed(vec![])
+                .unwrap()
+                .cert
+                .der()
+                .to_owned(),
+        )
+        .unwrap();
+    certs
+}
+
 impl Default for HandshakeConfig {
     fn default() -> Self {
         HandshakeConfig {
@@ -117,7 +131,7 @@ impl Default for HandshakeConfig {
             insecure_verification: false,
             verify_peer_certificate: None,
             server_cert_verifier: rustls::client::WebPkiServerVerifier::builder(Arc::new(
-                rustls::RootCertStore::empty(),
+                gen_self_signed_root_cert(),
             ))
             .build()
             .unwrap(),

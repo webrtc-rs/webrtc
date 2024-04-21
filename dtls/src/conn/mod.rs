@@ -216,7 +216,19 @@ impl DTLSConn {
             client_cert_verifier: if config.client_auth as u8
                 >= ClientAuthType::VerifyClientCertIfGiven as u8
             {
-                Some(rustls::server::WebPkiClientVerifier::no_client_auth())
+                Some(
+                    rustls::server::WebPkiClientVerifier::builder(Arc::new(config.client_cas))
+                        .allow_unauthenticated()
+                        .build()
+                        .unwrap_or(
+                            rustls::server::WebPkiClientVerifier::builder(Arc::new(
+                                gen_self_signed_root_cert(),
+                            ))
+                            .allow_unauthenticated()
+                            .build()
+                            .unwrap(),
+                        ),
+                )
             } else {
                 None
             },
@@ -224,7 +236,13 @@ impl DTLSConn {
                 config.roots_cas,
             ))
             .build()
-            .unwrap(),
+            .unwrap_or(
+                rustls::client::WebPkiServerVerifier::builder(
+                    Arc::new(gen_self_signed_root_cert()),
+                )
+                .build()
+                .unwrap(),
+            ),
             retransmit_interval,
             //log: logger,
             initial_epoch: 0,
