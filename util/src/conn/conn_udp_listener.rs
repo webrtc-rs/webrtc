@@ -291,4 +291,8 @@ impl Conn for UdpConn {
         conns.remove(self.raddr.to_string().as_str());
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }

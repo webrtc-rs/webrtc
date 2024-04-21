@@ -46,6 +46,10 @@ impl Conn for DumbConn {
     async fn close(&self) -> Result<()> {
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 fn create_association_internal(config: Config) -> AssociationInternal {

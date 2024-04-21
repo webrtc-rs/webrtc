@@ -66,6 +66,10 @@ impl Conn for BridgeConn {
     async fn close(&self) -> Result<()> {
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 pub type FilterCbFn = Box<dyn Fn(&Bytes) -> bool + Send + Sync>;

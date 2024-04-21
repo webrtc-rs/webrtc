@@ -35,4 +35,8 @@ impl Conn for UdpSocket {
     async fn close(&self) -> Result<()> {
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
