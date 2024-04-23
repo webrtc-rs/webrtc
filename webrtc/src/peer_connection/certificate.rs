@@ -228,7 +228,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_rsa() -> Result<()> {
-        let key_pair = KeyPair::generate(&rcgen::PKCS_RSA_SHA256);
+        let key_pair = KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256);
         assert!(key_pair.is_err(), "RcgenError::KeyGenerationUnavailable");
 
         Ok(())
@@ -236,7 +236,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_ecdsa() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let _cert = RTCCertificate::from_key_pair(kp)?;
 
         Ok(())
@@ -244,7 +244,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_eddsa() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ED25519)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ED25519)?;
         let _cert = RTCCertificate::from_key_pair(kp)?;
 
         Ok(())
@@ -252,10 +252,10 @@ mod test {
 
     #[test]
     fn test_certificate_equal() -> Result<()> {
-        let kp1 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp1 = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert1 = RTCCertificate::from_key_pair(kp1)?;
 
-        let kp2 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp2 = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert2 = RTCCertificate::from_key_pair(kp2)?;
 
         assert_ne!(cert1, cert2);
@@ -265,7 +265,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_expires_and_stats_id() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert = RTCCertificate::from_key_pair(kp)?;
 
         let now = SystemTime::now();
@@ -278,7 +278,7 @@ mod test {
     #[cfg(feature = "pem")]
     #[test]
     fn test_certificate_serialize_pem_and_from_pem() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert = RTCCertificate::from_key_pair(kp)?;
 
         let pem = cert.serialize_pem();

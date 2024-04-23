@@ -568,7 +568,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
     let interceptor = api.interceptor_registry.build("")?;
 
-    let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+    let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
     let certificate = RTCCertificate::from_key_pair(kp)?;
 
     let transport = Arc::new(RTCDtlsTransport::default());
