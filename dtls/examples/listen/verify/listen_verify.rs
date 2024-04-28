@@ -64,7 +64,7 @@ async fn main() -> Result<(), Error> {
     let mut cert_pool = rustls::RootCertStore::empty();
     let certs = load_certificate("dtls/examples/certificates/server.pub.pem".into())?;
     for cert in &certs {
-        if cert_pool.add(cert).is_err() {
+        if cert_pool.add(cert.to_owned()).is_err() {
             return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
         }
     }

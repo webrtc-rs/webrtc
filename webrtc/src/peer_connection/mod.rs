@@ -283,7 +283,7 @@ impl RTCPeerConnection {
                     .map_err(|_| Error::ErrCertificateExpired)?;
             }
         } else {
-            let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+            let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
             let cert = RTCCertificate::from_key_pair(kp)?;
             configuration.certificates = vec![cert];
         };

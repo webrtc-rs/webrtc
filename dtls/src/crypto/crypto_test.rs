@@ -190,7 +190,7 @@ fn test_certificate_verify() -> Result<()> {
         &certificate_ecdsa256
             .certificate
             .iter()
-            .map(|x| x.0.clone())
+            .map(|x| x.as_ref().to_owned())
             .collect::<Vec<Vec<u8>>>(),
         false,
     )?;
@@ -212,7 +212,7 @@ fn test_certificate_verify() -> Result<()> {
         &certificate_ed25519
             .certificate
             .iter()
-            .map(|x| x.0.clone())
+            .map(|x| x.as_ref().to_owned())
             .collect::<Vec<Vec<u8>>>(),
         false,
     )?;
