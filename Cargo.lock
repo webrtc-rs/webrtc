@@ -2599,7 +2599,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "turn"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
