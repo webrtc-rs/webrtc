@@ -2329,7 +2329,7 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "stun"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "base64 0.21.7",
  "clap 3.2.25",
