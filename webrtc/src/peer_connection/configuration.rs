@@ -53,6 +53,7 @@ impl RTCConfiguration {
     /// get_iceservers side-steps the strict parsing mode of the ice package
     /// (as defined in https://tools.ietf.org/html/rfc7064) by copying and then
     /// stripping any erroneous queries from "stun(s):" URLs before parsing.
+    #[allow(clippy::assigning_clones)]
     pub(crate) fn get_ice_servers(&self) -> Vec<RTCIceServer> {
         let mut ice_servers = self.ice_servers.clone();
 

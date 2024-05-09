@@ -228,10 +228,14 @@ impl Flight for Flight5 {
         };
         if cfg.local_psk_callback.is_none() {
             if let Some(local_keypair) = &state.local_keypair {
-                client_key_exchange.public_key = local_keypair.public_key.clone();
+                client_key_exchange
+                    .public_key
+                    .clone_from(&local_keypair.public_key);
             }
         } else if let Some(local_psk_identity_hint) = &cfg.local_psk_identity_hint {
-            client_key_exchange.identity_hint = local_psk_identity_hint.clone();
+            client_key_exchange
+                .identity_hint
+                .clone_from(local_psk_identity_hint);
         }
 
         pkts.push(Packet {

@@ -859,7 +859,7 @@ impl RTCPeerConnection {
 
         {
             let mut last_offer = self.internal.last_offer.lock().await;
-            *last_offer = offer.sdp.clone();
+            last_offer.clone_from(&offer.sdp);
         }
         Ok(offer)
     }
@@ -974,7 +974,7 @@ impl RTCPeerConnection {
 
         {
             let mut last_answer = self.internal.last_answer.lock().await;
-            *last_answer = answer.sdp.clone();
+            last_answer.clone_from(&answer.sdp);
         }
         Ok(answer)
     }
@@ -1225,11 +1225,11 @@ impl RTCPeerConnection {
             match desc.sdp_type {
                 RTCSdpType::Answer | RTCSdpType::Pranswer => {
                     let last_answer = self.internal.last_answer.lock().await;
-                    desc.sdp = last_answer.clone();
+                    desc.sdp.clone_from(&last_answer);
                 }
                 RTCSdpType::Offer => {
                     let last_offer = self.internal.last_offer.lock().await;
-                    desc.sdp = last_offer.clone();
+                    desc.sdp.clone_from(&last_offer);
                 }
                 _ => return Err(Error::ErrPeerConnSDPTypeInvalidValueSetLocalDescription),
             }

@@ -135,7 +135,7 @@ impl Flight for Flight0 {
                         }
                     }
                     Extension::ServerName(e) => {
-                        state.server_name = e.server_name.clone(); // remote server name
+                        state.server_name.clone_from(&e.server_name); // remote server name
                     }
                     _ => {}
                 }

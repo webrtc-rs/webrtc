@@ -75,6 +75,7 @@ pub async fn http_sdp_server(port: u16) -> mpsc::Receiver<String> {
 }
 
 /// must_read_stdin blocks until input is received from stdin
+#[allow(clippy::assigning_clones)]
 pub fn must_read_stdin() -> Result<String> {
     let mut line = String::new();
 

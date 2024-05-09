@@ -203,7 +203,7 @@ async fn main() -> Result<()> {
 
     {
         let mut oa = ADDRESS.lock().await;
-        *oa = answer_addr.clone();
+        oa.clone_from(&answer_addr);
     }
 
     // Prepare the configuration

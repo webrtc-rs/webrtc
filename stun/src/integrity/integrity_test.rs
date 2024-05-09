@@ -30,7 +30,7 @@ fn test_message_integrity_add_to_simple() -> Result<()> {
         m.write_header();
 
         let mut d_m = Message::new();
-        d_m.raw = m.raw.clone();
+        d_m.raw.clone_from(&m.raw);
         d_m.decode()?;
         i.check(&mut d_m)?;
 

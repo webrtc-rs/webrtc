@@ -189,8 +189,8 @@ pub(crate) fn track_details_from_sdp(
                         if track_idx < tracks_in_media_section.len() {
                             tracks_in_media_section[track_idx].mid = SmolStr::from(mid_value);
                             tracks_in_media_section[track_idx].kind = codec_type;
-                            tracks_in_media_section[track_idx].stream_id = stream_id.to_owned();
-                            tracks_in_media_section[track_idx].id = track_id.to_owned();
+                            stream_id.clone_into(&mut tracks_in_media_section[track_idx].stream_id);
+                            track_id.clone_into(&mut tracks_in_media_section[track_idx].id);
                             tracks_in_media_section[track_idx].ssrcs = vec![ssrc];
                             tracks_in_media_section[track_idx].repair_ssrc = repair_ssrc;
                         } else {
@@ -248,7 +248,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> Vec<SimulcastRid> {
                 log::warn!("Failed to parse RID: {}", err);
             }
         } else if attr.key.as_str() == SDP_ATTRIBUTE_SIMULCAST {
-            simulcast_attr = attr.value.clone();
+            simulcast_attr.clone_from(&attr.value);
         }
     }
 

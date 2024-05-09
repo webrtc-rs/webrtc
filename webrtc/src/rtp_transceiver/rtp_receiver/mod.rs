@@ -270,7 +270,7 @@ impl RTPReceiverInternal {
             let tracks = self.tracks.read().await;
             for t in &*tracks {
                 if t.track.tid() == tid {
-                    rtp_interceptor = t.stream.rtp_interceptor.clone();
+                    rtp_interceptor.clone_from(&t.stream.rtp_interceptor);
                     //ssrc = t.track.ssrc();
                     break;
                 }
@@ -478,7 +478,9 @@ impl RTCRtpReceiver {
         for (idx, codec) in params.codecs.iter().enumerate() {
             let t = &mut tracks[idx];
             if let Some(stream_info) = &mut t.stream.stream_info {
-                stream_info.rtp_header_extensions = header_extensions.clone();
+                stream_info
+                    .rtp_header_extensions
+                    .clone_from(&header_extensions);
             }
 
             let current_track = &t.track;

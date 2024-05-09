@@ -34,12 +34,12 @@ impl RTCIceServer {
                 if self.username.is_empty() || self.credential.is_empty() {
                     return Err(Error::ErrNoTurnCredentials);
                 }
-                url.username = self.username.clone();
+                url.username.clone_from(&self.username);
 
                 match self.credential_type {
                     RTCIceCredentialType::Password => {
                         // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.3)
-                        url.password = self.credential.clone();
+                        url.password.clone_from(&self.credential);
                     }
                     RTCIceCredentialType::Oauth => {
                         // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.4)

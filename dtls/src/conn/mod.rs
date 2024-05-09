@@ -200,8 +200,8 @@ impl DTLSConn {
             if let Some(remote_addr) = conn.remote_addr() {
                 server_name = remote_addr.ip().to_string();
             } else {
-                log::warn!("conn.remote_addr is empty, please set explicitly server_name in Config! Use default \"localhost\" as server_name now");
-                server_name = "localhost".to_owned();
+                warn!("conn.remote_addr is empty, please set explicitly server_name in Config! Use default \"localhost\" as server_name now");
+                "localhost".clone_into(&mut server_name);
             }
         }
 

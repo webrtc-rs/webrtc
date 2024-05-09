@@ -133,7 +133,7 @@ impl Feedback {
             self.chunks.push(self.last_chunk.encode());
         }
         self.rtcp.packet_chunks.extend_from_slice(&self.chunks);
-        self.rtcp.recv_deltas = self.deltas.clone();
+        self.rtcp.recv_deltas.clone_from(&self.deltas);
 
         self.rtcp.clone()
     }

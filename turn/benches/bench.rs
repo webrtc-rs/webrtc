@@ -44,7 +44,7 @@ fn benchmark_chan_data(c: &mut Criterion) {
         c.bench_function("BenchmarkChannelData_Decode", |b| {
             b.iter(|| {
                 d.reset();
-                d.raw = buf.clone();
+                d.raw.clone_from(&buf);
                 d.decode().unwrap();
             })
         });

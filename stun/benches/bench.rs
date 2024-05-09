@@ -501,7 +501,7 @@ fn benchmark_message(c: &mut Criterion) {
         c.bench_function("BenchmarkDecode", |b| {
             b.iter(|| {
                 mdecoded.reset();
-                mdecoded.raw = m.raw.clone();
+                mdecoded.raw.clone_from(&m.raw);
                 mdecoded.decode().unwrap();
             })
         });
