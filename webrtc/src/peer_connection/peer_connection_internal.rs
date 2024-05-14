@@ -700,6 +700,7 @@ impl PeerConnectionInternal {
             is_icelite: self.setting_engine.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: self.ice_gathering_state(),
+            match_bundle_group: None,
         };
         populate_sdp(
             d,
@@ -780,7 +781,7 @@ impl PeerConnectionInternal {
         }
 
         // If we are offering also include unmatched local transceivers
-        if include_unmatched {
+        let match_bundle_group = if include_unmatched {
             for t in &local_transceivers {
                 t.sender().await.set_negotiated();
                 media_sections.push(MediaSection {
@@ -803,7 +804,14 @@ impl PeerConnectionInternal {
                     ..Default::default()
                 });
             }
-        }
+            None
+        } else {
+            remote_description
+                .as_ref()
+                .and_then(|d| d.parsed.as_ref())
+                .and_then(|d| d.attribute(ATTR_KEY_GROUP))
+                .map(ToOwned::to_owned)
+        };
 
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
             cert.get_fingerprints()
@@ -816,6 +824,7 @@ impl PeerConnectionInternal {
             is_icelite: self.setting_engine.candidates.ice_lite,
             connection_role,
             ice_gathering_state: self.ice_gathering_state(),
+            match_bundle_group,
         };
         populate_sdp(
             d,
