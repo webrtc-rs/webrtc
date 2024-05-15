@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Use the new algorithm in crc crate for better throughput [#569](https://github.com/webrtc-rs/webrtc/pull/569)
+
 ## v0.8.0
 
 * Fix 'attempt to add with overflow' panic in dev profile [#393](https://github.com/webrtc-rs/webrtc/pull/393)
