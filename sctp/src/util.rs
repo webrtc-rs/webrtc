@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use crc::{Crc, CRC_32_ISCSI, Table};
+use crc::{Crc, Table, CRC_32_ISCSI};
 
 pub(crate) const PADDING_MULTIPLE: usize = 4;
 
