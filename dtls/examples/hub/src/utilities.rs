@@ -110,5 +110,4 @@ pub fn load_certificate(path: PathBuf) -> Result<Vec<CertificateDer<'static>>, E
         Ok(certs) => Ok(certs.into_iter().map(CertificateDer::from).collect()),
         Err(_) => Err(Error::ErrNoCertificateFound),
     }
-    
 }
