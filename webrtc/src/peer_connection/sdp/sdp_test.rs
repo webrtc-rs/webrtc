@@ -538,6 +538,7 @@ async fn fingerprint_test(
         is_icelite: false,
         connection_role: ConnectionRole::Active,
         ice_gathering_state: RTCIceGatheringState::New,
+        match_bundle_group: None,
     };
 
     let s = populate_sdp(
@@ -732,6 +733,7 @@ async fn test_populate_sdp() -> Result<()> {
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
+            match_bundle_group: None,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -836,6 +838,7 @@ async fn test_populate_sdp() -> Result<()> {
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
+            match_bundle_group: None,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -867,6 +870,228 @@ async fn test_populate_sdp() -> Result<()> {
             }
         }
         assert!(found_vp8, "vp8 should be present in sdp");
+    }
+
+    //"Bundle all"
+    {
+        let se = SettingEngine::default();
+        let mut me = MediaEngine::default();
+        me.register_default_codecs()?;
+
+        let api = APIBuilder::new().with_media_engine(me).build();
+        let interceptor = api.interceptor_registry.build("")?;
+        let transport = Arc::new(RTCDtlsTransport::default());
+        let receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Video,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+
+        let sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
+
+        let tr = RTCRtpTransceiver::new(
+            receiver,
+            sender,
+            RTCRtpTransceiverDirection::Recvonly,
+            RTPCodecType::Video,
+            api.media_engine.video_codecs.clone(),
+            Arc::clone(&api.media_engine),
+            None,
+        )
+        .await;
+
+        let media_sections = vec![MediaSection {
+            id: "video".to_owned(),
+            transceivers: vec![tr],
+            data: false,
+            rid_map: vec![],
+            ..Default::default()
+        }];
+
+        let d = SessionDescription::default();
+
+        let params = PopulateSdpParams {
+            media_description_fingerprint: se.sdp_media_level_fingerprints,
+            is_icelite: se.candidates.ice_lite,
+            connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+            ice_gathering_state: RTCIceGatheringState::Complete,
+            match_bundle_group: None,
+        };
+        let offer_sdp = populate_sdp(
+            d,
+            &[],
+            &api.media_engine,
+            &[],
+            &RTCIceParameters::default(),
+            &media_sections,
+            params,
+        )
+        .await?;
+
+        assert_eq!(
+            offer_sdp.attribute(ATTR_KEY_GROUP),
+            Some(&"BUNDLE video".to_owned())
+        );
+    }
+
+    //"Bundle matched"
+    {
+        let se = SettingEngine::default();
+        let mut me = MediaEngine::default();
+        me.register_default_codecs()?;
+
+        let api = APIBuilder::new().with_media_engine(me).build();
+        let interceptor = api.interceptor_registry.build("")?;
+        let transport = Arc::new(RTCDtlsTransport::default());
+
+        let video_receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Video,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+        let audio_receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Audio,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+
+        let video_sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
+        let audio_sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
+
+        let trv = RTCRtpTransceiver::new(
+            video_receiver,
+            video_sender,
+            RTCRtpTransceiverDirection::Recvonly,
+            RTPCodecType::Video,
+            api.media_engine.video_codecs.clone(),
+            Arc::clone(&api.media_engine),
+            None,
+        )
+        .await;
+
+        let tra = RTCRtpTransceiver::new(
+            audio_receiver,
+            audio_sender,
+            RTCRtpTransceiverDirection::Recvonly,
+            RTPCodecType::Audio,
+            api.media_engine.audio_codecs.clone(),
+            Arc::clone(&api.media_engine),
+            None,
+        )
+        .await;
+
+        let media_sections = vec![
+            MediaSection {
+                id: "video".to_owned(),
+                transceivers: vec![trv],
+                data: false,
+                rid_map: vec![],
+                ..Default::default()
+            },
+            MediaSection {
+                id: "audio".to_owned(),
+                transceivers: vec![tra],
+                data: false,
+                rid_map: vec![],
+                ..Default::default()
+            },
+        ];
+
+        let d = SessionDescription::default();
+
+        let params = PopulateSdpParams {
+            media_description_fingerprint: se.sdp_media_level_fingerprints,
+            is_icelite: se.candidates.ice_lite,
+            connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+            ice_gathering_state: RTCIceGatheringState::Complete,
+            match_bundle_group: Some("audio".to_owned()),
+        };
+        let offer_sdp = populate_sdp(
+            d,
+            &[],
+            &api.media_engine,
+            &[],
+            &RTCIceParameters::default(),
+            &media_sections,
+            params,
+        )
+        .await?;
+
+        assert_eq!(
+            offer_sdp.attribute(ATTR_KEY_GROUP),
+            Some(&"BUNDLE audio".to_owned())
+        );
+    }
+
+    //"empty bundle group"
+    {
+        let se = SettingEngine::default();
+        let mut me = MediaEngine::default();
+        me.register_default_codecs()?;
+
+        let api = APIBuilder::new().with_media_engine(me).build();
+        let interceptor = api.interceptor_registry.build("")?;
+        let transport = Arc::new(RTCDtlsTransport::default());
+        let receiver = Arc::new(api.new_rtp_receiver(
+            RTPCodecType::Video,
+            Arc::clone(&transport),
+            Arc::clone(&interceptor),
+        ));
+
+        let sender = Arc::new(
+            api.new_rtp_sender(None, Arc::clone(&transport), Arc::clone(&interceptor))
+                .await,
+        );
+
+        let tr = RTCRtpTransceiver::new(
+            receiver,
+            sender,
+            RTCRtpTransceiverDirection::Recvonly,
+            RTPCodecType::Video,
+            api.media_engine.video_codecs.clone(),
+            Arc::clone(&api.media_engine),
+            None,
+        )
+        .await;
+
+        let media_sections = vec![MediaSection {
+            id: "video".to_owned(),
+            transceivers: vec![tr],
+            data: false,
+            rid_map: vec![],
+            ..Default::default()
+        }];
+
+        let d = SessionDescription::default();
+
+        let params = PopulateSdpParams {
+            media_description_fingerprint: se.sdp_media_level_fingerprints,
+            is_icelite: se.candidates.ice_lite,
+            connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+            ice_gathering_state: RTCIceGatheringState::Complete,
+            match_bundle_group: Some("".to_owned()),
+        };
+        let offer_sdp = populate_sdp(
+            d,
+            &[],
+            &api.media_engine,
+            &[],
+            &RTCIceParameters::default(),
+            &media_sections,
+            params,
+        )
+        .await?;
+
+        assert_eq!(offer_sdp.attribute(ATTR_KEY_GROUP), None);
     }
 
     Ok(())
@@ -962,6 +1187,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
         is_icelite: se.candidates.ice_lite,
         connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
         ice_gathering_state: RTCIceGatheringState::Complete,
+        match_bundle_group: None,
     };
     let offer_sdp = populate_sdp(
         d,
