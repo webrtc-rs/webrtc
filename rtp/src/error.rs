@@ -54,6 +54,8 @@ pub enum Error {
     HeaderExtensionPayloadNot32BitWords,
     #[error("audio level overflow")]
     AudioLevelOverflow,
+    #[error("playout delay overflow")]
+    PlayoutDelayOverflow,
     #[error("payload is not large enough")]
     PayloadIsNotLargeEnough,
     #[error("STAP-A declared size({0}) is larger than buffer({1})")]
