@@ -7,7 +7,7 @@ description = "A pure Rust implementation of mDNS"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-mdns"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/mdns"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/mdns"
 
 [features]
 default = [ "reuse_port" ]

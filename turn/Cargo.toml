@@ -7,7 +7,7 @@ description = "A pure Rust implementation of TURN"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/turn"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/turn"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/turn"
 
 [dependencies]
 util = { version = "0.9.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
