@@ -7,7 +7,7 @@ description = "A pure Rust implementation of STUN"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/stun"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/stun"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/stun"
 
 [features]
 default = []

@@ -7,7 +7,7 @@ description = "A pure Rust implementation of SDP"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/sdp"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/sdp"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/sdp"
 
 [dependencies]
 url = "2"

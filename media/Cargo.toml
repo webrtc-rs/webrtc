@@ -7,7 +7,7 @@ description = "A pure Rust implementation of WebRTC Media API"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-media"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/media"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/media"
 
 [dependencies]
 rtp = { version = "0.11.0", path = "../rtp" }

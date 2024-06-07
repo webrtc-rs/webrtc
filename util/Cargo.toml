@@ -7,7 +7,7 @@ description = "Utilities for WebRTC.rs stack"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-util"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/util"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/util"
 
 [features]
 default = ["buffer", "conn", "ifaces", "vnet", "marshal", "sync"]

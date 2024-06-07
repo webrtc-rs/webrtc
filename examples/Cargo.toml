@@ -7,7 +7,7 @@ description = "Examples of WebRTC.rs stack"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/examples"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/examples"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/examples"
 
 [dependencies]
 
