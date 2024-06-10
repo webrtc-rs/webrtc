@@ -1410,6 +1410,7 @@ impl RTCPeerConnection {
                                 RTCRtpSender::new(
                                     receive_mtu,
                                     None,
+                                    kind,
                                     Arc::clone(&self.internal.dtls_transport),
                                     Arc::clone(&self.internal.media_engine),
                                     Arc::clone(&self.interceptor),
@@ -1608,7 +1609,10 @@ impl RTCPeerConnection {
         let current_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*current_transceivers {
             let sender = transceiver.sender().await;
-            if sender.is_negotiated() && !sender.has_sent() {
+            if !sender.track_encodings.lock().await.is_empty()
+                && sender.is_negotiated()
+                && !sender.has_sent()
+            {
                 sender.send(&sender.get_parameters().await).await?;
             }
         }

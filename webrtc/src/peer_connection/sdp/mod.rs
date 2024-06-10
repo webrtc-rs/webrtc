@@ -583,12 +583,32 @@ pub(crate) async fn add_transceiver_sdp(
     for mt in transceivers {
         let sender = mt.sender().await;
         if let Some(track) = sender.track().await {
-            media = media.with_media_source(
-                sender.ssrc,
-                track.stream_id().to_owned(), /* cname */
-                track.stream_id().to_owned(), /* streamLabel */
-                track.id().to_owned(),
-            );
+            let send_parameters = sender.get_parameters().await;
+            for encoding in &send_parameters.encodings {
+                media = media.with_media_source(
+                    encoding.ssrc,
+                    track.stream_id().to_owned(), /* cname */
+                    track.stream_id().to_owned(), /* streamLabel */
+                    track.id().to_owned(),
+                );
+            }
+
+            if send_parameters.encodings.len() > 1 {
+                let mut send_rids = Vec::with_capacity(send_parameters.encodings.len());
+
+                for encoding in &send_parameters.encodings {
+                    media = media.with_value_attribute(
+                        SDP_ATTRIBUTE_RID.to_owned(),
+                        format!("{} send", encoding.rid),
+                    );
+                    send_rids.push(encoding.rid.to_string());
+                }
+
+                media = media.with_value_attribute(
+                    SDP_ATTRIBUTE_SIMULCAST.to_owned(),
+                    format!("send {}", send_rids.join(";")),
+                );
+            }
 
             // Send msid based on the configured track if we haven't already
             // sent on this sender. If we have sent we must keep the msid line consistent, this

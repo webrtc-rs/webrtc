@@ -14,6 +14,7 @@ use crate::stats::{
     InboundRTPStats, OutboundRTPStats, RTCStatsType, RemoteInboundRTPStats, RemoteOutboundRTPStats,
     StatsReportType,
 };
+use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::TrackStream;
 use crate::SDP_ATTRIBUTE_RID;
 
@@ -442,44 +443,60 @@ impl PeerConnectionInternal {
             .map(|value| value.direction)
             .unwrap_or(RTCRtpTransceiverDirection::Sendrecv);
 
-        if direction == RTCRtpTransceiverDirection::Unspecified {
-            return Err(Error::ErrPeerConnAddTransceiverFromKindSupport);
-        }
+        let t = match direction {
+            RTCRtpTransceiverDirection::Sendonly | RTCRtpTransceiverDirection::Sendrecv => {
+                let codec = self
+                    .media_engine
+                    .get_codecs_by_kind(kind)
+                    .first()
+                    .map(|c| c.capability.clone())
+                    .ok_or(Error::ErrNoCodecsAvailable)?;
+                let track = Arc::new(TrackLocalStaticSample::new(
+                    codec,
+                    math_rand_alpha(16),
+                    math_rand_alpha(16),
+                ));
+                self.new_transceiver_from_track(direction, track).await?
+            }
+            RTCRtpTransceiverDirection::Recvonly => {
+                let interceptor = self
+                    .interceptor
+                    .upgrade()
+                    .ok_or(Error::ErrInterceptorNotBind)?;
+                let receiver = Arc::new(RTCRtpReceiver::new(
+                    self.setting_engine.get_receive_mtu(),
+                    kind,
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    Arc::clone(&interceptor),
+                ));
 
-        let interceptor = self
-            .interceptor
-            .upgrade()
-            .ok_or(Error::ErrInterceptorNotBind)?;
-        let receiver = Arc::new(RTCRtpReceiver::new(
-            self.setting_engine.get_receive_mtu(),
-            kind,
-            Arc::clone(&self.dtls_transport),
-            Arc::clone(&self.media_engine),
-            Arc::clone(&interceptor),
-        ));
+                let sender = Arc::new(
+                    RTCRtpSender::new(
+                        self.setting_engine.get_receive_mtu(),
+                        None,
+                        kind,
+                        Arc::clone(&self.dtls_transport),
+                        Arc::clone(&self.media_engine),
+                        interceptor,
+                        false,
+                    )
+                    .await,
+                );
 
-        let sender = Arc::new(
-            RTCRtpSender::new(
-                self.setting_engine.get_receive_mtu(),
-                None,
-                Arc::clone(&self.dtls_transport),
-                Arc::clone(&self.media_engine),
-                interceptor,
-                false,
-            )
-            .await,
-        );
-
-        let t = RTCRtpTransceiver::new(
-            receiver,
-            sender,
-            direction,
-            kind,
-            vec![],
-            Arc::clone(&self.media_engine),
-            Some(Box::new(self.make_negotiation_needed_trigger())),
-        )
-        .await;
+                RTCRtpTransceiver::new(
+                    receiver,
+                    sender,
+                    direction,
+                    kind,
+                    vec![],
+                    Arc::clone(&self.media_engine),
+                    Some(Box::new(self.make_negotiation_needed_trigger())),
+                )
+                .await
+            }
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport),
+        };
 
         self.add_rtp_transceiver(Arc::clone(&t)).await;
 
@@ -512,6 +529,7 @@ impl PeerConnectionInternal {
             RTCRtpSender::new(
                 self.setting_engine.get_receive_mtu(),
                 Some(Arc::clone(&track)),
+                track.kind(),
                 Arc::clone(&self.dtls_transport),
                 Arc::clone(&self.media_engine),
                 Arc::clone(&interceptor),
@@ -1343,32 +1361,29 @@ impl PeerConnectionInternal {
         }
         let mut track_infos = vec![];
         for transceiver in transceivers {
-            let sender = transceiver.sender().await;
-
             let mid = match transceiver.mid() {
                 Some(mid) => mid,
                 None => continue,
             };
 
-            let track = match sender.track().await {
-                Some(track) => track,
-                None => continue,
-            };
+            let sender = transceiver.sender().await;
+            let track_encodings = sender.track_encodings.lock().await;
+            for encoding in track_encodings.iter() {
+                let track_id = encoding.track.id().to_string();
+                let kind = match encoding.track.kind() {
+                    RTPCodecType::Unspecified => continue,
+                    RTPCodecType::Audio => "audio",
+                    RTPCodecType::Video => "video",
+                };
 
-            let track_id = track.id().to_string();
-            let kind = match track.kind() {
-                RTPCodecType::Unspecified => continue,
-                RTPCodecType::Audio => "audio",
-                RTPCodecType::Video => "video",
-            };
-
-            track_infos.push(TrackInfo {
-                track_id,
-                ssrc: sender.ssrc,
-                mid,
-                rid: None,
-                kind,
-            });
+                track_infos.push(TrackInfo {
+                    track_id,
+                    ssrc: encoding.ssrc,
+                    mid: mid.to_owned(),
+                    rid: encoding.track.rid().map(Into::into),
+                    kind,
+                });
+            }
         }
 
         let stream_stats = self

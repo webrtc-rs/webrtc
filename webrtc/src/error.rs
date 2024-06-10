@@ -199,6 +199,10 @@ pub enum Error {
     #[error("new track must be of the same kind as previous")]
     ErrRTPSenderNewTrackHasIncorrectKind,
 
+    /// ErrRTPSenderNewTrackHasIncorrectEnvelope indicates that the new track has a different envelope than the previous/original
+    #[error("new track must have the same envelope as previous")]
+    ErrRTPSenderNewTrackHasIncorrectEnvelope,
+
     /// ErrRTPSenderDataSent indicates that the sequence number transformer tries to be enabled after the data sending began
     #[error("Sequence number transformer must be enabled before sending data")]
     ErrRTPSenderDataSent,
@@ -328,6 +332,20 @@ pub enum Error {
     },
     #[error("Track must not be nil")]
     ErrRTPSenderTrackNil,
+    #[error("Sender has already been stopped")]
+    ErrRTPSenderStopped,
+    #[error("Sender Track has been removed or replaced to nil")]
+    ErrRTPSenderTrackRemoved,
+    #[error("Sender cannot add encoding as rid is empty")]
+    ErrRTPSenderRidNil,
+    #[error("Sender cannot add encoding as there is no base track")]
+    ErrRTPSenderNoBaseEncoding,
+    #[error("Sender cannot add encoding as provided track does not match base track")]
+    ErrRTPSenderBaseEncodingMismatch,
+    #[error("Sender cannot encoding due to RID collision")]
+    ErrRTPSenderRIDCollision,
+    #[error("Sender does not have track for RID")]
+    ErrRTPSenderNoTrackForRID,
     #[error("RTPSender must not be nil")]
     ErrRTPSenderNil,
     #[error("RTPReceiver must not be nil")]

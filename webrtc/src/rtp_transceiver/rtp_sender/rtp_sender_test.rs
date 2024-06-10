@@ -14,6 +14,7 @@ use crate::peer_connection::peer_connection_test::{
     until_connection_state,
 };
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use crate::rtp_transceiver::RTCRtpCodecParameters;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 
 #[tokio::test]
@@ -135,10 +136,14 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
     signal_pair(&mut offerer, &mut answerer).await?;
 
     let sender = rtp_transceiver.sender().await;
+    assert!(sender.track().await.is_some());
     let parameters = sender.get_parameters().await;
     assert_ne!(0, parameters.rtp_parameters.codecs.len());
     assert_eq!(1, parameters.encodings.len());
-    assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
+    assert_eq!(
+        sender.track_encodings.lock().await[0].ssrc,
+        parameters.encodings[0].ssrc
+    );
     assert!(parameters.encodings[0].rid.is_empty());
 
     close_pair_now(&offerer, &answerer).await;
@@ -176,7 +181,10 @@ async fn test_rtp_sender_get_parameters_with_rid() -> Result<()> {
     let parameters = sender.get_parameters().await;
     assert_ne!(0, parameters.rtp_parameters.codecs.len());
     assert_eq!(1, parameters.encodings.len());
-    assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
+    assert_eq!(
+        sender.track_encodings.lock().await[0].ssrc,
+        parameters.encodings[0].ssrc
+    );
     assert_eq!(rid, parameters.encodings[0].rid);
 
     close_pair_now(&offerer, &answerer).await;
@@ -323,23 +331,19 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
 
     {
         let tr = rtp_sender.rtp_transceiver.lock();
-        if let Some(t) = &*tr {
-            if let Some(t) = t.upgrade() {
-                t.set_codec_preferences(vec![RTCRtpCodecParameters {
-                    capability: RTCRtpCodecCapability {
-                        mime_type: MIME_TYPE_VP8.to_owned(),
-                        ..Default::default()
-                    },
-                    payload_type: 96,
-                    ..Default::default()
-                }])
-                .await?;
-            } else {
-                panic!();
-            }
-        } else {
-            panic!();
-        }
+        let t = tr
+            .as_ref()
+            .and_then(|t| t.upgrade())
+            .expect("Weak transceiver valid");
+        t.set_codec_preferences(vec![RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_VP8.to_owned(),
+                ..Default::default()
+            },
+            payload_type: 96,
+            ..Default::default()
+        }])
+        .await?;
     }
 
     signal_pair(&mut sender, &mut receiver).await?;
@@ -368,6 +372,164 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     } else {
         panic!();
     }
+
+    close_pair_now(&sender, &receiver).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rtp_sender_add_encoding() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (sender, receiver) = new_pair(&api).await?;
+    let track = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    let rtp_sender = sender.add_track(track).await?;
+
+    let track = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderRidNil,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "h".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderNoBaseEncoding,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "f".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    let rtp_sender = sender.add_track(track).await?;
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video-foobar".to_owned(),
+        "h".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderBaseEncodingMismatch,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "h".to_owned(),
+        "webrtc-rs-foobar".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderBaseEncodingMismatch,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_OPUS.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "h".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderBaseEncodingMismatch,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "f".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderRIDCollision,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "h".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    rtp_sender.add_encoding(track).await?;
+
+    rtp_sender.send(&rtp_sender.get_parameters().await).await?;
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "f".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderSendAlreadyCalled,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
+
+    rtp_sender.stop().await?;
+
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "f".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    assert_eq!(
+        Error::ErrRTPSenderStopped,
+        rtp_sender.add_encoding(track).await.unwrap_err()
+    );
 
     close_pair_now(&sender, &receiver).await;
     Ok(())
