@@ -1703,7 +1703,10 @@ impl RTCPeerConnection {
             for t in &*rtp_transceivers {
                 if !t.stopped.load(Ordering::SeqCst)
                     && t.kind == track.kind()
-                    && track.id() == t.sender().await.id
+                    && t.sender()
+                        .await
+                        .initial_track_id()
+                        .is_some_and(|id| id == track.id())
                 {
                     let sender = t.sender().await;
                     if sender.track().await.is_none() {
