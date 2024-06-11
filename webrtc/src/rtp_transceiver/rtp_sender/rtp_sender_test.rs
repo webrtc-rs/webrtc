@@ -378,6 +378,92 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_rtp_sender_get_parameters_replaced() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (sender, receiver) = new_pair(&api).await?;
+    let track = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    let rtp_sender = sender.add_track(track).await?;
+    let param = rtp_sender.get_parameters().await;
+    assert_eq!(1, param.encodings.len());
+
+    rtp_sender.replace_track(None).await?;
+    let param = rtp_sender.get_parameters().await;
+    assert_eq!(0, param.encodings.len());
+
+    close_pair_now(&sender, &receiver).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rtp_sender_send() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (sender, receiver) = new_pair(&api).await?;
+    let track = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    let rtp_sender = sender.add_track(track).await?;
+    let param = rtp_sender.get_parameters().await;
+    assert_eq!(1, param.encodings.len());
+
+    rtp_sender.send(&param).await?;
+
+    assert_eq!(
+        Error::ErrRTPSenderSendAlreadyCalled,
+        rtp_sender.send(&param).await.unwrap_err()
+    );
+
+    close_pair_now(&sender, &receiver).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rtp_sender_send_track_removed() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (sender, receiver) = new_pair(&api).await?;
+    let track = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    let rtp_sender = sender.add_track(track).await?;
+    let param = rtp_sender.get_parameters().await;
+    assert_eq!(1, param.encodings.len());
+
+    sender.remove_track(&rtp_sender).await?;
+    assert_eq!(
+        Error::ErrRTPSenderTrackRemoved,
+        rtp_sender.send(&param).await.unwrap_err()
+    );
+
+    close_pair_now(&sender, &receiver).await;
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_rtp_sender_add_encoding() -> Result<()> {
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
