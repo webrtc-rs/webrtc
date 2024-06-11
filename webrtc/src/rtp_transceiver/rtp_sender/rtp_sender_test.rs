@@ -139,6 +139,45 @@ async fn test_rtp_sender_get_parameters() -> Result<()> {
     assert_ne!(0, parameters.rtp_parameters.codecs.len());
     assert_eq!(1, parameters.encodings.len());
     assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
+    assert!(parameters.encodings[0].rid.is_empty());
+
+    close_pair_now(&offerer, &answerer).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rtp_sender_get_parameters_with_rid() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (mut offerer, mut answerer) = new_pair(&api).await?;
+
+    let rtp_transceiver = offerer
+        .add_transceiver_from_kind(RTPCodecType::Video, None)
+        .await?;
+
+    signal_pair(&mut offerer, &mut answerer).await?;
+
+    let rid = "moo";
+    let track = Arc::new(TrackLocalStaticSample::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        rid.to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+    rtp_transceiver.set_sending_track(Some(track)).await?;
+
+    let sender = rtp_transceiver.sender().await;
+    assert!(sender.track().await.is_some());
+    let parameters = sender.get_parameters().await;
+    assert_ne!(0, parameters.rtp_parameters.codecs.len());
+    assert_eq!(1, parameters.encodings.len());
+    assert_eq!(sender.ssrc, parameters.encodings[0].ssrc);
+    assert_eq!(rid, parameters.encodings[0].rid);
 
     close_pair_now(&offerer, &answerer).await;
     Ok(())

@@ -14,16 +14,34 @@ pub struct TrackLocalStaticRTP {
     pub(crate) bindings: Mutex<Vec<Arc<TrackBinding>>>,
     codec: RTCRtpCodecCapability,
     id: String,
+    rid: Option<String>,
     stream_id: String,
 }
 
 impl TrackLocalStaticRTP {
-    /// returns a TrackLocalStaticRTP.
+    /// returns a TrackLocalStaticRTP without rid.
     pub fn new(codec: RTCRtpCodecCapability, id: String, stream_id: String) -> Self {
         TrackLocalStaticRTP {
             codec,
             bindings: Mutex::new(vec![]),
             id,
+            rid: None,
+            stream_id,
+        }
+    }
+
+    /// returns a TrackLocalStaticRTP with rid.
+    pub fn new_with_rid(
+        codec: RTCRtpCodecCapability,
+        id: String,
+        rid: String,
+        stream_id: String,
+    ) -> Self {
+        TrackLocalStaticRTP {
+            codec,
+            bindings: Mutex::new(vec![]),
+            id,
+            rid: Some(rid),
             stream_id,
         }
     }
@@ -188,6 +206,11 @@ impl TrackLocal for TrackLocalStaticRTP {
     /// and StreamID would be 'desktop' or 'webcam'
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    /// RID is the RTP Stream ID for this track.
+    fn rid(&self) -> Option<&str> {
+        self.rid.as_deref()
     }
 
     /// stream_id is the group this track belongs too. This must be unique

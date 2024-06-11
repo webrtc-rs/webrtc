@@ -89,6 +89,9 @@ pub trait TrackLocal {
     /// and stream_id would be 'desktop' or 'webcam'
     fn id(&self) -> &str;
 
+    /// RID is the RTP Stream ID for this track.
+    fn rid(&self) -> Option<&str>;
+
     /// stream_id is the group this track belongs too. This must be unique
     fn stream_id(&self) -> &str;
 

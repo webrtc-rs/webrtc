@@ -241,12 +241,12 @@ impl RTCRtpSender {
     /// get_parameters describes the current configuration for the encoding and
     /// transmission of media on the sender's track.
     pub async fn get_parameters(&self) -> RTCRtpSendParameters {
-        let kind = {
+        let (kind, rid) = {
             let track = self.track.lock().await;
             if let Some(t) = &*track {
-                t.kind()
+                (t.kind(), t.rid().to_owned())
             } else {
-                RTPCodecType::default()
+                (RTPCodecType::default(), "".to_owned())
             }
         };
 
@@ -256,6 +256,7 @@ impl RTCRtpSender {
                     .media_engine
                     .get_rtp_parameters_by_kind(kind, RTCRtpTransceiverDirection::Sendonly),
                 encodings: vec![RTCRtpEncodingParameters {
+                    rid: rid.into(),
                     ssrc: self.ssrc,
                     payload_type: self.payload_type,
                     ..Default::default()
