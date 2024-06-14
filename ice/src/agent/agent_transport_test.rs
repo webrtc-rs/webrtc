@@ -13,22 +13,14 @@ pub(crate) async fn pipe(
     let (a_notifier, mut a_connected) = on_connected();
     let (b_notifier, mut b_connected) = on_connected();
 
-    let mut cfg0 = if let Some(cfg) = default_config0 {
-        cfg
-    } else {
-        AgentConfig::default()
-    };
+    let mut cfg0 = default_config0.unwrap_or_default();
     cfg0.urls = vec![];
     cfg0.network_types = supported_network_types();
 
     let a_agent = Arc::new(Agent::new(cfg0).await?);
     a_agent.on_connection_state_change(a_notifier);
 
-    let mut cfg1 = if let Some(cfg) = default_config1 {
-        cfg
-    } else {
-        AgentConfig::default()
-    };
+    let mut cfg1 = default_config1.unwrap_or_default();
     cfg1.urls = vec![];
     cfg1.network_types = supported_network_types();
 

@@ -173,7 +173,7 @@ impl MarshalSize for TransportLayerNack {
 impl Marshal for TransportLayerNack {
     /// Marshal encodes the packet in binary.
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
-        if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
+        if self.nacks.len() + TLN_LENGTH > u8::MAX as usize {
             return Err(Error::TooManyReports.into());
         }
         if buf.remaining_mut() < self.marshal_size() {

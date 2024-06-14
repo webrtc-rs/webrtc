@@ -97,7 +97,7 @@ impl MarshalSize for SliceLossIndication {
 impl Marshal for SliceLossIndication {
     /// Marshal encodes the SliceLossIndication in binary
     fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
-        if (self.sli_entries.len() + SLI_LENGTH) as u8 > std::u8::MAX {
+        if (self.sli_entries.len() + SLI_LENGTH) as u8 > u8::MAX {
             return Err(Error::TooManyReports.into());
         }
         if buf.remaining_mut() < self.marshal_size() {
