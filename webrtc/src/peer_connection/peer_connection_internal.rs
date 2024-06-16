@@ -876,6 +876,8 @@ impl PeerConnectionInternal {
         let only_media_section = &remote_description.media_descriptions[0];
         let mut stream_id = "";
         let mut id = "";
+        let mut has_rid = false;
+        let mut has_ssrc = false;
 
         for a in &only_media_section.attributes {
             match a.key.as_str() {
@@ -888,10 +890,16 @@ impl PeerConnectionInternal {
                         }
                     }
                 }
-                ATTR_KEY_SSRC => return Err(Error::ErrPeerConnSingleMediaSectionHasExplicitSSRC),
-                SDP_ATTRIBUTE_RID => return Ok(false),
+                ATTR_KEY_SSRC => has_ssrc = true,
+                SDP_ATTRIBUTE_RID => has_rid = true,
                 _ => {}
             };
+        }
+
+        if has_rid {
+            return Ok(false);
+        } else if has_ssrc {
+            return Err(Error::ErrPeerConnSingleMediaSectionHasExplicitSSRC);
         }
 
         let mut incoming = TrackDetails {
