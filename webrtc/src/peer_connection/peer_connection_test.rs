@@ -598,26 +598,6 @@ async fn test_peer_connection_simulcast_no_data_channel() -> Result<()> {
     let track_b = Arc::clone(&track);
     sender.add_encoding(track).await?;
 
-    let (mid_id, rid_id) = {
-        let params = sender.get_parameters().await;
-        (
-            params
-                .rtp_parameters
-                .header_extensions
-                .iter()
-                .find(|e| e.uri == ::sdp::extmap::SDES_MID_URI)
-                .map(|e| e.id as u8)
-                .unwrap(),
-            params
-                .rtp_parameters
-                .header_extensions
-                .iter()
-                .find(|e| e.uri == ::sdp::extmap::SDES_RTP_STREAM_ID_URI)
-                .map(|e| e.id as u8)
-                .unwrap(),
-        )
-    };
-
     let track = Arc::new(TrackLocalStaticRTP::new_with_rid(
         RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
@@ -635,9 +615,8 @@ async fn test_peer_connection_simulcast_no_data_channel() -> Result<()> {
     let _ = send_connected.recv().await;
     let _ = recv_connected.recv().await;
 
-    let mid = transceiver.mid().unwrap();
     for sequence_number in [0; 100] {
-        let mut pkt = rtp::packet::Packet {
+        let pkt = rtp::packet::Packet {
             header: rtp::header::Header {
                 version: 2,
                 sequence_number,
@@ -646,16 +625,9 @@ async fn test_peer_connection_simulcast_no_data_channel() -> Result<()> {
             },
             payload: Bytes::from_static(&[0; 2]),
         };
-        pkt.header
-            .set_extension(mid_id, Bytes::copy_from_slice(mid.as_bytes()))?;
 
-        pkt.header.set_extension(rid_id, Bytes::from_static(b"a"))?;
         track_a.write_rtp_with_extensions(&pkt, &[]).await?;
-
-        pkt.header.set_extension(rid_id, Bytes::from_static(b"b"))?;
         track_b.write_rtp_with_extensions(&pkt, &[]).await?;
-
-        pkt.header.set_extension(rid_id, Bytes::from_static(b"c"))?;
         track_c.write_rtp_with_extensions(&pkt, &[]).await?;
     }
 

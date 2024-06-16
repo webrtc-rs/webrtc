@@ -335,6 +335,13 @@ impl RTCRtpSender {
 
             self.seq_trans.reset_offset();
 
+            let mid = self
+                .rtp_transceiver
+                .lock()
+                .clone()
+                .and_then(|t| t.upgrade())
+                .and_then(|t| t.mid());
+
             let new_context = TrackLocalContext {
                 id: context.id.clone(),
                 params: self
@@ -343,6 +350,7 @@ impl RTCRtpSender {
                 ssrc: context.ssrc,
                 write_stream: context.write_stream.clone(),
                 paused: self.paused.clone(),
+                mid,
             };
 
             match t.bind(&new_context).await {
@@ -383,6 +391,13 @@ impl RTCRtpSender {
             return Err(Error::ErrRTPSenderTrackRemoved);
         }
 
+        let mid = self
+            .rtp_transceiver
+            .lock()
+            .clone()
+            .and_then(|t| t.upgrade())
+            .and_then(|t| t.mid());
+
         for (idx, encoding) in track_encodings.iter().enumerate() {
             let write_stream = Arc::new(InterceptorToTrackLocalWriter::new(self.paused.clone()));
             let mut context = TrackLocalContext {
@@ -396,6 +411,7 @@ impl RTCRtpSender {
                     Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>
                 ),
                 paused: self.paused.clone(),
+                mid: mid.to_owned(),
             };
 
             let codec = encoding.track.bind(&context).await?;

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use tokio::sync::Mutex;
 use util::{Marshal, MarshalSize};
 
@@ -117,6 +117,13 @@ impl TrackLocalStaticRTP {
             pkt.header.ssrc = b.ssrc;
             pkt.header.payload_type = b.payload_type;
 
+            for ext in b.hdr_ext_ids.iter() {
+                let payload = ext.payload.to_owned();
+                if let Err(err) = pkt.header.set_extension(ext.id, payload) {
+                    write_errs.push(Error::Rtp(err));
+                }
+            }
+
             for (uri, data) in extension_data.iter() {
                 if let Some(id) = b
                     .params
@@ -161,18 +168,45 @@ impl TrackLocal for TrackLocalStaticRTP {
             capability: self.codec.clone(),
             ..Default::default()
         };
+        let mut hdr_ext_ids = vec![];
+        if let Some(id) = t
+            .header_extensions()
+            .iter()
+            .find(|e| e.uri == ::sdp::extmap::SDES_MID_URI)
+            .map(|e| e.id as u8)
+        {
+            if let Some(payload) = t
+                .mid
+                .as_ref()
+                .map(|mid| Bytes::copy_from_slice(mid.as_bytes()))
+            {
+                hdr_ext_ids.push(rtp::header::Extension { id, payload });
+            }
+        }
+
+        if let Some(id) = t
+            .header_extensions()
+            .iter()
+            .find(|e| e.uri == ::sdp::extmap::SDES_RTP_STREAM_ID_URI)
+            .map(|e| e.id as u8)
+        {
+            if let Some(payload) = self.rid().map(|rid| rid.to_owned().into()) {
+                hdr_ext_ids.push(rtp::header::Extension { id, payload });
+            }
+        }
 
         let (codec, match_type) = codec_parameters_fuzzy_search(&parameters, t.codec_parameters());
         if match_type != CodecMatch::None {
             {
                 let mut bindings = self.bindings.lock().await;
                 bindings.push(Arc::new(TrackBinding {
+                    id: t.id(),
                     ssrc: t.ssrc(),
                     payload_type: codec.payload_type,
-                    write_stream: t.write_stream(),
                     params: t.params.clone(),
-                    id: t.id(),
+                    write_stream: t.write_stream(),
                     sender_paused: t.paused.clone(),
+                    hdr_ext_ids,
                 }));
             }
 

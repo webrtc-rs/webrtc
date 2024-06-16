@@ -12,6 +12,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use interceptor::{Attributes, RTPWriter};
 use portable_atomic::AtomicBool;
+use smol_str::SmolStr;
 use tokio::sync::Mutex;
 use util::Unmarshal;
 
@@ -38,6 +39,7 @@ pub struct TrackLocalContext {
     pub(crate) ssrc: SSRC,
     pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
     pub(crate) paused: Arc<AtomicBool>,
+    pub(crate) mid: Option<SmolStr>,
 }
 
 impl TrackLocalContext {
@@ -112,6 +114,7 @@ pub(crate) struct TrackBinding {
     params: RTCRtpParameters,
     write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
     sender_paused: Arc<AtomicBool>,
+    hdr_ext_ids: Vec<rtp::header::Extension>,
 }
 
 impl TrackBinding {
