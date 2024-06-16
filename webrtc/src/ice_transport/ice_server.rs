@@ -5,7 +5,7 @@ use crate::ice_transport::ice_credential_type::RTCIceCredentialType;
 
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Hash)]
 pub struct RTCIceServer {
     pub urls: Vec<String>,
     pub username: String,

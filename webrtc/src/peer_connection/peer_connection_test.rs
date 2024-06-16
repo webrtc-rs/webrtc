@@ -14,6 +14,7 @@ use crate::api::interceptor_registry::register_default_interceptors;
 use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
+use crate::ice_transport::ice_credential_type::RTCIceCredentialType;
 use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
@@ -386,6 +387,98 @@ async fn test_get_stats() -> Result<()> {
 async fn test_peer_connection_close_is_send() -> Result<()> {
     let handle = tokio::spawn(async move { peer().await });
     tokio::join!(handle).0.unwrap()
+}
+
+#[tokio::test]
+async fn test_set_get_configuration() {
+    // initialize MediaEngine and InterceptorRegistry
+    let media_engine = MediaEngine::default();
+    let registry = Registry::default();
+
+    // create API instance
+    let api = APIBuilder::new()
+        .with_media_engine(media_engine)
+        .with_interceptor_registry(registry)
+        .build();
+
+    // create configuration
+    let initial_config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_string()],
+            username: "".to_string(),
+            credential: "".to_string(),
+            credential_type: RTCIceCredentialType::Unspecified,
+        }],
+        ..Default::default()
+    };
+
+    // create RTCPeerConnection instance
+    let peer = Arc::new(
+        api.new_peer_connection(initial_config.clone())
+            .await
+            .expect("Failed to create RTCPeerConnection"),
+    );
+
+    // get configuration and println
+    let config_before = peer.get_configuration().await;
+    println!("Initial ICE Servers: {:?}", config_before.ice_servers);
+    println!(
+        "Initial ICE Transport Policy: {:?}",
+        config_before.ice_transport_policy
+    );
+    println!("Initial Bundle Policy: {:?}", config_before.bundle_policy);
+    println!(
+        "Initial RTCP Mux Policy: {:?}",
+        config_before.rtcp_mux_policy
+    );
+    println!("Initial Peer Identity: {:?}", config_before.peer_identity);
+    println!("Initial Certificates: {:?}", config_before.certificates);
+    println!(
+        "Initial ICE Candidate Pool Size: {:?}",
+        config_before.ice_candidate_pool_size
+    );
+    println!("");
+
+    // create new configuration
+    let new_config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
+            urls: vec![
+                "turn:turn.22333.fun".to_string(),
+                "turn:cn.22333.fun".to_string(),
+            ],
+            username: "live777".to_string(),
+            credential: "live777".to_string(),
+            credential_type: RTCIceCredentialType::Password,
+        }],
+        ..Default::default()
+    };
+
+    // set new configuration
+    peer.set_configuration(new_config.clone())
+        .await
+        .expect("Failed to set configuration");
+
+    // get new configuration and println
+    let updated_config = peer.get_configuration().await;
+    println!("Updated ICE Servers: {:?}", updated_config.ice_servers);
+    println!(
+        "Updated ICE Transport Policy: {:?}",
+        updated_config.ice_transport_policy
+    );
+    println!("Updated Bundle Policy: {:?}", updated_config.bundle_policy);
+    println!(
+        "Updated RTCP Mux Policy: {:?}",
+        updated_config.rtcp_mux_policy
+    );
+    println!("Updated Peer Identity: {:?}", updated_config.peer_identity);
+    println!("Updated Certificates: {:?}", updated_config.certificates);
+    println!(
+        "Updated ICE Candidate Pool Size: {:?}",
+        updated_config.ice_candidate_pool_size
+    );
+
+    // verify
+    assert_eq!(updated_config.ice_servers, new_config.ice_servers);
 }
 
 async fn peer() -> Result<()> {
