@@ -18,6 +18,8 @@ thiserror = "1"
 serde = { version = "1", features = ["derive"] }
 portable-atomic = "1.6"
 
+memchr = "2.1.1"
+
 [dev-dependencies]
 chrono = "0.4.28"
 criterion = "0.5"
