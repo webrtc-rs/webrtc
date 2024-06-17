@@ -1,0 +1,11 @@
+[package]
+name = "test_setconfiguration"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+webrtc = { path = "/home/binbat/.cargo/git/checkouts/webrtc-735f9f26b750c977/08189da/webrtc" }
+anyhow = "1.0"
+serde = "1"
+serde_json = "1"
