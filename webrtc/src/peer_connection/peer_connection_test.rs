@@ -437,7 +437,6 @@ async fn test_set_get_configuration() {
         "Initial ICE Candidate Pool Size: {:?}",
         config_before.ice_candidate_pool_size
     );
-    println!("");
 
     // create new configuration
     let new_config = RTCConfiguration {
