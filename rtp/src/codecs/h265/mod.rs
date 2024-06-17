@@ -67,10 +67,10 @@ pub struct HevcPayloader {
 impl HevcPayloader {
     pub fn parse(nalu: &Bytes) -> (Vec<usize>, usize) {
         let finder = memchr::memmem::Finder::new(&ANNEXB_NALUSTART_CODE);
-        let nals = finder.find_iter(&nalu).collect::<Vec<usize>>();
-        if nals.len() == 0 {
+        let nals = finder.find_iter(nalu).collect::<Vec<usize>>();
+        if nals.is_empty() {
             let finder = memchr::memmem::Finder::new(&ANNEXB_3_NALUSTART_CODE);
-            return (finder.find_iter(&nalu).collect::<Vec<usize>>(), 3);
+            return (finder.find_iter(nalu).collect::<Vec<usize>>(), 3);
         }
         (nals, 4)
     }
@@ -103,11 +103,11 @@ impl HevcPayloader {
             let mut aggr_nalu = BytesMut::new();
             aggr_nalu.extend_from_slice(&AGGR_PAYLOAD_HDR);
             aggr_nalu.extend_from_slice(&vps_len);
-            aggr_nalu.extend_from_slice(&vps_nalu);
+            aggr_nalu.extend_from_slice(vps_nalu);
             aggr_nalu.extend_from_slice(&sps_len);
-            aggr_nalu.extend_from_slice(&sps_nalu);
+            aggr_nalu.extend_from_slice(sps_nalu);
             aggr_nalu.extend_from_slice(&pps_len);
-            aggr_nalu.extend_from_slice(&pps_nalu);
+            aggr_nalu.extend_from_slice(pps_nalu);
             if aggr_nalu.len() <= mtu {
                 payloads.push(Bytes::from(aggr_nalu));
                 self.vps_nalu.take();

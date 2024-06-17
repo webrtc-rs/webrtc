@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::path::Path;
 use std::sync::{Arc, Weak};
-use std::time::Instant;
 use tokio::sync::{mpsc, Notify};
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -176,7 +175,6 @@ async fn main() -> Result<()> {
             println!("[Listener] track codec {:?}", track.codec());
             if kind == RTPCodecType::Video {
                 tokio::spawn(async move {
-                    let mut hb = Instant::now();
                     let mut ticker = tokio::time::interval(Duration::from_secs(2));
                     loop {
                         if let Some(pc3) = pc2.upgrade() {
