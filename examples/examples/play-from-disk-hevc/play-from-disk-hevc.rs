@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
                 .long("debug")
                 .short('d')
                 .help("Prints debug log information"),
-        )  
+        )
         .arg(
             Arg::new("video")
                 .required_unless_present("FULLHELP")
@@ -261,12 +261,12 @@ async fn main() -> Result<()> {
                                                 }
                                                 fdata.extend_from_slice(&p.payload());
                                                 if p.fu_header().e() {
-                                                    
+                                                    println!("[Listener] fu nal collected");
                                                 }
                                             }
                                         }
                                     } else if weak_peer_closed(&pc2) {
-                                        println!("oops");
+                                        println!("peer abnormally closed");
                                         break;
                                     }
                                 }
@@ -404,9 +404,7 @@ async fn offer_worker(
     let notify1 = notify_connect.clone();
     tokio::spawn(async move {
         let mut buf = vec![];
-        let mut file =
-            File::open(&video_file)
-                .unwrap();
+        let mut file = File::open(&video_file).unwrap();
         let _ = file.read_to_end(&mut buf);
         let mut data = BytesMut::from_iter(buf);
 
