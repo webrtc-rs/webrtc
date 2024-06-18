@@ -99,7 +99,7 @@ impl HevcPayloader {
             let sps_len = (sps_nalu.len() as u16).to_be_bytes();
             let pps_len = (pps_nalu.len() as u16).to_be_bytes();
 
-            // 由于直播流多数都没有B帧，故暂不考虑DONL
+            // TODO DONL not impl yet
             let mut aggr_nalu = BytesMut::new();
             aggr_nalu.extend_from_slice(&AGGR_PAYLOAD_HDR);
             aggr_nalu.extend_from_slice(&vps_len);

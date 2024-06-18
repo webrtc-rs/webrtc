@@ -176,25 +176,21 @@ async fn main() -> Result<()> {
             if kind == RTPCodecType::Video {
                 tokio::spawn(async move {
                     let mut ticker = tokio::time::interval(Duration::from_secs(2));
-                    loop {
-                        if let Some(pc3) = pc2.upgrade() {
-                            if peer_closed(&pc3) {
-                                break;
-                            }
-                            if pc3
-                                .write_rtcp(&[Box::new(PictureLossIndication {
-                                    sender_ssrc: 0,
-                                    media_ssrc,
-                                })])
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
-                            let _ = ticker.tick().await;
-                        } else {
+                    while let Some(pc3) = pc2.upgrade() {
+                        if peer_closed(&pc3) {
                             break;
                         }
+                        if pc3
+                            .write_rtcp(&[Box::new(PictureLossIndication {
+                                sender_ssrc: 0,
+                                media_ssrc,
+                            })])
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                        let _ = ticker.tick().await;
                     }
                     println!("[Listener] closing {kind} pli thread");
                 });
@@ -269,16 +265,14 @@ async fn main() -> Result<()> {
                                                 }
                                             }
                                         }
-                                    } else {
-                                        if weak_peer_closed(&pc2) {
-                                            println!("oops");
-                                            break;
-                                        }
+                                    } else if weak_peer_closed(&pc2) {
+                                        println!("oops");
+                                        break;
                                     }
                                 }
                             }
                         }
-                        let mut file = std::fs::File::create(&format!("{video_file1}.output")).unwrap();
+                        let mut file = std::fs::File::create(format!("{video_file1}.output")).unwrap();
                         let _ = file.write_all(&fdata);
                         println!("[Listener] closing video read thread");
                         notify2.notify_waiters();
@@ -294,10 +288,8 @@ async fn main() -> Result<()> {
                                     break;
                                 }
                                 m = track.read_rtp() => {
-                                    if m.is_err() {
-                                        if weak_peer_closed(&pc2) {
-                                            break;
-                                        }
+                                    if m.is_err() && weak_peer_closed(&pc2) {
+                                        break;
                                     }
                                 }
                             }
@@ -439,7 +431,7 @@ async fn offer_worker(
         println!("[Speaker] play video from disk file");
         let mut ticker = tokio::time::interval(Duration::from_millis(33));
         loop {
-            if data_list.len() == 0 {
+            if data_list.is_empty() {
                 break;
             }
             let nal_data = data_list.remove(0);
