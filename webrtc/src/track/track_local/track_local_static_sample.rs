@@ -24,9 +24,29 @@ pub struct TrackLocalStaticSample {
 }
 
 impl TrackLocalStaticSample {
-    /// returns a TrackLocalStaticSample
+    /// returns a TrackLocalStaticSample without RID
     pub fn new(codec: RTCRtpCodecCapability, id: String, stream_id: String) -> Self {
         let rtp_track = TrackLocalStaticRTP::new(codec, id, stream_id);
+
+        TrackLocalStaticSample {
+            rtp_track,
+            internal: Mutex::new(TrackLocalStaticSampleInternal {
+                packetizer: None,
+                sequencer: None,
+                clock_rate: 0.0f64,
+                did_warn_about_wonky_pause: false,
+            }),
+        }
+    }
+
+    /// returns a TrackLocalStaticSample with RID
+    pub fn new_with_rid(
+        codec: RTCRtpCodecCapability,
+        id: String,
+        rid: String,
+        stream_id: String,
+    ) -> Self {
+        let rtp_track = TrackLocalStaticRTP::new_with_rid(codec, id, rid, stream_id);
 
         TrackLocalStaticSample {
             rtp_track,
@@ -219,6 +239,11 @@ impl TrackLocal for TrackLocalStaticSample {
     /// and StreamID would be 'desktop' or 'webcam'
     fn id(&self) -> &str {
         self.rtp_track.id()
+    }
+
+    /// RID is the RTP Stream ID for this track.
+    fn rid(&self) -> Option<&str> {
+        self.rtp_track.rid()
     }
 
     /// stream_id is the group this track belongs too. This must be unique

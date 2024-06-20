@@ -650,6 +650,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                 RTCRtpSender::new(
                     api.setting_engine.get_receive_mtu(),
                     Some(track),
+                    RTPCodecType::Video,
                     Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),
                     Arc::clone(&interceptor),
