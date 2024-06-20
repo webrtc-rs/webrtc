@@ -30,6 +30,7 @@ bytes = "1"
 lazy_static = "1"
 rand = "0.8"
 
+memchr = "2.1.1"
 
 [[example]]
 name = "rc-cycle"
@@ -84,6 +85,11 @@ bench = false
 [[example]]
 name = "play-from-disk-h264"
 path = "examples/play-from-disk-h264/play-from-disk-h264.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-hevc"
+path = "examples/play-from-disk-hevc/play-from-disk-hevc.rs"
 bench = false
 
 [[example]]
