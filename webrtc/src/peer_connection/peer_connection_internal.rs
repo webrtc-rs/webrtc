@@ -829,6 +829,7 @@ impl PeerConnectionInternal {
                 .and_then(|d| d.parsed.as_ref())
                 .and_then(|d| d.attribute(ATTR_KEY_GROUP))
                 .map(ToOwned::to_owned)
+                .or(Some(String::new()))
         };
 
         let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
