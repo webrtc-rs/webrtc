@@ -980,21 +980,22 @@ impl PeerConnectionInternal {
             })
             .await;
 
-        let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
         // Packets that we read as part of simulcast probing that we need to make available
         // if we do find a track later.
         let mut buffered_packets: VecDeque<(rtp::packet::Packet, Attributes)> = VecDeque::default();
 
+        let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
         let n = rtp_stream.read(&mut buf).await?;
+        let mut b = &buf[..n];
 
         let (mut mid, mut rid, mut rsid, payload_type) = handle_unknown_rtp_packet(
-            &buf[..n],
+            b,
             mid_extension_id as u8,
             sid_extension_id as u8,
             rsid_extension_id as u8,
         )?;
 
-        let packet = rtp::packet::Packet::unmarshal(&mut buf.as_slice()).unwrap();
+        let packet = rtp::packet::Packet::unmarshal(&mut b).unwrap();
 
         // TODO: Can we have attributes on the first packets?
         buffered_packets.push_back((packet, Attributes::new()));
