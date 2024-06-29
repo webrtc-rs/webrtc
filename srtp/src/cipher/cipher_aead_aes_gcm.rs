@@ -146,7 +146,11 @@ impl Cipher for CipherAeadAesGcm {
 
 impl CipherAeadAesGcm {
     /// Create a new AEAD instance.
-    pub(crate) fn new(profile: ProtectionProfile, master_key: &[u8], master_salt: &[u8]) -> Result<CipherAeadAesGcm> {
+    pub(crate) fn new(
+        profile: ProtectionProfile,
+        master_key: &[u8],
+        master_salt: &[u8],
+    ) -> Result<CipherAeadAesGcm> {
         let srtp_session_key = aes_cm_key_derivation(
             LABEL_SRTP_ENCRYPTION,
             master_key,
