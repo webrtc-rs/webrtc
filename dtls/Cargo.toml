@@ -44,7 +44,7 @@ x509-parser = "0.16"
 der-parser = "9.0"
 rcgen = "0.13"
 ring = "0.17"
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rustls = { version = "0.23.10", default-features = false, features = ["std", "ring"] }
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 subtle = "2"
@@ -55,7 +55,7 @@ portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"
-env_logger = "0.10"
+env_logger = "0.11.3"
 chrono = "0.4.28"
 clap = "3"
 hub = {path = "examples/hub"}

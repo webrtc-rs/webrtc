@@ -16,7 +16,7 @@ repository = "https://github.com/webrtc-rs/webrtc/tree/master/examples"
 webrtc = { path = "../webrtc" }
 
 tokio = { version = "1.32.0", features = ["full"] }
-env_logger = "0.10"
+env_logger = "0.11.3"
 clap = "3"
 hyper = { version = "0.14.27", features = ["full"] }
 signal = { path = "examples/signal" }

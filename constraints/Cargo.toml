@@ -16,7 +16,7 @@ ordered-float = { version = "4", default-features = false }
 thiserror = "1"
 
 [dev-dependencies]
-env_logger = "0.10"
+env_logger = "0.11.3"
 lazy_static = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 

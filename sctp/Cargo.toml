@@ -36,7 +36,7 @@ portable-atomic = "1.6"
 [dev-dependencies]
 tokio-test = "0.4"
 lazy_static = "1"
-env_logger = "0.10"
+env_logger = "0.11.3"
 chrono = "0.4.28"
 clap = "3"
 
