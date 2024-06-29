@@ -31,7 +31,6 @@ pub mod ice_candidate;
 pub mod ice_candidate_pair;
 pub mod ice_candidate_type;
 pub mod ice_connection_state;
-pub mod ice_credential_type;
 pub mod ice_gatherer;
 pub mod ice_gatherer_state;
 pub mod ice_gathering_state;
