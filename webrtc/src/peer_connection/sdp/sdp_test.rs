@@ -254,6 +254,51 @@ async fn test_extract_ice_details() -> Result<()> {
         );
     }
 
+    //"Allow Conflict ufrag from inactive MediaDescription"
+    {
+        let s = SessionDescription {
+            media_descriptions: vec![
+                MediaDescription {
+                    attributes: vec![
+                        Attribute {
+                            key: "ice-ufrag".to_owned(),
+                            value: Some(DEFAULT_UFRAG.to_owned()),
+                        },
+                        Attribute {
+                            key: "ice-pwd".to_owned(),
+                            value: Some(DEFAULT_PWD.to_owned()),
+                        },
+                    ],
+                    ..Default::default()
+                },
+                MediaDescription {
+                    attributes: vec![
+                        Attribute {
+                            key: "ice-ufrag".to_owned(),
+                            value: Some("invalidUfrag".to_owned()),
+                        },
+                        Attribute {
+                            key: "ice-pwd".to_owned(),
+                            value: Some(DEFAULT_PWD.to_owned()),
+                        },
+                        Attribute {
+                            key: ATTR_KEY_INACTIVE.to_owned(),
+                            value: None,
+                        },
+                    ],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let (ufrag, pwd, _) = extract_ice_details(&s)
+            .await
+            .expect("should allow conflicting ICE ufrag when MediaDescription is inactive");
+        assert_eq!(ufrag, DEFAULT_UFRAG);
+        assert_eq!(pwd, DEFAULT_PWD);
+    }
+
     Ok(())
 }
 

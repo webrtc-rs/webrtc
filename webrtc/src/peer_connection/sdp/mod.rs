@@ -933,22 +933,44 @@ pub(crate) async fn extract_ice_details(
     desc: &SessionDescription,
 ) -> Result<(String, String, Vec<RTCIceCandidate>)> {
     let mut candidates = vec![];
-    let mut remote_pwds = vec![];
-    let mut remote_ufrags = vec![];
 
-    if let Some(ufrag) = desc.attribute("ice-ufrag") {
-        remote_ufrags.push(ufrag.clone());
-    }
-    if let Some(pwd) = desc.attribute("ice-pwd") {
-        remote_pwds.push(pwd.clone());
-    }
+    // Backup ufrag/pwd is the first inactive credentials found.
+    // We will return the backup credentials to solve the corner case where
+    // all media lines/transceivers are set to inactive.
+    //
+    // This should probably be handled in a better way by the caller.
+    let mut backup_ufrag = None;
+    let mut backup_pwd = None;
+
+    let mut remote_ufrag = desc.attribute("ice-ufrag").map(|s| s.as_str());
+    let mut remote_pwd = desc.attribute("ice-pwd").map(|s| s.as_str());
 
     for m in &desc.media_descriptions {
-        if let Some(ufrag) = m.attribute("ice-ufrag").and_then(|o| o) {
-            remote_ufrags.push(ufrag.to_owned());
+        let ufrag = m.attribute("ice-ufrag").and_then(|o| o);
+        let pwd = m.attribute("ice-pwd").and_then(|o| o);
+
+        if m.attribute(ATTR_KEY_INACTIVE).is_some() {
+            if backup_ufrag.is_none() {
+                backup_ufrag = ufrag;
+            }
+            if backup_pwd.is_none() {
+                backup_pwd = pwd;
+            }
+            continue;
         }
-        if let Some(pwd) = m.attribute("ice-pwd").and_then(|o| o) {
-            remote_pwds.push(pwd.to_owned());
+
+        if remote_ufrag.is_none() {
+            remote_ufrag = ufrag;
+        }
+        if remote_pwd.is_none() {
+            remote_pwd = pwd;
+        }
+
+        if ufrag.is_some() && ufrag != remote_ufrag {
+            return Err(Error::ErrSessionDescriptionConflictingIceUfrag);
+        }
+        if pwd.is_some() && pwd != remote_pwd {
+            return Err(Error::ErrSessionDescriptionConflictingIcePwd);
         }
 
         for a in &m.attributes {
@@ -962,25 +984,14 @@ pub(crate) async fn extract_ice_details(
         }
     }
 
-    if remote_ufrags.is_empty() {
-        return Err(Error::ErrSessionDescriptionMissingIceUfrag);
-    } else if remote_pwds.is_empty() {
-        return Err(Error::ErrSessionDescriptionMissingIcePwd);
-    }
+    let remote_ufrag = remote_ufrag
+        .or(backup_ufrag)
+        .ok_or(Error::ErrSessionDescriptionMissingIceUfrag)?;
+    let remote_pwd = remote_pwd
+        .or(backup_pwd)
+        .ok_or(Error::ErrSessionDescriptionMissingIcePwd)?;
 
-    for m in 1..remote_ufrags.len() {
-        if remote_ufrags[m] != remote_ufrags[0] {
-            return Err(Error::ErrSessionDescriptionConflictingIceUfrag);
-        }
-    }
-
-    for m in 1..remote_pwds.len() {
-        if remote_pwds[m] != remote_pwds[0] {
-            return Err(Error::ErrSessionDescriptionConflictingIcePwd);
-        }
-    }
-
-    Ok((remote_ufrags[0].clone(), remote_pwds[0].clone(), candidates))
+    Ok((remote_ufrag.to_owned(), remote_pwd.to_owned(), candidates))
 }
 
 pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool {
