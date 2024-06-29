@@ -14,7 +14,6 @@ use crate::api::interceptor_registry::register_default_interceptors;
 use crate::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use crate::api::APIBuilder;
 use crate::ice_transport::ice_candidate_pair::RTCIceCandidatePair;
-use crate::ice_transport::ice_credential_type::RTCIceCredentialType;
 use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
@@ -408,7 +407,6 @@ async fn test_set_get_configuration() {
             urls: vec!["stun:stun.l.google.com:19302".to_string()],
             username: "".to_string(),
             credential: "".to_string(),
-            credential_type: RTCIceCredentialType::Unspecified,
         }],
         ..Default::default()
     };
@@ -448,7 +446,6 @@ async fn test_set_get_configuration() {
             ],
             username: "live777".to_string(),
             credential: "live777".to_string(),
-            credential_type: RTCIceCredentialType::Password,
         }],
         ..Default::default()
     };
