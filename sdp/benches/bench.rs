@@ -1,6 +1,7 @@
 use std::io::Cursor;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use sdp::SessionDescription;
 
 const CANONICAL_UNMARSHAL_SDP: &str = "v=0\r\n\
@@ -29,18 +30,21 @@ a=sendrecv\r\n\
 m=video 51372 RTP/AVP 99\r\n\
 a=rtpmap:99 h263-1998/90000\r\n";
 
-fn benchmark_sdp(c: &mut Criterion) {
+fn benchmark_sdp(g: &mut BenchmarkGroup<WallTime>) {
     let mut reader = Cursor::new(CANONICAL_UNMARSHAL_SDP.as_bytes());
     let sdp = SessionDescription::unmarshal(&mut reader).unwrap();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    c.bench_function("Benchmark Marshal", |b| {
+
+    // BenchmarkMarshal
+    g.bench_function("Marshal", |b| {
         b.iter(|| {
             let _ = sdp.marshal();
         })
     });
 
-    c.bench_function("Benchmark Unmarshal ", |b| {
+    // BenchmarkUnmarshal
+    g.bench_function("Unmarshal", |b| {
         b.iter(|| {
             let mut reader = Cursor::new(CANONICAL_UNMARSHAL_SDP.as_bytes());
             let _ = SessionDescription::unmarshal(&mut reader).unwrap();
@@ -48,5 +52,13 @@ fn benchmark_sdp(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_sdp);
+fn benches() {
+    let mut c = Criterion::default().configure_from_args();
+    let mut g = c.benchmark_group("SDP");
+
+    benchmark_sdp(&mut g);
+
+    g.finish();
+}
+
 criterion_main!(benches);
