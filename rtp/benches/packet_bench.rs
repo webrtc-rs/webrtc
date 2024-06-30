@@ -2,8 +2,8 @@
 #![allow(clippy::needless_update)]
 
 use bytes::{Bytes, BytesMut};
-use criterion::{criterion_main, Criterion, BenchmarkGroup};
 use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use rtp::header::*;
 use rtp::packet::*;
 use util::marshal::{Marshal, MarshalSize, Unmarshal};

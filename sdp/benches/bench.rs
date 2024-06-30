@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
-use criterion::{criterion_main, Criterion, BenchmarkGroup};
 use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use sdp::SessionDescription;
 
 const CANONICAL_UNMARSHAL_SDP: &str = "v=0\r\n\

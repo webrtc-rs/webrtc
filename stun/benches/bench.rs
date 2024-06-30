@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use criterion::{criterion_main, Criterion, BenchmarkGroup};
 use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use stun::addr::{AlternateServer, MappedAddress};
@@ -680,7 +680,7 @@ fn benchmark_xoraddr(g: &mut BenchmarkGroup<WallTime>) {
 fn benches() {
     let mut c = Criterion::default().configure_from_args();
     let mut g = c.benchmark_group("STUN");
-    
+
     benchmark_addr(&mut g);
     benchmark_agent(&mut g);
     benchmark_attributes(&mut g);
@@ -694,7 +694,7 @@ fn benches() {
     benchmark_unknown_attributes(&mut g);
     benchmark_xor(&mut g);
     benchmark_xoraddr(&mut g);
-    
+
     g.finish();
 }
 

@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_main, Criterion, BenchmarkGroup};
 use criterion::measurement::WallTime;
+use criterion::{black_box, criterion_main, BenchmarkGroup, Criterion};
 use webrtc_media::audio::buffer::layout::{Deinterleaved, Interleaved};
 use webrtc_media::audio::buffer::Buffer;
 

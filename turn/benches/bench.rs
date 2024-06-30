@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use criterion::{criterion_main, Criterion, BenchmarkGroup};
 use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use stun::attributes::ATTR_DATA;
 use stun::message::{Getter, Message, Setter};
 use turn::proto::chandata::ChannelData;
