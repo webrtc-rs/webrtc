@@ -15,6 +15,14 @@ use crate::stats::stats_collector::StatsCollector;
 use crate::stats::{CertificateStats, StatsReportType};
 
 /// Certificate represents a X.509 certificate used to authenticate WebRTC communications.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCCertificate
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtccertificate
 #[derive(Clone, Debug)]
 pub struct RTCCertificate {
     /// DTLS certificate.

@@ -4,6 +4,12 @@ use crate::error::{Error, Result};
 
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtciceserver
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Hash)]
 pub struct RTCIceServer {
     pub urls: Vec<String>,

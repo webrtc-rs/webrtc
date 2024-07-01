@@ -244,12 +244,20 @@ const H265NALU_FRAGMENTATION_UNIT_TYPE: u8 = 49;
 const H265NALU_PACI_PACKET_TYPE: u8 = 50;
 
 /// H265NALUHeader is a H265 NAL Unit Header
-/// <https://datatracker.ietf.org/doc/html/rfc7798#section-1.1.4>
+///
+/// ```text
 /// +---------------+---------------+
-///  |0|1|2|3|4|5|6|7|0|1|2|3|4|5|6|7|
-///  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-///  |F|   Type    |  layer_id  | tid |
-///  +-------------+-----------------+
+/// |0|1|2|3|4|5|6|7|0|1|2|3|4|5|6|7|
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |F|   Type    |  layer_id  | tid|
+/// +-------------+-----------------+
+/// ```
+///
+/// ## Specifications
+///
+/// * [RFC 7798 §1.1.4]
+///
+/// [RFC 7798 §1.1.4]: https://tools.ietf.org/html/rfc7798#section-1.1.4
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265NALUHeader(pub u16);
 
@@ -322,7 +330,11 @@ impl H265NALUHeader {
 ///   |                               :...OPTIONAL RTP padding        |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1>
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.1]
+///
+/// [RFC 7798 §4.4.1]: https://tools.ietf.org/html/rfc7798#section-4.4.1
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265SingleNALUnitPacket {
     /// payload_header is the header of the H265 packet.
@@ -411,7 +423,11 @@ impl H265SingleNALUnitPacket {
 ///   |                               :
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.2]
+///
+/// [RFC 7798 §4.4.2]: https://tools.ietf.org/html/rfc7798#section-4.4.2
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnitFirst {
     donl: Option<u16>,
@@ -451,7 +467,11 @@ impl H265AggregationUnitFirst {
 ///   |                               :
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.2]
+///
+/// [RFC 7798 §4.4.2]: https://tools.ietf.org/html/rfc7798#section-4.4.2
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnit {
     dond: Option<u8>,
@@ -491,7 +511,11 @@ impl H265AggregationUnit {
 ///   |                               :...OPTIONAL RTP padding        |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.2]
+///
+/// [RFC 7798 §4.4.2]: https://tools.ietf.org/html/rfc7798#section-4.4.2
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationPacket {
     first_unit: Option<H265AggregationUnitFirst>,
@@ -650,7 +674,11 @@ impl H265FragmentationUnitHeader {
 /// |                               :...OPTIONAL RTP padding        |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3>
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.3]
+///
+/// [RFC 7798 §4.4.3]: https://tools.ietf.org/html/rfc7798#section-4.4.3
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265FragmentationUnitPacket {
     /// payload_header is the header of the H265 packet.
@@ -749,7 +777,11 @@ impl H265FragmentationUnitPacket {
 /// |                               :...OPTIONAL RTP padding        |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4>
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.4]
+///
+/// [RFC 7798 §4.4.4]: https://tools.ietf.org/html/rfc7798#section-4.4.4
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265PACIPacket {
     /// payload_header is the header of the H265 packet.
@@ -878,7 +910,12 @@ impl H265PACIPacket {
 ///
 
 /// H265TSCI is a Temporal Scalability Control Information header extension.
-/// Reference: <https://datatracker.ietf.org/doc/html/rfc7798#section-4.5>
+///
+/// ## Specifications
+///
+/// * [RFC 7798 §4.5]
+///
+/// [RFC 7798 §4.5]: https://tools.ietf.org/html/rfc7798#section-4.5
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265TSCI(pub u32);
 

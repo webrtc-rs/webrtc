@@ -129,22 +129,26 @@ impl Chunk for ChunkInit {
         }
     }
 
-    ///https://tools.ietf.org/html/rfc4960#section-3.2.1
+    /// Chunk values of SCTP control chunks consist of a chunk-type-specific
+    /// header of required fields, followed by zero or more parameters.  The
+    /// optional and variable-length parameters contained in a chunk are
+    /// defined in a Type-Length-Value format as shown below.
     ///
-    ///Chunk values of SCTP control chunks consist of a chunk-type-specific
-    ///header of required fields, followed by zero or more parameters.  The
-    ///optional and variable-length parameters contained in a chunk are
-    ///defined in a Type-Length-Value format as shown below.
+    /// 0                   1                   2                   3
+    /// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /// |          Parameter Type       |       Parameter Length        |
+    /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /// |                                                               |
+    /// |                       Parameter Value                         |
+    /// |                                                               |
+    /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     ///
-    ///0                   1                   2                   3
-    ///0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-    ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    ///|          Parameter Type       |       Parameter Length        |
-    ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    ///|                                                               |
-    ///|                       Parameter Value                         |
-    ///|                                                               |
-    ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /// ## Specifications
+    ///
+    /// * [RFC 4960 §3.2.1]
+    ///
+    /// [RFC 4960 §3.2.1]: https://tools.ietf.org/html/rfc4960#section-3.2.1
     fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 

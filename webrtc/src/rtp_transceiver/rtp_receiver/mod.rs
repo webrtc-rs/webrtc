@@ -391,6 +391,14 @@ impl RTPReceiverInternal {
 }
 
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpReceiver
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcrtpreceiver-interface
 pub struct RTCRtpReceiver {
     receive_mtu: usize,
     kind: RTPCodecType,

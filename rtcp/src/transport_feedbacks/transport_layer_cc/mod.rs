@@ -14,7 +14,6 @@ use crate::util::*;
 
 type Result<T> = std::result::Result<T, util::Error>;
 
-/// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 /// 0                   1                   2                   3
 /// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -40,9 +39,14 @@ type Result<T> = std::result::Result<T, util::Error>;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |           recv delta          |  recv delta   | zero padding  |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
 // for packet status chunk
 /// type of packet status chunk
+///
+/// ## Specifications
+///
+/// * [draft-holmer-rmcat-transport-wide-cc-extensions-01, page 5]
+///
+/// [draft-holmer-rmcat-transport-wide-cc-extensions-01, page 5]: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
 #[repr(u16)]
 pub enum StatusChunkTypeTcc {

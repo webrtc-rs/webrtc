@@ -47,6 +47,14 @@ pub type OnCloseHdlrFn =
 /// DataChannel represents a WebRTC DataChannel
 /// The DataChannel interface represents a network channel
 /// which can be used for bidirectional peer-to-peer transfers of arbitrary data
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcdatachannel
 #[derive(Default)]
 pub struct RTCDataChannel {
     pub(crate) stats_id: String,

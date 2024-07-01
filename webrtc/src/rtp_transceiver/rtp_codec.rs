@@ -50,7 +50,12 @@ impl fmt::Display for RTPCodecType {
 }
 
 /// RTPCodecCapability provides information about codec capabilities.
-/// <https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpcodeccapability-members>
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpcodeccapability-members
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCRtpCodecCapability {
     pub mime_type: String,

@@ -27,7 +27,11 @@ pub const PROTOCOL_VERSION1_2: ProtocolVersion = ProtocolVersion {
     minor: DTLS1_2MINOR,
 };
 
-// https://tools.ietf.org/html/rfc4346#section-6.2.1
+/// ## Specifications
+///
+/// * [RFC 4346 §6.2.1]
+///
+/// [RFC 4346 §6.2.1]: https://tools.ietf.org/html/rfc4346#section-6.2.1
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct ProtocolVersion {
     pub major: u8,

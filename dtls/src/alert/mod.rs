@@ -144,7 +144,11 @@ impl From<u8> for AlertDescription {
 // preventing the failed session from being used to establish new
 // connections.  Like other messages, alert messages are encrypted and
 // compressed, as specified by the current connection state.
-// https://tools.ietf.org/html/rfc5246#section-7.2
+/// ## Specifications
+///
+/// * [RFC 5246 §7.2]
+///
+/// [RFC 5246 §7.2]: https://tools.ietf.org/html/rfc5246#section-7.2
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Alert {
     pub(crate) alert_level: AlertLevel,

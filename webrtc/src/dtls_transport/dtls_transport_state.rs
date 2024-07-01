@@ -1,6 +1,14 @@
 use std::fmt;
 
 /// DTLSTransportState indicates the DTLS transport establishment state.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCDtlsTransport/state
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcdtlstransportstate
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCDtlsTransportState {
     #[default]

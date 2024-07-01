@@ -33,7 +33,11 @@ use handshake_message_server_key_exchange::*;
 use super::content::*;
 use super::error::*;
 
-// https://tools.ietf.org/html/rfc5246#section-7.4
+/// ## Specifications
+///
+/// * [RFC 5246 §7.4]
+///
+/// [RFC 5246 §7.4]: https://tools.ietf.org/html/rfc5246#section-7.4
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HandshakeType {
     HelloRequest = 0,

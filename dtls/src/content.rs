@@ -6,7 +6,11 @@ use super::change_cipher_spec::*;
 use super::handshake::*;
 use crate::error::*;
 
-// https://tools.ietf.org/html/rfc4346#section-6.2.1
+/// ## Specifications
+///
+/// * [RFC 4346 §6.2.1]
+///
+/// [RFC 4346 §6.2.1]: https://tools.ietf.org/html/rfc4346#section-6.2.1
 #[derive(Default, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ContentType {
     ChangeCipherSpec = 20,

@@ -9,6 +9,12 @@ use crate::peer_connection::policy::rtcp_mux_policy::RTCRtcpMuxPolicy;
 /// Configurations may be set up once and reused across multiple connections.
 /// Configurations are treated as readonly. As long as they are unmodified,
 /// they are safe for concurrent use.
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcconfiguration-dictionary
 #[derive(Default, Clone)]
 pub struct RTCConfiguration {
     /// iceservers defines a slice describing servers available to be used by

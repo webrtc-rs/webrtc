@@ -42,6 +42,14 @@ pub(crate) struct TrackEncoding {
 }
 
 /// RTPSender allows an application to control how a given Track is encoded and transmitted to a remote peer
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpSender
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcrtpsender-interface
 pub struct RTCRtpSender {
     pub(crate) track_encodings: Mutex<Vec<TrackEncoding>>,
 
