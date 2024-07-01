@@ -21,7 +21,12 @@ fn ext_map_uri() -> HashMap<isize, &'static str> {
 }
 
 /// MediaDescription represents a media type.
-/// <https://tools.ietf.org/html/rfc4566#section-5.14>
+///
+/// ## Specifications
+///
+/// * [RFC 4566 §5.14]
+///
+/// [RFC 4566 §5.14]: https://tools.ietf.org/html/rfc4566#section-5.14
 #[derive(Debug, Default, Clone)]
 pub struct MediaDescription {
     /// `m=<media> <port>/<number of ports> <proto> <fmt> ...`
