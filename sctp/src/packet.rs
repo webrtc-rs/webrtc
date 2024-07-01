@@ -22,9 +22,10 @@ use crate::chunk::Chunk;
 use crate::error::{Error, Result};
 use crate::util::*;
 
-///Packet represents an SCTP packet, defined in https://tools.ietf.org/html/rfc4960#section-3
-///An SCTP packet is composed of a common header and chunks.  A chunk
-///contains either control information or user data.
+/// Packet represents an SCTP packet
+///
+/// An SCTP packet is composed of a common header and chunks.  A chunk
+/// contains either control information or user data.
 ///
 ///
 ///SCTP Packet Format
@@ -52,6 +53,12 @@ use crate::util::*;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|                           Checksum                            |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///
+/// ## Specifications
+///
+/// * [RFC 4960 §3]
+///
+/// [RFC 4960 §3]: https://tools.ietf.org/html/rfc4960#section-3
 #[derive(Default, Debug)]
 pub(crate) struct Packet {
     pub(crate) source_port: u16,
