@@ -20,6 +20,9 @@ env_logger = "0.11.3"
 lazy_static = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 
+[lints]
+workspace = true
+
 [features]
 default = ["serde"]
 serde = ["dep:serde", "indexmap/serde"]

@@ -18,6 +18,9 @@ substring = "1"
 [dev-dependencies]
 criterion = "0.5"
 
+[lints]
+workspace = true
+
 [[bench]]
 name = "bench"
 harness = false
