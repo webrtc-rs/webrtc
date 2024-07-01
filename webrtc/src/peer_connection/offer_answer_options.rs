@@ -9,6 +9,12 @@ pub struct RTCAnswerOptions {
 
 /// OfferOptions structure describes the options used to control the offer
 /// creation process
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dictionary-rtcofferoptions-members
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
 pub struct RTCOfferOptions {
     /// voice_activity_detection allows the application to provide information

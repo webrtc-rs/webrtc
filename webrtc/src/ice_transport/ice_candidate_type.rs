@@ -4,6 +4,14 @@ use ice::candidate::CandidateType;
 use serde::{Deserialize, Serialize};
 
 /// ICECandidateType represents the type of the ICE candidate used.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidateStats/candidateType
+/// [W3C]: https://w3c.github.io/webrtc-stats/#dom-rtcicecandidatestats-candidatetype
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCIceCandidateType {
     #[default]

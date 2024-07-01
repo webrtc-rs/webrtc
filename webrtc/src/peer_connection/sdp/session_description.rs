@@ -7,6 +7,14 @@ use super::sdp_type::RTCSdpType;
 use crate::error::Result;
 
 /// SessionDescription is used to expose local and remote session descriptions.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCSessionDescription
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcsessiondescription-class
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct RTCSessionDescription {
     #[serde(rename = "type")]

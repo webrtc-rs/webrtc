@@ -14,6 +14,14 @@ use crate::ice_transport::ice_candidate_type::RTCIceCandidateType;
 use crate::ice_transport::ice_protocol::RTCIceProtocol;
 
 /// ICECandidate represents a ice candidate
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcicecandidate-interface
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RTCIceCandidate {
     pub stats_id: String,

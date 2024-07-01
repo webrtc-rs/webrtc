@@ -1,6 +1,14 @@
 use std::fmt;
 
 /// ICEGatheringState describes the state of the candidate gathering process.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-peerconnection-ice-gathering-state
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceGatheringState {
     #[default]

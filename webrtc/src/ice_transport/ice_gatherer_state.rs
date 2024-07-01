@@ -1,6 +1,12 @@
 use std::fmt;
 
 /// ICEGathererState represents the current state of the ICE gatherer.
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcicegathererstate
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceGathererState {
     #[default]

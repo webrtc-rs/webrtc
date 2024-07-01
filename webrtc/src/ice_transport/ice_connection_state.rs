@@ -1,6 +1,14 @@
 use std::fmt;
 
 /// RTCIceConnectionState indicates signaling state of the ICE Connection.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceConnectionState
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-peerconnection-ice-connection-state
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceConnectionState {
     #[default]

@@ -1,6 +1,14 @@
 use std::fmt;
 
 /// RTPTransceiverDirection indicates the direction of the RTPTransceiver.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpTransceiver/direction
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcrtptransceiver-direction
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCRtpTransceiverDirection {
     Unspecified,
