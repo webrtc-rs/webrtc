@@ -102,8 +102,11 @@ const TLN_LENGTH: usize = 2;
 const NACK_OFFSET: usize = 8;
 
 // The TransportLayerNack packet informs the encoder about the loss of a transport packet
-// IETF RFC 4585, Section 6.2.1
-// https://tools.ietf.org/html/rfc4585#section-6.2.1
+/// ## Specifications
+///
+/// * [RFC 4585 §6.2.1]
+///
+/// [RFC 4585 §6.2.1]: https://tools.ietf.org/html/rfc4585#section-6.2.1
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct TransportLayerNack {
     /// SSRC of sender
