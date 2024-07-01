@@ -7,7 +7,11 @@ use crate::error::Result;
 // fragmented, compressed, and encrypted based on the current connection
 // state.  The messages are treated as transparent data to the record
 // layer.
-// https://tools.ietf.org/html/rfc5246#section-10
+/// ## Specifications
+///
+/// * [RFC 5246 §10]
+///
+/// [RFC 5246 §10]: https://tools.ietf.org/html/rfc5246#section-10
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ApplicationData {
     pub data: Vec<u8>,

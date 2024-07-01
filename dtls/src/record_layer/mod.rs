@@ -28,8 +28,12 @@ use crate::handshake::Handshake;
  only change is the inclusion of an explicit sequence number in the
  record.  This sequence number allows the recipient to correctly
  verify the TLS MAC.
- https://tools.ietf.org/html/rfc4347#section-4.1
 */
+/// ## Specifications
+///
+/// * [RFC 4347 §4.1]
+///
+/// [RFC 4347 §4.1]: https://tools.ietf.org/html/rfc4347#section-4.1
 #[derive(Debug, Clone, PartialEq)]
 pub struct RecordLayer {
     pub record_layer_header: RecordLayerHeader,

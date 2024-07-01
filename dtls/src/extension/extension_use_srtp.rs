@@ -4,7 +4,11 @@ mod extension_use_srtp_test;
 use super::*;
 
 // SRTPProtectionProfile defines the parameters and options that are in effect for the SRTP processing
-// https://tools.ietf.org/html/rfc5764#section-4.1.2
+/// ## Specifications
+///
+/// * [RFC 5764 §4.1.2]
+///
+/// [RFC 5764 §4.1.2]: https://tools.ietf.org/html/rfc5764#section-4.1.2
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SrtpProtectionProfile {
@@ -29,7 +33,11 @@ impl From<u16> for SrtpProtectionProfile {
 
 const EXTENSION_USE_SRTPHEADER_SIZE: usize = 6;
 
-// https://tools.ietf.org/html/rfc8422
+/// ## Specifications
+///
+/// * [RFC 8422]
+///
+/// [RFC 8422]: https://tools.ietf.org/html/rfc8422
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtensionUseSrtp {

@@ -6,7 +6,11 @@ use crate::curve::named_curve::*;
 
 const EXTENSION_SUPPORTED_GROUPS_HEADER_SIZE: usize = 6;
 
-// https://tools.ietf.org/html/rfc8422#section-5.1.1
+/// ## Specifications
+///
+/// * [RFC 8422 §5.1.1]
+///
+/// [RFC 8422 §5.1.1]: https://tools.ietf.org/html/rfc8422#section-5.1.1
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtensionSupportedEllipticCurves {
     pub elliptic_curves: Vec<NamedCurve>,
