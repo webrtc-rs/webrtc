@@ -59,7 +59,7 @@ pub fn index_of(element: &str, data: &[&str]) -> i32 {
     -1
 }
 
-pub fn key_value_build_to_writer<W: fmt::Write, V: Display>(
+pub fn write_key_value<W: fmt::Write, V: Display>(
     writer: &mut W,
     key: &str,
     value: Option<V>,
@@ -71,10 +71,10 @@ pub fn key_value_build_to_writer<W: fmt::Write, V: Display>(
     write!(writer, "{key}{value}{END_LINE}")
 }
 
-pub fn key_vec_value_build_to_writer<W: fmt::Write, V: Display>(
+pub fn write_key_slice_of_values<W: fmt::Write, V: Display>(
     writer: &mut W,
     key: &str,
-    value: &Vec<V>,
+    value: &[V],
 ) -> fmt::Result {
     if value.is_empty() {
         return Ok(());

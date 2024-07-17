@@ -237,8 +237,7 @@ pub struct MediaName {
 
 impl fmt::Display for MediaName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.media)?;
-        write!(f, " {}", self.port)?;
+        write!(f, "{} {}", self.media, self.port)?;
 
         let mut first = true;
         for part in &self.protos {
