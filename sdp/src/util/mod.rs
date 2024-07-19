@@ -93,14 +93,21 @@ impl fmt::Display for Codec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} {}/{}/{} ({}) [{}]",
-            self.payload_type,
-            self.name,
-            self.clock_rate,
-            self.encoding_parameters,
-            self.fmtp,
-            self.rtcp_feedback.join(", "),
-        )
+            "{} {}/{}/{} ({}) [",
+            self.payload_type, self.name, self.clock_rate, self.encoding_parameters, self.fmtp,
+        )?;
+
+        let mut first = true;
+        for part in &self.rtcp_feedback {
+            if first {
+                first = false;
+                write!(f, "{part}")?;
+            } else {
+                write!(f, ", {part}")?;
+            }
+        }
+
+        write!(f, "]")
     }
 }
 

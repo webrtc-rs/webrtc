@@ -1,3 +1,5 @@
+use core::fmt;
+use std::fmt::Display;
 use std::io;
 use std::io::SeekFrom;
 
@@ -57,10 +59,39 @@ pub fn index_of(element: &str, data: &[&str]) -> i32 {
     -1
 }
 
-pub fn key_value_build(key: &str, value: Option<&String>) -> String {
-    if let Some(val) = value {
-        format!("{key}{val}{END_LINE}")
-    } else {
-        "".to_string()
+pub fn write_key_value<W: fmt::Write, V: Display>(
+    writer: &mut W,
+    key: &str,
+    value: Option<V>,
+) -> fmt::Result {
+    let Some(value) = value else {
+        return Ok(());
+    };
+
+    write!(writer, "{key}{value}{END_LINE}")
+}
+
+pub fn write_key_slice_of_values<W: fmt::Write, V: Display>(
+    writer: &mut W,
+    key: &str,
+    value: &[V],
+) -> fmt::Result {
+    if value.is_empty() {
+        return Ok(());
     }
+
+    let mut first = true;
+
+    write!(writer, "{key}")?;
+    for val in value {
+        if first {
+            first = false;
+            write!(writer, "{val}")?;
+        } else {
+            write!(writer, " {val}")?;
+        }
+    }
+    write!(writer, "{END_LINE}")?;
+
+    Ok(())
 }

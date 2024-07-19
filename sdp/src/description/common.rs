@@ -33,14 +33,14 @@ pub struct Address {
 
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut parts = vec![self.address.to_owned()];
+        write!(f, "{}", self.address)?;
         if let Some(t) = &self.ttl {
-            parts.push(t.to_string());
+            write!(f, "/{}", t)?;
         }
         if let Some(r) = &self.range {
-            parts.push(r.to_string());
+            write!(f, "/{}", r)?;
         }
-        write!(f, "{}", parts.join("/"))
+        Ok(())
     }
 }
 

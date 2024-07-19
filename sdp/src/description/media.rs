@@ -142,10 +142,11 @@ impl MediaDescription {
         fmtp: String,
     ) -> Self {
         self.media_name.formats.push(payload_type.to_string());
-        let mut rtpmap = format!("{payload_type} {name}/{clockrate}");
-        if channels > 0 {
-            rtpmap += format!("/{channels}").as_str();
-        }
+        let rtpmap = if channels > 0 {
+            format!("{payload_type} {name}/{clockrate}/{channels}")
+        } else {
+            format!("{payload_type} {name}/{clockrate}")
+        };
 
         if !fmtp.is_empty() {
             self.with_value_attribute("rtpmap".to_string(), rtpmap)
@@ -236,13 +237,23 @@ pub struct MediaName {
 
 impl fmt::Display for MediaName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = [
-            self.media.clone(),
-            self.port.to_string(),
-            self.protos.join("/"),
-            self.formats.join(" "),
-        ];
-        write!(f, "{}", s.join(" "))
+        write!(f, "{} {}", self.media, self.port)?;
+
+        let mut first = true;
+        for part in &self.protos {
+            if first {
+                first = false;
+                write!(f, " {}", part)?;
+            } else {
+                write!(f, "/{}", part)?;
+            }
+        }
+
+        for part in &self.formats {
+            write!(f, " {}", part)?;
+        }
+
+        Ok(())
     }
 }
 
