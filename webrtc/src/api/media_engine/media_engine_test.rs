@@ -123,6 +123,29 @@ a=fmtp:112 minptime=10; useinbandfec=1
         assert_eq!(opus_codec.capability.mime_type, MIME_TYPE_OPUS);
     }
 
+    //"Ambiguous Payload Type"
+    {
+        const OPUS_AMBIGUOUS_PAYLOAD: &str = "v=0
+o=- 4596489990601351948 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+m=audio 9 UDP/TLS/RTP/SAVPF 96
+a=rtpmap:96 opus/48000/2
+a=fmtp:96 minptime=10; useinbandfec=1
+";
+
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        m.update_from_remote_description(&must_parse(OPUS_AMBIGUOUS_PAYLOAD)?)
+            .await?;
+
+        assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(m.negotiated_audio.load(Ordering::SeqCst));
+
+        let (opus_codec, _) = m.get_codec_by_payload(96).await?;
+        assert_eq!(opus_codec.capability.mime_type, MIME_TYPE_OPUS);
+    }
+
     //"Case Insensitive"
     {
         const OPUS_UPCASE: &str = "v=0

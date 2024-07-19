@@ -465,7 +465,7 @@ impl MediaEngine {
         &self,
         payload_type: PayloadType,
     ) -> Result<(RTCRtpCodecParameters, RTPCodecType)> {
-        {
+        if self.negotiated_video.load(Ordering::SeqCst) {
             let negotiated_video_codecs = self.negotiated_video_codecs.lock();
             for codec in &*negotiated_video_codecs {
                 if codec.payload_type == payload_type {
@@ -473,9 +473,23 @@ impl MediaEngine {
                 }
             }
         }
-        {
+        if self.negotiated_audio.load(Ordering::SeqCst) {
             let negotiated_audio_codecs = self.negotiated_audio_codecs.lock();
             for codec in &*negotiated_audio_codecs {
+                if codec.payload_type == payload_type {
+                    return Ok((codec.clone(), RTPCodecType::Audio));
+                }
+            }
+        }
+        if !self.negotiated_video.load(Ordering::SeqCst) {
+            for codec in &self.video_codecs {
+                if codec.payload_type == payload_type {
+                    return Ok((codec.clone(), RTPCodecType::Video));
+                }
+            }
+        }
+        if !self.negotiated_audio.load(Ordering::SeqCst) {
+            for codec in &self.audio_codecs {
                 if codec.payload_type == payload_type {
                     return Ok((codec.clone(), RTPCodecType::Audio));
                 }
