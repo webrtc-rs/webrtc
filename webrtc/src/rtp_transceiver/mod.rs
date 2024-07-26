@@ -4,12 +4,13 @@ mod rtp_transceiver_test;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
 use interceptor::Attributes;
 use log::trace;
+use portable_atomic::{AtomicBool, AtomicU8};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use tokio::sync::{Mutex, OnceCell};
@@ -301,7 +302,7 @@ impl RTCRtpTransceiver {
 
     /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or create_answer.
     pub fn mid(&self) -> Option<SmolStr> {
-        self.mid.get().map(Clone::clone)
+        self.mid.get().cloned()
     }
 
     /// kind returns RTPTransceiver's kind.

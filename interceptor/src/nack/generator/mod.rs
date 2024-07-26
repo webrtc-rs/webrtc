@@ -61,11 +61,7 @@ impl InterceptorBuilder for GeneratorBuilder {
                 } else {
                     13 - 6 // 8192 = 1 << 13
                 },
-                skip_last_n: if let Some(skip_last_n) = self.skip_last_n {
-                    skip_last_n
-                } else {
-                    0
-                },
+                skip_last_n: self.skip_last_n.unwrap_or_default(),
                 interval: if let Some(interval) = self.interval {
                     interval
                 } else {

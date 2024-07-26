@@ -2,6 +2,14 @@ use std::fmt;
 
 /// ICERole describes the role ice.Agent is playing in selecting the
 /// preferred the candidate pair.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceTransport/role
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcicerole
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceRole {
     #[default]

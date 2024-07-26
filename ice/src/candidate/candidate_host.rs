@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU16, AtomicU8};
+use portable_atomic::{AtomicU16, AtomicU8};
 
 use super::candidate_base::*;
 use super::*;

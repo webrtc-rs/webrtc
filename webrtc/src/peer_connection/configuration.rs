@@ -9,6 +9,12 @@ use crate::peer_connection::policy::rtcp_mux_policy::RTCRtcpMuxPolicy;
 /// Configurations may be set up once and reused across multiple connections.
 /// Configurations are treated as readonly. As long as they are unmodified,
 /// they are safe for concurrent use.
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcconfiguration-dictionary
 #[derive(Default, Clone)]
 pub struct RTCConfiguration {
     /// iceservers defines a slice describing servers available to be used by
@@ -53,6 +59,7 @@ impl RTCConfiguration {
     /// get_iceservers side-steps the strict parsing mode of the ice package
     /// (as defined in https://tools.ietf.org/html/rfc7064) by copying and then
     /// stripping any erroneous queries from "stun(s):" URLs before parsing.
+    #[allow(clippy::assigning_clones)]
     pub(crate) fn get_ice_servers(&self) -> Vec<RTCIceServer> {
         let mut ice_servers = self.ice_servers.clone();
 

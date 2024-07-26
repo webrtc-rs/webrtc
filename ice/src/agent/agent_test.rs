@@ -614,6 +614,10 @@ impl Conn for MockPacketConn {
     async fn close(&self) -> std::result::Result<(), util::Error> {
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 fn build_msg(c: MessageClass, username: String, key: String) -> Result<Message> {
@@ -1930,8 +1934,8 @@ async fn test_get_remote_credentials() -> Result<()> {
 
     let (remote_ufrag, remote_pwd) = {
         let mut ufrag_pwd = a.internal.ufrag_pwd.lock().await;
-        ufrag_pwd.remote_ufrag = "remoteUfrag".to_owned();
-        ufrag_pwd.remote_pwd = "remotePwd".to_owned();
+        "remoteUfrag".clone_into(&mut ufrag_pwd.remote_ufrag);
+        "remotePwd".clone_into(&mut ufrag_pwd.remote_pwd);
         (
             ufrag_pwd.remote_ufrag.to_owned(),
             ufrag_pwd.remote_pwd.to_owned(),

@@ -4,11 +4,12 @@ mod conn_test;
 use std::io::{BufReader, BufWriter};
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::*;
+use portable_atomic::{AtomicBool, AtomicU16};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 use util::replay_detector::*;
@@ -139,6 +140,10 @@ impl Conn for DTLSConn {
     async fn close(&self) -> UtilResult<()> {
         self.close().await.map_err(util::Error::from_std)
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 impl DTLSConn {
@@ -195,8 +200,8 @@ impl DTLSConn {
             if let Some(remote_addr) = conn.remote_addr() {
                 server_name = remote_addr.ip().to_string();
             } else {
-                log::warn!("conn.remote_addr is empty, please set explicitly server_name in Config! Use default \"localhost\" as server_name now");
-                server_name = "localhost".to_owned();
+                warn!("conn.remote_addr is empty, please set explicitly server_name in Config! Use default \"localhost\" as server_name now");
+                "localhost".clone_into(&mut server_name);
             }
         }
 
@@ -216,16 +221,33 @@ impl DTLSConn {
             client_cert_verifier: if config.client_auth as u8
                 >= ClientAuthType::VerifyClientCertIfGiven as u8
             {
-                Some(Arc::new(rustls::server::AllowAnyAuthenticatedClient::new(
-                    config.client_cas,
-                )))
+                Some(
+                    rustls::server::WebPkiClientVerifier::builder(Arc::new(config.client_cas))
+                        .allow_unauthenticated()
+                        .build()
+                        .unwrap_or(
+                            rustls::server::WebPkiClientVerifier::builder(Arc::new(
+                                gen_self_signed_root_cert(),
+                            ))
+                            .allow_unauthenticated()
+                            .build()
+                            .unwrap(),
+                        ),
+                )
             } else {
                 None
             },
-            server_cert_verifier: Arc::new(rustls::client::WebPkiVerifier::new(
+            server_cert_verifier: rustls::client::WebPkiServerVerifier::builder(Arc::new(
                 config.roots_cas,
-                None,
-            )),
+            ))
+            .build()
+            .unwrap_or(
+                rustls::client::WebPkiServerVerifier::builder(
+                    Arc::new(gen_self_signed_root_cert()),
+                )
+                .build()
+                .unwrap(),
+            ),
             retransmit_interval,
             //log: logger,
             initial_epoch: 0,

@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use arc_swap::ArcSwapOption;
 use interceptor::{Attributes, Interceptor};
+use portable_atomic::{AtomicU32, AtomicU8, AtomicUsize};
 use smol_str::SmolStr;
 use tokio::sync::Mutex;
 use util::sync::Mutex as SyncMutex;
@@ -212,7 +213,7 @@ impl TrackRemote {
     /// Reads data from the track.
     ///
     /// **Cancel Safety:** This method is not cancel safe. Dropping the resulting [`Future`] before
-    /// it returns [`Poll::Ready`] will cause data loss.
+    /// it returns [`std::task::Poll::Ready`] will cause data loss.
     pub async fn read(&self, b: &mut [u8]) -> Result<(rtp::packet::Packet, Attributes)> {
         {
             // Internal lock scope

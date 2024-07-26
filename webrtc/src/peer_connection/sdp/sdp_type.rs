@@ -3,6 +3,14 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 /// SDPType describes the type of an SessionDescription.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCSessionDescription/type
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcsessiondescription-type
 #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCSdpType {
     #[default]

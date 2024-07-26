@@ -1,19 +1,19 @@
 [package]
 name = "webrtc-ice"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of ICE"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-ice"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/ice"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/ice"
 
 [dependencies]
-util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
-turn = { version = "0.7.1", path = "../turn" }
-stun = { version = "0.5.1", path = "../stun" }
-mdns = { version = "0.6.1", path = "../mdns", package = "webrtc-mdns" }
+util = { version = "0.9.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
+turn = { version = "0.8.0", path = "../turn" }
+stun = { version = "0.6.0", path = "../stun" }
+mdns = { version = "0.7.0", path = "../mdns", package = "webrtc-mdns" }
 
 arc-swap = "1"
 async-trait = "0.1"
@@ -23,21 +23,36 @@ rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 waitgroup = "0.1"
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"
 regex = "1.9.5"
-env_logger = "0.10"
+env_logger = "0.11.3"
 chrono = "0.4.28"
 ipnet = "2"
 clap = "3"
 lazy_static = "1"
 hyper = { version = "0.14.27", features = ["full"] }
 sha1 = "0.10"
+
+[lints]
+workspace = true
 
 [[example]]
 name = "ping_pong"

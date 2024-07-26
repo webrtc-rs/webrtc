@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU16, AtomicU8};
+use portable_atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 
 use util::sync::Mutex as SyncMutex;

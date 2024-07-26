@@ -1,35 +1,268 @@
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 
+use super::h264::ANNEXB_NALUSTART_CODE;
 use crate::error::{Error, Result};
-use crate::packetizer::Depacketizer;
+use crate::packetizer::{Depacketizer, Payloader};
 
 #[cfg(test)]
 mod h265_test;
+
+pub static ANNEXB_3_NALUSTART_CODE: Bytes = Bytes::from_static(&[0x00, 0x00, 0x01]);
+pub static SING_PAYLOAD_HDR: Bytes = Bytes::from_static(&[0x1C, 0x01]);
+pub static AGGR_PAYLOAD_HDR: Bytes = Bytes::from_static(&[0x60, 0x01]);
+pub static FRAG_PAYLOAD_HDR: Bytes = Bytes::from_static(&[0x62, 0x01]);
+pub static FU_HDR_IDR_S: u8 = 0x93;
+pub static FU_HDR_IDR_M: u8 = 0x13;
+pub static FU_HDR_IDR_E: u8 = 0x53;
+pub static FU_HDR_P_S: u8 = 0x81;
+pub static FU_HDR_P_M: u8 = 0x01;
+pub static FU_HDR_P_E: u8 = 0x41;
+pub static FU_HDR_B_S: u8 = 0x80;
+pub static FU_HDR_B_M: u8 = 0x00;
+pub static FU_HDR_B_E: u8 = 0x40;
+pub const RTP_OUTBOUND_MTU: usize = 1200;
+pub const H265FRAGMENTATION_UNIT_HEADER_SIZE: usize = 1;
+pub const NAL_HEADER_SIZE: usize = 2;
+
+#[derive(PartialEq, Hash, Debug, Copy, Clone)]
+pub enum UnitType {
+    VPS = 32,
+    SPS = 33,
+    PPS = 34,
+    CRA = 21,
+    SEI = 39,
+    IDR = 19,
+    PFR = 1,
+    BFR = 0,
+    IGNORE = -1,
+}
+impl UnitType {
+    pub fn for_id(id: u8) -> Result<UnitType> {
+        if id > 64 {
+            Err(Error::ErrUnhandledNaluType)
+        } else {
+            let t = match id {
+                32 => UnitType::VPS,
+                33 => UnitType::SPS,
+                34 => UnitType::PPS,
+                21 => UnitType::CRA,
+                39 => UnitType::SEI,
+                19 => UnitType::IDR,
+                1 => UnitType::PFR,
+                0 => UnitType::BFR,
+                _ => UnitType::IGNORE, // shouldn't happen
+            };
+            Ok(t)
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct HevcPayloader {
+    vps_nalu: Option<Bytes>,
+    sps_nalu: Option<Bytes>,
+    pps_nalu: Option<Bytes>,
+}
+
+impl HevcPayloader {
+    pub fn parse(nalu: &Bytes) -> (Vec<usize>, usize) {
+        let finder = memchr::memmem::Finder::new(&ANNEXB_NALUSTART_CODE);
+        let nals = finder.find_iter(nalu).collect::<Vec<usize>>();
+        if nals.is_empty() {
+            let finder = memchr::memmem::Finder::new(&ANNEXB_3_NALUSTART_CODE);
+            return (finder.find_iter(nalu).collect::<Vec<usize>>(), 3);
+        }
+        (nals, 4)
+    }
+
+    fn emit(&mut self, nalu: &Bytes, mtu: usize, payloads: &mut Vec<Bytes>) {
+        if nalu.is_empty() {
+            return;
+        }
+        let payload_header = H265NALUHeader::new(nalu[0], nalu[1]);
+        let payload_nalu_type = payload_header.nalu_type();
+        let nalu_type = UnitType::for_id(payload_nalu_type).unwrap_or(UnitType::IGNORE);
+        if nalu_type == UnitType::IGNORE {
+            return;
+        } else if nalu_type == UnitType::VPS {
+            self.vps_nalu.replace(nalu.clone());
+        } else if nalu_type == UnitType::SPS {
+            self.sps_nalu.replace(nalu.clone());
+        } else if nalu_type == UnitType::PPS {
+            self.pps_nalu.replace(nalu.clone());
+        }
+        if let (Some(vps_nalu), Some(sps_nalu), Some(pps_nalu)) =
+            (&self.vps_nalu, &self.sps_nalu, &self.pps_nalu)
+        {
+            // Pack current NALU with SPS and PPS as STAP-A
+            let vps_len = (vps_nalu.len() as u16).to_be_bytes();
+            let sps_len = (sps_nalu.len() as u16).to_be_bytes();
+            let pps_len = (pps_nalu.len() as u16).to_be_bytes();
+
+            // TODO DONL not impl yet
+            let mut aggr_nalu = BytesMut::new();
+            aggr_nalu.extend_from_slice(&AGGR_PAYLOAD_HDR);
+            aggr_nalu.extend_from_slice(&vps_len);
+            aggr_nalu.extend_from_slice(vps_nalu);
+            aggr_nalu.extend_from_slice(&sps_len);
+            aggr_nalu.extend_from_slice(sps_nalu);
+            aggr_nalu.extend_from_slice(&pps_len);
+            aggr_nalu.extend_from_slice(pps_nalu);
+            if aggr_nalu.len() <= mtu {
+                payloads.push(Bytes::from(aggr_nalu));
+                self.vps_nalu.take();
+                self.sps_nalu.take();
+                self.pps_nalu.take();
+                return;
+            }
+        } else if nalu_type == UnitType::VPS
+            || nalu_type == UnitType::SPS
+            || nalu_type == UnitType::PPS
+        {
+            return;
+        }
+        // if self.sps_nalu.is_some() && self.pps_nalu.is_some() {
+        //     self.sps_nalu = None;
+        //     self.pps_nalu = None;
+        // }
+
+        // Single NALU
+        if nalu.len() <= mtu {
+            payloads.push(nalu.clone());
+            return;
+        }
+        let max_fragment_size =
+            mtu as isize - NAL_HEADER_SIZE as isize - H265FRAGMENTATION_UNIT_HEADER_SIZE as isize;
+        let nalu_data = nalu;
+        let mut nalu_data_index = 2;
+        let nalu_data_length = nalu.len() as isize - nalu_data_index;
+        let mut nalu_data_remaining = nalu_data_length;
+        if std::cmp::min(max_fragment_size, nalu_data_remaining) <= 0 {
+            return;
+        }
+        while nalu_data_remaining > 0 {
+            let current_fragment_size = std::cmp::min(max_fragment_size, nalu_data_remaining);
+            //out: = make([]byte, fuaHeaderSize + currentFragmentSize)
+            let mut out = BytesMut::with_capacity(
+                H265FRAGMENTATION_UNIT_HEADER_SIZE + current_fragment_size as usize,
+            );
+            out.extend_from_slice(&FRAG_PAYLOAD_HDR);
+            let is_first = nalu_data_index == 2;
+            let is_last = !is_first && current_fragment_size < max_fragment_size;
+            /*
+            +---------------+
+            |0|1|2|3|4|5|6|7|
+            +-+-+-+-+-+-+-+-+
+            |S|E|  fu_type  |
+            +---------------+
+            */
+            if nalu_type == UnitType::IDR {
+                if is_first {
+                    out.put_u8(FU_HDR_IDR_S);
+                } else if is_last {
+                    out.put_u8(FU_HDR_IDR_E);
+                } else {
+                    out.put_u8(FU_HDR_IDR_M);
+                }
+            } else if nalu_type == UnitType::PFR {
+                if is_first {
+                    out.put_u8(FU_HDR_P_S);
+                } else if is_last {
+                    out.put_u8(FU_HDR_P_E);
+                } else {
+                    out.put_u8(FU_HDR_P_M);
+                }
+            } else if nalu_type == UnitType::BFR {
+                if is_first {
+                    out.put_u8(FU_HDR_B_S);
+                } else if is_last {
+                    out.put_u8(FU_HDR_B_E);
+                } else {
+                    out.put_u8(FU_HDR_B_M);
+                }
+            }
+
+            out.extend_from_slice(
+                &nalu_data
+                    [nalu_data_index as usize..(nalu_data_index + current_fragment_size) as usize],
+            );
+            // println!("pkt payload {:?}", &out[0..5]);
+            payloads.push(out.freeze());
+
+            nalu_data_remaining -= current_fragment_size;
+            nalu_data_index += current_fragment_size;
+        }
+    }
+}
+
+impl Payloader for HevcPayloader {
+    /// Payload fragments a H264 packet across one or more byte arrays
+    fn payload(&mut self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
+        if payload.is_empty() || mtu == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut payloads = vec![];
+
+        let (nal_idxs, offset) = HevcPayloader::parse(payload);
+        let nal_len = nal_idxs.len();
+        for (i, start) in nal_idxs.iter().enumerate() {
+            let end = if (i + 1) < nal_len {
+                nal_idxs[i + 1]
+            } else {
+                payload.len()
+            };
+            // println!(
+            //     "start {}, end {} payload {:?}",
+            //     start,
+            //     end,
+            //     &payload
+            //         .slice((start + offset)..(start + offset + 5))
+            //         .to_vec()
+            // );
+            self.emit(&payload.slice((start + offset)..end), mtu, &mut payloads);
+        }
+
+        Ok(payloads)
+    }
+
+    fn clone_to(&self) -> Box<dyn Payloader + Send + Sync> {
+        Box::new(self.clone())
+    }
+}
 
 ///
 /// Network Abstraction Unit Header implementation
 ///
 
 const H265NALU_HEADER_SIZE: usize = 2;
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
 const H265NALU_AGGREGATION_PACKET_TYPE: u8 = 48;
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+/// <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3>
 const H265NALU_FRAGMENTATION_UNIT_TYPE: u8 = 49;
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
+/// <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4>
 const H265NALU_PACI_PACKET_TYPE: u8 = 50;
 
 /// H265NALUHeader is a H265 NAL Unit Header
-/// https://datatracker.ietf.org/doc/html/rfc7798#section-1.1.4
+///
+/// ```text
 /// +---------------+---------------+
-///  |0|1|2|3|4|5|6|7|0|1|2|3|4|5|6|7|
-///  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-///  |F|   Type    |  layer_id  | tid |
-///  +-------------+-----------------+
+/// |0|1|2|3|4|5|6|7|0|1|2|3|4|5|6|7|
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |F|   Type    |  layer_id  | tid|
+/// +-------------+-----------------+
+/// ```
+///
+/// ## Specifications
+///
+/// * [RFC 7798 §1.1.4]
+///
+/// [RFC 7798 §1.1.4]: https://tools.ietf.org/html/rfc7798#section-1.1.4
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265NALUHeader(pub u16);
 
 impl H265NALUHeader {
-    fn new(high_byte: u8, low_byte: u8) -> Self {
+    pub fn new(high_byte: u8, low_byte: u8) -> Self {
         H265NALUHeader(((high_byte as u16) << 8) | low_byte as u16)
     }
 
@@ -97,7 +330,11 @@ impl H265NALUHeader {
 ///   |                               :...OPTIONAL RTP padding        |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.1
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.1]
+///
+/// [RFC 7798 §4.4.1]: https://tools.ietf.org/html/rfc7798#section-4.4.1
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265SingleNALUnitPacket {
     /// payload_header is the header of the H265 packet.
@@ -186,7 +423,11 @@ impl H265SingleNALUnitPacket {
 ///   |                               :
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.2]
+///
+/// [RFC 7798 §4.4.2]: https://tools.ietf.org/html/rfc7798#section-4.4.2
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnitFirst {
     donl: Option<u16>,
@@ -226,7 +467,11 @@ impl H265AggregationUnitFirst {
 ///   |                               :
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.2]
+///
+/// [RFC 7798 §4.4.2]: https://tools.ietf.org/html/rfc7798#section-4.4.2
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationUnit {
     dond: Option<u8>,
@@ -266,7 +511,11 @@ impl H265AggregationUnit {
 ///   |                               :...OPTIONAL RTP padding        |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.2]
+///
+/// [RFC 7798 §4.4.2]: https://tools.ietf.org/html/rfc7798#section-4.4.2
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265AggregationPacket {
     first_unit: Option<H265AggregationUnitFirst>,
@@ -381,8 +630,6 @@ impl H265AggregationPacket {
 /// Fragmentation Unit implementation
 ///
 
-const H265FRAGMENTATION_UNIT_HEADER_SIZE: usize = 1;
-
 /// H265FragmentationUnitHeader is a H265 FU Header
 /// +---------------+
 /// |0|1|2|3|4|5|6|7|
@@ -427,7 +674,11 @@ impl H265FragmentationUnitHeader {
 /// |                               :...OPTIONAL RTP padding        |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.3
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.3]
+///
+/// [RFC 7798 §4.4.3]: https://tools.ietf.org/html/rfc7798#section-4.4.3
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265FragmentationUnitPacket {
     /// payload_header is the header of the H265 packet.
@@ -526,7 +777,11 @@ impl H265FragmentationUnitPacket {
 /// |                               :...OPTIONAL RTP padding        |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.4
+/// ## Specifications
+///
+/// * [RFC 7798 §4.4.4]
+///
+/// [RFC 7798 §4.4.4]: https://tools.ietf.org/html/rfc7798#section-4.4.4
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265PACIPacket {
     /// payload_header is the header of the H265 packet.
@@ -655,7 +910,12 @@ impl H265PACIPacket {
 ///
 
 /// H265TSCI is a Temporal Scalability Control Information header extension.
-/// Reference: https://datatracker.ietf.org/doc/html/rfc7798#section-4.5
+///
+/// ## Specifications
+///
+/// * [RFC 7798 §4.5]
+///
+/// [RFC 7798 §4.5]: https://tools.ietf.org/html/rfc7798#section-4.5
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct H265TSCI(pub u32);
 

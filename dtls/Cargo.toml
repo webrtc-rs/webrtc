@@ -1,16 +1,16 @@
 [package]
 name = "webrtc-dtls"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of DTLS"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-dtls"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/dtls"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/dtls"
 
 [dependencies]
-util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
+util = { version = "0.9.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
 
 byteorder = "1"
 rand_core = "0.6"
@@ -26,27 +26,42 @@ aes = "0.8"
 cbc = { version = "0.1", features = [ "block-padding", "alloc"] }
 aes-gcm = "0.10"
 ccm = "0.5"
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 async-trait = "0.1"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
-x509-parser = "0.15"
-der-parser = "8.1"
-rcgen = "0.11"
+x509-parser = "0.16"
+der-parser = "9.0"
+rcgen = "0.13"
 ring = "0.17"
-rustls = { version = "0.21", features = ["dangerous_configuration"]}
+rustls = { version = "0.23.10", default-features = false, features = ["std", "ring"] }
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 subtle = "2"
 log = "0.4"
 thiserror = "1"
 pem = { version = "3", optional = true }
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"
-env_logger = "0.10"
+env_logger = "0.11.3"
 chrono = "0.4.28"
 clap = "3"
 hub = {path = "examples/hub"}
+
+[lints]
+workspace = true
 
 [features]
 pem = ["dep:pem"]

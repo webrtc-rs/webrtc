@@ -4,10 +4,11 @@ mod nat_test;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::ops::Add;
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use portable_atomic::AtomicU16;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
@@ -400,7 +401,7 @@ impl NetworkAddressTranslator {
         }
 
         let outbound_map = self.outbound_map.lock().await;
-        outbound_map.get(o_key).map(Arc::clone)
+        outbound_map.get(o_key).cloned()
     }
 
     // caller must hold the mutex
@@ -439,7 +440,7 @@ impl NetworkAddressTranslator {
         }
 
         let inbound_map = self.inbound_map.lock().await;
-        inbound_map.get(i_key).map(Arc::clone)
+        inbound_map.get(i_key).cloned()
     }
 
     // caller must hold the mutex

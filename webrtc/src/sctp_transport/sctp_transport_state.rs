@@ -1,6 +1,12 @@
 use std::fmt;
 
 /// SCTPTransportState indicates the state of the SCTP transport.
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcsctptransportstate
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum RTCSctpTransportState {

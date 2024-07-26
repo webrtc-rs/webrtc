@@ -15,6 +15,14 @@ use crate::stats::stats_collector::StatsCollector;
 use crate::stats::{CertificateStats, StatsReportType};
 
 /// Certificate represents a X.509 certificate used to authenticate WebRTC communications.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCCertificate
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtccertificate
 #[derive(Clone, Debug)]
 pub struct RTCCertificate {
     /// DTLS certificate.
@@ -39,11 +47,10 @@ impl RTCCertificate {
     /// Generates a new certificate from the given parameters.
     ///
     /// See [`rcgen::Certificate::from_params`].
-    pub fn from_params(params: CertificateParams) -> Result<Self> {
+    fn from_params(params: CertificateParams, key_pair: KeyPair) -> Result<Self> {
         let not_after = params.not_after;
-        let x509_cert = rcgen::Certificate::from_params(params)?;
 
-        let key_pair = x509_cert.get_key_pair();
+        let x509_cert = params.self_signed(&key_pair).unwrap();
         let serialized_der = key_pair.serialize_der();
 
         let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
@@ -88,7 +95,7 @@ impl RTCCertificate {
 
         Ok(Self {
             dtls_certificate: dtls::crypto::Certificate {
-                certificate: vec![rustls::Certificate(x509_cert.serialize_der()?)],
+                certificate: vec![x509_cert.der().to_owned()],
                 private_key,
             },
             expires,
@@ -98,20 +105,17 @@ impl RTCCertificate {
 
     /// Generates a new certificate with default [`CertificateParams`] using the given keypair.
     pub fn from_key_pair(key_pair: KeyPair) -> Result<Self> {
-        let mut params = CertificateParams::new(vec![math_rand_alpha(16)]);
-
-        if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
-            params.alg = &rcgen::PKCS_ED25519;
-        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
-            params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
-            params.alg = &rcgen::PKCS_RSA_SHA256;
-        } else {
+        if !(key_pair.is_compatible(&rcgen::PKCS_ED25519)
+            || key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256)
+            || key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256))
+        {
             return Err(Error::new("Unsupported key_pair".to_owned()));
-        };
-        params.key_pair = Some(key_pair);
+        }
 
-        RTCCertificate::from_params(params)
+        RTCCertificate::from_params(
+            CertificateParams::new(vec![math_rand_alpha(16)]).unwrap(),
+            key_pair,
+        )
     }
 
     /// Parses a certificate from the ASCII PEM format.
@@ -151,7 +155,7 @@ impl RTCCertificate {
     /// new one for each DTLS connection).
     ///
     /// NOTE: ID used for statistics will be different as it's neither derived from the given
-    /// certificate nor persisted along it when using [`serialize_pem`].
+    /// certificate nor persisted along it when using [`RTCCertificate::serialize_pem`].
     pub fn from_existing(dtls_certificate: dtls::crypto::Certificate, expires: SystemTime) -> Self {
         Self {
             dtls_certificate,
@@ -162,7 +166,7 @@ impl RTCCertificate {
     }
 
     /// Serializes the certificate (including the private key) in PKCS#8 format in PEM.
-    #[cfg(feature = "pem")]
+    #[cfg(any(doc, feature = "pem"))]
     pub fn serialize_pem(&self) -> String {
         // Encode `expires` as a PEM block.
         //
@@ -232,7 +236,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_rsa() -> Result<()> {
-        let key_pair = KeyPair::generate(&rcgen::PKCS_RSA_SHA256);
+        let key_pair = KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256);
         assert!(key_pair.is_err(), "RcgenError::KeyGenerationUnavailable");
 
         Ok(())
@@ -240,7 +244,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_ecdsa() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let _cert = RTCCertificate::from_key_pair(kp)?;
 
         Ok(())
@@ -248,7 +252,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_eddsa() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ED25519)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ED25519)?;
         let _cert = RTCCertificate::from_key_pair(kp)?;
 
         Ok(())
@@ -256,10 +260,10 @@ mod test {
 
     #[test]
     fn test_certificate_equal() -> Result<()> {
-        let kp1 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp1 = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert1 = RTCCertificate::from_key_pair(kp1)?;
 
-        let kp2 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp2 = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert2 = RTCCertificate::from_key_pair(kp2)?;
 
         assert_ne!(cert1, cert2);
@@ -269,7 +273,7 @@ mod test {
 
     #[test]
     fn test_generate_certificate_expires_and_stats_id() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert = RTCCertificate::from_key_pair(kp)?;
 
         let now = SystemTime::now();
@@ -282,7 +286,7 @@ mod test {
     #[cfg(feature = "pem")]
     #[test]
     fn test_certificate_serialize_pem_and_from_pem() -> Result<()> {
-        let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+        let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let cert = RTCCertificate::from_key_pair(kp)?;
 
         let pem = cert.serialize_pem();

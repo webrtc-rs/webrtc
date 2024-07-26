@@ -14,6 +14,14 @@ use crate::ice_transport::ice_candidate_type::RTCIceCandidateType;
 use crate::ice_transport::ice_protocol::RTCIceProtocol;
 
 /// ICECandidate represents a ice candidate
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcicecandidate-interface
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RTCIceCandidate {
     pub stats_id: String,
@@ -65,36 +73,29 @@ impl From<&Arc<dyn Candidate + Send + Sync>> for RTCIceCandidate {
 impl RTCIceCandidate {
     pub(crate) fn to_ice(&self) -> Result<impl Candidate> {
         let candidate_id = self.stats_id.clone();
+        let base_config = CandidateBaseConfig {
+            candidate_id,
+            network: self.protocol.to_string(),
+            address: self.address.clone(),
+            port: self.port,
+            component: self.component,
+            //tcp_type: ice.NewTCPType(c.TCPType),
+            foundation: self.foundation.clone(),
+            priority: self.priority,
+            ..Default::default()
+        };
+
         let c = match self.typ {
             RTCIceCandidateType::Host => {
                 let config = CandidateHostConfig {
-                    base_config: CandidateBaseConfig {
-                        candidate_id,
-                        network: self.protocol.to_string(),
-                        address: self.address.clone(),
-                        port: self.port,
-                        component: self.component,
-                        //tcp_type: ice.NewTCPType(c.TCPType),
-                        foundation: self.foundation.clone(),
-                        priority: self.priority,
-                        ..Default::default()
-                    },
+                    base_config,
                     ..Default::default()
                 };
                 config.new_candidate_host()?
             }
             RTCIceCandidateType::Srflx => {
                 let config = CandidateServerReflexiveConfig {
-                    base_config: CandidateBaseConfig {
-                        candidate_id,
-                        network: self.protocol.to_string(),
-                        address: self.address.clone(),
-                        port: self.port,
-                        component: self.component,
-                        foundation: self.foundation.clone(),
-                        priority: self.priority,
-                        ..Default::default()
-                    },
+                    base_config,
                     rel_addr: self.related_address.clone(),
                     rel_port: self.related_port,
                 };
@@ -102,16 +103,7 @@ impl RTCIceCandidate {
             }
             RTCIceCandidateType::Prflx => {
                 let config = CandidatePeerReflexiveConfig {
-                    base_config: CandidateBaseConfig {
-                        candidate_id,
-                        network: self.protocol.to_string(),
-                        address: self.address.clone(),
-                        port: self.port,
-                        component: self.component,
-                        foundation: self.foundation.clone(),
-                        priority: self.priority,
-                        ..Default::default()
-                    },
+                    base_config,
                     rel_addr: self.related_address.clone(),
                     rel_port: self.related_port,
                 };
@@ -119,16 +111,7 @@ impl RTCIceCandidate {
             }
             RTCIceCandidateType::Relay => {
                 let config = CandidateRelayConfig {
-                    base_config: CandidateBaseConfig {
-                        candidate_id,
-                        network: self.protocol.to_string(),
-                        address: self.address.clone(),
-                        port: self.port,
-                        component: self.component,
-                        foundation: self.foundation.clone(),
-                        priority: self.priority,
-                        ..Default::default()
-                    },
+                    base_config,
                     rel_addr: self.related_address.clone(),
                     rel_port: self.related_port,
                     relay_client: None, //TODO?

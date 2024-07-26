@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicUsize;
+use portable_atomic::AtomicUsize;
 
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};

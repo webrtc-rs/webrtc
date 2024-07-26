@@ -7,7 +7,7 @@ description = "A pure Rust implementation of WebRTC Media Constraints API"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-constraints"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/constraints"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/constraints"
 
 [dependencies]
 indexmap = "2"
@@ -16,9 +16,12 @@ ordered-float = { version = "4", default-features = false }
 thiserror = "1"
 
 [dev-dependencies]
-env_logger = "0.10"
+env_logger = "0.11.3"
 lazy_static = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
+
+[lints]
+workspace = true
 
 [features]
 default = ["serde"]

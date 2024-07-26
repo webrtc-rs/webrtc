@@ -10,7 +10,7 @@ util = { path = "../../../util", package = "webrtc-util", default-features = fal
 dtls = { package = "webrtc-dtls", path = "../../" }
 
 tokio = { version = "1.32.0", features = ["full"] }
-rcgen = { version = "0.11", features = ["pem", "x509-parser"] }
-rustls = "0.21"
-rustls-pemfile = "1"
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+rustls = { version = "0.23.10", default-features = false }
+rustls-pemfile = "2"
 thiserror = "1"

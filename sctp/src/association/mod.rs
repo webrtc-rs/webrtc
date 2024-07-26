@@ -6,13 +6,14 @@ mod association_stats;
 
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use association_internal::*;
 use association_stats::*;
 use bytes::{Bytes, BytesMut};
+use portable_atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize};
 use rand::random;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use util::Conn;
@@ -487,7 +488,7 @@ impl Association {
         let done = Arc::new(AtomicBool::new(false));
         let name = Arc::new(name);
 
-        while !done.load(Ordering::Relaxed) {
+        'outer: while !done.load(Ordering::Relaxed) {
             //log::debug!("[{}] gather_outbound begin", name);
             let (packets, continue_loop) = {
                 let mut ai = association_internal.lock().await;
@@ -511,9 +512,8 @@ impl Association {
                 // Doing it this way, tokio schedules this work on a dedicated blocking thread, this future is suspended, and the read_loop can make progress
                 match tokio::task::spawn_blocking(move || raw.marshal_to(&mut buf).map(|_| buf))
                     .await
-                    .unwrap()
                 {
-                    Ok(mut buf) => {
+                    Ok(Ok(mut buf)) => {
                         let raw = buf.as_ref();
                         if let Err(err) = net_conn.send(raw.as_ref()).await {
                             log::warn!("[{}] failed to write packets on net_conn: {}", name2, err);
@@ -526,8 +526,20 @@ impl Association {
                         buf.clear();
                         buffer = Some(buf);
                     }
-                    Err(err) => {
+                    Ok(Err(err)) => {
                         log::warn!("[{}] failed to serialize a packet: {:?}", name2, err);
+                    }
+                    Err(err) => {
+                        if err.is_cancelled() {
+                            log::debug!(
+                                "[{}] task cancelled while serializing a packet: {:?}",
+                                name,
+                                err
+                            );
+                            break 'outer;
+                        } else {
+                            log::error!("[{}] panic while serializing a packet: {:?}", name, err);
+                        }
                     }
                 }
                 //log::debug!("[{}] sending {} bytes done", name, raw.len());

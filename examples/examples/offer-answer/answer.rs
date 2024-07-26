@@ -245,7 +245,7 @@ async fn main() -> Result<()> {
 
     {
         let mut oa = ADDRESS.lock().await;
-        *oa = offer_addr.clone();
+        oa.clone_from(&offer_addr);
     }
 
     // Prepare the configuration

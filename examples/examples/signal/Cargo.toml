@@ -6,6 +6,6 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.32.0", features = ["full"] }
 anyhow = "1"
-base64 = "0.21"
+base64 = "0.22.1"
 lazy_static = "1"
 hyper = { version = "0.14.27", features = ["full"] }

@@ -116,7 +116,7 @@ async fn test_net_native_unexpected_operations() -> Result<()> {
     for ifc in &ifcs {
         if let Some(addr) = ifc.addr {
             if addr.ip().is_loopback() {
-                lo_name = ifc.name.clone();
+                lo_name.clone_from(&ifc.name);
                 break;
             }
         }

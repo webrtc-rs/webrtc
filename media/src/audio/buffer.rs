@@ -123,7 +123,7 @@ where
             );
 
             // Transmute the vec to the initialized type.
-            unsafe { std::mem::transmute::<_, Vec<T>>(samples) }
+            unsafe { std::mem::transmute::<Vec<MaybeUninit<T>>, Vec<T>>(samples) }
         };
 
         let info = buffer.info.into();
@@ -167,7 +167,7 @@ where
             );
 
             // Everything is initialized. Transmute the vec to the initialized type.
-            unsafe { std::mem::transmute::<_, Vec<T>>(samples) }
+            unsafe { std::mem::transmute::<Vec<MaybeUninit<T>>, Vec<T>>(samples) }
         };
 
         let info = buffer.info.into();

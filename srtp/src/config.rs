@@ -37,7 +37,7 @@ pub struct Config {
 impl Config {
     /// ExtractSessionKeysFromDTLS allows setting the Config SessionKeys by
     /// extracting them from DTLS. This behavior is defined in RFC5764:
-    /// https://tools.ietf.org/html/rfc5764
+    /// <https://tools.ietf.org/html/rfc5764>
     pub async fn extract_session_keys_from_dtls(
         &mut self,
         exporter: impl KeyingMaterialExporter,

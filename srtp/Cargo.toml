@@ -1,26 +1,26 @@
 [package]
 name = "webrtc-srtp"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of SRTP"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-srtp"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/srtp"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/srtp"
 
 [features]
 openssl = ["dep:openssl"]
 vendored-openssl = ["openssl/vendored"]
 
 [dependencies]
-util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = [
+util = { version = "0.9.0", path = "../util", package = "webrtc-util", default-features = false, features = [
     "conn",
     "buffer",
     "marshal",
 ] }
-rtp = { version = "0.10.0", path = "../rtp" }
-rtcp = { version = "0.10.1", path = "../rtcp" }
+rtp = { version = "0.11.0", path = "../rtp" }
+rtcp = { version = "0.11.0", path = "../rtcp" }
 
 byteorder = "1"
 bytes = "1"
@@ -30,7 +30,18 @@ sha1 = "0.10"
 ctr = "0.9"
 aes = "0.8"
 subtle = "2"
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 log = "0.4"
 aead = { version = "0.5", features = ["std"] }
 aes-gcm = { version = "0.10", features = ["std"] }
@@ -40,6 +51,9 @@ openssl = { version = "0.10.57", optional = true }
 criterion = { version = "0.5", features = ["async_futures"] }
 tokio-test = "0.4"
 lazy_static = "1"
+
+[lints]
+workspace = true
 
 [[bench]]
 name = "srtp_bench"

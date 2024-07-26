@@ -1,25 +1,31 @@
 [package]
 name = "rtp"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2021"
 description = "A pure Rust implementation of RTP"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/rtp"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/rtp"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/rtp"
 
 [dependencies]
-util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
+util = { version = "0.9.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
 
 bytes = "1"
 rand = "0.8"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
+portable-atomic = "1.6"
+
+memchr = "2.1.1"
 
 [dev-dependencies]
 chrono = "0.4.28"
 criterion = "0.5"
+
+[lints]
+workspace = true
 
 [[bench]]
 name = "packet_bench"

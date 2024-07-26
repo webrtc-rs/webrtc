@@ -1,9 +1,9 @@
-use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
 use bytes::Bytes;
 use interceptor::registry::Registry;
 use media::Sample;
+use portable_atomic::AtomicU32;
 use tokio::time::Duration;
 use util::vnet::net::{Net, NetConfig};
 use util::vnet::router::{Router, RouterConfig};
@@ -18,6 +18,7 @@ use crate::ice_transport::ice_server::RTCIceServer;
 use crate::peer_connection::configuration::RTCConfiguration;
 use crate::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use crate::stats::StatsReportType;
+use crate::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::Error;
 
@@ -388,6 +389,95 @@ async fn test_peer_connection_close_is_send() -> Result<()> {
     tokio::join!(handle).0.unwrap()
 }
 
+#[tokio::test]
+async fn test_set_get_configuration() {
+    // initialize MediaEngine and InterceptorRegistry
+    let media_engine = MediaEngine::default();
+    let registry = Registry::default();
+
+    // create API instance
+    let api = APIBuilder::new()
+        .with_media_engine(media_engine)
+        .with_interceptor_registry(registry)
+        .build();
+
+    // create configuration
+    let initial_config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_string()],
+            username: "".to_string(),
+            credential: "".to_string(),
+        }],
+        ..Default::default()
+    };
+
+    // create RTCPeerConnection instance
+    let peer = Arc::new(
+        api.new_peer_connection(initial_config.clone())
+            .await
+            .expect("Failed to create RTCPeerConnection"),
+    );
+
+    // get configuration and println
+    let config_before = peer.get_configuration().await;
+    println!("Initial ICE Servers: {:?}", config_before.ice_servers);
+    println!(
+        "Initial ICE Transport Policy: {:?}",
+        config_before.ice_transport_policy
+    );
+    println!("Initial Bundle Policy: {:?}", config_before.bundle_policy);
+    println!(
+        "Initial RTCP Mux Policy: {:?}",
+        config_before.rtcp_mux_policy
+    );
+    println!("Initial Peer Identity: {:?}", config_before.peer_identity);
+    println!("Initial Certificates: {:?}", config_before.certificates);
+    println!(
+        "Initial ICE Candidate Pool Size: {:?}",
+        config_before.ice_candidate_pool_size
+    );
+
+    // create new configuration
+    let new_config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
+            urls: vec![
+                "turn:turn.22333.fun".to_string(),
+                "turn:cn.22333.fun".to_string(),
+            ],
+            username: "live777".to_string(),
+            credential: "live777".to_string(),
+        }],
+        ..Default::default()
+    };
+
+    // set new configuration
+    peer.set_configuration(new_config.clone())
+        .await
+        .expect("Failed to set configuration");
+
+    // get new configuration and println
+    let updated_config = peer.get_configuration().await;
+    println!("Updated ICE Servers: {:?}", updated_config.ice_servers);
+    println!(
+        "Updated ICE Transport Policy: {:?}",
+        updated_config.ice_transport_policy
+    );
+    println!("Updated Bundle Policy: {:?}", updated_config.bundle_policy);
+    println!(
+        "Updated RTCP Mux Policy: {:?}",
+        updated_config.rtcp_mux_policy
+    );
+    println!("Updated Peer Identity: {:?}", updated_config.peer_identity);
+    println!("Updated Certificates: {:?}", updated_config.certificates);
+    println!(
+        "Updated ICE Candidate Pool Size: {:?}",
+        updated_config.ice_candidate_pool_size
+    );
+
+    // verify
+    assert_eq!(updated_config.ice_servers, new_config.ice_servers);
+}
+
 async fn peer() -> Result<()> {
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
@@ -418,6 +508,130 @@ async fn peer() -> Result<()> {
     }
 
     peer_connection.close().await?;
+
+    Ok(())
+}
+
+pub(crate) fn on_connected() -> (OnPeerConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
+    let (done_tx, done_rx) = mpsc::channel::<()>(1);
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    let hdlr_fn: OnPeerConnectionStateChangeHdlrFn =
+        Box::new(move |state: RTCPeerConnectionState| {
+            let done_tx_clone = Arc::clone(&done_tx);
+            Box::pin(async move {
+                if state == RTCPeerConnectionState::Connected {
+                    let mut tx = done_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
+        });
+    (hdlr_fn, done_rx)
+}
+
+// Everytime we receive a new SSRC we probe it and try to determine the proper way to handle it.
+// In most cases a Track explicitly declares a SSRC and a OnTrack is fired. In two cases we don't
+// know the SSRC ahead of time
+// * Undeclared SSRC in a single media section
+// * Simulcast
+//
+// The Undeclared SSRC processing code would run before Simulcast. If a Simulcast Offer/Answer only
+// contained one Media Section we would never fire the OnTrack. We would assume it was a failed
+// Undeclared SSRC processing. This test asserts that we properly handled this.
+#[tokio::test]
+async fn test_peer_connection_simulcast_no_data_channel() -> Result<()> {
+    let mut m = MediaEngine::default();
+    for ext in [
+        ::sdp::extmap::SDES_MID_URI,
+        ::sdp::extmap::SDES_RTP_STREAM_ID_URI,
+    ] {
+        m.register_header_extension(
+            RTCRtpHeaderExtensionCapability {
+                uri: ext.to_owned(),
+            },
+            RTPCodecType::Video,
+            None,
+        )?;
+    }
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (mut pc_send, mut pc_recv) = new_pair(&api).await?;
+    let (send_notifier, mut send_connected) = on_connected();
+    let (recv_notifier, mut recv_connected) = on_connected();
+    pc_send.on_peer_connection_state_change(send_notifier);
+    pc_recv.on_peer_connection_state_change(recv_notifier);
+    let (track_tx, mut track_rx) = mpsc::unbounded_channel();
+    pc_recv.on_track(Box::new(move |t, _, _| {
+        let rid = t.rid().to_owned();
+        let _ = track_tx.send(rid);
+        Box::pin(async move {})
+    }));
+
+    let id = "video";
+    let stream_id = "webrtc-rs";
+    let track = Arc::new(TrackLocalStaticRTP::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        id.to_owned(),
+        "a".to_owned(),
+        stream_id.to_owned(),
+    ));
+    let track_a = Arc::clone(&track);
+    let transceiver = pc_send.add_transceiver_from_track(track, None).await?;
+    let sender = transceiver.sender().await;
+
+    let track = Arc::new(TrackLocalStaticRTP::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        id.to_owned(),
+        "b".to_owned(),
+        stream_id.to_owned(),
+    ));
+    let track_b = Arc::clone(&track);
+    sender.add_encoding(track).await?;
+
+    let track = Arc::new(TrackLocalStaticRTP::new_with_rid(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        id.to_owned(),
+        "c".to_owned(),
+        stream_id.to_owned(),
+    ));
+    let track_c = Arc::clone(&track);
+    sender.add_encoding(track).await?;
+
+    // signaling
+    signal_pair(&mut pc_send, &mut pc_recv).await?;
+    let _ = send_connected.recv().await;
+    let _ = recv_connected.recv().await;
+
+    for sequence_number in [0; 100] {
+        let pkt = rtp::packet::Packet {
+            header: rtp::header::Header {
+                version: 2,
+                sequence_number,
+                payload_type: 96,
+                ..Default::default()
+            },
+            payload: Bytes::from_static(&[0; 2]),
+        };
+
+        track_a.write_rtp_with_extensions(&pkt, &[]).await?;
+        track_b.write_rtp_with_extensions(&pkt, &[]).await?;
+        track_c.write_rtp_with_extensions(&pkt, &[]).await?;
+    }
+
+    assert_eq!(track_rx.recv().await.unwrap(), "a".to_owned());
+    assert_eq!(track_rx.recv().await.unwrap(), "b".to_owned());
+    assert_eq!(track_rx.recv().await.unwrap(), "c".to_owned());
+
+    close_pair_now(&pc_send, &pc_recv).await;
 
     Ok(())
 }

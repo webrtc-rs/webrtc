@@ -1,36 +1,51 @@
 [package]
 name = "turn"
-version = "0.7.1"
+version = "0.8.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of TURN"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/turn"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/turn"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/turn"
 
 [dependencies]
-util = { version = "0.8.1", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
-stun = { version = "0.5.1", path = "../stun" }
+util = { version = "0.9.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
+stun = { version = "0.6.0", path = "../stun" }
 
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 tokio-util = "0.7"
 futures = "0.3"
 async-trait = "0.1"
 log = "0.4"
-base64 = "0.21"
+base64 = "0.22.1"
 rand = "0.8"
 ring = "0.17"
 md-5 = "0.10"
 thiserror = "1"
+portable-atomic = "1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"
-env_logger = "0.10"
+env_logger = "0.11.3"
 chrono = "0.4.28"
 hex = "0.4"
 clap = "3"
 criterion = "0.5"
+
+[lints]
+workspace = true
 
 [features]
 metrics = []

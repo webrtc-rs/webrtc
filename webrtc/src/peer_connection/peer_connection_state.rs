@@ -1,6 +1,14 @@
 use std::fmt;
 
 /// PeerConnectionState indicates the state of the PeerConnection.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/connectionState
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-peerconnection-connection-state
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCPeerConnectionState {
     #[default]

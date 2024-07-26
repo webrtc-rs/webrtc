@@ -14,7 +14,6 @@ use crate::util::*;
 
 type Result<T> = std::result::Result<T, util::Error>;
 
-/// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 /// 0                   1                   2                   3
 /// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -40,9 +39,14 @@ type Result<T> = std::result::Result<T, util::Error>;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |           recv delta          |  recv delta   | zero padding  |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
 // for packet status chunk
 /// type of packet status chunk
+///
+/// ## Specifications
+///
+/// * [draft-holmer-rmcat-transport-wide-cc-extensions-01, page 5]
+///
+/// [draft-holmer-rmcat-transport-wide-cc-extensions-01, page 5]: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
 #[repr(u16)]
 pub enum StatusChunkTypeTcc {
@@ -323,15 +327,15 @@ impl MarshalSize for RecvDelta {
         // small delta
         if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta
             && delta >= 0
-            && delta <= std::u8::MAX as i64
+            && delta <= u8::MAX as i64
         {
             return 1;
         }
 
         // big delta
         if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta
-            && delta >= std::i16::MIN as i64
-            && delta <= std::u16::MAX as i64
+            && delta >= i16::MIN as i64
+            && delta <= i16::MAX as i64
         {
             return 2;
         }
@@ -348,7 +352,7 @@ impl Marshal for RecvDelta {
         // small delta
         if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta
             && delta >= 0
-            && delta <= std::u8::MAX as i64
+            && delta <= u8::MAX as i64
             && buf.remaining_mut() >= 1
         {
             buf.put_u8(delta as u8);
@@ -357,11 +361,11 @@ impl Marshal for RecvDelta {
 
         // big delta
         if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta
-            && delta >= std::i16::MIN as i64
-            && delta <= std::u16::MAX as i64
+            && delta >= i16::MIN as i64
+            && delta <= i16::MAX as i64
             && buf.remaining_mut() >= 2
         {
-            buf.put_u16(delta as u16);
+            buf.put_i16(delta as i16);
             return Ok(2);
         }
 

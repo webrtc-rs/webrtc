@@ -3,6 +3,14 @@ use std::fmt;
 use ice::state::ConnectionState;
 
 /// ICETransportState represents the current state of the ICE transport.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceTransport/state
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcicetransportstate
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RTCIceTransportState {
     #[default]

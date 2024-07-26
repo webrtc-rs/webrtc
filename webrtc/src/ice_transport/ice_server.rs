@@ -1,16 +1,20 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::ice_transport::ice_credential_type::RTCIceCredentialType;
 
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, Hash)]
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtciceserver
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Hash)]
 pub struct RTCIceServer {
     pub urls: Vec<String>,
     pub username: String,
     pub credential: String,
-    pub credential_type: RTCIceCredentialType,
 }
 
 impl RTCIceServer {
@@ -34,23 +38,9 @@ impl RTCIceServer {
                 if self.username.is_empty() || self.credential.is_empty() {
                     return Err(Error::ErrNoTurnCredentials);
                 }
-                url.username = self.username.clone();
 
-                match self.credential_type {
-                    RTCIceCredentialType::Password => {
-                        // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.3)
-                        url.password = self.credential.clone();
-                    }
-                    RTCIceCredentialType::Oauth => {
-                        // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.4)
-                        /*if _, ok: = s.Credential.(OAuthCredential); !ok {
-                                return nil,
-                                &rtcerr.InvalidAccessError{Err: ErrTurnCredentials
-                            }
-                        }*/
-                    }
-                    _ => return Err(Error::ErrTurnCredentials),
-                };
+                url.username.clone_from(&self.username);
+                url.password.clone_from(&self.credential);
             }
 
             urls.push(url);
@@ -72,7 +62,6 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: "placeholder".to_owned(),
-                    credential_type: RTCIceCredentialType::Password,
                 },
                 true,
             ),
@@ -81,7 +70,6 @@ mod test {
                     urls: vec!["turn:[2001:db8:1234:5678::1]?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: "placeholder".to_owned(),
-                    credential_type: RTCIceCredentialType::Password,
                 },
                 true,
             ),
@@ -117,7 +105,6 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
-                    credential_type: RTCIceCredentialType::Password,
                 },
                 Error::ErrNoTurnCredentials,
             ),
@@ -126,7 +113,6 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
-                    credential_type: RTCIceCredentialType::Oauth,
                 },
                 Error::ErrNoTurnCredentials,
             ),
@@ -135,7 +121,6 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
-                    credential_type: RTCIceCredentialType::Unspecified,
                 },
                 Error::ErrNoTurnCredentials,
             ),
@@ -157,7 +142,6 @@ mod test {
                 urls: vec!["stun:google.de?transport=udp".to_owned()],
                 username: "unittest".to_owned(),
                 credential: String::new(),
-                credential_type: RTCIceCredentialType::Oauth,
             },
             ice::Error::ErrStunQuery,
         )];

@@ -186,6 +186,10 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
             .map_err(|err| util::Error::Other(format!("{err}")));
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }
 
 impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {

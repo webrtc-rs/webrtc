@@ -5,12 +5,13 @@ use std::borrow::Borrow;
 use std::future::Future;
 use std::net::Shutdown;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::{fmt, io};
 
 use bytes::{Buf, Bytes};
+use portable_atomic::AtomicUsize;
 use sctp::association::Association;
 use sctp::chunk::chunk_payload_data::PayloadProtocolIdentifier;
 use sctp::stream::*;

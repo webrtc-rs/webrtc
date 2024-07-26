@@ -1,5 +1,11 @@
 /// DataChannelConfig can be used to configure properties of the underlying
 /// channel such as data reliability.
+///
+/// ## Specifications
+///
+/// * [W3C]
+///
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcdatachannelinit
 #[derive(Default, Debug, Clone)]
 pub struct RTCDataChannelInit {
     /// ordered indicates if data is allowed to be delivered out of order. The

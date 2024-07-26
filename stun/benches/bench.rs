@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use stun::addr::{AlternateServer, MappedAddress};
@@ -30,14 +31,15 @@ use tokio::time::Instant;
 // sufficient to make function zero-alloc in most cases.
 const AGENT_COLLECT_CAP: usize = 100;
 
-fn benchmark_addr(c: &mut Criterion) {
+fn benchmark_addr(g: &mut BenchmarkGroup<WallTime>) {
     let mut m = Message::new();
 
     let ma_addr = MappedAddress {
         ip: "122.12.34.5".parse().unwrap(),
         port: 5412,
     };
-    c.bench_function("BenchmarkMappedAddress_AddTo", |b| {
+    // BenchmarkMappedAddress_AddTo
+    g.bench_function("MappedAddress/add_to", |b| {
         b.iter(|| {
             ma_addr.add_to(&mut m).unwrap();
             m.reset();
@@ -48,7 +50,8 @@ fn benchmark_addr(c: &mut Criterion) {
         ip: "122.12.34.5".parse().unwrap(),
         port: 5412,
     };
-    c.bench_function("BenchmarkAlternateServer_AddTo", |b| {
+    // BenchmarkAlternateServer_AddTo
+    g.bench_function("AlternateServer/add_to", |b| {
         b.iter(|| {
             as_addr.add_to(&mut m).unwrap();
             m.reset();
@@ -56,7 +59,7 @@ fn benchmark_addr(c: &mut Criterion) {
     });
 }
 
-fn benchmark_agent(c: &mut Criterion) {
+fn benchmark_agent(g: &mut BenchmarkGroup<WallTime>) {
     let deadline = Instant::now().add(Duration::from_secs(60 * 60 * 24));
     let gc_deadline = deadline.sub(Duration::from_secs(1));
 
@@ -66,7 +69,8 @@ fn benchmark_agent(c: &mut Criterion) {
             a.start(TransactionId::new(), deadline).unwrap();
         }
 
-        c.bench_function("BenchmarkAgent_GC", |b| {
+        // BenchmarkAgent_GC
+        g.bench_function("Agent/GC", |b| {
             b.iter(|| {
                 a.collect(gc_deadline).unwrap();
             })
@@ -83,7 +87,8 @@ fn benchmark_agent(c: &mut Criterion) {
 
         let mut m = Message::new();
         m.build(&[Box::<TransactionId>::default()]).unwrap();
-        c.bench_function("BenchmarkAgent_Process", |b| {
+        // BenchmarkAgent_Process
+        g.bench_function("Agent/process", |b| {
             b.iter(|| {
                 a.process(m.clone()).unwrap();
             })
@@ -93,10 +98,11 @@ fn benchmark_agent(c: &mut Criterion) {
     }
 }
 
-fn benchmark_attributes(c: &mut Criterion) {
+fn benchmark_attributes(g: &mut BenchmarkGroup<WallTime>) {
     {
         let m = Message::new();
-        c.bench_function("BenchmarkMessage_GetNotFound", |b| {
+        // BenchmarkMessage_GetNotFound
+        g.bench_function("Message/get (Not Found)", |b| {
             b.iter(|| {
                 let _ = m.get(ATTR_REALM);
             })
@@ -106,7 +112,8 @@ fn benchmark_attributes(c: &mut Criterion) {
     {
         let mut m = Message::new();
         m.add(ATTR_USERNAME, &[1, 2, 3, 4, 5, 6, 7]);
-        c.bench_function("BenchmarkMessage_Get", |b| {
+        // BenchmarkMessage_Get
+        g.bench_function("Message/get", |b| {
             b.iter(|| {
                 let _ = m.get(ATTR_USERNAME);
             })
@@ -116,10 +123,11 @@ fn benchmark_attributes(c: &mut Criterion) {
 
 //TODO: add benchmark_client
 
-fn benchmark_error_code(c: &mut Criterion) {
+fn benchmark_error_code(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
-        c.bench_function("BenchmarkErrorCode_AddTo", |b| {
+        // BenchmarkErrorCode_AddTo
+        g.bench_function("ErrorCode/add_to", |b| {
             b.iter(|| {
                 let _ = CODE_STALE_NONCE.add_to(&mut m);
                 m.reset();
@@ -133,7 +141,8 @@ fn benchmark_error_code(c: &mut Criterion) {
             code: ErrorCode(404),
             reason: b"not found!".to_vec(),
         };
-        c.bench_function("BenchmarkErrorCodeAttribute_AddTo", |b| {
+        // BenchmarkErrorCodeAttribute_AddTo
+        g.bench_function("ErrorCodeAttribute/add_to", |b| {
             b.iter(|| {
                 let _ = a.add_to(&mut m);
                 m.reset();
@@ -148,7 +157,8 @@ fn benchmark_error_code(c: &mut Criterion) {
             reason: b"not found!".to_vec(),
         };
         let _ = a.add_to(&mut m);
-        c.bench_function("BenchmarkErrorCodeAttribute_GetFrom", |b| {
+        // BenchmarkErrorCodeAttribute_GetFrom
+        g.bench_function("ErrorCodeAttribute/get_from", |b| {
             b.iter(|| {
                 a.get_from(&m).unwrap();
             })
@@ -156,7 +166,7 @@ fn benchmark_error_code(c: &mut Criterion) {
     }
 }
 
-fn benchmark_fingerprint(c: &mut Criterion) {
+fn benchmark_fingerprint(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
         let s = Software::new(ATTR_SOFTWARE, "software".to_owned());
@@ -166,7 +176,8 @@ fn benchmark_fingerprint(c: &mut Criterion) {
         };
         let _ = addr.add_to(&mut m);
         let _ = s.add_to(&mut m);
-        c.bench_function("BenchmarkFingerprint_AddTo", |b| {
+        // BenchmarkFingerprint_AddTo
+        g.bench_function("Fingerprint/add_to", |b| {
             b.iter(|| {
                 let _ = FINGERPRINT.add_to(&mut m);
                 m.write_length();
@@ -189,7 +200,8 @@ fn benchmark_fingerprint(c: &mut Criterion) {
         m.write_header();
         FINGERPRINT.add_to(&mut m).unwrap();
         m.write_header();
-        c.bench_function("BenchmarkFingerprint_Check", |b| {
+        // BenchmarkFingerprint_Check
+        g.bench_function("Fingerprint/check", |b| {
             b.iter(|| {
                 FINGERPRINT.check(&m).unwrap();
             })
@@ -197,7 +209,8 @@ fn benchmark_fingerprint(c: &mut Criterion) {
     }
 }
 
-fn benchmark_message_build_overhead(c: &mut Criterion) {
+// BenchmarkBuildOverhead
+fn benchmark_message_build_overhead(g: &mut BenchmarkGroup<WallTime>) {
     let t = BINDING_REQUEST;
     let username = Username::new(ATTR_USERNAME, "username".to_owned());
     let nonce = Nonce::new(ATTR_NONCE, "nonce".to_owned());
@@ -205,7 +218,7 @@ fn benchmark_message_build_overhead(c: &mut Criterion) {
 
     {
         let mut m = Message::new();
-        c.bench_function("BenchmarkBuildOverhead/Build", |b| {
+        g.bench_function("BuildOverhead/Build", |b| {
             b.iter(|| {
                 let _ = m.build(&[
                     Box::new(username.clone()),
@@ -219,7 +232,7 @@ fn benchmark_message_build_overhead(c: &mut Criterion) {
 
     {
         let mut m = Message::new();
-        c.bench_function("BenchmarkBuildOverhead/Raw", |b| {
+        g.bench_function("BuildOverhead/Raw", |b| {
             b.iter(|| {
                 m.reset();
                 m.write_header();
@@ -233,12 +246,13 @@ fn benchmark_message_build_overhead(c: &mut Criterion) {
     }
 }
 
-fn benchmark_message_integrity(c: &mut Criterion) {
+fn benchmark_message_integrity(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
         let integrity = MessageIntegrity::new_short_term_integrity("password".to_owned());
         m.write_header();
-        c.bench_function("BenchmarkMessageIntegrity_AddTo", |b| {
+        // BenchmarkMessageIntegrity_AddTo
+        g.bench_function("MessageIntegrity/add_to", |b| {
             b.iter(|| {
                 m.write_header();
                 integrity.add_to(&mut m).unwrap();
@@ -256,7 +270,8 @@ fn benchmark_message_integrity(c: &mut Criterion) {
         m.write_header();
         integrity.add_to(&mut m).unwrap();
         m.write_header();
-        c.bench_function("BenchmarkMessageIntegrity_Check", |b| {
+        // BenchmarkMessageIntegrity_Check
+        g.bench_function("MessageIntegrity/check", |b| {
             b.iter(|| {
                 integrity.check(&mut m).unwrap();
             })
@@ -264,10 +279,11 @@ fn benchmark_message_integrity(c: &mut Criterion) {
     }
 }
 
-fn benchmark_message(c: &mut Criterion) {
+fn benchmark_message(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
-        c.bench_function("BenchmarkMessage_Write", |b| {
+        // BenchmarkMessage_Write
+        g.bench_function("Message/write", |b| {
             b.iter(|| {
                 m.add(ATTR_ERROR_CODE, &[0xff, 0x11, 0x12, 0x34]);
                 m.transaction_id = TransactionId::new();
@@ -286,7 +302,8 @@ fn benchmark_message(c: &mut Criterion) {
             method: METHOD_BINDING,
             class: CLASS_REQUEST,
         };
-        c.bench_function("BenchmarkMessageType_Value", |b| {
+        // BenchmarkMessageType_Value
+        g.bench_function("MessageType/value", |b| {
             b.iter(|| {
                 let _ = m.value();
             })
@@ -306,7 +323,8 @@ fn benchmark_message(c: &mut Criterion) {
         };
         m.write_header();
         let mut buf = vec![];
-        c.bench_function("BenchmarkMessage_WriteTo", |b| {
+        // BenchmarkMessage_WriteTo
+        g.bench_function("Message/write_to", |b| {
             b.iter(|| {
                 {
                     let mut writer = Cursor::new(&mut buf);
@@ -330,7 +348,8 @@ fn benchmark_message(c: &mut Criterion) {
         };
         m.write_header();
         let mut mrec = Message::new();
-        c.bench_function("BenchmarkMessage_ReadFrom", |b| {
+        // BenchmarkMessage_ReadFrom
+        g.bench_function("Message/read_from", |b| {
             b.iter(|| {
                 let mut reader = Cursor::new(&m.raw);
                 mrec.read_from(&mut reader).unwrap();
@@ -352,7 +371,8 @@ fn benchmark_message(c: &mut Criterion) {
         };
         m.write_header();
         let mut mrec = Message::new();
-        c.bench_function("BenchmarkMessage_ReadBytes", |b| {
+        // BenchmarkMessage_ReadBytes
+        g.bench_function("Message/read_bytes", |b| {
             b.iter(|| {
                 mrec.write(&m.raw).unwrap();
                 mrec.reset();
@@ -373,7 +393,8 @@ fn benchmark_message(c: &mut Criterion) {
         let software = Software::new(ATTR_SOFTWARE, "cydev/stun test".to_owned());
         software.add_to(&mut m).unwrap();
         m.write_header();
-        c.bench_function("BenchmarkIsMessage", |b| {
+        // BenchmarkIsMessage
+        g.bench_function("Message/is_message", |b| {
             b.iter(|| {
                 assert!(is_message(&m.raw), "Should be message");
             })
@@ -383,7 +404,8 @@ fn benchmark_message(c: &mut Criterion) {
     {
         let mut m = Message::new();
         m.write_header();
-        c.bench_function("BenchmarkMessage_NewTransactionID", |b| {
+        // BenchmarkMessage_NewTransactionID
+        g.bench_function("Message/new_transaction_id", |b| {
             b.iter(|| {
                 m.new_transaction_id().unwrap();
             })
@@ -397,7 +419,8 @@ fn benchmark_message(c: &mut Criterion) {
             ip: Ipv4Addr::new(213, 1, 223, 5).into(),
             ..Default::default()
         };
-        c.bench_function("BenchmarkMessageFull", |b| {
+        // BenchmarkMessageFull
+        g.bench_function("Message/Full", |b| {
             b.iter(|| {
                 addr.add_to(&mut m).unwrap();
                 s.add_to(&mut m).unwrap();
@@ -417,7 +440,8 @@ fn benchmark_message(c: &mut Criterion) {
             ip: Ipv4Addr::new(213, 1, 223, 5).into(),
             ..Default::default()
         };
-        c.bench_function("BenchmarkMessageFullHardcore", |b| {
+        // BenchmarkMessageFullHardcore
+        g.bench_function("Message/Full (Hardcore)", |b| {
             b.iter(|| {
                 addr.add_to(&mut m).unwrap();
                 s.add_to(&mut m).unwrap();
@@ -438,7 +462,8 @@ fn benchmark_message(c: &mut Criterion) {
             raw: vec![0u8; 128],
             ..Default::default()
         };
-        c.bench_function("BenchmarkMessage_WriteHeader", |b| {
+        // BenchmarkMessage_WriteHeader
+        g.bench_function("Message/write_header", |b| {
             b.iter(|| {
                 m.write_header();
             })
@@ -461,7 +486,8 @@ fn benchmark_message(c: &mut Criterion) {
         .unwrap();
         let mut a = Message::new();
         m.clone_to(&mut a).unwrap();
-        c.bench_function("BenchmarkMessage_CloneTo", |b| {
+        // BenchmarkMessage_CloneTo
+        g.bench_function("Message/clone_to", |b| {
             b.iter(|| {
                 m.clone_to(&mut a).unwrap();
             })
@@ -478,7 +504,8 @@ fn benchmark_message(c: &mut Criterion) {
         .unwrap();
         let mut a = Message::new();
         m.clone_to(&mut a).unwrap();
-        c.bench_function("BenchmarkMessage_AddTo", |b| {
+        // BenchmarkMessage_AddTo
+        g.bench_function("Message/add_to", |b| {
             b.iter(|| {
                 m.add_to(&mut a).unwrap();
             })
@@ -498,21 +525,23 @@ fn benchmark_message(c: &mut Criterion) {
         m.add(ATTR_ERROR_CODE, &[0xff, 0xfe, 0xfa]);
         m.write_header();
         let mut mdecoded = Message::new();
-        c.bench_function("BenchmarkDecode", |b| {
+        // BenchmarkDecode
+        g.bench_function("Message/decode", |b| {
             b.iter(|| {
                 mdecoded.reset();
-                mdecoded.raw = m.raw.clone();
+                mdecoded.raw.clone_from(&m.raw);
                 mdecoded.decode().unwrap();
             })
         });
     }
 }
 
-fn benchmark_text_attributes(c: &mut Criterion) {
+fn benchmark_text_attributes(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
         let u = Username::new(ATTR_USERNAME, "test".to_owned());
-        c.bench_function("BenchmarkUsername_AddTo", |b| {
+        // BenchmarkUsername_AddTo
+        g.bench_function("Username/add_to", |b| {
             b.iter(|| {
                 u.add_to(&mut m).unwrap();
                 m.reset();
@@ -524,7 +553,8 @@ fn benchmark_text_attributes(c: &mut Criterion) {
         let mut m = Message::new();
         let mut u = Username::new(ATTR_USERNAME, "test".to_owned());
         u.add_to(&mut m).unwrap();
-        c.bench_function("BenchmarkUsername_GetFrom", |b| {
+        // BenchmarkUsername_GetFrom
+        g.bench_function("Username/get_from", |b| {
             b.iter(|| {
                 u.get_from(&m).unwrap();
                 u.text.clear();
@@ -535,7 +565,8 @@ fn benchmark_text_attributes(c: &mut Criterion) {
     {
         let mut m = Message::new();
         let n = Nonce::new(ATTR_NONCE, "nonce".to_owned());
-        c.bench_function("BenchmarkNonce_AddTo", |b| {
+        // BenchmarkNonce_AddTo
+        g.bench_function("Nonce/add_to", |b| {
             b.iter(|| {
                 n.add_to(&mut m).unwrap();
                 m.reset();
@@ -547,7 +578,8 @@ fn benchmark_text_attributes(c: &mut Criterion) {
         let mut m = Message::new();
         let nonce = String::from_utf8(vec![b'a'; 2048]).unwrap();
         let n = Nonce::new(ATTR_NONCE, nonce);
-        c.bench_function("BenchmarkNonce_AddTo_BadLength", |b| {
+        // BenchmarkNonce_AddTo_BadLength
+        g.bench_function("Nonce/add_to (Bad Length)", |b| {
             b.iter(|| {
                 assert!(n.add_to(&mut m).is_err());
                 m.reset();
@@ -559,7 +591,8 @@ fn benchmark_text_attributes(c: &mut Criterion) {
         let mut m = Message::new();
         let mut n = Nonce::new(ATTR_NONCE, "nonce".to_owned());
         n.add_to(&mut m).unwrap();
-        c.bench_function("BenchmarkNonce_GetFrom", |b| {
+        // BenchmarkNonce_GetFrom
+        g.bench_function("Nonce/get_from", |b| {
             b.iter(|| {
                 n.get_from(&m).unwrap();
             })
@@ -567,7 +600,8 @@ fn benchmark_text_attributes(c: &mut Criterion) {
     }
 }
 
-fn benchmark_unknown_attributes(c: &mut Criterion) {
+// BenchmarkUnknownAttributes
+fn benchmark_unknown_attributes(g: &mut BenchmarkGroup<WallTime>) {
     let mut m = Message::new();
     let a = UnknownAttributes(vec![
         ATTR_DONT_FRAGMENT,
@@ -577,7 +611,7 @@ fn benchmark_unknown_attributes(c: &mut Criterion) {
     ]);
 
     {
-        c.bench_function("BenchmarkUnknownAttributes/AddTo", |b| {
+        g.bench_function("UnknownAttributes/add_to", |b| {
             b.iter(|| {
                 a.add_to(&mut m).unwrap();
                 m.reset();
@@ -588,7 +622,7 @@ fn benchmark_unknown_attributes(c: &mut Criterion) {
     {
         a.add_to(&mut m).unwrap();
         let mut attrs = UnknownAttributes(Vec::with_capacity(10));
-        c.bench_function("BenchmarkUnknownAttributes/GetFrom", |b| {
+        g.bench_function("UnknownAttributes/get_from", |b| {
             b.iter(|| {
                 attrs.get_from(&m).unwrap();
                 attrs.0.clear();
@@ -597,25 +631,27 @@ fn benchmark_unknown_attributes(c: &mut Criterion) {
     }
 }
 
-fn benchmark_xor(c: &mut Criterion) {
+fn benchmark_xor(g: &mut BenchmarkGroup<WallTime>) {
     let mut r = StdRng::seed_from_u64(666);
     let mut a = [0u8; 1024];
     let mut d = [0u8; 1024];
     r.fill(&mut a);
     r.fill(&mut d);
     let mut dst = [0u8; 1024];
-    c.bench_function("BenchmarkXOR", |b| {
+    // BenchmarkXOR
+    g.bench_function("XOR", |b| {
         b.iter(|| {
             let _ = xor_bytes(&mut dst, &a, &d);
         })
     });
 }
 
-fn benchmark_xoraddr(c: &mut Criterion) {
+fn benchmark_xoraddr(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
         let ip = "192.168.1.32".parse().unwrap();
-        c.bench_function("BenchmarkXORMappedAddress_AddTo", |b| {
+        // BenchmarkXORMappedAddress_AddTo
+        g.bench_function("XorMappedAddress/add_to", |b| {
             b.iter(|| {
                 let addr = XorMappedAddress { ip, port: 3654 };
                 addr.add_to(&mut m).unwrap();
@@ -632,7 +668,8 @@ fn benchmark_xoraddr(c: &mut Criterion) {
         let addr_value = [0, 1, 156, 213, 244, 159, 56, 174]; //hex.DecodeString("00019cd5f49f38ae")
         m.add(ATTR_XORMAPPED_ADDRESS, &addr_value);
         let mut addr = XorMappedAddress::default();
-        c.bench_function("BenchmarkXORMappedAddress_GetFrom", |b| {
+        // BenchmarkXORMappedAddress_GetFrom
+        g.bench_function("XorMappedAddress/get_from", |b| {
             b.iter(|| {
                 addr.get_from(&m).unwrap();
             })
@@ -640,20 +677,25 @@ fn benchmark_xoraddr(c: &mut Criterion) {
     }
 }
 
-criterion_group!(
-    benches,
-    benchmark_addr,
-    benchmark_agent,
-    benchmark_attributes,
-    //TODO: benchmark_client,
-    benchmark_error_code,
-    benchmark_fingerprint,
-    benchmark_message_build_overhead,
-    benchmark_message_integrity,
-    benchmark_message,
-    benchmark_text_attributes,
-    benchmark_unknown_attributes,
-    benchmark_xor,
-    benchmark_xoraddr,
-);
+fn benches() {
+    let mut c = Criterion::default().configure_from_args();
+    let mut g = c.benchmark_group("STUN");
+
+    benchmark_addr(&mut g);
+    benchmark_agent(&mut g);
+    benchmark_attributes(&mut g);
+    // TODO: benchmark_client(&mut g);
+    benchmark_error_code(&mut g);
+    benchmark_fingerprint(&mut g);
+    benchmark_message_build_overhead(&mut g);
+    benchmark_message_integrity(&mut g);
+    benchmark_message(&mut g);
+    benchmark_text_attributes(&mut g);
+    benchmark_unknown_attributes(&mut g);
+    benchmark_xor(&mut g);
+    benchmark_xoraddr(&mut g);
+
+    g.finish();
+}
+
 criterion_main!(benches);

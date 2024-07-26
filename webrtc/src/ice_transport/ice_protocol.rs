@@ -4,6 +4,14 @@ use serde::{Deserialize, Serialize};
 
 /// ICEProtocol indicates the transport protocol type that is used in the
 /// ice.URL structure.
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate/protocol
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtciceprotocol-enum
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCIceProtocol {
     #[default]

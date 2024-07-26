@@ -3,13 +3,14 @@ use std::num::ParseIntError;
 use std::pin::Pin;
 use std::string::FromUtf8Error;
 
-use rcgen::RcgenError;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError as MpscSendError;
 
 use crate::peer_connection::sdp::sdp_type::RTCSdpType;
 use crate::peer_connection::signaling_state::RTCSignalingState;
 use crate::rtp_transceiver::rtp_receiver;
+#[cfg(doc)]
+use crate::rtp_transceiver::rtp_sender;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -128,13 +129,13 @@ pub enum Error {
     #[error("protocol is larger then 65535 bytes")]
     ErrProtocolTooLarge,
 
-    /// ErrSenderNotCreatedByConnection indicates remove_track was called with a RtpSender not created
-    /// by this PeerConnection
+    /// ErrSenderNotCreatedByConnection indicates remove_track was called with a
+    /// [`rtp_sender::RTCRtpSender`] not created by this PeerConnection
     #[error("RtpSender not created by this PeerConnection")]
     ErrSenderNotCreatedByConnection,
 
     /// ErrSenderInitialTrackIdAlreadySet indicates a second call to
-    /// [`RtpSender::set_initial_track_id`] which is not allowed.
+    /// `RTCRtpSender::set_initial_track_id` which is not allowed. Purely internal error, should not happen in practice.
     #[error("RtpSender's initial_track_id has already been set")]
     ErrSenderInitialTrackIdAlreadySet,
 
@@ -197,6 +198,10 @@ pub enum Error {
     /// ErrRTPSenderNewTrackHasIncorrectKind indicates that the new track is of a different kind than the previous/original
     #[error("new track must be of the same kind as previous")]
     ErrRTPSenderNewTrackHasIncorrectKind,
+
+    /// ErrRTPSenderNewTrackHasIncorrectEnvelope indicates that the new track has a different envelope than the previous/original
+    #[error("new track must have the same envelope as previous")]
+    ErrRTPSenderNewTrackHasIncorrectEnvelope,
 
     /// ErrRTPSenderDataSent indicates that the sequence number transformer tries to be enabled after the data sending began
     #[error("Sequence number transformer must be enabled before sending data")]
@@ -327,6 +332,20 @@ pub enum Error {
     },
     #[error("Track must not be nil")]
     ErrRTPSenderTrackNil,
+    #[error("Sender has already been stopped")]
+    ErrRTPSenderStopped,
+    #[error("Sender Track has been removed or replaced to nil")]
+    ErrRTPSenderTrackRemoved,
+    #[error("Sender cannot add encoding as rid is empty")]
+    ErrRTPSenderRidNil,
+    #[error("Sender cannot add encoding as there is no base track")]
+    ErrRTPSenderNoBaseEncoding,
+    #[error("Sender cannot add encoding as provided track does not match base track")]
+    ErrRTPSenderBaseEncodingMismatch,
+    #[error("Sender cannot encoding due to RID collision")]
+    ErrRTPSenderRIDCollision,
+    #[error("Sender does not have track for RID")]
+    ErrRTPSenderNoTrackForRID,
     #[error("RTPSender must not be nil")]
     ErrRTPSenderNil,
     #[error("RTPReceiver must not be nil")]
@@ -409,7 +428,7 @@ pub enum Error {
     #[error("utf-8 error: {0}")]
     Utf8(#[from] FromUtf8Error),
     #[error("{0}")]
-    RcGen(#[from] RcgenError),
+    RcGen(#[from] rcgen::Error),
     #[error("mpsc send: {0}")]
     MpscSend(String),
     #[error("parse int: {0}")]

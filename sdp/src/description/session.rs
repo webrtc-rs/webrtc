@@ -150,11 +150,12 @@ pub struct RepeatTime {
 
 impl fmt::Display for RepeatTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut fields = vec![format!("{}", self.interval), format!("{}", self.duration)];
+        write!(f, "{} {}", self.interval, self.duration)?;
+
         for value in &self.offsets {
-            fields.push(format!("{value}"));
+            write!(f, " {value}")?;
         }
-        write!(f, "{}", fields.join(" "))
+        Ok(())
     }
 }
 
@@ -232,6 +233,59 @@ pub struct SessionDescription {
 
     /// <https://tools.ietf.org/html/rfc4566#section-5.14>
     pub media_descriptions: Vec<MediaDescription>,
+}
+
+impl fmt::Display for SessionDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_key_value(f, "v=", Some(&self.version))?;
+        write_key_value(f, "o=", Some(&self.origin))?;
+        write_key_value(f, "s=", Some(&self.session_name))?;
+
+        write_key_value(f, "i=", self.session_information.as_ref())?;
+
+        if let Some(uri) = &self.uri {
+            write_key_value(f, "u=", Some(uri))?;
+        }
+        write_key_value(f, "e=", self.email_address.as_ref())?;
+        write_key_value(f, "p=", self.phone_number.as_ref())?;
+        if let Some(connection_information) = &self.connection_information {
+            write_key_value(f, "c=", Some(&connection_information))?;
+        }
+
+        for bandwidth in &self.bandwidth {
+            write_key_value(f, "b=", Some(&bandwidth))?;
+        }
+        for time_description in &self.time_descriptions {
+            write_key_value(f, "t=", Some(&time_description.timing))?;
+            for repeat_time in &time_description.repeat_times {
+                write_key_value(f, "r=", Some(&repeat_time))?;
+            }
+        }
+
+        write_key_slice_of_values(f, "z=", &self.time_zones)?;
+
+        write_key_value(f, "k=", self.encryption_key.as_ref())?;
+        for attribute in &self.attributes {
+            write_key_value(f, "a=", Some(&attribute))?;
+        }
+
+        for media_description in &self.media_descriptions {
+            write_key_value(f, "m=", Some(&media_description.media_name))?;
+            write_key_value(f, "i=", media_description.media_title.as_ref())?;
+            if let Some(connection_information) = &media_description.connection_information {
+                write_key_value(f, "c=", Some(&connection_information))?;
+            }
+            for bandwidth in &media_description.bandwidth {
+                write_key_value(f, "b=", Some(&bandwidth))?;
+            }
+            write_key_value(f, "k=", media_description.encryption_key.as_ref())?;
+            for attribute in &media_description.attributes {
+                write_key_value(f, "a=", Some(&attribute))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Reset cleans the SessionDescription, and sets all fields back to their default values
@@ -399,61 +453,7 @@ impl SessionDescription {
     ///    k=* (encryption key)
     ///    a=* (zero or more media attribute lines)
     pub fn marshal(&self) -> String {
-        let mut result = String::new();
-
-        result += key_value_build("v=", Some(&self.version.to_string())).as_str();
-        result += key_value_build("o=", Some(&self.origin.to_string())).as_str();
-        result += key_value_build("s=", Some(&self.session_name)).as_str();
-
-        result += key_value_build("i=", self.session_information.as_ref()).as_str();
-
-        if let Some(uri) = &self.uri {
-            result += key_value_build("u=", Some(&format!("{uri}"))).as_str();
-        }
-        result += key_value_build("e=", self.email_address.as_ref()).as_str();
-        result += key_value_build("p=", self.phone_number.as_ref()).as_str();
-        if let Some(connection_information) = &self.connection_information {
-            result += key_value_build("c=", Some(&connection_information.to_string())).as_str();
-        }
-
-        for bandwidth in &self.bandwidth {
-            result += key_value_build("b=", Some(&bandwidth.to_string())).as_str();
-        }
-        for time_description in &self.time_descriptions {
-            result += key_value_build("t=", Some(&time_description.timing.to_string())).as_str();
-            for repeat_time in &time_description.repeat_times {
-                result += key_value_build("r=", Some(&repeat_time.to_string())).as_str();
-            }
-        }
-        if !self.time_zones.is_empty() {
-            let mut time_zones = vec![];
-            for time_zone in &self.time_zones {
-                time_zones.push(time_zone.to_string());
-            }
-            result += key_value_build("z=", Some(&time_zones.join(" "))).as_str();
-        }
-        result += key_value_build("k=", self.encryption_key.as_ref()).as_str();
-        for attribute in &self.attributes {
-            result += key_value_build("a=", Some(&attribute.to_string())).as_str();
-        }
-
-        for media_description in &self.media_descriptions {
-            result +=
-                key_value_build("m=", Some(&media_description.media_name.to_string())).as_str();
-            result += key_value_build("i=", media_description.media_title.as_ref()).as_str();
-            if let Some(connection_information) = &media_description.connection_information {
-                result += key_value_build("c=", Some(&connection_information.to_string())).as_str();
-            }
-            for bandwidth in &media_description.bandwidth {
-                result += key_value_build("b=", Some(&bandwidth.to_string())).as_str();
-            }
-            result += key_value_build("k=", media_description.encryption_key.as_ref()).as_str();
-            for attribute in &media_description.attributes {
-                result += key_value_build("a=", Some(&attribute.to_string())).as_str();
-            }
-        }
-
-        result
+        self.to_string()
     }
 
     /// Unmarshal is the primary function that deserializes the session description

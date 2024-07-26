@@ -1,16 +1,16 @@
 [package]
 name = "webrtc-media"
-version = "0.7.1"
+version = "0.8.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of WebRTC Media API"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/webrtc-media"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/media"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/media"
 
 [dependencies]
-rtp = { version = "0.10.0", path = "../rtp" }
+rtp = { version = "0.11.0", path = "../rtp" }
 
 byteorder = "1"
 bytes = "1"
@@ -20,6 +20,9 @@ rand = "0.8"
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 nearly_eq = "0.2"
+
+[lints]
+workspace = true
 
 [[bench]]
 name = "audio_buffer"

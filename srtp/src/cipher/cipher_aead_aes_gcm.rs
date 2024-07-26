@@ -8,6 +8,7 @@ use util::marshal::*;
 use super::Cipher;
 use crate::error::{Error, Result};
 use crate::key_derivation::*;
+use crate::protection_profile::ProtectionProfile;
 
 pub const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
 
@@ -15,6 +16,7 @@ const RTCP_ENCRYPTION_FLAG: u8 = 0x80;
 
 /// AEAD Cipher based on AES.
 pub(crate) struct CipherAeadAesGcm {
+    profile: ProtectionProfile,
     srtp_cipher: aes_gcm::Aes128Gcm,
     srtcp_cipher: aes_gcm::Aes128Gcm,
     srtp_session_salt: Vec<u8>,
@@ -22,8 +24,19 @@ pub(crate) struct CipherAeadAesGcm {
 }
 
 impl Cipher for CipherAeadAesGcm {
-    fn auth_tag_len(&self) -> usize {
-        CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN
+    /// Get RTP authenticated tag length.
+    fn rtp_auth_tag_len(&self) -> usize {
+        self.profile.rtp_auth_tag_len()
+    }
+
+    /// Get RTCP authenticated tag length.
+    fn rtcp_auth_tag_len(&self) -> usize {
+        self.profile.rtcp_auth_tag_len()
+    }
+
+    /// Get AEAD auth key length of the cipher.
+    fn aead_auth_tag_len(&self) -> usize {
+        self.profile.aead_auth_tag_len()
     }
 
     fn encrypt_rtp(
@@ -34,7 +47,7 @@ impl Cipher for CipherAeadAesGcm {
     ) -> Result<Bytes> {
         // Grow the given buffer to fit the output.
         let header_len = header.marshal_size();
-        let mut writer = BytesMut::with_capacity(payload.len() + self.auth_tag_len());
+        let mut writer = BytesMut::with_capacity(payload.len() + self.aead_auth_tag_len());
 
         // Copy header unencrypted.
         writer.extend_from_slice(&payload[..header_len]);
@@ -59,7 +72,7 @@ impl Cipher for CipherAeadAesGcm {
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes> {
-        if ciphertext.len() < self.auth_tag_len() {
+        if ciphertext.len() < self.aead_auth_tag_len() {
             return Err(Error::ErrFailedToVerifyAuthTag);
         }
 
@@ -101,7 +114,7 @@ impl Cipher for CipherAeadAesGcm {
     }
 
     fn decrypt_rtcp(&mut self, encrypted: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes> {
-        if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
+        if encrypted.len() < self.aead_auth_tag_len() + SRTCP_INDEX_SIZE {
             return Err(Error::ErrFailedToVerifyAuthTag);
         }
 
@@ -133,7 +146,11 @@ impl Cipher for CipherAeadAesGcm {
 
 impl CipherAeadAesGcm {
     /// Create a new AEAD instance.
-    pub(crate) fn new(master_key: &[u8], master_salt: &[u8]) -> Result<CipherAeadAesGcm> {
+    pub(crate) fn new(
+        profile: ProtectionProfile,
+        master_key: &[u8],
+        master_salt: &[u8],
+    ) -> Result<CipherAeadAesGcm> {
         let srtp_session_key = aes_cm_key_derivation(
             LABEL_SRTP_ENCRYPTION,
             master_key,
@@ -163,7 +180,7 @@ impl CipherAeadAesGcm {
             master_key,
             master_salt,
             0,
-            master_key.len(),
+            master_salt.len(),
         )?;
 
         let srtcp_session_salt = aes_cm_key_derivation(
@@ -171,10 +188,11 @@ impl CipherAeadAesGcm {
             master_key,
             master_salt,
             0,
-            master_key.len(),
+            master_salt.len(),
         )?;
 
         Ok(CipherAeadAesGcm {
+            profile,
             srtp_cipher,
             srtcp_cipher,
             srtp_session_salt,

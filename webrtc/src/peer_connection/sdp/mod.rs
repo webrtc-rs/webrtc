@@ -189,8 +189,8 @@ pub(crate) fn track_details_from_sdp(
                         if track_idx < tracks_in_media_section.len() {
                             tracks_in_media_section[track_idx].mid = SmolStr::from(mid_value);
                             tracks_in_media_section[track_idx].kind = codec_type;
-                            tracks_in_media_section[track_idx].stream_id = stream_id.to_owned();
-                            tracks_in_media_section[track_idx].id = track_id.to_owned();
+                            stream_id.clone_into(&mut tracks_in_media_section[track_idx].stream_id);
+                            track_id.clone_into(&mut tracks_in_media_section[track_idx].id);
                             tracks_in_media_section[track_idx].ssrcs = vec![ssrc];
                             tracks_in_media_section[track_idx].repair_ssrc = repair_ssrc;
                         } else {
@@ -211,26 +211,20 @@ pub(crate) fn track_details_from_sdp(
             };
         }
 
+        // If media line is using RTP Stream Identifier Source Description per RFC8851
+        // we will need to override tracks, and remove ssrcs.
+        // This is in particular important for Firefox, as it uses both 'rid', 'simulcast'
+        // and 'a=ssrc' lines.
         let rids = get_rids(media);
         if !rids.is_empty() && !track_id.is_empty() && !stream_id.is_empty() {
-            let mut simulcast_track = TrackDetails {
+            tracks_in_media_section = vec![TrackDetails {
                 mid: SmolStr::from(mid_value),
                 kind: codec_type,
                 stream_id: stream_id.to_owned(),
                 id: track_id.to_owned(),
-                rids: vec![],
+                rids: rids.iter().map(|r| SmolStr::from(&r.id)).collect(),
                 ..Default::default()
-            };
-            for rid in &rids {
-                simulcast_track.rids.push(SmolStr::from(&rid.id));
-            }
-            if simulcast_track.rids.len() == tracks_in_media_section.len() {
-                for track in &tracks_in_media_section {
-                    simulcast_track.ssrcs.extend(&track.ssrcs)
-                }
-            }
-
-            tracks_in_media_section = vec![simulcast_track];
+            }];
         }
 
         incoming_tracks.extend(tracks_in_media_section);
@@ -254,7 +248,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> Vec<SimulcastRid> {
                 log::warn!("Failed to parse RID: {}", err);
             }
         } else if attr.key.as_str() == SDP_ATTRIBUTE_SIMULCAST {
-            simulcast_attr = attr.value.clone();
+            simulcast_attr.clone_from(&attr.value);
         }
     }
 
@@ -589,12 +583,32 @@ pub(crate) async fn add_transceiver_sdp(
     for mt in transceivers {
         let sender = mt.sender().await;
         if let Some(track) = sender.track().await {
-            media = media.with_media_source(
-                sender.ssrc,
-                track.stream_id().to_owned(), /* cname */
-                track.stream_id().to_owned(), /* streamLabel */
-                track.id().to_owned(),
-            );
+            let send_parameters = sender.get_parameters().await;
+            for encoding in &send_parameters.encodings {
+                media = media.with_media_source(
+                    encoding.ssrc,
+                    track.stream_id().to_owned(), /* cname */
+                    track.stream_id().to_owned(), /* streamLabel */
+                    track.id().to_owned(),
+                );
+            }
+
+            if send_parameters.encodings.len() > 1 {
+                let mut send_rids = Vec::with_capacity(send_parameters.encodings.len());
+
+                for encoding in &send_parameters.encodings {
+                    media = media.with_value_attribute(
+                        SDP_ATTRIBUTE_RID.to_owned(),
+                        format!("{} send", encoding.rid),
+                    );
+                    send_rids.push(encoding.rid.to_string());
+                }
+
+                media = media.with_value_attribute(
+                    SDP_ATTRIBUTE_SIMULCAST.to_owned(),
+                    format!("send {}", send_rids.join(";")),
+                );
+            }
 
             // Send msid based on the configured track if we haven't already
             // sent on this sender. If we have sent we must keep the msid line consistent, this
@@ -744,6 +758,13 @@ impl TryFrom<&String> for SimulcastRid {
     }
 }
 
+fn bundle_match(bundle: Option<&String>, id: &str) -> bool {
+    match bundle {
+        None => true,
+        Some(b) => b.split_whitespace().any(|s| s == id),
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct MediaSection {
     pub(crate) id: String,
@@ -758,6 +779,7 @@ pub(crate) struct PopulateSdpParams {
     pub(crate) is_icelite: bool,
     pub(crate) connection_role: ConnectionRole,
     pub(crate) ice_gathering_state: RTCIceGatheringState,
+    pub(crate) match_bundle_group: Option<String>,
 }
 
 /// populate_sdp serializes a PeerConnections state into an SDP
@@ -825,7 +847,14 @@ pub(crate) async fn populate_sdp(
         };
 
         if should_add_id {
-            append_bundle(&m.id, &mut bundle_value, &mut bundle_count);
+            if bundle_match(params.match_bundle_group.as_ref(), &m.id) {
+                append_bundle(&m.id, &mut bundle_value, &mut bundle_count);
+            } else if let Some(desc) = d.media_descriptions.last_mut() {
+                desc.media_name.port = RangedPort {
+                    value: 0,
+                    range: None,
+                }
+            }
         }
     }
 
@@ -843,7 +872,11 @@ pub(crate) async fn populate_sdp(
         d = d.with_value_attribute(ATTR_KEY_ICELITE.to_owned(), ATTR_KEY_ICELITE.to_owned());
     }
 
-    Ok(d.with_value_attribute(ATTR_KEY_GROUP.to_owned(), bundle_value))
+    if bundle_count > 0 {
+        d = d.with_value_attribute(ATTR_KEY_GROUP.to_owned(), bundle_value);
+    }
+
+    Ok(d)
 }
 
 pub(crate) fn get_mid_value(media: &MediaDescription) -> Option<&String> {
@@ -900,22 +933,44 @@ pub(crate) async fn extract_ice_details(
     desc: &SessionDescription,
 ) -> Result<(String, String, Vec<RTCIceCandidate>)> {
     let mut candidates = vec![];
-    let mut remote_pwds = vec![];
-    let mut remote_ufrags = vec![];
 
-    if let Some(ufrag) = desc.attribute("ice-ufrag") {
-        remote_ufrags.push(ufrag.clone());
-    }
-    if let Some(pwd) = desc.attribute("ice-pwd") {
-        remote_pwds.push(pwd.clone());
-    }
+    // Backup ufrag/pwd is the first inactive credentials found.
+    // We will return the backup credentials to solve the corner case where
+    // all media lines/transceivers are set to inactive.
+    //
+    // This should probably be handled in a better way by the caller.
+    let mut backup_ufrag = None;
+    let mut backup_pwd = None;
+
+    let mut remote_ufrag = desc.attribute("ice-ufrag").map(|s| s.as_str());
+    let mut remote_pwd = desc.attribute("ice-pwd").map(|s| s.as_str());
 
     for m in &desc.media_descriptions {
-        if let Some(ufrag) = m.attribute("ice-ufrag").and_then(|o| o) {
-            remote_ufrags.push(ufrag.to_owned());
+        let ufrag = m.attribute("ice-ufrag").and_then(|o| o);
+        let pwd = m.attribute("ice-pwd").and_then(|o| o);
+
+        if m.attribute(ATTR_KEY_INACTIVE).is_some() {
+            if backup_ufrag.is_none() {
+                backup_ufrag = ufrag;
+            }
+            if backup_pwd.is_none() {
+                backup_pwd = pwd;
+            }
+            continue;
         }
-        if let Some(pwd) = m.attribute("ice-pwd").and_then(|o| o) {
-            remote_pwds.push(pwd.to_owned());
+
+        if remote_ufrag.is_none() {
+            remote_ufrag = ufrag;
+        }
+        if remote_pwd.is_none() {
+            remote_pwd = pwd;
+        }
+
+        if ufrag.is_some() && ufrag != remote_ufrag {
+            return Err(Error::ErrSessionDescriptionConflictingIceUfrag);
+        }
+        if pwd.is_some() && pwd != remote_pwd {
+            return Err(Error::ErrSessionDescriptionConflictingIcePwd);
         }
 
         for a in &m.attributes {
@@ -929,25 +984,14 @@ pub(crate) async fn extract_ice_details(
         }
     }
 
-    if remote_ufrags.is_empty() {
-        return Err(Error::ErrSessionDescriptionMissingIceUfrag);
-    } else if remote_pwds.is_empty() {
-        return Err(Error::ErrSessionDescriptionMissingIcePwd);
-    }
+    let remote_ufrag = remote_ufrag
+        .or(backup_ufrag)
+        .ok_or(Error::ErrSessionDescriptionMissingIceUfrag)?;
+    let remote_pwd = remote_pwd
+        .or(backup_pwd)
+        .ok_or(Error::ErrSessionDescriptionMissingIcePwd)?;
 
-    for m in 1..remote_ufrags.len() {
-        if remote_ufrags[m] != remote_ufrags[0] {
-            return Err(Error::ErrSessionDescriptionConflictingIceUfrag);
-        }
-    }
-
-    for m in 1..remote_pwds.len() {
-        if remote_pwds[m] != remote_pwds[0] {
-            return Err(Error::ErrSessionDescriptionConflictingIcePwd);
-        }
-    }
-
-    Ok((remote_ufrags[0].clone(), remote_pwds[0].clone(), candidates))
+    Ok((remote_ufrag.to_owned(), remote_pwd.to_owned(), candidates))
 }
 
 pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool {

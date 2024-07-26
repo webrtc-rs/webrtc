@@ -73,4 +73,8 @@ impl Conn for Pipe {
     async fn close(&self) -> Result<()> {
         Ok(())
     }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
 }

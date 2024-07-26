@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use stun::attributes::ATTR_DATA;
 use stun::message::{Getter, Message, Setter};
 use turn::proto::chandata::ChannelData;
@@ -8,10 +9,11 @@ use turn::proto::channum::{ChannelNumber, MIN_CHANNEL_NUMBER};
 use turn::proto::data::Data;
 use turn::proto::lifetime::Lifetime;
 
-fn benchmark_chan_data(c: &mut Criterion) {
+fn benchmark_chan_data(g: &mut BenchmarkGroup<WallTime>) {
     {
         let buf = [64, 0, 0, 0, 0, 4, 0, 0, 1, 2, 3];
-        c.bench_function("BenchmarkIsChannelData", |b| {
+        // BenchmarkIsChannelData
+        g.bench_function("ChannelData/is_channel_data", |b| {
             b.iter(|| {
                 assert!(ChannelData::is_channel_data(&buf));
             })
@@ -24,7 +26,8 @@ fn benchmark_chan_data(c: &mut Criterion) {
             number: ChannelNumber(MIN_CHANNEL_NUMBER + 1),
             raw: vec![],
         };
-        c.bench_function("BenchmarkChannelData_Encode", |b| {
+        // BenchmarkChannelData_Encode
+        g.bench_function("ChannelData/encode", |b| {
             b.iter(|| {
                 d.encode();
                 d.reset();
@@ -41,20 +44,22 @@ fn benchmark_chan_data(c: &mut Criterion) {
         d.encode();
         let mut buf = vec![0u8; d.raw.len()];
         buf.copy_from_slice(&d.raw);
-        c.bench_function("BenchmarkChannelData_Decode", |b| {
+        // BenchmarkChannelData_Decode
+        g.bench_function("ChannelData/decode", |b| {
             b.iter(|| {
                 d.reset();
-                d.raw = buf.clone();
+                d.raw.clone_from(&buf);
                 d.decode().unwrap();
             })
         });
     }
 }
 
-fn benchmark_chan(c: &mut Criterion) {
+// BenchmarkChannelNumber
+fn benchmark_chan(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
-        c.bench_function("BenchmarkChannelNumber/AddTo", |b| {
+        g.bench_function("ChannelNumber/add_to", |b| {
             b.iter(|| {
                 let n = ChannelNumber(12);
                 n.add_to(&mut m).unwrap();
@@ -68,7 +73,7 @@ fn benchmark_chan(c: &mut Criterion) {
         let expected = ChannelNumber(12);
         expected.add_to(&mut m).unwrap();
         let mut n = ChannelNumber::default();
-        c.bench_function("BenchmarkChannelNumber/GetFrom", |b| {
+        g.bench_function("ChannelNumber/get_from", |b| {
             b.iter(|| {
                 n.get_from(&m).unwrap();
                 assert_eq!(n, expected);
@@ -77,11 +82,12 @@ fn benchmark_chan(c: &mut Criterion) {
     }
 }
 
-fn benchmark_data(c: &mut Criterion) {
+// BenchmarkData
+fn benchmark_data(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
         let d = Data(vec![0u8; 10]);
-        c.bench_function("BenchmarkData/AddTo", |b| {
+        g.bench_function("Data/add_to", |b| {
             b.iter(|| {
                 d.add_to(&mut m).unwrap();
                 m.reset();
@@ -92,7 +98,7 @@ fn benchmark_data(c: &mut Criterion) {
     {
         let mut m = Message::new();
         let d = Data(vec![0u8; 10]);
-        c.bench_function("BenchmarkData/AddToRaw", |b| {
+        g.bench_function("Data/add_to Raw", |b| {
             b.iter(|| {
                 m.add(ATTR_DATA, &d.0);
                 m.reset();
@@ -101,11 +107,12 @@ fn benchmark_data(c: &mut Criterion) {
     }
 }
 
-fn benchmark_lifetime(c: &mut Criterion) {
+// BenchmarkLifetime
+fn benchmark_lifetime(g: &mut BenchmarkGroup<WallTime>) {
     {
         let mut m = Message::new();
         let l = Lifetime(Duration::from_secs(1));
-        c.bench_function("BenchmarkLifetime/AddTo", |b| {
+        g.bench_function("Lifetime/add_to", |b| {
             b.iter(|| {
                 l.add_to(&mut m).unwrap();
                 m.reset();
@@ -118,7 +125,7 @@ fn benchmark_lifetime(c: &mut Criterion) {
         let expected = Lifetime(Duration::from_secs(60));
         expected.add_to(&mut m).unwrap();
         let mut l = Lifetime::default();
-        c.bench_function("BenchmarkLifetime/GetFrom", |b| {
+        g.bench_function("Lifetime/get_from", |b| {
             b.iter(|| {
                 l.get_from(&m).unwrap();
                 assert_eq!(l, expected);
@@ -127,11 +134,16 @@ fn benchmark_lifetime(c: &mut Criterion) {
     }
 }
 
-criterion_group!(
-    benches,
-    benchmark_chan_data,
-    benchmark_chan,
-    benchmark_data,
-    benchmark_lifetime
-);
+fn benches() {
+    let mut c = Criterion::default().configure_from_args();
+    let mut g = c.benchmark_group("TURN");
+
+    benchmark_chan_data(&mut g);
+    benchmark_chan(&mut g);
+    benchmark_data(&mut g);
+    benchmark_lifetime(&mut g);
+
+    g.finish();
+}
+
 criterion_main!(benches);

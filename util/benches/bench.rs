@@ -1,5 +1,6 @@
 use criterion::async_executor::FuturesExecutor;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use webrtc_util::Buffer;
 
 async fn buffer_write_then_read(times: u32) {
@@ -11,23 +12,35 @@ async fn buffer_write_then_read(times: u32) {
     }
 }
 
-fn benchmark_buffer(c: &mut Criterion) {
+fn benchmark_buffer(g: &mut BenchmarkGroup<WallTime>) {
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    c.bench_function("Benchmark Buffer WriteThenRead 1", |b| {
+
+    // Benchmark Buffer WriteThenRead 1
+    g.bench_function("Buffer/Write then read x1", |b| {
         b.to_async(FuturesExecutor)
             .iter(|| buffer_write_then_read(1));
     });
 
-    c.bench_function("Benchmark Buffer WriteThenRead 10", |b| {
+    // Benchmark Buffer WriteThenRead 10
+    g.bench_function("Buffer/Write then read x10", |b| {
         b.to_async(FuturesExecutor)
             .iter(|| buffer_write_then_read(10));
     });
 
-    c.bench_function("Benchmark Buffer WriteThenRead 100", |b| {
+    // Benchmark Buffer WriteThenRead 100
+    g.bench_function("Buffer/Write then read x100", |b| {
         b.to_async(FuturesExecutor)
             .iter(|| buffer_write_then_read(100));
     });
 }
 
-criterion_group!(benches, benchmark_buffer);
+fn benches() {
+    let mut c = Criterion::default().configure_from_args();
+    let mut g = c.benchmark_group("Util");
+
+    benchmark_buffer(&mut g);
+
+    g.finish();
+}
+
 criterion_main!(benches);

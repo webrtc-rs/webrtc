@@ -90,7 +90,7 @@ impl API {
                     .map_err(|_| Error::ErrCertificateExpired)?;
             }
         } else {
-            let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+            let kp = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
             let cert = RTCCertificate::from_key_pair(kp)?;
             certificates = vec![cert];
         };
@@ -157,9 +157,11 @@ impl API {
         transport: Arc<RTCDtlsTransport>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTCRtpSender {
+        let kind = track.as_ref().map(|t| t.kind()).unwrap_or_default();
         RTCRtpSender::new(
             self.setting_engine.get_receive_mtu(),
             track,
+            kind,
             transport,
             Arc::clone(&self.media_engine),
             interceptor,

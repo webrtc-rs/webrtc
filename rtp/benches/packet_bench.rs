@@ -2,12 +2,13 @@
 #![allow(clippy::needless_update)]
 
 use bytes::{Bytes, BytesMut};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::measurement::WallTime;
+use criterion::{criterion_main, BenchmarkGroup, Criterion};
 use rtp::header::*;
 use rtp::packet::*;
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-fn benchmark_packet(c: &mut Criterion) {
+fn benchmark_packet(g: &mut BenchmarkGroup<WallTime>) {
     let pkt = Packet {
         header: Header {
             extension: true,
@@ -38,19 +39,22 @@ fn benchmark_packet(c: &mut Criterion) {
     ///////////////////////////////////////////////////////////////////////////////////////////////
     let mut buf = BytesMut::with_capacity(pkt.marshal_size());
     buf.resize(pkt.marshal_size(), 0);
-    c.bench_function("Benchmark MarshalTo", |b| {
+    // BenchmarkMarshalTo
+    g.bench_function("marshal_to", |b| {
         b.iter(|| {
             let _ = pkt.marshal_to(&mut buf).unwrap();
         })
     });
 
-    c.bench_function("Benchmark Marshal", |b| {
+    // BenchmarkMarshal
+    g.bench_function("marshal", |b| {
         b.iter(|| {
             let _ = pkt.marshal().unwrap();
         })
     });
 
-    c.bench_function("Benchmark Unmarshal ", |b| {
+    // BenchmarkUnmarshal
+    g.bench_function("unmarshal", |b| {
         b.iter(|| {
             let buf = &mut raw.clone();
             let _ = Packet::unmarshal(buf).unwrap();
@@ -58,5 +62,13 @@ fn benchmark_packet(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_packet);
+fn benches() {
+    let mut c = Criterion::default().configure_from_args();
+    let mut g = c.benchmark_group("RTP");
+
+    benchmark_packet(&mut g);
+
+    g.finish();
+}
+
 criterion_main!(benches);

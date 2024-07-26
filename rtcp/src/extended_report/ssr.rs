@@ -72,7 +72,7 @@ impl From<u8> for TTLorHopLimitType {
     fn from(v: u8) -> Self {
         match v {
             1 => TTLorHopLimitType::IPv4,
-            2 => TTLorHopLimitType::IPv4,
+            2 => TTLorHopLimitType::IPv6,
             _ => TTLorHopLimitType::Missing,
         }
     }

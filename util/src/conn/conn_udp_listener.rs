@@ -2,8 +2,8 @@ use core::sync::atomic::Ordering;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
 
+use portable_atomic::AtomicBool;
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch, Mutex};
 
@@ -290,5 +290,9 @@ impl Conn for UdpConn {
         let mut conns = self.conns.lock().await;
         conns.remove(self.raddr.to_string().as_str());
         Ok(())
+    }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
     }
 }

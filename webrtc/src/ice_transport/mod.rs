@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
@@ -10,6 +10,7 @@ use ice_candidate::RTCIceCandidate;
 use ice_candidate_pair::RTCIceCandidatePair;
 use ice_gatherer::RTCIceGatherer;
 use ice_role::RTCIceRole;
+use portable_atomic::AtomicU8;
 use tokio::sync::{mpsc, Mutex};
 use util::Conn;
 
@@ -30,7 +31,6 @@ pub mod ice_candidate;
 pub mod ice_candidate_pair;
 pub mod ice_candidate_type;
 pub mod ice_connection_state;
-pub mod ice_credential_type;
 pub mod ice_gatherer;
 pub mod ice_gatherer_state;
 pub mod ice_gathering_state;

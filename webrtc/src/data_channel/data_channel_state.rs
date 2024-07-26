@@ -1,9 +1,17 @@
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// DataChannelState indicates the state of a data channel.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize)]
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/readyState
+/// [W3C]: https://w3c.github.io/webrtc-pc/#dom-rtcdatachannelstate
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RTCDataChannelState {
     #[serde(rename = "unspecified")]
     #[default]

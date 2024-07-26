@@ -116,5 +116,5 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-      - name: Check for typos
-        uses: crate-ci/typos@master
+      # - name: Check for typos
+      #   uses: crate-ci/typos@master

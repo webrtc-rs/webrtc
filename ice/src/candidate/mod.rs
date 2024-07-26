@@ -15,13 +15,14 @@ pub mod candidate_server_reflexive;
 
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use async_trait::async_trait;
 use candidate_base::*;
-use serde::Serialize;
+use portable_atomic::{AtomicBool, AtomicU16, AtomicU8};
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, Mutex};
 
 use crate::error::Result;
@@ -88,7 +89,7 @@ pub trait Candidate: fmt::Display {
 }
 
 /// Represents the type of candidate `CandidateType` enum.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidateType {
     #[serde(rename = "unspecified")]
     Unspecified,
@@ -170,7 +171,7 @@ impl fmt::Display for CandidateRelatedAddress {
 }
 
 /// Represent the ICE candidate pair state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidatePairState {
     #[serde(rename = "unspecified")]
     Unspecified = 0,

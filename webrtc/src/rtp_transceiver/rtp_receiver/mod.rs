@@ -270,7 +270,7 @@ impl RTPReceiverInternal {
             let tracks = self.tracks.read().await;
             for t in &*tracks {
                 if t.track.tid() == tid {
-                    rtp_interceptor = t.stream.rtp_interceptor.clone();
+                    rtp_interceptor.clone_from(&t.stream.rtp_interceptor);
                     //ssrc = t.track.ssrc();
                     break;
                 }
@@ -391,10 +391,16 @@ impl RTPReceiverInternal {
 }
 
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
+///
+/// ## Specifications
+///
+/// * [MDN]
+/// * [W3C]
+///
+/// [MDN]: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpReceiver
+/// [W3C]: https://w3c.github.io/webrtc-pc/#rtcrtpreceiver-interface
 pub struct RTCRtpReceiver {
     receive_mtu: usize,
-    kind: RTPCodecType,
-    transport: Arc<RTCDtlsTransport>,
 
     pub internal: Arc<RTPReceiverInternal>,
 }
@@ -402,7 +408,7 @@ pub struct RTCRtpReceiver {
 impl std::fmt::Debug for RTCRtpReceiver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RTCRtpReceiver")
-            .field("kind", &self.kind)
+            .field("kind", &self.internal.kind)
             .finish()
     }
 }
@@ -419,8 +425,6 @@ impl RTCRtpReceiver {
 
         RTCRtpReceiver {
             receive_mtu,
-            kind,
-            transport: Arc::clone(&transport),
 
             internal: Arc::new(RTPReceiverInternal {
                 kind,
@@ -439,7 +443,7 @@ impl RTCRtpReceiver {
     }
 
     pub fn kind(&self) -> RTPCodecType {
-        self.kind
+        self.internal.kind
     }
 
     pub(crate) fn set_transceiver_codecs(
@@ -452,7 +456,7 @@ impl RTCRtpReceiver {
     /// transport returns the currently-configured *DTLSTransport or nil
     /// if one has not yet been configured
     pub fn transport(&self) -> Arc<RTCDtlsTransport> {
-        Arc::clone(&self.transport)
+        Arc::clone(&self.internal.transport)
     }
 
     /// get_parameters describes the current configuration for the encoding and
@@ -478,22 +482,14 @@ impl RTCRtpReceiver {
         for (idx, codec) in params.codecs.iter().enumerate() {
             let t = &mut tracks[idx];
             if let Some(stream_info) = &mut t.stream.stream_info {
-                stream_info.rtp_header_extensions = header_extensions.clone();
+                stream_info
+                    .rtp_header_extensions
+                    .clone_from(&header_extensions);
             }
 
             let current_track = &t.track;
             current_track.set_codec(codec.clone());
             current_track.set_params(params.clone());
-        }
-    }
-
-    /// track returns the RtpTransceiver TrackRemote
-    pub async fn track(&self) -> Option<Arc<TrackRemote>> {
-        let tracks = self.internal.tracks.read().await;
-        if tracks.len() != 1 {
-            None
-        } else {
-            tracks.first().map(|t| Arc::clone(&t.track))
         }
     }
 
@@ -539,7 +535,8 @@ impl RTCRtpReceiver {
                         &global_params.header_extensions,
                     );
                     let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                        self.transport
+                        self.internal
+                            .transport
                             .streams_for_ssrc(encoding.ssrc, &stream_info, &interceptor)
                             .await?;
 
@@ -557,7 +554,7 @@ impl RTCRtpReceiver {
             let t = TrackStreams {
                 track: Arc::new(TrackRemote::new(
                     self.receive_mtu,
-                    self.kind,
+                    self.internal.kind,
                     encoding.ssrc,
                     encoding.rid.clone(),
                     receiver.clone(),
@@ -596,6 +593,7 @@ impl RTCRtpReceiver {
                     &global_params.header_extensions,
                 );
                 let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) = self
+                    .internal
                     .transport
                     .streams_for_ssrc(rtx_ssrc, &stream_info, &interceptor)
                     .await?;
@@ -766,7 +764,7 @@ impl RTCRtpReceiver {
         let mut tracks = self.internal.tracks.write().await;
         for t in &mut *tracks {
             if *t.track.rid() == rid {
-                t.track.set_kind(self.kind);
+                t.track.set_kind(self.internal.kind);
                 if let Some(codec) = params.codecs.first() {
                     t.track.set_codec(codec.clone());
                 }

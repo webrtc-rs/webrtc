@@ -2104,7 +2104,7 @@ struct FakeEchoConn {
 }
 
 impl FakeEchoConn {
-    fn type_erased() -> impl Conn + AsAny {
+    fn type_erased() -> impl Conn {
         Self::default()
     }
 }
@@ -2118,16 +2118,6 @@ impl Default for FakeEchoConn {
             bytes_sent: AtomicUsize::new(0),
             bytes_received: AtomicUsize::new(0),
         }
-    }
-}
-
-trait AsAny {
-    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync);
-}
-
-impl AsAny for FakeEchoConn {
-    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
-        self
     }
 }
 
@@ -2181,6 +2171,10 @@ impl Conn for FakeEchoConn {
 
     async fn close(&self) -> UResult<()> {
         Ok(())
+    }
+
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
     }
 }
 

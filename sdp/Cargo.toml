@@ -1,13 +1,13 @@
 [package]
 name = "sdp"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of SDP"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/sdp"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/sdp"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/sdp"
 
 [dependencies]
 url = "2"
@@ -17,6 +17,9 @@ substring = "1"
 
 [dev-dependencies]
 criterion = "0.5"
+
+[lints]
+workspace = true
 
 [[bench]]
 name = "bench"
