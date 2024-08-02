@@ -635,3 +635,108 @@ async fn test_peer_connection_simulcast_no_data_channel() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_peer_connection_state() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+    let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::New);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Checking,
+        RTCDtlsTransportState::New,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Connecting);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Connected,
+        RTCDtlsTransportState::New,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Connecting);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Connected,
+        RTCDtlsTransportState::Connecting,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Connecting);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Connected,
+        RTCDtlsTransportState::Connected,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Connected);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Completed,
+        RTCDtlsTransportState::Connected,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Connected);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Connected,
+        RTCDtlsTransportState::Closed,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Connected);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Disconnected,
+        RTCDtlsTransportState::Connected,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Disconnected);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Failed,
+        RTCDtlsTransportState::Connected,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Failed);
+
+    RTCPeerConnection::update_connection_state(
+        &pc.internal.on_peer_connection_state_change_handler,
+        &pc.internal.is_closed,
+        &pc.internal.peer_connection_state,
+        RTCIceConnectionState::Connected,
+        RTCDtlsTransportState::Failed,
+    )
+    .await;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Failed);
+
+    pc.close().await?;
+    assert_eq!(pc.connection_state(), RTCPeerConnectionState::Closed);
+
+    Ok(())
+}

@@ -884,14 +884,21 @@ impl RTCPeerConnection {
                 // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
                 // state and none of them are in the "failed" or "connecting" or "checking" state.
                 RTCPeerConnectionState::Disconnected
-            } else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == RTCDtlsTransportState::Connected {
-                // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
-                // state and at least one of them is in the "connected" or "completed" state.
-                RTCPeerConnectionState::Connected
-            } else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == RTCDtlsTransportState::Connecting {
-                //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
-                // "checking" state and none of them is in the "failed" state.
+            } else if (ice_connection_state == RTCIceConnectionState::New || ice_connection_state == RTCIceConnectionState::Closed) &&
+                (dtls_transport_state == RTCDtlsTransportState::New || dtls_transport_state == RTCDtlsTransportState::Closed) {
+                // None of the previous states apply and all RTCIceTransports are in the "new" or "closed" state,
+                // and all RTCDtlsTransports are in the "new" or "closed" state, or there are no transports.
+                RTCPeerConnectionState::New
+            } else if (ice_connection_state == RTCIceConnectionState::New || ice_connection_state == RTCIceConnectionState::Checking) ||
+                (dtls_transport_state == RTCDtlsTransportState::New || dtls_transport_state == RTCDtlsTransportState::Connecting) {
+                // None of the previous states apply and any RTCIceTransport is in the "new" or "checking" state or
+                // any RTCDtlsTransport is in the "new" or "connecting" state.
                 RTCPeerConnectionState::Connecting
+            } else if (ice_connection_state == RTCIceConnectionState::Connected || ice_connection_state == RTCIceConnectionState::Completed || ice_connection_state == RTCIceConnectionState::Closed) &&
+                (dtls_transport_state == RTCDtlsTransportState::Connected || dtls_transport_state == RTCDtlsTransportState::Closed) {
+                // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
+                // state and all RTCDtlsTransports are in the "connected" or "closed" state.
+                RTCPeerConnectionState::Connected
             } else {
                 RTCPeerConnectionState::New
             };
