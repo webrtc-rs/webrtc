@@ -60,9 +60,6 @@ chrono = "0.4.28"
 clap = "3"
 hub = {path = "examples/hub"}
 
-[lints]
-workspace = true
-
 [features]
 pem = ["dep:pem"]
 

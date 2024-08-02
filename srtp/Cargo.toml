@@ -52,9 +52,6 @@ criterion = { version = "0.5", features = ["async_futures"] }
 tokio-test = "0.4"
 lazy_static = "1"
 
-[lints]
-workspace = true
-
 [[bench]]
 name = "srtp_bench"
 harness = false

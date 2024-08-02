@@ -44,9 +44,6 @@ hex = "0.4"
 clap = "3"
 criterion = "0.5"
 
-[lints]
-workspace = true
-
 [features]
 metrics = []
 

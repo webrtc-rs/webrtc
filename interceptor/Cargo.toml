@@ -27,6 +27,3 @@ portable-atomic = "1.6"
 [dev-dependencies]
 tokio-test = "0.4"
 chrono = "0.4.28"
-
-[lints]
-workspace = true

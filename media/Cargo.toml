@@ -21,9 +21,6 @@ rand = "0.8"
 criterion = { version = "0.5", features = ["html_reports"] }
 nearly_eq = "0.2"
 
-[lints]
-workspace = true
-
 [[bench]]
 name = "audio_buffer"
 harness = false

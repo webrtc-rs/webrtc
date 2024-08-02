@@ -40,9 +40,6 @@ env_logger = "0.11.3"
 chrono = "0.4.28"
 clap = "3"
 
-[lints]
-workspace = true
-
 [[example]]
 name = "ping"
 path = "examples/ping.rs"
@@ -52,3 +49,6 @@ bench = false
 name = "pong"
 path = "examples/pong.rs"
 bench = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }

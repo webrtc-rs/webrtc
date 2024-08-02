@@ -51,9 +51,6 @@ lazy_static = "1"
 hyper = { version = "0.14.27", features = ["full"] }
 sha1 = "0.10"
 
-[lints]
-workspace = true
-
 [[example]]
 name = "ping_pong"
 path = "examples/ping_pong.rs"

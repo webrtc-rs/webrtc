@@ -24,9 +24,6 @@ memchr = "2.1.1"
 chrono = "0.4.28"
 criterion = "0.5"
 
-[lints]
-workspace = true
-
 [[bench]]
 name = "packet_bench"
 harness = false

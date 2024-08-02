@@ -1356,7 +1356,6 @@ checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.3",
- "serde",
 ]
 
 [[package]]
@@ -1677,15 +1676,6 @@ dependencies = [
  "openssl-src",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "ordered-float"
-version = "4.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76df7075c7d4d01fdcb46c912dd17fba5b60c78ea480b475f2b6ab6f666584e"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -2224,7 +2214,6 @@ version = "1.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e17db7126d17feb94eb3fad46bf1a96b034e8aacbc2e775fe81505f8b0b2813"
 dependencies = [
- "indexmap 2.2.6",
  "itoa",
  "ryu",
  "serde",
@@ -2832,19 +2821,6 @@ dependencies = [
  "webrtc-sctp",
  "webrtc-srtp",
  "webrtc-util",
-]
-
-[[package]]
-name = "webrtc-constraints"
-version = "0.1.0"
-dependencies = [
- "env_logger",
- "indexmap 2.2.6",
- "lazy_static",
- "ordered-float",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]

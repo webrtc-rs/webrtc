@@ -37,9 +37,6 @@ env_logger = "0.11.3"
 chrono = "0.4.28"
 clap = "3"
 
-[lints]
-workspace = true
-
 [[example]]
 name = "mdns_query"
 path = "examples/mdns_query.rs"

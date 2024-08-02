@@ -61,9 +61,6 @@ chrono = "0.4.28"
 criterion = { version = "0.5", features = ["async_futures"] }
 async-global-executor = "2"
 
-[lints]
-workspace = true
-
 [[bench]]
 name = "bench"
 harness = false

@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "constraints",
     "data",
     "dtls",
     "examples",
@@ -19,9 +18,6 @@ members = [
     "webrtc",
 ]
 resolver = "2"
-
-[workspace.lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 
 [profile.dev]
 opt-level = 0
