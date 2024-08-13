@@ -34,6 +34,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) agent_internal: Arc<AgentInternal>,
     pub(crate) gathering_state: Arc<AtomicU8>,
     pub(crate) chan_candidate_tx: ChanCandidateTx,
+    pub(crate) include_loopback: bool,
 }
 
 struct GatherCandidatesLocalParams {
@@ -46,6 +47,7 @@ struct GatherCandidatesLocalParams {
     ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<AgentInternal>,
+    include_loopback: bool,
 }
 
 struct GatherCandidatesLocalUDPMuxParams {
@@ -56,6 +58,7 @@ struct GatherCandidatesLocalUDPMuxParams {
     net: Arc<Net>,
     agent_internal: Arc<AgentInternal>,
     udp_mux: Arc<dyn UDPMux + Send + Sync>,
+    include_loopback: bool,
 }
 
 struct GatherCandidatesSrflxMappedParasm {
@@ -100,6 +103,7 @@ impl Agent {
                         ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
                         net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
+                        include_loopback: params.include_loopback,
                     };
 
                     let w = wg.worker();
@@ -203,6 +207,7 @@ impl Agent {
             ext_ip_mapper,
             net,
             agent_internal,
+            include_loopback,
         } = params;
 
         // If we wanna use UDP mux, do so
@@ -216,6 +221,7 @@ impl Agent {
                 net,
                 agent_internal,
                 udp_mux,
+                include_loopback,
             })
             .await;
 
@@ -226,7 +232,14 @@ impl Agent {
             return;
         }
 
-        let ips = local_interfaces(&net, &interface_filter, &ip_filter, &network_types).await;
+        let ips = local_interfaces(
+            &net,
+            &interface_filter,
+            &ip_filter,
+            &network_types,
+            include_loopback,
+        )
+        .await;
         for ip in ips {
             let mut mapped_ip = ip;
 
@@ -380,6 +393,7 @@ impl Agent {
             net,
             agent_internal,
             udp_mux,
+            include_loopback,
         } = params;
 
         // Filter out non UDP network types
@@ -388,8 +402,14 @@ impl Agent {
 
         let udp_mux = Arc::clone(&udp_mux);
 
-        let local_ips =
-            local_interfaces(&net, &interface_filter, &ip_filter, &relevant_network_types).await;
+        let local_ips = local_interfaces(
+            &net,
+            &interface_filter,
+            &ip_filter,
+            &relevant_network_types,
+            include_loopback,
+        )
+        .await;
 
         let candidate_ips: Vec<std::net::IpAddr> = ext_ip_mapper
             .as_ref() // Arc

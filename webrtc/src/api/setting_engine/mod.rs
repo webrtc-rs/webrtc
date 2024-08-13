@@ -44,6 +44,7 @@ pub struct Candidates {
     pub multicast_dns_host_name: String,
     pub username_fragment: String,
     pub password: String,
+    pub include_loopback_candidate: bool,
 }
 
 #[derive(Default, Clone)]
@@ -277,6 +278,15 @@ impl SettingEngine {
     /// disable_srtcp_replay_protection disables srtcp replay protection.
     pub fn disable_srtcp_replay_protection(&mut self, is_disabled: bool) {
         self.disable_srtcp_replay_protection = is_disabled;
+    }
+
+    /// set_include_loopback_candidate enables webrtc-rs to gather loopback candidates, it is
+    /// useful for, e.g., some VMs that have public IP mapped to loopback interface.
+    /// Note that allowing loopback candidates to be gathered is technically inconsistent with the
+    /// webRTC spec (see https://www.rfc-editor.org/rfc/rfc8445#section-5.1.1.1). This option is
+    /// therefore disabled by default, and should be used with caution.
+    pub fn set_include_loopback_candidate(&mut self, allow_loopback: bool) {
+        self.candidates.include_loopback_candidate = allow_loopback;
     }
 
     /// set_sdp_media_level_fingerprints configures the logic for dtls_transport Fingerprint insertion

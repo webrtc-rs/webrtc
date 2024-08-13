@@ -99,6 +99,7 @@ pub async fn local_interfaces(
     interface_filter: &Option<InterfaceFilterFn>,
     ip_filter: &Option<IpFilterFn>,
     network_types: &[NetworkType],
+    include_loopback: bool,
 ) -> HashSet<IpAddr> {
     let mut ips = HashSet::new();
     let interfaces = vnet.get_interfaces().await;
@@ -123,7 +124,7 @@ pub async fn local_interfaces(
         for ipnet in iface.addrs() {
             let ipaddr = ipnet.addr();
 
-            if !ipaddr.is_loopback()
+            if (!ipaddr.is_loopback() || include_loopback)
                 && ((ipv4requested && ipaddr.is_ipv4()) || (ipv6requested && ipaddr.is_ipv6()))
                 && ip_filter
                     .as_ref()
