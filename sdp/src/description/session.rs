@@ -30,6 +30,7 @@ pub const ATTR_KEY_RECV_ONLY: &str = "recvonly";
 pub const ATTR_KEY_SEND_ONLY: &str = "sendonly";
 pub const ATTR_KEY_SEND_RECV: &str = "sendrecv";
 pub const ATTR_KEY_EXT_MAP: &str = "extmap";
+pub const ATTR_KEY_EXTMAP_ALLOW_MIXED: &str = "extmap-allow-mixed";
 
 /// Constants for semantic tokens used in JSEP
 pub const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &str = "LS";
@@ -407,6 +408,11 @@ impl SessionDescription {
         }
 
         Err(Error::CodecNotFound)
+    }
+
+    /// Returns whether an attribute exists
+    pub fn has_attribute(&self, key: &str) -> bool {
+        self.attributes.iter().any(|a| a.key == key)
     }
 
     /// Attribute returns the value of an attribute and if it exists

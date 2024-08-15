@@ -65,6 +65,11 @@ pub struct MediaDescription {
 }
 
 impl MediaDescription {
+    /// Returns whether an attribute exists
+    pub fn has_attribute(&self, key: &str) -> bool {
+        self.attributes.iter().any(|a| a.key == key)
+    }
+
     /// attribute returns the value of an attribute and if it exists
     pub fn attribute(&self, key: &str) -> Option<Option<&str>> {
         for a in &self.attributes {

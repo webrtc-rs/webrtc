@@ -581,6 +581,7 @@ async fn fingerprint_test(
     let params = PopulateSdpParams {
         media_description_fingerprint: sdpmedia_description_fingerprints,
         is_icelite: false,
+        extmap_allow_mixed: false,
         connection_role: ConnectionRole::Active,
         ice_gathering_state: RTCIceGatheringState::New,
         match_bundle_group: None,
@@ -777,6 +778,7 @@ async fn test_populate_sdp() -> Result<()> {
         let params = PopulateSdpParams {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
+            extmap_allow_mixed: true,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: None,
@@ -882,6 +884,7 @@ async fn test_populate_sdp() -> Result<()> {
         let params = PopulateSdpParams {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
+            extmap_allow_mixed: true,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: None,
@@ -962,6 +965,7 @@ async fn test_populate_sdp() -> Result<()> {
         let params = PopulateSdpParams {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
+            extmap_allow_mixed: true,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: None,
@@ -981,6 +985,8 @@ async fn test_populate_sdp() -> Result<()> {
             offer_sdp.attribute(ATTR_KEY_GROUP),
             Some(&"BUNDLE video".to_owned())
         );
+
+        assert!(offer_sdp.has_attribute(ATTR_KEY_EXTMAP_ALLOW_MIXED));
     }
 
     //"Bundle matched"
@@ -1057,6 +1063,7 @@ async fn test_populate_sdp() -> Result<()> {
         let params = PopulateSdpParams {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
+            extmap_allow_mixed: true,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: Some("audio".to_owned()),
@@ -1122,6 +1129,7 @@ async fn test_populate_sdp() -> Result<()> {
         let params = PopulateSdpParams {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
+            extmap_allow_mixed: true,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: RTCIceGatheringState::Complete,
             match_bundle_group: Some("".to_owned()),
@@ -1231,6 +1239,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
     let params = PopulateSdpParams {
         media_description_fingerprint: se.sdp_media_level_fingerprints,
         is_icelite: se.candidates.ice_lite,
+        extmap_allow_mixed: true,
         connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
         ice_gathering_state: RTCIceGatheringState::Complete,
         match_bundle_group: None,
