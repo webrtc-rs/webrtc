@@ -20,6 +20,15 @@ pub struct StreamInfo {
     pub channels: u16,
     pub sdp_fmtp_line: String,
     pub rtcp_feedback: Vec<RTCPFeedback>,
+    pub associated_stream: Option<AssociatedStreamInfo>,
+}
+
+/// AssociatedStreamInfo provides a mapping from an auxiliary stream (RTX, FEC,
+/// etc.) back to the original stream.
+#[derive(Default, Debug, Clone)]
+pub struct AssociatedStreamInfo {
+    pub ssrc: u32,
+    pub payload_type: u8,
 }
 
 /// RTCPFeedback signals the connection to use additional RTCP packet types.

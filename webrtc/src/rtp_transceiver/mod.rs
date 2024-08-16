@@ -7,7 +7,7 @@ use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
+use interceptor::stream_info::{AssociatedStreamInfo, RTPHeaderExtension, StreamInfo};
 use interceptor::Attributes;
 use log::trace;
 use portable_atomic::{AtomicBool, AtomicU8};
@@ -136,6 +136,7 @@ pub(crate) fn create_stream_info(
     payload_type: PayloadType,
     codec: RTCRtpCodecCapability,
     webrtc_header_extensions: &[RTCRtpHeaderExtensionParameters],
+    associated_stream: Option<AssociatedStreamInfo>,
 ) -> StreamInfo {
     let header_extensions: Vec<RTPHeaderExtension> = webrtc_header_extensions
         .iter()
@@ -165,6 +166,7 @@ pub(crate) fn create_stream_info(
         channels: codec.channels,
         sdp_fmtp_line: codec.sdp_fmtp_line,
         rtcp_feedback: feedbacks,
+        associated_stream,
     }
 }
 

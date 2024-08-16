@@ -168,3 +168,31 @@ pub(crate) fn codec_parameters_fuzzy_search(
 
     (RTCRtpCodecParameters::default(), CodecMatch::None)
 }
+
+pub(crate) fn codec_rtx_search(
+    original_codec: &RTCRtpCodecParameters,
+    available_codecs: &[RTCRtpCodecParameters],
+) -> Option<RTCRtpCodecParameters> {
+    // find the rtx codec as defined in RFC4588
+
+    let (mime_kind, _) = original_codec.capability.mime_type.split_once("/")?;
+    let rtx_mime = format!("{mime_kind}/rtx");
+
+    for codec in available_codecs {
+        if codec.capability.mime_type != rtx_mime {
+            continue;
+        }
+
+        let params = fmtp::parse(&codec.capability.mime_type, &codec.capability.sdp_fmtp_line);
+
+        if params
+            .parameter("apt")
+            .and_then(|v| v.parse::<u8>().ok())
+            .is_some_and(|apt| apt == original_codec.payload_type)
+        {
+            return Some(codec.clone());
+        }
+    }
+
+    None
+}

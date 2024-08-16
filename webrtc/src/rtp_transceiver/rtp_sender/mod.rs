@@ -427,6 +427,7 @@ impl RTCRtpSender {
                 codec.payload_type,
                 codec.capability.clone(),
                 &parameters.rtp_parameters.header_extensions,
+                None,
             );
             context.params.codecs = vec![codec];
 
