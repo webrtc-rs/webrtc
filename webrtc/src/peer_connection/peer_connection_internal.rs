@@ -771,6 +771,7 @@ impl PeerConnectionInternal {
         let params = PopulateSdpParams {
             media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
             is_icelite: self.setting_engine.candidates.ice_lite,
+            extmap_allow_mixed: true,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: self.ice_gathering_state(),
             match_bundle_group: None,
@@ -804,8 +805,12 @@ impl PeerConnectionInternal {
         let remote_description = self.remote_description().await;
         let mut media_sections = vec![];
         let mut already_have_application_media_section = false;
+        let mut extmap_allow_mixed = false;
+
         if let Some(remote_description) = remote_description.as_ref() {
             if let Some(parsed) = &remote_description.parsed {
+                extmap_allow_mixed = parsed.has_attribute(ATTR_KEY_EXTMAP_ALLOW_MIXED);
+
                 for media in &parsed.media_descriptions {
                     if let Some(mid_value) = get_mid_value(media) {
                         if mid_value.is_empty() {
@@ -830,6 +835,8 @@ impl PeerConnectionInternal {
                             continue;
                         }
 
+                        let extmap_allow_mixed = media.has_attribute(ATTR_KEY_EXTMAP_ALLOW_MIXED);
+
                         if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
                             t.sender().await.set_negotiated();
                             let media_transceivers = vec![t];
@@ -843,6 +850,7 @@ impl PeerConnectionInternal {
                                 transceivers: media_transceivers,
                                 rid_map: get_rids(media),
                                 offered_direction: (!include_unmatched).then(|| direction),
+                                extmap_allow_mixed,
                                 ..Default::default()
                             });
                         } else {
@@ -896,6 +904,7 @@ impl PeerConnectionInternal {
         let params = PopulateSdpParams {
             media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
             is_icelite: self.setting_engine.candidates.ice_lite,
+            extmap_allow_mixed,
             connection_role,
             ice_gathering_state: self.ice_gathering_state(),
             match_bundle_group,

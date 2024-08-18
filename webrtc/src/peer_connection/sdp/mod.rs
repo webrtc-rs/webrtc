@@ -462,6 +462,10 @@ pub(crate) async fn add_transceiver_sdp(
         .with_property_attribute(ATTR_KEY_RTCPMUX.to_owned())
         .with_property_attribute(ATTR_KEY_RTCPRSIZE.to_owned());
 
+    if media_section.extmap_allow_mixed {
+        media = media.with_property_attribute(ATTR_KEY_EXTMAP_ALLOW_MIXED.to_owned());
+    }
+
     let codecs = t.get_codecs().await;
     for codec in &codecs {
         let name = codec
@@ -772,11 +776,13 @@ pub(crate) struct MediaSection {
     pub(crate) data: bool,
     pub(crate) rid_map: Vec<SimulcastRid>,
     pub(crate) offered_direction: Option<RTCRtpTransceiverDirection>,
+    pub(crate) extmap_allow_mixed: bool,
 }
 
 pub(crate) struct PopulateSdpParams {
     pub(crate) media_description_fingerprint: bool,
     pub(crate) is_icelite: bool,
+    pub(crate) extmap_allow_mixed: bool,
     pub(crate) connection_role: ConnectionRole,
     pub(crate) ice_gathering_state: RTCIceGatheringState,
     pub(crate) match_bundle_group: Option<String>,
@@ -874,6 +880,11 @@ pub(crate) async fn populate_sdp(
 
     if bundle_count > 0 {
         d = d.with_value_attribute(ATTR_KEY_GROUP.to_owned(), bundle_value);
+    }
+
+    if params.extmap_allow_mixed {
+        // RFC 8285 6.
+        d = d.with_property_attribute(ATTR_KEY_EXTMAP_ALLOW_MIXED.to_owned());
     }
 
     Ok(d)
