@@ -152,6 +152,9 @@ pub struct AgentConfig {
     /// Controls if self-signed certificates are accepted when connecting to TURN servers via TLS or
     /// DTLS.
     pub insecure_skip_verify: bool,
+
+    /// Include loopback addresses in the candidate list.
+    pub include_loopback: bool,
 }
 
 impl AgentConfig {

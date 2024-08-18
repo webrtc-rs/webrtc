@@ -104,6 +104,7 @@ pub struct Agent {
 
     pub(crate) udp_network: UDPNetwork,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
+    pub(crate) include_loopback: bool,
     pub(crate) ip_filter: Arc<Option<IpFilterFn>>,
     pub(crate) mdns_mode: MulticastDnsMode,
     pub(crate) mdns_name: String,
@@ -200,6 +201,7 @@ impl Agent {
             udp_network: config.udp_network,
             internal: Arc::new(ai),
             interface_filter: Arc::clone(&config.interface_filter),
+            include_loopback: config.include_loopback,
             ip_filter: Arc::clone(&config.ip_filter),
             mdns_mode,
             mdns_name,
@@ -465,6 +467,7 @@ impl Agent {
             agent_internal: Arc::clone(&self.internal),
             gathering_state: Arc::clone(&self.gathering_state),
             chan_candidate_tx: Arc::clone(&self.internal.chan_candidate_tx),
+            include_loopback: self.include_loopback,
         };
         tokio::spawn(async move {
             Self::gather_candidates_internal(params).await;
