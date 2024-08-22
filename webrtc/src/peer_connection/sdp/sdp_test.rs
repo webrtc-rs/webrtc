@@ -365,16 +365,16 @@ fn test_track_details_from_sdp() -> Result<()> {
                             value: None,
                         },
                         Attribute {
-                            key: "ssrc-group".to_owned(),
-                            value: Some("FID 3000 4000".to_owned()),
-                        },
-                        Attribute {
                             key: "ssrc".to_owned(),
                             value: Some("3000 msid:video_trk_label video_trk_guid".to_owned()),
                         },
                         Attribute {
                             key: "ssrc".to_owned(),
                             value: Some("4000 msid:rtx_trk_label rtx_trck_guid".to_owned()),
+                        },
+                        Attribute {
+                            key: "ssrc-group".to_owned(),
+                            value: Some("FID 3000 4000".to_owned()),
                         },
                     ],
                     ..Default::default()
@@ -441,6 +441,7 @@ fn test_track_details_from_sdp() -> Result<()> {
             assert_eq!(track.kind, RTPCodecType::Video);
             assert_eq!(track.ssrcs[0], 3000);
             assert_eq!(track.stream_id, "video_trk_label");
+            assert_eq!(track.repair_ssrc, 4000);
         } else {
             panic!("missing video track with ssrc:3000");
         }
