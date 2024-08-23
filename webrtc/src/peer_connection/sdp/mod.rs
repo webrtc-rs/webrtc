@@ -595,6 +595,23 @@ pub(crate) async fn add_transceiver_sdp(
                     track.stream_id().to_owned(), /* streamLabel */
                     track.id().to_owned(),
                 );
+
+                if encoding.rtx.ssrc != 0 {
+                    media = media.with_media_source(
+                        encoding.rtx.ssrc,
+                        track.stream_id().to_owned(),
+                        track.stream_id().to_owned(),
+                        track.id().to_owned(),
+                    );
+
+                    media = media.with_value_attribute(
+                        ATTR_KEY_SSRCGROUP.to_owned(),
+                        format!(
+                            "{} {} {}",
+                            SEMANTIC_TOKEN_FLOW_IDENTIFICATION, encoding.ssrc, encoding.rtx.ssrc
+                        ),
+                    );
+                }
             }
 
             if send_parameters.encodings.len() > 1 {

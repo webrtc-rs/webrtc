@@ -12,7 +12,7 @@ use crate::peer_connection::peer_connection_test::{
     close_pair_now, create_vnet_pair, signal_pair, until_connection_state,
 };
 use crate::rtp_transceiver::rtp_codec::RTCRtpHeaderExtensionParameters;
-use crate::rtp_transceiver::RTCPFeedback;
+use crate::rtp_transceiver::{RTCPFeedback, RTCRtpCodecCapability};
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::track_local::TrackLocal;
 

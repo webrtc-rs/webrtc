@@ -159,11 +159,11 @@ impl API {
     ) -> RTCRtpSender {
         let kind = track.as_ref().map(|t| t.kind()).unwrap_or_default();
         RTCRtpSender::new(
-            self.setting_engine.get_receive_mtu(),
             track,
             kind,
             transport,
             Arc::clone(&self.media_engine),
+            Arc::clone(&self.setting_engine),
             interceptor,
             false,
         )
