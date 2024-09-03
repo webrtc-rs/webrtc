@@ -1849,14 +1849,10 @@ impl RTCPeerConnection {
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #7)
-            if let Some(max_packet_life_time) = options.max_packet_life_time {
-                params.max_packet_life_time = max_packet_life_time;
-            }
+            params.max_packet_life_time = options.max_packet_life_time;
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #8)
-            if let Some(max_retransmits) = options.max_retransmits {
-                params.max_retransmits = max_retransmits;
-            }
+            params.max_retransmits = options.max_retransmits;
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #10)
             if let Some(protocol) = options.protocol {
@@ -1878,7 +1874,7 @@ impl RTCPeerConnection {
         ));
 
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #16)
-        if d.max_packet_lifetime != 0 && d.max_retransmits != 0 {
+        if d.max_packet_lifetime.is_some() && d.max_retransmits.is_some() {
             return Err(Error::ErrRetransmitsOrPacketLifeTime);
         }
 
