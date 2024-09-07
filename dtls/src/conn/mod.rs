@@ -491,9 +491,11 @@ impl DTLSConn {
 
     // Close closes the connection.
     pub async fn close(&self) -> Result<()> {
-        if !self.closed.load(Ordering::SeqCst) {
-            self.closed.store(true, Ordering::SeqCst);
-
+        if self
+            .closed
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
             // Discard error from notify() to return non-error on the first user call of Close()
             // even if the underlying connection is already closed.
             self.notify(AlertLevel::Warning, AlertDescription::CloseNotify)
