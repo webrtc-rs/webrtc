@@ -528,11 +528,11 @@ impl PeerConnectionInternal {
 
                 let sender = Arc::new(
                     RTCRtpSender::new(
-                        self.setting_engine.get_receive_mtu(),
                         None,
                         kind,
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
+                        Arc::clone(&self.setting_engine),
                         interceptor,
                         false,
                     )
@@ -582,11 +582,11 @@ impl PeerConnectionInternal {
 
         let s = Arc::new(
             RTCRtpSender::new(
-                self.setting_engine.get_receive_mtu(),
                 Some(Arc::clone(&track)),
                 track.kind(),
                 Arc::clone(&self.dtls_transport),
                 Arc::clone(&self.media_engine),
+                Arc::clone(&self.setting_engine),
                 Arc::clone(&interceptor),
                 false,
             )
@@ -1080,6 +1080,7 @@ impl PeerConnectionInternal {
             params.codecs[0].payload_type,
             params.codecs[0].capability.clone(),
             &params.header_extensions,
+            None,
         );
         let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) = self
             .dtls_transport
@@ -1386,7 +1387,7 @@ impl PeerConnectionInternal {
             let sender = transceiver.sender().await;
             let track_encodings = sender.track_encodings.lock().await;
             for encoding in track_encodings.iter() {
-                let track_id = encoding.track.id().to_string();
+                let track_id = encoding.track.id();
                 let kind = match encoding.track.kind() {
                     RTPCodecType::Unspecified => continue,
                     RTPCodecType::Audio => "audio",
@@ -1394,12 +1395,22 @@ impl PeerConnectionInternal {
                 };
 
                 track_infos.push(TrackInfo {
-                    track_id,
+                    track_id: track_id.to_owned(),
                     ssrc: encoding.ssrc,
                     mid: mid.to_owned(),
                     rid: encoding.track.rid().map(Into::into),
                     kind,
                 });
+
+                if let Some(rtx) = &encoding.rtx {
+                    track_infos.push(TrackInfo {
+                        track_id: track_id.to_owned(),
+                        ssrc: rtx.ssrc,
+                        mid: mid.to_owned(),
+                        rid: encoding.track.rid().map(Into::into),
+                        kind,
+                    });
+                }
             }
         }
 

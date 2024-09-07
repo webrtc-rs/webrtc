@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
-use interceptor::stream_info::RTPHeaderExtension;
+use interceptor::stream_info::{AssociatedStreamInfo, RTPHeaderExtension};
 use interceptor::{Attributes, Interceptor};
 use log::trace;
 use smol_str::SmolStr;
@@ -16,12 +16,12 @@ use crate::dtls_transport::RTCDtlsTransport;
 use crate::error::{flatten_errs, Error, Result};
 use crate::peer_connection::sdp::TrackDetails;
 use crate::rtp_transceiver::rtp_codec::{
-    codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
-    RTCRtpParameters, RTPCodecType,
+    codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecParameters, RTCRtpParameters,
+    RTPCodecType,
 };
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::rtp_transceiver::{
-    create_stream_info, RTCRtpDecodingParameters, RTCRtpReceiveParameters, SSRC,
+    codec_rtx_search, create_stream_info, RTCRtpDecodingParameters, RTCRtpReceiveParameters, SSRC,
 };
 use crate::track::track_remote::TrackRemote;
 use crate::track::{TrackStream, TrackStreams};
@@ -519,9 +519,9 @@ impl RTCRtpReceiver {
         };
 
         let codec = if let Some(codec) = global_params.codecs.first() {
-            codec.capability.clone()
+            codec.clone()
         } else {
-            RTCRtpCodecCapability::default()
+            RTCRtpCodecParameters::default()
         };
 
         for encoding in &parameters.encodings {
@@ -531,8 +531,9 @@ impl RTCRtpReceiver {
                         "".to_owned(),
                         encoding.ssrc,
                         0,
-                        codec.clone(),
+                        codec.capability.clone(),
                         &global_params.header_extensions,
+                        None,
                     );
                     let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
                         self.internal
@@ -585,12 +586,21 @@ impl RTCRtpReceiver {
 
             let rtx_ssrc = encoding.rtx.ssrc;
             if rtx_ssrc != 0 {
+                let rtx_info = AssociatedStreamInfo {
+                    ssrc: encoding.ssrc,
+                    payload_type: 0,
+                };
+
+                let rtx_codec =
+                    codec_rtx_search(&codec, &global_params.codecs).unwrap_or(codec.clone());
+
                 let stream_info = create_stream_info(
                     "".to_owned(),
                     rtx_ssrc,
                     0,
-                    codec.clone(),
+                    rtx_codec.capability,
                     &global_params.header_extensions,
+                    Some(rtx_info),
                 );
                 let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) = self
                     .internal

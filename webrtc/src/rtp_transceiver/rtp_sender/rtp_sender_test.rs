@@ -1,4 +1,7 @@
+use async_trait::async_trait;
 use bytes::Bytes;
+use interceptor::registry::Registry;
+use interceptor::InterceptorBuilder;
 use portable_atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -621,5 +624,175 @@ async fn test_rtp_sender_add_encoding() -> Result<()> {
     );
 
     close_pair_now(&sender, &receiver).await;
+    Ok(())
+}
+
+#[derive(Debug)]
+enum TestInterceptorEvent {
+    BindLocal(StreamInfo),
+    BindRemote(StreamInfo),
+    UnbindLocal(StreamInfo),
+    UnbindRemote(StreamInfo),
+}
+
+#[derive(Clone)]
+struct TestInterceptor(mpsc::UnboundedSender<TestInterceptorEvent>);
+
+#[async_trait]
+impl Interceptor for TestInterceptor {
+    async fn bind_rtcp_reader(
+        &self,
+        reader: Arc<dyn RTCPReader + Send + Sync>,
+    ) -> Arc<dyn RTCPReader + Send + Sync> {
+        reader
+    }
+
+    async fn bind_rtcp_writer(
+        &self,
+        writer: Arc<dyn interceptor::RTCPWriter + Send + Sync>,
+    ) -> Arc<dyn interceptor::RTCPWriter + Send + Sync> {
+        writer
+    }
+
+    async fn bind_local_stream(
+        &self,
+        info: &StreamInfo,
+        writer: Arc<dyn RTPWriter + Send + Sync>,
+    ) -> Arc<dyn RTPWriter + Send + Sync> {
+        let _ = self.0.send(TestInterceptorEvent::BindLocal(info.clone()));
+        writer
+    }
+
+    async fn unbind_local_stream(&self, info: &StreamInfo) {
+        let _ = self.0.send(TestInterceptorEvent::UnbindLocal(info.clone()));
+    }
+
+    async fn bind_remote_stream(
+        &self,
+        info: &StreamInfo,
+        reader: Arc<dyn interceptor::RTPReader + Send + Sync>,
+    ) -> Arc<dyn interceptor::RTPReader + Send + Sync> {
+        let _ = self.0.send(TestInterceptorEvent::BindRemote(info.clone()));
+        reader
+    }
+
+    async fn unbind_remote_stream(&self, info: &StreamInfo) {
+        let _ = self
+            .0
+            .send(TestInterceptorEvent::UnbindRemote(info.clone()));
+    }
+
+    async fn close(&self) -> std::result::Result<(), interceptor::Error> {
+        Ok(())
+    }
+}
+
+impl InterceptorBuilder for TestInterceptor {
+    fn build(
+        &self,
+        _id: &str,
+    ) -> std::result::Result<Arc<dyn Interceptor + Send + Sync>, interceptor::Error> {
+        Ok(Arc::new(self.clone()))
+    }
+}
+
+#[tokio::test]
+async fn test_rtp_sender_rtx() -> Result<()> {
+    let mut s = SettingEngine::default();
+    s.enable_sender_rtx(true);
+
+    let (interceptor_tx, mut interceptor_rx) = mpsc::unbounded_channel();
+
+    let mut registry = Registry::new();
+    registry.add(Box::new(TestInterceptor(interceptor_tx)));
+
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    // only register rtx for VP8
+    m.register_codec(
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: "video/rtx".to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: "apt=96".to_string(),
+                rtcp_feedback: vec![],
+            },
+            payload_type: 97,
+            ..Default::default()
+        },
+        RTPCodecType::Video,
+    )?;
+
+    let api = APIBuilder::new()
+        .with_setting_engine(s)
+        .with_media_engine(m)
+        .with_interceptor_registry(registry)
+        .build();
+
+    let (mut offerer, mut answerer) = new_pair(&api).await?;
+
+    let track_a = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+
+    let track_b = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_H264.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+
+    let rtp_sender_a = offerer
+        .add_track(Arc::clone(&track_a) as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
+
+    let rtp_sender_b = offerer
+        .add_track(Arc::clone(&track_b) as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
+
+    signal_pair(&mut offerer, &mut answerer).await?;
+
+    // rtx enabled for vp8
+    assert!(rtp_sender_a.track().await.is_some());
+    assert!(rtp_sender_a.track_encodings.lock().await[0].rtx.is_some());
+
+    // no rtx for h264
+    assert!(rtp_sender_b.track().await.is_some());
+    assert!(rtp_sender_b.track_encodings.lock().await[0].rtx.is_some());
+
+    close_pair_now(&offerer, &answerer).await;
+
+    let mut vp8_ssrcs = Vec::new();
+    let mut h264_ssrcs = Vec::new();
+    let mut rtx_associated_ssrcs = Vec::new();
+
+    // pair closed, all interceptor events should be buffered
+    while let Ok(event) = interceptor_rx.try_recv() {
+        if let TestInterceptorEvent::BindLocal(info) = event {
+            match info.mime_type.as_str() {
+                MIME_TYPE_VP8 => vp8_ssrcs.push(info.ssrc),
+                MIME_TYPE_H264 => h264_ssrcs.push(info.ssrc),
+                "video/rtx" => rtx_associated_ssrcs.push(
+                    info.associated_stream
+                        .expect("rtx without asscoiated stream")
+                        .ssrc,
+                ),
+                mime => panic!("unexpected mime: {mime}"),
+            }
+        }
+    }
+
+    assert_eq!(vp8_ssrcs.len(), 1);
+    assert_eq!(h264_ssrcs.len(), 1);
+    assert_eq!(rtx_associated_ssrcs, vp8_ssrcs);
+
     Ok(())
 }

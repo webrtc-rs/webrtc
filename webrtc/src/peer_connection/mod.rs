@@ -1415,11 +1415,11 @@ impl RTCPeerConnection {
 
                             let sender = Arc::new(
                                 RTCRtpSender::new(
-                                    receive_mtu,
                                     None,
                                     kind,
                                     Arc::clone(&self.internal.dtls_transport),
                                     Arc::clone(&self.internal.media_engine),
+                                    Arc::clone(&self.internal.setting_engine),
                                     Arc::clone(&self.interceptor),
                                     false,
                                 )

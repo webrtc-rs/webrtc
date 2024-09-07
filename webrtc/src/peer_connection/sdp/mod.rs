@@ -178,21 +178,12 @@ pub(crate) fn track_details_from_sdp(
                             }
                         }
 
-                        let mut repair_ssrc = 0;
-                        for (repair, base) in &rtx_repair_flows {
-                            if *base == ssrc {
-                                repair_ssrc = *repair;
-                                //TODO: no break?
-                            }
-                        }
-
                         if track_idx < tracks_in_media_section.len() {
                             tracks_in_media_section[track_idx].mid = SmolStr::from(mid_value);
                             tracks_in_media_section[track_idx].kind = codec_type;
                             stream_id.clone_into(&mut tracks_in_media_section[track_idx].stream_id);
                             track_id.clone_into(&mut tracks_in_media_section[track_idx].id);
                             tracks_in_media_section[track_idx].ssrcs = vec![ssrc];
-                            tracks_in_media_section[track_idx].repair_ssrc = repair_ssrc;
                         } else {
                             let track_details = TrackDetails {
                                 mid: SmolStr::from(mid_value),
@@ -200,7 +191,6 @@ pub(crate) fn track_details_from_sdp(
                                 stream_id: stream_id.to_owned(),
                                 id: track_id.to_owned(),
                                 ssrcs: vec![ssrc],
-                                repair_ssrc,
                                 ..Default::default()
                             };
                             tracks_in_media_section.push(track_details);
@@ -209,6 +199,13 @@ pub(crate) fn track_details_from_sdp(
                 }
                 _ => {}
             };
+        }
+        for (repair, base) in &rtx_repair_flows {
+            for track in &mut tracks_in_media_section {
+                if track.ssrcs.contains(base) {
+                    track.repair_ssrc = *repair;
+                }
+            }
         }
 
         // If media line is using RTP Stream Identifier Source Description per RFC8851
@@ -595,6 +592,23 @@ pub(crate) async fn add_transceiver_sdp(
                     track.stream_id().to_owned(), /* streamLabel */
                     track.id().to_owned(),
                 );
+
+                if encoding.rtx.ssrc != 0 {
+                    media = media.with_media_source(
+                        encoding.rtx.ssrc,
+                        track.stream_id().to_owned(),
+                        track.stream_id().to_owned(),
+                        track.id().to_owned(),
+                    );
+
+                    media = media.with_value_attribute(
+                        ATTR_KEY_SSRCGROUP.to_owned(),
+                        format!(
+                            "{} {} {}",
+                            SEMANTIC_TOKEN_FLOW_IDENTIFICATION, encoding.ssrc, encoding.rtx.ssrc
+                        ),
+                    );
+                }
             }
 
             if send_parameters.encodings.len() > 1 {

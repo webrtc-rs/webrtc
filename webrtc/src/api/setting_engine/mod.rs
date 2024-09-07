@@ -78,6 +78,7 @@ pub struct SettingEngine {
     pub(crate) srtp_protection_profiles: Vec<SrtpProtectionProfile>,
     pub(crate) receive_mtu: usize,
     pub(crate) mid_generator: Option<Arc<dyn Fn(isize) -> String + Send + Sync>>,
+    pub(crate) enable_sender_rtx: bool,
 }
 
 impl SettingEngine {
@@ -333,5 +334,12 @@ impl SettingEngine {
     /// to allow them to efficiently fit into the RTP header extension
     pub fn set_mid_generator(&mut self, f: impl Fn(isize) -> String + Send + Sync + 'static) {
         self.mid_generator = Some(Arc::new(f));
+    }
+
+    /// enable_sender_rtx allows outgoing rtx streams to be created where applicable.
+    /// RTPSender will create an RTP retransmission stream for each source stream where a retransmission
+    /// codec is configured.
+    pub fn enable_sender_rtx(&mut self, is_enabled: bool) {
+        self.enable_sender_rtx = is_enabled;
     }
 }
