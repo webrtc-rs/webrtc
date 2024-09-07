@@ -60,8 +60,8 @@ pub struct RTCDataChannel {
     pub(crate) stats_id: String,
     pub(crate) label: String,
     pub(crate) ordered: bool,
-    pub(crate) max_packet_lifetime: u16,
-    pub(crate) max_retransmits: u16,
+    pub(crate) max_packet_lifetime: Option<u16>,
+    pub(crate) max_retransmits: Option<u16>,
     pub(crate) protocol: String,
     pub(crate) negotiated: bool,
     pub(crate) id: AtomicU16,
@@ -137,26 +137,32 @@ impl RTCDataChannel {
             let channel_type;
             let reliability_parameter;
 
-            if self.max_packet_lifetime == 0 && self.max_retransmits == 0 {
-                reliability_parameter = 0u32;
-                if self.ordered {
-                    channel_type = ChannelType::Reliable;
-                } else {
-                    channel_type = ChannelType::ReliableUnordered;
+            match (self.max_retransmits, self.max_packet_lifetime) {
+                (None, None) => {
+                    reliability_parameter = 0u32;
+                    if self.ordered {
+                        channel_type = ChannelType::Reliable;
+                    } else {
+                        channel_type = ChannelType::ReliableUnordered;
+                    }
                 }
-            } else if self.max_retransmits != 0 {
-                reliability_parameter = self.max_retransmits as u32;
-                if self.ordered {
-                    channel_type = ChannelType::PartialReliableRexmit;
-                } else {
-                    channel_type = ChannelType::PartialReliableRexmitUnordered;
+
+                (Some(max_retransmits), _) => {
+                    reliability_parameter = max_retransmits as u32;
+                    if self.ordered {
+                        channel_type = ChannelType::PartialReliableRexmit;
+                    } else {
+                        channel_type = ChannelType::PartialReliableRexmitUnordered;
+                    }
                 }
-            } else {
-                reliability_parameter = self.max_packet_lifetime as u32;
-                if self.ordered {
-                    channel_type = ChannelType::PartialReliableTimed;
-                } else {
-                    channel_type = ChannelType::PartialReliableTimedUnordered;
+
+                (None, Some(max_packet_lifetime)) => {
+                    reliability_parameter = max_packet_lifetime as u32;
+                    if self.ordered {
+                        channel_type = ChannelType::PartialReliableTimed;
+                    } else {
+                        channel_type = ChannelType::PartialReliableTimedUnordered;
+                    }
                 }
             }
 
@@ -454,13 +460,13 @@ impl RTCDataChannel {
 
     /// max_packet_lifetime represents the length of the time window (msec) during
     /// which transmissions and retransmissions may occur in unreliable mode.
-    pub fn max_packet_lifetime(&self) -> u16 {
+    pub fn max_packet_lifetime(&self) -> Option<u16> {
         self.max_packet_lifetime
     }
 
     /// max_retransmits represents the maximum number of retransmissions that are
     /// attempted in unreliable mode.
-    pub fn max_retransmits(&self) -> u16 {
+    pub fn max_retransmits(&self) -> Option<u16> {
         self.max_retransmits
     }
 
