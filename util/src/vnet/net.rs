@@ -445,10 +445,7 @@ impl Net {
 
             Net::VNet(Arc::new(Mutex::new(vnet)))
         } else {
-            let interfaces = match ifaces::ifaces() {
-                Ok(ifs) => ifs,
-                Err(_) => vec![],
-            };
+            let interfaces = ifaces::ifaces().unwrap_or_default();
 
             let mut m: HashMap<String, Vec<IpNet>> = HashMap::new();
             for iface in interfaces {

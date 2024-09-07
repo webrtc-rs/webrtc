@@ -38,11 +38,7 @@ impl InterceptorBuilder for ResponderBuilder {
     fn build(&self, _id: &str) -> Result<Arc<dyn Interceptor + Send + Sync>> {
         Ok(Arc::new(Responder {
             internal: Arc::new(ResponderInternal {
-                log2_size: if let Some(log2_size) = self.log2_size {
-                    log2_size
-                } else {
-                    13 // 8192 = 1 << 13
-                },
+                log2_size: self.log2_size.unwrap_or(13), // 8192 = 1 << 13
                 streams: Arc::new(Mutex::new(HashMap::new())),
             }),
         }))

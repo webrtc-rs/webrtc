@@ -23,10 +23,7 @@ impl fmt::Display for RawPacket {
 impl Packet for RawPacket {
     /// Header returns the Header associated with this packet.
     fn header(&self) -> Header {
-        match Header::unmarshal(&mut self.0.clone()) {
-            Ok(h) => h,
-            Err(_) => Header::default(),
-        }
+        Header::unmarshal(&mut self.0.clone()).unwrap_or_default()
     }
 
     /// destination_ssrc returns an array of SSRC values that this packet refers to.

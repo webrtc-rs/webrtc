@@ -952,11 +952,7 @@ pub(crate) fn rand_seq(n: usize) -> String {
     for b in &mut buf {
         *b = letters[rand::random::<usize>() % letters.len()];
     }
-    if let Ok(s) = String::from_utf8(buf) {
-        s
-    } else {
-        String::new()
-    }
+    String::from_utf8(buf).unwrap_or_default()
 }
 
 pub(crate) fn build_nonce() -> Result<String> {

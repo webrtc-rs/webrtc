@@ -56,11 +56,7 @@ impl InterceptorBuilder for GeneratorBuilder {
         let (close_tx, close_rx) = mpsc::channel(1);
         Ok(Arc::new(Generator {
             internal: Arc::new(GeneratorInternal {
-                log2_size_minus_6: if let Some(log2_size_minus_6) = self.log2_size_minus_6 {
-                    log2_size_minus_6
-                } else {
-                    13 - 6 // 8192 = 1 << 13
-                },
+                log2_size_minus_6: self.log2_size_minus_6.unwrap_or(13 - 6), // 8192 = 1 << 13
                 skip_last_n: self.skip_last_n.unwrap_or_default(),
                 interval: if let Some(interval) = self.interval {
                     interval
