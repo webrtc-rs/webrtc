@@ -82,6 +82,17 @@ impl TrackLocalStaticRTP {
         p: &rtp::packet::Packet,
         extensions: &[rtp::extension::HeaderExtension],
     ) -> Result<usize> {
+        let attr = Attributes::new();
+        self.write_rtp_with_extensions_attributes(p, extensions, &attr)
+            .await
+    }
+
+    pub async fn write_rtp_with_extensions_attributes(
+        &self,
+        p: &rtp::packet::Packet,
+        extensions: &[rtp::extension::HeaderExtension],
+        attr: &Attributes,
+    ) -> Result<usize> {
         let mut n = 0;
         let mut write_errs = vec![];
         let mut pkt = p.clone();
@@ -140,7 +151,7 @@ impl TrackLocalStaticRTP {
             }
 
             if let Some(write_stream) = &b.write_stream {
-                match write_stream.write_rtp(&pkt).await {
+                match write_stream.write_rtp_with_attributes(&pkt, attr).await {
                     Ok(m) => {
                         n += m;
                     }
@@ -270,7 +281,7 @@ impl TrackLocal for TrackLocalStaticRTP {
 
 #[async_trait]
 impl TrackLocalWriter for TrackLocalStaticRTP {
-    /// write_rtp writes a RTP Packet to the TrackLocalStaticRTP
+    /// `write_rtp_with_attributes` writes a RTP Packet to the TrackLocalStaticRTP
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
     /// PeerConnections so you can remove them
@@ -279,8 +290,13 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// function are blocked internally. Care must be taken to not increase the sequence number
     /// while the sender is paused. While the actual _sending_ is blocked, the receiver will
     /// miss out when the sequence number "rolls over", which in turn will break SRTP.
-    async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize> {
-        self.write_rtp_with_extensions(p, &[]).await
+    async fn write_rtp_with_attributes(
+        &self,
+        pkt: &rtp::packet::Packet,
+        attr: &Attributes,
+    ) -> Result<usize> {
+        self.write_rtp_with_extensions_attributes(pkt, &[], attr)
+            .await
     }
 
     /// write writes a RTP Packet as a buffer to the TrackLocalStaticRTP
