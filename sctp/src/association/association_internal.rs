@@ -636,7 +636,6 @@ impl AssociationInternal {
 
     async fn handle_init(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>> {
         let state = self.get_state();
-        log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
 
         // https://tools.ietf.org/html/rfc4960#section-5.2.1
         // Upon receipt of an INIT in the COOKIE-WAIT state, an endpoint MUST
@@ -649,10 +648,13 @@ impl AssociationInternal {
             && state != AssociationState::CookieWait
             && state != AssociationState::CookieEchoed
         {
+            log::error!("[{}] chunkInit received in state '{}'", self.name, state);
             // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
             //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
             return Err(Error::ErrHandleInitState);
         }
+
+        log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
 
         // Should we be setting any of these permanently until we've ACKed further?
         self.my_max_num_inbound_streams =
