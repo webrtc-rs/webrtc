@@ -321,10 +321,8 @@ impl Association {
         init.set_supported_extensions();
 
         let association_internal = Arc::new(Mutex::new(ai));
-
         {
             let weak = Arc::downgrade(&association_internal);
-
             let mut ai = association_internal.lock().await;
             ai.t1init = Some(RtxTimer::new(
                 weak.clone(),
@@ -352,33 +350,32 @@ impl Association {
                 NO_MAX_RETRANS,
             )); // retransmit forever
             ai.ack_timer = Some(AckTimer::new(weak, ACK_INTERVAL));
-        }
 
-        tokio::spawn(Association::read_loop(
-            name.clone(),
-            Arc::clone(&bytes_received),
-            Arc::clone(&net_conn),
-            close_loop_ch_rx1,
-            Arc::clone(&association_internal),
-        ));
+            tokio::spawn(Association::read_loop(
+                name.clone(),
+                Arc::clone(&bytes_received),
+                Arc::clone(&net_conn),
+                close_loop_ch_rx1,
+                Arc::clone(&association_internal),
+            ));
 
-        tokio::spawn(Association::write_loop(
-            name.clone(),
-            Arc::clone(&bytes_sent),
-            Arc::clone(&net_conn),
-            close_loop_ch_rx2,
-            Arc::clone(&association_internal),
-            awake_write_loop_ch_rx,
-        ));
+            tokio::spawn(Association::write_loop(
+                name.clone(),
+                Arc::clone(&bytes_sent),
+                Arc::clone(&net_conn),
+                close_loop_ch_rx2,
+                Arc::clone(&association_internal),
+                awake_write_loop_ch_rx,
+            ));
 
-        if is_client {
-            let mut ai = association_internal.lock().await;
-            ai.set_state(AssociationState::CookieWait);
-            ai.stored_init = Some(init);
-            ai.send_init()?;
-            let rto = ai.rto_mgr.get_rto();
-            if let Some(t1init) = &ai.t1init {
-                t1init.start(rto).await;
+            if is_client {
+                ai.set_state(AssociationState::CookieWait);
+                ai.stored_init = Some(init);
+                ai.send_init()?;
+                let rto = ai.rto_mgr.get_rto();
+                if let Some(t1init) = &ai.t1init {
+                    t1init.start(rto).await;
+                }
             }
         }
 
