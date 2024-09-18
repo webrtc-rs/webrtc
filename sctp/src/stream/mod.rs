@@ -60,12 +60,11 @@ pub type OnBufferedAmountLowFn =
 // TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<StreamInternal>
 
 /// Stream represents an SCTP stream
-#[derive(Default)]
 pub struct Stream {
     pub(crate) max_payload_size: u32,
     pub(crate) max_message_size: Arc<AtomicU32>, // clone from association
     pub(crate) state: Arc<AtomicU8>,             // clone from association
-    pub(crate) awake_write_loop_ch: Option<Arc<mpsc::Sender<()>>>,
+    pub(crate) awake_write_loop_ch: Arc<mpsc::Sender<()>>,
     pub(crate) pending_queue: Arc<PendingQueue>,
 
     pub(crate) stream_identifier: u16,
@@ -114,10 +113,10 @@ impl Stream {
         max_payload_size: u32,
         max_message_size: Arc<AtomicU32>,
         state: Arc<AtomicU8>,
-        awake_write_loop_ch: Option<Arc<mpsc::Sender<()>>>,
+        awake_write_loop_ch: Arc<mpsc::Sender<()>>,
         pending_queue: Arc<PendingQueue>,
     ) -> Self {
-        Stream {
+        Self {
             max_payload_size,
             max_message_size,
             state,
@@ -479,9 +478,7 @@ impl Stream {
 
     fn awake_write_loop(&self) {
         //log::debug!("[{}] awake_write_loop_ch.notify_one", self.name);
-        if let Some(awake_write_loop_ch) = &self.awake_write_loop_ch {
-            let _ = awake_write_loop_ch.try_send(());
-        }
+        let _ = self.awake_write_loop_ch.try_send(());
     }
 
     async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
@@ -590,16 +587,6 @@ pub struct PollStream {
 
 impl PollStream {
     /// Constructs a new `PollStream`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use webrtc_sctp::stream::{Stream, PollStream};
-    /// use std::sync::Arc;
-    ///
-    /// let stream = Arc::new(Stream::default());
-    /// let poll_stream = PollStream::new(stream);
-    /// ```
     pub fn new(stream: Arc<Stream>) -> Self {
         Self {
             stream,

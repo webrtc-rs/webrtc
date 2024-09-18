@@ -6,9 +6,22 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::*;
 
+fn create_test_stream() -> Stream {
+    let (awake_write_loop_ch_tx, _awake_write_loop_ch_rx) = mpsc::channel(1);
+    Stream::new(
+        "client".to_owned(),
+        0,
+        0,
+        Arc::new(AtomicU32::default()),
+        Arc::new(AtomicU8::default()),
+        Arc::new(awake_write_loop_ch_tx),
+        Arc::new(PendingQueue::default()),
+    )
+}
+
 #[test]
 fn test_stream_buffered_amount() -> Result<()> {
-    let s = Stream::default();
+    let s = create_test_stream();
 
     assert_eq!(s.buffered_amount(), 0);
     assert_eq!(s.buffered_amount_low_threshold(), 0);
@@ -27,7 +40,7 @@ fn test_stream_buffered_amount() -> Result<()> {
 
 #[tokio::test]
 async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
-    let s = Stream::default();
+    let s = create_test_stream();
 
     s.buffered_amount.store(4096, Ordering::SeqCst);
     s.set_buffered_amount_low_threshold(2048);
@@ -75,13 +88,14 @@ async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
 
 #[tokio::test]
 async fn test_stream() -> std::result::Result<(), io::Error> {
+    let (awake_write_loop_ch_tx, _awake_write_loop_ch_rx) = mpsc::channel(1);
     let s = Stream::new(
         "test_poll_stream".to_owned(),
         0,
         4096,
         Arc::new(AtomicU32::new(4096)),
         Arc::new(AtomicU8::new(AssociationState::Established as u8)),
-        None,
+        Arc::new(awake_write_loop_ch_tx),
         Arc::new(PendingQueue::new()),
     );
 
@@ -149,13 +163,14 @@ async fn test_stream() -> std::result::Result<(), io::Error> {
 
 #[tokio::test]
 async fn test_poll_stream() -> std::result::Result<(), io::Error> {
+    let (awake_write_loop_ch_tx, _awake_write_loop_ch_rx) = mpsc::channel(1);
     let s = Arc::new(Stream::new(
         "test_poll_stream".to_owned(),
         0,
         4096,
         Arc::new(AtomicU32::new(4096)),
         Arc::new(AtomicU8::new(AssociationState::Established as u8)),
-        None,
+        Arc::new(awake_write_loop_ch_tx),
         Arc::new(PendingQueue::new()),
     ));
     let mut poll_stream = PollStream::new(s.clone());
