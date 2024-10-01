@@ -320,85 +320,62 @@ impl Association {
         };
         init.set_supported_extensions();
 
-        let name1 = name.clone();
-        let name2 = name.clone();
-
-        let bytes_received1 = Arc::clone(&bytes_received);
-        let bytes_sent2 = Arc::clone(&bytes_sent);
-
-        let net_conn1 = Arc::clone(&net_conn);
-        let net_conn2 = Arc::clone(&net_conn);
-
         let association_internal = Arc::new(Mutex::new(ai));
-        let association_internal1 = Arc::clone(&association_internal);
-        let association_internal2 = Arc::clone(&association_internal);
-
         {
-            let association_internal3 = Arc::clone(&association_internal);
-
+            let weak = Arc::downgrade(&association_internal);
             let mut ai = association_internal.lock().await;
             ai.t1init = Some(RtxTimer::new(
-                Arc::downgrade(&association_internal3),
+                weak.clone(),
                 RtxTimerId::T1Init,
                 MAX_INIT_RETRANS,
             ));
             ai.t1cookie = Some(RtxTimer::new(
-                Arc::downgrade(&association_internal3),
+                weak.clone(),
                 RtxTimerId::T1Cookie,
                 MAX_INIT_RETRANS,
             ));
             ai.t2shutdown = Some(RtxTimer::new(
-                Arc::downgrade(&association_internal3),
+                weak.clone(),
                 RtxTimerId::T2Shutdown,
                 NO_MAX_RETRANS,
             )); // retransmit forever
             ai.t3rtx = Some(RtxTimer::new(
-                Arc::downgrade(&association_internal3),
+                weak.clone(),
                 RtxTimerId::T3RTX,
                 NO_MAX_RETRANS,
             )); // retransmit forever
             ai.treconfig = Some(RtxTimer::new(
-                Arc::downgrade(&association_internal3),
+                weak.clone(),
                 RtxTimerId::Reconfig,
                 NO_MAX_RETRANS,
             )); // retransmit forever
-            ai.ack_timer = Some(AckTimer::new(
-                Arc::downgrade(&association_internal3),
-                ACK_INTERVAL,
-            ));
-        }
+            ai.ack_timer = Some(AckTimer::new(weak, ACK_INTERVAL));
 
-        tokio::spawn(async move {
-            Association::read_loop(
-                name1,
-                bytes_received1,
-                net_conn1,
+            tokio::spawn(Association::read_loop(
+                name.clone(),
+                Arc::clone(&bytes_received),
+                Arc::clone(&net_conn),
                 close_loop_ch_rx1,
-                association_internal1,
-            )
-            .await;
-        });
+                Arc::clone(&association_internal),
+            ));
 
-        tokio::spawn(async move {
-            Association::write_loop(
-                name2,
-                bytes_sent2,
-                net_conn2,
+            tokio::spawn(Association::write_loop(
+                name.clone(),
+                Arc::clone(&bytes_sent),
+                Arc::clone(&net_conn),
                 close_loop_ch_rx2,
-                association_internal2,
+                Arc::clone(&association_internal),
                 awake_write_loop_ch_rx,
-            )
-            .await;
-        });
+            ));
 
-        if is_client {
-            let mut ai = association_internal.lock().await;
-            ai.set_state(AssociationState::CookieWait);
-            ai.stored_init = Some(init);
-            ai.send_init()?;
-            let rto = ai.rto_mgr.get_rto();
-            if let Some(t1init) = &ai.t1init {
-                t1init.start(rto).await;
+            if is_client {
+                ai.set_state(AssociationState::CookieWait);
+                ai.stored_init = Some(init);
+                ai.send_init()?;
+                let rto = ai.rto_mgr.get_rto();
+                if let Some(t1init) = &ai.t1init {
+                    t1init.start(rto).await;
+                }
             }
         }
 

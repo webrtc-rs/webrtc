@@ -37,7 +37,7 @@ pub struct Config {
 }
 
 /// DataChannel represents a data channel
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct DataChannel {
     pub config: Config,
     stream: Arc<Stream>,
@@ -54,7 +54,11 @@ impl DataChannel {
         Self {
             config,
             stream,
-            ..Default::default()
+
+            messages_sent: Arc::new(AtomicUsize::default()),
+            messages_received: Arc::new(AtomicUsize::default()),
+            bytes_sent: Arc::new(AtomicUsize::default()),
+            bytes_received: Arc::new(AtomicUsize::default()),
         }
     }
 
@@ -404,17 +408,6 @@ pub struct PollDataChannel {
 
 impl PollDataChannel {
     /// Constructs a new `PollDataChannel`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use webrtc_data::data_channel::{DataChannel, PollDataChannel, Config};
-    /// use sctp::stream::Stream;
-    /// use std::sync::Arc;
-    ///
-    /// let dc = Arc::new(DataChannel::new(Arc::new(Stream::default()), Config::default()));
-    /// let poll_dc = PollDataChannel::new(dc);
-    /// ```
     pub fn new(data_channel: Arc<DataChannel>) -> Self {
         Self {
             data_channel,

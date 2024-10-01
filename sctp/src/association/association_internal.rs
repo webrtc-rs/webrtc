@@ -9,14 +9,13 @@ use crate::param::param_forward_tsn_supported::ParamForwardTsnSupported;
 use crate::param::param_type::ParamType;
 use crate::param::param_unrecognized::ParamUnrecognized;
 
-#[derive(Default)]
 pub struct AssociationInternal {
     pub(crate) name: String,
     pub(crate) state: Arc<AtomicU8>,
     pub(crate) max_message_size: Arc<AtomicU32>,
     pub(crate) inflight_queue_length: Arc<AtomicUsize>,
     pub(crate) will_send_shutdown: Arc<AtomicBool>,
-    awake_write_loop_ch: Option<Arc<mpsc::Sender<()>>>,
+    awake_write_loop_ch: Arc<mpsc::Sender<()>>,
 
     peer_verification_tag: u32,
     pub(crate) my_verification_tag: u32,
@@ -77,11 +76,8 @@ pub struct AssociationInternal {
     streams: HashMap<u16, Arc<Stream>>,
 
     close_loop_ch_tx: Option<broadcast::Sender<()>>,
-    accept_ch_tx: Option<mpsc::Sender<Arc<Stream>>>,
-    handshake_completed_ch_tx: Option<mpsc::Sender<Option<Error>>>,
-
-    // local error
-    silent_error: Option<Error>,
+    accept_ch_tx: mpsc::Sender<Arc<Stream>>,
+    handshake_completed_ch_tx: mpsc::Sender<Option<Error>>,
 
     // per inbound packet context
     delayed_ack_triggered: bool,
@@ -118,58 +114,94 @@ impl AssociationInternal {
         if tsn == 0 {
             tsn += 1;
         }
-        let mut a = AssociationInternal {
-            name: config.name,
-            max_receive_buffer_size,
-            max_message_size: Arc::new(AtomicU32::new(max_message_size)),
 
-            my_max_num_outbound_streams: u16::MAX,
-            my_max_num_inbound_streams: u16::MAX,
-            payload_queue: PayloadQueue::new(Arc::new(AtomicUsize::new(0))),
-            inflight_queue: PayloadQueue::new(Arc::clone(&inflight_queue_length)),
-            inflight_queue_length,
-            pending_queue: Arc::new(PendingQueue::new()),
-            control_queue: ControlQueue::new(),
-            mtu: INITIAL_MTU,
-            max_payload_size: INITIAL_MTU - (COMMON_HEADER_SIZE + DATA_CHUNK_HEADER_SIZE),
-            my_verification_tag: random::<u32>(),
-            my_next_tsn: tsn,
-            my_next_rsn: tsn,
-            min_tsn2measure_rtt: tsn,
-            state: Arc::new(AtomicU8::new(AssociationState::Closed as u8)),
-            rto_mgr: RtoManager::new(),
-            streams: HashMap::new(),
-            reconfigs: HashMap::new(),
-            reconfig_requests: HashMap::new(),
-            accept_ch_tx: Some(accept_ch_tx),
-            close_loop_ch_tx: Some(close_loop_ch_tx),
-            handshake_completed_ch_tx: Some(handshake_completed_ch_tx),
-            cumulative_tsn_ack_point: tsn - 1,
-            advanced_peer_tsn_ack_point: tsn - 1,
-            silent_error: Some(Error::ErrSilentlyDiscard),
-            stats: Arc::new(AssociationStats::default()),
-            awake_write_loop_ch: Some(awake_write_loop_ch),
-            ..Default::default()
-        };
-
+        let mtu = INITIAL_MTU;
         // RFC 4690 Sec 7.2.1
         //  o  The initial cwnd before DATA transmission or after a sufficiently
         //     long idle period MUST be set to min(4*MTU, max (2*MTU, 4380
         //     bytes)).
         //     TODO: Consider whether this should use `clamp`
         #[allow(clippy::manual_clamp)]
-        {
-            a.cwnd = std::cmp::min(4 * a.mtu, std::cmp::max(2 * a.mtu, 4380));
-        }
+        let cwnd = std::cmp::min(4 * mtu, std::cmp::max(2 * mtu, 4380));
+
+        let ret = AssociationInternal {
+            name: config.name,
+            state: Arc::new(AtomicU8::new(AssociationState::Closed as u8)),
+            max_message_size: Arc::new(AtomicU32::new(max_message_size)),
+
+            will_send_shutdown: Arc::new(AtomicBool::default()),
+            awake_write_loop_ch,
+            peer_verification_tag: 0,
+            my_verification_tag: random::<u32>(),
+
+            my_next_tsn: tsn,
+            peer_last_tsn: 0,
+            min_tsn2measure_rtt: tsn,
+            will_send_forward_tsn: false,
+            will_retransmit_fast: false,
+            will_retransmit_reconfig: false,
+            will_send_shutdown_ack: false,
+            will_send_shutdown_complete: false,
+
+            my_next_rsn: tsn,
+            reconfigs: HashMap::new(),
+            reconfig_requests: HashMap::new(),
+
+            source_port: 0,
+            destination_port: 0,
+            my_max_num_inbound_streams: u16::MAX,
+            my_max_num_outbound_streams: u16::MAX,
+            my_cookie: None,
+            payload_queue: PayloadQueue::new(Arc::new(AtomicUsize::new(0))),
+            inflight_queue: PayloadQueue::new(Arc::clone(&inflight_queue_length)),
+            inflight_queue_length,
+            pending_queue: Arc::new(PendingQueue::new()),
+            control_queue: ControlQueue::new(),
+            mtu,
+            max_payload_size: mtu - (COMMON_HEADER_SIZE + DATA_CHUNK_HEADER_SIZE),
+            cumulative_tsn_ack_point: tsn - 1,
+            advanced_peer_tsn_ack_point: tsn - 1,
+            use_forward_tsn: false,
+
+            max_receive_buffer_size,
+            cwnd,
+            rwnd: 0,
+            ssthresh: 0,
+            partial_bytes_acked: 0,
+            in_fast_recovery: false,
+            fast_recover_exit_point: 0,
+
+            rto_mgr: RtoManager::new(),
+            t1init: None,
+            t1cookie: None,
+            t2shutdown: None,
+            t3rtx: None,
+            treconfig: None,
+            ack_timer: None,
+
+            stored_init: None,
+            stored_cookie_echo: None,
+            streams: HashMap::new(),
+            close_loop_ch_tx: Some(close_loop_ch_tx),
+            accept_ch_tx,
+            handshake_completed_ch_tx,
+
+            delayed_ack_triggered: false,
+            immediate_ack_triggered: false,
+            stats: Arc::new(AssociationStats::default()),
+            ack_state: AckState::default(),
+            ack_mode: AckMode::default(),
+        };
+
         log::trace!(
             "[{}] updated cwnd={} ssthresh={} inflight={} (INI)",
-            a.name,
-            a.cwnd,
-            a.ssthresh,
-            a.inflight_queue.get_num_bytes()
+            ret.name,
+            ret.cwnd,
+            ret.ssthresh,
+            ret.inflight_queue.get_num_bytes()
         );
 
-        a
+        ret
     }
 
     /// caller must hold self.lock
@@ -291,9 +323,7 @@ impl AssociationInternal {
 
     fn awake_write_loop(&self) {
         //log::debug!("[{}] awake_write_loop_ch.notify_one", self.name);
-        if let Some(awake_write_loop_ch) = &self.awake_write_loop_ch {
-            let _ = awake_write_loop_ch.try_send(());
-        }
+        let _ = self.awake_write_loop_ch.try_send(());
     }
 
     /// unregister_stream un-registers a stream from the association
@@ -606,7 +636,6 @@ impl AssociationInternal {
 
     async fn handle_init(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>> {
         let state = self.get_state();
-        log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
 
         // https://tools.ietf.org/html/rfc4960#section-5.2.1
         // Upon receipt of an INIT in the COOKIE-WAIT state, an endpoint MUST
@@ -619,10 +648,13 @@ impl AssociationInternal {
             && state != AssociationState::CookieWait
             && state != AssociationState::CookieEchoed
         {
+            log::error!("[{}] chunkInit received in state '{}'", self.name, state);
             // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
             //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
             return Err(Error::ErrHandleInitState);
         }
+
+        log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
 
         // Should we be setting any of these permanently until we've ACKed further?
         self.my_max_num_inbound_streams =
@@ -855,9 +887,7 @@ impl AssociationInternal {
                     self.stored_cookie_echo = None;
 
                     self.set_state(AssociationState::Established);
-                    if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
-                        let _ = handshake_completed_ch.send(None).await;
-                    }
+                    let _ = self.handshake_completed_ch_tx.send(None).await;
                 }
                 _ => return Ok(vec![]),
             };
@@ -891,9 +921,7 @@ impl AssociationInternal {
         self.stored_cookie_echo = None;
 
         self.set_state(AssociationState::Established);
-        if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
-            let _ = handshake_completed_ch.send(None).await;
-        }
+        let _ = self.handshake_completed_ch_tx.send(None).await;
 
         Ok(vec![])
     }
@@ -1049,22 +1077,14 @@ impl AssociationInternal {
         ));
 
         if accept {
-            if let Some(accept_ch) = &self.accept_ch_tx {
-                if accept_ch.try_send(Arc::clone(&s)).is_ok() {
-                    log::debug!(
-                        "[{}] accepted a new stream (streamIdentifier: {})",
-                        self.name,
-                        stream_identifier
-                    );
-                } else {
-                    log::debug!("[{}] dropped a new stream due to accept_ch full", self.name);
-                    return None;
-                }
-            } else {
+            if self.accept_ch_tx.try_send(Arc::clone(&s)).is_ok() {
                 log::debug!(
-                    "[{}] dropped a new stream due to accept_ch_tx is None",
-                    self.name
+                    "[{}] accepted a new stream (streamIdentifier: {})",
+                    self.name,
+                    stream_identifier
                 );
+            } else {
+                log::debug!("[{}] dropped a new stream due to accept_ch full", self.name);
                 return None;
             }
         }
@@ -2389,19 +2409,17 @@ impl RtxTimerObserver for AssociationInternal {
         match id {
             RtxTimerId::T1Init => {
                 log::error!("[{}] retransmission failure: T1-init", self.name);
-                if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
-                    let _ = handshake_completed_ch
-                        .send(Some(Error::ErrHandshakeInitAck))
-                        .await;
-                }
+                let _ = self
+                    .handshake_completed_ch_tx
+                    .send(Some(Error::ErrHandshakeInitAck))
+                    .await;
             }
             RtxTimerId::T1Cookie => {
                 log::error!("[{}] retransmission failure: T1-cookie", self.name);
-                if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
-                    let _ = handshake_completed_ch
-                        .send(Some(Error::ErrHandshakeCookieEcho))
-                        .await;
-                }
+                let _ = self
+                    .handshake_completed_ch_tx
+                    .send(Some(Error::ErrHandshakeCookieEcho))
+                    .await;
             }
 
             RtxTimerId::T2Shutdown => {

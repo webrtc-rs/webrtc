@@ -68,11 +68,14 @@ fn create_association_internal(config: Config) -> AssociationInternal {
 
 #[test]
 fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
-    let mut a = AssociationInternal {
-        cumulative_tsn_ack_point: 9,
-        ..Default::default()
-    };
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
 
+    a.cumulative_tsn_ack_point = 9;
     a.advanced_peer_tsn_ack_point = 10;
     a.inflight_queue.push_no_check(ChunkPayloadData {
         beginning_fragment: true,
@@ -98,11 +101,14 @@ fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
 
 #[test]
 fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()> {
-    let mut a = AssociationInternal {
-        cumulative_tsn_ack_point: 9,
-        ..Default::default()
-    };
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
 
+    a.cumulative_tsn_ack_point = 9;
     a.advanced_peer_tsn_ack_point = 12;
     a.inflight_queue.push_no_check(ChunkPayloadData {
         beginning_fragment: true,
@@ -166,10 +172,13 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
-    let mut a = AssociationInternal {
-        use_forward_tsn: true,
-        ..Default::default()
-    };
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
+    a.use_forward_tsn = true;
 
     let prev_tsn = a.peer_last_tsn;
 
@@ -202,10 +211,13 @@ async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
-    let mut a = AssociationInternal {
-        use_forward_tsn: true,
-        ..Default::default()
-    };
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
+    a.use_forward_tsn = true;
 
     let prev_tsn = a.peer_last_tsn;
 
@@ -252,10 +264,13 @@ async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
-    let mut a = AssociationInternal {
-        use_forward_tsn: true,
-        ..Default::default()
-    };
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
+    a.use_forward_tsn = true;
 
     let prev_tsn = a.peer_last_tsn;
 
@@ -300,10 +315,13 @@ async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
 
 #[tokio::test]
 async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() -> Result<()> {
-    let mut a = AssociationInternal {
-        use_forward_tsn: true,
-        ..Default::default()
-    };
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
+    a.use_forward_tsn = true;
 
     let prev_tsn = a.peer_last_tsn;
 
@@ -326,11 +344,22 @@ async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() ->
 
 #[tokio::test]
 async fn test_assoc_create_new_stream() -> Result<()> {
+    let (close_loop_ch_tx, _close_loop_ch_rx) = broadcast::channel(1);
     let (accept_ch_tx, _accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
-    let mut a = AssociationInternal {
-        accept_ch_tx: Some(accept_ch_tx),
-        ..Default::default()
-    };
+    let (handshake_completed_ch_tx, _handshake_completed_ch_rx) = mpsc::channel(1);
+    let (awake_write_loop_ch_tx, _awake_write_loop_ch_rx) = mpsc::channel(1);
+    let mut a = AssociationInternal::new(
+        Config {
+            net_conn: Arc::new(DumbConn {}),
+            max_receive_buffer_size: 0,
+            max_message_size: 0,
+            name: "client".to_owned(),
+        },
+        close_loop_ch_tx,
+        accept_ch_tx,
+        handshake_completed_ch_tx,
+        Arc::new(awake_write_loop_ch_tx),
+    );
 
     for i in 0..ACCEPT_CH_SIZE {
         let s = a.create_stream(i as u16, true);
