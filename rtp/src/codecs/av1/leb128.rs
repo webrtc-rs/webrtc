@@ -20,7 +20,7 @@ pub fn decode_leb128(mut val: u64) -> u32 {
         b |= val & 0b_0111_1111;
         val >>= 8;
         if val == 0 {
-	    return b as u32;            
+            return b as u32;
         }
         b <<= 7;
     }
