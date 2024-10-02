@@ -14,13 +14,13 @@ pub fn encode_leb128(mut val: u32) -> u32 {
     }
 }
 
-pub fn decode_leb128(mut val: u32) -> u32 {
+pub fn decode_leb128(mut val: u64) -> u32 {
     let mut b = 0;
     loop {
         b |= val & 0b_0111_1111;
         val >>= 8;
         if val == 0 {
-            return b;
+            return b as u32;
         }
         b <<= 7;
     }
@@ -29,7 +29,7 @@ pub fn decode_leb128(mut val: u32) -> u32 {
 pub fn read_leb128(bytes: &Bytes) -> (u32, usize) {
     let mut encoded = 0;
     for i in 0..bytes.len() {
-        encoded |= bytes[i] as u32;
+        encoded |= bytes[i] as u64;
         if bytes[i] & 0b_1000_0000 == 0 {
             return (decode_leb128(encoded), i + 1);
         }

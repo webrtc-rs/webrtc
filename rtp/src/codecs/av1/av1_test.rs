@@ -1,3 +1,4 @@
+use crate::codecs::av1::leb128::read_leb128;
 use crate::codecs::av1::obu::{
     OBU_HAS_EXTENSION_BIT, OBU_TYPE_FRAME, OBU_TYPE_FRAME_HEADER, OBU_TYPE_METADATA,
     OBU_TYPE_SEQUENCE_HEADER, OBU_TYPE_TEMPORAL_DELIMITER, OBU_TYPE_TILE_GROUP, OBU_TYPE_TILE_LIST,
@@ -451,4 +452,20 @@ fn test_split_two_obus_into_two_packets() -> Result<()> {
         ]
     );
     Ok(())
+}
+
+#[test]
+fn read_leb128_0() {
+    let bytes = vec![0u8];
+    let (payload_size, leb128_size) = read_leb128(&(bytes.into()));
+    assert_eq!(payload_size, 0);
+    assert_eq!(leb128_size, 1);
+}
+
+#[test]
+fn read_leb128_5_byte() {
+    let bytes = vec![0xC3, 0x80, 0x81, 0x80, 0x00];
+    let (payload_size, leb128_size) = read_leb128(&(bytes.into()));
+    assert_eq!(leb128_size, 5);
+    assert_eq!(payload_size, 16451);
 }
