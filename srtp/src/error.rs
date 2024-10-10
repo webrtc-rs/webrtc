@@ -32,6 +32,9 @@ pub enum Error {
     ErrPayloadDiffers,
     #[error("started channel used incorrectly, should only be closed")]
     ErrStartedChannelUsedIncorrectly,
+    #[error("exceeded the maximum number of packets")]
+    ErrExceededMaxPackets,
+
     #[error("stream has not been inited, unable to close")]
     ErrStreamNotInited,
     #[error("stream is already closed")]

@@ -19,15 +19,16 @@ use crate::protection_profile::*;
 pub mod srtcp;
 pub mod srtp;
 
-const MAX_ROC_DISORDER: u16 = 100;
+const MAX_ROC: u32 = u32::MAX;
+const SEQ_NUM_MEDIAN: u16 = 1 << 15;
+const SEQ_NUM_MAX: u16 = u16::MAX;
 
 /// Encrypt/Decrypt state for a single SRTP SSRC
 #[derive(Default)]
 pub(crate) struct SrtpSsrcState {
     ssrc: u32,
-    rollover_counter: u32,
+    index: u64,
     rollover_has_processed: bool,
-    last_sequence_number: u16,
     replay_detector: Option<Box<dyn ReplayDetector + Send + 'static>>,
 }
 
@@ -40,61 +41,49 @@ pub(crate) struct SrtcpSsrcState {
 }
 
 impl SrtpSsrcState {
-    pub fn next_rollover_count(&self, sequence_number: u16) -> u32 {
-        let mut roc = self.rollover_counter;
+    pub fn next_rollover_count(&self, sequence_number: u16) -> (u32, i32, bool) {
+        let local_roc = (self.index >> 16) as u32;
+        let local_seq = self.index as u16;
 
-        if !self.rollover_has_processed {
-        } else if sequence_number == 0 {
-            // We exactly hit the rollover count
+        let mut guess_roc = local_roc;
 
-            // Only update rolloverCounter if lastSequenceNumber is greater then MAX_ROCDISORDER
-            // otherwise we already incremented for disorder
-            if self.last_sequence_number > MAX_ROC_DISORDER {
-                roc += 1;
+        let diff = if self.rollover_has_processed {
+            let seq = (sequence_number as i32).wrapping_sub(local_seq as i32);
+            // When local_roc is equal to 0, and entering seq-local_seq > SEQ_NUM_MEDIAN
+            // judgment, it will cause guess_roc calculation error
+            if self.index > SEQ_NUM_MEDIAN as _ {
+                if local_seq < SEQ_NUM_MEDIAN {
+                    if seq > SEQ_NUM_MEDIAN as i32 {
+                        guess_roc = local_roc.wrapping_sub(1);
+                        seq.wrapping_sub(SEQ_NUM_MAX as i32 + 1)
+                    } else {
+                        seq
+                    }
+                } else if local_seq - SEQ_NUM_MEDIAN > sequence_number {
+                    guess_roc = local_roc.wrapping_add(1);
+                    seq.wrapping_add(SEQ_NUM_MAX as i32 + 1)
+                } else {
+                    seq
+                }
+            } else {
+                // local_roc is equal to 0
+                seq
             }
-        } else if self.last_sequence_number < MAX_ROC_DISORDER
-            && sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROC_DISORDER)
-        {
-            // Our last sequence number incremented because we crossed 0, but then our current number was within MAX_ROCDISORDER of the max
-            // So we fell behind, drop to account for jitter
-            roc -= 1;
-        } else if sequence_number < MAX_ROC_DISORDER
-            && self.last_sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROC_DISORDER)
-        {
-            // our current is within a MAX_ROCDISORDER of 0
-            // and our last sequence number was a high sequence number, increment to account for jitter
-            roc += 1;
-        }
+        } else {
+            0i32
+        };
 
-        roc
+        (guess_roc, diff, (guess_roc == 0 && local_roc == MAX_ROC))
     }
 
     /// https://tools.ietf.org/html/rfc3550#appendix-A.1
-    pub fn update_rollover_count(&mut self, sequence_number: u16) {
+    pub fn update_rollover_count(&mut self, sequence_number: u16, diff: i32) {
         if !self.rollover_has_processed {
+            self.index |= sequence_number as u64;
             self.rollover_has_processed = true;
-        } else if sequence_number == 0 {
-            // We exactly hit the rollover count
-
-            // Only update rolloverCounter if lastSequenceNumber is greater then MAX_ROCDISORDER
-            // otherwise we already incremented for disorder
-            if self.last_sequence_number > MAX_ROC_DISORDER {
-                self.rollover_counter += 1;
-            }
-        } else if self.last_sequence_number < MAX_ROC_DISORDER
-            && sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROC_DISORDER)
-        {
-            // Our last sequence number incremented because we crossed 0, but then our current number was within MAX_ROCDISORDER of the max
-            // So we fell behind, drop to account for jitter
-            self.rollover_counter -= 1;
-        } else if sequence_number < MAX_ROC_DISORDER
-            && self.last_sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROC_DISORDER)
-        {
-            // our current is within a MAX_ROCDISORDER of 0
-            // and our last sequence number was a high sequence number, increment to account for jitter
-            self.rollover_counter += 1;
+        } else {
+            self.index = self.index.wrapping_add(diff as _);
         }
-        self.last_sequence_number = sequence_number;
     }
 }
 
@@ -181,12 +170,16 @@ impl Context {
 
     /// roc returns SRTP rollover counter value of specified SSRC.
     fn get_roc(&self, ssrc: u32) -> Option<u32> {
-        self.srtp_ssrc_states.get(&ssrc).map(|s| s.rollover_counter)
+        self.srtp_ssrc_states
+            .get(&ssrc)
+            .map(|s| (s.index >> 16) as _)
     }
 
     /// set_roc sets SRTP rollover counter value of specified SSRC.
     fn set_roc(&mut self, ssrc: u32, roc: u32) {
-        self.get_srtp_ssrc_state(ssrc).rollover_counter = roc;
+        let state = self.get_srtp_ssrc_state(ssrc);
+        state.index = (roc as u64) << 16;
+        state.rollover_has_processed = false;
     }
 
     /// index returns SRTCP index value of specified SSRC.
@@ -196,6 +189,6 @@ impl Context {
 
     /// set_index sets SRTCP index value of specified SSRC.
     fn set_index(&mut self, ssrc: u32, index: usize) {
-        self.get_srtcp_ssrc_state(ssrc).srtcp_index = index;
+        self.get_srtcp_ssrc_state(ssrc).srtcp_index = index % (MAX_SRTCP_INDEX + 1);
     }
 }

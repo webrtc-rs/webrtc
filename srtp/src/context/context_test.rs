@@ -113,7 +113,7 @@ fn test_valid_packet_counter() -> Result<()> {
         0xcf, 0x90, 0x1e, 0xa5, 0xda, 0xd3, 0x2c, 0x15, 0x00, 0xa2, 0x24, 0xae, 0xae, 0xaf, 0x00,
         0x00,
     ];
-    let counter = generate_counter(32846, s.rollover_counter, s.ssrc, &srtp_session_salt);
+    let counter = generate_counter(32846, (s.index >> 16) as _, s.ssrc, &srtp_session_salt);
     assert_eq!(
         counter, expected_counter,
         "Session Key {counter:?} does not match expected {expected_counter:?}",
@@ -124,15 +124,13 @@ fn test_valid_packet_counter() -> Result<()> {
 
 #[test]
 fn test_rollover_count() -> Result<()> {
-    let mut s = SrtpSsrcState {
-        ssrc: DEFAULT_SSRC,
-        ..Default::default()
-    };
+    let mut s = SrtpSsrcState::default();
 
     // Set initial seqnum
-    let roc = s.next_rollover_count(65530);
+    let (roc, diff, ovf) = s.next_rollover_count(65530);
     assert_eq!(roc, 0, "Initial rolloverCounter must be 0");
-    s.update_rollover_count(65530);
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(65530, diff);
 
     // Invalid packets never update ROC
     s.next_rollover_count(0);
@@ -142,64 +140,148 @@ fn test_rollover_count() -> Result<()> {
     s.next_rollover_count(0);
 
     // We rolled over to 0
-    let roc = s.next_rollover_count(0);
+    let (roc, diff, ovf) = s.next_rollover_count(0);
     assert_eq!(roc, 1, "rolloverCounter was not updated after it crossed 0");
-    s.update_rollover_count(0);
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(0, diff);
 
-    let roc = s.next_rollover_count(65530);
+    let (roc, diff, ovf) = s.next_rollover_count(65530);
     assert_eq!(
         roc, 0,
         "rolloverCounter was not updated when it rolled back, failed to handle out of order"
     );
-    s.update_rollover_count(65530);
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(65530, diff);
 
-    let roc = s.next_rollover_count(5);
+    let (roc, diff, ovf) = s.next_rollover_count(5);
     assert_eq!(
         roc, 1,
         "rolloverCounter was not updated when it rolled over initial, to handle out of order"
     );
-    s.update_rollover_count(5);
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(5, diff);
 
-    s.next_rollover_count(6);
-    s.update_rollover_count(6);
-
-    s.next_rollover_count(7);
-    s.update_rollover_count(7);
-
-    let roc = s.next_rollover_count(8);
+    let (_, diff, _) = s.next_rollover_count(6);
+    s.update_rollover_count(6, diff);
+    let (_, diff, _) = s.next_rollover_count(7);
+    s.update_rollover_count(7, diff);
+    let (roc, diff, _) = s.next_rollover_count(8);
     assert_eq!(
         roc, 1,
         "rolloverCounter was improperly updated for non-significant packets"
     );
-    s.update_rollover_count(8);
+    s.update_rollover_count(8, diff);
 
     // valid packets never update ROC
-    let roc = s.next_rollover_count(0x4000);
+    let (roc, diff, ovf) = s.next_rollover_count(0x4000);
     assert_eq!(
         roc, 1,
         "rolloverCounter was improperly updated for non-significant packets"
     );
-    s.update_rollover_count(0x4000);
-
-    let roc = s.next_rollover_count(0x8000);
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(0x4000, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(0x8000);
     assert_eq!(
         roc, 1,
         "rolloverCounter was improperly updated for non-significant packets"
     );
-    s.update_rollover_count(0x8000);
-
-    let roc = s.next_rollover_count(0xFFFF);
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(0x8000, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(0xFFFF);
     assert_eq!(
         roc, 1,
         "rolloverCounter was improperly updated for non-significant packets"
     );
-    s.update_rollover_count(0xFFFF);
-
-    let roc = s.next_rollover_count(0);
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(0xFFFF, diff);
+    let (roc, _, ovf) = s.next_rollover_count(0);
     assert_eq!(
         roc, 2,
         "rolloverCounter must be incremented after wrapping, got {roc}"
     );
+    assert!(!ovf, "Should not overflow");
+
+    Ok(())
+}
+
+#[test]
+fn test_rollover_count_overflow() -> Result<()> {
+    let mut s = SrtpSsrcState {
+        index: (MAX_ROC as u64) << 16,
+        ..Default::default()
+    };
+    s.update_rollover_count(0xFFFF, 0);
+    let (_, _, ovf) = s.next_rollover_count(0);
+    assert!(ovf, "Should overflow");
+
+    Ok(())
+}
+
+#[test]
+fn test_rollover_count_2() -> Result<()> {
+    let mut s = SrtpSsrcState::default();
+
+    let (roc, diff, ovf) = s.next_rollover_count(30123);
+    assert_eq!(roc, 0, "Initial rolloverCounter must be 0");
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(30123, diff);
+
+    // 62892 = 30123 + (1 << 15) + 1
+    let (roc, diff, ovf) = s.next_rollover_count(62892);
+    assert_eq!(roc, 0, "Initial rolloverCounter must be 0");
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(62892, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(204);
+    assert_eq!(roc, 1, "rolloverCounter was not updated after it crossed 0");
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(62892, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(64535);
+    assert_eq!(
+        roc, 0,
+        "rolloverCounter was not updated when it rolled back, failed to handle out of order"
+    );
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(64535, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(205);
+    assert_eq!(
+        roc, 1,
+        "rolloverCounter was improperly updated for non-significant packets"
+    );
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(205, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(1);
+    assert_eq!(
+        roc, 1,
+        "rolloverCounter was improperly updated for non-significant packets"
+    );
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(1, diff);
+
+    let (roc, diff, ovf) = s.next_rollover_count(64532);
+    assert_eq!(
+        roc, 0,
+        "rolloverCounter was improperly updated for non-significant packets"
+    );
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(64532, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(64534);
+    assert_eq!(
+        roc, 0,
+        "index was improperly updated for non-significant packets"
+    );
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(64534, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(64532);
+    assert_eq!(
+        roc, 0,
+        "index was improperly updated for non-significant packets"
+    );
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(64532, diff);
+    let (roc, diff, ovf) = s.next_rollover_count(205);
+    assert_eq!(roc, 1, "index was not updated after it crossed 0");
+    assert!(!ovf, "Should not overflow");
+    s.update_rollover_count(205, diff);
 
     Ok(())
 }
