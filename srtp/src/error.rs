@@ -26,7 +26,9 @@ pub enum Error {
     ErrNoConn,
     #[error("failed to verify auth tag")]
     ErrFailedToVerifyAuthTag,
-    #[error("packet is too short to be rtcp packet")]
+    #[error("packet is too short to be RTP packet")]
+    ErrTooShortRtp,
+    #[error("packet is too short to be RTCP packet")]
     ErrTooShortRtcp,
     #[error("payload differs")]
     ErrPayloadDiffers,

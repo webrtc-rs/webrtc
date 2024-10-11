@@ -247,3 +247,18 @@ fn test_rtp_burst_loss_with_set_roc() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_decrypt_invalid_srtp() -> Result<()> {
+    let mut decrypt_context = build_test_context()?;
+
+    let encrypted = Bytes::from_static(&[
+        0x41, 0x02, 0x07, 0xf9, 0xf9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb5, 0x73,
+        0x19, 0xf6, 0x91, 0xbb, 0x3e, 0xa5, 0x21, 0x07,
+    ]);
+    decrypt_context
+        .decrypt_rtp(&encrypted)
+        .expect_err("Should fail");
+
+    Ok(())
+}

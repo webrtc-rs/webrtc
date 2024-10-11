@@ -10,6 +10,11 @@ impl Context {
         encrypted: &[u8],
         header: &rtp::header::Header,
     ) -> Result<Bytes> {
+        let auth_tag_len = self.cipher.rtp_auth_tag_len();
+        if encrypted.len() < header.marshal_size() + auth_tag_len {
+            return Err(Error::ErrTooShortRtp);
+        }
+
         let state = self.get_srtp_ssrc_state(header.ssrc);
         let (roc, diff, _) = state.next_rollover_count(header.sequence_number);
         if let Some(replay_detector) = &mut state.replay_detector {
