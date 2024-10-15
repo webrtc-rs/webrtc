@@ -1050,16 +1050,14 @@ impl PeerConnectionInternal {
 
         let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
         let n = rtp_stream.read(&mut buf).await?;
-        let mut b = &buf[..n];
 
+        let packet = rtp::packet::Packet::unmarshal(&mut &buf[..n]).unwrap();
         let (mut mid, mut rid, mut rsid, payload_type) = handle_unknown_rtp_packet(
-            b,
+            &packet.header,
             mid_extension_id as u8,
             sid_extension_id as u8,
             rsid_extension_id as u8,
         )?;
-
-        let packet = rtp::packet::Packet::unmarshal(&mut b).unwrap();
 
         // TODO: Can we have attributes on the first packets?
         buffered_packets.push_back((packet, Attributes::new()));
@@ -1092,7 +1090,7 @@ impl PeerConnectionInternal {
             if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
                 let (pkt, _) = rtp_interceptor.read(&mut buf, &a).await?;
                 let (m, r, rs, _) = handle_unknown_rtp_packet(
-                    &buf[..n],
+                    &pkt.header,
                     mid_extension_id as u8,
                     sid_extension_id as u8,
                     rsid_extension_id as u8,
