@@ -1072,7 +1072,7 @@ impl PeerConnectionInternal {
             None => return Err(Error::ErrInterceptorNotBind),
         };
 
-        let stream_info = create_stream_info(
+        let mut stream_info = create_stream_info(
             "".to_owned(),
             ssrc,
             params.codecs[0].payload_type,
@@ -1080,15 +1080,22 @@ impl PeerConnectionInternal {
             &params.header_extensions,
             None,
         );
+
+        // indicate this stream starts with probing
+        stream_info
+            .attributes
+            .insert(interceptor::ATTR_READ_PROBE, 1);
+
         let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) = self
             .dtls_transport
             .streams_for_ssrc(ssrc, &stream_info, &icpr)
             .await?;
 
-        let a = Attributes::new();
         for _ in 0..=SIMULCAST_PROBE_COUNT {
             if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
-                let (pkt, _) = rtp_interceptor.read(&mut buf, &a).await?;
+                let (pkt, a) = rtp_interceptor
+                    .read(&mut buf, &stream_info.attributes)
+                    .await?;
                 let (m, r, rs, _) = handle_unknown_rtp_packet(
                     &pkt.header,
                     mid_extension_id as u8,
