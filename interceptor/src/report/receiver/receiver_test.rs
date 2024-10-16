@@ -58,6 +58,73 @@ async fn test_receiver_interceptor_before_any_packet() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(start_paused = true)]
+async fn test_receiver_interceptor_read_probe() -> Result<()> {
+    let mt = Arc::new(MockTime::default());
+    let time_gen = {
+        let mt = Arc::clone(&mt);
+        Arc::new(move || mt.now())
+    };
+
+    let icpr: Arc<dyn Interceptor + Send + Sync> = ReceiverReport::builder()
+        .with_interval(Duration::from_millis(50))
+        .with_now_fn(time_gen)
+        .build("")?;
+
+    let stream = MockStream::new(
+        &StreamInfo {
+            ssrc: 123456,
+            clock_rate: 90000,
+            attributes: [(crate::ATTR_READ_PROBE, 1)].into_iter().collect(),
+            ..Default::default()
+        },
+        icpr,
+    )
+    .await;
+
+    // no report initially
+    tokio::time::timeout(Duration::from_millis(60), stream.written_rtcp())
+        .await
+        .expect_err("expected no report");
+
+    stream
+        .receive_rtp(rtp::packet::Packet {
+            header: rtp::header::Header {
+                sequence_number: 7,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .await;
+
+    let pkts = stream.written_rtcp().await.unwrap();
+    assert_eq!(pkts.len(), 1);
+    if let Some(rr) = pkts[0]
+        .as_any()
+        .downcast_ref::<rtcp::receiver_report::ReceiverReport>()
+    {
+        assert_eq!(rr.reports.len(), 1);
+        assert_eq!(
+            rr.reports[0],
+            rtcp::reception_report::ReceptionReport {
+                ssrc: 123456,
+                last_sequence_number: 7,
+                last_sender_report: 0,
+                fraction_lost: 0,
+                total_lost: 0,
+                delay: 0,
+                jitter: 0,
+            }
+        )
+    } else {
+        panic!();
+    }
+
+    stream.close().await?;
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_receiver_interceptor_after_rtp_packets() -> Result<()> {
     let mt = Arc::new(MockTime::default());
