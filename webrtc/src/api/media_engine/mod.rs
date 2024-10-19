@@ -535,9 +535,11 @@ impl MediaEngine {
             let payload_type = apt.parse::<u8>()?;
 
             let mut apt_match = CodecMatch::None;
+            let mut apt_codec = None;
             for codec in exact_matches {
                 if codec.payload_type == payload_type {
                     apt_match = CodecMatch::Exact;
+                    apt_codec = Some(codec);
                     break;
                 }
             }
@@ -546,6 +548,7 @@ impl MediaEngine {
                 for codec in partial_matches {
                     if codec.payload_type == payload_type {
                         apt_match = CodecMatch::Partial;
+                        apt_codec = Some(codec);
                         break;
                     }
                 }
@@ -555,8 +558,22 @@ impl MediaEngine {
                 return Ok(CodecMatch::None); // not an error, we just ignore this codec we don't support
             }
 
+            // replace the apt value with the original codec's payload type
+            let mut to_match_codec = remote_codec.clone();
+            if let Some(apt_codec) = apt_codec {
+                let (apt_matched, mt) = codec_parameters_fuzzy_search(apt_codec, codecs);
+                if mt == apt_match {
+                    to_match_codec.capability.sdp_fmtp_line =
+                        to_match_codec.capability.sdp_fmtp_line.replacen(
+                            &format!("apt={payload_type}"),
+                            &format!("apt={}", apt_matched.payload_type),
+                            1,
+                        );
+                }
+            }
+
             // if apt's media codec is partial match, then apt codec must be partial match too
-            let (_, mut match_type) = codec_parameters_fuzzy_search(remote_codec, codecs);
+            let (_, mut match_type) = codec_parameters_fuzzy_search(&to_match_codec, codecs);
             if match_type == CodecMatch::Exact && apt_match == CodecMatch::Partial {
                 match_type = CodecMatch::Partial;
             }
