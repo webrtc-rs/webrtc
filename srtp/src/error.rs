@@ -26,12 +26,17 @@ pub enum Error {
     ErrNoConn,
     #[error("failed to verify auth tag")]
     ErrFailedToVerifyAuthTag,
-    #[error("packet is too short to be rtcp packet")]
+    #[error("packet is too short to be RTP packet")]
+    ErrTooShortRtp,
+    #[error("packet is too short to be RTCP packet")]
     ErrTooShortRtcp,
     #[error("payload differs")]
     ErrPayloadDiffers,
     #[error("started channel used incorrectly, should only be closed")]
     ErrStartedChannelUsedIncorrectly,
+    #[error("exceeded the maximum number of packets")]
+    ErrExceededMaxPackets,
+
     #[error("stream has not been inited, unable to close")]
     ErrStreamNotInited,
     #[error("stream is already closed")]

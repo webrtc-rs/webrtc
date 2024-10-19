@@ -170,3 +170,95 @@ fn test_rtp_lifecycle() -> Result<()> {
 //TODO: BenchmarkEncryptRTP
 //TODO: BenchmarkEncryptRTPInPlace
 //TODO: BenchmarkDecryptRTP
+
+#[test]
+fn test_rtp_max_packets() -> Result<()> {
+    let mut context = build_test_context()?;
+
+    context.set_roc(1, u32::MAX);
+
+    let pkt = rtp::packet::Packet {
+        header: rtp::header::Header {
+            ssrc: 1,
+            sequence_number: 0xffff,
+            ..Default::default()
+        },
+        payload: Bytes::from_static(&[]),
+    };
+    let pkt_raw = pkt.marshal()?;
+    context.encrypt_rtp(&pkt_raw)?;
+
+    let pkt = rtp::packet::Packet {
+        header: rtp::header::Header {
+            ssrc: 1,
+            sequence_number: 0x0,
+            ..Default::default()
+        },
+        payload: Bytes::from_static(&[]),
+    };
+    let pkt_raw = pkt.marshal()?;
+    let err = context.encrypt_rtp(&pkt_raw).expect_err("Should be error");
+    assert_eq!(err, Error::ErrExceededMaxPackets);
+
+    Ok(())
+}
+
+#[test]
+fn test_rtp_burst_loss_with_set_roc() -> Result<()> {
+    let mut encrypt_context = build_test_context()?;
+
+    encrypt_context.set_roc(1, 3);
+
+    struct PacketWithROC {
+        pkt: rtp::packet::Packet,
+        raw: Bytes,
+        enc: Bytes,
+        roc: u32,
+    }
+
+    let mut pkts = vec![];
+    for i in (0x8c00u32..0x20400u32).step_by(0x100) {
+        let pkt = rtp::packet::Packet {
+            header: rtp::header::Header {
+                version: 2,
+                ssrc: 1,
+                marker: true,
+                sequence_number: i as _,
+                ..Default::default()
+            },
+            payload: vec![(i >> 16) as u8, (i >> 8) as u8, i as u8].into(),
+        };
+        let raw = pkt.marshal()?;
+        let enc = encrypt_context.encrypt_rtp(&raw)?;
+
+        // Only add first and last packets, to simulate bursty loss
+        if i <= 0x9000 || i >= 0x20100 {
+            let roc = encrypt_context.get_roc(1).unwrap();
+            pkts.push(PacketWithROC { pkt, raw, enc, roc });
+        }
+    }
+
+    let mut decrypt_context = build_test_context()?;
+    for p in pkts {
+        decrypt_context.set_roc(1, p.roc);
+        let dec = decrypt_context.decrypt_rtp(&p.enc)?;
+        assert_eq!(p.raw, dec);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_decrypt_invalid_srtp() -> Result<()> {
+    let mut decrypt_context = build_test_context()?;
+
+    let encrypted = Bytes::from_static(&[
+        0x41, 0x02, 0x07, 0xf9, 0xf9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb5, 0x73,
+        0x19, 0xf6, 0x91, 0xbb, 0x3e, 0xa5, 0x21, 0x07,
+    ]);
+    decrypt_context
+        .decrypt_rtp(&encrypted)
+        .expect_err("Should fail");
+
+    Ok(())
+}

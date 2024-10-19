@@ -31,6 +31,10 @@ impl Context {
     /// EncryptRTCP marshals and encrypts an RTCP packet, writing to the dst buffer provided.
     /// If the dst buffer does not have the capacity to hold `len(plaintext) + 14` bytes, a new one will be allocated and returned.
     pub fn encrypt_rtcp(&mut self, decrypted: &[u8]) -> Result<Bytes> {
+        if decrypted.len() < 8 {
+            return Err(Error::ErrTooShortRtcp);
+        }
+
         let mut buf = decrypted;
         rtcp::header::Header::unmarshal(&mut buf)?;
 

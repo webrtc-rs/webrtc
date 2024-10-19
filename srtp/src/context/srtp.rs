@@ -10,19 +10,21 @@ impl Context {
         encrypted: &[u8],
         header: &rtp::header::Header,
     ) -> Result<Bytes> {
-        let roc = {
-            let state = self.get_srtp_ssrc_state(header.ssrc);
-            if let Some(replay_detector) = &mut state.replay_detector {
-                if !replay_detector.check(header.sequence_number as u64) {
-                    return Err(Error::SrtpSsrcDuplicated(
-                        header.ssrc,
-                        header.sequence_number,
-                    ));
-                }
-            }
+        let auth_tag_len = self.cipher.rtp_auth_tag_len();
+        if encrypted.len() < header.marshal_size() + auth_tag_len {
+            return Err(Error::ErrTooShortRtp);
+        }
 
-            state.next_rollover_count(header.sequence_number)
-        };
+        let state = self.get_srtp_ssrc_state(header.ssrc);
+        let (roc, diff, _) = state.next_rollover_count(header.sequence_number);
+        if let Some(replay_detector) = &mut state.replay_detector {
+            if !replay_detector.check(header.sequence_number as u64) {
+                return Err(Error::SrtpSsrcDuplicated(
+                    header.ssrc,
+                    header.sequence_number,
+                ));
+            }
+        }
 
         let dst = self.cipher.decrypt_rtp(encrypted, header, roc)?;
         {
@@ -30,7 +32,7 @@ impl Context {
             if let Some(replay_detector) = &mut state.replay_detector {
                 replay_detector.accept();
             }
-            state.update_rollover_count(header.sequence_number);
+            state.update_rollover_count(header.sequence_number, diff);
         }
 
         Ok(dst)
@@ -48,14 +50,21 @@ impl Context {
         payload: &[u8],
         header: &rtp::header::Header,
     ) -> Result<Bytes> {
-        let roc = self
+        let (roc, diff, ovf) = self
             .get_srtp_ssrc_state(header.ssrc)
             .next_rollover_count(header.sequence_number);
+        if ovf {
+            // ... when 2^48 SRTP packets or 2^31 SRTCP packets have been secured with the same key
+            // (whichever occurs before), the key management MUST be called to provide new master key(s)
+            // (previously stored and used keys MUST NOT be used again), or the session MUST be terminated.
+            // https://www.rfc-editor.org/rfc/rfc3711#section-9.2
+            return Err(Error::ErrExceededMaxPackets);
+        }
 
         let dst = self.cipher.encrypt_rtp(payload, header, roc)?;
 
         self.get_srtp_ssrc_state(header.ssrc)
-            .update_rollover_count(header.sequence_number);
+            .update_rollover_count(header.sequence_number, diff);
 
         Ok(dst)
     }

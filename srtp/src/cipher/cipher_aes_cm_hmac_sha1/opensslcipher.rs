@@ -217,6 +217,9 @@ impl Cipher for CipherAesCmHmacSha1 {
         }
 
         let tail_offset = encrypted_len - (self.rtcp_auth_tag_len() + SRTCP_INDEX_SIZE);
+        if tail_offset < 8 {
+            return Err(Error::ErrTooShortRtcp);
+        }
 
         let mut writer = Vec::with_capacity(tail_offset);
 
