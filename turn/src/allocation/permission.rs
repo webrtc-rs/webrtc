@@ -1,5 +1,5 @@
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use portable_atomic::AtomicBool;
 use tokio::sync::Mutex;
@@ -15,7 +15,7 @@ pub(crate) const PERMISSION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// https://tools.ietf.org/html/rfc5766#section-2.3
 pub struct Permission {
     pub(crate) addr: SocketAddr,
-    pub(crate) permissions: Option<Arc<Mutex<HashMap<String, Permission>>>>,
+    pub(crate) permissions: Option<Weak<Mutex<HashMap<String, Permission>>>>,
     reset_tx: Option<mpsc::Sender<Duration>>,
     timer_expired: Arc<AtomicBool>,
 }
@@ -47,7 +47,7 @@ impl Permission {
             while !done {
                 tokio::select! {
                     _ = &mut timer => {
-                        if let Some(perms) = &permissions{
+                        if let Some(perms) = &permissions.clone().and_then(|x| x.upgrade()) {
                             let mut p = perms.lock().await;
                             p.remove(&addr2ipfingerprint(&addr));
                         }
