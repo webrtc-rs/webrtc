@@ -492,12 +492,7 @@ impl Router {
                 // check if the destination is in our subnet
                 if ipv4net.contains(&dst_ip) {
                     // search for the destination NIC
-                    if let Some(nic) = ri
-                        .nics
-                        .get(&dst_ip.to_string())
-                        .clone()
-                        .and_then(|p| p.upgrade())
-                    {
+                    if let Some(nic) = ri.nics.get(&dst_ip.to_string()).and_then(|p| p.upgrade()) {
                         // found the NIC, forward the chunk to the NIC.
                         // call to NIC must unlock mutex
                         let ni = nic.lock().await;
