@@ -8,7 +8,7 @@ use std::ops::{Add, Sub};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::SystemTime;
 
 use async_trait::async_trait;
@@ -77,12 +77,12 @@ pub type ChunkFilterFn = Box<dyn (Fn(&(dyn Chunk + Send + Sync)) -> bool) + Send
 
 #[derive(Default)]
 pub struct RouterInternal {
-    pub(crate) nat_type: Option<NatType>,          // read-only
-    pub(crate) ipv4net: IpNet,                     // read-only
-    pub(crate) parent: Option<Arc<Mutex<Router>>>, // read-only
-    pub(crate) nat: NetworkAddressTranslator,      // read-only
-    pub(crate) nics: HashMap<String, Arc<Mutex<dyn Nic + Send + Sync>>>, // read-only
-    pub(crate) chunk_filters: Vec<ChunkFilterFn>,  // requires mutex [x]
+    pub(crate) nat_type: Option<NatType>,           // read-only
+    pub(crate) ipv4net: IpNet,                      // read-only
+    pub(crate) parent: Option<Weak<Mutex<Router>>>, // read-only
+    pub(crate) nat: NetworkAddressTranslator,       // read-only
+    pub(crate) nics: HashMap<String, Weak<Mutex<dyn Nic + Send + Sync>>>, // read-only
+    pub(crate) chunk_filters: Vec<ChunkFilterFn>,   // requires mutex [x]
     pub(crate) last_id: u8, // requires mutex [x], used to assign the last digit of IPv4 address
 }
 
@@ -157,7 +157,7 @@ impl Nic for Router {
     async fn set_router(&self, parent: Arc<Mutex<Router>>) -> Result<()> {
         {
             let mut router_internal = self.router_internal.lock().await;
-            router_internal.parent = Some(Arc::clone(&parent));
+            router_internal.parent = Some(Arc::downgrade(&parent));
         }
 
         let parent_resolver = {
@@ -166,7 +166,7 @@ impl Nic for Router {
         };
         {
             let mut resolver = self.resolver.lock().await;
-            resolver.set_parent(parent_resolver);
+            resolver.set_parent(Arc::downgrade(&parent_resolver));
         }
 
         let mut mapped_ips = vec![];
@@ -492,7 +492,7 @@ impl Router {
                 // check if the destination is in our subnet
                 if ipv4net.contains(&dst_ip) {
                     // search for the destination NIC
-                    if let Some(nic) = ri.nics.get(&dst_ip.to_string()) {
+                    if let Some(nic) = ri.nics.get(&dst_ip.to_string()).and_then(|p| p.upgrade()) {
                         // found the NIC, forward the chunk to the NIC.
                         // call to NIC must unlock mutex
                         let ni = nic.lock().await;
@@ -504,7 +504,7 @@ impl Router {
                 } else {
                     // the destination is outside of this subnet
                     // is this WAN?
-                    if let Some(parent) = &ri.parent {
+                    if let Some(parent) = &ri.parent.clone().and_then(|p| p.upgrade()) {
                         // Pass it to the parent via NAT
                         if let Some(to_parent) = ri.nat.translate_outbound(&*c).await? {
                             // call to parent router mutex unlock mutex
@@ -545,7 +545,7 @@ impl RouterInternal {
             if !self.ipv4net.contains(ip) {
                 return Err(Error::ErrStaticIpIsBeyondSubnet);
             }
-            self.nics.insert(ip.to_string(), Arc::clone(&nic));
+            self.nics.insert(ip.to_string(), Arc::downgrade(&nic));
             ipnets.push(IpNet::from_str(&format!(
                 "{}/{}",
                 ip,

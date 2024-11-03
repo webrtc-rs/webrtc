@@ -211,7 +211,7 @@ impl ListenConfig {
             }
         }
 
-        let udp_conn = Arc::new(UdpConn::new(Arc::clone(pconn), Arc::clone(conns), raddr));
+        let udp_conn = Arc::new(UdpConn::new(Arc::clone(pconn), raddr));
         {
             let accept_ch = accept_ch_tx.lock().await;
             if let Some(tx) = &*accept_ch {
@@ -235,20 +235,14 @@ impl ListenConfig {
 /// UdpConn augments a connection-oriented connection over a UdpSocket
 pub struct UdpConn {
     pconn: Arc<dyn Conn + Send + Sync>,
-    conns: Arc<Mutex<HashMap<String, Arc<UdpConn>>>>,
     raddr: SocketAddr,
     buffer: Buffer,
 }
 
 impl UdpConn {
-    fn new(
-        pconn: Arc<dyn Conn + Send + Sync>,
-        conns: Arc<Mutex<HashMap<String, Arc<UdpConn>>>>,
-        raddr: SocketAddr,
-    ) -> Self {
+    fn new(pconn: Arc<dyn Conn + Send + Sync>, raddr: SocketAddr) -> Self {
         UdpConn {
             pconn,
-            conns,
             raddr,
             buffer: Buffer::new(0, 0),
         }
@@ -287,8 +281,6 @@ impl Conn for UdpConn {
     }
 
     async fn close(&self) -> Result<()> {
-        let mut conns = self.conns.lock().await;
-        conns.remove(self.raddr.to_string().as_str());
         Ok(())
     }
 

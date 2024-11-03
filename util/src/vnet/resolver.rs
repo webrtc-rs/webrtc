@@ -6,7 +6,7 @@ use std::future::Future;
 use std::net::IpAddr;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::Weak;
 
 use tokio::sync::Mutex;
 
@@ -14,7 +14,7 @@ use crate::error::*;
 
 #[derive(Default)]
 pub(crate) struct Resolver {
-    parent: Option<Arc<Mutex<Resolver>>>,
+    parent: Option<Weak<Mutex<Resolver>>>,
     hosts: HashMap<String, IpAddr>,
 }
 
@@ -31,7 +31,7 @@ impl Resolver {
         r
     }
 
-    pub(crate) fn set_parent(&mut self, p: Arc<Mutex<Resolver>>) {
+    pub(crate) fn set_parent(&mut self, p: Weak<Mutex<Resolver>>) {
         self.parent = Some(p);
     }
 
@@ -55,10 +55,9 @@ impl Resolver {
         }
 
         // mutex must be unlocked before calling into parent Resolver
-        if let Some(parent) = &self.parent {
-            let parent2 = Arc::clone(parent);
+        if let Some(parent) = self.parent.clone().and_then(|p| p.upgrade()).clone() {
             Box::pin(async move {
-                let p = parent2.lock().await;
+                let p = parent.lock().await;
                 p.lookup(host_name).await
             })
         } else {
