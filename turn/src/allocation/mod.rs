@@ -137,7 +137,7 @@ impl Allocation {
             }
         }
 
-        p.permissions = Some(Arc::clone(&self.permissions));
+        p.permissions = Some(Arc::downgrade(&self.permissions));
         p.start(PERMISSION_TIMEOUT).await;
 
         {
@@ -184,7 +184,7 @@ impl Allocation {
         let peer = c.peer;
 
         // Add or refresh this channel.
-        c.channel_bindings = Some(Arc::clone(&self.channel_bindings));
+        c.channel_bindings = Some(Arc::downgrade(&self.channel_bindings));
         c.start(lifetime).await;
 
         {
