@@ -12,12 +12,14 @@ async fn create_channel_bind(lifetime: Duration) -> Result<Allocation> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 

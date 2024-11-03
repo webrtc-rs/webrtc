@@ -12,12 +12,14 @@ async fn test_has_permission() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -50,12 +52,14 @@ async fn test_add_permission() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -74,12 +78,14 @@ async fn test_remove_permission() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -107,12 +113,14 @@ async fn test_add_channel_bind() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -141,12 +149,14 @@ async fn test_get_channel_by_number() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -177,12 +187,14 @@ async fn test_get_channel_by_addr() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -209,12 +221,14 @@ async fn test_remove_channel_bind() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -246,12 +260,14 @@ async fn test_allocation_refresh() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
@@ -268,12 +284,14 @@ async fn test_allocation_close() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
+    let allocations = Arc::new(Mutex::new(AllocationMap::new()));
     let a = Allocation::new(
         turn_socket,
         relay_socket,
         relay_addr,
         FiveTuple::default(),
         TextAttribute::new(ATTR_USERNAME, "user".into()),
+        Arc::downgrade(&allocations),
         None,
     );
 
