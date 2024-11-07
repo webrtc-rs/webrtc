@@ -39,7 +39,7 @@ async fn main() -> Result<(), Error> {
 
     let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let conn = UdpSocket::bind("0:0").await?;
+    let conn = UdpSocket::bind("0.0.0.0:0").await?;
     println!("Local address: {}", conn.local_addr()?);
 
     println!("Connecting to: {server}");
