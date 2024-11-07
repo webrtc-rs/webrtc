@@ -136,7 +136,7 @@ impl PeerConnectionInternal {
         let ice_connection_state = Arc::clone(&pc.ice_connection_state);
         let peer_connection_state = Arc::clone(&pc.peer_connection_state);
         let is_closed = Arc::clone(&pc.is_closed);
-        let dtls_transport = Arc::clone(&pc.dtls_transport);
+        let dtls_transport = Arc::downgrade(&pc.dtls_transport);
         let on_ice_connection_state_change_handler =
             Arc::clone(&pc.on_ice_connection_state_change_handler);
         let on_peer_connection_state_change_handler =
@@ -158,7 +158,7 @@ impl PeerConnectionInternal {
                     }
                 };
 
-                let dtls_transport = Arc::clone(&dtls_transport);
+                let dtls_transport = dtls_transport.clone();
                 let ice_connection_state = Arc::clone(&ice_connection_state);
                 let on_ice_connection_state_change_handler =
                     Arc::clone(&on_ice_connection_state_change_handler);
@@ -174,15 +174,19 @@ impl PeerConnectionInternal {
                     )
                     .await;
 
-                    let dtls_transport_state = dtls_transport.state();
-                    RTCPeerConnection::update_connection_state(
-                        &on_peer_connection_state_change_handler,
-                        &is_closed,
-                        &peer_connection_state,
-                        cs,
-                        dtls_transport_state,
-                    )
-                    .await;
+                    if let Some(dtls_transport) = dtls_transport.upgrade() {
+                            RTCPeerConnection::update_connection_state(
+                                &on_peer_connection_state_change_handler,
+                                &is_closed,
+                                &peer_connection_state,
+                                cs,
+                                dtls_transport.state(),
+                            )
+                                .await;
+                    } else {
+                        log::warn!("on_ice_connection_state_change: dtls_transport unavailable");
+                    }
+
                 })
             },
         ));
