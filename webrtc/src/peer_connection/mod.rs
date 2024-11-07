@@ -236,9 +236,13 @@ impl RTCPeerConnection {
         };
 
         let weak_interceptor = Arc::downgrade(&interceptor);
-        let (internal, configuration) =
-            PeerConnectionInternal::new(api, weak_interceptor, stats_interceptor, configuration)
-                .await?;
+        let (internal, configuration) = PeerConnectionInternal::new(
+            api,
+            weak_interceptor,
+            Arc::downgrade(&stats_interceptor),
+            configuration,
+        )
+        .await?;
         let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
         let interceptor_rtcp_writer = interceptor.bind_rtcp_writer(internal_rtcp_writer).await;
 
