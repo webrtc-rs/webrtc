@@ -206,7 +206,11 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
             d.on_message(Box::new(move |_: DataChannelMessage| {
                 let d3 = d2.clone();
                 Box::pin(async move {
-                    let result = d3.upgrade().unwrap().send(&Bytes::from(b"Pong".to_vec())).await;
+                    let result = d3
+                        .upgrade()
+                        .unwrap()
+                        .send(&Bytes::from(b"Pong".to_vec()))
+                        .await;
                     assert!(result.is_ok(), "Failed to send string on data channel");
                 })
             }));
@@ -263,7 +267,11 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
                 let d3 = d2.clone();
 
                 Box::pin(async move {
-                    let result = d3.upgrade().unwrap().send(&Bytes::from(b"Pong".to_vec())).await;
+                    let result = d3
+                        .upgrade()
+                        .unwrap()
+                        .send(&Bytes::from(b"Pong".to_vec()))
+                        .await;
                     assert!(result.is_ok(), "Failed to send string on data channel");
                 })
             }));

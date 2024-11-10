@@ -175,18 +175,17 @@ impl PeerConnectionInternal {
                     .await;
 
                     if let Some(dtls_transport) = dtls_transport.upgrade() {
-                            RTCPeerConnection::update_connection_state(
-                                &on_peer_connection_state_change_handler,
-                                &is_closed,
-                                &peer_connection_state,
-                                cs,
-                                dtls_transport.state(),
-                            )
-                                .await;
+                        RTCPeerConnection::update_connection_state(
+                            &on_peer_connection_state_change_handler,
+                            &is_closed,
+                            &peer_connection_state,
+                            cs,
+                            dtls_transport.state(),
+                        )
+                        .await;
                     } else {
                         log::warn!("on_ice_connection_state_change: dtls_transport unavailable");
                     }
-
                 })
             },
         ));

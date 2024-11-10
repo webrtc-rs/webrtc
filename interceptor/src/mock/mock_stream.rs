@@ -17,7 +17,7 @@ pub struct MockStream {
     rtcp_writer: Mutex<Option<Arc<dyn RTCPWriter + Send + Sync>>>,
     rtp_writer: Mutex<Option<Arc<dyn RTPWriter + Send + Sync>>>,
 
-    internal: Arc<MockStreamInternal>
+    internal: Arc<MockStreamInternal>,
 }
 
 struct MockStreamInternal {
@@ -65,7 +65,7 @@ impl MockStream {
 
                 rtcp_in_modified_rx: Mutex::new(rtcp_in_modified_rx),
                 rtp_in_modified_rx: Mutex::new(rtp_in_modified_rx),
-            })
+            }),
         });
 
         let rtcp_writer = interceptor
