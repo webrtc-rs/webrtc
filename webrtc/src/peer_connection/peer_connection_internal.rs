@@ -1,12 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::Weak;
 
-use arc_swap::ArcSwapOption;
-use portable_atomic::AtomicIsize;
-use smol_str::SmolStr;
-use tokio::time::Instant;
-use util::Unmarshal;
-
 use super::*;
 use crate::rtp_transceiver::create_stream_info;
 use crate::stats::stats_collector::StatsCollector;
@@ -17,6 +11,11 @@ use crate::stats::{
 use crate::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::track::TrackStream;
 use crate::SDP_ATTRIBUTE_RID;
+use arc_swap::ArcSwapOption;
+use portable_atomic::AtomicIsize;
+use smol_str::SmolStr;
+use tokio::time::Instant;
+use util::Unmarshal;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -67,14 +66,14 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) setting_engine: Arc<SettingEngine>,
     pub(crate) media_engine: Arc<MediaEngine>,
     pub(super) interceptor: Weak<dyn Interceptor + Send + Sync>,
-    stats_interceptor: Arc<stats::StatsInterceptor>,
+    stats_interceptor: Weak<stats::StatsInterceptor>,
 }
 
 impl PeerConnectionInternal {
     pub(super) async fn new(
         api: &API,
         interceptor: Weak<dyn Interceptor + Send + Sync>,
-        stats_interceptor: Arc<stats::StatsInterceptor>,
+        stats_interceptor: Weak<stats::StatsInterceptor>,
         mut configuration: RTCConfiguration,
     ) -> Result<(Arc<Self>, RTCConfiguration)> {
         // Create the ice gatherer
@@ -137,7 +136,7 @@ impl PeerConnectionInternal {
         let ice_connection_state = Arc::clone(&pc.ice_connection_state);
         let peer_connection_state = Arc::clone(&pc.peer_connection_state);
         let is_closed = Arc::clone(&pc.is_closed);
-        let dtls_transport = Arc::clone(&pc.dtls_transport);
+        let dtls_transport = Arc::downgrade(&pc.dtls_transport);
         let on_ice_connection_state_change_handler =
             Arc::clone(&pc.on_ice_connection_state_change_handler);
         let on_peer_connection_state_change_handler =
@@ -159,7 +158,7 @@ impl PeerConnectionInternal {
                     }
                 };
 
-                let dtls_transport = Arc::clone(&dtls_transport);
+                let dtls_transport = dtls_transport.clone();
                 let ice_connection_state = Arc::clone(&ice_connection_state);
                 let on_ice_connection_state_change_handler =
                     Arc::clone(&on_ice_connection_state_change_handler);
@@ -175,15 +174,18 @@ impl PeerConnectionInternal {
                     )
                     .await;
 
-                    let dtls_transport_state = dtls_transport.state();
-                    RTCPeerConnection::update_connection_state(
-                        &on_peer_connection_state_change_handler,
-                        &is_closed,
-                        &peer_connection_state,
-                        cs,
-                        dtls_transport_state,
-                    )
-                    .await;
+                    if let Some(dtls_transport) = dtls_transport.upgrade() {
+                        RTCPeerConnection::update_connection_state(
+                            &on_peer_connection_state_change_handler,
+                            &is_closed,
+                            &peer_connection_state,
+                            cs,
+                            dtls_transport.state(),
+                        )
+                        .await;
+                    } else {
+                        log::warn!("on_ice_connection_state_change: dtls_transport unavailable");
+                    }
                 })
             },
         ));
@@ -1277,90 +1279,91 @@ impl PeerConnectionInternal {
             }
         }
 
-        let stream_stats = self
-            .stats_interceptor
-            .fetch_inbound_stats(track_infos.iter().map(|t| t.ssrc).collect())
-            .await;
+        if let Some(stats_interceptor) = self.stats_interceptor.upgrade() {
+            let stream_stats = stats_interceptor
+                .fetch_inbound_stats(track_infos.iter().map(|t| t.ssrc).collect())
+                .await;
 
-        for (stats, info) in
-            (stream_stats.into_iter().zip(track_infos)).filter_map(|(s, i)| s.map(|s| (s, i)))
-        {
-            let ssrc = info.ssrc;
-            let kind = info.kind;
+            for (stats, info) in
+                (stream_stats.into_iter().zip(track_infos)).filter_map(|(s, i)| s.map(|s| (s, i)))
+            {
+                let ssrc = info.ssrc;
+                let kind = info.kind;
 
-            let id = format!("RTCInboundRTP{}Stream_{}", capitalize(kind), ssrc);
-            let (
-                packets_received,
-                header_bytes_received,
-                bytes_received,
-                last_packet_received_timestamp,
-                nack_count,
-                remote_packets_sent,
-                remote_bytes_sent,
-                remote_reports_sent,
-                remote_round_trip_time,
-                remote_total_round_trip_time,
-                remote_round_trip_time_measurements,
-            ) = (
-                stats.packets_received(),
-                stats.header_bytes_received(),
-                stats.payload_bytes_received(),
-                stats.last_packet_received_timestamp(),
-                stats.nacks_sent(),
-                stats.remote_packets_sent(),
-                stats.remote_bytes_sent(),
-                stats.remote_reports_sent(),
-                stats.remote_round_trip_time(),
-                stats.remote_total_round_trip_time(),
-                stats.remote_round_trip_time_measurements(),
-            );
-
-            collector.insert(
-                id.clone(),
-                crate::stats::StatsReportType::InboundRTP(InboundRTPStats {
-                    timestamp: Instant::now(),
-                    stats_type: RTCStatsType::InboundRTP,
-                    id: id.clone(),
-                    ssrc,
-                    kind: kind.to_owned(),
+                let id = format!("RTCInboundRTP{}Stream_{}", capitalize(kind), ssrc);
+                let (
                     packets_received,
-                    track_identifier: info.track_id,
-                    mid: info.mid,
-                    last_packet_received_timestamp,
                     header_bytes_received,
                     bytes_received,
+                    last_packet_received_timestamp,
                     nack_count,
+                    remote_packets_sent,
+                    remote_bytes_sent,
+                    remote_reports_sent,
+                    remote_round_trip_time,
+                    remote_total_round_trip_time,
+                    remote_round_trip_time_measurements,
+                ) = (
+                    stats.packets_received(),
+                    stats.header_bytes_received(),
+                    stats.payload_bytes_received(),
+                    stats.last_packet_received_timestamp(),
+                    stats.nacks_sent(),
+                    stats.remote_packets_sent(),
+                    stats.remote_bytes_sent(),
+                    stats.remote_reports_sent(),
+                    stats.remote_round_trip_time(),
+                    stats.remote_total_round_trip_time(),
+                    stats.remote_round_trip_time_measurements(),
+                );
 
-                    fir_count: (info.kind == "video").then(|| stats.firs_sent()),
-                    pli_count: (info.kind == "video").then(|| stats.plis_sent()),
-                }),
-            );
+                collector.insert(
+                    id.clone(),
+                    crate::stats::StatsReportType::InboundRTP(InboundRTPStats {
+                        timestamp: Instant::now(),
+                        stats_type: RTCStatsType::InboundRTP,
+                        id: id.clone(),
+                        ssrc,
+                        kind: kind.to_owned(),
+                        packets_received,
+                        track_identifier: info.track_id,
+                        mid: info.mid,
+                        last_packet_received_timestamp,
+                        header_bytes_received,
+                        bytes_received,
+                        nack_count,
 
-            let local_id = id;
-            let id = format!(
-                "RTCRemoteOutboundRTP{}Stream_{}",
-                capitalize(info.kind),
-                info.ssrc
-            );
-            collector.insert(
-                id.clone(),
-                crate::stats::StatsReportType::RemoteOutboundRTP(RemoteOutboundRTPStats {
-                    timestamp: Instant::now(),
-                    stats_type: RTCStatsType::RemoteOutboundRTP,
-                    id,
+                        fir_count: (info.kind == "video").then(|| stats.firs_sent()),
+                        pli_count: (info.kind == "video").then(|| stats.plis_sent()),
+                    }),
+                );
 
-                    ssrc,
-                    kind: kind.to_owned(),
+                let local_id = id;
+                let id = format!(
+                    "RTCRemoteOutboundRTP{}Stream_{}",
+                    capitalize(info.kind),
+                    info.ssrc
+                );
+                collector.insert(
+                    id.clone(),
+                    crate::stats::StatsReportType::RemoteOutboundRTP(RemoteOutboundRTPStats {
+                        timestamp: Instant::now(),
+                        stats_type: RTCStatsType::RemoteOutboundRTP,
+                        id,
 
-                    packets_sent: remote_packets_sent as u64,
-                    bytes_sent: remote_bytes_sent as u64,
-                    local_id,
-                    reports_sent: remote_reports_sent,
-                    round_trip_time: remote_round_trip_time,
-                    total_round_trip_time: remote_total_round_trip_time,
-                    round_trip_time_measurements: remote_round_trip_time_measurements,
-                }),
-            );
+                        ssrc,
+                        kind: kind.to_owned(),
+
+                        packets_sent: remote_packets_sent as u64,
+                        bytes_sent: remote_bytes_sent as u64,
+                        local_id,
+                        reports_sent: remote_reports_sent,
+                        round_trip_time: remote_round_trip_time,
+                        total_round_trip_time: remote_total_round_trip_time,
+                        round_trip_time_measurements: remote_round_trip_time_measurements,
+                    }),
+                );
+            }
         }
     }
 
@@ -1414,102 +1417,103 @@ impl PeerConnectionInternal {
             }
         }
 
-        let stream_stats = self
-            .stats_interceptor
-            .fetch_outbound_stats(track_infos.iter().map(|t| t.ssrc).collect())
-            .await;
+        if let Some(stats_interceptor) = self.stats_interceptor.upgrade() {
+            let stream_stats = stats_interceptor
+                .fetch_outbound_stats(track_infos.iter().map(|t| t.ssrc).collect())
+                .await;
 
-        for (stats, info) in stream_stats
-            .into_iter()
-            .zip(track_infos)
-            .filter_map(|(s, i)| s.map(|s| (s, i)))
-        {
-            // RTCOutboundRtpStreamStats
-            let id = format!(
-                "RTCOutboundRTP{}Stream_{}",
-                capitalize(info.kind),
-                info.ssrc
-            );
-            let (
-                packets_sent,
-                bytes_sent,
-                header_bytes_sent,
-                nack_count,
-                remote_inbound_packets_received,
-                remote_inbound_packets_lost,
-                remote_rtt_ms,
-                remote_total_rtt_ms,
-                remote_rtt_measurements,
-                remote_fraction_lost,
-            ) = (
-                stats.packets_sent(),
-                stats.payload_bytes_sent(),
-                stats.header_bytes_sent(),
-                stats.nacks_received(),
-                stats.remote_packets_received(),
-                stats.remote_total_lost(),
-                stats.remote_round_trip_time(),
-                stats.remote_total_round_trip_time(),
-                stats.remote_round_trip_time_measurements(),
-                stats.remote_fraction_lost(),
-            );
-
-            let TrackInfo {
-                mid,
-                ssrc,
-                rid,
-                kind,
-                track_id: track_identifier,
-            } = info;
-
-            collector.insert(
-                id.clone(),
-                crate::stats::StatsReportType::OutboundRTP(OutboundRTPStats {
-                    timestamp: Instant::now(),
-                    stats_type: RTCStatsType::OutboundRTP,
-                    track_identifier,
-                    id: id.clone(),
-                    ssrc,
-                    kind: kind.to_owned(),
+            for (stats, info) in stream_stats
+                .into_iter()
+                .zip(track_infos)
+                .filter_map(|(s, i)| s.map(|s| (s, i)))
+            {
+                // RTCOutboundRtpStreamStats
+                let id = format!(
+                    "RTCOutboundRTP{}Stream_{}",
+                    capitalize(info.kind),
+                    info.ssrc
+                );
+                let (
                     packets_sent,
-                    mid,
-                    rid,
-                    header_bytes_sent,
                     bytes_sent,
+                    header_bytes_sent,
                     nack_count,
+                    remote_inbound_packets_received,
+                    remote_inbound_packets_lost,
+                    remote_rtt_ms,
+                    remote_total_rtt_ms,
+                    remote_rtt_measurements,
+                    remote_fraction_lost,
+                ) = (
+                    stats.packets_sent(),
+                    stats.payload_bytes_sent(),
+                    stats.header_bytes_sent(),
+                    stats.nacks_received(),
+                    stats.remote_packets_received(),
+                    stats.remote_total_lost(),
+                    stats.remote_round_trip_time(),
+                    stats.remote_total_round_trip_time(),
+                    stats.remote_round_trip_time_measurements(),
+                    stats.remote_fraction_lost(),
+                );
 
-                    fir_count: (info.kind == "video").then(|| stats.firs_received()),
-                    pli_count: (info.kind == "video").then(|| stats.plis_received()),
-                }),
-            );
-
-            let local_id = id;
-            let id = format!(
-                "RTCRemoteInboundRTP{}Stream_{}",
-                capitalize(info.kind),
-                info.ssrc
-            );
-
-            collector.insert(
-                id.clone(),
-                StatsReportType::RemoteInboundRTP(RemoteInboundRTPStats {
-                    timestamp: Instant::now(),
-                    stats_type: RTCStatsType::RemoteInboundRTP,
-                    id,
+                let TrackInfo {
+                    mid,
                     ssrc,
-                    kind: kind.to_owned(),
+                    rid,
+                    kind,
+                    track_id: track_identifier,
+                } = info;
 
-                    packets_received: remote_inbound_packets_received,
-                    packets_lost: remote_inbound_packets_lost as i64,
+                collector.insert(
+                    id.clone(),
+                    crate::stats::StatsReportType::OutboundRTP(OutboundRTPStats {
+                        timestamp: Instant::now(),
+                        stats_type: RTCStatsType::OutboundRTP,
+                        track_identifier,
+                        id: id.clone(),
+                        ssrc,
+                        kind: kind.to_owned(),
+                        packets_sent,
+                        mid,
+                        rid,
+                        header_bytes_sent,
+                        bytes_sent,
+                        nack_count,
 
-                    local_id,
+                        fir_count: (info.kind == "video").then(|| stats.firs_received()),
+                        pli_count: (info.kind == "video").then(|| stats.plis_received()),
+                    }),
+                );
 
-                    round_trip_time: remote_rtt_ms,
-                    total_round_trip_time: remote_total_rtt_ms,
-                    fraction_lost: remote_fraction_lost.unwrap_or(0.0),
-                    round_trip_time_measurements: remote_rtt_measurements,
-                }),
-            );
+                let local_id = id;
+                let id = format!(
+                    "RTCRemoteInboundRTP{}Stream_{}",
+                    capitalize(info.kind),
+                    info.ssrc
+                );
+
+                collector.insert(
+                    id.clone(),
+                    StatsReportType::RemoteInboundRTP(RemoteInboundRTPStats {
+                        timestamp: Instant::now(),
+                        stats_type: RTCStatsType::RemoteInboundRTP,
+                        id,
+                        ssrc,
+                        kind: kind.to_owned(),
+
+                        packets_received: remote_inbound_packets_received,
+                        packets_lost: remote_inbound_packets_lost as i64,
+
+                        local_id,
+
+                        round_trip_time: remote_rtt_ms,
+                        total_round_trip_time: remote_total_rtt_ms,
+                        fraction_lost: remote_fraction_lost.unwrap_or(0.0),
+                        round_trip_time_measurements: remote_rtt_measurements,
+                    }),
+                );
+            }
         }
     }
 }

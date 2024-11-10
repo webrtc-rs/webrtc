@@ -202,11 +202,15 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
             return Box::pin(async {});
         }
         Box::pin(async move {
-            let d2 = Arc::clone(&d);
+            let d2 = Arc::downgrade(&d);
             d.on_message(Box::new(move |_: DataChannelMessage| {
-                let d3 = Arc::clone(&d2);
+                let d3 = d2.clone();
                 Box::pin(async move {
-                    let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
+                    let result = d3
+                        .upgrade()
+                        .unwrap()
+                        .send(&Bytes::from(b"Pong".to_vec()))
+                        .await;
                     assert!(result.is_ok(), "Failed to send string on data channel");
                 })
             }));
@@ -218,11 +222,11 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
 
     assert!(dc.ordered(), "Ordered should be set to true");
 
-    let dc2 = Arc::clone(&dc);
+    let dc2 = Arc::downgrade(&dc);
     dc.on_open(Box::new(move || {
-        let dc3 = Arc::clone(&dc2);
+        let dc3 = dc2.clone();
         Box::pin(async move {
-            let result = dc3.send_text("Ping".to_owned()).await;
+            let result = dc3.upgrade().unwrap().send_text("Ping".to_owned()).await;
             assert!(result.is_ok(), "Failed to send string on data channel");
         })
     }));
@@ -258,12 +262,16 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
             return Box::pin(async {});
         }
         Box::pin(async move {
-            let d2 = Arc::clone(&d);
+            let d2 = Arc::downgrade(&d);
             d.on_message(Box::new(move |_: DataChannelMessage| {
-                let d3 = Arc::clone(&d2);
+                let d3 = d2.clone();
 
                 Box::pin(async move {
-                    let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
+                    let result = d3
+                        .upgrade()
+                        .unwrap()
+                        .send(&Bytes::from(b"Pong".to_vec()))
+                        .await;
                     assert!(result.is_ok(), "Failed to send string on data channel");
                 })
             }));
