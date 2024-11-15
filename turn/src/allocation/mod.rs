@@ -45,6 +45,9 @@ pub struct AllocationInfo {
     /// Username of this [`Allocation`].
     pub username: String,
 
+    /// Relay address of this [`Allocation`].
+    pub relay_addr: SocketAddr,
+
     /// Relayed bytes with this [`Allocation`].
     #[cfg(feature = "metrics")]
     pub relayed_bytes: usize,
@@ -55,11 +58,13 @@ impl AllocationInfo {
     pub fn new(
         five_tuple: FiveTuple,
         username: String,
+        relay_addr: SocketAddr,
         #[cfg(feature = "metrics")] relayed_bytes: usize,
     ) -> Self {
         Self {
             five_tuple,
             username,
+            relay_addr,
             #[cfg(feature = "metrics")]
             relayed_bytes,
         }
@@ -255,6 +260,7 @@ impl Allocation {
                 .send(AllocationInfo {
                     five_tuple: self.five_tuple,
                     username: self.username.text.clone(),
+                    relay_addr: self.relay_addr,
                     #[cfg(feature = "metrics")]
                     relayed_bytes: self.relayed_bytes.load(Ordering::Acquire),
                 })
