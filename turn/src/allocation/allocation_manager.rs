@@ -63,6 +63,7 @@ impl Manager {
                     AllocationInfo::new(
                         *five_tuple,
                         alloc.username.text.clone(),
+                        alloc.relay_addr,
                         #[cfg(feature = "metrics")]
                         alloc.relayed_bytes.load(Ordering::Acquire),
                     ),
