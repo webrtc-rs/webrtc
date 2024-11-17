@@ -330,45 +330,46 @@ impl DTLSConn {
 
         loop {
             tokio::select! {
-                 done = self.handshake_rx.recv() =>{
-                    if done.is_none() {
+                 done_senders = self.handshake_rx.recv() =>{
+                    if done_senders.is_none() {
                         trace!("[handshake:{}] {} handshake_tx is dropped", srv_cli_str(self.state.is_client), self.current_flight.to_string());
                         return Err(Error::ErrAlertFatalOrClose);
-                    }
+                    } else if let Some((rendezvous_tx, done_tx)) = done_senders {
+                        rendezvous_tx.send(()).ok();
+                        //trace!("[handshake:{}] {} received handshake_rx", srv_cli_str(self.state.is_client), self.current_flight.to_string());
+                        let result = self.current_flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
+                        drop(done_tx);
+                        match result {
+                            Err((alert, mut err)) => {
+                                trace!("[handshake:{}] {} result alert:{:?}, err:{:?}",
+                                        srv_cli_str(self.state.is_client),
+                                        self.current_flight.to_string(),
+                                        alert,
+                                        err);
 
-                    //trace!("[handshake:{}] {} received handshake_rx", srv_cli_str(self.state.is_client), self.current_flight.to_string());
-                    let result = self.current_flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
-                    drop(done);
-                    match result {
-                        Err((alert, mut err)) => {
-                            trace!("[handshake:{}] {} result alert:{:?}, err:{:?}",
-                                    srv_cli_str(self.state.is_client),
-                                    self.current_flight.to_string(),
-                                    alert,
-                                    err);
+                                if let Some(alert) = alert {
+                                    let alert_err = self.notify(alert.alert_level, alert.alert_description).await;
 
-                            if let Some(alert) = alert {
-                                let alert_err = self.notify(alert.alert_level, alert.alert_description).await;
-
-                                if let Err(alert_err) = alert_err {
-                                    if err.is_some() {
-                                        err = Some(alert_err);
+                                    if let Err(alert_err) = alert_err {
+                                        if err.is_some() {
+                                            err = Some(alert_err);
+                                        }
                                     }
                                 }
+                                if let Some(err) = err {
+                                    return Err(err);
+                                }
                             }
-                            if let Some(err) = err {
-                                return Err(err);
+                            Ok(next_flight) => {
+                                trace!("[handshake:{}] {} -> {}", srv_cli_str(self.state.is_client), self.current_flight.to_string(), next_flight.to_string());
+                                if next_flight.is_last_recv_flight() && self.current_flight.to_string() == next_flight.to_string() {
+                                    return Ok(HandshakeState::Finished);
+                                }
+                                self.current_flight = next_flight;
+                                return Ok(HandshakeState::Preparing);
                             }
-                        }
-                        Ok(next_flight) => {
-                            trace!("[handshake:{}] {} -> {}", srv_cli_str(self.state.is_client), self.current_flight.to_string(), next_flight.to_string());
-                            if next_flight.is_last_recv_flight() && self.current_flight.to_string() == next_flight.to_string() {
-                                return Ok(HandshakeState::Finished);
-                            }
-                            self.current_flight = next_flight;
-                            return Ok(HandshakeState::Preparing);
-                        }
-                    };
+                        };
+                    }
                 }
 
                 _ = retransmit_timer.as_mut() =>{
