@@ -10,7 +10,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use log::*;
 use portable_atomic::{AtomicBool, AtomicU16};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::Duration;
 use util::replay_detector::*;
 use util::Conn;
@@ -64,7 +64,8 @@ struct ConnReaderContext {
     cache: HandshakeCache,
     cipher_suite: Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
     remote_epoch: Arc<AtomicU16>,
-    handshake_tx: mpsc::Sender<mpsc::Sender<()>>,
+    // use additional oneshot sender to mimic rendezvous channel behavior
+    handshake_tx: mpsc::Sender<(oneshot::Sender<()>, mpsc::Sender<()>)>,
     handshake_done_rx: mpsc::Receiver<()>,
     packet_tx: Arc<mpsc::Sender<PacketSendRequest>>,
 }
@@ -96,7 +97,8 @@ pub struct DTLSConn {
     pub(crate) flights: Option<Vec<Packet>>,
     pub(crate) cfg: HandshakeConfig,
     pub(crate) retransmit: bool,
-    pub(crate) handshake_rx: mpsc::Receiver<mpsc::Sender<()>>,
+    // use additional oneshot sender to mimic rendezvous channel behavior
+    pub(crate) handshake_rx: mpsc::Receiver<(oneshot::Sender<()>, mpsc::Sender<()>)>,
 
     pub(crate) packet_tx: Arc<mpsc::Sender<PacketSendRequest>>,
     pub(crate) handle_queue_tx: mpsc::Sender<mpsc::Sender<()>>,
@@ -830,9 +832,13 @@ impl DTLSConn {
 
         if has_handshake {
             let (done_tx, mut done_rx) = mpsc::channel(1);
-
+            let rendezvous_at_handshake = async {
+                let (rendezvous_tx, rendezvous_rx) = oneshot::channel();
+                _ = ctx.handshake_tx.send((rendezvous_tx, done_tx)).await;
+                rendezvous_rx.await
+            };
             tokio::select! {
-                _ = ctx.handshake_tx.send(done_tx) => {
+                _ = rendezvous_at_handshake => {
                     let mut wait_done_rx = true;
                     while wait_done_rx{
                         tokio::select!{
