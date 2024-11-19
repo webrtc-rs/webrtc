@@ -651,6 +651,14 @@ impl RTCPeerConnection {
         }
     }
 
+    /// restart_ice restart ICE and triggers negotiation needed
+    /// <https://w3c.github.io/webrtc-pc/#dom-rtcpeerconnection-restartice>
+    pub async fn restart_ice(&self) -> Result<()> {
+        self.internal.ice_transport.restart().await?;
+        self.internal.trigger_negotiation_needed().await;
+        Ok(())
+    }
+
     // set_configuration updates the configuration of this PeerConnection object.
     pub async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()> {
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-setconfiguration (step #2)
