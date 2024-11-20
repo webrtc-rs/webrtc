@@ -50,8 +50,8 @@ jobs:
           args: --all --no-fail-fast ${{ matrix.cargo_flags }}
         env:
           CARGO_INCREMENTAL: "0"
-          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off'
-          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off'
+          RUSTFLAGS: '-Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off -Cprofile-generate=target/debug'
+          RUSTDOCFLAGS: '-Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off -Cprofile-generate=target/debug'
 
       - name: Generate coverage data
         id: grcov
