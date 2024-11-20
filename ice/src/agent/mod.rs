@@ -349,6 +349,8 @@ impl Agent {
             udp_mux.remove_conn_by_ufrag(&ufrag).await;
         }
 
+        Self::close_multicast_conn(&self.mdns_conn).await;
+
         //FIXME: deadlock here
         self.internal.close().await
     }
