@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.10.7/.schema/devbox.schema.json",
+  "packages": {
+    "git":        "latest",
+    "pre-commit": "latest",
+    "rustup":     "latest",
+    "libiconv":   "latest",
+    "darwin.apple_sdk.frameworks.SystemConfiguration": {
+      "platforms": ["x86_64-darwin", "aarch64-darwin"],
+    },
+    "darwin.apple_sdk.frameworks.Security": {
+      "platforms": ["x86_64-darwin", "aarch64-darwin"],
+    },
+    "darwin.apple_sdk.frameworks.CoreServices": {
+      "platforms": ["x86_64-darwin", "aarch64-darwin"],
+    },
+    "vim":  "latest",
+    "less": "latest",
+    "openssh": "latest",
+  },
+  "shell": {
+    "init_hook": [
+      "pre-commit install",
+      "if [ ! -d $RUSTUP_HOME/toolchains/stable* ]; then rustup default stable; fi",
+    ],
+    "scripts": {
+      "test": [
+        "cargo test",
+      ],
+      "build": [
+        "cargo build",
+      ],
+      "fmt": [
+        "cargo fmt",
+      ],
+    },
+  },
+  "env": {
+    "LS_COLORS": "di=33",
+  },
+}

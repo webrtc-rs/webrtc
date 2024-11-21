@@ -137,6 +137,29 @@ To build webrtc crate:
 cargo build [or clippy or test or fmt]
 ```
 
+### Devbox
+
+This repo now supports [devbox](https://www.jetify.com/devspace) for a better development experience.
+In short, devbox allows to define a development environment by modifying the `PATH` variable in your shell.
+It is based on nix and runs on Linux, MacOS, and WSL.
+To use devbox, install it from [devbox installation](https://www.jetify.com/docs/devbox/installing_devbox/):
+
+```bash
+curl -fsSL https://get.jetify.com/devbox | bash
+```
+
+Now you can either use the different devbox scripts:
+
+- test it: `devbox run test`
+- build it: `devbox run build`
+- format it: `devbux run format`
+
+Or you can enter a shell with everything pre-installed:
+
+```bash
+devbox shell
+```
+
 ## Open Source License
 
 Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has been used for both the compiler and many public libraries since (see <https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license>). In order to match the community standards, webrtc-rs is using the dual MIT+Apache-2.0 license.
@@ -144,3 +167,11 @@ Dual licensing under both MIT and Apache-2.0 is the currently accepted standard 
 ## Contributing
 
 Contributors or Pull Requests are Welcome!!!
+
+If you want to contribute, please be sure to install the pre-commit hooks:
+
+```bash
+pre-commit install
+```
+
+Or use the devbox environment described above, which will do so automatically.
