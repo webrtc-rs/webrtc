@@ -86,6 +86,16 @@ impl TrackLocalContext {
     pub fn id(&self) -> String {
         self.id.clone()
     }
+
+    /// mid returns the id of media associated with the RTP stream
+    pub fn mid(&self) -> Option<SmolStr> {
+        self.mid.clone()
+    }
+
+    /// paused returns a boolean indicating whether the track is currently paused
+    pub fn paused(&self) -> Arc<AtomicBool> {
+        self.paused.clone()
+    }
 }
 /// TrackLocal is an interface that controls how the user can send media
 /// The user can provide their own TrackLocal implementations, or use
