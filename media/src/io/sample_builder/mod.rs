@@ -391,7 +391,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
     }
 }
 
-/// Computes the distance between two sequence numbers
+// Computes the distance between two sequence numbers
 /*pub(crate) fn seqnum_distance(head: u16, tail: u16) -> u16 {
     if head > tail {
         head.wrapping_add(tail)

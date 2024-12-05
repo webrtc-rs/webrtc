@@ -234,7 +234,6 @@ impl Payloader for HevcPayloader {
 ///
 /// Network Abstraction Unit Header implementation
 ///
-
 const H265NALU_HEADER_SIZE: usize = 2;
 /// <https://datatracker.ietf.org/doc/html/rfc7798#section-4.4.2>
 const H265NALU_AGGREGATION_PACKET_TYPE: u8 = 48;
@@ -626,10 +625,8 @@ impl H265AggregationPacket {
     }
 }
 
-///
 /// Fragmentation Unit implementation
 ///
-
 /// H265FragmentationUnitHeader is a H265 FU Header
 /// +---------------+
 /// |0|1|2|3|4|5|6|7|
@@ -759,7 +756,6 @@ impl H265FragmentationUnitPacket {
 ///
 /// PACI implementation
 ///
-
 /// H265PACIPacket represents a single H265 PACI packet.
 ///
 ///  0                   1                   2                   3
@@ -908,7 +904,6 @@ impl H265PACIPacket {
 ///
 /// Temporal Scalability Control Information
 ///
-
 /// H265TSCI is a Temporal Scalability Control Information header extension.
 ///
 /// ## Specifications
@@ -976,7 +971,6 @@ impl Default for H265Payload {
 ///
 /// Packet implementation
 ///
-
 /// H265Packet represents a H265 packet, stored in the payload of an RTP packet.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct H265Packet {

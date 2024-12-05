@@ -27,7 +27,7 @@ impl<T> Mutex<T> {
 /// dropped (falls out of scope), the lock will be unlocked.
 pub struct MutexGuard<'a, T>(sync::MutexGuard<'a, T>);
 
-impl<'a, T> ops::Deref for MutexGuard<'a, T> {
+impl<T> ops::Deref for MutexGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -35,7 +35,7 @@ impl<'a, T> ops::Deref for MutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> ops::DerefMut for MutexGuard<'a, T> {
+impl<T> ops::DerefMut for MutexGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -72,7 +72,7 @@ impl<T> RwLock<T> {
 /// dropped.
 pub struct RwLockReadGuard<'a, T>(sync::RwLockReadGuard<'a, T>);
 
-impl<'a, T> ops::Deref for RwLockReadGuard<'a, T> {
+impl<T> ops::Deref for RwLockReadGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -84,7 +84,7 @@ impl<'a, T> ops::Deref for RwLockReadGuard<'a, T> {
 /// dropped.
 pub struct RwLockWriteGuard<'a, T>(sync::RwLockWriteGuard<'a, T>);
 
-impl<'a, T> ops::Deref for RwLockWriteGuard<'a, T> {
+impl<T> ops::Deref for RwLockWriteGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -92,7 +92,7 @@ impl<'a, T> ops::Deref for RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<'a, T> ops::DerefMut for RwLockWriteGuard<'a, T> {
+impl<T> ops::DerefMut for RwLockWriteGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

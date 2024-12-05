@@ -127,7 +127,7 @@ impl<W: Write + Seek> OggWriter<W> {
     ) -> Result<()> {
         self.last_payload_size = payload.len();
         self.last_payload = payload.clone();
-        let n_segments = (self.last_payload_size + 255 - 1) / 255;
+        let n_segments = self.last_payload_size.div_ceil(255);
 
         let mut page =
             Vec::with_capacity(PAGE_HEADER_SIZE + 1 + self.last_payload_size + n_segments);
