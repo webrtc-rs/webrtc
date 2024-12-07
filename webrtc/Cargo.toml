@@ -12,7 +12,7 @@ readme = "../README.md"
 
 [dependencies]
 data = { version = "0.9.0", path = "../data", package = "webrtc-data" }
-dtls = { version = "0.10.0", path = "../dtls", package = "webrtc-dtls" }
+dtls = { version = "0.11.0", path = "../dtls", package = "webrtc-dtls" }
 ice = { version = "0.12.0", path = "../ice", package = "webrtc-ice" }
 interceptor = { version = "0.12.0", path = "../interceptor" }
 mdns = { version = "0.8.0", path = "../mdns", package = "webrtc-mdns" }
