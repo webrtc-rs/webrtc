@@ -344,7 +344,7 @@ impl PeerConnectionInternal {
                             .await;
 
                         if let Err(err) = pci.handle_incoming_ssrc(stream, ssrc).await {
-                            log::error!(
+                            log::warn!(
                                 "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
                                 ssrc,
                                 err
