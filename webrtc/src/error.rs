@@ -40,11 +40,6 @@ pub enum Error {
     #[error("turn server credentials required")]
     ErrNoTurnCredentials,
 
-    /// ErrTurnCredentials indicates that provided TURN credentials are partial
-    /// or malformed.
-    #[error("invalid turn server credentials")]
-    ErrTurnCredentials,
-
     /// ErrExistingTrack indicates that a track already exists.
     #[error("track already exists")]
     ErrExistingTrack,
