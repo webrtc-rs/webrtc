@@ -25,9 +25,7 @@ use crate::rtp_transceiver::{
     create_stream_info, PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters,
     RTCRtpTransceiver, SSRC,
 };
-use crate::track::track_local::{
-    InterceptorToTrackLocalWriter, TrackLocal, TrackLocalContext, TrackLocalWriter,
-};
+use crate::track::track_local::{InterceptorToTrackLocalWriter, TrackLocal, TrackLocalContext};
 
 pub(crate) struct RTPSenderInternal {
     pub(crate) stop_called_rx: Arc<Notify>,
@@ -38,8 +36,8 @@ pub(crate) struct TrackEncoding {
     pub(crate) track: Arc<dyn TrackLocal + Send + Sync>,
     pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
     pub(crate) rtcp_interceptor: Arc<dyn RTCPReader + Send + Sync>,
-    pub(crate) stream_info: Mutex<StreamInfo>,
-    pub(crate) context: Mutex<TrackLocalContext>,
+    pub(crate) stream_info: StreamInfo,
+    pub(crate) context: TrackLocalContext,
 
     pub(crate) ssrc: SSRC,
 
@@ -275,12 +273,21 @@ impl RTCRtpSender {
             None
         };
 
+        let write_stream = Arc::new(InterceptorToTrackLocalWriter::new(self.paused.clone()));
+        let context = TrackLocalContext {
+            id: self.id.clone(),
+            params: super::RTCRtpParameters::default(),
+            ssrc: 0,
+            write_stream,
+            paused: self.paused.clone(),
+            mid: None,
+        };
         let encoding = TrackEncoding {
             track,
             srtp_stream,
             rtcp_interceptor,
-            stream_info: Mutex::new(StreamInfo::default()),
-            context: Mutex::new(TrackLocalContext::default()),
+            stream_info: StreamInfo::default(),
+            context,
             ssrc,
             rtx,
         };
@@ -390,9 +397,8 @@ impl RTCRtpSender {
                 .first_mut()
                 .ok_or(Error::ErrRTPSenderNewTrackHasIncorrectEnvelope)?;
 
-            let mut context = encoding.context.lock().await;
             if self.has_sent() {
-                encoding.track.unbind(&context).await?;
+                encoding.track.unbind(&encoding.context).await?;
             }
 
             self.seq_trans.reset_offset();
@@ -406,12 +412,12 @@ impl RTCRtpSender {
                 .and_then(|t| t.mid());
 
             let new_context = TrackLocalContext {
-                id: context.id.clone(),
+                id: encoding.context.id.clone(),
                 params: self
                     .media_engine
                     .get_rtp_parameters_by_kind(t.kind(), RTCRtpTransceiverDirection::Sendonly),
-                ssrc: context.ssrc,
-                write_stream: context.write_stream.clone(),
+                ssrc: encoding.context.ssrc,
+                write_stream: encoding.context.write_stream.clone(),
                 paused: self.paused.clone(),
                 mid,
             };
@@ -419,13 +425,13 @@ impl RTCRtpSender {
             match t.bind(&new_context).await {
                 Err(err) => {
                     // Re-bind the original track
-                    encoding.track.bind(&context).await?;
+                    encoding.track.bind(&encoding.context).await?;
 
                     Err(err)
                 }
                 Ok(codec) => {
                     // Codec has changed
-                    context.params.codecs = vec![codec];
+                    encoding.context.params.codecs = vec![codec];
                     encoding.track = Arc::clone(t);
                     Ok(())
                 }
@@ -433,8 +439,7 @@ impl RTCRtpSender {
         } else {
             if self.has_sent() {
                 for encoding in track_encodings.drain(..) {
-                    let context = encoding.context.lock().await;
-                    encoding.track.unbind(&context).await?;
+                    encoding.track.unbind(&encoding.context).await?;
                 }
             } else {
                 track_encodings.clear();
@@ -449,7 +454,7 @@ impl RTCRtpSender {
         if self.has_sent() {
             return Err(Error::ErrRTPSenderSendAlreadyCalled);
         }
-        let track_encodings = self.track_encodings.lock().await;
+        let mut track_encodings = self.track_encodings.lock().await;
         if track_encodings.is_empty() {
             return Err(Error::ErrRTPSenderTrackRemoved);
         }
@@ -461,24 +466,18 @@ impl RTCRtpSender {
             .and_then(|t| t.upgrade())
             .and_then(|t| t.mid());
 
-        for (idx, encoding) in track_encodings.iter().enumerate() {
+        for (idx, encoding) in track_encodings.iter_mut().enumerate() {
             let write_stream = Arc::new(InterceptorToTrackLocalWriter::new(self.paused.clone()));
-            let mut context = TrackLocalContext {
-                id: self.id.clone(),
-                params: self.media_engine.get_rtp_parameters_by_kind(
-                    encoding.track.kind(),
-                    RTCRtpTransceiverDirection::Sendonly,
-                ),
-                ssrc: parameters.encodings[idx].ssrc,
-                write_stream: Some(
-                    Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>
-                ),
-                paused: self.paused.clone(),
-                mid: mid.to_owned(),
-            };
+            encoding.context.params = self.media_engine.get_rtp_parameters_by_kind(
+                encoding.track.kind(),
+                RTCRtpTransceiverDirection::Sendonly,
+            );
+            encoding.context.ssrc = parameters.encodings[idx].ssrc;
+            encoding.context.write_stream = Arc::clone(&write_stream) as _;
+            encoding.context.mid = mid.to_owned();
 
-            let codec = encoding.track.bind(&context).await?;
-            let stream_info = create_stream_info(
+            let codec = encoding.track.bind(&encoding.context).await?;
+            encoding.stream_info = create_stream_info(
                 self.id.clone(),
                 parameters.encodings[idx].ssrc,
                 codec.payload_type,
@@ -486,16 +485,14 @@ impl RTCRtpSender {
                 &parameters.rtp_parameters.header_extensions,
                 None,
             );
-            context.params.codecs = vec![codec.clone()];
+            encoding.context.params.codecs = vec![codec.clone()];
 
             let srtp_writer = Arc::clone(&encoding.srtp_stream) as Arc<dyn RTPWriter + Send + Sync>;
             let rtp_writer = self
                 .interceptor
-                .bind_local_stream(&stream_info, srtp_writer)
+                .bind_local_stream(&encoding.stream_info, srtp_writer)
                 .await;
 
-            *encoding.context.lock().await = context;
-            *encoding.stream_info.lock().await = stream_info;
             *write_stream.interceptor_rtp_writer.lock().await = Some(rtp_writer);
 
             if let (Some(rtx), Some(rtx_codec)) = (
@@ -573,8 +570,9 @@ impl RTCRtpSender {
 
         let track_encodings = self.track_encodings.lock().await;
         for encoding in track_encodings.iter() {
-            let stream_info = encoding.stream_info.lock().await;
-            self.interceptor.unbind_local_stream(&stream_info).await;
+            self.interceptor
+                .unbind_local_stream(&encoding.stream_info)
+                .await;
 
             encoding.srtp_stream.close().await?;
 
