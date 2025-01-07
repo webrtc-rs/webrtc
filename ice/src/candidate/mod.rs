@@ -234,6 +234,7 @@ pub struct CandidatePair {
     pub(crate) binding_request_count: AtomicU16,
     pub(crate) state: AtomicU8, // convert it to CandidatePairState,
     pub(crate) nominated: AtomicBool,
+    pub(crate) nominate_on_binding_success: AtomicBool,
 }
 
 impl Default for CandidatePair {
@@ -245,6 +246,7 @@ impl Default for CandidatePair {
             state: AtomicU8::new(CandidatePairState::Waiting as u8),
             binding_request_count: AtomicU16::new(0),
             nominated: AtomicBool::new(false),
+            nominate_on_binding_success: AtomicBool::new(false),
         }
     }
 }
@@ -297,6 +299,7 @@ impl CandidatePair {
             state: AtomicU8::new(CandidatePairState::Waiting as u8),
             binding_request_count: AtomicU16::new(0),
             nominated: AtomicBool::new(false),
+            nominate_on_binding_success: AtomicBool::new(false),
         }
     }
 
