@@ -150,17 +150,13 @@ impl TrackLocalStaticRTP {
                 }
             }
 
-            if let Some(write_stream) = &b.write_stream {
-                match write_stream.write_rtp_with_attributes(&pkt, attr).await {
-                    Ok(m) => {
-                        n += m;
-                    }
-                    Err(err) => {
-                        write_errs.push(err);
-                    }
+            match b.write_stream.write_rtp_with_attributes(&pkt, attr).await {
+                Ok(m) => {
+                    n += m;
                 }
-            } else {
-                write_errs.push(Error::new("track binding has none write_stream".to_owned()));
+                Err(err) => {
+                    write_errs.push(err);
+                }
             }
         }
 
