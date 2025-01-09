@@ -488,6 +488,12 @@ impl ControlledSelector for AgentInternal {
                 p.state
                     .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
                 log::trace!("Found valid candidate pair: {}", p);
+
+                if p.nominate_on_binding_success.load(Ordering::SeqCst)
+                    && self.agent_conn.get_selected_pair().is_none()
+                {
+                    self.set_selected_pair(Some(Arc::clone(&p))).await;
+                }
             } else {
                 // This shouldn't happen
                 log::error!("Success response from invalid candidate pair");
@@ -524,7 +530,6 @@ impl ControlledSelector for AgentInternal {
                     if self.agent_conn.get_selected_pair().is_none() {
                         self.set_selected_pair(Some(Arc::clone(&p))).await;
                     }
-                    self.send_binding_success(m, local, remote).await;
                 } else {
                     // If the received Binding request triggered a new check to be
                     // enqueued in the triggered-check queue (Section 7.3.1.4), once the
@@ -534,12 +539,12 @@ impl ControlledSelector for AgentInternal {
                     // MUST remove the candidate pair from the valid list, set the
                     // candidate pair state to Failed, and set the checklist state to
                     // Failed.
-                    self.ping_candidate(local, remote).await;
+                    p.nominate_on_binding_success.store(true, Ordering::SeqCst);
                 }
-            } else {
-                self.send_binding_success(m, local, remote).await;
-                self.ping_candidate(local, remote).await;
             }
+
+            self.send_binding_success(m, local, remote).await;
+            self.ping_candidate(local, remote).await;
         }
     }
 }
