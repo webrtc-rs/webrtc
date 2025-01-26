@@ -28,6 +28,7 @@ const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
 pub struct Session {
     local_context: Arc<Mutex<Context>>,
     streams_map: Arc<Mutex<HashMap<u32, Arc<Stream>>>>,
+    #[allow(clippy::type_complexity)]
     new_stream_rx: Arc<Mutex<mpsc::Receiver<(Arc<Stream>, Option<rtp::header::Header>)>>>,
     close_stream_tx: mpsc::Sender<u32>,
     close_session_tx: mpsc::Sender<()>,

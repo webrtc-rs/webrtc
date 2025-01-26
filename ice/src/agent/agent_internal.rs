@@ -984,7 +984,7 @@ impl AgentInternal {
     ) -> bool {
         self.find_remote_candidate(local.network_type(), remote)
             .await
-            .map_or(false, |remote_candidate| {
+            .is_some_and(|remote_candidate| {
                 remote_candidate.seen(false);
                 true
             })

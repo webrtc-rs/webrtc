@@ -71,7 +71,7 @@ impl Packet for PacketReceiptTimesReportBlock {
         other
             .as_any()
             .downcast_ref::<PacketReceiptTimesReportBlock>()
-            .map_or(false, |a| self == a)
+            == Some(self)
     }
     fn cloned(&self) -> Box<dyn Packet + Send + Sync> {
         Box::new(self.clone())

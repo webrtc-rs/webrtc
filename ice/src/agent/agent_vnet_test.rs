@@ -1002,7 +1002,7 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
     log::debug!("controlled_agent start_connectivity_checks done...");
 
     let test_message = "Test Message";
-    let mut read_buf = vec![0u8; test_message.as_bytes().len()];
+    let mut read_buf = vec![0u8; test_message.len()];
     controlled_agent_conn.recv(&mut read_buf).await?;
 
     assert_eq!(read_buf, test_message.as_bytes(), "should match");

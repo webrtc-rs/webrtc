@@ -40,10 +40,7 @@ impl Packet for RawPacket {
     }
 
     fn equal(&self, other: &(dyn Packet + Send + Sync)) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<RawPacket>()
-            .map_or(false, |a| self == a)
+        other.as_any().downcast_ref::<RawPacket>() == Some(self)
     }
 
     fn cloned(&self) -> Box<dyn Packet + Send + Sync> {

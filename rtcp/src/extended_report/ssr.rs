@@ -132,7 +132,7 @@ impl Packet for StatisticsSummaryReportBlock {
         other
             .as_any()
             .downcast_ref::<StatisticsSummaryReportBlock>()
-            .map_or(false, |a| self == a)
+            == Some(self)
     }
     fn cloned(&self) -> Box<dyn Packet + Send + Sync> {
         Box::new(self.clone())

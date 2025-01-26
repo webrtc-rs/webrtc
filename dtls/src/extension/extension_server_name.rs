@@ -21,7 +21,7 @@ impl ExtensionServerName {
 
     pub fn size(&self) -> usize {
         //TODO: check how to do cryptobyte?
-        2 + 2 + 1 + 2 + self.server_name.as_bytes().len()
+        2 + 2 + 1 + 2 + self.server_name.len()
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {

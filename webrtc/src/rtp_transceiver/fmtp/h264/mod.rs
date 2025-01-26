@@ -90,10 +90,7 @@ impl Fmtp for H264Fmtp {
     }
 
     fn equal(&self, other: &(dyn Fmtp)) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<H264Fmtp>()
-            .map_or(false, |a| self == a)
+        other.as_any().downcast_ref::<H264Fmtp>() == Some(self)
     }
 
     fn as_any(&self) -> &(dyn Any) {

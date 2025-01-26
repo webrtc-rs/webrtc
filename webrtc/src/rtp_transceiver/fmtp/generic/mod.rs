@@ -53,10 +53,7 @@ impl Fmtp for GenericFmtp {
     }
 
     fn equal(&self, other: &(dyn Fmtp)) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<GenericFmtp>()
-            .map_or(false, |a| self == a)
+        other.as_any().downcast_ref::<GenericFmtp>() == Some(self)
     }
 
     fn as_any(&self) -> &(dyn Any) {
