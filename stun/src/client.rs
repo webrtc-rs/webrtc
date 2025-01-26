@@ -246,12 +246,12 @@ impl Client {
         }
     }
 
-    fn insert(&mut self, ct: ClientTransaction) -> Result<()> {
+    fn insert(&self, ct: ClientTransaction) -> Result<()> {
         if self.settings.closed {
             return Err(Error::ErrClientClosed);
         }
 
-        if let Some(handler_tx) = &mut self.handler_tx {
+        if let Some(handler_tx) = &self.handler_tx {
             handler_tx.send(Event {
                 event_type: EventType::Insert(ct),
                 ..Default::default()
@@ -261,12 +261,12 @@ impl Client {
         Ok(())
     }
 
-    fn remove(&mut self, id: TransactionId) -> Result<()> {
+    fn remove(&self, id: TransactionId) -> Result<()> {
         if self.settings.closed {
             return Err(Error::ErrClientClosed);
         }
 
-        if let Some(handler_tx) = &mut self.handler_tx {
+        if let Some(handler_tx) = &self.handler_tx {
             handler_tx.send(Event {
                 event_type: EventType::Remove(id),
                 ..Default::default()
@@ -426,7 +426,7 @@ impl Client {
         Ok(self)
     }
 
-    pub async fn send(&mut self, m: &Message, handler: Handler) -> Result<()> {
+    pub async fn send(&self, m: &Message, handler: Handler) -> Result<()> {
         if self.settings.closed {
             return Err(Error::ErrClientClosed);
         }
@@ -446,7 +446,7 @@ impl Client {
             let d = t.next_timeout(t.start);
             self.insert(t)?;
 
-            if let Some(client_agent_tx) = &mut self.client_agent_tx {
+            if let Some(client_agent_tx) = &self.client_agent_tx {
                 client_agent_tx
                     .send(ClientAgent::Start(m.transaction_id, d))
                     .await?;
@@ -458,7 +458,7 @@ impl Client {
             if result.is_err() && has_handler {
                 self.remove(m.transaction_id)?;
 
-                if let Some(client_agent_tx) = &mut self.client_agent_tx {
+                if let Some(client_agent_tx) = &self.client_agent_tx {
                     client_agent_tx
                         .send(ClientAgent::Stop(m.transaction_id))
                         .await?;
