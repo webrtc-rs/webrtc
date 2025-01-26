@@ -14,7 +14,6 @@ use portable_atomic::{AtomicBool, AtomicU8};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use tokio::sync::{Mutex, OnceCell};
-use util::Unmarshal;
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::{Error, Result};
@@ -522,42 +521,4 @@ pub(crate) async fn satisfy_type_and_direction(
     }
 
     None
-}
-
-/// handle_unknown_rtp_packet consumes a single RTP Packet and returns information that is helpful
-/// for demuxing and handling an unknown SSRC (usually for Simulcast)
-pub(crate) fn handle_unknown_rtp_packet(
-    buf: &[u8],
-    mid_extension_id: u8,
-    sid_extension_id: u8,
-    rsid_extension_id: u8,
-) -> Result<(String, String, String, PayloadType)> {
-    let mut reader = buf;
-    let rp = rtp::packet::Packet::unmarshal(&mut reader)?;
-
-    if !rp.header.extension {
-        return Ok((String::new(), String::new(), String::new(), 0));
-    }
-
-    let payload_type = rp.header.payload_type;
-
-    let mid = if let Some(payload) = rp.header.get_extension(mid_extension_id) {
-        String::from_utf8(payload.to_vec())?
-    } else {
-        String::new()
-    };
-
-    let rid = if let Some(payload) = rp.header.get_extension(sid_extension_id) {
-        String::from_utf8(payload.to_vec())?
-    } else {
-        String::new()
-    };
-
-    let srid = if let Some(payload) = rp.header.get_extension(rsid_extension_id) {
-        String::from_utf8(payload.to_vec())?
-    } else {
-        String::new()
-    };
-
-    Ok((mid, rid, srid, payload_type))
 }

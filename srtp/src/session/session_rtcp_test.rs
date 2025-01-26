@@ -84,7 +84,7 @@ async fn test_session_srtcp_accept() -> Result<()> {
     let test_payload = rtcp_packet.marshal()?;
     sa.write_rtcp(&rtcp_packet).await?;
 
-    let read_stream = sb.accept().await?;
+    let (read_stream, _) = sb.accept().await?;
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,

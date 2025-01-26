@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Weak;
 
 use super::*;
-use crate::rtp_transceiver::create_stream_info;
+use crate::rtp_transceiver::{create_stream_info, PayloadType};
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::{
     InboundRTPStats, OutboundRTPStats, RTCStatsType, RemoteInboundRTPStats, RemoteOutboundRTPStats,
@@ -15,7 +15,6 @@ use arc_swap::ArcSwapOption;
 use portable_atomic::AtomicIsize;
 use smol_str::SmolStr;
 use tokio::time::Instant;
-use util::Unmarshal;
 
 pub(crate) struct PeerConnectionInternal {
     /// a value containing the last known greater mid value
@@ -309,8 +308,12 @@ impl PeerConnectionInternal {
                     }
                 };
 
-                let stream = match srtp_session.accept().await {
-                    Ok(stream) => stream,
+                let (stream, header) = match srtp_session.accept().await {
+                    Ok((stream, Some(header))) => (stream, header),
+                    Ok((_, None)) => {
+                        log::error!("Accepting RTP session, without RTP header?");
+                        return;
+                    }
                     Err(err) => {
                         log::warn!("Failed to accept RTP {}", err);
                         return;
@@ -338,16 +341,16 @@ impl PeerConnectionInternal {
                     let pci = Arc::clone(&pci);
                     tokio::spawn(async move {
                         let ssrc = stream.get_ssrc();
-
                         dtls_transport
                             .store_simulcast_stream(ssrc, Arc::clone(&stream))
                             .await;
 
-                        if let Err(err) = pci.handle_incoming_ssrc(stream, ssrc).await {
+                        if let Err(err) = pci
+                            .handle_incoming_rtp_stream(stream, header.payload_type)
+                            .await
+                        {
                             log::warn!(
-                                "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
-                                ssrc,
-                                err
+                                "Incoming unhandled RTP ssrc({ssrc}), on_track will not be fired. {err}"
                             );
                         }
 
@@ -370,17 +373,18 @@ impl PeerConnectionInternal {
                         }
                     };
 
-                    let stream = match srtcp_session.accept().await {
-                        Ok(stream) => stream,
+                    match srtcp_session.accept().await {
+                        Ok((stream, _)) => {
+                            let ssrc = stream.get_ssrc();
+                            log::warn!(
+                                "Incoming unhandled RTCP ssrc({ssrc}), on_track will not be fired"
+                            );
+                        }
                         Err(err) => {
-                            log::warn!("Failed to accept RTCP {}", err);
+                            log::warn!("Failed to accept RTCP {err}");
                             return;
                         }
                     };
-                    log::warn!(
-                        "Incoming unhandled RTCP ssrc({}), on_track will not be fired",
-                        stream.get_ssrc()
-                    );
                 }
             });
         }
@@ -1002,18 +1006,18 @@ impl PeerConnectionInternal {
         Ok(true)
     }
 
-    async fn handle_incoming_ssrc(
+    async fn handle_incoming_rtp_stream(
         self: &Arc<Self>,
         rtp_stream: Arc<Stream>,
-        ssrc: SSRC,
+        payload_type: PayloadType,
     ) -> Result<()> {
+        let ssrc = rtp_stream.get_ssrc();
         let parsed = match self.remote_description().await.and_then(|rd| rd.parsed) {
             Some(r) => r,
             None => return Err(Error::ErrPeerConnRemoteDescriptionNil),
         };
         // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
-        let handled = self.handle_undeclared_ssrc(ssrc, &parsed).await?;
-        if handled {
+        if self.handle_undeclared_ssrc(ssrc, &parsed).await? {
             return Ok(());
         }
 
@@ -1046,26 +1050,6 @@ impl PeerConnectionInternal {
             })
             .await;
 
-        // Packets that we read as part of simulcast probing that we need to make available
-        // if we do find a track later.
-        let mut buffered_packets: VecDeque<(rtp::packet::Packet, Attributes)> = VecDeque::default();
-
-        let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
-        let n = rtp_stream.read(&mut buf).await?;
-        let mut b = &buf[..n];
-
-        let (mut mid, mut rid, mut rsid, payload_type) = handle_unknown_rtp_packet(
-            b,
-            mid_extension_id as u8,
-            sid_extension_id as u8,
-            rsid_extension_id as u8,
-        )?;
-
-        let packet = rtp::packet::Packet::unmarshal(&mut b).unwrap();
-
-        // TODO: Can we have attributes on the first packets?
-        buffered_packets.push_back((packet, Attributes::new()));
-
         let params = self
             .media_engine
             .get_rtp_parameters_by_payload_type(payload_type)
@@ -1089,21 +1073,24 @@ impl PeerConnectionInternal {
             .streams_for_ssrc(ssrc, &stream_info, &icpr)
             .await?;
 
-        let a = Attributes::new();
-        for _ in 0..=SIMULCAST_PROBE_COUNT {
-            if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
-                let (pkt, _) = rtp_interceptor.read(&mut buf, &a).await?;
-                let (m, r, rs, _) = handle_unknown_rtp_packet(
-                    &buf[..n],
-                    mid_extension_id as u8,
-                    sid_extension_id as u8,
-                    rsid_extension_id as u8,
-                )?;
-                mid = m;
-                rid = r;
-                rsid = rs;
+        // Packets that we read as part of simulcast probing that we need to make available
+        // if we do find a track later.
+        let mut buffered_packets: VecDeque<(rtp::packet::Packet, Attributes)> = VecDeque::default();
+        let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
 
-                buffered_packets.push_back((pkt, a.clone()));
+        for _ in 0..=SIMULCAST_PROBE_COUNT {
+            let (pkt, a) = rtp_interceptor
+                .read(&mut buf, &stream_info.attributes)
+                .await?;
+            let (mid, rid, rsid) = get_stream_mid_rid(
+                &pkt.header,
+                mid_extension_id as u8,
+                sid_extension_id as u8,
+                rsid_extension_id as u8,
+            )?;
+            buffered_packets.push_back((pkt, a.clone()));
+
+            if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
                 continue;
             }
 
@@ -1543,4 +1530,35 @@ fn capitalize(s: &str) -> String {
     result.extend(s.chars().skip(1));
 
     result
+}
+
+fn get_stream_mid_rid(
+    header: &rtp::header::Header,
+    mid_extension_id: u8,
+    sid_extension_id: u8,
+    rsid_extension_id: u8,
+) -> Result<(String, String, String)> {
+    if !header.extension {
+        return Ok((String::new(), String::new(), String::new()));
+    }
+
+    let mid = if let Some(payload) = header.get_extension(mid_extension_id) {
+        String::from_utf8(payload.to_vec())?
+    } else {
+        String::new()
+    };
+
+    let rid = if let Some(payload) = header.get_extension(sid_extension_id) {
+        String::from_utf8(payload.to_vec())?
+    } else {
+        String::new()
+    };
+
+    let srid = if let Some(payload) = header.get_extension(rsid_extension_id) {
+        String::from_utf8(payload.to_vec())?
+    } else {
+        String::new()
+    };
+
+    Ok((mid, rid, srid))
 }

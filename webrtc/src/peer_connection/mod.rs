@@ -81,8 +81,7 @@ use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::rtp_transceiver::{
-    find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
-    RTCRtpTransceiverInit, SSRC,
+    find_by_mid, satisfy_type_and_direction, RTCRtpTransceiver, RTCRtpTransceiverInit, SSRC,
 };
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;

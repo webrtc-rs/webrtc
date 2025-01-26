@@ -86,19 +86,22 @@ async fn test_session_srtp_accept() -> Result<()> {
 
     let packet = rtp::packet::Packet {
         header: rtp::header::Header {
+            version: 2,
             ssrc: TEST_SSRC,
+            payload_type: 96,
             ..Default::default()
         },
         payload: test_payload.clone(),
     };
     sa.write_rtp(&packet).await?;
 
-    let read_stream = sb.accept().await?;
+    let (read_stream, header) = sb.accept().await?;
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,
         "SSRC mismatch during accept exp({TEST_SSRC}) actual({ssrc})"
     );
+    assert_eq!(header, Some(packet.header));
 
     read_stream.read(&mut read_buffer).await?;
 
