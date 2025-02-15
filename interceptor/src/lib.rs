@@ -24,6 +24,9 @@ pub mod twcc;
 
 pub use error::Error;
 
+/// Attribute indicating the stream is probing incoming packets.
+pub const ATTR_READ_PROBE: usize = 2295978936;
+
 /// Attributes are a generic key/value store used by interceptors
 pub type Attributes = HashMap<usize, usize>;
 
