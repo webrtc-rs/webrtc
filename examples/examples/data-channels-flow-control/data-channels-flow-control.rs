@@ -117,7 +117,8 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
                 Box::pin(async {
                     // This callback shouldn't be blocked for a long time, so we spawn our handler
                     tokio::spawn(async move {
-                        let start = SystemTime::now();
+                        let mut start = SystemTime::now();
+                        let mut last_total_bytes_received: usize = 0;
 
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         println!();
@@ -125,15 +126,19 @@ async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
                         loop {
                             let total_bytes_received =
                                 shared_total_bytes_received.load(Ordering::Relaxed);
+                            let epoch_bytes_received =
+                                total_bytes_received - last_total_bytes_received;
+                            last_total_bytes_received = total_bytes_received;
 
                             let elapsed = SystemTime::now().duration_since(start);
                             let bps =
-                                (total_bytes_received * 8) as f64 / elapsed.unwrap().as_secs_f64();
+                                (epoch_bytes_received * 8) as f64 / elapsed.unwrap().as_secs_f64();
 
                             println!(
                                 "Throughput is about {:.03} Mbps",
                                 bps / (1024 * 1024) as f64
                             );
+                            start = SystemTime::now();
                             tokio::time::sleep(Duration::from_secs(1)).await;
                         }
                     });
