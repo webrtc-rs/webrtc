@@ -316,7 +316,18 @@ impl RTCDataChannel {
         let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
         loop {
             let (n, is_string) = tokio::select! {
-                _ = notify_rx.notified() => break,
+                _ = notify_rx.notified() => {
+                    ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
+                    let on_close_handler2 = Arc::clone(&on_close_handler);
+                    tokio::spawn(async move {
+                        if let Some(handler) = &*on_close_handler2.load() {
+                            let mut f = handler.lock().await;
+                            f().await;
+                        }
+                    });
+
+                    break;
+                }
                 result = data_channel.read_data_channel(&mut buffer) => {
                     match result{
                         // EOF (`data_channel` was either closed or the underlying stream got
