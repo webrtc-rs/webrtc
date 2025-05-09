@@ -28,9 +28,9 @@ use crate::stats::StatsReportType::Codec;
 /// MIME_TYPE_H264 H264 MIME type.
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_H264: &str = "video/H264";
-/// MIME_TYPE_HEVC HEVC MIME type.
+/// MIME_TYPE_HEVC HEVC/H265 MIME type.
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_HEVC: &str = "video/HEVC";
+pub const MIME_TYPE_HEVC: &str = "video/H265";
 /// MIME_TYPE_OPUS Opus MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_OPUS: &str = "audio/opus";
