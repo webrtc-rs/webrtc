@@ -101,12 +101,12 @@ impl Server {
     /// Get information of [`Allocation`][`Allocation`]s by specified [`FiveTuple`]s.
     ///
     /// If `five_tuples` is:
-    /// - [`None`]:               It returns information about the all
-    ///                           [`Allocation`][`Allocation`]s.
+    /// - [`None`]: It returns information about the all
+    ///   [`Allocation`][`Allocation`]s.
     /// - [`Some`] and not empty: It returns information about
-    ///                           the [`Allocation`][`Allocation`]s associated with
-    ///                           the specified [`FiveTuples`].
-    /// - [`Some`], but empty:    It returns an empty [`HashMap`].
+    ///   the [`Allocation`][`Allocation`]s associated with
+    ///   the specified [`FiveTuples`].
+    /// - [`Some`], but empty: It returns an empty [`HashMap`].
     ///
     /// [`Allocation`]: crate::allocation::Allocation
     pub async fn get_allocations_info(

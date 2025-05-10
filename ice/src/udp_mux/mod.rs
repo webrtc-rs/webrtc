@@ -329,10 +329,6 @@ impl UDPMuxWriter for UDPMuxDefault {
     }
 
     async fn send_to(&self, buf: &[u8], target: &SocketAddr) -> Result<usize, Error> {
-        self.params
-            .conn
-            .send_to(buf, *target)
-            .await
-            .map_err(Into::into)
+        self.params.conn.send_to(buf, *target).await
     }
 }

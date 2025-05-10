@@ -84,15 +84,14 @@ impl SequenceTransformer {
             return None;
         }
 
-        let offset = guard
-            .reset_needed
-            .then(|| {
-                guard.reset_needed = false;
-                let offset = guard.last_sq.overflowing_sub(raw_sn.overflowing_sub(1).0).0;
-                guard.offset = offset;
-                offset
-            })
-            .unwrap_or(guard.offset);
+        let offset = if guard.reset_needed {
+            guard.reset_needed = false;
+            let offset = guard.last_sq.overflowing_sub(raw_sn.overflowing_sub(1).0).0;
+            guard.offset = offset;
+            offset
+        } else {
+            guard.offset
+        };
         let next = raw_sn.overflowing_add(offset).0;
         guard.last_sq = next;
 

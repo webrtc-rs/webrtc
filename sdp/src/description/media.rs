@@ -192,10 +192,7 @@ impl MediaDescription {
         let uri = {
             let m = ext_map_uri();
             if let Some(uri_str) = m.get(&EXT_MAP_VALUE_TRANSPORT_CC_KEY) {
-                match Url::parse(uri_str) {
-                    Ok(uri) => Some(uri),
-                    Err(_) => None,
-                }
+                Url::parse(uri_str).ok()
             } else {
                 None
             }

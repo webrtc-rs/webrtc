@@ -289,6 +289,12 @@ async fn test_assoc_reliable_simple() -> Result<()> {
 
 //use std::io::Write;
 
+fn fill(buf: &mut [u8]) {
+    for i in 0..buf.len() {
+        buf[i] = (i & 0xff) as u8;
+    }
+}
+
 // NB: This is ignored on Windows due to flakiness with timing/IO interactions.
 // TODO: Refactor this and other tests that are disabled for similar reason to not have such issues
 #[cfg(not(target_os = "windows"))]
@@ -311,13 +317,9 @@ async fn test_assoc_reliable_ordered_reordered() -> Result<()> {
 
     const SI: u16 = 2;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf);
     let mut sbufl = vec![0u8; 2000];
-    for i in 0..sbufl.len() {
-        sbufl[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbufl);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -406,13 +408,9 @@ async fn test_assoc_reliable_ordered_fragmented_then_defragmented() -> Result<()
 
     const SI: u16 = 3;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf);
     let mut sbufl = vec![0u8; 2000];
-    for i in 0..sbufl.len() {
-        sbufl[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbufl);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -473,13 +471,9 @@ async fn test_assoc_reliable_unordered_fragmented_then_defragmented() -> Result<
 
     const SI: u16 = 4;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf);
     let mut sbufl = vec![0u8; 2000];
-    for i in 0..sbufl.len() {
-        sbufl[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbufl);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -540,13 +534,9 @@ async fn test_assoc_reliable_unordered_ordered() -> Result<()> {
 
     const SI: u16 = 5;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf);
     let mut sbufl = vec![0u8; 2000];
-    for i in 0..sbufl.len() {
-        sbufl[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbufl);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -785,9 +775,7 @@ async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<()> {
 
     const SI: u16 = 1;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -870,9 +858,7 @@ async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<()> {
 
     const SI: u16 = 1;
     let mut sbuf = vec![0u8; 2000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -960,9 +946,7 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<()> {
 
     const SI: u16 = 2;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1048,9 +1032,7 @@ async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<()> {
 
     const SI: u16 = 1;
     let mut sbuf = vec![0u8; 2000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1143,9 +1125,7 @@ async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<()> {
 
     const SI: u16 = 3;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1228,9 +1208,7 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
 
     const SI: u16 = 3;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1331,9 +1309,7 @@ async fn test_assoc_congestion_control_fast_retransmission() -> Result<()> {
 
     const SI: u16 = 6;
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1425,9 +1401,7 @@ async fn test_assoc_congestion_control_congestion_avoidance() -> Result<()> {
     const N_PACKETS_TO_SEND: u32 = 2000;
 
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1567,9 +1541,7 @@ async fn test_assoc_congestion_control_slow_reader() -> Result<()> {
     const N_PACKETS_TO_SEND: u32 = 130;
 
     let mut sbuf = vec![0u8; 1000];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -1696,9 +1668,8 @@ async fn test_assoc_delayed_ack() -> Result<()> {
     const SI: u16 = 6;
     let mut sbuf = vec![0u8; 1000];
     let mut rbuf = vec![0u8; 1500];
-    for i in 0..sbuf.len() {
-        sbuf[i] = (i & 0xff) as u8;
-    }
+    fill(&mut sbuf[..]);
+    fill(&mut rbuf[..]);
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 

@@ -87,11 +87,7 @@ impl ConnObserver for VNetInternal {
         }
 
         if dst_ip.is_loopback() {
-            let src_ip = if let Ok(src_ip) = IpAddr::from_str("127.0.0.1") {
-                Some(src_ip)
-            } else {
-                None
-            };
+            let src_ip = IpAddr::from_str("127.0.0.1").ok();
             return src_ip;
         }
 

@@ -208,7 +208,7 @@ impl MarshalSize for Header {
         let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
         if self.extension {
             let extension_payload_len = self.get_extension_payload_len() + self.extensions_padding;
-            let extension_payload_size = (extension_payload_len + 3) / 4;
+            let extension_payload_size = extension_payload_len.div_ceil(4);
             head_size += 4 + extension_payload_size * 4;
         }
         head_size
@@ -275,7 +275,7 @@ impl Marshal for Header {
                 //the payload must be in 32-bit words.
                 return Err(Error::HeaderExtensionPayloadNot32BitWords.into());
             }
-            let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
+            let extension_payload_size = (extension_payload_len as u16).div_ceil(4);
             buf.put_u16(extension_payload_size);
 
             match self.extension_profile {
