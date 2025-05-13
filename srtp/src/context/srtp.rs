@@ -10,7 +10,7 @@ impl Context {
         encrypted: &[u8],
         header: &rtp::header::Header,
     ) -> Result<Bytes> {
-        let auth_tag_len = self.cipher.rtp_auth_tag_len();
+        let auth_tag_len = self.cipher.auth_tag_len();
         if encrypted.len() < header.marshal_size() + auth_tag_len {
             return Err(Error::ErrTooShortRtp);
         }

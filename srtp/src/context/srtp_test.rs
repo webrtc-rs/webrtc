@@ -121,7 +121,7 @@ fn test_rtp_invalid_auth() -> Result<()> {
 fn test_rtp_lifecycle() -> Result<()> {
     let mut encrypt_context = build_test_context()?;
     let mut decrypt_context = build_test_context()?;
-    let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.rtp_auth_tag_len();
+    let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_tag_len();
 
     for test_case in RTP_TEST_CASES.iter() {
         let decrypted_pkt = rtp::packet::Packet {
