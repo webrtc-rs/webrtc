@@ -208,8 +208,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         let cipher_text = &encrypted[..encrypted_len - self.rtcp_auth_tag_len()];
 
         // Generate the auth tag we expect to see from the ciphertext.
-        let expected_tag =
-            &self.inner.generate_srtcp_auth_tag(cipher_text)[..self.rtcp_auth_tag_len()];
+        let expected_tag = &self.inner.generate_srtcp_auth_tag(cipher_text)[..self.rtcp_auth_tag_len()];
 
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
