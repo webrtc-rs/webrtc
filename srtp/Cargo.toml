@@ -45,7 +45,7 @@ tokio = { version = "1.32.0", features = [
 log = "0.4"
 aead = { version = "0.5", features = ["std"] }
 aes-gcm = { version = "0.10", features = ["std"] }
-openssl = { version = "0.10.66", optional = true }
+openssl = { version = "0.10.72", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_futures"] }

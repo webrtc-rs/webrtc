@@ -256,8 +256,8 @@ impl ControllingSelector for AgentInternal {
                 if let Some(p) = self.agent_conn.get_best_valid_candidate_pair().await {
                     log::trace!(
                         "Nominatable pair found, nominating ({}, {})",
-                        p.local.to_string(),
-                        p.remote.to_string()
+                        p.local,
+                        p.remote
                     );
                     p.nominated.store(true, Ordering::SeqCst);
                     {

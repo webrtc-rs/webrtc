@@ -741,8 +741,9 @@ impl Request {
                     }
 
                     log::debug!(
-                        "adding permission for {}",
-                        format!("{}:{}", peer_address.ip, peer_address.port)
+                        "adding permission for {}:{}",
+                        peer_address.ip,
+                        peer_address.port
                     );
 
                     a.add_permission(Permission::new(SocketAddr::new(
@@ -886,9 +887,10 @@ impl Request {
             }
 
             log::debug!(
-                "binding channel {} to {}",
+                "binding channel {} to {}:{}",
                 channel,
-                format!("{}:{}", peer_addr.ip, peer_addr.port)
+                peer_addr.ip,
+                peer_addr.port,
             );
 
             let result = {

@@ -1658,7 +1658,7 @@ impl AssociationInternal {
     }
 
     async fn handle_forward_tsn(&mut self, c: &ChunkForwardTsn) -> Result<Vec<Packet>> {
-        log::trace!("[{}] FwdTSN: {}", self.name, c.to_string());
+        log::trace!("[{}] FwdTSN: {}", self.name, c);
 
         if !self.use_forward_tsn {
             log::warn!("[{}] received FwdTSN but not enabled", self.name);

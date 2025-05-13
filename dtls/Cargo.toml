@@ -19,11 +19,11 @@ p256 = { version = "0.13", features = ["default", "ecdh", "ecdsa"] }
 p384 = "0.13"
 rand = "0.8"
 hmac = "0.12"
-sec1 = { version = "0.7", features = [ "std" ] }
+sec1 = { version = "0.7", features = ["std"] }
 sha1 = "0.10"
 sha2 = "0.10"
 aes = "0.8"
-cbc = { version = "0.1", features = [ "block-padding", "alloc"] }
+cbc = { version = "0.1", features = ["block-padding", "alloc"] }
 aes-gcm = "0.10"
 ccm = "0.5"
 tokio = { version = "1.32.0", features = [
@@ -43,8 +43,8 @@ x25519-dalek = { version = "2", features = ["static_secrets"] }
 x509-parser = "0.16"
 der-parser = "9.0"
 rcgen = "0.13"
-ring = "0.17"
-rustls = { version = "0.23.10", default-features = false, features = ["std", "ring"] }
+ring = "0.17.14"
+rustls = { version = "0.23.27", default-features = false, features = ["std", "ring"] }
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 subtle = "2"
@@ -58,7 +58,7 @@ tokio-test = "0.4"
 env_logger = "0.11.3"
 chrono = "0.4.28"
 clap = "3"
-hub = {path = "examples/hub"}
+hub = { path = "examples/hub" }
 
 [features]
 pem = ["dep:pem"]
