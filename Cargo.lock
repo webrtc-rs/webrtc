@@ -3082,7 +3082,7 @@ dependencies = [
 
 [[package]]
 name = "webrtc-sctp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "arc-swap",
  "async-trait",
