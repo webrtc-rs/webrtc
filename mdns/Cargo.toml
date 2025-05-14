@@ -10,11 +10,11 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/mdns"
 
 [features]
-default = [ "reuse_port" ]
+default = ["reuse_port"]
 reuse_port = []
 
 [dependencies]
-util = { version = "0.10.0", path = "../util", package = "webrtc-util", default-features = false, features = ["ifaces"] }
+util = { version = "0.11.0", path = "../util", package = "webrtc-util", default-features = false, features = ["ifaces"] }
 
 tokio = { version = "1.32.0", features = [
     "fs",
