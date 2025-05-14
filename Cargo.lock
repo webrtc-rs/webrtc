@@ -2165,7 +2165,7 @@ dependencies = [
 
 [[package]]
 name = "rtcp"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "bytes",
  "thiserror",
@@ -2174,7 +2174,7 @@ dependencies = [
 
 [[package]]
 name = "rtp"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "bytes",
  "chrono",
