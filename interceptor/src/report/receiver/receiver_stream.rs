@@ -13,6 +13,7 @@ struct ReceiverStreamInternal {
 
     packets: Vec<u64>,
     started: bool,
+    wait_for_probe: bool,
     seq_num_cycles: u16,
     last_seq_num: i32,
     last_report_seq_num: i32,
@@ -40,7 +41,7 @@ impl ReceiverStreamInternal {
         (self.packets[pos / 64] & (1 << (pos % 64))) != 0
     }
 
-    fn process_rtp(&mut self, now: SystemTime, pkt: &rtp::packet::Packet) {
+    fn process_rtp(&mut self, now: SystemTime, pkt: &rtp::packet::Packet, is_probe: bool) {
         if !self.started {
             // first frame
             self.started = true;
@@ -79,6 +80,7 @@ impl ReceiverStreamInternal {
 
         self.last_rtp_time_rtp = pkt.header.timestamp;
         self.last_rtp_time_time = now;
+        self.wait_for_probe &= is_probe;
     }
 
     fn process_sender_report(&mut self, now: SystemTime, sr: &rtcp::sender_report::SenderReport) {
@@ -158,6 +160,7 @@ impl ReceiverStream {
         clock_rate: u32,
         reader: Arc<dyn RTPReader + Send + Sync>,
         now: Option<FnTimeGen>,
+        wait_for_probe: bool,
     ) -> Self {
         let receiver_ssrc = rand::random::<u32>();
         ReceiverStream {
@@ -171,6 +174,7 @@ impl ReceiverStream {
 
                 packets: vec![0u64; 128],
                 started: false,
+                wait_for_probe,
                 seq_num_cycles: 0,
                 last_seq_num: 0,
                 last_report_seq_num: 0,
@@ -184,9 +188,9 @@ impl ReceiverStream {
         }
     }
 
-    pub(crate) fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet) {
+    pub(crate) fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet, is_probe: bool) {
         let mut internal = self.internal.lock();
-        internal.process_rtp(now, pkt);
+        internal.process_rtp(now, pkt, is_probe);
     }
 
     pub(crate) fn process_sender_report(
@@ -198,9 +202,17 @@ impl ReceiverStream {
         internal.process_sender_report(now, sr);
     }
 
-    pub(crate) fn generate_report(&self, now: SystemTime) -> rtcp::receiver_report::ReceiverReport {
+    pub(crate) fn generate_report(
+        &self,
+        now: SystemTime,
+    ) -> Option<rtcp::receiver_report::ReceiverReport> {
         let mut internal = self.internal.lock();
-        internal.generate_report(now)
+
+        if internal.wait_for_probe {
+            return None;
+        }
+
+        Some(internal.generate_report(now))
     }
 }
 
@@ -213,6 +225,8 @@ impl RTPReader for ReceiverStream {
         buf: &mut [u8],
         a: &Attributes,
     ) -> Result<(rtp::packet::Packet, Attributes)> {
+        let is_probe = a.get(&crate::ATTR_READ_PROBE).is_some_and(|v| *v != 0);
+
         let (pkt, attr) = self.parent_rtp_reader.read(buf, a).await?;
 
         let now = if let Some(f) = &self.now {
@@ -220,7 +234,7 @@ impl RTPReader for ReceiverStream {
         } else {
             SystemTime::now()
         };
-        self.process_rtp(now, &pkt);
+        self.process_rtp(now, &pkt, is_probe);
 
         Ok((pkt, attr))
     }
