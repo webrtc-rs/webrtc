@@ -62,8 +62,36 @@ pub struct LongTermAuthHandler {
     shared_secret: String,
 }
 
+#[cfg(not(feature = "async-auth"))]
 impl AuthHandler for LongTermAuthHandler {
     fn auth_handle(&self, username: &str, realm: &str, src_addr: SocketAddr) -> Result<Vec<u8>> {
+        log::trace!(
+            "Authentication username={} realm={} src_addr={}",
+            username,
+            realm,
+            src_addr
+        );
+
+        let t = Duration::from_secs(username.parse::<u64>()?);
+        if t < SystemTime::now().duration_since(UNIX_EPOCH)? {
+            return Err(Error::Other(format!(
+                "Expired time-windowed username {username}"
+            )));
+        }
+
+        let password = long_term_credentials(username, &self.shared_secret);
+        Ok(generate_auth_key(username, realm, &password))
+    }
+}
+#[cfg(feature = "async-auth")]
+#[async_trait]
+impl AuthHandler for LongTermAuthHandler {
+    async fn auth_handle(
+        &self,
+        username: &str,
+        realm: &str,
+        src_addr: SocketAddr,
+    ) -> Result<Vec<u8>> {
         log::trace!(
             "Authentication username={} realm={} src_addr={}",
             username,
