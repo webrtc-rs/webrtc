@@ -1,6 +1,8 @@
 use std::net::IpAddr;
 use std::str::FromStr;
 
+#[cfg(feature = "async-auth")]
+use async_trait::async_trait;
 use tokio::net::UdpSocket;
 use tokio::time::{Duration, Instant};
 use util::vnet::net::*;
@@ -50,8 +52,21 @@ async fn test_allocation_lifetime_overflow() -> Result<()> {
 }
 
 struct TestAuthHandler;
+#[cfg(not(feature = "async-auth"))]
 impl AuthHandler for TestAuthHandler {
     fn auth_handle(&self, _username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+        Ok(STATIC_KEY.as_bytes().to_vec())
+    }
+}
+#[cfg(feature = "async-auth")]
+#[async_trait]
+impl AuthHandler for TestAuthHandler {
+    async fn auth_handle(
+        &self,
+        _username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>> {
         Ok(STATIC_KEY.as_bytes().to_vec())
     }
 }
