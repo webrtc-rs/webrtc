@@ -47,6 +47,7 @@ criterion = "0.5"
 
 [features]
 metrics = []
+async-auth = []
 
 [[bench]]
 name = "bench"

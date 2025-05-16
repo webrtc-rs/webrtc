@@ -201,11 +201,34 @@ impl Request {
             return Ok(None);
         }
 
+        #[cfg(not(feature = "async-auth"))]
         let our_key = match self.auth_handler.auth_handle(
             &username_attr.to_string(),
             &realm_attr.to_string(),
             self.src_addr,
         ) {
+            Ok(key) => key,
+            Err(_) => {
+                build_and_send_err(
+                    &self.conn,
+                    self.src_addr,
+                    bad_request_msg,
+                    Error::ErrNoSuchUser,
+                )
+                .await?;
+                return Ok(None);
+            }
+        };
+        #[cfg(feature = "async-auth")]
+        let our_key = match self
+            .auth_handler
+            .auth_handle(
+                &username_attr.to_string(),
+                &realm_attr.to_string(),
+                self.src_addr,
+            )
+            .await
+        {
             Ok(key) => key,
             Err(_) => {
                 build_and_send_err(

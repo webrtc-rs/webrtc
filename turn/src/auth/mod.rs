@@ -4,6 +4,8 @@ mod auth_test;
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[cfg(feature = "async-auth")]
+use async_trait::async_trait;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use md5::{Digest, Md5};
@@ -11,8 +13,20 @@ use ring::hmac;
 
 use crate::error::*;
 
+#[cfg(not(feature = "async-auth"))]
 pub trait AuthHandler {
     fn auth_handle(&self, username: &str, realm: &str, src_addr: SocketAddr) -> Result<Vec<u8>>;
+}
+
+#[cfg(feature = "async-auth")]
+#[async_trait]
+pub trait AuthHandler {
+    async fn auth_handle(
+        &self,
+        username: &str,
+        realm: &str,
+        src_addr: SocketAddr,
+    ) -> Result<Vec<u8>>;
 }
 
 /// `generate_long_term_credentials()` can be used to create credentials valid for `duration` time/
