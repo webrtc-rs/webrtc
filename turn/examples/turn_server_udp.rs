@@ -3,6 +3,8 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[cfg(feature = "async-auth")]
+use async_trait::async_trait;
 use clap::{App, AppSettings, Arg};
 use tokio::net::UdpSocket;
 use tokio::signal;
@@ -24,8 +26,26 @@ impl MyAuthHandler {
     }
 }
 
+#[cfg(not(feature = "async-auth"))]
 impl AuthHandler for MyAuthHandler {
     fn auth_handle(
+        &self,
+        username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, Error> {
+        if let Some(pw) = self.cred_map.get(username) {
+            //log::debug!("username={}, password={:?}", username, pw);
+            Ok(pw.to_vec())
+        } else {
+            Err(Error::ErrFakeErr)
+        }
+    }
+}
+#[cfg(feature = "async-auth")]
+#[async_trait]
+impl AuthHandler for MyAuthHandler {
+    async fn auth_handle(
         &self,
         username: &str,
         _realm: &str,

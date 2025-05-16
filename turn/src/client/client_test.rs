@@ -1,5 +1,7 @@
 use std::net::IpAddr;
 
+#[cfg(feature = "async-auth")]
+use async_trait::async_trait;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
 use util::vnet::net::*;
@@ -120,8 +122,21 @@ async fn test_client_with_stun_send_binding_request_to_timeout() -> Result<()> {
 }
 
 struct TestAuthHandler;
+#[cfg(not(feature = "async-auth"))]
 impl AuthHandler for TestAuthHandler {
     fn auth_handle(&self, username: &str, realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+        Ok(generate_auth_key(username, realm, "pass"))
+    }
+}
+#[cfg(feature = "async-auth")]
+#[async_trait]
+impl AuthHandler for TestAuthHandler {
+    async fn auth_handle(
+        &self,
+        username: &str,
+        realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>> {
         Ok(generate_auth_key(username, realm, "pass"))
     }
 }

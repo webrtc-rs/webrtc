@@ -1,6 +1,8 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 
+#[cfg(feature = "async-auth")]
+use async_trait::async_trait;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use util::vnet::router::Nic;
@@ -30,8 +32,25 @@ impl TestAuthHandler {
     }
 }
 
+#[cfg(not(feature = "async-auth"))]
 impl AuthHandler for TestAuthHandler {
     fn auth_handle(&self, username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+        if let Some(pw) = self.cred_map.get(username) {
+            Ok(pw.to_vec())
+        } else {
+            Err(Error::ErrFakeErr)
+        }
+    }
+}
+#[cfg(feature = "async-auth")]
+#[async_trait]
+impl AuthHandler for TestAuthHandler {
+    async fn auth_handle(
+        &self,
+        username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>> {
         if let Some(pw) = self.cred_map.get(username) {
             Ok(pw.to_vec())
         } else {
