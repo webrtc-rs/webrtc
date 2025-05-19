@@ -652,10 +652,18 @@ impl DTLSConn {
         }
 
         if p.should_encrypt {
-            let cipher_suite = cipher_suite.lock().await;
-            if let Some(cipher_suite) = &*cipher_suite {
-                raw_packet = cipher_suite.encrypt(&p.record.record_layer_header, &raw_packet)?;
-            }
+            let cipher_suite = Arc::clone(&cipher_suite);
+            let record_layer_header = p.record.record_layer_header;
+            raw_packet = tokio::task::spawn_blocking(move || {
+                let cipher_suite = cipher_suite.blocking_lock();
+                if let Some(cipher_suite) = &*cipher_suite {
+                    cipher_suite.encrypt(&record_layer_header, &raw_packet)
+                } else {
+                    Ok(raw_packet)
+                }
+            })
+            .await
+            .map_err(|e| Error::Other(e.to_string()))??;
         }
 
         Ok(raw_packet)
@@ -709,10 +717,17 @@ impl DTLSConn {
             raw_packet.extend_from_slice(&record_layer_header_bytes);
             raw_packet.extend_from_slice(handshake_fragment);
             if p.should_encrypt {
-                let cipher_suite = cipher_suite.lock().await;
-                if let Some(cipher_suite) = &*cipher_suite {
-                    raw_packet = cipher_suite.encrypt(&record_layer_header, &raw_packet)?;
-                }
+                let cipher_suite = Arc::clone(&cipher_suite);
+                raw_packet = tokio::task::spawn_blocking(move || {
+                    let cipher_suite = cipher_suite.blocking_lock();
+                    if let Some(cipher_suite) = &*cipher_suite {
+                        cipher_suite.encrypt(&record_layer_header, &raw_packet)
+                    } else {
+                        Ok(raw_packet)
+                    }
+                })
+                .await
+                .map_err(|e| Error::Other(e.to_string()))??;
             }
 
             raw_packets.push(raw_packet);
