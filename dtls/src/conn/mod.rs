@@ -713,7 +713,8 @@ impl DTLSConn {
 
             //p.record.record_layer_header = record_layer_header;
 
-            let mut raw_packet = vec![];
+            let mut raw_packet =
+                Vec::with_capacity(record_layer_header_bytes.len() + handshake_fragment.len());
             raw_packet.extend_from_slice(&record_layer_header_bytes);
             raw_packet.extend_from_slice(handshake_fragment);
             if p.should_encrypt {
@@ -1205,7 +1206,7 @@ impl DTLSConn {
 
 fn compact_raw_packets(raw_packets: &[Vec<u8>], maximum_transmission_unit: usize) -> Vec<Vec<u8>> {
     let mut combined_raw_packets = vec![];
-    let mut current_combined_raw_packet = vec![];
+    let mut current_combined_raw_packet = Vec::with_capacity(maximum_transmission_unit);
 
     for raw_packet in raw_packets {
         if !current_combined_raw_packet.is_empty()
