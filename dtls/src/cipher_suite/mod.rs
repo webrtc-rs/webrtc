@@ -101,6 +101,33 @@ impl From<u16> for CipherSuiteId {
     }
 }
 
+impl From<&str> for CipherSuiteId {
+    fn from(val: &str) -> Self {
+        match val {
+            "TLS_ECDHE_ECDSA_WITH_AES_128_CCM" => CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm,
+            "TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" => {
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8
+            }
+            "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" => {
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256
+            }
+            "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" => {
+                CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256
+            }
+            "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA" => {
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha
+            }
+            "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA" => {
+                CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_256_Cbc_Sha
+            }
+            "TLS_PSK_WITH_AES_128_CCM" => CipherSuiteId::Tls_Psk_With_Aes_128_Ccm,
+            "TLS_PSK_WITH_AES_128_CCM_8" => CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8,
+            "TLS_PSK_WITH_AES_128_GCM_SHA256" => CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256,
+            _ => CipherSuiteId::Unsupported,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum CipherSuiteHash {
     Sha256,
