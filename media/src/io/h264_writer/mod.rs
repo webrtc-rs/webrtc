@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod h264_writer_test;
 
-use std::io::{Seek, Write};
+use std::io::Write;
 
 use rtp::codecs::h264::H264Packet;
 use rtp::packetizer::Depacketizer;
@@ -29,13 +29,13 @@ fn is_key_frame(data: &[u8]) -> bool {
 /// Currently it only supports non-interleaved mode
 /// Therefore, only 1-23, 24 (STAP-A), 28 (FU-A) NAL types are allowed.
 /// <https://tools.ietf.org/html/rfc6184#section-5.2>
-pub struct H264Writer<W: Write + Seek> {
+pub struct H264Writer<W: Write> {
     writer: W,
     has_key_frame: bool,
     cached_packet: Option<H264Packet>,
 }
 
-impl<W: Write + Seek> H264Writer<W> {
+impl<W: Write> H264Writer<W> {
     // new initializes a new H264 writer with an io.Writer output
     pub fn new(writer: W) -> Self {
         H264Writer {
@@ -46,7 +46,7 @@ impl<W: Write + Seek> H264Writer<W> {
     }
 }
 
-impl<W: Write + Seek> Writer for H264Writer<W> {
+impl<W: Write> Writer for H264Writer<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
         if packet.payload.is_empty() {
