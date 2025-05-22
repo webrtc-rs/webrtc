@@ -231,17 +231,16 @@ pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Se
 // CipherSuites we support in order of preference
 pub(crate) fn default_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
     vec![
-        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(false)),
         Box::new(CipherSuiteAes128GcmSha256::new(false)),
         Box::new(CipherSuiteAes256CbcSha::new(false)),
         Box::new(CipherSuiteAes128GcmSha256::new(true)),
         Box::new(CipherSuiteAes256CbcSha::new(true)),
+        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(false)),
     ]
 }
 
 fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
     vec![
-        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(false)),
         Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm()),
         Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8()),
         Box::new(CipherSuiteAes128GcmSha256::new(false)),
@@ -251,6 +250,8 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm()),
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()),
         Box::<CipherSuiteTlsPskWithAes128GcmSha256>::default(),
+        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(false)),
+        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(true)),
     ]
 }
 
