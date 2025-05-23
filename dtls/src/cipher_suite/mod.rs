@@ -1,6 +1,7 @@
 pub mod cipher_suite_aes_128_ccm;
 pub mod cipher_suite_aes_128_gcm_sha256;
 pub mod cipher_suite_aes_256_cbc_sha;
+pub mod cipher_suite_chacha20_poly1305_sha256;
 pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm;
 pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8;
 pub mod cipher_suite_tls_psk_with_aes_128_ccm;
@@ -12,6 +13,7 @@ use std::marker::{Send, Sync};
 
 use cipher_suite_aes_128_gcm_sha256::*;
 use cipher_suite_aes_256_cbc_sha::*;
+use cipher_suite_chacha20_poly1305_sha256::*;
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm::*;
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8::*;
 use cipher_suite_tls_psk_with_aes_128_ccm::*;
@@ -43,6 +45,10 @@ pub enum CipherSuiteId {
     Tls_Psk_With_Aes_128_Ccm_8 = 0xc0a8,
     Tls_Psk_With_Aes_128_Gcm_Sha256 = 0x00a8,
 
+    // CHACHA20_POLY1305_SHA256
+    Tls_Ecdhe_Rsa_With_ChaCha20_Poly1305_Sha256 = 0xcca8,
+    Tls_Ecdhe_Ecdsa_With_ChaCha20_Poly1305_Sha256 = 0xcca9,
+
     Unsupported,
 }
 
@@ -72,6 +78,13 @@ impl fmt::Display for CipherSuiteId {
             CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
                 write!(f, "TLS_PSK_WITH_AES_128_GCM_SHA256")
             }
+            CipherSuiteId::Tls_Ecdhe_Rsa_With_ChaCha20_Poly1305_Sha256 => {
+                write!(f, "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256")
+            }
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_ChaCha20_Poly1305_Sha256 => {
+                write!(f, "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256")
+            }
+
             _ => write!(f, "Unsupported CipherSuiteID"),
         }
     }
@@ -96,6 +109,43 @@ impl From<u16> for CipherSuiteId {
             0xc0a8 => CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8,
             0x00a8 => CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256,
 
+            // CHACHA20_POLY1305_SHA256
+            0xcca8 => CipherSuiteId::Tls_Ecdhe_Rsa_With_ChaCha20_Poly1305_Sha256,
+            0xcca9 => CipherSuiteId::Tls_Ecdhe_Ecdsa_With_ChaCha20_Poly1305_Sha256,
+
+            _ => CipherSuiteId::Unsupported,
+        }
+    }
+}
+
+impl From<&str> for CipherSuiteId {
+    fn from(val: &str) -> Self {
+        match val {
+            "TLS_ECDHE_ECDSA_WITH_AES_128_CCM" => CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm,
+            "TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" => {
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8
+            }
+            "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" => {
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256
+            }
+            "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" => {
+                CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256
+            }
+            "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA" => {
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha
+            }
+            "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA" => {
+                CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_256_Cbc_Sha
+            }
+            "TLS_PSK_WITH_AES_128_CCM" => CipherSuiteId::Tls_Psk_With_Aes_128_Ccm,
+            "TLS_PSK_WITH_AES_128_CCM_8" => CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8,
+            "TLS_PSK_WITH_AES_128_GCM_SHA256" => CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256,
+            "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" => {
+                CipherSuiteId::Tls_Ecdhe_Rsa_With_ChaCha20_Poly1305_Sha256
+            }
+            "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256" => {
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_ChaCha20_Poly1305_Sha256
+            }
             _ => CipherSuiteId::Unsupported,
         }
     }
@@ -167,6 +217,13 @@ pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Se
         CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
             Ok(Box::<CipherSuiteTlsPskWithAes128GcmSha256>::default())
         }
+        CipherSuiteId::Tls_Ecdhe_Rsa_With_ChaCha20_Poly1305_Sha256 => {
+            Ok(Box::new(CipherSuiteChaCha20Poly1305Sha256::new(true)))
+        }
+        CipherSuiteId::Tls_Ecdhe_Ecdsa_With_ChaCha20_Poly1305_Sha256 => {
+            Ok(Box::new(CipherSuiteChaCha20Poly1305Sha256::new(false)))
+        }
+
         _ => Err(Error::ErrInvalidCipherSuite),
     }
 }
@@ -178,6 +235,7 @@ pub(crate) fn default_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>>
         Box::new(CipherSuiteAes256CbcSha::new(false)),
         Box::new(CipherSuiteAes128GcmSha256::new(true)),
         Box::new(CipherSuiteAes256CbcSha::new(true)),
+        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(false)),
     ]
 }
 
@@ -192,6 +250,8 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm()),
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()),
         Box::<CipherSuiteTlsPskWithAes128GcmSha256>::default(),
+        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(false)),
+        Box::new(CipherSuiteChaCha20Poly1305Sha256::new(true)),
     ]
 }
 
