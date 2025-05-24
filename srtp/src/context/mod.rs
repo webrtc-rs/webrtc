@@ -7,6 +7,8 @@ mod srtp_test;
 
 use std::collections::HashMap;
 
+use aes::Aes128;
+use aes::Aes256;
 use util::replay_detector::*;
 
 use crate::cipher::cipher_aead_aes_gcm::*;
@@ -123,8 +125,12 @@ impl Context {
                 Box::new(CipherAesCmHmacSha1::new(profile, master_key, master_salt)?)
             }
 
-            ProtectionProfile::AeadAes128Gcm | ProtectionProfile::AeadAes256Gcm => {
-                Box::new(CipherAeadAesGcm::new(profile, master_key, master_salt)?)
+            ProtectionProfile::AeadAes128Gcm => {
+                Box::new(CipherAeadAesGcm::<Aes128>::new(profile, master_key, master_salt)?)
+            }
+
+            ProtectionProfile::AeadAes256Gcm => {
+                Box::new(CipherAeadAesGcm::<Aes256>::new(profile, master_key, master_salt)?)
             }
         };
 

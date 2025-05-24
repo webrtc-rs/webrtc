@@ -1,3 +1,4 @@
+use aes::Aes128;
 use byteorder::{BigEndian, ByteOrder};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
@@ -33,14 +34,14 @@ pub(crate) struct CipherInner {
 
 impl CipherInner {
     pub fn new(profile: ProtectionProfile, master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
-        let srtp_session_salt = aes_cm_key_derivation(
+        let srtp_session_salt = aes_cm_key_derivation::<Aes128>(
             LABEL_SRTP_SALT,
             master_key,
             master_salt,
             0,
             master_salt.len(),
         )?;
-        let srtcp_session_salt = aes_cm_key_derivation(
+        let srtcp_session_salt = aes_cm_key_derivation::<Aes128>(
             LABEL_SRTCP_SALT,
             master_key,
             master_salt,
@@ -50,14 +51,14 @@ impl CipherInner {
 
         let auth_key_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_key_len();
 
-        let srtp_session_auth_tag = aes_cm_key_derivation(
+        let srtp_session_auth_tag = aes_cm_key_derivation::<Aes128>(
             LABEL_SRTP_AUTHENTICATION_TAG,
             master_key,
             master_salt,
             0,
             auth_key_len,
         )?;
-        let srtcp_session_auth_tag = aes_cm_key_derivation(
+        let srtcp_session_auth_tag = aes_cm_key_derivation::<Aes128>(
             LABEL_SRTCP_AUTHENTICATION_TAG,
             master_key,
             master_salt,

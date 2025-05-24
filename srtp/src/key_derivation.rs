@@ -1,6 +1,5 @@
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::BlockEncrypt;
-use aes::Aes128;
 use aes_gcm::KeyInit;
 
 use crate::error::{Error, Result};
@@ -14,13 +13,16 @@ pub const LABEL_SRTCP_SALT: u8 = 0x05;
 
 pub(crate) const SRTCP_INDEX_SIZE: usize = 4;
 
-pub(crate) fn aes_cm_key_derivation(
+pub(crate) fn aes_cm_key_derivation<AES>(
     label: u8,
     master_key: &[u8],
     master_salt: &[u8],
     index_over_kdr: usize,
     out_len: usize,
-) -> Result<Vec<u8>> {
+) -> Result<Vec<u8>>
+where
+    AES: BlockEncrypt + KeyInit,
+{
     if index_over_kdr != 0 {
         // 24-bit "index DIV kdr" must be xored to prf input.
         return Err(Error::UnsupportedIndexOverKdr);
@@ -41,7 +43,7 @@ pub(crate) fn aes_cm_key_derivation(
 
     //The resulting value is then AES encrypted using the master key to get the cipher key.
     let key = GenericArray::from_slice(master_key);
-    let block = Aes128::new(key);
+    let block = AES::new(key);
 
     let mut out = vec![0u8; ((out_len + n_master_key) / n_master_key) * n_master_key];
     for (i, n) in (0..out_len).step_by(n_master_key).enumerate() {
@@ -50,7 +52,7 @@ pub(crate) fn aes_cm_key_derivation(
         prf_in[n_master_key - 1] = (i & 0xFF) as u8;
 
         out[n..n + n_master_key].copy_from_slice(&prf_in);
-        let out_key = GenericArray::from_mut_slice(&mut out[n..n + n_master_key]);
+        let out_key = GenericArray::from_mut_slice(&mut out[n..n + AES::block_size()]);
         block.encrypt_block(out_key);
     }
 
@@ -94,6 +96,8 @@ pub(crate) fn generate_counter(
 
 #[cfg(test)]
 mod test {
+    use aes::Aes128;
+
     use super::*;
     use crate::protection_profile::*;
 
@@ -120,7 +124,7 @@ mod test {
             0x6A, 0x15, 0x6D, 0x38, 0xBA, 0xA4,
         ];
 
-        let session_key = aes_cm_key_derivation(
+        let session_key = aes_cm_key_derivation::<Aes128>(
             LABEL_SRTP_ENCRYPTION,
             &master_key,
             &master_salt,
@@ -132,7 +136,7 @@ mod test {
             "Session Key:\n{session_key:?} \ndoes not match expected:\n{expected_session_key:?}\nMaster Key:\n{master_key:?}\nMaster Salt:\n{master_salt:?}\n",
         );
 
-        let session_salt = aes_cm_key_derivation(
+        let session_salt = aes_cm_key_derivation::<Aes128>(
             LABEL_SRTP_SALT,
             &master_key,
             &master_salt,
@@ -146,7 +150,7 @@ mod test {
 
         let auth_key_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_key_len();
 
-        let session_auth_tag = aes_cm_key_derivation(
+        let session_auth_tag = aes_cm_key_derivation::<Aes128>(
             LABEL_SRTP_AUTHENTICATION_TAG,
             &master_key,
             &master_salt,
@@ -165,7 +169,7 @@ mod test {
     // Currently this isn't supported, but the API makes sure we can add this in the future
     #[test]
     fn test_index_over_kdr() -> Result<()> {
-        let result = aes_cm_key_derivation(LABEL_SRTP_AUTHENTICATION_TAG, &[], &[], 1, 0);
+        let result = aes_cm_key_derivation::<Aes128>(LABEL_SRTP_AUTHENTICATION_TAG, &[], &[], 1, 0);
         assert!(result.is_err());
 
         Ok(())
