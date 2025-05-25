@@ -88,8 +88,8 @@ pub(crate) fn aes_256_cm_key_derivation(
     prf_in[7] = label;
     prf_in[8..12].copy_from_slice((index_over_kdr as u32).to_be_bytes().as_slice());
 
-    for i in 0..prf_in.len() {
-        prf_in[i] ^= master_salt.get(i).unwrap_or(&0);
+    for (i, x) in prf_in.iter_mut().enumerate() {
+        *x ^= master_salt.get(i).unwrap_or(&0);
     }
 
     //The resulting value is then AES encrypted using the master key to get the cipher key.
