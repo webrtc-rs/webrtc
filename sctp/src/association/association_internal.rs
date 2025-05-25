@@ -1040,11 +1040,7 @@ impl AssociationInternal {
             bytes_queued += s.get_num_bytes_in_reassembly_queue().await as u32;
         }
 
-        if bytes_queued >= self.max_receive_buffer_size {
-            0
-        } else {
-            self.max_receive_buffer_size - bytes_queued
-        }
+        self.max_receive_buffer_size.saturating_sub(bytes_queued)
     }
 
     pub(crate) fn open_stream(

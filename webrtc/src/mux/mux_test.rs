@@ -37,7 +37,7 @@ type Result<T> = std::result::Result<T, util::Error>;
 #[async_trait]
 impl Conn for MuxErrorConn {
     async fn connect(&self, _addr: SocketAddr) -> Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
@@ -47,28 +47,24 @@ impl Conn for MuxErrorConn {
             buf[..n].copy_from_slice(&self.data[idx][..n]);
             Ok(n)
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("idx {} >= data.len {}", idx, self.data.len()),
-            )
-            .into())
+            Err(io::Error::other(format!("idx {} >= data.len {}", idx, self.data.len())).into())
         }
     }
 
     async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn send(&self, _buf: &[u8]) -> Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     fn local_addr(&self) -> Result<SocketAddr> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     fn remote_addr(&self) -> Option<SocketAddr> {

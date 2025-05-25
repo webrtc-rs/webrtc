@@ -106,11 +106,11 @@ impl<T: 'static + RelayConnObserver + Send + Sync> RelayConn<T> {
 #[async_trait]
 impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
     async fn connect(&self, _addr: SocketAddr) -> Result<(), util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv(&self, _buf: &mut [u8]) -> Result<usize, util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     /// Reads a packet from the connection,
@@ -147,7 +147,7 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
     }
 
     async fn send(&self, _buf: &[u8]) -> Result<usize, util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     /// Writes a packet with payload `p` to `addr`.
@@ -159,7 +159,7 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
         let mut relay_conn = self.relay_conn.lock().await;
         match relay_conn.send_to(p, addr).await {
             Ok(n) => Ok(n),
-            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
+            Err(err) => Err(io::Error::other(err.to_string()).into()),
         }
     }
 

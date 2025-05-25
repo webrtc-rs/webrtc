@@ -16,7 +16,7 @@ struct DumbConn;
 #[async_trait]
 impl Conn for DumbConn {
     async fn connect(&self, _addr: SocketAddr) -> Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv(&self, _b: &mut [u8]) -> Result<usize> {
@@ -24,7 +24,7 @@ impl Conn for DumbConn {
     }
 
     async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn send(&self, _b: &[u8]) -> Result<usize> {
@@ -32,7 +32,7 @@ impl Conn for DumbConn {
     }
 
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     fn local_addr(&self) -> Result<SocketAddr> {

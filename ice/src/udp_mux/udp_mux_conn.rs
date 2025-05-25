@@ -267,11 +267,11 @@ impl UDPMuxConnInner {
 #[async_trait]
 impl Conn for UDPMuxConn {
     async fn connect(&self, _addr: SocketAddr) -> ConnResult<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv(&self, _buf: &mut [u8]) -> ConnResult<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv_from(&self, buf: &mut [u8]) -> ConnResult<(usize, SocketAddr)> {
@@ -279,7 +279,7 @@ impl Conn for UDPMuxConn {
     }
 
     async fn send(&self, _buf: &[u8]) -> ConnResult<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn send_to(&self, buf: &[u8], target: SocketAddr) -> ConnResult<usize> {

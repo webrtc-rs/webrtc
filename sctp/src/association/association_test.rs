@@ -2097,7 +2097,7 @@ type UResult<T> = std::result::Result<T, util::Error>;
 #[async_trait]
 impl Conn for FakeEchoConn {
     async fn connect(&self, _addr: SocketAddr) -> UResult<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv(&self, b: &mut [u8]) -> UResult<usize> {
@@ -2115,25 +2115,25 @@ impl Conn for FakeEchoConn {
     }
 
     async fn recv_from(&self, _buf: &mut [u8]) -> UResult<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn send(&self, b: &[u8]) -> UResult<usize> {
         let wr_tx = self.wr_tx.lock().await;
         match wr_tx.send(b.to_vec()).await {
             Ok(_) => {}
-            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
+            Err(err) => return Err(io::Error::other(err.to_string()).into()),
         };
         self.bytes_sent.fetch_add(b.len(), Ordering::SeqCst);
         Ok(b.len())
     }
 
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> UResult<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     fn local_addr(&self) -> UResult<SocketAddr> {
-        Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     fn remote_addr(&self) -> Option<SocketAddr> {

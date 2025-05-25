@@ -14,10 +14,7 @@ impl CipherSuiteChaCha20Poly1305Sha256 {
     const PRF_IV_LEN: usize = 12;
 
     pub fn new(rsa: bool) -> Self {
-        CipherSuiteChaCha20Poly1305Sha256 {
-            rsa: rsa,
-            cipher: None,
-        }
+        CipherSuiteChaCha20Poly1305Sha256 { rsa, cipher: None }
     }
 }
 

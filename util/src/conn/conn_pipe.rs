@@ -30,7 +30,7 @@ pub fn pipe() -> (impl Conn, impl Conn) {
 #[async_trait]
 impl Conn for Pipe {
     async fn connect(&self, _addr: SocketAddr) -> Result<()> {
-        Err(Error::new(ErrorKind::Other, "Not applicable").into())
+        Err(Error::other("Not applicable").into())
     }
 
     async fn recv(&self, b: &mut [u8]) -> Result<usize> {
@@ -53,13 +53,13 @@ impl Conn for Pipe {
         let wr_tx = self.wr_tx.lock().await;
         match wr_tx.send(b.to_vec()).await {
             Ok(_) => {}
-            Err(err) => return Err(Error::new(ErrorKind::Other, err.to_string()).into()),
+            Err(err) => return Err(Error::other(err.to_string()).into()),
         };
         Ok(b.len())
     }
 
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
-        Err(Error::new(ErrorKind::Other, "Not applicable").into())
+        Err(Error::other("Not applicable").into())
     }
 
     fn local_addr(&self) -> Result<SocketAddr> {
