@@ -1,4 +1,3 @@
-use aes::Aes128;
 use bytes::Bytes;
 use lazy_static::lazy_static;
 
@@ -98,7 +97,7 @@ fn test_valid_packet_counter() -> Result<()> {
         0x62, 0x77, 0x60, 0x38, 0xc0, 0x6d, 0xc9, 0x41, 0x9f, 0x6d, 0xd9, 0x43, 0x3e, 0x7c,
     ];
 
-    let srtp_session_salt = aes_cm_key_derivation::<Aes128>(
+    let srtp_session_salt = aes_cm_key_derivation(
         LABEL_SRTP_SALT,
         &master_key,
         &master_salt,

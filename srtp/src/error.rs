@@ -48,6 +48,12 @@ pub enum Error {
 
     #[error("index_over_kdr > 0 is not supported yet")]
     UnsupportedIndexOverKdr,
+    #[error("invalid master key length for aes_256_cm")]
+    InvalidMasterKeyLength,
+    #[error("invalid master salt length for aes_256_cm")]
+    InvalidMasterSaltLength,
+    #[error("out_len > 32 is not supported for aes_256_cm")]
+    UnsupportedOutLength,
     #[error("SRTP Master Key must be len {0}, got {1}")]
     SrtpMasterKeyLength(usize, usize),
     #[error("SRTP Salt must be len {0}, got {1}")]

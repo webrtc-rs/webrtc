@@ -1,6 +1,5 @@
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
-use aes::Aes128;
 use bytes::{BufMut, Bytes};
 use rtcp::header::{HEADER_LENGTH, SSRC_LENGTH};
 use subtle::ConstantTimeEq;
@@ -23,14 +22,14 @@ impl CipherAesCmHmacSha1 {
     pub fn new(profile: ProtectionProfile, master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
         let inner = CipherInner::new(profile, master_key, master_salt)?;
 
-        let srtp_session_key = aes_cm_key_derivation::<Aes128>(
+        let srtp_session_key = aes_cm_key_derivation(
             LABEL_SRTP_ENCRYPTION,
             master_key,
             master_salt,
             0,
             master_key.len(),
         )?;
-        let srtcp_session_key = aes_cm_key_derivation::<Aes128>(
+        let srtcp_session_key = aes_cm_key_derivation(
             LABEL_SRTCP_ENCRYPTION,
             master_key,
             master_salt,
