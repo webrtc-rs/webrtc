@@ -1,4 +1,4 @@
-use aes::cipher::{BlockEncrypt, BlockSizeUser};
+use aes::cipher::BlockEncrypt;
 use aes::Aes256;
 use aes::{cipher::generic_array::GenericArray, Aes128};
 use aes_gcm::KeyInit;

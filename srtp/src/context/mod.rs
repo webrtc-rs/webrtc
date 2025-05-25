@@ -125,13 +125,17 @@ impl Context {
                 Box::new(CipherAesCmHmacSha1::new(profile, master_key, master_salt)?)
             }
 
-            ProtectionProfile::AeadAes128Gcm => {
-                Box::new(CipherAeadAesGcm::<Aes128>::new(profile, master_key, master_salt)?)
-            }
+            ProtectionProfile::AeadAes128Gcm => Box::new(CipherAeadAesGcm::<Aes128>::new(
+                profile,
+                master_key,
+                master_salt,
+            )?),
 
-            ProtectionProfile::AeadAes256Gcm => {
-                Box::new(CipherAeadAesGcm::<Aes256>::new(profile, master_key, master_salt)?)
-            }
+            ProtectionProfile::AeadAes256Gcm => Box::new(CipherAeadAesGcm::<Aes256>::new(
+                profile,
+                master_key,
+                master_salt,
+            )?),
         };
 
         let srtp_ctx_opt = if let Some(ctx_opt) = srtp_ctx_opt {

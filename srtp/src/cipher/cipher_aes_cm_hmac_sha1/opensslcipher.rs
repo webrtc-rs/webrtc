@@ -5,11 +5,11 @@ use subtle::ConstantTimeEq;
 use util::marshal::*;
 
 use super::{Cipher, CipherInner};
+use crate::protection_profile::ProtectionProfile;
 use crate::{
     error::{Error, Result},
     key_derivation::*,
 };
-use crate::protection_profile::ProtectionProfile;
 
 pub(crate) struct CipherAesCmHmacSha1 {
     inner: CipherInner,
@@ -167,7 +167,8 @@ impl Cipher for CipherAesCmHmacSha1 {
     fn encrypt_rtcp(&mut self, decrypted: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes> {
         let decrypted_len = decrypted.len();
 
-        let mut writer = Vec::with_capacity(decrypted_len + SRTCP_INDEX_SIZE + self.rtcp_auth_tag_len());
+        let mut writer =
+            Vec::with_capacity(decrypted_len + SRTCP_INDEX_SIZE + self.rtcp_auth_tag_len());
 
         // Write the decrypted to the destination buffer.
         writer.extend_from_slice(&decrypted[..HEADER_LENGTH + SSRC_LENGTH]);
@@ -241,7 +242,8 @@ impl Cipher for CipherAesCmHmacSha1 {
         let cipher_text = &encrypted[..encrypted_len - self.rtcp_auth_tag_len()];
 
         // Generate the auth tag we expect to see from the ciphertext.
-        let expected_tag = &self.inner.generate_srtcp_auth_tag(cipher_text)[..self.rtcp_auth_tag_len()];
+        let expected_tag =
+            &self.inner.generate_srtcp_auth_tag(cipher_text)[..self.rtcp_auth_tag_len()];
 
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.

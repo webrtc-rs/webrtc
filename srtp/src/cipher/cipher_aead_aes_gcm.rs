@@ -176,7 +176,7 @@ where
             ProtectionProfile::AeadAes128Gcm => aes_cm_key_derivation,
             // AES_256_GCM must use AES_256_CM_PRF as per https://datatracker.ietf.org/doc/html/rfc7714#section-11
             ProtectionProfile::AeadAes256Gcm => aes_256_cm_key_derivation,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         let srtp_session_key = kdf(
