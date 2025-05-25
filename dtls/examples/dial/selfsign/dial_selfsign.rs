@@ -46,6 +46,12 @@ async fn main() -> Result<(), Error> {
                 .default_value("127.0.0.1:4444")
                 .long("server")
                 .help("DTLS Server name."),
+        )
+        .arg(
+            Arg::with_name("ciphersuite")
+                .takes_value(true)
+                .long("ciphersuite")
+                .help("Force a single ciphersuite."),
         );
 
     let matches = app.clone().get_matches();
@@ -68,6 +74,11 @@ async fn main() -> Result<(), Error> {
         certificates: vec![certificate],
         insecure_skip_verify: true,
         extended_master_secret: ExtendedMasterSecretType::Require,
+        cipher_suites: if matches.is_present("ciphersuite") {
+            vec![matches.value_of("ciphersuite").unwrap().into()]
+        } else {
+            vec![]
+        },
         ..Default::default()
     };
     let dtls_conn: Arc<dyn Conn + Send + Sync> =
