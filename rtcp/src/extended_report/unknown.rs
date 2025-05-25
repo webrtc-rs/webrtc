@@ -83,7 +83,10 @@ impl Unmarshal for UnknownReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-        let block_length = xr_header.block_length * 4;
+        let block_length = match xr_header.block_length.checked_mul(4) {
+            Some(length) => length,
+            None => return Err(error::Error::InvalidBlockSize.into()),
+        };
         if raw_packet.remaining() < block_length as usize {
             return Err(error::Error::PacketTooShort.into());
         }
