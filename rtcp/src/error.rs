@@ -96,6 +96,8 @@ pub enum Error {
     BadStructMemberType,
     #[error("Cannot read into non-pointer")]
     BadReadParameter,
+    #[error("Invalid block size")]
+    InvalidBlockSize,
 
     #[error("{0}")]
     Util(#[from] util::Error),
