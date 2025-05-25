@@ -130,7 +130,7 @@ fn test_rtcp_lifecycle() -> Result<()> {
 
 #[test]
 fn test_rtcp_invalid_auth_tag() -> Result<()> {
-    let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_tag_len();
+    let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.rtcp_auth_tag_len();
 
     let mut decrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
@@ -217,7 +217,7 @@ fn test_encrypt_rtcp_separation() -> Result<()> {
         None,
     )?;
 
-    let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_tag_len();
+    let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.rtcp_auth_tag_len();
 
     let mut decrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,

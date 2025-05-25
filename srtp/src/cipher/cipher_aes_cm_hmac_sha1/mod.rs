@@ -24,6 +24,7 @@ type HmacSha1 = Hmac<Sha1>;
 pub const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
 pub(crate) struct CipherInner {
+    profile: ProtectionProfile,
     srtp_session_salt: Vec<u8>,
     srtp_session_auth: HmacSha1,
     srtcp_session_salt: Vec<u8>,
@@ -31,7 +32,7 @@ pub(crate) struct CipherInner {
 }
 
 impl CipherInner {
-    pub fn new(master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
+    pub fn new(profile: ProtectionProfile, master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
         let srtp_session_salt = aes_cm_key_derivation(
             LABEL_SRTP_SALT,
             master_key,
@@ -70,6 +71,7 @@ impl CipherInner {
             .map_err(|e| Error::Other(e.to_string()))?;
 
         Ok(Self {
+            profile,
             srtp_session_salt,
             srtp_session_auth,
             srtcp_session_salt,
@@ -121,12 +123,8 @@ impl CipherInner {
         signer.finalize().into_bytes().into()
     }
 
-    fn auth_tag_len(&self) -> usize {
-        CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN
-    }
-
     fn get_rtcp_index(&self, input: &[u8]) -> usize {
-        let tail_offset = input.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
+        let tail_offset = input.len() - (self.profile.rtcp_auth_tag_len() + SRTCP_INDEX_SIZE);
         (BigEndian::read_u32(&input[tail_offset..tail_offset + SRTCP_INDEX_SIZE]) & !(1 << 31))
             as usize
     }
