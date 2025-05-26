@@ -160,9 +160,10 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
             // Update the head of the window.
             self.mask.lsh((-diff) as usize);
             self.latest_seq = self.seq;
+            self.mask.set_bit(0);
+        } else {
+            self.mask.set_bit(diff as usize);
         }
-        self.mask
-            .set_bit((self.latest_seq as isize - self.seq as isize) as usize);
     }
 }
 
