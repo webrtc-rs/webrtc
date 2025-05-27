@@ -430,7 +430,7 @@ impl Association {
             // read from the underlying transport. We do this because the
             // user data is passed to the reassembly queue without
             // copying.
-            log::debug!("[{}] recving {} bytes", name, n);
+            log::debug!("[{}] receiving {} bytes", name, n);
             let inbound = Bytes::from(buffer[..n].to_vec());
             bytes_received.fetch_add(n, Ordering::SeqCst);
 
@@ -468,6 +468,9 @@ impl Association {
         'outer: while !done.load(Ordering::Relaxed) {
             //log::debug!("[{}] gather_outbound begin", name);
             let (packets, continue_loop) = {
+                // Yielding here fixes a deadlock that crops up when requestor and responder are
+                // using the same tokio event loop as in examples/data=channels-flow-control
+                tokio::task::yield_now().await;
                 let mut ai = association_internal.lock().await;
                 ai.gather_outbound().await
             };
