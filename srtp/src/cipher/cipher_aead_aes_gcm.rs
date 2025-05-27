@@ -172,7 +172,8 @@ where
         assert_eq!(profile.key_len(), AES::key_size());
         assert_eq!(profile.salt_len(), master_salt.len());
 
-        let kdf: fn(u8, &[u8], &[u8], usize, usize) -> Result<Vec<u8>> = match profile {
+        type Kdf = fn(u8, &[u8], &[u8], usize, usize) -> Result<Vec<u8>>;
+        let kdf: Kdf = match profile {
             ProtectionProfile::AeadAes128Gcm => aes_cm_key_derivation,
             // AES_256_GCM must use AES_256_CM_PRF as per https://datatracker.ietf.org/doc/html/rfc7714#section-11
             ProtectionProfile::AeadAes256Gcm => aes_256_cm_key_derivation,
