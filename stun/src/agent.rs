@@ -130,18 +130,18 @@ impl Agent {
             return Err(Error::ErrAgentClosed);
         }
 
-        let v = self.transactions.remove(&id);
-        if let Some(t) = v {
-            if let Some(handler) = &self.handler {
-                handler.send(Event {
-                    event_type: EventType::Callback(t.id),
-                    event_body: Err(error),
-                })?;
-            }
-            Ok(())
-        } else {
-            Err(Error::ErrTransactionNotExists)
+        let t = self
+            .transactions
+            .remove(&id)
+            .ok_or(Error::ErrTransactionNotExists)?;
+
+        if let Some(handler) = &self.handler {
+            handler.send(Event {
+                event_type: EventType::Callback(t.id),
+                event_body: Err(error),
+            })?;
         }
+        Ok(())
     }
 
     /// process incoming message, synchronously passing it to handler.
