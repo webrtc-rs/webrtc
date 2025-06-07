@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn test_conn_lookup_host() -> Result<()> {
-    let stun_serv_addr = "stun1.l.google.com:19302";
+    let stun_serv_addr = "stun.cloudflare.com:3478";
 
     if let Ok(ipv4_addr) = lookup_host(true, stun_serv_addr).await {
         assert!(

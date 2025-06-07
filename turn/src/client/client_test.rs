@@ -35,7 +35,7 @@ async fn create_listening_test_client_with_stun_serv() -> Result<Client> {
     let conn = UdpSocket::bind("0.0.0.0:0").await?;
 
     let c = Client::new(ClientConfig {
-        stun_serv_addr: "stun1.l.google.com:19302".to_owned(),
+        stun_serv_addr: "stun.cloudflare.com:3478".to_owned(),
         turn_serv_addr: String::new(),
         username: String::new(),
         password: String::new(),
@@ -81,7 +81,7 @@ async fn test_client_with_stun_send_binding_request_to_parallel() -> Result<()> 
     let (stared_tx, mut started_rx) = mpsc::channel::<()>(1);
     let (finished_tx, mut finished_rx) = mpsc::channel::<()>(1);
 
-    let to = lookup_host(true, "stun1.l.google.com:19302").await?;
+    let to = lookup_host(true, "stun.cloudflare.com:3478").await?;
 
     tokio::spawn(async move {
         drop(stared_tx);
