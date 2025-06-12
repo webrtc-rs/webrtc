@@ -65,11 +65,11 @@ impl Resource {
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
     ) -> Result<Vec<u8>> {
-        if let Some(body) = &self.body {
-            self.header.typ = body.real_type();
-        } else {
-            return Err(Error::ErrNilResourceBody);
-        }
+        self.header.typ = self
+            .body
+            .as_ref()
+            .ok_or(Error::ErrNilResourceBody)?
+            .real_type();
         let (mut msg, len_off) = self.header.pack(msg, compression, compression_off)?;
         let pre_len = msg.len();
         if let Some(body) = &self.body {
