@@ -150,14 +150,12 @@ impl RelayConnObserver for ClientInternal {
         }
 
         // wait_for_result waits for the transaction result
-        if let Some(mut result_ch_rx) = result_ch_rx {
-            match result_ch_rx.recv().await {
-                Some(tr) => Ok(tr),
-                None => Err(Error::ErrTransactionClosed),
-            }
-        } else {
-            Err(Error::ErrWaitForResultOnNonResultTransaction)
-        }
+        let mut result_ch_rx = result_ch_rx.ok_or(Error::ErrWaitForResultOnNonResultTransaction)?;
+        let tr = result_ch_rx
+            .recv()
+            .await
+            .ok_or(Error::ErrTransactionClosed)?;
+        Ok(tr)
     }
 }
 
