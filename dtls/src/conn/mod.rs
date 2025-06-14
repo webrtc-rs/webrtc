@@ -114,9 +114,11 @@ impl Conn for DTLSConn {
     async fn connect(&self, _addr: SocketAddr) -> UtilResult<()> {
         Err(util::Error::Other("Not applicable".to_owned()))
     }
+
     async fn recv(&self, buf: &mut [u8]) -> UtilResult<usize> {
         self.read(buf, None).await.map_err(util::Error::from_std)
     }
+
     async fn recv_from(&self, buf: &mut [u8]) -> UtilResult<(usize, SocketAddr)> {
         if let Some(raddr) = self.conn.remote_addr() {
             let n = self.read(buf, None).await.map_err(util::Error::from_std)?;
@@ -127,18 +129,23 @@ impl Conn for DTLSConn {
             ))
         }
     }
+
     async fn send(&self, buf: &[u8]) -> UtilResult<usize> {
         self.write(buf, None).await.map_err(util::Error::from_std)
     }
+
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> UtilResult<usize> {
         Err(util::Error::Other("Not applicable".to_owned()))
     }
+
     fn local_addr(&self) -> UtilResult<SocketAddr> {
         self.conn.local_addr()
     }
+
     fn remote_addr(&self) -> Option<SocketAddr> {
         self.conn.remote_addr()
     }
+
     async fn close(&self) -> UtilResult<()> {
         self.close().await.map_err(util::Error::from_std)
     }
