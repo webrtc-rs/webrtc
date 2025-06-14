@@ -97,22 +97,16 @@ impl CipherSuite for CipherSuiteAes128Ccm {
     }
 
     fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>> {
-        if let Some(ccm) = &self.ccm {
-            ccm.encrypt(pkt_rlh, raw)
-        } else {
-            Err(Error::Other(
-                "CipherSuite has not been initialized, unable to encrypt".to_owned(),
-            ))
-        }
+        let ccm = self.ccm.as_ref().ok_or(Error::Other(
+            "CipherSuite has not been initialized, unable to encrypt".to_owned(),
+        ))?;
+        ccm.encrypt(pkt_rlh, raw)
     }
 
     fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>> {
-        if let Some(ccm) = &self.ccm {
-            ccm.decrypt(input)
-        } else {
-            Err(Error::Other(
-                "CipherSuite has not been initialized, unable to decrypt".to_owned(),
-            ))
-        }
+        let ccm = self.ccm.as_ref().ok_or(Error::Other(
+            "CipherSuite has not been initialized, unable to decrypt".to_owned(),
+        ))?;
+        ccm.decrypt(input)
     }
 }
