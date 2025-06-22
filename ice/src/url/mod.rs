@@ -4,6 +4,8 @@ mod url_test;
 use std::convert::From;
 use std::fmt;
 
+use stun::{DEFAULT_PORT, DEFAULT_TLS_PORT};
+
 use crate::error::*;
 
 /// The type of server used in the ice.URL structure.
@@ -165,9 +167,9 @@ impl Url {
         let port = if let Some(port) = raw_parts.port() {
             port
         } else if scheme == SchemeType::Stun || scheme == SchemeType::Turn {
-            3478
+            DEFAULT_PORT
         } else {
-            5349
+            DEFAULT_TLS_PORT
         };
 
         let mut q_args = raw_parts.query_pairs();
