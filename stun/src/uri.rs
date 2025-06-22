@@ -21,7 +21,7 @@ pub struct Uri {
 impl fmt::Display for Uri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let host = if self.host.contains("::") {
-            "[".to_owned() + self.host.as_str() + "]"
+            format!("[{}]", self.host)
         } else {
             self.host.clone()
         };
