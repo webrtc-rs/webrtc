@@ -249,18 +249,16 @@ async fn main() -> Result<(), Error> {
         let (local_ufrag, local_pwd) = ice_agent.get_local_user_credentials().await;
 
         println!("posting remoteAuth with {local_ufrag}:{local_pwd}");
-        let req = match Request::builder()
+        let req = Request::builder()
             .method(Method::POST)
             .uri(format!("http://localhost:{remote_http_port}/remoteAuth"))
             .body(Body::from(format!("{local_ufrag}:{local_pwd}")))
-        {
-            Ok(req) => req,
-            Err(err) => return Err(Error::Other(format!("{err}"))),
-        };
-        let resp = match client.request(req).await {
-            Ok(resp) => resp,
-            Err(err) => return Err(Error::Other(format!("{err}"))),
-        };
+            .map_err(|err| Error::Other(format!("{err}")))?;
+
+        let resp = client
+            .request(req)
+            .await
+            .map_err(|err| Error::Other(format!("{err}")))?;
         println!("Response from remoteAuth: {}", resp.status());
 
         let (remote_ufrag, remote_pwd) = {
@@ -291,11 +289,11 @@ async fn main() -> Result<(), Error> {
                                 println!("add_remote_candidate: {c}");
                                 let c: Arc<dyn Candidate + Send + Sync> = Arc::new(c);
                                 let _ = ice_agent2.add_remote_candidate(&c);
-                            }else{
+                            } else {
                                 println!("unmarshal_candidate error!");
                                 break;
                             }
-                        }else{
+                        } else {
                             println!("REMOTE_CAND_CHANNEL done!");
                             break;
                         }
@@ -343,7 +341,7 @@ async fn main() -> Result<(), Error> {
                         if let Err(err) = result {
                             eprintln!("conn_tx send error: {err}");
                             break;
-                        }else{
+                        } else {
                             println!("Sent: '{val}'");
                         }
                     }
