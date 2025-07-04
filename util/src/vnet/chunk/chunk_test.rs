@@ -26,7 +26,7 @@ fn test_chunk_udp() -> Result<()> {
 
     let mut c = ChunkUdp::new(src, dst);
     let s = c.to_string();
-    log::debug!("chunk: {}", s);
+    log::debug!("chunk: {s}");
     assert_eq!(c.network(), UDP_STR, "should match");
     assert!(s.contains(&src.to_string()), "should include address");
     assert!(s.contains(&dst.to_string()), "should include address");

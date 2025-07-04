@@ -21,7 +21,7 @@ async fn test_resolver_standalone() -> Result<()> {
     let name = "abc.com";
     let ip_addr = DEMO_IP;
     let ip = IpAddr::from_str(ip_addr)?;
-    log::debug!("adding {} {}", name, ip_addr);
+    log::debug!("adding {name} {ip_addr}");
 
     r.add_host(name.to_owned(), ip_addr.to_owned())?;
 

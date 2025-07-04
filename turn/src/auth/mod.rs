@@ -50,12 +50,7 @@ pub struct LongTermAuthHandler {
 
 impl AuthHandler for LongTermAuthHandler {
     fn auth_handle(&self, username: &str, realm: &str, src_addr: SocketAddr) -> Result<Vec<u8>> {
-        log::trace!(
-            "Authentication username={} realm={} src_addr={}",
-            username,
-            realm,
-            src_addr
-        );
+        log::trace!("Authentication username={username} realm={realm} src_addr={src_addr}");
 
         let t = Duration::from_secs(username.parse::<u64>()?);
         if t < SystemTime::now().duration_since(UNIX_EPOCH)? {

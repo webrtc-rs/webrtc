@@ -245,14 +245,14 @@ impl fmt::Display for MediaName {
         for part in &self.protos {
             if first {
                 first = false;
-                write!(f, " {}", part)?;
+                write!(f, " {part}")?;
             } else {
-                write!(f, "/{}", part)?;
+                write!(f, "/{part}")?;
             }
         }
 
         for part in &self.formats {
-            write!(f, " {}", part)?;
+            write!(f, " {part}")?;
         }
 
         Ok(())

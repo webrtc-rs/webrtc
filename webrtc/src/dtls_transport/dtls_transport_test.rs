@@ -87,7 +87,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
         _ = offer_chan_rx.recv() =>{
             let mut offer = pc_offer.pending_local_description().await.unwrap();
 
-            log::trace!("receiving pending local desc: {:?}", offer);
+            log::trace!("receiving pending local desc: {offer:?}");
 
             // Replace with invalid fingerprint
             let re = Regex::new(r"sha-256 (.*?)\r").unwrap();

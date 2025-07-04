@@ -2302,7 +2302,7 @@ async fn test_multiple_hello_verify_request() -> Result<()> {
 
     for i in 0..cookies.len() {
         let cookie = &cookies[i];
-        trace!("cookie {}: {:?}", i, cookie);
+        trace!("cookie {i}: {cookie:?}");
 
         // read client hello
         let mut resp = vec![0; 1024];

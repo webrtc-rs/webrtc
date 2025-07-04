@@ -658,8 +658,8 @@ async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats()
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()
     };
-    log::debug!("natType0: {:?}", nat_type0);
-    log::debug!("natType1: {:?}", nat_type1);
+    log::debug!("natType0: {nat_type0:?}");
+    log::debug!("natType1: {nat_type1:?}");
 
     let v = build_vnet(nat_type0, nat_type1).await?;
 
@@ -711,8 +711,8 @@ async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats(
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()
     };
-    log::debug!("natType0: {:?}", nat_type0);
-    log::debug!("natType1: {:?}", nat_type1);
+    log::debug!("natType0: {nat_type0:?}");
+    log::debug!("natType1: {nat_type1:?}");
 
     let v = build_vnet(nat_type0, nat_type1).await?;
 

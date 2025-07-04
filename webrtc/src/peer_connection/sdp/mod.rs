@@ -111,14 +111,14 @@ pub(crate) fn track_details_from_sdp(
                                 let base_ssrc = match split[1].parse::<u32>() {
                                     Ok(ssrc) => ssrc,
                                     Err(err) => {
-                                        log::warn!("Failed to parse SSRC: {}", err);
+                                        log::warn!("Failed to parse SSRC: {err}");
                                         continue;
                                     }
                                 };
                                 let rtx_repair_flow = match split[2].parse::<u32>() {
                                     Ok(n) => n,
                                     Err(err) => {
-                                        log::warn!("Failed to parse SSRC: {}", err);
+                                        log::warn!("Failed to parse SSRC: {err}");
                                         continue;
                                     }
                                 };
@@ -155,7 +155,7 @@ pub(crate) fn track_details_from_sdp(
                         let ssrc = match split[0].parse::<u32>() {
                             Ok(ssrc) => ssrc,
                             Err(err) => {
-                                log::warn!("Failed to parse SSRC: {}", err);
+                                log::warn!("Failed to parse SSRC: {err}");
                                 continue;
                             }
                         };
@@ -242,7 +242,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> Vec<SimulcastRid> {
                 .and_then(SimulcastRid::try_from)
                 .map(|rid| rids.push(rid))
             {
-                log::warn!("Failed to parse RID: {}", err);
+                log::warn!("Failed to parse RID: {err}");
             }
         } else if attr.key.as_str() == SDP_ATTRIBUTE_SIMULCAST {
             simulcast_attr.clone_from(&attr.value);

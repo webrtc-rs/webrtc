@@ -131,7 +131,7 @@ impl Manager {
 
         if let Some(a) = allocation {
             if let Err(err) = a.close().await {
-                log::error!("Failed to close allocation: {}", err);
+                log::error!("Failed to close allocation: {err}");
             }
         }
     }
@@ -159,7 +159,7 @@ impl Manager {
 
         future::join_all(to_delete.iter().map(|a| async move {
             if let Err(err) = a.close().await {
-                log::error!("Failed to close allocation: {}", err);
+                log::error!("Failed to close allocation: {err}");
             }
         }))
         .await;

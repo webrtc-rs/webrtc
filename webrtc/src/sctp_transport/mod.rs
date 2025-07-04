@@ -232,7 +232,7 @@ impl RTCSctpTransport {
                         Ok(dc) => dc,
                         Err(err) => {
                             if data::Error::ErrStreamClosed == err {
-                                log::error!("Failed to accept data channel: {}", err);
+                                log::error!("Failed to accept data channel: {err}");
                                 if let Some(handler) = &*param.on_error_handler.load() {
                                     let mut f = handler.lock().await;
                                     f(err.into()).await;

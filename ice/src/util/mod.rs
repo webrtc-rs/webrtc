@@ -160,7 +160,7 @@ pub async fn listen_udp_in_port_range(
         let laddr = SocketAddr::new(laddr.ip(), port_current);
         match vnet.bind(laddr).await {
             Ok(c) => return Ok(c),
-            Err(err) => log::debug!("failed to listen {}: {}", laddr, err),
+            Err(err) => log::debug!("failed to listen {laddr}: {err}"),
         };
 
         port_current += 1;

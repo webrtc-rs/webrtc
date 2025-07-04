@@ -174,7 +174,7 @@ async fn main() -> anyhow::Result<()> {
                 if let Ok(candidate) = candidate.to_json() {
                     if let Some(requester) = maybe_requester.upgrade() {
                         if let Err(err) = requester.add_ice_candidate(candidate).await {
-                            log::warn!("{}", err);
+                            log::warn!("{err}");
                         }
                     }
                 }
@@ -191,7 +191,7 @@ async fn main() -> anyhow::Result<()> {
                 if let Ok(candidate) = candidate.to_json() {
                     if let Some(responder) = maybe_responder.upgrade() {
                         if let Err(err) = responder.add_ice_candidate(candidate).await {
-                            log::warn!("{}", err);
+                            log::warn!("{err}");
                         }
                     }
                 }

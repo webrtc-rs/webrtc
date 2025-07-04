@@ -187,7 +187,7 @@ impl DataChannel {
                     match self.handle_dcep(&mut data).await {
                         Ok(()) => {}
                         Err(err) => {
-                            log::error!("Failed to handle DCEP: {:?}", err);
+                            log::error!("Failed to handle DCEP: {err:?}");
                         }
                     }
                     continue;

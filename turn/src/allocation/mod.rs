@@ -371,7 +371,7 @@ impl Allocation {
                         }
                     }
                     _ = drop_rx.as_mut() => {
-                        log::trace!("allocation has stopped, stop packet_handler. five_tuple: {:?}", five_tuple);
+                        log::trace!("allocation has stopped, stop packet_handler. five_tuple: {five_tuple:?}");
                         break;
                     }
                 };
@@ -407,11 +407,7 @@ impl Allocation {
                         .send_to(&channel_data.raw, five_tuple.src_addr)
                         .await
                     {
-                        log::error!(
-                            "Failed to send ChannelData from allocation {} {}",
-                            src_addr,
-                            err
-                        );
+                        log::error!("Failed to send ChannelData from allocation {src_addr} {err}");
                     }
                 } else {
                     let exist = {
@@ -435,9 +431,7 @@ impl Allocation {
                                 Box::new(data_attr),
                             ]) {
                                 log::error!(
-                                    "Failed to send DataIndication from allocation {} {}",
-                                    src_addr,
-                                    err
+                                    "Failed to send DataIndication from allocation {src_addr} {err}"
                                 );
                                 None
                             } else {
@@ -455,17 +449,13 @@ impl Allocation {
                                 turn_socket.send_to(&msg.raw, five_tuple.src_addr).await
                             {
                                 log::error!(
-                                    "Failed to send DataIndication from allocation {} {}",
-                                    src_addr,
-                                    err
+                                    "Failed to send DataIndication from allocation {src_addr} {err}"
                                 );
                             }
                         }
                     } else {
                         log::info!(
-                            "No Permission or Channel exists for {} on allocation {}",
-                            src_addr,
-                            relay_addr
+                            "No Permission or Channel exists for {src_addr} on allocation {relay_addr}"
                         );
                     }
                 }

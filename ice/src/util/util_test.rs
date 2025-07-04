@@ -25,10 +25,7 @@ async fn test_local_interfaces() -> Result<()> {
     assert!(!ips.iter().any(|ip| ip.is_loopback()));
     assert!(ips_with_loopback.iter().any(|ip| ip.is_loopback()));
     log::info!(
-        "interfaces: {:?}, ips: {:?}, ips_with_loopback: {:?}",
-        interfaces,
-        ips,
-        ips_with_loopback
+        "interfaces: {interfaces:?}, ips: {ips:?}, ips_with_loopback: {ips_with_loopback:?}"
     );
     Ok(())
 }

@@ -342,7 +342,7 @@ fn verify_signature(
         _ => return Err(Error::ErrKeySignatureVerifyUnimplemented),
     };
 
-    log::trace!("Picked an algorithm {:?}", verify_alg);
+    log::trace!("Picked an algorithm {verify_alg:?}");
 
     let public_key = ring::signature::UnparsedPublicKey::new(
         verify_alg,

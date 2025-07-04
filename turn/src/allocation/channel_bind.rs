@@ -54,7 +54,7 @@ impl ChannelBind {
                         if let Some(cbs) = &channel_bindings.clone().and_then(|x| x.upgrade()) {
                             let mut cb = cbs.lock().await;
                             if cb.remove(&number).is_none() {
-                                log::error!("Failed to remove ChannelBind for {}", number);
+                                log::error!("Failed to remove ChannelBind for {number}");
                             }
                         }
                         done = true;

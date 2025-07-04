@@ -58,7 +58,7 @@ pub(crate) fn create_multicast_dns(
     } else {
         SocketAddr::from_str(dest_addr)?
     };
-    log::info!("mDNS is using {} as dest_addr", addr);
+    log::info!("mDNS is using {addr} as dest_addr");
 
     let conn = DnsConn::server(
         addr,

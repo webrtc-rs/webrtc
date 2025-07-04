@@ -335,11 +335,7 @@ impl RTCRtpTransceiver {
         let changed = d != previous;
 
         if changed {
-            trace!(
-                "Changing direction of transceiver from {} to {}",
-                previous,
-                d
-            );
+            trace!("Changing direction of transceiver from {previous} to {d}");
         }
 
         changed
@@ -363,11 +359,7 @@ impl RTCRtpTransceiver {
             .into();
 
         if d != previous {
-            trace!(
-                "Changing current direction of transceiver from {} to {}",
-                previous,
-                d,
-            );
+            trace!("Changing current direction of transceiver from {previous} to {d}",);
         }
     }
 
@@ -387,10 +379,7 @@ impl RTCRtpTransceiver {
         if previous_direction != current_direction {
             let mid = self.mid();
             trace!(
-                "Processing transceiver({:?}) direction change from {} to {}",
-                mid,
-                previous_direction,
-                current_direction
+                "Processing transceiver({mid:?}) direction change from {previous_direction} to {current_direction}"
             );
         } else {
             // no change.

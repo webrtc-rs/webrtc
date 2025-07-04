@@ -46,7 +46,7 @@ impl Nic for DummyNic {
     }
 
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
-        log::debug!("received: {}", c);
+        log::debug!("received: {c}");
         match self.on_inbound_chunk_handler {
             0 => {
                 self.cbs0.fetch_add(1, Ordering::SeqCst);
@@ -321,9 +321,9 @@ async fn test_router_standalone_add_chunk_filter() -> Result<()> {
             let m = n.fetch_add(1, Ordering::SeqCst);
             let pass = m > 0;
             if pass {
-                log::debug!("{}: {} passed {}", m, name, c);
+                log::debug!("{m}: {name} passed {c}");
             } else {
-                log::debug!("{}: {} blocked {}", m, name, c);
+                log::debug!("{m}: {name} blocked {c}");
             }
             pass
         })
@@ -440,9 +440,9 @@ async fn delay_sub_test(title: String, min_delay: Duration, max_jitter: Duration
         let n = nics[1].lock().await;
         let delay_res = n.delay_res.lock().await;
         for d in &*delay_res {
-            log::info!("min delay : {:?}", min_delay);
-            log::info!("max jitter: {:?}", max_jitter);
-            log::info!("actual delay: {:?}", d);
+            log::info!("min delay : {min_delay:?}");
+            log::info!("max jitter: {max_jitter:?}");
+            log::info!("actual delay: {d:?}");
             assert!(*d >= min_delay, "{title} should delay {d:?} >= 20ms");
             assert!(
                 *d <= (min_delay + max_jitter + MARGIN),
@@ -587,7 +587,7 @@ async fn test_router_one_child() -> Result<()> {
             SocketAddr::new(ips[1], 1234), //lanIP
             SocketAddr::new(ips[0], 5678), //wanIP
         ));
-        log::debug!("sending {}", c);
+        log::debug!("sending {c}");
         let lan = rs[1].lock().await;
         lan.push(c).await;
     }

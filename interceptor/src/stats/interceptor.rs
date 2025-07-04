@@ -135,10 +135,7 @@ impl StatsInterceptor {
             .send(Message::RequestInboundSnapshot { ssrcs, chan: tx })
             .await
         {
-            log::debug!(
-                "Failed to fetch inbound RTP stream stats from stats task with error: {}",
-                e
-            );
+            log::debug!("Failed to fetch inbound RTP stream stats from stats task with error: {e}");
 
             return vec![];
         }
@@ -158,8 +155,7 @@ impl StatsInterceptor {
             .await
         {
             log::debug!(
-                "Failed to fetch outbound RTP stream stats from stats task with error: {}",
-                e
+                "Failed to fetch outbound RTP stream stats from stats task with error: {e}"
             );
 
             return vec![];

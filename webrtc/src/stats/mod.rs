@@ -125,8 +125,7 @@ impl<'de> Deserialize<'de> for StatsReportType {
             .ok_or_else(|| serde::de::Error::missing_field("type"))?;
         let rtc_type: RTCStatsType = serde_json::from_value(type_field.clone()).map_err(|e| {
             serde::de::Error::custom(format!(
-                "failed to deserialize RTCStatsType from the `type` field ({}): {}",
-                type_field, e
+                "failed to deserialize RTCStatsType from the `type` field ({type_field}): {e}"
             ))
         })?;
 
@@ -228,8 +227,7 @@ impl<'de> Deserialize<'de> for StatsReport {
         for (key, value) in root {
             let report = serde_json::from_value(value.clone()).map_err(|e| {
                 serde::de::Error::custom(format!(
-                    "failed to deserialize `StatsReportType` from key={}, value={}: {}",
-                    key, value, e
+                    "failed to deserialize `StatsReportType` from key={key}, value={value}: {e}"
                 ))
             })?;
             reports.insert(key.clone(), report);
