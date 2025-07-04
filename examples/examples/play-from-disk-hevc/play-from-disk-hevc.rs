@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
     let (answer_sdr, answer_rcv) = mpsc::channel::<RTCSessionDescription>(10);
     tokio::spawn(async move {
         if let Err(e) = offer_worker(video_file1, audio_file, offer_sdr, answer_rcv).await {
-            println!("[Speaker] Error: {:?}", e);
+            println!("[Speaker] Error: {e:?}");
         }
     });
     // Create a MediaEngine object to configure the supported codec

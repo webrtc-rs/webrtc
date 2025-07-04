@@ -47,12 +47,7 @@ async fn on_rtx_timeout(
         return true;
     }
 
-    log::trace!(
-        "retransmitting transaction {} to {} (n_rtx={})",
-        tr_key,
-        tr_to,
-        n_rtx
-    );
+    log::trace!("retransmitting transaction {tr_key} to {tr_to} (n_rtx={n_rtx})");
 
     let dst = match SocketAddr::from_str(&tr_to) {
         Ok(dst) => dst,

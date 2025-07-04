@@ -170,7 +170,7 @@ impl Server {
                             break;
                         }
                         Err(RecvError::Lagged(n)) => {
-                            log::warn!("Turn server has lagged by {} messages", n);
+                            log::warn!("Turn server has lagged by {n} messages");
                             continue;
                         }
                     }
@@ -184,7 +184,7 @@ impl Server {
                     match v {
                         Ok(v) => v,
                         Err(err) => {
-                            log::debug!("exit read loop on error: {}", err);
+                            log::debug!("exit read loop on error: {err}");
                             break;
                         }
                     }
@@ -204,7 +204,7 @@ impl Server {
             };
 
             if let Err(err) = r.handle_request().await {
-                log::error!("error when handling datagram: {}", err);
+                log::error!("error when handling datagram: {err}");
             }
         }
 

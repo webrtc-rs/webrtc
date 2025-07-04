@@ -226,7 +226,7 @@ impl Agent {
             .await;
 
             if let Err(err) = result {
-                log::error!("Failed to gather local candidates using UDP mux: {}", err);
+                log::error!("Failed to gather local candidates using UDP mux: {err}");
             }
 
             return;
@@ -426,9 +426,7 @@ impl Agent {
                             Ok(ip) => Some(ip),
                             Err(err) => {
                                 log::warn!(
-                            "1:1 NAT mapping is enabled but not external IP is found for {}: {}",
-                            ip,
-                            err
+                            "1:1 NAT mapping is enabled but not external IP is found for {ip}: {err}"
                         );
                                 None
                             }

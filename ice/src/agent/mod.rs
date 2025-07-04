@@ -141,7 +141,7 @@ impl Agent {
                 Err(err) => {
                     // Opportunistic mDNS: If we can't open the connection, that's ok: we
                     // can continue without it.
-                    log::warn!("Failed to initialize mDNS {}: {}", mdns_name, err);
+                    log::warn!("Failed to initialize mDNS {mdns_name}: {err}");
                     None
                 }
             };
@@ -269,7 +269,7 @@ impl Agent {
         if c.tcp_type() == TcpType::Active {
             // TCP Candidates with tcptype active will probe server passive ones, so
             // no need to do anything with them.
-            log::info!("Ignoring remote candidate with tcpType active: {}", c);
+            log::info!("Ignoring remote candidate with tcpType active: {c}");
             return Ok(());
         }
 
@@ -515,7 +515,7 @@ impl Agent {
     async fn close_multicast_conn(mdns_conn: &Option<Arc<DnsConn>>) {
         if let Some(conn) = mdns_conn {
             if let Err(err) = conn.close().await {
-                log::warn!("failed to close mDNS Conn: {}", err);
+                log::warn!("failed to close mDNS Conn: {err}");
             }
         }
     }

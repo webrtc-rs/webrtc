@@ -405,7 +405,7 @@ impl Association {
         mut close_loop_ch: broadcast::Receiver<()>,
         association_internal: Arc<Mutex<AssociationInternal>>,
     ) {
-        log::debug!("[{}] read_loop entered", name);
+        log::debug!("[{name}] read_loop entered");
 
         let mut buffer = vec![0u8; RECEIVE_MTU];
         let mut done = false;
@@ -419,7 +419,7 @@ impl Association {
                             n=m;
                         }
                         Err(err) => {
-                            log::warn!("[{}] failed to read packets on net_conn: {}", name, err);
+                            log::warn!("[{name}] failed to read packets on net_conn: {err}");
                             break;
                         }
                     }
@@ -430,14 +430,14 @@ impl Association {
             // read from the underlying transport. We do this because the
             // user data is passed to the reassembly queue without
             // copying.
-            log::debug!("[{}] recving {} bytes", name, n);
+            log::debug!("[{name}] recving {n} bytes");
             let inbound = Bytes::from(buffer[..n].to_vec());
             bytes_received.fetch_add(n, Ordering::SeqCst);
 
             {
                 let mut ai = association_internal.lock().await;
                 if let Err(err) = ai.handle_inbound(&inbound).await {
-                    log::warn!("[{}] failed to handle_inbound: {:?}", name, err);
+                    log::warn!("[{name}] failed to handle_inbound: {err:?}");
                     done = true;
                 }
             }
@@ -446,11 +446,11 @@ impl Association {
         {
             let mut ai = association_internal.lock().await;
             if let Err(err) = ai.close().await {
-                log::warn!("[{}] failed to close association: {:?}", name, err);
+                log::warn!("[{name}] failed to close association: {err:?}");
             }
         }
 
-        log::debug!("[{}] read_loop exited", name);
+        log::debug!("[{name}] read_loop exited");
     }
 
     async fn write_loop(
@@ -461,7 +461,7 @@ impl Association {
         association_internal: Arc<Mutex<AssociationInternal>>,
         mut awake_write_loop_ch: mpsc::Receiver<()>,
     ) {
-        log::debug!("[{}] write_loop entered", name);
+        log::debug!("[{name}] write_loop entered");
         let done = Arc::new(AtomicBool::new(false));
         let name = Arc::new(name);
 
@@ -493,7 +493,7 @@ impl Association {
                     Ok(Ok(mut buf)) => {
                         let raw = buf.as_ref();
                         if let Err(err) = net_conn.send(raw.as_ref()).await {
-                            log::warn!("[{}] failed to write packets on net_conn: {}", name2, err);
+                            log::warn!("[{name2}] failed to write packets on net_conn: {err}");
                             done2.store(true, Ordering::Relaxed)
                         } else {
                             bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
@@ -504,18 +504,16 @@ impl Association {
                         buffer = Some(buf);
                     }
                     Ok(Err(err)) => {
-                        log::warn!("[{}] failed to serialize a packet: {:?}", name2, err);
+                        log::warn!("[{name2}] failed to serialize a packet: {err:?}");
                     }
                     Err(err) => {
                         if err.is_cancelled() {
                             log::debug!(
-                                "[{}] task cancelled while serializing a packet: {:?}",
-                                name,
-                                err
+                                "[{name}] task cancelled while serializing a packet: {err:?}"
                             );
                             break 'outer;
                         } else {
-                            log::error!("[{}] panic while serializing a packet: {:?}", name, err);
+                            log::error!("[{name}] panic while serializing a packet: {err:?}");
                         }
                     }
                 }
@@ -539,11 +537,11 @@ impl Association {
         {
             let mut ai = association_internal.lock().await;
             if let Err(err) = ai.close().await {
-                log::warn!("[{}] failed to close association: {:?}", name, err);
+                log::warn!("[{name}] failed to close association: {err:?}");
             }
         }
 
-        log::debug!("[{}] write_loop exited", name);
+        log::debug!("[{name}] write_loop exited");
     }
 
     /// bytes_sent returns the number of bytes sent
