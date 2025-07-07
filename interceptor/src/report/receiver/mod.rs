@@ -110,11 +110,11 @@ impl ReceiverReport {
                         m.values().cloned().collect()
                     };
                     for stream in streams {
-                        let pkt = stream.generate_report(now);
-
-                        let a = Attributes::new();
-                        if let Err(err) = rtcp_writer.write(&[Box::new(pkt)], &a).await{
-                            log::warn!("failed sending: {}", err);
+                        if let Some(pkt) = stream.generate_report(now) {
+                            let a = Attributes::new();
+                            if let Err(err) = rtcp_writer.write(&[Box::new(pkt)], &a).await{
+                                log::warn!("failed sending: {}", err);
+                            }
                         }
                     }
                 }
@@ -186,11 +186,17 @@ impl Interceptor for ReceiverReport {
         info: &StreamInfo,
         reader: Arc<dyn RTPReader + Send + Sync>,
     ) -> Arc<dyn RTPReader + Send + Sync> {
+        let wait_for_probe = info
+            .attributes
+            .get(&crate::ATTR_READ_PROBE)
+            .is_some_and(|v| *v != 0);
+
         let stream = Arc::new(ReceiverStream::new(
             info.ssrc,
             info.clock_rate,
             reader,
             self.internal.now.clone(),
+            wait_for_probe,
         ));
         {
             let mut streams = self.internal.streams.lock().await;
