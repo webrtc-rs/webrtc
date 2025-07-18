@@ -60,7 +60,7 @@ pub mod tests {
         for original_length in 0..128 {
             for padding_length in 0..(256 - original_length) {
                 let mut block = vec![0; original_length + padding_length + 1];
-                rand::thread_rng().fill(&mut block[0..original_length]);
+                rand::rng().fill(&mut block[0..original_length]);
                 let original = block[0..original_length].to_vec();
                 DtlsPadding::raw_pad(&mut block, original_length);
 

@@ -68,7 +68,7 @@ impl CryptoCbc {
         payload.extend_from_slice(&mac);
 
         let mut iv: Vec<u8> = vec![0; Self::BLOCK_SIZE];
-        rand::thread_rng().fill(iv.as_mut_slice());
+        rand::rng().fill(iv.as_mut_slice());
 
         let write_cbc = Aes256CbcEnc::new_from_slices(&self.local_key, &iv)?;
         let encrypted = write_cbc.encrypt_padded_vec_mut::<DtlsPadding>(&payload);

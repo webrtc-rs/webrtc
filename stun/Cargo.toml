@@ -30,7 +30,7 @@ tokio = { version = "1.32.0", features = [
 ] }
 lazy_static = "1"
 url = "2"
-rand = "0.8"
+rand = "0.9"
 base64 = "0.22.1"
 subtle = "2.4"
 crc = "3"

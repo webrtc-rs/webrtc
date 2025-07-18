@@ -89,7 +89,7 @@ impl TransactionId {
     /// as source.
     pub fn new() -> Self {
         let mut b = TransactionId([0u8; TRANSACTION_ID_SIZE]);
-        rand::thread_rng().fill(&mut b.0);
+        rand::rng().fill(&mut b.0);
         b
     }
 }

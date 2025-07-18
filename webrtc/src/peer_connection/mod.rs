@@ -30,7 +30,7 @@ use async_trait::async_trait;
 use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use portable_atomic::{AtomicBool, AtomicU64, AtomicU8};
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use rcgen::KeyPair;
 use smol_str::SmolStr;
 use srtp::stream::Stream;
@@ -105,11 +105,11 @@ const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY
 
 /// math_rand_alpha generates a mathematical random alphabet sequence of the requested length.
 pub fn math_rand_alpha(n: usize) -> String {
-    let mut rng = thread_rng();
+    let mut rng = rng();
 
     let rand_string: String = (0..n)
         .map(|_| {
-            let idx = rng.gen_range(0..RUNES_ALPHA.len());
+            let idx = rng.random_range(0..RUNES_ALPHA.len());
             RUNES_ALPHA[idx] as char
         })
         .collect();
