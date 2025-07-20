@@ -194,7 +194,7 @@ impl Flight for Flight0 {
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         // Initialize
         state.cookie = vec![0; COOKIE_LENGTH];
-        rand::thread_rng().fill(state.cookie.as_mut_slice());
+        rand::rng().fill(state.cookie.as_mut_slice());
 
         //TODO: figure out difference between golang's atom store and rust atom store
         let zero_epoch = 0;

@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::io;
 use std::time::Duration;
 
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use sha1::{Digest, Sha1};
 use stun::message::{Message, BINDING_REQUEST};
 use tokio::net::UdpSocket;
@@ -252,7 +252,7 @@ async fn test_mux_connection(
     let mut written = 0;
     let mut buffer = vec![0u8; RECEIVE_MTU];
     while written < TARGET_SIZE {
-        thread_rng().fill(&mut buffer[24..]);
+        rng().fill(&mut buffer[24..]);
 
         let hash = sha1_hash(&buffer[24..]);
         buffer[4..24].copy_from_slice(&hash);

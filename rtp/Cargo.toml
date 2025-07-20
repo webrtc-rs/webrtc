@@ -13,7 +13,7 @@ repository = "https://github.com/webrtc-rs/webrtc/tree/master/rtp"
 util = { version = "0.11.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
 
 bytes = "1"
-rand = "0.8"
+rand = "0.9"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
 portable-atomic = "1.6"

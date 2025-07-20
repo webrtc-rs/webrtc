@@ -143,7 +143,7 @@ impl Message {
     // NewTransactionID sets m.TransactionID to random value from crypto/rand
     // and returns error if any.
     pub fn new_transaction_id(&mut self) -> Result<()> {
-        rand::thread_rng().fill(&mut self.transaction_id.0);
+        rand::rng().fill(&mut self.transaction_id.0);
         self.write_transaction_id();
         Ok(())
     }

@@ -17,7 +17,7 @@ rand_core = "0.6"
 hkdf = "0.12"
 p256 = { version = "0.13", features = ["default", "ecdh", "ecdsa"] }
 p384 = "0.13"
-rand = "0.8"
+rand = "0.9"
 hmac = "0.12"
 sec1 = { version = "0.7", features = ["std"] }
 sha1 = "0.10"

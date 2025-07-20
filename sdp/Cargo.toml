@@ -11,7 +11,7 @@ repository = "https://github.com/webrtc-rs/webrtc/tree/master/sdp"
 
 [dependencies]
 url = "2"
-rand = "0.8"
+rand = "0.9"
 thiserror = "1"
 substring = "1"
 

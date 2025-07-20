@@ -1793,7 +1793,7 @@ async fn test_server_timeout() -> Result<()> {
     .init();*/
 
     let mut cookie = vec![0u8; 20];
-    rand::thread_rng().fill(cookie.as_mut_slice());
+    rand::rng().fill(cookie.as_mut_slice());
 
     let random_bytes = [0u8; RANDOM_BYTES_LENGTH];
     let gmt_unix_time = SystemTime::UNIX_EPOCH
@@ -1951,7 +1951,7 @@ async fn test_protocol_version_validation() -> Result<()> {
     .init();*/
 
     let mut cookie = vec![0; 20];
-    rand::thread_rng().fill(cookie.as_mut_slice());
+    rand::rng().fill(cookie.as_mut_slice());
 
     let random_bytes = [0u8; RANDOM_BYTES_LENGTH];
     let gmt_unix_time = SystemTime::UNIX_EPOCH
@@ -2266,7 +2266,7 @@ async fn test_multiple_hello_verify_request() -> Result<()> {
     let mut packets = vec![];
     for i in 0..2 {
         let mut cookie = vec![0; 20];
-        rand::thread_rng().fill(cookie.as_mut_slice());
+        rand::rng().fill(cookie.as_mut_slice());
         cookies.push(cookie.clone());
 
         let mut handshake = Handshake::new(HandshakeMessage::HelloVerifyRequest(

@@ -13,7 +13,7 @@ use ice::network_type::*;
 use ice::state::*;
 use ice::udp_network::UDPNetwork;
 use ice::Error;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, watch, Mutex};
 use util::Conn;
@@ -327,7 +327,7 @@ async fn main() -> Result<(), Error> {
 
                 let val: String = (0..15)
                     .map(|_| {
-                        let idx = thread_rng().gen_range(0..RANDOM_STRING.len());
+                        let idx = rng().random_range(0..RANDOM_STRING.len());
                         RANDOM_STRING[idx] as char
                     })
                     .collect();

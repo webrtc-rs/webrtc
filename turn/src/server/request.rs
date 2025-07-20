@@ -932,12 +932,9 @@ impl Request {
 }
 
 pub(crate) fn rand_seq(n: usize) -> String {
-    let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".as_bytes();
-    let mut buf = vec![0u8; n];
-    for b in &mut buf {
-        *b = letters[rand::random::<usize>() % letters.len()];
-    }
-    String::from_utf8(buf).unwrap_or_default()
+    use rand::distr::{Alphabetic, SampleString};
+
+    Alphabetic.sample_string(&mut rand::rng(), n)
 }
 
 pub(crate) fn build_nonce() -> Result<String> {
