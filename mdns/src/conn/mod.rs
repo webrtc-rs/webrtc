@@ -58,8 +58,7 @@ impl DnsConn {
             Some(socket2::Protocol::UDP),
         )?;
 
-        #[cfg(feature = "reuse_port")]
-        #[cfg(target_family = "unix")]
+        #[cfg(all(target_family = "unix", feature = "reuse_port"))]
         socket.set_reuse_port(true)?;
 
         socket.set_reuse_address(true)?;
