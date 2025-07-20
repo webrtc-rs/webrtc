@@ -137,7 +137,7 @@ impl AgentInternal {
                 };
 
                 if let Err(err) = result {
-                    log::error!("{}", err);
+                    log::error!("{err}");
                     None
                 } else {
                     log::trace!(
@@ -297,7 +297,7 @@ impl ControllingSelector for AgentInternal {
         };
 
         if let Err(err) = result {
-            log::error!("{}", err);
+            log::error!("{err}");
         } else {
             self.send_binding_request(&msg, local, remote).await;
         }
@@ -316,15 +316,11 @@ impl ControllingSelector for AgentInternal {
             // Assert that NAT is not symmetric
             // https://tools.ietf.org/html/rfc8445#section-7.2.5.2.1
             if transaction_addr != remote_addr {
-                log::debug!("discard message: transaction source and destination does not match expected({}), actual({})", transaction_addr, remote);
+                log::debug!("discard message: transaction source and destination does not match expected({transaction_addr}), actual({remote})");
                 return;
             }
 
-            log::trace!(
-                "inbound STUN (SuccessResponse) from {} to {}",
-                remote,
-                local
-            );
+            log::trace!("inbound STUN (SuccessResponse) from {remote} to {local}");
             let selected_pair_is_none = self.agent_conn.get_selected_pair().is_none();
 
             if let Some(p) = self.find_pair(local, remote).await {
@@ -380,10 +376,7 @@ impl ControllingSelector for AgentInternal {
                 && self.agent_conn.get_selected_pair().is_none()
             {
                 if let Some(best_pair) = self.agent_conn.get_best_available_candidate_pair().await {
-                    log::trace!(
-                        "controllingSelector: getBestAvailableCandidatePair {}",
-                        best_pair
-                    );
+                    log::trace!("controllingSelector: getBestAvailableCandidatePair {best_pair}");
                     if best_pair == p
                         && self.is_nominatable(&p.local)
                         && self.is_nominatable(&p.remote)
@@ -449,7 +442,7 @@ impl ControlledSelector for AgentInternal {
         };
 
         if let Err(err) = result {
-            log::error!("{}", err);
+            log::error!("{err}");
         } else {
             self.send_binding_request(&msg, local, remote).await;
         }
@@ -474,20 +467,16 @@ impl ControlledSelector for AgentInternal {
             // Assert that NAT is not symmetric
             // https://tools.ietf.org/html/rfc8445#section-7.2.5.2.1
             if transaction_addr != remote_addr {
-                log::debug!("discard message: transaction source and destination does not match expected({}), actual({})", transaction_addr, remote);
+                log::debug!("discard message: transaction source and destination does not match expected({transaction_addr}), actual({remote})");
                 return;
             }
 
-            log::trace!(
-                "inbound STUN (SuccessResponse) from {} to {}",
-                remote,
-                local
-            );
+            log::trace!("inbound STUN (SuccessResponse) from {remote} to {local}");
 
             if let Some(p) = self.find_pair(local, remote).await {
                 p.state
                     .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
-                log::trace!("Found valid candidate pair: {}", p);
+                log::trace!("Found valid candidate pair: {p}");
 
                 if p.nominate_on_binding_success.load(Ordering::SeqCst)
                     && self.agent_conn.get_selected_pair().is_none()

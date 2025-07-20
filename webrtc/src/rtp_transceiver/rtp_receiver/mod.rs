@@ -684,7 +684,7 @@ impl RTCRtpReceiver {
         }
 
         if let Err(err) = self.receive(&RTCRtpReceiveParameters { encodings }).await {
-            log::warn!("RTPReceiver Receive failed {}", err);
+            log::warn!("RTPReceiver Receive failed {err}");
             return;
         }
 

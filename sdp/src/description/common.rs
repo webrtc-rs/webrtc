@@ -35,10 +35,10 @@ impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.address)?;
         if let Some(t) = &self.ttl {
-            write!(f, "/{}", t)?;
+            write!(f, "/{t}")?;
         }
         if let Some(r) = &self.range {
-            write!(f, "/{}", r)?;
+            write!(f, "/{r}")?;
         }
         Ok(())
     }

@@ -59,7 +59,7 @@ async fn test_client_with_stun_send_binding_request() -> Result<()> {
     let c = create_listening_test_client_with_stun_serv().await?;
 
     let resp = c.send_binding_request().await?;
-    log::debug!("mapped-addr: {}", resp);
+    log::debug!("mapped-addr: {resp}");
     {
         let ci = c.client_internal.lock().await;
         let tm = ci.tr_map.lock().await;
@@ -86,7 +86,7 @@ async fn test_client_with_stun_send_binding_request_to_parallel() -> Result<()> 
     tokio::spawn(async move {
         drop(stared_tx);
         if let Ok(resp) = c2.send_binding_request_to(&to.to_string()).await {
-            log::debug!("mapped-addr: {}", resp);
+            log::debug!("mapped-addr: {resp}");
         }
         drop(finished_tx);
     });
@@ -94,7 +94,7 @@ async fn test_client_with_stun_send_binding_request_to_parallel() -> Result<()> 
     let _ = started_rx.recv().await;
 
     let resp = c1.send_binding_request_to(&to.to_string()).await?;
-    log::debug!("mapped-addr: {}", resp);
+    log::debug!("mapped-addr: {resp}");
 
     let _ = finished_rx.recv().await;
 

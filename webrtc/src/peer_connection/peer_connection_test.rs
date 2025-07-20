@@ -164,11 +164,11 @@ pub(crate) async fn signal_pair(
 pub(crate) async fn close_pair_now(pc1: &RTCPeerConnection, pc2: &RTCPeerConnection) {
     let mut fail = false;
     if let Err(err) = pc1.close().await {
-        log::error!("Failed to close PeerConnection: {}", err);
+        log::error!("Failed to close PeerConnection: {err}");
         fail = true;
     }
     if let Err(err) = pc2.close().await {
-        log::error!("Failed to close PeerConnection: {}", err);
+        log::error!("Failed to close PeerConnection: {err}");
         fail = true;
     }
 

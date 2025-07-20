@@ -141,7 +141,7 @@ impl Generator {
                     let a = Attributes::new();
                     for nack in nacks{
                         if let Err(err) = rtcp_writer.write(&[Box::new(nack)], &a).await{
-                            log::warn!("failed sending nack: {}", err);
+                            log::warn!("failed sending nack: {err}");
                         }
                     }
                 }
@@ -183,7 +183,7 @@ impl Interceptor for Generator {
         tokio::spawn(async move {
             let _d = w.take();
             if let Err(err) = Generator::run(writer2, internal).await {
-                log::warn!("bind_rtcp_writer NACK Generator::run got error: {}", err);
+                log::warn!("bind_rtcp_writer NACK Generator::run got error: {err}");
             }
         });
 

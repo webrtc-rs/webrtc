@@ -152,7 +152,7 @@ impl PeerConnectionInternal {
                     RTCIceTransportState::Disconnected => RTCIceConnectionState::Disconnected,
                     RTCIceTransportState::Closed => RTCIceConnectionState::Closed,
                     _ => {
-                        log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
+                        log::warn!("on_connection_state_change: unhandled ICE state: {state}");
                         return Box::pin(async {});
                     }
                 };
@@ -257,9 +257,9 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
-                log::info!("Stopping receiver {:?}", receiver);
+                log::info!("Stopping receiver {receiver:?}");
                 if let Err(err) = receiver.stop().await {
-                    log::warn!("Failed to stop RtpReceiver: {}", err);
+                    log::warn!("Failed to stop RtpReceiver: {err}");
                     continue;
                 }
 
@@ -315,14 +315,14 @@ impl PeerConnectionInternal {
                         return;
                     }
                     Err(err) => {
-                        log::warn!("Failed to accept RTP {}", err);
+                        log::warn!("Failed to accept RTP {err}");
                         return;
                     }
                 };
 
                 if is_closed.load(Ordering::SeqCst) {
                     if let Err(err) = stream.close().await {
-                        log::warn!("Failed to close RTP stream {}", err);
+                        log::warn!("Failed to close RTP stream {err}");
                     }
                     continue;
                 }
@@ -460,9 +460,9 @@ impl PeerConnectionInternal {
             })
             .await
         {
-            log::warn!("Failed to start SCTP: {}", err);
+            log::warn!("Failed to start SCTP: {err}");
             if let Err(err) = self.sctp_transport.stop().await {
-                log::warn!("Failed to stop SCTPTransport: {}", err);
+                log::warn!("Failed to stop SCTPTransport: {err}");
             }
 
             return;
@@ -479,7 +479,7 @@ impl PeerConnectionInternal {
         for d in data_channels {
             if d.ready_state() == RTCDataChannelState::Connecting {
                 if let Err(err) = d.open(Arc::clone(&self.sctp_transport)).await {
-                    log::warn!("failed to open data channel: {}", err);
+                    log::warn!("failed to open data channel: {err}");
                     continue;
                 }
                 opened_dc_count += 1;
@@ -695,7 +695,7 @@ impl PeerConnectionInternal {
             )
             .await
         {
-            log::warn!("Failed to start manager ice: {}", err);
+            log::warn!("Failed to start manager ice: {err}");
             return;
         }
 
@@ -719,7 +719,7 @@ impl PeerConnectionInternal {
         )
         .await;
         if let Err(err) = result {
-            log::warn!("Failed to start manager dtls: {}", err);
+            log::warn!("Failed to start manager dtls: {err}");
         }
     }
 

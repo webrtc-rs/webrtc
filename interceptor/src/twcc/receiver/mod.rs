@@ -139,7 +139,7 @@ impl Receiver {
                     }
 
                     if let Err(err) = rtcp_writer.write(&pkts, &a).await{
-                        log::error!("rtcp_writer.write got err: {}", err);
+                        log::error!("rtcp_writer.write got err: {err}");
                     }
                 }
             }
@@ -182,7 +182,7 @@ impl Interceptor for Receiver {
         tokio::spawn(async move {
             let _d = w.take();
             if let Err(err) = Receiver::run(writer2, internal).await {
-                log::warn!("bind_rtcp_writer TWCC Sender::run got error: {}", err);
+                log::warn!("bind_rtcp_writer TWCC Sender::run got error: {err}");
             }
         });
 
