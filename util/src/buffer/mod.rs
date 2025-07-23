@@ -254,9 +254,9 @@ impl Buffer {
 
             // Wait for signal.
             if let Some(d) = duration {
-                if timeout(d, self.notify.notified()).await.is_err() {
-                    return Err(Error::ErrTimeout);
-                }
+                timeout(d, self.notify.notified())
+                    .await
+                    .map_err(|_| Error::ErrTimeout)?;
             } else {
                 self.notify.notified().await;
             }
