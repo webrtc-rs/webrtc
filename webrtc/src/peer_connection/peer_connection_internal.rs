@@ -281,9 +281,18 @@ impl PeerConnectionInternal {
 
         self.start_rtp_receivers(&mut track_details, &current_transceivers)
             .await?;
-        if let Some(parsed) = &remote_desc.parsed {
-            if have_application_media_section(parsed) {
-                self.start_sctp().await;
+        if let Some(parsed_remote) = &remote_desc.parsed {
+            let current_local_desc = self.current_local_description.lock().await;
+            if let Some(parsed_local) = current_local_desc
+                .as_ref()
+                .and_then(|desc| desc.parsed.as_ref())
+            {
+                if let Some(remote_port) = get_application_media_section_sctp_port(parsed_remote) {
+                    if let Some(local_port) = get_application_media_section_sctp_port(parsed_local)
+                    {
+                        self.start_sctp(local_port, remote_port).await;
+                    }
+                }
             }
         }
 
@@ -451,13 +460,17 @@ impl PeerConnectionInternal {
     }
 
     /// Start SCTP subsystem
-    async fn start_sctp(&self) {
+    async fn start_sctp(&self, local_port: u16, remote_port: u16) {
         // Start sctp
         if let Err(err) = self
             .sctp_transport
-            .start(SCTPTransportCapabilities {
-                max_message_size: 0,
-            })
+            .start(
+                SCTPTransportCapabilities {
+                    max_message_size: 0,
+                },
+                local_port,
+                remote_port,
+            )
             .await
         {
             log::warn!("Failed to start SCTP: {err}");

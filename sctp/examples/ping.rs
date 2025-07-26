@@ -67,6 +67,8 @@ async fn main() -> Result<(), Error> {
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     };
     let a = Association::client(config).await?;
     println!("created a client");

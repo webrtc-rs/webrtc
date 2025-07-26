@@ -147,8 +147,8 @@ impl AssociationInternal {
             reconfigs: HashMap::new(),
             reconfig_requests: HashMap::new(),
 
-            source_port: 0,
-            destination_port: 0,
+            source_port: config.local_port,
+            destination_port: config.remote_port,
             my_max_num_inbound_streams: u16::MAX,
             my_max_num_outbound_streams: u16::MAX,
             my_cookie: None,
@@ -208,9 +208,6 @@ impl AssociationInternal {
     pub(crate) fn send_init(&mut self) -> Result<()> {
         if let Some(stored_init) = self.stored_init.clone() {
             log::debug!("[{}] sending INIT", self.name);
-
-            self.source_port = 5000; // Spec??
-            self.destination_port = 5000; // Spec??
 
             let outbound = Packet {
                 source_port: self.source_port,
@@ -662,8 +659,18 @@ impl AssociationInternal {
         self.my_max_num_outbound_streams =
             std::cmp::min(i.num_outbound_streams, self.my_max_num_outbound_streams);
         self.peer_verification_tag = i.initiate_tag;
-        self.source_port = p.destination_port;
-        self.destination_port = p.source_port;
+
+        if self.source_port != p.destination_port || self.destination_port != p.source_port {
+            log::error!(
+                "[{}] chunkInit received with wrong ports. Expected: {}/{} got {}/{}",
+                self.name,
+                self.source_port,
+                self.destination_port,
+                p.destination_port,
+                p.source_port
+            );
+            return Err(Error::ErrHandleInitState);
+        }
 
         // 13.2 This is the last TSN received in sequence.  This value
         // is set initially by taking the peer's initial TSN,

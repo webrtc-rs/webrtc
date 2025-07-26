@@ -1428,7 +1428,7 @@ impl TestOrtcStack {
         self.dtls.start(sig.dtls_parameters.clone()).await?;
 
         // Start the SCTP transport
-        self.sctp.start(sig.sctp_capabilities).await?;
+        self.sctp.start(sig.sctp_capabilities, 5000, 5000).await?;
 
         Ok(())
     }

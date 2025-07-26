@@ -35,6 +35,8 @@ async fn create_new_association_pair(
             max_receive_buffer_size: 0,
             max_message_size: 0,
             name: "client".to_owned(),
+            local_port: 5000,
+            remote_port: 5000,
         })
         .await;
 
@@ -51,6 +53,8 @@ async fn create_new_association_pair(
             max_receive_buffer_size: 0,
             max_message_size: 0,
             name: "server".to_owned(),
+            local_port: 5000,
+            remote_port: 5000,
         })
         .await;
 
