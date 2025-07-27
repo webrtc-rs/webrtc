@@ -570,10 +570,8 @@ where
                     },
                 })
             });
-            for fut in futures {
-                // TODO: Use futures::join_all
-                let _ = fut.await;
-            }
+
+            futures::future::join_all(futures).await;
 
             let futures = sender_reports.into_iter().map(|sr| {
                 let rtt_ms = match (sr.dlrr_last_rr, sr.dlrr_delay_rr, sr.sr_packets_sent) {
@@ -593,10 +591,8 @@ where
                     },
                 })
             });
-            for fut in futures {
-                // TODO: Use futures::join_all
-                let _ = fut.await;
-            }
+
+            futures::future::join_all(futures).await;
         }
 
         Ok((pkts, attributes))

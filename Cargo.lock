@@ -1489,6 +1489,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
+ "futures",
  "log",
  "portable-atomic",
  "rand",
