@@ -94,10 +94,17 @@ impl CryptoCbc {
             return Ok(r.to_vec());
         }
 
+        if r.len() < RECORD_LAYER_HEADER_SIZE + Self::BLOCK_SIZE {
+            return Err(Error::ErrInvalidPacketLength);
+        }
+
         let body = &r[RECORD_LAYER_HEADER_SIZE..];
         let iv = &body[0..Self::BLOCK_SIZE];
         let body = &body[Self::BLOCK_SIZE..];
-        //TODO: add body.len() check
+
+        if body.is_empty() || body.len() % Self::BLOCK_SIZE != 0 {
+            return Err(Error::ErrInvalidPacketLength);
+        }
 
         let read_cbc = Aes256CbcDec::new_from_slices(&self.remote_key, iv)?;
 
