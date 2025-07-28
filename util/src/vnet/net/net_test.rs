@@ -27,11 +27,11 @@ async fn test_net_native_interfaces() -> Result<()> {
     assert!(!nw.is_virtual(), "should be false");
 
     let interfaces = nw.get_interfaces().await;
-    log::debug!("interfaces: {:?}", interfaces);
+    log::debug!("interfaces: {interfaces:?}");
     for ifc in interfaces {
         let addrs = ifc.addrs();
         for addr in addrs {
-            log::debug!("{}", addr)
+            log::debug!("{addr}")
         }
     }
 
@@ -65,7 +65,7 @@ async fn test_net_native_bind() -> Result<()> {
         "127.0.0.1",
         "local_addr ip should match 127.0.0.1"
     );
-    log::debug!("laddr: {}", laddr);
+    log::debug!("laddr: {laddr}");
 
     Ok(())
 }
@@ -83,7 +83,7 @@ async fn test_net_native_dail() -> Result<()> {
         "local_addr should match 127.0.0.1"
     );
     assert_ne!(laddr.port(), 1234, "local_addr port should match 1234");
-    log::debug!("laddr: {}", laddr);
+    log::debug!("laddr: {laddr}");
 
     Ok(())
 }
@@ -293,7 +293,7 @@ async fn test_net_virtual_assign_port() -> Result<()> {
 
         for i in 0..space {
             let port = vnet.assign_port(ip, start, end).await?;
-            log::debug!("{} got port: {}", i, port);
+            log::debug!("{i} got port: {port}");
 
             let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
                 Arc::new(Mutex::new(DummyObserver));
@@ -343,7 +343,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<()> {
         let vnet = vnet.lock().await;
         let vi = vnet.vi.lock().await;
         let src_ip = vi.determine_source_ip(any_ip, dst_ip);
-        log::debug!("any_ip: {} => {:?}", any_ip, src_ip);
+        log::debug!("any_ip: {any_ip} => {src_ip:?}");
         assert!(src_ip.is_some(), "shouldn't be none");
         if let Some(src_ip) = src_ip {
             assert_eq!(src_ip.to_string().as_str(), DEMO_IP, "use non-loopback IP");
@@ -357,7 +357,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<()> {
         let vnet = vnet.lock().await;
         let vi = vnet.vi.lock().await;
         let src_ip = vi.determine_source_ip(any_ip, dst_ip);
-        log::debug!("any_ip: {} => {:?}", any_ip, src_ip);
+        log::debug!("any_ip: {any_ip} => {src_ip:?}");
         assert!(src_ip.is_some(), "shouldn't be none");
         if let Some(src_ip) = src_ip {
             assert_eq!(src_ip.to_string().as_str(), "127.0.0.1", "use loopback IP");
@@ -371,7 +371,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<()> {
         let vnet = vnet.lock().await;
         let vi = vnet.vi.lock().await;
         let src_ip = vi.determine_source_ip(any_ip, dst_ip);
-        log::debug!("any_ip: {} => {:?}", any_ip, src_ip);
+        log::debug!("any_ip: {any_ip} => {src_ip:?}");
         assert!(src_ip.is_some(), "shouldn't be none");
         if let Some(src_ip) = src_ip {
             assert_eq!(src_ip, any_ip, "IP change");
@@ -581,7 +581,7 @@ async fn test_net_virtual_loopback2() -> Result<()> {
                     let (n, addr) = match result {
                         Ok((n, addr)) => (n, addr),
                         Err(err) => {
-                            log::debug!("ReadFrom returned: {}", err);
+                            log::debug!("ReadFrom returned: {err}");
                             break;
                         }
                     };
@@ -706,7 +706,7 @@ async fn test_net_virtual_end2end() -> Result<()> {
                     let n = match result{
                         Ok((n, _)) => n,
                         Err(err) => {
-                            log::debug!("ReadFrom returned: {}", err);
+                            log::debug!("ReadFrom returned: {err}");
                             break;
                         }
                     };
@@ -734,7 +734,7 @@ async fn test_net_virtual_end2end() -> Result<()> {
                     let (n, addr) = match result{
                         Ok((n, addr)) => (n, addr),
                         Err(err) => {
-                            log::debug!("ReadFrom returned: {}", err);
+                            log::debug!("ReadFrom returned: {err}");
                             break;
                         }
                     };
@@ -838,7 +838,7 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<()> {
                     let n = match result{
                         Ok((n, _)) => n,
                         Err(err) => {
-                            log::debug!("ReadFrom returned: {}", err);
+                            log::debug!("ReadFrom returned: {err}");
                             break;
                         }
                     };
@@ -866,7 +866,7 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<()> {
                     let (n, addr) = match result{
                         Ok((n, addr)) => (n, addr),
                         Err(err) => {
-                            log::debug!("ReadFrom returned: {}", err);
+                            log::debug!("ReadFrom returned: {err}");
                             break;
                         }
                     };

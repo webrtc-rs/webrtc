@@ -23,7 +23,7 @@ impl fmt::Display for UnknownAttributes {
                 .map(|t| t.to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            write!(f, "{}", s)
+            write!(f, "{s}")
         }
     }
 }

@@ -83,7 +83,7 @@ async fn test_udp_conn_send_to_recv_from() -> Result<()> {
             let (n, addr) = match conn_rx.recv_from(&mut buf).await {
                 Ok((n, addr)) => (n, addr),
                 Err(err) => {
-                    log::debug!("conn closed. exiting the read loop with err {}", err);
+                    log::debug!("conn closed. exiting the read loop with err {err}");
                     break;
                 }
             };
@@ -91,7 +91,7 @@ async fn test_udp_conn_send_to_recv_from() -> Result<()> {
             log::debug!("read data");
             assert_eq!(data_rx.len(), n, "should match");
             assert_eq!(&data_rx, &buf[..n], "should match");
-            log::debug!("dst_addr {} vs add {}", dst_addr, addr);
+            log::debug!("dst_addr {dst_addr} vs add {addr}");
             assert_eq!(dst_addr.to_string(), addr.to_string(), "should match");
             let _ = rcvd_ch_tx.send(()).await;
         }
@@ -170,7 +170,7 @@ async fn test_udp_conn_send_recv() -> Result<()> {
             let n = match conn_rx.recv(&mut buf).await {
                 Ok(n) => n,
                 Err(err) => {
-                    log::debug!("conn closed. exiting the read loop with err {}", err);
+                    log::debug!("conn closed. exiting the read loop with err {err}");
                     break;
                 }
             };

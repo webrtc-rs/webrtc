@@ -303,7 +303,7 @@ impl RTCPeerConnection {
     }
 
     async fn do_signaling_state_change(&self, new_state: RTCSignalingState) {
-        log::info!("signaling state changed to {}", new_state);
+        log::info!("signaling state changed to {new_state}");
         if let Some(handler) = &*self.internal.on_signaling_state_change_handler.load() {
             let mut f = handler.lock().await;
             f(new_state).await;
@@ -598,7 +598,7 @@ impl RTCPeerConnection {
         receiver: Arc<RTCRtpReceiver>,
         transceiver: Arc<RTCRtpTransceiver>,
     ) {
-        log::debug!("got new track: {:?}", track);
+        log::debug!("got new track: {track:?}");
 
         tokio::spawn(async move {
             if let Some(handler) = &*on_track_handler.load() {
@@ -625,7 +625,7 @@ impl RTCPeerConnection {
     ) {
         ice_connection_state.store(cs as u8, Ordering::SeqCst);
 
-        log::info!("ICE connection state changed: {}", cs);
+        log::info!("ICE connection state changed: {cs}");
         if let Some(handler) = &*handler.load() {
             let mut f = handler.lock().await;
             f(cs).await;
@@ -918,7 +918,7 @@ impl RTCPeerConnection {
             return;
         }
 
-        log::info!("peer connection state changed: {}", connection_state);
+        log::info!("peer connection state changed: {connection_state}");
         peer_connection_state.store(connection_state as u8, Ordering::SeqCst);
 
         RTCPeerConnection::do_peer_connection_state_change(
@@ -1601,9 +1601,7 @@ impl RTCPeerConnection {
                         let fp_hash = fingerprint_hash.clone();
                         Box::pin(async move {
                             log::trace!(
-                                "start_transports: ice_role={}, dtls_role={}",
-                                ice_role,
-                                dtls_role,
+                                "start_transports: ice_role={ice_role}, dtls_role={dtls_role}",
                             );
                             pc.start_transports(ice_role, dtls_role, ru, rp, fp, fp_hash)
                                 .await;

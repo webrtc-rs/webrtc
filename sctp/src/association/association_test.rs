@@ -1829,7 +1829,7 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
                     let _ = done_ch_tx.send(None).await;
                 }
                 Err(err) => {
-                    log::debug!("s1.read_sctp err {:?}", err);
+                    log::debug!("s1.read_sctp err {err:?}");
                     let _ = done_ch_tx.send(Some(err)).await;
                     break;
                 }
@@ -1846,7 +1846,7 @@ async fn test_assoc_reset_close_one_way() -> Result<()> {
         tokio::select! {
             _ = timer.as_mut() =>{},
             result = done_ch_rx.recv() => {
-                log::debug!("s1. {:?}", result);
+                log::debug!("s1. {result:?}");
                 if let Some(err_opt) = result {
                     if err_opt.is_some() {
                         break;
@@ -1931,7 +1931,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
                     let _ = done_ch_tx1.send(None).await;
                 }
                 Err(err) => {
-                    log::debug!("s1.read_sctp err {:?}", err);
+                    log::debug!("s1.read_sctp err {err:?}");
                     let _ = done_ch_tx1.send(Some(err)).await;
                     break;
                 }
@@ -1948,7 +1948,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
         tokio::select! {
             _ = timer.as_mut() =>{},
             result = done_ch_rx.recv() => {
-                log::debug!("s1. {:?}", result);
+                log::debug!("s1. {result:?}");
                 if let Some(err_opt) = result {
                     if err_opt.is_some() {
                         break;
@@ -1977,7 +1977,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
                 panic!("must be error");
             }
             Err(err) => {
-                log::debug!("s0.read_sctp err {:?}", err);
+                log::debug!("s0.read_sctp err {err:?}");
                 let _ = done_ch_tx0.send(Some(err)).await;
             }
         }
@@ -1992,7 +1992,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<()> {
         tokio::select! {
             _ = timer.as_mut() =>{},
             result = done_ch_rx.recv() => {
-                log::debug!("s0. {:?}", result);
+                log::debug!("s0. {result:?}");
                 if let Some(err_opt) = result {
                     if err_opt.is_some() {
                         break;
@@ -2392,7 +2392,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
             _ = writing_done_rx.recv() => {
                 log::debug!("writing_done_rx");
                 let result = close_loop_ch_rx.recv().await;
-                log::debug!("a1.close_loop_ch_rx.recv: {:?}", result);
+                log::debug!("a1.close_loop_ch_rx.recv: {result:?}");
             },
         };
     }
@@ -2567,7 +2567,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
     ];
 
     for (name, packet) in tests {
-        log::debug!("testing {}", name);
+        log::debug!("testing {name}");
 
         let (a_conn, charlie_conn) = pipe();
 

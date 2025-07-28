@@ -72,7 +72,7 @@ impl DnsConn {
             let interfaces = match ifaces::ifaces() {
                 Ok(e) => e,
                 Err(e) => {
-                    log::error!("Error getting interfaces: {:?}", e);
+                    log::error!("Error getting interfaces: {e:?}");
                     return Err(Error::Other(e.to_string()));
                 }
             };
@@ -81,12 +81,12 @@ impl DnsConn {
                 if let Some(SocketAddr::V4(e)) = interface.addr {
                     if let Err(e) = socket.join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), e.ip())
                     {
-                        log::trace!("Error connecting multicast, error: {:?}", e);
+                        log::trace!("Error connecting multicast, error: {e:?}");
                         join_error_count += 1;
                         continue;
                     }
 
-                    log::trace!("Connected to interface address {:?}", e);
+                    log::trace!("Connected to interface address {e:?}");
                 }
             }
 
@@ -155,7 +155,7 @@ impl DnsConn {
                 Ok(())
             }
             Err(e) => {
-                log::warn!("Error sending close command to server: {:?}", e);
+                log::warn!("Error sending close command to server: {e:?}");
                 Err(Error::ErrConnectionClosed)
             }
         }
@@ -212,7 +212,7 @@ impl DnsConn {
         let packed_name = match Name::new(name) {
             Ok(pn) => pn,
             Err(err) => {
-                log::warn!("Failed to construct mDNS packet: {}", err);
+                log::warn!("Failed to construct mDNS packet: {err}");
                 return;
             }
         };
@@ -231,7 +231,7 @@ impl DnsConn {
             match msg.pack() {
                 Ok(v) => v,
                 Err(err) => {
-                    log::error!("Failed to construct mDNS packet {}", err);
+                    log::error!("Failed to construct mDNS packet {err}");
                     return;
                 }
             }
@@ -239,7 +239,7 @@ impl DnsConn {
 
         log::trace!("{:?} sending {:?}...", self.socket.local_addr(), raw_query);
         if let Err(err) = self.socket.send_to(&raw_query, self.dst_addr).await {
-            log::error!("Failed to send mDNS packet {}", err);
+            log::error!("Failed to send mDNS packet {err}");
         }
     }
 
@@ -270,11 +270,11 @@ impl DnsConn {
                         Ok((len, addr)) => {
                             n = len;
                             src = addr;
-                            log::trace!("Received new connection from {:?}", addr);
+                            log::trace!("Received new connection from {addr:?}");
                         },
 
                         Err(err) => {
-                            log::error!("Error receiving from socket connection: {:?}", err);
+                            log::error!("Error receiving from socket connection: {err:?}");
                             continue;
                         },
                     }
@@ -283,7 +283,7 @@ impl DnsConn {
 
             let mut p = Parser::default();
             if let Err(err) = p.start(&b[..n]) {
-                log::error!("Failed to parse mDNS packet {}", err);
+                log::error!("Failed to parse mDNS packet {err}");
                 continue;
             }
 
@@ -309,7 +309,7 @@ async fn run(
                     log::trace!("Parsing has completed");
                     break;
                 } else {
-                    log::error!("Failed to parse mDNS packet {}", err);
+                    log::error!("Failed to parse mDNS packet {err}");
                     return;
                 }
             }
@@ -344,7 +344,7 @@ async fn run(
                 if let Err(e) =
                     send_answer(socket, &interface_addr, &q.name.data, src.ip(), dst_addr).await
                 {
-                    log::error!("Error sending answer to client: {:?}", e);
+                    log::error!("Error sending answer to client: {e:?}");
                     continue;
                 };
             }
@@ -359,7 +359,7 @@ async fn run(
             Ok(a) => a,
             Err(err) => {
                 if Error::ErrSectionDone != err {
-                    log::warn!("Failed to parse mDNS packet {}", err);
+                    log::warn!("Failed to parse mDNS packet {err}");
                 }
                 return;
             }
@@ -424,7 +424,7 @@ async fn send_answer(
     };
 
     socket.send_to(&raw_answer, dst_addr).await?;
-    log::trace!("Sent answer to IP {}", dst);
+    log::trace!("Sent answer to IP {dst}");
 
     Ok(())
 }
