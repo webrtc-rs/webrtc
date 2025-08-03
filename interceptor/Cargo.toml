@@ -17,6 +17,7 @@ srtp = { version = "0.15.0", path = "../srtp", package = "webrtc-srtp" }
 
 tokio = { version = "1.32.0", features = ["sync", "time"] }
 async-trait = "0.1"
+futures = "0.3"
 bytes = "1"
 thiserror = "1"
 rand = "0.9"
