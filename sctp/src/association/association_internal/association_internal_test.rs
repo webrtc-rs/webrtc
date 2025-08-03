@@ -73,6 +73,8 @@ fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
 
     a.cumulative_tsn_ack_point = 9;
@@ -106,6 +108,8 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
 
     a.cumulative_tsn_ack_point = 9;
@@ -177,6 +181,8 @@ async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
     a.use_forward_tsn = true;
 
@@ -216,6 +222,8 @@ async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
     a.use_forward_tsn = true;
 
@@ -269,6 +277,8 @@ async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
     a.use_forward_tsn = true;
 
@@ -320,6 +330,8 @@ async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() ->
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
     a.use_forward_tsn = true;
 
@@ -354,6 +366,8 @@ async fn test_assoc_create_new_stream() -> Result<()> {
             max_receive_buffer_size: 0,
             max_message_size: 0,
             name: "client".to_owned(),
+            local_port: 5000,
+            remote_port: 5000,
         },
         close_loop_ch_tx,
         accept_ch_tx,
@@ -398,6 +412,8 @@ async fn handle_init_test(name: &str, initial_state: AssociationState, expect_er
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5002,
+        remote_port: 5001,
     });
     a.set_state(initial_state);
     let pkt = Packet {
@@ -488,6 +504,8 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
     assert_eq!(
         a.max_message_size.load(Ordering::SeqCst),
@@ -533,6 +551,8 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
         max_receive_buffer_size: 0,
         max_message_size: 30000,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     });
 
     assert_eq!(

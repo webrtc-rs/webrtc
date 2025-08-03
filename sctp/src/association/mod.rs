@@ -178,6 +178,8 @@ pub struct Config {
     pub max_receive_buffer_size: u32,
     pub max_message_size: u32,
     pub name: String,
+    pub remote_port: u16,
+    pub local_port: u16,
 }
 
 ///Association represents an SCTP association

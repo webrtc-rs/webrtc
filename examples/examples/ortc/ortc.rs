@@ -189,7 +189,8 @@ async fn main() -> Result<()> {
     dtls.start(remote_signal.dtls_parameters).await?;
 
     // Start the SCTP transport
-    sctp.start(remote_signal.sctp_capabilities).await?;
+    sctp.start(remote_signal.sctp_capabilities, 5000, 5000)
+        .await?;
 
     // Construct the data channel as the offerer
     if is_offer {

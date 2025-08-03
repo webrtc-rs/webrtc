@@ -35,6 +35,8 @@ async fn create_new_association_pair(
             max_receive_buffer_size: recv_buf_size,
             max_message_size: 0,
             name: "client".to_owned(),
+            local_port: 5000,
+            remote_port: 5000,
         })
         .await;
 
@@ -51,6 +53,8 @@ async fn create_new_association_pair(
             max_receive_buffer_size: recv_buf_size,
             max_message_size: 0,
             name: "server".to_owned(),
+            local_port: 5000,
+            remote_port: 5000,
         })
         .await;
 
@@ -2174,6 +2178,8 @@ async fn test_stats() -> Result<()> {
         max_receive_buffer_size: 0,
         max_message_size: 0,
         name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
     })
     .await?;
 
@@ -2209,6 +2215,8 @@ async fn create_assocs() -> Result<(Association, Association)> {
             max_receive_buffer_size: 0,
             max_message_size: 0,
             name: "client".to_owned(),
+            local_port: 5000,
+            remote_port: 5000,
         })
         .await?;
 
@@ -2223,6 +2231,8 @@ async fn create_assocs() -> Result<(Association, Association)> {
             max_receive_buffer_size: 0,
             max_message_size: 0,
             name: "server".to_owned(),
+            local_port: 5000,
+            remote_port: 5000,
         })
         .await?;
 
@@ -2567,6 +2577,8 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
                 max_message_size: 0,
                 max_receive_buffer_size: 0,
                 name: "client".to_owned(),
+                local_port: 5000,
+                remote_port: 5000,
             },
             true,
         )

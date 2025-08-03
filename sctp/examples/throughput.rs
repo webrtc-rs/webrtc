@@ -68,6 +68,8 @@ fn main() -> Result<(), Error> {
                     max_receive_buffer_size: 0,
                     max_message_size: 0,
                     name: "recver".to_owned(),
+                    local_port: 5000,
+                    remote_port: 5000,
                 };
                 let a = Association::server(config).await?;
                 println!("created a server");
@@ -114,6 +116,8 @@ fn main() -> Result<(), Error> {
                     max_receive_buffer_size: 0,
                     max_message_size: 0,
                     name: "sender".to_owned(),
+                    local_port: 5000,
+                    remote_port: 5000,
                 };
                 let a = Association::client(config).await.unwrap();
                 println!("created a client");
