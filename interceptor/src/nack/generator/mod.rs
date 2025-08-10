@@ -107,14 +107,12 @@ impl Generator {
         internal: Arc<GeneratorInternal>,
     ) -> Result<()> {
         let mut ticker = tokio::time::interval(internal.interval);
-        let mut close_rx = {
-            let mut close_rx = internal.close_rx.lock().await;
-            if let Some(close) = close_rx.take() {
-                close
-            } else {
-                return Err(Error::ErrInvalidCloseRx);
-            }
-        };
+        let mut close_rx = internal
+            .close_rx
+            .lock()
+            .await
+            .take()
+            .ok_or(Error::ErrInvalidCloseRx)?;
 
         let sender_ssrc = rand::random::<u32>();
         loop {
