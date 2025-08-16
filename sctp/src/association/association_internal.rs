@@ -354,7 +354,15 @@ impl AssociationInternal {
         self.handle_chunk_start();
 
         for c in &p.chunks {
-            self.handle_chunk(&p, c).await?;
+            match self.handle_chunk(&p, c).await {
+                Err(Error::ErrChunk) => return Err(Error::ErrChunk),
+                // stop processing this SCTP packet, discard the unrecognized
+                // chunk and all further chunks
+                Err(Error::ErrChunkTypeUnhandled) => break,
+                // log and continue, the only condition that is fatal is a ABORT chunk
+                Err(err) => log::warn!("[{}] failed to handle chunk: {}", self.name, err),
+                Ok(()) => (),
+            };
         }
 
         self.handle_chunk_end();
@@ -645,7 +653,7 @@ impl AssociationInternal {
             && state != AssociationState::CookieWait
             && state != AssociationState::CookieEchoed
         {
-            log::error!("[{}] chunkInit received in state '{}'", self.name, state);
+            log::warn!("[{}] chunkInit received in state '{}'", self.name, state);
             // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
             //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
             return Err(Error::ErrHandleInitState);
@@ -2170,10 +2178,11 @@ impl AssociationInternal {
             } else {
                 self.handle_init(p, c).await?
             }
-        } else if chunk_any.downcast_ref::<ChunkAbort>().is_some()
-            || chunk_any.downcast_ref::<ChunkError>().is_some()
-        {
+        } else if chunk_any.downcast_ref::<ChunkAbort>().is_some() {
             return Err(Error::ErrChunk);
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkError>() {
+            log::error!("[{}] error chunk, with following errors: {}", self.name, c);
+            vec![]
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkHeartbeat>() {
             self.handle_heartbeat(c).await?
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkCookieEcho>() {
