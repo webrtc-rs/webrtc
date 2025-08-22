@@ -1065,18 +1065,20 @@ pub(crate) fn get_by_mid<'a>(
     None
 }
 
+pub(crate) fn get_application_media(desc: &SessionDescription) -> Option<&MediaDescription> {
+    for d in &desc.media_descriptions {
+        if d.media_name.media == MEDIA_SECTION_APPLICATION {
+            return Some(d);
+        }
+    }
+    None
+}
+
 /// have_data_channel return MediaDescription with MediaName equal application
 pub(crate) fn have_data_channel(
     desc: &session_description::RTCSessionDescription,
 ) -> Option<&MediaDescription> {
-    if let Some(parsed) = &desc.parsed {
-        for d in &parsed.media_descriptions {
-            if d.media_name.media == MEDIA_SECTION_APPLICATION {
-                return Some(d);
-            }
-        }
-    }
-    None
+    get_application_media(desc.parsed.as_ref()?)
 }
 
 pub(crate) fn codecs_from_media_description(
