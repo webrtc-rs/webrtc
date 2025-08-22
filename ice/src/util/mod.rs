@@ -163,7 +163,8 @@ pub async fn listen_udp_in_port_range(
             Err(err) => log::debug!("failed to listen {laddr}: {err}"),
         };
 
-        port_current += 1;
+        port_current = port_current.checked_add(1).unwrap_or(i);
+
         if port_current > j {
             port_current = i;
         }
@@ -173,4 +174,36 @@ pub async fn listen_udp_in_port_range(
     }
 
     Err(Error::ErrPort)
+}
+
+#[cfg(test)]
+mod tests {
+    use util::vnet::net::{Net, NetConfig};
+
+    use crate::util::listen_udp_in_port_range;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_listen_udp_in_port_range_overflow() {
+        let vnet = Arc::new(Net::new(Some(NetConfig {
+            static_ips: vec![],
+            static_ip: "127.0.0.1".parse().unwrap(),
+        })));
+
+        // Preemptively bind to port 65535 (u16::MAX) to ensure that listen_udp_in_port_range
+        // triggers overflow logic by being unable to bind to port 65535 itself.
+        let _conn = vnet
+            .bind("127.0.0.1:65535".parse().unwrap())
+            .await
+            .expect("Expected binding to vnet to succeed");
+
+        let port_max = u16::MAX;
+        let port_min = u16::MAX;
+
+        assert!(matches!(
+            listen_udp_in_port_range(&vnet, port_max, port_min, "127.0.0.1:0".parse().unwrap())
+                .await,
+            Err(crate::Error::ErrPort)
+        ))
+    }
 }
