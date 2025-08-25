@@ -333,9 +333,9 @@ impl RTCSctpTransport {
             .store(Some(Arc::new(Mutex::new(f))));
     }
 
-    fn calc_message_size(remote_max_message_size: usize, can_send_size: usize) -> usize {
+    fn calc_message_size(remote_max_message_size: u32, can_send_size: u32) -> u32 {
         if remote_max_message_size == 0 && can_send_size == 0 {
-            usize::MAX
+            u32::MAX
         } else if remote_max_message_size == 0 {
             can_send_size
         } else if can_send_size == 0 || can_send_size > remote_max_message_size {
