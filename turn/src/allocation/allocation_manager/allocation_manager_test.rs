@@ -1,6 +1,8 @@
 use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 
+#[cfg(feature = "async-auth")]
+use async_trait::async_trait;
 use stun::attributes::ATTR_USERNAME;
 use stun::textattrs::TextAttribute;
 use tokio::net::UdpSocket;
@@ -397,8 +399,21 @@ async fn test_delete_allocation_by_username() -> Result<()> {
 }
 
 struct TestAuthHandler;
+#[cfg(not(feature = "async-auth"))]
 impl AuthHandler for TestAuthHandler {
     fn auth_handle(&self, username: &str, realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+        Ok(generate_auth_key(username, realm, "pass"))
+    }
+}
+#[cfg(feature = "async-auth")]
+#[async_trait]
+impl AuthHandler for TestAuthHandler {
+    async fn auth_handle(
+        &self,
+        username: &str,
+        realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>> {
         Ok(generate_auth_key(username, realm, "pass"))
     }
 }
