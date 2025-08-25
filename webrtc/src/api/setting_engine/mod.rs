@@ -61,6 +61,7 @@ pub enum SctpMaxMessageSize {
 }
 
 impl SctpMaxMessageSize {
+    pub const DEFAULT_MESSAGE_SIZE: u32 = 65536;
     pub fn as_u32(&self) -> u32 {
         match self {
             Self::Bounded(result) => *result,
@@ -73,7 +74,7 @@ impl Default for SctpMaxMessageSize {
     fn default() -> Self {
         // https://datatracker.ietf.org/doc/html/rfc8841#section-6.1-4
         // > If the SDP "max-message-size" attribute is not present, the default value is 64K.
-        Self::Bounded(65536)
+        Self::Bounded(Self::DEFAULT_MESSAGE_SIZE)
     }
 }
 
