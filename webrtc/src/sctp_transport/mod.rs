@@ -69,10 +69,6 @@ pub struct RTCSctpTransport {
     // so we need a dedicated field
     is_started: AtomicBool,
 
-    // max_message_size represents the maximum size of data that can be passed to
-    // DataChannel's send() method.
-    max_message_size: usize,
-
     // max_channels represents the maximum amount of DataChannel's that can
     // be used simultaneously.
     max_channels: u16,
@@ -103,7 +99,6 @@ impl RTCSctpTransport {
             dtls_transport,
             state: AtomicU8::new(RTCSctpTransportState::Connecting as u8),
             is_started: AtomicBool::new(false),
-            max_message_size: RTCSctpTransport::calc_message_size(65536, 65536),
             max_channels: SCTP_MAX_CHANNELS,
             sctp_association: Mutex::new(None),
             on_error_handler: Arc::new(ArcSwapOption::empty()),
