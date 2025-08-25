@@ -69,6 +69,8 @@ pub(crate) struct PeerConnectionInternal {
 }
 
 impl PeerConnectionInternal {
+    const DEFAULT_MAX_MESSAGE_SIZE: u32 = 65536;
+
     pub(super) async fn new(
         api: &API,
         interceptor: Weak<dyn Interceptor + Send + Sync>,
@@ -290,7 +292,23 @@ impl PeerConnectionInternal {
                 if let Some(remote_port) = get_application_media_section_sctp_port(parsed_remote) {
                     if let Some(local_port) = get_application_media_section_sctp_port(parsed_local)
                     {
-                        self.start_sctp(local_port, remote_port).await;
+                        let max_message_size = match get_application_media(parsed_remote).and_then(
+                            |media_description| media_description.attribute("max-message-size"),
+                        ) {
+                            Some(Some(max_message_size_raw)) => max_message_size_raw
+                                .parse()
+                                .unwrap_or(Self::DEFAULT_MAX_MESSAGE_SIZE),
+                            // If the SDP "max-message-size" attribute is not present, the default
+                            // value is 64K.
+                            // https://datatracker.ietf.org/doc/html/rfc8841#section-6.1-4
+                            Some(None) | None => Self::DEFAULT_MAX_MESSAGE_SIZE,
+                        };
+                        self.start_sctp(
+                            local_port,
+                            remote_port,
+                            SCTPTransportCapabilities { max_message_size },
+                        )
+                        .await;
                     }
                 }
             }
@@ -460,17 +478,16 @@ impl PeerConnectionInternal {
     }
 
     /// Start SCTP subsystem
-    async fn start_sctp(&self, local_port: u16, remote_port: u16) {
+    async fn start_sctp(
+        &self,
+        local_port: u16,
+        remote_port: u16,
+        sctp_transport_capabilities: SCTPTransportCapabilities,
+    ) {
         // Start sctp
         if let Err(err) = self
             .sctp_transport
-            .start(
-                SCTPTransportCapabilities {
-                    max_message_size: 0,
-                },
-                local_port,
-                remote_port,
-            )
+            .start(sctp_transport_capabilities, local_port, remote_port)
             .await
         {
             log::warn!("Failed to start SCTP: {err}");

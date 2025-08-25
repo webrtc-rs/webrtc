@@ -138,7 +138,7 @@ impl RTCSctpTransport {
     /// a connection over SCTP.
     pub async fn start(
         &self,
-        _remote_caps: SCTPTransportCapabilities,
+        remote_caps: SCTPTransportCapabilities,
         local_port: u16,
         remote_port: u16,
     ) -> Result<()> {
@@ -162,7 +162,7 @@ impl RTCSctpTransport {
                     association = sctp::association::Association::client(sctp::association::Config {
                         net_conn: Arc::clone(net_conn) as Arc<dyn Conn + Send + Sync>,
                         max_receive_buffer_size: 0,
-                        max_message_size: 0,
+                        max_message_size: Self::calc_message_size(remote_caps.max_message_size as usize, 0) as u32,
                         name: String::new(),
                         local_port,
                         remote_port,
