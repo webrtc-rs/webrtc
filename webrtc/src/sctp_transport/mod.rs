@@ -233,7 +233,10 @@ impl RTCSctpTransport {
                 _ = param.notify_rx.notified() => break,
                 result = DataChannel::accept(
                     &param.sctp_association,
-                    data::data_channel::Config::default(),
+                    data::data_channel::Config {
+                        max_message_size: param.sctp_association.max_message_size(),
+                        ..data::data_channel::Config::default()
+                    },
                     &existing_data_channels,
                 ) => {
                     match result {
