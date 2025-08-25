@@ -54,6 +54,29 @@ pub struct ReplayProtection {
     pub srtcp: usize,
 }
 
+#[derive(Clone)]
+pub enum SctpMaxMessageSize {
+    Bounded(u32),
+    Unbounded,
+}
+
+impl SctpMaxMessageSize {
+    pub fn as_u32(&self) -> u32 {
+        match self {
+            Self::Bounded(result) => *result,
+            Self::Unbounded => 0,
+        }
+    }
+}
+
+impl Default for SctpMaxMessageSize {
+    fn default() -> Self {
+        // https://datatracker.ietf.org/doc/html/rfc8841#section-6.1-4
+        // > If the SDP "max-message-size" attribute is not present, the default value is 64K.
+        Self::Bounded(65536)
+    }
+}
+
 /// SettingEngine allows influencing behavior in ways that are not
 /// supported by the WebRTC API. This allows us to support additional
 /// use-cases without deviating from the WebRTC API elsewhere.
@@ -79,6 +102,8 @@ pub struct SettingEngine {
     pub(crate) receive_mtu: usize,
     pub(crate) mid_generator: Option<Arc<dyn Fn(isize) -> String + Send + Sync>>,
     pub(crate) enable_sender_rtx: bool,
+    /// Determines the max size of any message that may be sent through an SCTP transport.
+    pub(crate) sctp_max_message_size_can_send: SctpMaxMessageSize,
 }
 
 impl SettingEngine {
@@ -341,5 +366,12 @@ impl SettingEngine {
     /// codec is configured.
     pub fn enable_sender_rtx(&mut self, is_enabled: bool) {
         self.enable_sender_rtx = is_enabled;
+    }
+
+    pub fn set_sctp_max_message_size_can_send(
+        &mut self,
+        max_message_size_can_send: SctpMaxMessageSize,
+    ) {
+        self.sctp_max_message_size_can_send = max_message_size_can_send
     }
 }

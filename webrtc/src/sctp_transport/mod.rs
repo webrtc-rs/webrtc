@@ -143,6 +143,12 @@ impl RTCSctpTransport {
         self.is_started.store(true, Ordering::SeqCst);
 
         let dtls_transport = self.transport();
+
+        let max_message_size = Self::calc_message_size(
+            remote_caps.max_message_size,
+            self.setting_engine.sctp_max_message_size_can_send.as_u32(),
+        );
+
         if let Some(net_conn) = &dtls_transport.conn().await {
             let sctp_association = loop {
                 tokio::select! {
@@ -157,7 +163,7 @@ impl RTCSctpTransport {
                     association = sctp::association::Association::client(sctp::association::Config {
                         net_conn: Arc::clone(net_conn) as Arc<dyn Conn + Send + Sync>,
                         max_receive_buffer_size: 0,
-                        max_message_size: Self::calc_message_size(remote_caps.max_message_size as usize, 0) as u32,
+                        max_message_size,
                         name: String::new(),
                         local_port,
                         remote_port,

@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Weak;
 
 use super::*;
+use crate::api::setting_engine::SctpMaxMessageSize;
 use crate::rtp_transceiver::{create_stream_info, PayloadType};
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::{
@@ -69,8 +70,6 @@ pub(crate) struct PeerConnectionInternal {
 }
 
 impl PeerConnectionInternal {
-    const DEFAULT_MAX_MESSAGE_SIZE: u32 = 65536;
-
     pub(super) async fn new(
         api: &API,
         interceptor: Weak<dyn Interceptor + Send + Sync>,
@@ -297,11 +296,8 @@ impl PeerConnectionInternal {
                         ) {
                             Some(Some(max_message_size_raw)) => max_message_size_raw
                                 .parse()
-                                .unwrap_or(Self::DEFAULT_MAX_MESSAGE_SIZE),
-                            // If the SDP "max-message-size" attribute is not present, the default
-                            // value is 64K.
-                            // https://datatracker.ietf.org/doc/html/rfc8841#section-6.1-4
-                            Some(None) | None => Self::DEFAULT_MAX_MESSAGE_SIZE,
+                                .unwrap_or(SctpMaxMessageSize::default().as_u32()),
+                            Some(None) | None => SctpMaxMessageSize::default().as_u32(),
                         };
                         self.start_sctp(
                             local_port,
