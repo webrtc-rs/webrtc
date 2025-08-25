@@ -291,14 +291,10 @@ impl PeerConnectionInternal {
                 if let Some(remote_port) = get_application_media_section_sctp_port(parsed_remote) {
                     if let Some(local_port) = get_application_media_section_sctp_port(parsed_local)
                     {
-                        let max_message_size = match get_application_media(parsed_remote).and_then(
-                            |media_description| media_description.attribute("max-message-size"),
-                        ) {
-                            Some(Some(max_message_size_raw)) => max_message_size_raw
-                                .parse()
-                                .unwrap_or(SctpMaxMessageSize::default().as_u32()),
-                            Some(None) | None => SctpMaxMessageSize::default().as_u32(),
-                        };
+                        // TODO: Reuse the MediaDescription retrieved when looking for the message size.
+                        let max_message_size =
+                            get_application_media_section_max_message_size(parsed_remote)
+                                .unwrap_or(SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE);
                         self.start_sctp(
                             local_port,
                             remote_port,

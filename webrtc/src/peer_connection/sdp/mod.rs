@@ -1049,6 +1049,15 @@ pub(crate) fn get_application_media_section_sctp_port(desc: &SessionDescription)
     None
 }
 
+pub(crate) fn get_application_media_section_max_message_size(
+    desc: &SessionDescription,
+) -> Option<u32> {
+    get_application_media(desc)?
+        .attribute(ATTR_KEY_MAX_MESSAGE_SIZE)??
+        .parse()
+        .ok()
+}
+
 pub(crate) fn get_by_mid<'a>(
     search_mid: &str,
     desc: &'a session_description::RTCSessionDescription,
@@ -1066,12 +1075,9 @@ pub(crate) fn get_by_mid<'a>(
 }
 
 pub(crate) fn get_application_media(desc: &SessionDescription) -> Option<&MediaDescription> {
-    for d in &desc.media_descriptions {
-        if d.media_name.media == MEDIA_SECTION_APPLICATION {
-            return Some(d);
-        }
-    }
-    None
+    desc.media_descriptions
+        .iter()
+        .find(|media_description| media_description.media_name.media == MEDIA_SECTION_APPLICATION)
 }
 
 /// have_data_channel return MediaDescription with MediaName equal application
