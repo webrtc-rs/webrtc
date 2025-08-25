@@ -34,6 +34,7 @@ pub struct Config {
     pub reliability_parameter: u32,
     pub label: String,
     pub protocol: String,
+    pub max_message_size: u32,
 }
 
 /// DataChannel represents a data channel
