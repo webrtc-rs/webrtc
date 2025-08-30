@@ -35,11 +35,11 @@
 <p align="center">
 <strong>Sponsored with 💖 by</strong><br>
 </p>
-<!--p align="center">
+<p align="center">
 <strong>Gold Sponsors:</strong><br>
-<a href="https://www.parity.io/" target="_blank">
-<img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/parity.png" style="height:75px;" alt="Parity Technologies">
-</a><br-->
+<a href="https://www.recall.ai" target="_blank">
+<img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/recall.svg" style="height:50px;" alt="Recall.ai">
+</a><br>
 <p align="center">
 <strong>Silver Sponsors:</strong><br>
 <a href="https://getstream.io/video/voice-calling/?utm_source=https://github.com/webrtc-rs/webrtc&utm_medium=sponsorship&utm_content=&utm_campaign=webrtcRepo_July2023_video_klmh22" target="_blank">
@@ -61,8 +61,8 @@
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-  - [Toolchain](#toolchain)
-  - [Monorepo Setup](#monorepo-setup)
+    - [Toolchain](#toolchain)
+    - [Monorepo Setup](#monorepo-setup)
 - [Open Source License](#open-source-license)
 - [Contributing](#contributing)
 
@@ -70,9 +70,12 @@
 
 ## Overview
 
-WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href="https://github.com/pion/webrtc/releases/tag/v3.1.5">Pion</a> stack in Rust.
-This project is still in active and early development stage, please refer to the [Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) to track the major milestones and releases.
-[Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) provide code samples to show how to use webrtc-rs to build media and data channel applications.
+WebRTC.rs is a pure Rust implementation of WebRTC stack, which
+rewrites <a href="https://github.com/pion/webrtc/releases/tag/v3.1.5">Pion</a> stack in Rust.
+This project is still in active and early development stage, please refer to
+the [Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) to track the major milestones and releases.
+[Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) provide code samples to show how
+to use webrtc-rs to build media and data channel applications.
 
 ## Features
 
@@ -111,9 +114,12 @@ This project is still in active and early development stage, please refer to the
 
 **Minimum Supported Rust Version:** `1.65.0`
 
-Our minimum supported rust version(MSRV) policy is to support versions of the compiler released within the last six months. We don't eagerly bump the minimum version we support, instead the minimum will be bumped on a needed by needed basis, usually because downstream dependencies force us to.
+Our minimum supported rust version(MSRV) policy is to support versions of the compiler released within the last six
+months. We don't eagerly bump the minimum version we support, instead the minimum will be bumped on a needed by needed
+basis, usually because downstream dependencies force us to.
 
-**Note:** Changes to the minimum supported version are not consider breaking from a [semver](https://semver.org/) perspective.
+**Note:** Changes to the minimum supported version are not consider breaking from a [semver](https://semver.org/)
+perspective.
 
 ### Monorepo Setup
 
@@ -162,7 +168,10 @@ devbox shell
 
 ## Open Source License
 
-Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has been used for both the compiler and many public libraries since (see <https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license>). In order to match the community standards, webrtc-rs is using the dual MIT+Apache-2.0 license.
+Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has
+been used for both the compiler and many public libraries since (
+see <https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license>). In order to match the
+community standards, webrtc-rs is using the dual MIT+Apache-2.0 license.
 
 ## Contributing
 
