@@ -38,7 +38,7 @@
 <p align="center">
 <strong>Gold Sponsors:</strong><br>
 <a href="https://www.recall.ai" target="_blank">
-<img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/recall.svg" style="height:50px;" alt="Recall.ai">
+<img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/recall.png" style="height:100px;" alt="Recall.ai">
 </a><br>
 <p align="center">
 <strong>Silver Sponsors:</strong><br>
