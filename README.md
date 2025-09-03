@@ -49,9 +49,6 @@
 <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/ChannelTalk_logo.png" alt="ChannelTalk">
 </a><br>
 <strong>Bronze Sponsors:</strong><br>
-<a href="https://kittycad.io/" target="_blank">
-<img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/KittyCAD.png" alt="KittyCAD">
-</a><br>
 <a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a><br>
 </p>
 
