@@ -173,6 +173,7 @@ impl RTCDataChannel {
                 label: self.label.clone(),
                 protocol: self.protocol.clone(),
                 negotiated: self.negotiated,
+                max_message_size: association.max_message_size(),
             };
 
             if !self.negotiated {
