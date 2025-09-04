@@ -81,14 +81,9 @@ impl Default for XorMappedAddress {
 
 impl fmt::Display for XorMappedAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let family = match self.ip {
-            IpAddr::V4(_) => FAMILY_IPV4,
-            IpAddr::V6(_) => FAMILY_IPV6,
-        };
-        if family == FAMILY_IPV4 {
-            write!(f, "{}:{}", self.ip, self.port)
-        } else {
-            write!(f, "[{}]:{}", self.ip, self.port)
+        match self.ip {
+            IpAddr::V4(_) => write!(f, "{}:{}", self.ip, self.port),
+            IpAddr::V6(_) => write!(f, "[{}]:{}", self.ip, self.port),
         }
     }
 }
