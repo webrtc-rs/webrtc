@@ -202,6 +202,12 @@ pub struct Config {
 pub struct Association {
     name: String,
     state: Arc<AtomicU8>,
+    // TODO: Convert into `u32`, as there is no reason why the `max_message_size` should need to be
+    // changed after the Assocaition has been created. Note that even if there was a use case for
+    // this, it is not used anywhere in the code base.
+    //
+    // Using atomics where not necessary -- especially in a hot path such as `prepare_write` -- may
+    // negatively impact performance, and adds unneeded complexity to the code.
     max_message_size: Arc<AtomicU32>,
     inflight_queue_length: Arc<AtomicUsize>,
     will_send_shutdown: Arc<AtomicBool>,
