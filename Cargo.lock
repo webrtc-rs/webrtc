@@ -3048,7 +3048,6 @@ dependencies = [
  "clap 3.2.25",
  "der-parser",
  "env_logger",
- "hkdf",
  "hmac",
  "hub",
  "log",
