@@ -39,7 +39,6 @@ md-5 = "0.10"
 thiserror = "1"
 
 [dev-dependencies]
-tokio-test = "0.4"
 clap = "3"
 criterion = "0.5"
 
