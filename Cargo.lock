@@ -2976,7 +2976,6 @@ dependencies = [
  "env_logger",
  "ipnet",
  "lazy_static",
- "libc",
  "log",
  "nix",
  "portable-atomic",
