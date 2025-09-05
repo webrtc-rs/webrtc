@@ -2781,7 +2781,6 @@ dependencies = [
  "ring",
  "rtcp",
  "rtp",
- "rustls",
  "sdp",
  "serde",
  "serde_json",

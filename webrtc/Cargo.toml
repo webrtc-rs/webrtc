@@ -50,10 +50,6 @@ waitgroup = "0.1"
 regex = "1.9.5"
 smol_str = { version = "0.2", features = ["serde"] }
 url = "2"
-rustls = { version = "0.23.27", default-features = false, features = [
-    "std",
-    "ring",
-] }
 rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
 ring = "0.17.14"
 sha2 = "0.10"
