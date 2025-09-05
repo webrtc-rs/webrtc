@@ -3067,7 +3067,6 @@ dependencies = [
  "subtle",
  "thiserror",
  "tokio",
- "tokio-test",
  "webrtc-util",
  "x25519-dalek",
  "x509-parser",
