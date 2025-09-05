@@ -3064,7 +3064,6 @@ dependencies = [
  "serde",
  "sha1",
  "sha2",
- "subtle",
  "thiserror",
  "tokio",
  "webrtc-util",
