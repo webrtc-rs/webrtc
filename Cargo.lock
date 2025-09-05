@@ -3097,7 +3097,6 @@ dependencies = [
  "stun",
  "thiserror",
  "tokio",
- "tokio-test",
  "turn",
  "url",
  "uuid",
