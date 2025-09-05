@@ -19,5 +19,8 @@ members = [
 ]
 resolver = "2"
 
+[workspace.dependencies]
+tokio-test = { version = "0.4.4" }
+
 [profile.dev]
 opt-level = 0

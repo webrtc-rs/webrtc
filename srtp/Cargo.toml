@@ -49,7 +49,6 @@ openssl = { version = "0.10.72", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_futures"] }
-tokio-test = "0.4"
 lazy_static = "1"
 
 [[bench]]
