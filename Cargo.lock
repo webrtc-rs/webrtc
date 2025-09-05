@@ -2789,7 +2789,6 @@ dependencies = [
  "smol_str",
  "stun",
  "thiserror",
- "time",
  "tokio",
  "tokio-test",
  "turn",

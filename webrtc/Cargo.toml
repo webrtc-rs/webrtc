@@ -60,7 +60,6 @@ sha2 = "0.10"
 lazy_static = "1.4"
 hex = "0.4"
 pem = { version = "3", optional = true }
-time = "0.3"
 cfg-if = "1"
 portable-atomic = "1.6"
 unicase = "2.8"
