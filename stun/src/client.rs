@@ -394,11 +394,7 @@ impl Client {
         self.handler_tx = Some(Arc::clone(&handler_tx));
         self.close_tx = Some(close_tx);
 
-        let conn = if let Some(conn) = &self.settings.c {
-            Arc::clone(conn)
-        } else {
-            return Err(Error::ErrNoConnection);
-        };
+        let conn = self.settings.c.clone().ok_or(Error::ErrNoConnection)?;
 
         Client::start(
             self.settings.c.clone(),
