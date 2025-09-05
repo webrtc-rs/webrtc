@@ -59,7 +59,6 @@ tokio-test = "0.4"
 env_logger = "0.11.3"
 chrono = "0.4.28"
 criterion = { version = "0.5", features = ["async_futures"] }
-async-global-executor = "2"
 
 [[bench]]
 name = "bench"
