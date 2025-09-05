@@ -3027,7 +3027,6 @@ dependencies = [
  "portable-atomic",
  "thiserror",
  "tokio",
- "tokio-test",
  "webrtc-sctp",
  "webrtc-util",
 ]
