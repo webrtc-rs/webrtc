@@ -2774,7 +2774,6 @@ dependencies = [
  "stun",
  "thiserror",
  "tokio",
- "tokio-test",
  "tokio-util",
  "webrtc-util",
 ]
