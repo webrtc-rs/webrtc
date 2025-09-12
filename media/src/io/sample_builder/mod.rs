@@ -111,11 +111,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             return false;
         }
 
-        // SAFETY: we have explicitly checked for none values 10 lines above
-        let diff = unsafe { found_tail.unwrap_unchecked() }
-            .wrapping_sub(unsafe { found_head.unwrap_unchecked() });
-
-        diff > self.max_late_timestamp
+        found_tail.unwrap().wrapping_sub(found_head.unwrap()) > self.max_late_timestamp
     }
 
     /// Returns the timestamp associated with a given sample location
