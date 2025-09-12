@@ -1474,7 +1474,80 @@ fn test_pop_with_timestamp() {
 }
 
 #[test]
-fn test_sample_builder_data() {
+fn test_too_old_timestamp_wrapping() {
+    // Create a SampleBuilder with 1ms max late duration (sample rate 48000 = 48 samples per 1ms)
+    let mut s = SampleBuilder::new(10, FakeDepacketizer::new(), 48000)
+        .with_max_time_delay(Duration::from_millis(1));
+
+    // Push packet with very high timestamp that would wrap around
+    s.push(Packet {
+        header: Header {
+            sequence_number: 1,
+            timestamp: u32::MAX - 10, // Very high timestamp
+            marker: false,
+            ..Default::default()
+        },
+        payload: bytes!(0x01),
+    });
+
+    // Push packet with wrapped timestamp, too_old will say true and we would get a sample with above packet
+    s.push(Packet {
+        header: Header {
+            sequence_number: 2,
+            timestamp: 38, // Very low timestamp but the ts diff will be > 48
+            marker: false,
+            ..Default::default()
+        },
+        payload: bytes!(0x02),
+    });
+
+    // This test would panic with "attempt to subtract with overflow" if wrapping_sub wasn't used
+    // The difference between timestamps should wrap around properly
+    assert!(
+        s.prepared.count() > 0, // due to ts diff 49 > 48 it will say that an old sample is done
+        "Expected packets to be considered too old event with timestamp wrapping"
+    );
+}
+
+#[test]
+fn test_too_old_ok_timestamp_wrapping() {
+    // Create a SampleBuilder with 1ms max late duration (sample rate 48000 = 48 samples per 1ms)
+    let mut s = SampleBuilder::new(10, FakeDepacketizer::new(), 48000)
+        .with_max_time_delay(Duration::from_millis(1));
+
+    // Push packet with very high timestamp that would wrap around
+    s.push(Packet {
+        header: Header {
+            sequence_number: 1,
+            timestamp: u32::MAX - 10, // Very high timestamp
+            marker: false,
+            ..Default::default()
+        },
+        payload: bytes!(0x01),
+    });
+
+    // Push packet with low timestamp
+    s.push(Packet {
+        header: Header {
+            sequence_number: 2,
+            timestamp: 10, // Very low timestamp
+            marker: false,
+            ..Default::default()
+        },
+        payload: bytes!(0x02),
+    });
+
+    // This test would panic with "attempt to subtract with overflow" if wrapping_sub wasn't used
+    // The difference between timestamps should wrap around properly
+    assert!(
+        !s.too_old(&s.filled), // 21 < 48
+        "Expected packets to not be considered too old even with timestamp wrapping"
+    );
+    assert!(s.prepared.empty());
+}
+
+#[test]
+fn nano_sample_builder_data() {
     let mut s = SampleBuilder::new(10, FakeDepacketizer::new(), 1);
     let mut j: usize = 0;
     for i in 0..0x20000_usize {
