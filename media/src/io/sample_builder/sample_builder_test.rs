@@ -1547,7 +1547,7 @@ fn test_too_old_ok_timestamp_wrapping() {
 }
 
 #[test]
-fn nano_sample_builder_data() {
+fn test_sample_builder_data() {
     let mut s = SampleBuilder::new(10, FakeDepacketizer::new(), 1);
     let mut j: usize = 0;
     for i in 0..0x20000_usize {
