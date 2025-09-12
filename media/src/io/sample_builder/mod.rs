@@ -111,7 +111,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             return false;
         }
 
-        found_tail.unwrap() - found_head.unwrap() > self.max_late_timestamp
+        found_tail.unwrap().wrapping_sub(found_head.unwrap()) > self.max_late_timestamp
     }
 
     /// Returns the timestamp associated with a given sample location
@@ -341,7 +341,7 @@ impl<T: Depacketizer> SampleBuilder<T> {
             data.extend_from_slice(&p);
             i = i.wrapping_add(1);
         }
-        let samples = after_timestamp - sample_timestamp;
+        let samples = after_timestamp.wrapping_sub(sample_timestamp);
 
         let sample = Sample {
             data: Bytes::copy_from_slice(&data),
