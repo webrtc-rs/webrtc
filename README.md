@@ -89,7 +89,7 @@ to use webrtc-rs to build media and data channel applications.
     <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/check.png">SRTP<a href="https://crates.io/crates/webrtc-srtp"><img src="https://img.shields.io/crates/v/webrtc-srtp.svg"></a>
     <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/check.png">SCTP<a href="https://crates.io/crates/webrtc-sctp"><img src="https://img.shields.io/crates/v/webrtc-sctp.svg"></a>
     <br>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/check.png">DTLS<a href="https://crates.io/crates/webrtc-dtls"><img src="https://img.shields.io/crates/v/webrtc-dtls.svg"></a>
+    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/check.png">DTLS<a href="https://crates.io/crates/dtls"><img src="https://img.shields.io/crates/v/dtls.svg"></a>
     <br>
     <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/check.png">mDNS<a href="https://crates.io/crates/webrtc-mdns"><img src="https://img.shields.io/crates/v/webrtc-mdns.svg"></a>
     <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc/master/doc/check.png">STUN<a href="https://crates.io/crates/stun"><img src="https://img.shields.io/crates/v/stun.svg"></a>

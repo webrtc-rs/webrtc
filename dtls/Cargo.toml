@@ -1,11 +1,11 @@
 [package]
-name = "webrtc-dtls"
+name = "dtls"
 version = "0.12.0"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of DTLS"
 license = "MIT OR Apache-2.0"
-documentation = "https://docs.rs/webrtc-dtls"
+documentation = "https://docs.rs/dtls"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/dtls"
 

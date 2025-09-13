@@ -2,12 +2,12 @@ use std::io::Write;
 use std::sync::Arc;
 
 use clap::{App, AppSettings, Arg};
+use dtls::config::*;
+use dtls::conn::DTLSConn;
+use dtls::crypto::Certificate;
+use dtls::Error;
 use tokio::net::UdpSocket;
 use util::Conn;
-use webrtc_dtls::config::*;
-use webrtc_dtls::conn::DTLSConn;
-use webrtc_dtls::crypto::Certificate;
-use webrtc_dtls::Error;
 
 // cargo run --example dial_selfsign -- --server 127.0.0.1:4444
 
