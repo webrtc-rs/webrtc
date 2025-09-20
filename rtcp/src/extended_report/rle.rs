@@ -215,7 +215,7 @@ impl Unmarshal for RLEReportBlock {
             None => return Err(error::Error::InvalidBlockSize.into()),
         };
         if block_length < RLE_REPORT_BLOCK_MIN_LENGTH
-            || (block_length - RLE_REPORT_BLOCK_MIN_LENGTH) % 2 != 0
+            || !(block_length - RLE_REPORT_BLOCK_MIN_LENGTH).is_multiple_of(2)
             || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());

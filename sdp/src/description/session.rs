@@ -1152,7 +1152,7 @@ fn unmarshal_time_zones<'a, R: io::BufRead + io::Seek>(
     // z=<adjustment time> <offset> <adjustment time> <offset> ....
     // so we are making sure that there are actually multiple of 2 total.
     let fields: Vec<&str> = value.split_whitespace().collect();
-    if fields.len() % 2 != 0 {
+    if !fields.len().is_multiple_of(2) {
         return Err(Error::SdpInvalidSyntax(format!("`t={value}`")));
     }
 

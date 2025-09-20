@@ -123,7 +123,7 @@ impl Unmarshal for PacketReceiptTimesReportBlock {
             None => return Err(error::Error::InvalidBlockSize.into()),
         };
         if block_length < PRT_REPORT_BLOCK_MIN_LENGTH
-            || (block_length - PRT_REPORT_BLOCK_MIN_LENGTH) % 4 != 0
+            || !(block_length - PRT_REPORT_BLOCK_MIN_LENGTH).is_multiple_of(4)
             || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());

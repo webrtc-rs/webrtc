@@ -102,7 +102,7 @@ impl CryptoCbc {
         let iv = &body[0..Self::BLOCK_SIZE];
         let body = &body[Self::BLOCK_SIZE..];
 
-        if body.is_empty() || body.len() % Self::BLOCK_SIZE != 0 {
+        if body.is_empty() || !body.len().is_multiple_of(Self::BLOCK_SIZE) {
             return Err(Error::ErrInvalidPacketLength);
         }
 

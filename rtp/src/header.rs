@@ -270,7 +270,7 @@ impl Marshal for Header {
             let extension_payload_len = self.get_extension_payload_len();
             if self.extension_profile != EXTENSION_PROFILE_ONE_BYTE
                 && self.extension_profile != EXTENSION_PROFILE_TWO_BYTE
-                && extension_payload_len % 4 != 0
+                && !extension_payload_len.is_multiple_of(4)
             {
                 //the payload must be in 32-bit words.
                 return Err(Error::HeaderExtensionPayloadNot32BitWords.into());
