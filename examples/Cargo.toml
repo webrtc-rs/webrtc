@@ -19,7 +19,7 @@ tokio = { version = "1.32.0", features = ["full"] }
 env_logger = "0.11.3"
 clap = "3"
 hyper = { version = "0.14.27", features = ["full"] }
-signal = { path = "examples/signal" }
+signal = { version = "0.1.1", path = "examples/signal", package = "webrtc-signal" }
 tokio-util = { version = "0.7", features = ["codec"] }
 anyhow = "1"
 chrono = "0.4.28"
