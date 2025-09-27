@@ -99,6 +99,7 @@ pub struct SettingEngine {
     //iceProxyDialer                            :proxy.Dialer,?
     pub(crate) udp_network: UDPNetwork,
     pub(crate) disable_media_engine_copy: bool,
+    pub(crate) disable_media_engine_multiple_codecs: bool,
     pub(crate) srtp_protection_profiles: Vec<SrtpProtectionProfile>,
     pub(crate) receive_mtu: usize,
     pub(crate) mid_generator: Option<Arc<dyn Fn(isize) -> String + Send + Sync>>,
@@ -340,6 +341,16 @@ impl SettingEngine {
     /// modify codecs after signaling. Make sure not to share MediaEngines between PeerConnections.
     pub fn disable_media_engine_copy(&mut self, is_disabled: bool) {
         self.disable_media_engine_copy = is_disabled;
+    }
+
+    /// disable_media_engine_multiple_codecs disables the MediaEngine negotiating different codecs.
+    /// With the default value multiple media sections in the SDP can each negotiate different
+    /// codecs. This is the new default behvior, because it makes Pion more spec compliant.
+    /// The value of this setting will get copied to every copy of the MediaEngine generated
+    /// for new PeerConnections (assuming DisableMediaEngineCopy is set to false).
+    /// Note: this setting is targeted to be removed in release 4.2.0 (or later).
+    pub fn disable_media_engine_multiple_codecs(&mut self, is_disabled: bool) {
+        self.disable_media_engine_multiple_codecs = is_disabled;
     }
 
     /// set_receive_mtu sets the size of read buffer that copies incoming packets. This is optional.

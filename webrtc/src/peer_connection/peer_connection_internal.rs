@@ -121,10 +121,14 @@ impl PeerConnectionInternal {
             peer_connection_state: Arc::new(AtomicU8::new(RTCPeerConnectionState::New as u8)),
 
             setting_engine: Arc::clone(&api.setting_engine),
-            media_engine: if !api.setting_engine.disable_media_engine_copy {
-                Arc::new(api.media_engine.clone_to())
-            } else {
+            media_engine: if api.setting_engine.disable_media_engine_copy {
                 Arc::clone(&api.media_engine)
+            } else {
+                let cloned_media_engine = Arc::new(api.media_engine.clone_to());
+                cloned_media_engine.set_multi_codec_negotiation(
+                    !api.setting_engine.disable_media_engine_multiple_codecs,
+                );
+                cloned_media_engine
             },
             interceptor,
             stats_interceptor,
