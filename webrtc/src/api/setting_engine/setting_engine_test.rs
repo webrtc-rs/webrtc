@@ -269,3 +269,15 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_setting_engine_media_engine_and_mtu_flags() -> Result<()> {
+    let mut s = SettingEngine::default();
+
+    s.disable_media_engine_multiple_codecs(true);
+    assert!(s.disable_media_engine_multiple_codecs);
+
+    s.set_receive_mtu(1337);
+    assert_eq!(1337, s.receive_mtu);
+    Ok(())
+}

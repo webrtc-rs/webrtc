@@ -336,17 +336,6 @@ impl MediaEngine {
         codecs.push(codec);
     }
 
-    /// set_multi_codec_negotiation enables or disables the negotiation of multiple codecs.
-    pub fn set_multi_codec_negotiation(&mut self, negotiate_multi_codecs: bool) {
-        self.negotiate_multi_codecs
-            .store(negotiate_multi_codecs, Ordering::SeqCst);
-    }
-
-    /// multi_codec_negotiation returns the current state of the negotiation of multiple codecs.
-    pub fn multi_codec_negotiation(&self) -> bool {
-        self.negotiate_multi_codecs.load(Ordering::SeqCst)
-    }
-
     /// register_codec adds codec to the MediaEngine
     /// These are the list of codecs supported by this PeerConnection.
     /// register_codec is not safe for concurrent use.
@@ -471,6 +460,17 @@ impl MediaEngine {
             header_extensions: self.header_extensions.clone(),
             ..Default::default()
         }
+    }
+
+    /// set_multi_codec_negotiation enables or disables the negotiation of multiple codecs.
+    pub(crate) fn set_multi_codec_negotiation(&self, negotiate_multi_codecs: bool) {
+        self.negotiate_multi_codecs
+            .store(negotiate_multi_codecs, Ordering::SeqCst);
+    }
+
+    /// multi_codec_negotiation returns the current state of the negotiation of multiple codecs.
+    pub(crate) fn multi_codec_negotiation(&self) -> bool {
+        self.negotiate_multi_codecs.load(Ordering::SeqCst)
     }
 
     pub(crate) async fn get_codec_by_payload(
