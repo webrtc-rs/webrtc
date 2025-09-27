@@ -88,6 +88,7 @@ pub struct MediaEngine {
     // If we have attempted to negotiate a codec type yet.
     pub(crate) negotiated_video: AtomicBool,
     pub(crate) negotiated_audio: AtomicBool,
+    pub(crate) negotiate_multi_codecs: AtomicBool,
 
     pub(crate) video_codecs: Vec<RTCRtpCodecParameters>,
     pub(crate) audio_codecs: Vec<RTCRtpCodecParameters>,
@@ -333,6 +334,17 @@ impl MediaEngine {
             }
         }
         codecs.push(codec);
+    }
+
+    /// set_multi_codec_negotiation enables or disables the negotiation of multiple codecs.
+    pub fn set_multi_codec_negotiation(&mut self, negotiate_multi_codecs: bool) {
+        self.negotiate_multi_codecs
+            .store(negotiate_multi_codecs, Ordering::SeqCst);
+    }
+
+    /// multi_codec_negotiation returns the current state of the negotiation of multiple codecs.
+    pub fn multi_codec_negotiation(&self) -> bool {
+        self.negotiate_multi_codecs.load(Ordering::SeqCst)
     }
 
     /// register_codec adds codec to the MediaEngine
@@ -653,12 +665,14 @@ impl MediaEngine {
         desc: &SessionDescription,
     ) -> Result<()> {
         for media in &desc.media_descriptions {
-            let typ = if !self.negotiated_audio.load(Ordering::SeqCst)
+            let typ = if (!self.negotiated_audio.load(Ordering::SeqCst)
+                || self.negotiate_multi_codecs.load(Ordering::SeqCst))
                 && media.media_name.media.to_lowercase() == "audio"
             {
                 self.negotiated_audio.store(true, Ordering::SeqCst);
                 RTPCodecType::Audio
-            } else if !self.negotiated_video.load(Ordering::SeqCst)
+            } else if (!self.negotiated_video.load(Ordering::SeqCst)
+                || self.negotiate_multi_codecs.load(Ordering::SeqCst))
                 && media.media_name.media.to_lowercase() == "video"
             {
                 self.negotiated_video.store(true, Ordering::SeqCst);
