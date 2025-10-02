@@ -71,11 +71,11 @@ async fn test_net_native_bind() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_net_native_dail() -> Result<()> {
+async fn test_net_native_dial() -> Result<()> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
-    let conn = nw.dail(true, "127.0.0.1:1234").await?;
+    let conn = nw.dial(true, "127.0.0.1:1234").await?;
     let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string(),
@@ -443,11 +443,11 @@ async fn test_net_virtual_bind_specific_port() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_dail_lo0() -> Result<()> {
+async fn test_net_virtual_dial_lo0() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
-    let conn = nw.dail(true, "127.0.0.1:1234").await?;
+    let conn = nw.dial(true, "127.0.0.1:1234").await?;
     let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
@@ -461,7 +461,7 @@ async fn test_net_virtual_dail_lo0() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_dail_eth0() -> Result<()> {
+async fn test_net_virtual_dial_eth0() -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -479,7 +479,7 @@ async fn test_net_virtual_dail_eth0() -> Result<()> {
         n.set_router(Arc::clone(&wan)).await?;
     };
 
-    let conn = nw.dail(true, "27.3.4.5:1234").await?;
+    let conn = nw.dial(true, "27.3.4.5:1234").await?;
     let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
@@ -523,7 +523,7 @@ async fn test_net_virtual_resolver() -> Result<()> {
     tokio::spawn(async move {
         let (conn, raddr) = {
             let raddr = nw.resolve_addr(true, "test.webrtc.rs:1234").await?;
-            (nw.dail(true, "test.webrtc.rs:1234").await?, raddr)
+            (nw.dial(true, "test.webrtc.rs:1234").await?, raddr)
         };
 
         let laddr = conn.local_addr()?;
