@@ -7,7 +7,7 @@ use rtp::extension::abs_send_time_extension::unix2ntp;
 use tokio::sync::Mutex;
 
 use super::*;
-use crate::{Attributes, RTPWriter};
+use crate::RTPWriter;
 
 struct SenderStreamInternal {
     ssrc: u32,
@@ -92,7 +92,7 @@ impl SenderStream {
 #[async_trait]
 impl RTPWriter for SenderStream {
     /// write a rtp packet
-    async fn write(&self, pkt: &rtp::packet::Packet, a: &Attributes) -> Result<usize> {
+    async fn write(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
         let now = if let Some(f) = &self.now {
             f()
         } else {
@@ -100,7 +100,7 @@ impl RTPWriter for SenderStream {
         };
         self.process_rtp(now, pkt).await;
 
-        self.next_rtp_writer.write(pkt, a).await
+        self.next_rtp_writer.write(pkt).await
     }
 }
 

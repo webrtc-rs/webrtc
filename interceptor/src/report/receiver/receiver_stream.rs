@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use util::sync::Mutex;
 
 use super::*;
-use crate::{Attributes, RTPReader};
+use crate::RTPReader;
 
 struct ReceiverStreamInternal {
     ssrc: u32,
@@ -208,12 +208,8 @@ impl ReceiverStream {
 #[async_trait]
 impl RTPReader for ReceiverStream {
     /// read a rtp packet
-    async fn read(
-        &self,
-        buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(rtp::packet::Packet, Attributes)> {
-        let (pkt, attr) = self.parent_rtp_reader.read(buf, a).await?;
+    async fn read(&self, buf: &mut [u8]) -> Result<rtp::packet::Packet> {
+        let pkt = self.parent_rtp_reader.read(buf).await?;
 
         let now = if let Some(f) = &self.now {
             f()
@@ -222,6 +218,6 @@ impl RTPReader for ReceiverStream {
         };
         self.process_rtp(now, &pkt);
 
-        Ok((pkt, attr))
+        Ok(pkt)
     }
 }

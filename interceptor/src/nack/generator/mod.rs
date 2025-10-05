@@ -17,9 +17,7 @@ use waitgroup::WaitGroup;
 use crate::error::{Error, Result};
 use crate::nack::stream_support_nack;
 use crate::stream_info::StreamInfo;
-use crate::{
-    Attributes, Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader, RTPWriter,
-};
+use crate::{Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
 
 /// GeneratorBuilder can be used to configure Generator Interceptor
 #[derive(Default)]
@@ -136,9 +134,8 @@ impl Generator {
                         nacks
                     };
 
-                    let a = Attributes::new();
                     for nack in nacks{
-                        if let Err(err) = rtcp_writer.write(&[Box::new(nack)], &a).await{
+                        if let Err(err) = rtcp_writer.write(&[Box::new(nack)]).await{
                             log::warn!("failed sending nack: {err}");
                         }
                     }

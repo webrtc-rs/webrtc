@@ -113,7 +113,6 @@ impl Receiver {
             }
         };
 
-        let a = Attributes::new();
         let mut ticker = tokio::time::interval(internal.interval);
         ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         loop {
@@ -138,7 +137,7 @@ impl Receiver {
                         continue;
                     }
 
-                    if let Err(err) = rtcp_writer.write(&pkts, &a).await{
+                    if let Err(err) = rtcp_writer.write(&pkts).await{
                         log::error!("rtcp_writer.write got err: {err}");
                     }
                 }

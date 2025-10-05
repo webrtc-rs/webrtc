@@ -72,7 +72,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
         let seen_packet_b_tx2 = Arc::clone(&seen_packet_b_tx);
         Box::pin(async move {
             let pkt = match track.read_rtp().await {
-                Ok((pkt, _)) => pkt,
+                Ok(pkt) => pkt,
                 Err(err) => {
                     //assert!(errors.Is(io.EOF, err))
                     log::debug!("{err}");

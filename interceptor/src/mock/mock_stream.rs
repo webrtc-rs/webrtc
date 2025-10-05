@@ -6,7 +6,7 @@ use util::Marshal;
 
 use crate::error::{Error, Result};
 use crate::stream_info::StreamInfo;
-use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
+use crate::{Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
 
 type RTCPPackets = Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>;
 
@@ -91,10 +91,9 @@ impl MockStream {
             .await;
         tokio::spawn(async move {
             let mut buf = vec![0u8; 1500];
-            let a = Attributes::new();
             loop {
-                let pkts = match rtcp_reader.read(&mut buf, &a).await {
-                    Ok((n, _)) => n,
+                let pkts = match rtcp_reader.read(&mut buf).await {
+                    Ok(n) => n,
                     Err(err) => {
                         let _ = rtcp_in_modified_tx.send(Err(err)).await;
                         break;
@@ -113,10 +112,9 @@ impl MockStream {
             .await;
         tokio::spawn(async move {
             let mut buf = vec![0u8; 1500];
-            let a = Attributes::new();
             loop {
-                let pkt = match rtp_reader.read(&mut buf, &a).await {
-                    Ok((pkt, _)) => pkt,
+                let pkt = match rtp_reader.read(&mut buf).await {
+                    Ok(pkt) => pkt,
                     Err(err) => {
                         let _ = rtp_in_modified_tx.send(Err(err)).await;
                         break;
@@ -135,10 +133,9 @@ impl MockStream {
         &self,
         pkt: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
     ) -> Result<usize> {
-        let a = Attributes::new();
         let rtcp_writer = self.rtcp_writer.lock().await;
         if let Some(writer) = &*rtcp_writer {
-            writer.write(pkt, &a).await
+            writer.write(pkt).await
         } else {
             Err(Error::Other("invalid rtcp_writer".to_owned()))
         }
@@ -146,10 +143,9 @@ impl MockStream {
 
     /// write_rtp writes an rtp packet to the stream, using the interceptor
     pub async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
-        let a = Attributes::new();
         let rtp_writer = self.rtp_writer.lock().await;
         if let Some(writer) = &*rtp_writer {
-            writer.write(pkt, &a).await
+            writer.write(pkt).await
         } else {
             Err(Error::Other("invalid rtp_writer".to_owned()))
         }
@@ -229,11 +225,7 @@ impl MockStream {
 
 #[async_trait]
 impl RTCPWriter for MockStreamInternal {
-    async fn write(
-        &self,
-        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
-        _attributes: &Attributes,
-    ) -> Result<usize> {
+    async fn write(&self, pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>]) -> Result<usize> {
         let _ = self.rtcp_out_modified_tx.send(pkts.to_vec()).await;
 
         Ok(0)
@@ -245,8 +237,7 @@ impl RTCPReader for MockStreamInternal {
     async fn read(
         &self,
         buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         let pkts = {
             let mut rtcp_in = self.rtcp_in_rx.lock().await;
             rtcp_in.recv().await.ok_or(Error::ErrIoEOF)?
@@ -259,13 +250,13 @@ impl RTCPReader for MockStreamInternal {
         }
 
         buf[..n].copy_from_slice(&marshaled);
-        Ok((pkts, a.clone()))
+        Ok(pkts)
     }
 }
 
 #[async_trait]
 impl RTPWriter for MockStreamInternal {
-    async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> Result<usize> {
+    async fn write(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
         let _ = self.rtp_out_modified_tx.send(pkt.clone()).await;
         Ok(0)
     }
@@ -273,11 +264,7 @@ impl RTPWriter for MockStreamInternal {
 
 #[async_trait]
 impl RTPReader for MockStreamInternal {
-    async fn read(
-        &self,
-        buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(rtp::packet::Packet, Attributes)> {
+    async fn read(&self, buf: &mut [u8]) -> Result<rtp::packet::Packet> {
         let pkt = {
             let mut rtp_in = self.rtp_in_rx.lock().await;
             rtp_in.recv().await.ok_or(Error::ErrIoEOF)?
@@ -290,7 +277,7 @@ impl RTPReader for MockStreamInternal {
         }
 
         buf[..n].copy_from_slice(&marshaled);
-        Ok((pkt, a.clone()))
+        Ok(pkt)
     }
 }
 

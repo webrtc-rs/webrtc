@@ -315,7 +315,7 @@ async fn test_get_stats() -> Result<()> {
     pc_answer.on_track(Box::new(move |track, _, _| {
         let packet_tx = packet_tx.clone();
         tokio::spawn(async move {
-            while let Ok((pkt, _)) = track.read_rtp().await {
+            while let Ok(pkt) = track.read_rtp().await {
                 dbg!(&pkt);
                 let last = pkt.payload[pkt.payload.len() - 1];
 

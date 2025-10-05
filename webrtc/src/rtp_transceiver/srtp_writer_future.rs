@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use interceptor::{Attributes, RTCPReader, RTPWriter};
+use interceptor::{RTCPReader, RTPWriter};
 use portable_atomic::AtomicBool;
 use srtp::session::Session;
 use srtp::stream::Stream;
@@ -263,18 +263,17 @@ impl RTCPReader for SrtpWriterFuture {
     async fn read(
         &self,
         buf: &mut [u8],
-        a: &Attributes,
-    ) -> IResult<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+    ) -> IResult<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         let read = self.read(buf).await?;
         let pkt = rtcp::packet::unmarshal(&mut &buf[..read])?;
 
-        Ok((pkt, a.clone()))
+        Ok(pkt)
     }
 }
 
 #[async_trait]
 impl RTPWriter for SrtpWriterFuture {
-    async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
+    async fn write(&self, pkt: &rtp::packet::Packet) -> IResult<usize> {
         Ok(
             match self.seq_trans.seq_number(pkt.header.sequence_number) {
                 Some(seq_num) => {

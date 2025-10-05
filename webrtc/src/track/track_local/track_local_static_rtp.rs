@@ -1,11 +1,66 @@
-use std::collections::HashMap;
-
 use bytes::{Bytes, BytesMut};
+use std::any::Any;
+use std::{borrow::Cow, collections::HashMap, time::Duration};
 use tokio::sync::Mutex;
 use util::{Marshal, MarshalSize};
 
 use super::*;
-use crate::error::flatten_errs;
+use crate::{error::flatten_errs, track::track_local::packet_cache::PCacheBuffer};
+
+#[derive(Debug)]
+pub struct TrackState {
+    last_out_seq: u16, // переживает все переключения источников
+    last_out_ts: u32,  // переживает все переключения источников
+    started_at_ts: i64,
+
+    out_offset: Option<(
+        u16, /* смещение порядкового номера */
+        u32, /* смещение временной метки timestamp */
+    )>,
+}
+
+impl TrackState {
+    pub fn new() -> Self {
+        TrackState {
+            // Порядковый номер начинается с 0
+            last_out_seq: 0,
+            // время трека начинается с 0
+            last_out_ts: 0,
+            // Сохраняем начало трека в реальной временной шкале дла последующей синхронизации
+            started_at_ts: chrono::Utc::now().timestamp(),
+            out_offset: None,
+        }
+    }
+
+    pub fn get_out_offset(&mut self, pkt_sequence_number: u16, pkt_timestamp: u32) -> (u16, u32) {
+        match self.out_offset {
+            Some((seq_num_offset, ts_offset)) => {
+                self.last_out_seq = pkt_sequence_number.wrapping_add(seq_num_offset);
+                self.last_out_ts = pkt_timestamp.wrapping_add(ts_offset);
+                (self.last_out_seq, self.last_out_ts)
+            }
+            None => {
+                println!(
+                    "Смещения перезаписаны seq_num: {}; ts: {}",
+                    pkt_sequence_number, pkt_timestamp
+                );
+                let seq_num_offset = self
+                    .last_out_seq
+                    .wrapping_sub(pkt_sequence_number)
+                    .wrapping_add(1);
+                let ts_offset = self
+                    .last_out_ts
+                    .wrapping_sub(pkt_timestamp)
+                    .wrapping_add(90000);
+                self.out_offset = Some((seq_num_offset, ts_offset));
+
+                self.last_out_seq = pkt_sequence_number.wrapping_add(seq_num_offset);
+                self.last_out_ts = pkt_timestamp.wrapping_add(ts_offset);
+                (self.last_out_seq, self.last_out_ts)
+            }
+        }
+    }
+}
 
 /// TrackLocalStaticRTP  is a TrackLocal that has a pre-set codec and accepts RTP Packets.
 /// If you wish to send a media.Sample use TrackLocalStaticSample
@@ -16,6 +71,9 @@ pub struct TrackLocalStaticRTP {
     id: String,
     rid: Option<String>,
     stream_id: String,
+
+    state: Mutex<TrackState>,
+    pub rtp_cache: Arc<PCacheBuffer>,
 }
 
 impl TrackLocalStaticRTP {
@@ -27,6 +85,9 @@ impl TrackLocalStaticRTP {
             id,
             rid: None,
             stream_id,
+
+            state: Mutex::new(TrackState::new()),
+            rtp_cache: Arc::new(PCacheBuffer::new(Duration::from_millis(500), 1024)),
         }
     }
 
@@ -43,6 +104,9 @@ impl TrackLocalStaticRTP {
             id,
             rid: Some(rid),
             stream_id,
+
+            state: Mutex::new(TrackState::new()),
+            rtp_cache: Arc::new(PCacheBuffer::new(Duration::from_millis(500), 1024)),
         }
     }
 
@@ -65,6 +129,29 @@ impl TrackLocalStaticRTP {
             .all(|b| b.sender_paused.load(Ordering::SeqCst))
     }
 
+    /// Выполняется, когда мы изменяем источник данных для трека
+    pub async fn replace_remote(&self) {
+        let mut s = self.state.lock().await;
+        s.out_offset = None;
+    }
+
+    /// write_rtp_to writes a RTP Packet to specific binding inside the TrackLocalStaticRTP
+    /// If it fails it just return Ok(0)
+    /// The error message will contain the ID of the failed
+    /// PeerConnections so you can remove them
+    ///
+    /// If the RTCRtpSender direction is such that no packets should be sent, any call to this
+    /// function are blocked internally. Care must be taken to not increase the sequence number
+    /// while the sender is paused. While the actual _sending_ is blocked, the receiver will
+    /// miss out when the sequence number "rolls over", which in turn will break SRTP.
+    pub async fn write_rtp_to(
+        &self,
+        pkt: &rtp::packet::Packet,
+        binding_ssrc: u32,
+    ) -> Result<usize> {
+        self.write_rtp_with_attributes_to(pkt, binding_ssrc).await
+    }
+
     /// write_rtp_with_extensions writes a RTP Packet to the TrackLocalStaticRTP
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
@@ -82,20 +169,73 @@ impl TrackLocalStaticRTP {
         p: &rtp::packet::Packet,
         extensions: &[rtp::extension::HeaderExtension],
     ) -> Result<usize> {
-        let attr = Attributes::new();
-        self.write_rtp_with_extensions_attributes(p, extensions, &attr)
+        self.write_rtp_with_extensions_attributes(p, extensions)
             .await
+    }
+
+    pub async fn write_rtp_with_extensions_attributes_to(
+        &self,
+        p: &rtp::packet::Packet,
+        extensions: &[rtp::extension::HeaderExtension],
+        binding_ssrc: u32,
+    ) -> Result<usize> {
+        let binding = {
+            let bindings = self.bindings.lock().await;
+            bindings
+                .iter()
+                .find(|b| b.ssrc == binding_ssrc)
+                .map(|b| b.clone())
+        };
+
+        if let Some(b) = binding {
+            // Prepare the extensions data
+            let mut extension_error = None;
+            let extension_data: HashMap<_, _> = extensions
+                .iter()
+                .flat_map(|extension| {
+                    let buf = {
+                        let mut buf = BytesMut::with_capacity(extension.marshal_size());
+                        buf.resize(extension.marshal_size(), 0);
+                        if let Err(err) = extension.marshal_to(&mut buf) {
+                            extension_error = Some(Error::Util(err));
+                            return None;
+                        }
+
+                        buf.freeze()
+                    };
+
+                    Some((extension.uri(), buf))
+                })
+                .collect();
+            if let Some(err) = extension_error {
+                return Err(err);
+            }
+
+            self.write_rtp_with_extensions_attributes_to_binding(p, &extension_data, b)
+                .await
+        } else {
+            // Must return Ok(usize) to be consistent with write_rtp_with_extensions_attributes
+            Err(Error::LocalTrackBindingNotFound)
+        }
     }
 
     pub async fn write_rtp_with_extensions_attributes(
         &self,
         p: &rtp::packet::Packet,
         extensions: &[rtp::extension::HeaderExtension],
-        attr: &Attributes,
     ) -> Result<usize> {
+        let (seq_number, ts) = {
+            let mut st = self.state.lock().await;
+            st.get_out_offset(p.header.sequence_number, p.header.timestamp)
+        };
+
+        let mut pkt = p.clone();
+        pkt.header.sequence_number = seq_number;
+        pkt.header.timestamp = ts;
+        self.rtp_cache.put(&pkt);
+
         let mut n = 0;
         let mut write_errs = vec![];
-        let mut pkt = p.clone();
 
         let bindings = {
             let bindings = self.bindings.lock().await;
@@ -121,38 +261,12 @@ impl TrackLocalStaticRTP {
             .collect();
 
         for b in bindings.into_iter() {
-            if b.is_sender_paused() {
-                // See caveat in function doc.
-                continue;
-            }
-            pkt.header.ssrc = b.ssrc;
-            pkt.header.payload_type = b.payload_type;
-
-            for ext in b.hdr_ext_ids.iter() {
-                let payload = ext.payload.to_owned();
-                if let Err(err) = pkt.header.set_extension(ext.id, payload) {
-                    write_errs.push(Error::Rtp(err));
-                }
-            }
-
-            for (uri, data) in extension_data.iter() {
-                if let Some(id) = b
-                    .params
-                    .header_extensions
-                    .iter()
-                    .find(|ext| &ext.uri == uri)
-                    .map(|ext| ext.id)
-                {
-                    if let Err(err) = pkt.header.set_extension(id as u8, data.clone()) {
-                        write_errs.push(Error::Rtp(err));
-                        continue;
-                    }
-                }
-            }
-
-            match b.write_stream.write_rtp_with_attributes(&pkt, attr).await {
-                Ok(m) => {
-                    n += m;
+            match self
+                .write_rtp_with_extensions_attributes_to_binding(&pkt, &extension_data, b)
+                .await
+            {
+                Ok(one_or_zero) => {
+                    n += one_or_zero;
                 }
                 Err(err) => {
                     write_errs.push(err);
@@ -163,6 +277,54 @@ impl TrackLocalStaticRTP {
         flatten_errs(write_errs)?;
         Ok(n)
     }
+
+    async fn write_rtp_with_attributes_to(
+        &self,
+        pkt: &rtp::packet::Packet,
+        binding_ssrc: u32,
+    ) -> Result<usize> {
+        self.write_rtp_with_extensions_attributes_to(pkt, &[], binding_ssrc)
+            .await
+    }
+
+    async fn write_rtp_with_extensions_attributes_to_binding(
+        &self,
+        p: &rtp::packet::Packet,
+        extension_data: &HashMap<Cow<'static, str>, Bytes>,
+        binidng: Arc<TrackBinding>,
+    ) -> Result<usize> {
+        let mut pkt = p.clone();
+
+        if binidng.is_sender_paused() {
+            // See caveat in function doc.
+            return Ok(0);
+        }
+        pkt.header.ssrc = binidng.ssrc;
+        pkt.header.payload_type = binidng.payload_type;
+
+        for ext in binidng.hdr_ext_ids.iter() {
+            let payload = ext.payload.to_owned();
+            if let Err(err) = pkt.header.set_extension(ext.id, payload) {
+                return Err(Error::Rtp(err));
+            }
+        }
+
+        for (uri, data) in extension_data.iter() {
+            if let Some(id) = binidng
+                .params
+                .header_extensions
+                .iter()
+                .find(|ext| &ext.uri == uri)
+                .map(|ext| ext.id)
+            {
+                if let Err(err) = pkt.header.set_extension(id as u8, data.clone()) {
+                    return Err(Error::Rtp(err));
+                }
+            }
+        }
+
+        binidng.write_stream.write_rtp_with_attributes(&pkt).await
+    }
 }
 
 #[async_trait]
@@ -171,6 +333,18 @@ impl TrackLocal for TrackLocalStaticRTP {
     /// This asserts that the code requested is supported by the remote peer.
     /// If so it setups all the state (SSRC and PayloadType) to have a call
     async fn bind(&self, t: &TrackLocalContext) -> Result<RTCRtpCodecParameters> {
+        if let Some(ittlw) = t
+            .write_stream
+            .as_any()
+            .downcast_ref::<InterceptorToTrackLocalWriter>()
+        {
+            let ptr = &ittlw.interceptor_rtp_writer as *const _ as *const u8;
+            unsafe {
+                let a_ptr = ptr as *const i32;
+                println!("a: {}", *a_ptr); // 42 (но это не гарантировано!)
+            }
+        }
+
         let parameters = RTCRtpCodecParameters {
             capability: self.codec.clone(),
             ..Default::default()
@@ -277,6 +451,10 @@ impl TrackLocal for TrackLocalStaticRTP {
 
 #[async_trait]
 impl TrackLocalWriter for TrackLocalStaticRTP {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     /// `write_rtp_with_attributes` writes a RTP Packet to the TrackLocalStaticRTP
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
@@ -286,13 +464,8 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// function are blocked internally. Care must be taken to not increase the sequence number
     /// while the sender is paused. While the actual _sending_ is blocked, the receiver will
     /// miss out when the sequence number "rolls over", which in turn will break SRTP.
-    async fn write_rtp_with_attributes(
-        &self,
-        pkt: &rtp::packet::Packet,
-        attr: &Attributes,
-    ) -> Result<usize> {
-        self.write_rtp_with_extensions_attributes(pkt, &[], attr)
-            .await
+    async fn write_rtp_with_attributes(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+        self.write_rtp_with_extensions_attributes(pkt, &[]).await
     }
 
     /// write writes a RTP Packet as a buffer to the TrackLocalStaticRTP

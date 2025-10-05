@@ -1097,20 +1097,18 @@ impl PeerConnectionInternal {
 
         // Packets that we read as part of simulcast probing that we need to make available
         // if we do find a track later.
-        let mut buffered_packets: VecDeque<(rtp::packet::Packet, Attributes)> = VecDeque::default();
+        let mut buffered_packets: VecDeque<rtp::packet::Packet> = VecDeque::default();
         let mut buf = vec![0u8; self.setting_engine.get_receive_mtu()];
 
         for _ in 0..=SIMULCAST_PROBE_COUNT {
-            let (pkt, a) = rtp_interceptor
-                .read(&mut buf, &stream_info.attributes)
-                .await?;
+            let pkt = rtp_interceptor.read(&mut buf).await?;
             let (mid, rid, rsid) = get_stream_mid_rid(
                 &pkt.header,
                 mid_extension_id as u8,
                 sid_extension_id as u8,
                 rsid_extension_id as u8,
             )?;
-            buffered_packets.push_back((pkt, a.clone()));
+            buffered_packets.push_back(pkt);
 
             if mid.is_empty() || (rid.is_empty() && rsid.is_empty()) {
                 continue;
@@ -1192,7 +1190,7 @@ impl PeerConnectionInternal {
             tokio::spawn(async move {
                 let mut b = vec![0u8; receive_mtu];
                 let pkt = match track.peek(&mut b).await {
-                    Ok((pkt, _)) => pkt,
+                    Ok(pkt) => pkt,
                     Err(err) => {
                         log::warn!(
                             "Could not determine PayloadType for SSRC {} ({})",
@@ -1531,11 +1529,7 @@ type IResult<T> = std::result::Result<T, interceptor::Error>;
 
 #[async_trait]
 impl RTCPWriter for PeerConnectionInternal {
-    async fn write(
-        &self,
-        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
-        _a: &Attributes,
-    ) -> IResult<usize> {
+    async fn write(&self, pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>]) -> IResult<usize> {
         Ok(self.dtls_transport.write_rtcp(pkts).await?)
     }
 }

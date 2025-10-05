@@ -30,12 +30,8 @@ impl ReceiverStream {
 #[async_trait]
 impl RTPReader for ReceiverStream {
     /// read a rtp packet
-    async fn read(
-        &self,
-        buf: &mut [u8],
-        attributes: &Attributes,
-    ) -> Result<(rtp::packet::Packet, Attributes)> {
-        let (pkt, attr) = self.parent_rtp_reader.read(buf, attributes).await?;
+    async fn read(&self, buf: &mut [u8]) -> Result<rtp::packet::Packet> {
+        let pkt = self.parent_rtp_reader.read(buf).await?;
 
         if let Some(mut ext) = pkt.header.get_extension(self.hdr_ext_id) {
             let tcc_ext = TransportCcExtension::unmarshal(&mut ext)?;
@@ -52,6 +48,6 @@ impl RTPReader for ReceiverStream {
                 .await;
         }
 
-        Ok((pkt, attr))
+        Ok(pkt)
     }
 }

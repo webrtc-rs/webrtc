@@ -19,7 +19,7 @@ use util::MarshalSize;
 use super::{inbound, outbound, StatsContainer};
 use crate::error::Result;
 use crate::stream_info::StreamInfo;
-use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
+use crate::{Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
 
 #[derive(Debug)]
 enum Message {
@@ -390,9 +390,8 @@ where
     async fn read(
         &self,
         buf: &mut [u8],
-        attributes: &Attributes,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
-        let (pkts, attributes) = self.rtcp_reader.read(buf, attributes).await?;
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
+        let pkts = self.rtcp_reader.read(buf).await?;
 
         // Middle 32 bits
         let now = (unix2ntp((self.now_gen)()) >> 16) as u32;
@@ -595,7 +594,7 @@ where
             futures::future::join_all(futures).await;
         }
 
-        Ok((pkts, attributes))
+        Ok(pkts)
     }
 }
 
@@ -610,11 +609,7 @@ impl<F> RTCPWriter for RTCPWriteInterceptor<F>
 where
     F: Fn() -> SystemTime + Send + Sync,
 {
-    async fn write(
-        &self,
-        pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
-        attributes: &Attributes,
-    ) -> Result<usize> {
+    async fn write(&self, pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>]) -> Result<usize> {
         #[derive(Default, Debug)]
         struct Entry {
             fir_count: Option<u64>,
@@ -691,7 +686,7 @@ where
             }
         }
 
-        self.rtcp_writer.write(pkts, attributes).await
+        self.rtcp_writer.write(pkts).await
     }
 }
 
@@ -714,12 +709,8 @@ impl fmt::Debug for RTPReadRecorder {
 
 #[async_trait]
 impl RTPReader for RTPReadRecorder {
-    async fn read(
-        &self,
-        buf: &mut [u8],
-        attributes: &Attributes,
-    ) -> Result<(rtp::packet::Packet, Attributes)> {
-        let (pkt, attributes) = self.rtp_reader.read(buf, attributes).await?;
+    async fn read(&self, buf: &mut [u8]) -> Result<rtp::packet::Packet> {
+        let pkt = self.rtp_reader.read(buf).await?;
 
         let _ = self
             .tx
@@ -734,7 +725,7 @@ impl RTPReader for RTPReadRecorder {
             })
             .await;
 
-        Ok((pkt, attributes))
+        Ok(pkt)
     }
 }
 
@@ -758,8 +749,8 @@ impl fmt::Debug for RTPWriteRecorder {
 #[async_trait]
 impl RTPWriter for RTPWriteRecorder {
     /// write a rtp packet
-    async fn write(&self, pkt: &rtp::packet::Packet, attributes: &Attributes) -> Result<usize> {
-        let n = self.rtp_writer.write(pkt, attributes).await?;
+    async fn write(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+        let n = self.rtp_writer.write(pkt).await?;
 
         let _ = self
             .tx

@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use arc_swap::ArcSwapOption;
-use interceptor::{Attributes, Interceptor};
+use interceptor::Interceptor;
 use portable_atomic::{AtomicU32, AtomicU8, AtomicUsize};
 use smol_str::SmolStr;
 use tokio::sync::Mutex;
@@ -32,7 +32,7 @@ struct Handlers {
 
 #[derive(Default)]
 struct TrackRemoteInternal {
-    peeked: VecDeque<(rtp::packet::Packet, Attributes)>,
+    peeked: VecDeque<rtp::packet::Packet>,
 }
 
 /// TrackRemote represents a single inbound source of media
@@ -214,14 +214,14 @@ impl TrackRemote {
     ///
     /// **Cancel Safety:** This method is not cancel safe. Dropping the resulting [`Future`] before
     /// it returns [`std::task::Poll::Ready`] will cause data loss.
-    pub async fn read(&self, b: &mut [u8]) -> Result<(rtp::packet::Packet, Attributes)> {
+    pub async fn read(&self, b: &mut [u8]) -> Result<rtp::packet::Packet> {
         {
             // Internal lock scope
             let mut internal = self.internal.lock().await;
-            if let Some((pkt, attributes)) = internal.peeked.pop_front() {
+            if let Some(pkt) = internal.peeked.pop_front() {
                 self.check_and_update_track(&pkt).await?;
 
-                return Ok((pkt, attributes));
+                return Ok(pkt);
             }
         };
 
@@ -230,9 +230,9 @@ impl TrackRemote {
             None => return Err(Error::ErrRTPReceiverNil),
         };
 
-        let (pkt, attributes) = receiver.read_rtp(b, self.tid).await?;
+        let pkt = receiver.read_rtp(b, self.tid).await?;
         self.check_and_update_track(&pkt).await?;
-        Ok((pkt, attributes))
+        Ok(pkt)
     }
 
     /// check_and_update_track checks payloadType for every incoming packet
@@ -269,25 +269,25 @@ impl TrackRemote {
     }
 
     /// read_rtp is a convenience method that wraps Read and unmarshals for you.
-    pub async fn read_rtp(&self) -> Result<(rtp::packet::Packet, Attributes)> {
+    pub async fn read_rtp(&self) -> Result<rtp::packet::Packet> {
         let mut b = vec![0u8; self.receive_mtu];
-        let (pkt, attributes) = self.read(&mut b).await?;
+        let pkt = self.read(&mut b).await?;
 
-        Ok((pkt, attributes))
+        Ok(pkt)
     }
 
     /// peek is like Read, but it doesn't discard the packet read
-    pub(crate) async fn peek(&self, b: &mut [u8]) -> Result<(rtp::packet::Packet, Attributes)> {
-        let (pkt, a) = self.read(b).await?;
+    pub(crate) async fn peek(&self, b: &mut [u8]) -> Result<rtp::packet::Packet> {
+        let pkt = self.read(b).await?;
 
         // this might overwrite data if somebody peeked between the Read
         // and us getting the lock.  Oh well, we'll just drop a packet in
         // that case.
         {
             let mut internal = self.internal.lock().await;
-            internal.peeked.push_back((pkt.clone(), a.clone()));
+            internal.peeked.push_back(pkt.clone());
         }
-        Ok((pkt, a))
+        Ok(pkt)
     }
 
     /// Set the initially peeked data for this track.
@@ -295,10 +295,7 @@ impl TrackRemote {
     /// This is useful when a track is first created to populate data read from the track in the
     /// process of identifying the track as part of simulcast probing. Using this during other
     /// parts of the track's lifecycle is probably an error.
-    pub(crate) async fn prepopulate_peeked_data(
-        &self,
-        data: VecDeque<(rtp::packet::Packet, Attributes)>,
-    ) {
+    pub(crate) async fn prepopulate_peeked_data(&self, data: VecDeque<rtp::packet::Packet>) {
         let mut internal = self.internal.lock().await;
         internal.peeked = data;
     }

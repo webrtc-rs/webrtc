@@ -15,9 +15,7 @@ use tokio::sync::Mutex;
 use crate::error::Result;
 use crate::nack::stream_support_nack;
 use crate::stream_info::StreamInfo;
-use crate::{
-    Attributes, Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader, RTPWriter,
-};
+use crate::{Interceptor, InterceptorBuilder, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
 
 /// GeneratorBuilder can be used to configure Responder Interceptor
 #[derive(Default)]
@@ -73,8 +71,7 @@ impl ResponderInternal {
                     let stream3 = Arc::clone(&stream2);
                     Box::pin(async move {
                         if let Some(p) = stream3.get(seq).await {
-                            let a = Attributes::new();
-                            if let Err(err) = stream3.next_rtp_writer.write(&p, &a).await {
+                            if let Err(err) = stream3.next_rtp_writer.write(&p).await {
                                 log::warn!("failed resending nacked packet: {err}");
                             }
                         }
@@ -101,9 +98,8 @@ impl RTCPReader for ResponderRtcpReader {
     async fn read(
         &self,
         buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
-        let (pkts, attr) = { self.parent_rtcp_reader.read(buf, a).await? };
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
+        let pkts = { self.parent_rtcp_reader.read(buf).await? };
         for p in &pkts {
             if let Some(nack) = p.as_any().downcast_ref::<TransportLayerNack>() {
                 let nack = nack.clone();
@@ -114,7 +110,7 @@ impl RTCPReader for ResponderRtcpReader {
             }
         }
 
-        Ok((pkts, attr))
+        Ok(pkts)
     }
 }
 

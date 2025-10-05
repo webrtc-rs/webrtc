@@ -24,7 +24,7 @@ impl SenderStream {
 #[async_trait]
 impl RTPWriter for SenderStream {
     /// write a rtp packet
-    async fn write(&self, pkt: &rtp::packet::Packet, a: &Attributes) -> Result<usize> {
+    async fn write(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
         let sequence_number = self.next_sequence_nr.fetch_add(1, Ordering::SeqCst);
 
         let tcc_ext = TransportCcExtension {
@@ -35,6 +35,6 @@ impl RTPWriter for SenderStream {
         let mut pkt = pkt.clone();
         pkt.header.set_extension(self.hdr_ext_id, tcc_payload)?;
 
-        self.next_rtp_writer.write(&pkt, a).await
+        self.next_rtp_writer.write(&pkt).await
     }
 }

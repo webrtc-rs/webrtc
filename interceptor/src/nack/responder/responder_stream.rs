@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::error::Result;
 use crate::nack::UINT16SIZE_HALF;
-use crate::{Attributes, RTPWriter};
+use crate::RTPWriter;
 
 struct ResponderStreamInternal {
     packets: Vec<Option<rtp::packet::Packet>>,
@@ -90,10 +90,10 @@ impl ResponderStream {
 #[async_trait]
 impl RTPWriter for ResponderStream {
     /// write a rtp packet
-    async fn write(&self, pkt: &rtp::packet::Packet, a: &Attributes) -> Result<usize> {
+    async fn write(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
         self.add(pkt).await;
 
-        self.next_rtp_writer.write(pkt, a).await
+        self.next_rtp_writer.write(pkt).await
     }
 }
 

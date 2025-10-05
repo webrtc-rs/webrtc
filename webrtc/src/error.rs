@@ -389,6 +389,9 @@ pub enum Error {
     #[error("SCTP is not established")]
     ErrSCTPNotEstablished,
 
+    #[error("LocalTrack binding not found")]
+    LocalTrackBindingNotFound,
+
     #[error("DataChannel is not opened")]
     ErrClosedPipe,
     #[error("Interceptor is not bind")]

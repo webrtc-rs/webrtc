@@ -150,16 +150,12 @@ impl GeneratorStream {
 #[async_trait]
 impl RTPReader for GeneratorStream {
     /// read a rtp packet
-    async fn read(
-        &self,
-        buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(rtp::packet::Packet, Attributes)> {
-        let (pkt, attr) = self.parent_rtp_reader.read(buf, a).await?;
+    async fn read(&self, buf: &mut [u8]) -> Result<rtp::packet::Packet> {
+        let pkt = self.parent_rtp_reader.read(buf).await?;
 
         self.add(pkt.header.sequence_number);
 
-        Ok((pkt, attr))
+        Ok(pkt)
     }
 }
 

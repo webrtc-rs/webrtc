@@ -6,7 +6,7 @@ use std::sync::{Arc, Weak};
 
 use ice::rand::generate_crypto_random_string;
 use interceptor::stream_info::{AssociatedStreamInfo, StreamInfo};
-use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
+use interceptor::{Interceptor, RTCPReader, RTPWriter};
 use portable_atomic::AtomicBool;
 use tokio::select;
 use tokio::sync::{watch, Mutex, Notify};
@@ -539,11 +539,10 @@ impl RTCRtpSender {
         let stop_called_rx = self.internal.stop_called_rx.clone();
 
         tokio::spawn(async move {
-            let attrs = Attributes::new();
             let mut b = vec![0u8; receive_mtu];
             while !stop_called_signal.load(Ordering::SeqCst) {
                 select! {
-                    r = rtcp_reader.read(&mut b, &attrs) => {
+                    r = rtcp_reader.read(&mut b) => {
                         if r.is_err() {
                             break
                         }
@@ -591,17 +590,16 @@ impl RTCRtpSender {
     pub async fn read(
         &self,
         b: &mut [u8],
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         tokio::select! {
             _ = self.wait_for_send() => {
                 let rtcp_interceptor = {
                     let track_encodings = self.track_encodings.lock().await;
                     track_encodings.first().map(|e|e.rtcp_interceptor.clone())
                 }.ok_or(Error::ErrInterceptorNotBind)?;
-                let a = Attributes::new();
                 tokio::select! {
                     _ = self.internal.stop_called_rx.notified() => Err(Error::ErrClosedPipe),
-                    result = rtcp_interceptor.read(b, &a) => Ok(result?),
+                    result = rtcp_interceptor.read(b) => Ok(result?),
                 }
             }
             _ = self.internal.stop_called_rx.notified() => Err(Error::ErrClosedPipe),
@@ -609,13 +607,11 @@ impl RTCRtpSender {
     }
 
     /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
-    pub async fn read_rtcp(
-        &self,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+    pub async fn read_rtcp(&self) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         let mut b = vec![0u8; self.receive_mtu];
-        let (pkts, attributes) = self.read(&mut b).await?;
+        let pkts = self.read(&mut b).await?;
 
-        Ok((pkts, attributes))
+        Ok(pkts)
     }
 
     /// ReadSimulcast reads incoming RTCP for this RTPSender for given rid
@@ -623,17 +619,16 @@ impl RTCRtpSender {
         &self,
         b: &mut [u8],
         rid: &str,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         tokio::select! {
             _ = self.wait_for_send() => {
                 let rtcp_interceptor = {
                     let track_encodings = self.track_encodings.lock().await;
                     track_encodings.iter().find(|e| e.track.rid() == Some(rid)).map(|e| e.rtcp_interceptor.clone())
                 }.ok_or(Error::ErrRTPSenderNoTrackForRID)?;
-                let a = Attributes::new();
                 tokio::select! {
                     _ = self.internal.stop_called_rx.notified() => Err(Error::ErrClosedPipe),
-                    result = rtcp_interceptor.read(b, &a) => Ok(result?),
+                    result = rtcp_interceptor.read(b) => Ok(result?),
                 }
             }
             _ = self.internal.stop_called_rx.notified() => Err(Error::ErrClosedPipe),
@@ -644,11 +639,11 @@ impl RTCRtpSender {
     pub async fn read_rtcp_simulcast(
         &self,
         rid: &str,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         let mut b = vec![0u8; self.receive_mtu];
-        let (pkts, attributes) = self.read_simulcast(&mut b, rid).await?;
+        let pkts = self.read_simulcast(&mut b, rid).await?;
 
-        Ok((pkts, attributes))
+        Ok(pkts)
     }
 
     /// Enables overriding outgoing `RTP` packets' `sequence number`s.

@@ -30,9 +30,8 @@ impl RTCPReader for ReceiverReportRtcpReader {
     async fn read(
         &self,
         buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
-        let (pkts, attr) = self.parent_rtcp_reader.read(buf, a).await?;
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
+        let pkts = self.parent_rtcp_reader.read(buf).await?;
 
         let now = if let Some(f) = &self.internal.now {
             f()
@@ -55,7 +54,7 @@ impl RTCPReader for ReceiverReportRtcpReader {
             }
         }
 
-        Ok((pkts, attr))
+        Ok(pkts)
     }
 }
 
@@ -112,8 +111,7 @@ impl ReceiverReport {
                     for stream in streams {
                         let pkt = stream.generate_report(now);
 
-                        let a = Attributes::new();
-                        if let Err(err) = rtcp_writer.write(&[Box::new(pkt)], &a).await{
+                        if let Err(err) = rtcp_writer.write(&[Box::new(pkt)]).await{
                             log::warn!("failed sending: {err}");
                         }
                     }

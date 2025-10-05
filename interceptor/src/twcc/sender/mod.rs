@@ -11,7 +11,7 @@ use sender_stream::SenderStream;
 use tokio::sync::Mutex;
 use util::Marshal;
 
-use crate::{Attributes, RTPWriter, *};
+use crate::{RTPWriter, *};
 
 pub(crate) const TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";

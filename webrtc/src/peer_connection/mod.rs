@@ -27,7 +27,7 @@ use ::sdp::description::session::*;
 use ::sdp::util::ConnectionRole;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
+use interceptor::{stats, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use portable_atomic::{AtomicBool, AtomicU64, AtomicU8};
 use rand::{rng, Rng};
@@ -1917,8 +1917,7 @@ impl RTCPeerConnection {
         &self,
         pkts: &[Box<dyn rtcp::packet::Packet + Send + Sync>],
     ) -> Result<usize> {
-        let a = Attributes::new();
-        Ok(self.interceptor_rtcp_writer.write(pkts, &a).await?)
+        Ok(self.interceptor_rtcp_writer.write(pkts).await?)
     }
 
     /// close ends the PeerConnection

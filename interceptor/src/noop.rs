@@ -59,12 +59,8 @@ impl Interceptor for NoOp {
 
 #[async_trait]
 impl RTPReader for NoOp {
-    async fn read(
-        &self,
-        _buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(rtp::packet::Packet, Attributes)> {
-        Ok((rtp::packet::Packet::default(), a.clone()))
+    async fn read(&self, _buf: &mut [u8]) -> Result<rtp::packet::Packet> {
+        Ok(rtp::packet::Packet::default())
     }
 }
 
@@ -73,8 +69,7 @@ impl RTCPReader for NoOp {
     async fn read(
         &self,
         _buf: &mut [u8],
-        a: &Attributes,
-    ) -> Result<(Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>, Attributes)> {
-        Ok((vec![], a.clone()))
+    ) -> Result<Vec<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
+        Ok(vec![])
     }
 }

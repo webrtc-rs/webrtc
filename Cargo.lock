@@ -399,6 +399,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -2819,6 +2820,7 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "bytes",
+ "chrono",
  "dtls",
  "env_logger",
  "hex",
