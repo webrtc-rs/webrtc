@@ -2,6 +2,7 @@
 mod track_local_static_test;
 
 pub mod packet_cache;
+pub mod track_local_simple;
 pub mod track_local_static_rtp;
 pub mod track_local_static_sample;
 
@@ -24,21 +25,13 @@ use crate::rtp_transceiver::*;
 /// TrackLocalWriter is the Writer for outbound RTP Packets
 #[async_trait]
 pub trait TrackLocalWriter: fmt::Debug {
-    fn as_any(&self) -> &dyn Any;
-
-    /// write_rtp_with_attributes encrypts a RTP packet and writes to the connection.
-    /// attributes are delivered to the interceptor chain
-    async fn write_rtp_with_attributes(&self, pkt: &rtp::packet::Packet) -> Result<usize>;
-
     /// write_rtp encrypts a RTP packet and writes to the connection
-    async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
-        self.write_rtp_with_attributes(pkt).await
-    }
+    async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize>;
 
     /// write encrypts and writes a full RTP packet
     async fn write(&self, mut b: &[u8]) -> Result<usize> {
         let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
-        self.write_rtp_with_attributes(&pkt).await
+        self.write_rtp(&pkt).await
     }
 }
 
@@ -171,11 +164,7 @@ impl std::fmt::Debug for InterceptorToTrackLocalWriter {
 
 #[async_trait]
 impl TrackLocalWriter for InterceptorToTrackLocalWriter {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    async fn write_rtp_with_attributes(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+    async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
         if self.is_sender_paused() {
             return Ok(0);
         }

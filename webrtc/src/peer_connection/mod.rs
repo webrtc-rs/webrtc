@@ -76,7 +76,9 @@ use crate::peer_connection::sdp::*;
 use crate::peer_connection::signaling_state::{
     check_next_signaling_state, RTCSignalingState, StateChangeOp,
 };
-use crate::rtp_transceiver::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
+use crate::rtp_transceiver::rtp_codec::{
+    RTCRtpCodecParameters, RTCRtpHeaderExtensionCapability, RTPCodecType,
+};
 use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
@@ -1803,6 +1805,19 @@ impl RTCPeerConnection {
         init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<RTCRtpTransceiver>> {
         self.internal.add_transceiver_from_kind(kind, init).await
+    }
+
+    pub async fn add_transceiver_from_params(
+        &self,
+        direction: RTCRtpTransceiverDirection,
+        kind: RTPCodecType,
+        stream_id: String,
+        ssrc: u32,
+        codecs: Vec<RTCRtpCodecParameters>,
+    ) -> Result<Arc<RTCRtpTransceiver>> {
+        self.internal
+            .add_transceiver_from_params(direction, kind, stream_id, ssrc, codecs)
+            .await
     }
 
     /// add_transceiver_from_track Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.

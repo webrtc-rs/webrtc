@@ -3,6 +3,7 @@ use std::sync::Weak;
 
 use super::*;
 use crate::api::setting_engine::SctpMaxMessageSize;
+use crate::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 use crate::rtp_transceiver::{create_stream_info, PayloadType};
 use crate::stats::stats_collector::StatsCollector;
 use crate::stats::{
@@ -631,6 +632,107 @@ impl PeerConnectionInternal {
             Some(Box::new(self.make_negotiation_needed_trigger())),
         )
         .await)
+    }
+
+    pub(super) async fn add_transceiver_from_params(
+        &self,
+        direction: RTCRtpTransceiverDirection,
+        kind: RTPCodecType,
+        stream_id: String,
+        ssrc: u32,
+        codecs: Vec<RTCRtpCodecParameters>,
+    ) -> Result<Arc<RTCRtpTransceiver>> {
+        if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed);
+        }
+
+        let t = match direction {
+            RTCRtpTransceiverDirection::Sendonly | RTCRtpTransceiverDirection::Sendrecv => {
+                let interceptor = self
+                    .interceptor
+                    .upgrade()
+                    .ok_or(Error::ErrInterceptorNotBind)?;
+
+                if direction == RTCRtpTransceiverDirection::Unspecified {
+                    return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport);
+                }
+
+                let r = Arc::new(RTCRtpReceiver::new(
+                    self.setting_engine.get_receive_mtu(),
+                    kind,
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    Arc::clone(&interceptor),
+                ));
+
+                let s = Arc::new(
+                    RTCRtpSender::new_by_ssrc(
+                        kind,
+                        Arc::clone(&self.dtls_transport),
+                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.setting_engine),
+                        Arc::clone(&interceptor),
+                        false,
+                        stream_id,
+                        ssrc,
+                    )
+                    .await,
+                );
+
+                RTCRtpTransceiver::new(
+                    r,
+                    s,
+                    direction,
+                    kind,
+                    codecs,
+                    Arc::clone(&self.media_engine),
+                    Some(Box::new(self.make_negotiation_needed_trigger())),
+                )
+                .await
+            }
+            RTCRtpTransceiverDirection::Recvonly => {
+                let interceptor = self
+                    .interceptor
+                    .upgrade()
+                    .ok_or(Error::ErrInterceptorNotBind)?;
+                let receiver = Arc::new(RTCRtpReceiver::new(
+                    self.setting_engine.get_receive_mtu(),
+                    kind,
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    Arc::clone(&interceptor),
+                ));
+
+                let sender = Arc::new(
+                    RTCRtpSender::new(
+                        None,
+                        kind,
+                        Arc::clone(&self.dtls_transport),
+                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.setting_engine),
+                        interceptor,
+                        false,
+                    )
+                    .await,
+                );
+
+                RTCRtpTransceiver::new(
+                    receiver,
+                    sender,
+                    direction,
+                    kind,
+                    vec![],
+                    Arc::clone(&self.media_engine),
+                    Some(Box::new(self.make_negotiation_needed_trigger())),
+                )
+                .await
+            }
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport),
+        };
+
+        self.add_rtp_transceiver(Arc::clone(&t)).await;
+
+        Ok(t)
     }
 
     /// add_rtp_transceiver appends t into rtp_transceivers

@@ -25,6 +25,7 @@ use crate::rtp_transceiver::{
     create_stream_info, PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters,
     RTCRtpTransceiver, SSRC,
 };
+use crate::track::track_local::track_local_simple::TrackLocalSimple;
 use crate::track::track_local::{InterceptorToTrackLocalWriter, TrackLocal, TrackLocalContext};
 
 pub(crate) struct RTPSenderInternal {
@@ -180,6 +181,77 @@ impl RTCRtpSender {
         ret
     }
 
+    pub async fn new_by_ssrc(
+        kind: RTPCodecType,
+        transport: Arc<RTCDtlsTransport>,
+        media_engine: Arc<MediaEngine>,
+        setting_engine: Arc<SettingEngine>,
+        interceptor: Arc<dyn Interceptor + Send + Sync>,
+        start_paused: bool,
+        stream_id: String,
+        ssrc: u32,
+    ) -> Self {
+        let id = generate_crypto_random_string(
+            32,
+            b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        );
+        let (send_called, _) = watch::channel(false);
+        let stop_called_tx = Arc::new(Notify::new());
+        let stop_called_rx = stop_called_tx.clone();
+        let stop_called_signal = Arc::new(AtomicBool::new(false));
+
+        let internal = Arc::new(RTPSenderInternal {
+            stop_called_rx,
+            stop_called_signal: Arc::clone(&stop_called_signal),
+        });
+
+        let seq_trans = Arc::new(SequenceTransformer::new());
+        let rtx_seq_trans = Arc::new(SequenceTransformer::new());
+
+        let stream_ids = vec![stream_id.clone()];
+        let ret = Self {
+            track_encodings: Mutex::new(vec![]),
+
+            seq_trans,
+            rtx_seq_trans,
+
+            transport,
+
+            kind,
+            payload_type: 0,
+            receive_mtu: setting_engine.get_receive_mtu(),
+            enable_rtx: setting_engine.enable_sender_rtx,
+
+            negotiated: AtomicBool::new(false),
+
+            media_engine,
+            interceptor,
+
+            id,
+            initial_track_id: std::sync::Mutex::new(None),
+            associated_media_stream_ids: std::sync::Mutex::new(stream_ids),
+
+            rtp_transceiver: SyncMutex::new(None),
+
+            send_called,
+            stop_called_tx,
+            stop_called_signal,
+
+            paused: Arc::new(AtomicBool::new(start_paused)),
+
+            internal,
+        };
+
+        {
+            let mut track_encodings = ret.track_encodings.lock().await;
+            let _ = ret
+                .add_encoding_internal_by_kind(&mut track_encodings, kind, ssrc, stream_id)
+                .await;
+        }
+
+        ret
+    }
+
     /// AddEncoding adds an encoding to RTPSender. Used by simulcast senders.
     pub async fn add_encoding(&self, track: Arc<dyn TrackLocal + Send + Sync>) -> Result<()> {
         let mut track_encodings = self.track_encodings.lock().await;
@@ -290,6 +362,52 @@ impl RTCRtpSender {
             context,
             ssrc,
             rtx,
+        };
+
+        track_encodings.push(encoding);
+
+        Ok(())
+    }
+
+    async fn add_encoding_internal_by_kind(
+        &self,
+        track_encodings: &mut Vec<TrackEncoding>,
+        kind: RTPCodecType,
+        ssrc: u32,
+        stream_id: String,
+    ) -> Result<()> {
+        let srtp_stream = Arc::new(SrtpWriterFuture {
+            closed: AtomicBool::new(false),
+            ssrc,
+            rtp_sender: Arc::downgrade(&self.internal),
+            rtp_transport: Arc::clone(&self.transport),
+            rtcp_read_stream: Mutex::new(None),
+            rtp_write_session: Mutex::new(None),
+            seq_trans: Arc::clone(&self.seq_trans),
+        });
+
+        let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
+        let rtcp_interceptor = self.interceptor.bind_rtcp_reader(srtp_rtcp_reader).await;
+
+        let write_stream = Arc::new(InterceptorToTrackLocalWriter::new(self.paused.clone()));
+        let context = TrackLocalContext {
+            id: self.id.clone(),
+            params: super::RTCRtpParameters::default(),
+            ssrc: 0,
+            write_stream,
+            paused: self.paused.clone(),
+            mid: None,
+        };
+
+        let track = TrackLocalSimple::new(kind, format!("{stream_id}_{kind}"), stream_id, ssrc);
+        let encoding = TrackEncoding {
+            track: Arc::new(track),
+            srtp_stream,
+            rtcp_interceptor,
+            stream_info: StreamInfo::default(),
+            context,
+            ssrc,
+            rtx: None,
         };
 
         track_encodings.push(encoding);
