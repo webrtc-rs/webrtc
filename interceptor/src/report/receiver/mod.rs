@@ -86,6 +86,8 @@ impl ReceiverReport {
         internal: Arc<ReceiverReportInternal>,
     ) -> Result<()> {
         let mut ticker = tokio::time::interval(internal.interval);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
         let mut close_rx = {
             let mut close_rx = internal.close_rx.lock().await;
             if let Some(close) = close_rx.take() {
