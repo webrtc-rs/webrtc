@@ -240,7 +240,9 @@ impl Candidate for CandidateBase {
         {
             let mut closed_ch = self.closed_ch.lock().await;
             if closed_ch.is_none() {
-                return Err(Error::ErrClosed);
+                // Если кандидат уже был ранее закрыт, не возвращать ошибку, а просто вернуть успех
+                return Ok(());
+                // return Err(Error::ErrClosed);
             }
             closed_ch.take();
         }

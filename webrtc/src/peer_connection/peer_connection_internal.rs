@@ -335,7 +335,14 @@ impl PeerConnectionInternal {
                         return;
                     }
                     Err(err) => {
-                        log::warn!("Failed to accept RTP {err}");
+                        match err {
+                            // Если агент уже закрыт, то не показываем сообщение об ошибке
+                            srtp::Error::SessionSrtpAlreadyClosed => {}
+                            _ => {
+                                log::warn!("Failed to accept RTP {err}");
+                            }
+                        }
+
                         return;
                     }
                 };
@@ -401,7 +408,14 @@ impl PeerConnectionInternal {
                             );
                         }
                         Err(err) => {
-                            log::warn!("Failed to accept RTCP {err}");
+                            match err {
+                                // TODO: убедиться, что нет проблемы с этим кодом
+                                srtp::Error::SessionSrtpAlreadyClosed => {}
+                                _ => {
+                                    log::warn!("Failed to accept RTCP {err}");
+                                }
+                            }
+
                             return;
                         }
                     };

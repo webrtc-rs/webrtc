@@ -80,6 +80,23 @@ impl MediaDescription {
         None
     }
 
+    pub fn attributes(&self, key: &str) -> Vec<String> {
+        let mut atrs = vec![];
+        for a in &self.attributes {
+            if a.key == key {
+                match a.value.as_ref().map(|s| s.to_owned()) {
+                    Some(atr_value) => {
+                        atrs.push(atr_value);
+                    }
+                    None => {
+                        atrs.push(String::new());
+                    }
+                }
+            }
+        }
+        atrs
+    }
+
     /// new_jsep_media_description creates a new MediaName with
     /// some settings that are required by the JSEP spec.
     pub fn new_jsep_media_description(codec_type: String, _codec_prefs: Vec<&str>) -> Self {

@@ -33,12 +33,11 @@ impl PCacheBuffer {
         (seq as usize) & self.capacity
     }
 
-    pub fn put(&self, pkt: &Packet) {
-        let seq = pkt.header.sequence_number;
-        let idx = self.idx(seq);
+    pub fn put(&self, packet: Packet) {
+        let idx = self.idx(packet.header.sequence_number);
         let mut slots = self.slots.write();
         slots[idx] = Some(PCache {
-            packet: pkt.clone(),
+            packet,
             first_sent_at: Instant::now(),
         });
     }
@@ -48,11 +47,18 @@ impl PCacheBuffer {
         let slots = self.slots.read();
         let some = slots.get(idx)?.as_ref()?;
         if some.packet.header.sequence_number != seq {
-            println!("Коллизия кольца");
+            println!(
+                "Коллизия кольца: запрошен seq={seq}. В кеше seq={}",
+                some.packet.header.sequence_number
+            );
             return None; // коллизия кольца (wrap)
         }
-        if some.first_sent_at.elapsed() > self.ttl {
-            println!("Пакет просрочен");
+        let elapsed = some.first_sent_at.elapsed();
+        if elapsed > self.ttl {
+            println!(
+                "Пакет просрочен. Прошло {:?}, что больше ttl = {:?}",
+                elapsed, self.ttl
+            );
             return None; // просрочен
         }
         Some(some.packet.clone())
