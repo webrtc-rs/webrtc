@@ -66,6 +66,7 @@ impl PCacheBuffer {
 }
 
 // Вспомогательная функция разворачивания NACK-пар (packet_id + bitmask -> список seq)
+// Разворачиваем список потерянных SN из NACK-пар
 pub fn expand_nack_pairs(pairs: &[NackPair]) -> Vec<u16> {
     let mut out = Vec::with_capacity(pairs.len() * 8);
     for p in pairs {

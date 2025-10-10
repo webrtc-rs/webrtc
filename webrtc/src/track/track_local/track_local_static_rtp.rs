@@ -1,6 +1,7 @@
 use bytes::{Bytes, BytesMut};
 use rtp::packet::Packet;
 use std::any::Any;
+use std::sync::atomic::AtomicU64;
 use std::{borrow::Cow, collections::HashMap, time::Duration};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, Mutex};
@@ -94,10 +95,13 @@ pub struct TrackLocalStaticRTP {
 
     pub state: Mutex<TrackState>,
     pub rtp_cache: Arc<PCacheBuffer>,
+
+    pli_last_ms: AtomicU64,
+    pli_interval_ms: u64,
 }
 
 /// Количество пакетов в кэше
-const CAPACITY: usize = 128; // если 24 пакета в секунду, то на 3 секунды нужно 72 ячейки кэша
+const CAPACITY: usize = 256; // если 24 пакета в секунду, то на 3 секунды нужно 72 ячейки кэша
 
 /// TTL в миллисекундах, время через которое кэш становится невалидным
 const TTL_MILLIS: u64 = 3000;
@@ -117,6 +121,9 @@ impl TrackLocalStaticRTP {
                 Duration::from_millis(TTL_MILLIS),
                 CAPACITY,
             )),
+
+            pli_last_ms: AtomicU64::new(0),
+            pli_interval_ms: 500,
         }
     }
 
@@ -139,6 +146,9 @@ impl TrackLocalStaticRTP {
                 Duration::from_millis(TTL_MILLIS),
                 CAPACITY,
             )),
+
+            pli_last_ms: AtomicU64::new(0),
+            pli_interval_ms: 500,
         }
     }
 
@@ -159,6 +169,19 @@ impl TrackLocalStaticRTP {
         bindings
             .iter()
             .all(|b| b.sender_paused.load(Ordering::SeqCst))
+    }
+
+    pub async fn is_binding_active(&self, binding_ssrc: u32) -> bool {
+        match {
+            let bindings = self.bindings.lock().await;
+            bindings
+                .iter()
+                .find(|b| b.ssrc == binding_ssrc)
+                .map(|b| b.clone())
+        } {
+            Some(b) => !b.is_sender_paused(),
+            None => false,
+        }
     }
 
     /// Выполняется, когда мы изменяем источник данных для трека
@@ -215,6 +238,11 @@ impl TrackLocalStaticRTP {
     pub async fn bindings_ssrc(&self) -> Vec<u32> {
         let bindings = self.bindings.lock().await;
         bindings.iter().map(|b| b.ssrc).collect()
+    }
+
+    pub async fn bindings_ids(&self) -> Vec<String> {
+        let bindings = self.bindings.lock().await;
+        bindings.iter().map(|b| b.id.clone()).collect()
     }
 
     pub async fn write_rtp_with_extensions_to(
@@ -346,6 +374,45 @@ impl TrackLocalStaticRTP {
         pkt.header.timestamp = timestamp;
         self.write_rtp_with_extensions_to(&pkt, &[], binding_ssrc)
             .await
+    }
+
+    pub async fn set_muted(&self, muted: bool) {
+        let bindings = {
+            let bindings = self.bindings.lock().await;
+            bindings.clone()
+        };
+        bindings.iter().for_each(|b| {
+            b.set_sender_paused(muted);
+        });
+    }
+
+    pub async fn set_muted_for(&self, muted: bool, bindings_ssrc: Vec<u32>) {
+        let bindings = {
+            let bindings = self.bindings.lock().await;
+            bindings.clone()
+        };
+        bindings.iter().for_each(|b| {
+            if bindings_ssrc.contains(&b.ssrc) {
+                b.set_sender_paused(muted);
+            }
+        });
+    }
+
+    pub fn should_fire_pli(&self, now_ms: u64) -> bool {
+        loop {
+            let prev = self.pli_last_ms.load(Ordering::Relaxed);
+            if now_ms.saturating_sub(prev) < self.pli_interval_ms {
+                return false;
+            }
+            if self
+                .pli_last_ms
+                .compare_exchange(prev, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                return true;
+            }
+            // кто-то другой успел обновить last_ms — пробуем снова
+        }
     }
 
     async fn write_rtp_with_extensions_to_binding(

@@ -136,6 +136,10 @@ impl TrackBinding {
     pub fn is_sender_paused(&self) -> bool {
         self.sender_paused.load(Ordering::SeqCst)
     }
+
+    pub fn set_sender_paused(&self, sender_paused: bool) {
+        self.sender_paused.store(sender_paused, Ordering::SeqCst);
+    }
 }
 
 pub(crate) struct InterceptorToTrackLocalWriter {
