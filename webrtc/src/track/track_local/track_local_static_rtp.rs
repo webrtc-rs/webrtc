@@ -386,14 +386,14 @@ impl TrackLocalStaticRTP {
         });
     }
 
-    pub async fn set_muted_for(&self, muted: bool, bindings_ssrc: Vec<u32>) {
+    pub async fn set_muted_for(&self, bindings_ssrc: Vec<(u32, bool)>) {
         let bindings = {
             let bindings = self.bindings.lock().await;
             bindings.clone()
         };
         bindings.iter().for_each(|b| {
-            if bindings_ssrc.contains(&b.ssrc) {
-                b.set_sender_paused(muted);
+            if let Some((_, muted)) = bindings_ssrc.iter().find(|(ssrc, _)| *ssrc == b.ssrc) {
+                b.set_sender_paused(*muted);
             }
         });
     }
