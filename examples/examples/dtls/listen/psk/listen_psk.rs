@@ -57,9 +57,12 @@ async fn main() -> Result<(), Error> {
     let host = matches.value_of("host").unwrap().to_owned();
 
     let cfg = Config {
-        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>, Error> {
-            println!("Client's hint: {}", String::from_utf8(hint.to_vec())?);
-            Ok(vec![0xAB, 0xC1, 0x23])
+        psk: Some(Arc::new(|hint: &[u8]| {
+            let hint = hint.to_owned();
+            Box::pin(async move {
+                println!("Client's hint: {}", String::from_utf8(hint.to_vec())?);
+                Ok(vec![0xAB, 0xC1, 0x23])
+            })
         })),
         psk_identity_hint: Some("webrtc-rs DTLS Client".as_bytes().to_vec()),
         cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],

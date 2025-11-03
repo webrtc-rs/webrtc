@@ -62,9 +62,12 @@ async fn main() -> Result<(), Error> {
     println!("connecting {server}..");
 
     let config = Config {
-        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>, Error> {
-            println!("Server's hint: {}", String::from_utf8(hint.to_vec())?);
-            Ok(vec![0xAB, 0xC1, 0x23])
+        psk: Some(Arc::new(|hint: &[u8]| {
+            let hint = hint.to_owned();
+            Box::pin(async move {
+                println!("Server's hint: {}", String::from_utf8(hint.to_vec())?);
+                Ok(vec![0xAB, 0xC1, 0x23])
+            })
         })),
         psk_identity_hint: Some("webrtc-rs DTLS Server".as_bytes().to_vec()),
         cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
