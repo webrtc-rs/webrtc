@@ -290,7 +290,8 @@ impl Flight for Flight4 {
 
                     let mut pre_master_secret = vec![];
                     if let Some(local_psk_callback) = &cfg.local_psk_callback {
-                        let psk = match local_psk_callback(&client_key_exchange.identity_hint) {
+                        let psk = match local_psk_callback(&client_key_exchange.identity_hint).await
+                        {
                             Ok(psk) => psk,
                             Err(err) => {
                                 return Err((

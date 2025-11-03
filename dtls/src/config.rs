@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use tokio::time::Duration;
@@ -131,7 +133,8 @@ pub(crate) const DEFAULT_MTU: usize = 1200; // bytes
 
 // PSKCallback is called once we have the remote's psk_identity_hint.
 // If the remote provided none it will be nil
-pub(crate) type PskCallback = Arc<dyn (Fn(&[u8]) -> Result<Vec<u8>>) + Send + Sync>;
+pub(crate) type PskCallback =
+    Arc<dyn (Fn(&[u8]) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>>) + Send + Sync>;
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
