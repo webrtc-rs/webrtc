@@ -284,7 +284,7 @@ impl PeerConnectionInternal {
             }
         }
 
-        self.start_rtp_receivers(&mut track_details, &current_transceivers)
+        self.start_rtp_receivers(&mut track_details, &current_transceivers, is_renegotiation)
             .await?;
         if let Some(parsed_remote) = &remote_desc.parsed {
             let current_local_desc = self.current_local_description.lock().await;
@@ -418,17 +418,23 @@ impl PeerConnectionInternal {
         self: &Arc<Self>,
         incoming_tracks: &mut Vec<TrackDetails>,
         local_transceivers: &[Arc<RTCRtpTransceiver>],
+        is_renegotiation: bool,
     ) -> Result<()> {
-        // Ensure we haven't already started a transceiver for this ssrc
+        // Ensure we haven't already started a transceiver for this ssrc.
+        // Skip filtering during renegotiation since receiver reuse logic handles it.
         let mut filtered_tracks = incoming_tracks.clone();
-        for incoming_track in incoming_tracks {
-            // If we already have a TrackRemote for a given SSRC don't handle it again
-            for t in local_transceivers {
-                let receiver = t.receiver().await;
-                for track in receiver.tracks().await {
-                    for ssrc in &incoming_track.ssrcs {
-                        if *ssrc == track.ssrc() {
-                            filter_track_with_ssrc(&mut filtered_tracks, track.ssrc());
+
+        if !is_renegotiation {
+            for incoming_track in incoming_tracks {
+                // If we already have a TrackRemote for a given SSRC don't handle it again
+                for t in local_transceivers {
+                    let receiver = t.receiver().await;
+                    let existing_tracks = receiver.tracks().await;
+                    for track in existing_tracks {
+                        for ssrc in &incoming_track.ssrcs {
+                            if *ssrc == track.ssrc() {
+                                filter_track_with_ssrc(&mut filtered_tracks, track.ssrc());
+                            }
                         }
                     }
                 }
@@ -450,10 +456,31 @@ impl PeerConnectionInternal {
                     continue;
                 }
 
+                // Fix(issue-749): Handle receiver reuse during renegotiation in mesh topology.
+                //
+                // During SDP renegotiation, the same tracks (SSRCs) legitimately appear in
+                // subsequent negotiation rounds per RFC 8829 Section 3.7. Receivers that are
+                // already active should be recognized as handling their existing tracks rather
+                // than being skipped and marked as "NOT HANDLED".
+                //
+                // Root cause: The original code didn't distinguish between initial negotiation
+                // (where skipping active receivers prevents duplicates) and renegotiation
+                // (where active receivers represent existing media flows to preserve).
                 let receiver = t.receiver().await;
-                if receiver.have_received().await {
-                    continue;
+                let already_receiving = receiver.have_received().await;
+
+                if already_receiving {
+                    if !is_renegotiation {
+                        // Initial negotiation: skip if already receiving (safety check)
+                        continue;
+                    } else {
+                        // Renegotiation: receiver already active, mark as handled
+                        track_handled = true;
+                        break;
+                    }
                 }
+
+                // Start receiver for new tracks only
                 PeerConnectionInternal::start_receiver(
                     self.setting_engine.get_receive_mtu(),
                     incoming_track,
