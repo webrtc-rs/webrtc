@@ -1,7 +1,10 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::time::SystemTime;
 
 use rand::Rng;
 use rustls::pki_types::CertificateDer;
+use tokio::time::sleep;
 use util::conn::conn_pipe::*;
 use util::KeyingMaterialExporter;
 
@@ -79,24 +82,27 @@ async fn pipe_conn(
     Ok((client, sever))
 }
 
-fn psk_callback_client(hint: &[u8]) -> Result<Vec<u8>> {
+fn psk_callback_client(hint: &[u8]) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>> {
     trace!(
         "Server's hint: {}",
         String::from_utf8(hint.to_vec()).unwrap()
     );
-    Ok(vec![0xAB, 0xC1, 0x23])
+    Box::pin(async move { Ok(vec![0xAB, 0xC1, 0x23]) })
 }
 
-fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>> {
+fn psk_callback_server(hint: &[u8]) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>> {
     trace!(
         "Client's hint: {}",
         String::from_utf8(hint.to_vec()).unwrap()
     );
-    Ok(vec![0xAB, 0xC1, 0x23])
+    Box::pin(async move {
+        sleep(Duration::from_millis(1)).await; // Now it's possible to await in the psk callback
+        Ok(vec![0xAB, 0xC1, 0x23])
+    })
 }
 
-fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>> {
-    Err(Error::Other(ERR_PSK_REJECTED.to_owned()))
+fn psk_callback_hint_fail(_hint: &[u8]) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>> {
+    Box::pin(async move { Err(Error::Other(ERR_PSK_REJECTED.to_owned())) })
 }
 
 async fn create_test_client(
@@ -1617,7 +1623,7 @@ async fn test_cipher_suite_configuration() -> Result<()> {
                     assert!(cipher_suite.is_some(), "{name} expected some, but got none");
                     if let Some(cs) = &*cipher_suite {
                         assert_eq!(cs.id(), want_cs,
-                                   "test_cipher_suite_configuration: Server Selected Bad Cipher Suite '{}': expected({}) actual({})", 
+                                   "test_cipher_suite_configuration: Server Selected Bad Cipher Suite '{}': expected({}) actual({})",
                                    name, want_cs, cs.id());
                     }
                 }
@@ -1630,8 +1636,8 @@ async fn test_cipher_suite_configuration() -> Result<()> {
     Ok(())
 }
 
-fn psk_callback(_b: &[u8]) -> Result<Vec<u8>> {
-    Ok(vec![0x00, 0x01, 0x02])
+fn psk_callback(_b: &[u8]) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>> {
+    Box::pin(async move { Ok(vec![0x00, 0x01, 0x02]) })
 }
 
 #[tokio::test]
