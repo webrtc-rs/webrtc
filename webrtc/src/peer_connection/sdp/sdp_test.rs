@@ -1448,7 +1448,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
 
 #[test]
 fn test_get_rids() {
-    let m = vec![MediaDescription {
+    let m = [MediaDescription {
         media_name: MediaName {
             media: "video".to_owned(),
             ..Default::default()

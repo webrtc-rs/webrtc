@@ -867,8 +867,12 @@ async fn test_receiver_reuse_during_renegotiation_issue_749() -> Result<()> {
         "stream_initial".to_owned(),
     ));
 
-    pc_offer.add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>).await?;
-    pc_offer.add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>).await?;
+    pc_offer
+        .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
+    pc_offer
+        .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
 
     // Step 2: Perform initial negotiation
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
@@ -921,7 +925,9 @@ async fn test_receiver_reuse_during_renegotiation_issue_749() -> Result<()> {
         "stream_new".to_owned(),
     ));
 
-    pc_offer.add_track(new_video_track as Arc<dyn TrackLocal + Send + Sync>).await?;
+    pc_offer
+        .add_track(new_video_track as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
 
     // Step 5: Perform renegotiation
     let reoffer = pc_offer.create_offer(None).await?;

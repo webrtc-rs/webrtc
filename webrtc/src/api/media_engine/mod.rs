@@ -105,7 +105,7 @@ impl MediaEngine {
     /// register_default_codecs is not safe for concurrent use.
     pub fn register_default_codecs(&mut self) -> Result<()> {
         // Default Audio Codecs
-        for codec in vec![
+        for codec in [
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),

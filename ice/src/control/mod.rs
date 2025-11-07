@@ -108,17 +108,12 @@ impl Getter for AttrControl {
 
 /// Represents ICE agent role, which can be controlling or controlled.
 /// Possible ICE agent roles.
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(Default, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Role {
+    #[default]
     Controlling,
     Controlled,
     Unspecified,
-}
-
-impl Default for Role {
-    fn default() -> Self {
-        Self::Controlling
-    }
 }
 
 impl From<&str> for Role {

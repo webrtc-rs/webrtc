@@ -12,22 +12,17 @@ use uuid::Uuid;
 use crate::error::Result;
 
 /// Represents the different Multicast modes that ICE can run.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum MulticastDnsMode {
     /// Means remote mDNS candidates will be discarded, and local host candidates will use IPs.
     Disabled,
 
     /// Means remote mDNS candidates will be accepted, and local host candidates will use IPs.
+    #[default]
     QueryOnly,
 
     /// Means remote mDNS candidates will be accepted, and local host candidates will use mDNS.
     QueryAndGather,
-}
-
-impl Default for MulticastDnsMode {
-    fn default() -> Self {
-        Self::QueryOnly
-    }
 }
 
 pub(crate) fn generate_multicast_dns_name() -> String {

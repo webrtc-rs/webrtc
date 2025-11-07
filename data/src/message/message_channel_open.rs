@@ -17,10 +17,11 @@ pub const CHANNEL_PRIORITY_NORMAL: u16 = 256;
 pub const CHANNEL_PRIORITY_HIGH: u16 = 512;
 pub const CHANNEL_PRIORITY_EXTRA_HIGH: u16 = 1024;
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Default, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum ChannelType {
     // `Reliable` determines the Data Channel provides a
     // reliable in-order bi-directional communication.
+    #[default]
     Reliable,
     // `ReliableUnordered` determines the Data Channel
     // provides a reliable unordered bi-directional communication.
@@ -44,12 +45,6 @@ pub enum ChannelType {
     // after a specified life-time given in milli- seconds in the Reliability Parameter.
     // This life-time starts when providing the user message to the protocol stack.
     PartialReliableTimedUnordered,
-}
-
-impl Default for ChannelType {
-    fn default() -> Self {
-        Self::Reliable
-    }
 }
 
 impl MarshalSize for ChannelType {

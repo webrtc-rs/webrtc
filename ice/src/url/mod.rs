@@ -9,7 +9,7 @@ use stun::{DEFAULT_PORT, DEFAULT_TLS_PORT};
 use crate::error::*;
 
 /// The type of server used in the ice.URL structure.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum SchemeType {
     /// The URL represents a STUN server.
     Stun,
@@ -24,13 +24,8 @@ pub enum SchemeType {
     Turns,
 
     /// Default public constant to use for "enum" like struct comparisons when no value was defined.
+    #[default]
     Unknown,
-}
-
-impl Default for SchemeType {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl From<&str> for SchemeType {
@@ -61,21 +56,16 @@ impl fmt::Display for SchemeType {
 }
 
 /// The transport protocol type that is used in the `ice::url::Url` structure.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum ProtoType {
     /// The URL uses a UDP transport.
+    #[default]
     Udp,
 
     /// The URL uses a TCP transport.
     Tcp,
 
     Unknown,
-}
-
-impl Default for ProtoType {
-    fn default() -> Self {
-        Self::Udp
-    }
 }
 
 // defines a procedure for creating a new ProtoType from a raw

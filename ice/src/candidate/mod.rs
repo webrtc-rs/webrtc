@@ -89,9 +89,10 @@ pub trait Candidate: fmt::Display {
 }
 
 /// Represents the type of candidate `CandidateType` enum.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidateType {
     #[serde(rename = "unspecified")]
+    #[default]
     Unspecified,
     #[serde(rename = "host")]
     Host,
@@ -114,12 +115,6 @@ impl fmt::Display for CandidateType {
             CandidateType::Unspecified => "Unknown candidate type",
         };
         write!(f, "{s}")
-    }
-}
-
-impl Default for CandidateType {
-    fn default() -> Self {
-        Self::Unspecified
     }
 }
 
@@ -171,9 +166,10 @@ impl fmt::Display for CandidateRelatedAddress {
 }
 
 /// Represent the ICE candidate pair state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidatePairState {
     #[serde(rename = "unspecified")]
+    #[default]
     Unspecified = 0,
 
     /// Means a check has not been performed for this pair.
@@ -203,12 +199,6 @@ impl From<u8> for CandidatePairState {
             4 => Self::Succeeded,
             _ => Self::Unspecified,
         }
-    }
-}
-
-impl Default for CandidatePairState {
-    fn default() -> Self {
-        Self::Unspecified
     }
 }
 

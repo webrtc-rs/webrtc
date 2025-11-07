@@ -22,9 +22,10 @@ pub fn supported_network_types() -> Vec<NetworkType> {
 }
 
 /// Represents the type of network.
-#[derive(PartialEq, Debug, Copy, Clone, Eq, Hash, Serialize, Deserialize)]
+#[derive(Default, PartialEq, Debug, Copy, Clone, Eq, Hash, Serialize, Deserialize)]
 pub enum NetworkType {
     #[serde(rename = "unspecified")]
+    #[default]
     Unspecified,
 
     /// Indicates UDP over IPv4.
@@ -66,12 +67,6 @@ impl fmt::Display for NetworkType {
             Self::Unspecified => "unspecified",
         };
         write!(f, "{s}")
-    }
-}
-
-impl Default for NetworkType {
-    fn default() -> Self {
-        Self::Unspecified
     }
 }
 
