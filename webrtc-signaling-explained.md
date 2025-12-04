@@ -16,7 +16,7 @@ This includes exchanging:
 WebRTC peers cannot discover each other on their own.
 
 They need to:
-- agree on codecs and media setup
+- agree on codecs, media and datachannel setup
 - share network information
 - exchange security fingerprints
 
@@ -75,7 +75,7 @@ Contain:
 6. Peer B sends Answer back via signaling channel
 7. Both sides exchange ICE Candidates
 8. ICE finds a working route
-9. Peers connect directly
+9. Peers connect directly (or through a TURN relay, but still end-to-end encrypted)
 
 
 ## Signaling Server Responsibilities
@@ -95,7 +95,7 @@ It does *not*:
 
 Once the WebRTC connection is established:
 - the signaling server is no longer required
-- peers communicate directly (unless TURN is used)
+- peers communicate directly (unless TURN is used when the peers are behind restrictive NAT)
 
 
 ## Simplified Diagram
