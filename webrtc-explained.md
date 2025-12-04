@@ -64,10 +64,10 @@ Protocol used by WebRTC Data Channels.
 
 Provides:
 - multiple streams
-- partial reliability
+- configurable reliability
 - no head-of-line blocking
 
-Runs inside DTLS.
+Runs inside DTLS. Can be configured to be TCP-like or UDP-like or anything in between.  
 
 ## DTLS (Datagram TLS)
 TLS over UDP.
@@ -77,6 +77,8 @@ Used for:
 - negotiating encryption keys
 - securing SCTP
 - securing SRTP
+
+DTLS does not typically go through CA Root Verification in WebRTC; it is verified in the signalling phase using the key fingerprint. 
 
 ## mDNS
 Masks local LAN IP addresses for privacy (e.g. *.local hostnames).
@@ -126,3 +128,13 @@ Commonly includes:
 - timers
 - UUID helpers
 
+
+## Interoperability 
+Check [WebRTC interoperability tests](https://github.com/sipsorcery/webrtc-interop) for samples in other WebRTC libraries like libwebrtc, pion, SipSorcery and whether they can interoperate with each other. 
+
+## Extras
+### Selective Forwarding Unit (SFU)
+This is not peer-to-peer WebRTC; a central server manages the media streams. This is how certain "mute" functions or noise detection is implemented in multiuser video conferencing. Used to restrict audio/video flow from users, due to administrative controls or due to being "idle" in a video/audio call.  
+
+### Multipoint Control Unit (MCU)
+This is an alternate architecture to the above, still not peer to peer but the central server itself takes the responsibility to mix/re-encode the streams.  
