@@ -166,17 +166,17 @@ impl AgentConn {
 #[async_trait]
 impl Conn for AgentConn {
     async fn connect(&self, _addr: SocketAddr) -> std::result::Result<(), util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv(&self, buf: &mut [u8]) -> std::result::Result<usize, util::Error> {
         if self.done.load(Ordering::SeqCst) {
-            return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed").into());
+            return Err(io::Error::other("Conn is closed").into());
         }
 
         let n = match self.buffer.read(buf, None).await {
             Ok(n) => n,
-            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
+            Err(err) => return Err(io::Error::other(err.to_string()).into()),
         };
         self.bytes_received.fetch_add(n, Ordering::SeqCst);
 
@@ -191,13 +191,13 @@ impl Conn for AgentConn {
             let n = self.recv(buf).await?;
             Ok((n, raddr))
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+            Err(io::Error::other("Not applicable").into())
         }
     }
 
     async fn send(&self, buf: &[u8]) -> std::result::Result<usize, util::Error> {
         if self.done.load(Ordering::SeqCst) {
-            return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed").into());
+            return Err(io::Error::other("Conn is closed").into());
         }
 
         if is_message(buf) {
@@ -217,7 +217,7 @@ impl Conn for AgentConn {
                 self.bytes_sent.fetch_add(buf.len(), Ordering::SeqCst);
                 Ok(n)
             }
-            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
+            Err(err) => Err(io::Error::other(err.to_string()).into()),
         }
     }
 
@@ -226,7 +226,7 @@ impl Conn for AgentConn {
         _buf: &[u8],
         _target: SocketAddr,
     ) -> std::result::Result<usize, util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     fn local_addr(&self) -> std::result::Result<SocketAddr, util::Error> {

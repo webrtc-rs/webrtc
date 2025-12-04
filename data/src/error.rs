@@ -48,7 +48,7 @@ impl From<Error> for io::Error {
             e @ Error::ErrStreamClosed => {
                 io::Error::new(io::ErrorKind::ConnectionAborted, e.to_string())
             }
-            e => io::Error::new(io::ErrorKind::Other, e.to_string()),
+            e => io::Error::other(e.to_string()),
         }
     }
 }

@@ -49,7 +49,7 @@ impl Fmtp for H264Fmtp {
     ///     Informative note: The requirement for symmetric use does not
     ///     apply for the level part of profile-level-id and does not apply
     ///     for the other stream properties and capability parameters.
-    fn match_fmtp(&self, f: &(dyn Fmtp)) -> bool {
+    fn match_fmtp(&self, f: &dyn Fmtp) -> bool {
         if let Some(c) = f.as_any().downcast_ref::<H264Fmtp>() {
             // test packetization-mode
             let hpmode = match self.parameters.get("packetization-mode") {
@@ -89,14 +89,11 @@ impl Fmtp for H264Fmtp {
         self.parameters.get(key)
     }
 
-    fn equal(&self, other: &(dyn Fmtp)) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<H264Fmtp>()
-            .map_or(false, |a| self == a)
+    fn equal(&self, other: &dyn Fmtp) -> bool {
+        other.as_any().downcast_ref::<H264Fmtp>() == Some(self)
     }
 
-    fn as_any(&self) -> &(dyn Any) {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

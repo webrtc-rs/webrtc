@@ -147,8 +147,8 @@ impl AssociationInternal {
             reconfigs: HashMap::new(),
             reconfig_requests: HashMap::new(),
 
-            source_port: 0,
-            destination_port: 0,
+            source_port: config.local_port,
+            destination_port: config.remote_port,
             my_max_num_inbound_streams: u16::MAX,
             my_max_num_outbound_streams: u16::MAX,
             my_cookie: None,
@@ -208,9 +208,6 @@ impl AssociationInternal {
     pub(crate) fn send_init(&mut self) -> Result<()> {
         if let Some(stored_init) = self.stored_init.clone() {
             log::debug!("[{}] sending INIT", self.name);
-
-            self.source_port = 5000; // Spec??
-            self.destination_port = 5000; // Spec??
 
             let outbound = Packet {
                 source_port: self.source_port,
@@ -357,7 +354,15 @@ impl AssociationInternal {
         self.handle_chunk_start();
 
         for c in &p.chunks {
-            self.handle_chunk(&p, c).await?;
+            match self.handle_chunk(&p, c).await {
+                Err(Error::ErrChunk) => return Err(Error::ErrChunk),
+                // stop processing this SCTP packet, discard the unrecognized
+                // chunk and all further chunks
+                Err(Error::ErrChunkTypeUnhandled) => break,
+                // log and continue, the only condition that is fatal is a ABORT chunk
+                Err(err) => log::warn!("[{}] failed to handle chunk: {}", self.name, err),
+                Ok(()) => (),
+            };
         }
 
         self.handle_chunk_end();
@@ -648,7 +653,7 @@ impl AssociationInternal {
             && state != AssociationState::CookieWait
             && state != AssociationState::CookieEchoed
         {
-            log::error!("[{}] chunkInit received in state '{}'", self.name, state);
+            log::warn!("[{}] chunkInit received in state '{}'", self.name, state);
             // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
             //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
             return Err(Error::ErrHandleInitState);
@@ -662,8 +667,18 @@ impl AssociationInternal {
         self.my_max_num_outbound_streams =
             std::cmp::min(i.num_outbound_streams, self.my_max_num_outbound_streams);
         self.peer_verification_tag = i.initiate_tag;
-        self.source_port = p.destination_port;
-        self.destination_port = p.source_port;
+
+        if self.source_port != p.destination_port || self.destination_port != p.source_port {
+            log::error!(
+                "[{}] chunkInit received with wrong ports. Expected: {}/{} got {}/{}",
+                self.name,
+                self.source_port,
+                self.destination_port,
+                p.destination_port,
+                p.source_port
+            );
+            return Err(Error::ErrHandleInitState);
+        }
 
         // 13.2 This is the last TSN received in sequence.  This value
         // is set initially by taking the peer's initial TSN,
@@ -1040,11 +1055,7 @@ impl AssociationInternal {
             bytes_queued += s.get_num_bytes_in_reassembly_queue().await as u32;
         }
 
-        if bytes_queued >= self.max_receive_buffer_size {
-            0
-        } else {
-            self.max_receive_buffer_size - bytes_queued
-        }
+        self.max_receive_buffer_size.saturating_sub(bytes_queued)
     }
 
     pub(crate) fn open_stream(
@@ -1264,7 +1275,7 @@ impl AssociationInternal {
             //      most, the lesser of 1) the total size of the previously
             //      outstanding DATA chunk(s) acknowledged, and 2) the destination's
             //      path MTU.
-            if !self.in_fast_recovery && self.pending_queue.len() > 0 {
+            if !self.in_fast_recovery && !self.pending_queue.is_empty() {
                 self.cwnd += std::cmp::min(total_bytes_acked as u32, self.cwnd); // TCP way
                                                                                  // self.cwnd += min32(uint32(total_bytes_acked), self.mtu) // SCTP way (slow)
                 log::trace!(
@@ -1299,7 +1310,7 @@ impl AssociationInternal {
             //      of data outstanding (i.e., before arrival of the SACK, flight size
             //      was greater than or equal to cwnd), increase cwnd by MTU, and
             //      reset partial_bytes_acked to (partial_bytes_acked - cwnd).
-            if self.partial_bytes_acked >= self.cwnd && self.pending_queue.len() > 0 {
+            if self.partial_bytes_acked >= self.cwnd && !self.pending_queue.is_empty() {
                 self.partial_bytes_acked -= self.cwnd;
                 self.cwnd += self.mtu;
                 log::trace!(
@@ -1658,7 +1669,7 @@ impl AssociationInternal {
     }
 
     async fn handle_forward_tsn(&mut self, c: &ChunkForwardTsn) -> Result<Vec<Packet>> {
-        log::trace!("[{}] FwdTSN: {}", self.name, c.to_string());
+        log::trace!("[{}] FwdTSN: {}", self.name, c);
 
         if !self.use_forward_tsn {
             log::warn!("[{}] received FwdTSN but not enabled", self.name);
@@ -1905,7 +1916,7 @@ impl AssociationInternal {
         let mut chunks = vec![];
         let mut sis_to_reset = vec![]; // stream identifiers to reset
 
-        if self.pending_queue.len() == 0 {
+        if self.pending_queue.is_empty() {
             return (chunks, sis_to_reset);
         }
 
@@ -2167,10 +2178,11 @@ impl AssociationInternal {
             } else {
                 self.handle_init(p, c).await?
             }
-        } else if chunk_any.downcast_ref::<ChunkAbort>().is_some()
-            || chunk_any.downcast_ref::<ChunkError>().is_some()
-        {
+        } else if chunk_any.downcast_ref::<ChunkAbort>().is_some() {
             return Err(Error::ErrChunk);
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkError>() {
+            log::error!("[{}] error chunk, with following errors: {}", self.name, c);
+            vec![]
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkHeartbeat>() {
             self.handle_heartbeat(c).await?
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkCookieEcho>() {

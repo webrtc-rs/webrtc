@@ -180,10 +180,7 @@ impl AgentInternal {
         }
 
         log::debug!(
-            "Started agent: isControlling? {}, remoteUfrag: {}, remotePwd: {}",
-            is_controlling,
-            remote_ufrag,
-            remote_pwd
+            "Started agent: isControlling? {is_controlling}, remoteUfrag: {remote_ufrag}, remotePwd: {remote_pwd}"
         );
         self.set_remote_credentials(remote_ufrag, remote_pwd)
             .await?;
@@ -984,7 +981,7 @@ impl AgentInternal {
     ) -> bool {
         self.find_remote_candidate(local.network_type(), remote)
             .await
-            .map_or(false, |remote_candidate| {
+            .is_some_and(|remote_candidate| {
                 remote_candidate.seen(false);
                 true
             })

@@ -34,6 +34,7 @@ pub struct Config {
     pub reliability_parameter: u32,
     pub label: String,
     pub protocol: String,
+    pub max_message_size: u32,
 }
 
 /// DataChannel represents a data channel
@@ -187,7 +188,7 @@ impl DataChannel {
                     match self.handle_dcep(&mut data).await {
                         Ok(()) => {}
                         Err(err) => {
-                            log::error!("Failed to handle DCEP: {:?}", err);
+                            log::error!("Failed to handle DCEP: {err:?}");
                         }
                     }
                     continue;

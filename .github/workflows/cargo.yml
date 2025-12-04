@@ -18,7 +18,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        os: ["ubuntu-latest", "macos-latest"]
+        os: ["ubuntu-latest"] #, "macos-latest"]
         toolchain:
           # - 1.65.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
           - stable

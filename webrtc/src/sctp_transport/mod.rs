@@ -69,10 +69,6 @@ pub struct RTCSctpTransport {
     // so we need a dedicated field
     is_started: AtomicBool,
 
-    // max_message_size represents the maximum size of data that can be passed to
-    // DataChannel's send() method.
-    max_message_size: usize,
-
     // max_channels represents the maximum amount of DataChannel's that can
     // be used simultaneously.
     max_channels: u16,
@@ -103,7 +99,6 @@ impl RTCSctpTransport {
             dtls_transport,
             state: AtomicU8::new(RTCSctpTransportState::Connecting as u8),
             is_started: AtomicBool::new(false),
-            max_message_size: RTCSctpTransport::calc_message_size(65536, 65536),
             max_channels: SCTP_MAX_CHANNELS,
             sctp_association: Mutex::new(None),
             on_error_handler: Arc::new(ArcSwapOption::empty()),
@@ -136,13 +131,24 @@ impl RTCSctpTransport {
     /// Start the SCTPTransport. Since both local and remote parties must mutually
     /// create an SCTPTransport, SCTP SO (Simultaneous Open) is used to establish
     /// a connection over SCTP.
-    pub async fn start(&self, _remote_caps: SCTPTransportCapabilities) -> Result<()> {
+    pub async fn start(
+        &self,
+        remote_caps: SCTPTransportCapabilities,
+        local_port: u16,
+        remote_port: u16,
+    ) -> Result<()> {
         if self.is_started.load(Ordering::SeqCst) {
             return Ok(());
         }
         self.is_started.store(true, Ordering::SeqCst);
 
         let dtls_transport = self.transport();
+
+        let max_message_size = Self::calc_message_size(
+            remote_caps.max_message_size,
+            self.setting_engine.sctp_max_message_size_can_send.as_u32(),
+        );
+
         if let Some(net_conn) = &dtls_transport.conn().await {
             let sctp_association = loop {
                 tokio::select! {
@@ -157,8 +163,10 @@ impl RTCSctpTransport {
                     association = sctp::association::Association::client(sctp::association::Config {
                         net_conn: Arc::clone(net_conn) as Arc<dyn Conn + Send + Sync>,
                         max_receive_buffer_size: 0,
-                        max_message_size: 0,
+                        max_message_size,
                         name: String::new(),
+                        local_port,
+                        remote_port,
                     }) => {
                         break Arc::new(association?);
                     }
@@ -225,14 +233,17 @@ impl RTCSctpTransport {
                 _ = param.notify_rx.notified() => break,
                 result = DataChannel::accept(
                     &param.sctp_association,
-                    data::data_channel::Config::default(),
+                    data::data_channel::Config {
+                        max_message_size: param.sctp_association.max_message_size(),
+                        ..data::data_channel::Config::default()
+                    },
                     &existing_data_channels,
                 ) => {
                     match result {
                         Ok(dc) => dc,
                         Err(err) => {
                             if data::Error::ErrStreamClosed == err {
-                                log::error!("Failed to accept data channel: {}", err);
+                                log::error!("Failed to accept data channel: {err}");
                                 if let Some(handler) = &*param.on_error_handler.load() {
                                     let mut f = handler.lock().await;
                                     f(err.into()).await;
@@ -331,9 +342,9 @@ impl RTCSctpTransport {
             .store(Some(Arc::new(Mutex::new(f))));
     }
 
-    fn calc_message_size(remote_max_message_size: usize, can_send_size: usize) -> usize {
+    fn calc_message_size(remote_max_message_size: u32, can_send_size: u32) -> u32 {
         if remote_max_message_size == 0 && can_send_size == 0 {
-            usize::MAX
+            u32::MAX
         } else if remote_max_message_size == 0 {
             can_send_size
         } else if can_send_size == 0 || can_send_size > remote_max_message_size {

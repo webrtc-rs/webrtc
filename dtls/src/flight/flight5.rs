@@ -273,7 +273,8 @@ impl Flight for Flight5 {
 
         // handshakeMessageServerKeyExchange is optional for PSK
         if server_key_exchange_data.is_empty() {
-            if let Err((alert, err)) = handle_server_key_exchange(state, cfg, &server_key_exchange)
+            if let Err((alert, err)) =
+                handle_server_key_exchange(state, cfg, &server_key_exchange).await
             {
                 return Err((alert, err));
             }

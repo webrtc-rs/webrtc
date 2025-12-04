@@ -1,0 +1,16 @@
+[package]
+name = "webrtc-hub"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+util = { version = "0.12.0", path = "../../../util", package = "webrtc-util", default-features = false, features = [
+    "conn"
+] }
+dtls = { version = "0.13.0", path = "../../" }
+
+tokio = { version = "1.32.0", features = ["full"] }
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+rustls = { version = "0.23.27", default-features = false }
+rustls-pemfile = "2"
+thiserror = "1"

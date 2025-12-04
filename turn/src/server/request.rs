@@ -633,37 +633,37 @@ impl Request {
         };
 
         if lifetime_duration != Duration::from_secs(0) {
-            let a = self.allocation_manager.get_allocation(&five_tuple).await;
-            if let Some(a) = a {
-                // If a server receives a Refresh Request with a REQUESTED-ADDRESS-FAMILY
-                // attribute, and the attribute's value doesn't match the address
-                // family of the allocation, the server MUST reply with a 443 (Peer
-                // Address Family Mismatch) Refresh error response. [RFC 6156, Section 5.2]
-                let mut req_family = RequestedAddressFamily::default();
-                if req_family.get_from(m).is_ok()
-                    && ((req_family == REQUESTED_FAMILY_IPV6 && !a.relay_addr.is_ipv6())
-                        || (req_family == REQUESTED_FAMILY_IPV4 && !a.relay_addr.is_ipv4()))
-                {
-                    let peer_address_family_mismatch_msg = build_msg(
-                        m.transaction_id,
-                        MessageType::new(METHOD_REFRESH, CLASS_ERROR_RESPONSE),
-                        vec![Box::new(ErrorCodeAttribute {
-                            code: CODE_PEER_ADDR_FAMILY_MISMATCH,
-                            reason: vec![],
-                        })],
-                    )?;
-                    return build_and_send_err(
-                        &self.conn,
-                        self.src_addr,
-                        peer_address_family_mismatch_msg,
-                        Error::ErrPeerAddressFamilyMismatch,
-                    )
-                    .await;
-                }
-                a.refresh(lifetime_duration).await;
-            } else {
-                return Err(Error::ErrNoAllocationFound);
+            let a = self
+                .allocation_manager
+                .get_allocation(&five_tuple)
+                .await
+                .ok_or(Error::ErrNoAllocationFound)?;
+            // If a server receives a Refresh Request with a REQUESTED-ADDRESS-FAMILY
+            // attribute, and the attribute's value doesn't match the address
+            // family of the allocation, the server MUST reply with a 443 (Peer
+            // Address Family Mismatch) Refresh error response. [RFC 6156, Section 5.2]
+            let mut req_family = RequestedAddressFamily::default();
+            if req_family.get_from(m).is_ok()
+                && ((req_family == REQUESTED_FAMILY_IPV6 && !a.relay_addr.is_ipv6())
+                    || (req_family == REQUESTED_FAMILY_IPV4 && !a.relay_addr.is_ipv4()))
+            {
+                let peer_address_family_mismatch_msg = build_msg(
+                    m.transaction_id,
+                    MessageType::new(METHOD_REFRESH, CLASS_ERROR_RESPONSE),
+                    vec![Box::new(ErrorCodeAttribute {
+                        code: CODE_PEER_ADDR_FAMILY_MISMATCH,
+                        reason: vec![],
+                    })],
+                )?;
+                return build_and_send_err(
+                    &self.conn,
+                    self.src_addr,
+                    peer_address_family_mismatch_msg,
+                    Error::ErrPeerAddressFamilyMismatch,
+                )
+                .await;
             }
+            a.refresh(lifetime_duration).await;
         } else {
             self.allocation_manager.delete_allocation(&five_tuple).await;
         }
@@ -690,85 +690,83 @@ impl Request {
                 dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
-            .await;
+            .await
+            .ok_or(Error::ErrNoAllocationFound)?;
 
-        if let Some(a) = a {
-            let (_, message_integrity) = if let Some(mi) = self
-                .authenticate_request(m, METHOD_CREATE_PERMISSION)
-                .await?
-            {
-                mi
-            } else {
-                log::debug!("no MessageIntegrity");
-                return Ok(());
-            };
-            let mut add_count = 0;
-
-            {
-                for attr in &m.attributes.0 {
-                    if attr.typ != ATTR_XOR_PEER_ADDRESS {
-                        continue;
-                    }
-
-                    let mut peer_address = PeerAddress::default();
-                    if peer_address.get_from(m).is_err() {
-                        add_count = 0;
-                        break;
-                    }
-
-                    // If an XOR-PEER-ADDRESS attribute contains an address of an address
-                    // family different than that of the relayed transport address for the
-                    // allocation, the server MUST generate an error response with the 443
-                    // (Peer Address Family Mismatch) response code. [RFC 6156, Section 6.2]
-                    if (peer_address.ip.is_ipv4() && !a.relay_addr.is_ipv4())
-                        || (peer_address.ip.is_ipv6() && !a.relay_addr.is_ipv6())
-                    {
-                        let peer_address_family_mismatch_msg = build_msg(
-                            m.transaction_id,
-                            MessageType::new(METHOD_CREATE_PERMISSION, CLASS_ERROR_RESPONSE),
-                            vec![Box::new(ErrorCodeAttribute {
-                                code: CODE_PEER_ADDR_FAMILY_MISMATCH,
-                                reason: vec![],
-                            })],
-                        )?;
-                        return build_and_send_err(
-                            &self.conn,
-                            self.src_addr,
-                            peer_address_family_mismatch_msg,
-                            Error::ErrPeerAddressFamilyMismatch,
-                        )
-                        .await;
-                    }
-
-                    log::debug!(
-                        "adding permission for {}",
-                        format!("{}:{}", peer_address.ip, peer_address.port)
-                    );
-
-                    a.add_permission(Permission::new(SocketAddr::new(
-                        peer_address.ip,
-                        peer_address.port,
-                    )))
-                    .await;
-                    add_count += 1;
-                }
-            }
-
-            let mut resp_class = CLASS_SUCCESS_RESPONSE;
-            if add_count == 0 {
-                resp_class = CLASS_ERROR_RESPONSE;
-            }
-
-            let msg = build_msg(
-                m.transaction_id,
-                MessageType::new(METHOD_CREATE_PERMISSION, resp_class),
-                vec![Box::new(message_integrity)],
-            )?;
-
-            build_and_send(&self.conn, self.src_addr, msg).await
+        let (_, message_integrity) = if let Some(mi) = self
+            .authenticate_request(m, METHOD_CREATE_PERMISSION)
+            .await?
+        {
+            mi
         } else {
-            Err(Error::ErrNoAllocationFound)
+            log::debug!("no MessageIntegrity");
+            return Ok(());
+        };
+        let mut add_count = 0;
+
+        {
+            for attr in &m.attributes.0 {
+                if attr.typ != ATTR_XOR_PEER_ADDRESS {
+                    continue;
+                }
+
+                let mut peer_address = PeerAddress::default();
+                if peer_address.get_from(m).is_err() {
+                    add_count = 0;
+                    break;
+                }
+
+                // If an XOR-PEER-ADDRESS attribute contains an address of an address
+                // family different than that of the relayed transport address for the
+                // allocation, the server MUST generate an error response with the 443
+                // (Peer Address Family Mismatch) response code. [RFC 6156, Section 6.2]
+                if (peer_address.ip.is_ipv4() && !a.relay_addr.is_ipv4())
+                    || (peer_address.ip.is_ipv6() && !a.relay_addr.is_ipv6())
+                {
+                    let peer_address_family_mismatch_msg = build_msg(
+                        m.transaction_id,
+                        MessageType::new(METHOD_CREATE_PERMISSION, CLASS_ERROR_RESPONSE),
+                        vec![Box::new(ErrorCodeAttribute {
+                            code: CODE_PEER_ADDR_FAMILY_MISMATCH,
+                            reason: vec![],
+                        })],
+                    )?;
+                    return build_and_send_err(
+                        &self.conn,
+                        self.src_addr,
+                        peer_address_family_mismatch_msg,
+                        Error::ErrPeerAddressFamilyMismatch,
+                    )
+                    .await;
+                }
+
+                log::debug!(
+                    "adding permission for {}:{}",
+                    peer_address.ip,
+                    peer_address.port
+                );
+
+                a.add_permission(Permission::new(SocketAddr::new(
+                    peer_address.ip,
+                    peer_address.port,
+                )))
+                .await;
+                add_count += 1;
+            }
         }
+
+        let mut resp_class = CLASS_SUCCESS_RESPONSE;
+        if add_count == 0 {
+            resp_class = CLASS_ERROR_RESPONSE;
+        }
+
+        let msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_CREATE_PERMISSION, resp_class),
+            vec![Box::new(message_integrity)],
+        )?;
+
+        build_and_send(&self.conn, self.src_addr, msg).await
     }
 
     pub(crate) async fn handle_send_indication(&mut self, m: &Message) -> Result<()> {
@@ -781,34 +779,31 @@ impl Request {
                 dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
-            .await;
+            .await
+            .ok_or(Error::ErrNoAllocationFound)?;
 
-        if let Some(a) = a {
-            let mut data_attr = Data::default();
-            data_attr.get_from(m)?;
+        let mut data_attr = Data::default();
+        data_attr.get_from(m)?;
 
-            let mut peer_address = PeerAddress::default();
-            peer_address.get_from(m)?;
+        let mut peer_address = PeerAddress::default();
+        peer_address.get_from(m)?;
 
-            let msg_dst = SocketAddr::new(peer_address.ip, peer_address.port);
+        let msg_dst = SocketAddr::new(peer_address.ip, peer_address.port);
 
-            let has_perm = a.has_permission(&msg_dst).await;
-            if !has_perm {
-                return Err(Error::ErrNoPermission);
-            }
+        let has_perm = a.has_permission(&msg_dst).await;
+        if !has_perm {
+            return Err(Error::ErrNoPermission);
+        }
 
-            let l = a.relay_socket.send_to(&data_attr.0, msg_dst).await?;
-            if l != data_attr.0.len() {
-                Err(Error::ErrShortWrite)
-            } else {
-                #[cfg(feature = "metrics")]
-                a.relayed_bytes
-                    .fetch_add(data_attr.0.len(), Ordering::AcqRel);
-
-                Ok(())
-            }
+        let l = a.relay_socket.send_to(&data_attr.0, msg_dst).await?;
+        if l != data_attr.0.len() {
+            Err(Error::ErrShortWrite)
         } else {
-            Err(Error::ErrNoAllocationFound)
+            #[cfg(feature = "metrics")]
+            a.relayed_bytes
+                .fetch_add(data_attr.0.len(), Ordering::AcqRel);
+
+            Ok(())
         }
     }
 
@@ -822,95 +817,88 @@ impl Request {
                 dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
-            .await;
+            .await
+            .ok_or(Error::ErrNoAllocationFound)?;
 
-        if let Some(a) = a {
-            let bad_request_msg = build_msg(
-                m.transaction_id,
-                MessageType::new(METHOD_CHANNEL_BIND, CLASS_ERROR_RESPONSE),
-                vec![Box::new(ErrorCodeAttribute {
-                    code: CODE_BAD_REQUEST,
-                    reason: vec![],
-                })],
-            )?;
+        let bad_request_msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_CHANNEL_BIND, CLASS_ERROR_RESPONSE),
+            vec![Box::new(ErrorCodeAttribute {
+                code: CODE_BAD_REQUEST,
+                reason: vec![],
+            })],
+        )?;
 
-            let (_, message_integrity) =
-                if let Some(mi) = self.authenticate_request(m, METHOD_CHANNEL_BIND).await? {
-                    mi
-                } else {
-                    log::debug!("no MessageIntegrity");
-                    return Ok(());
-                };
-            let mut channel = ChannelNumber::default();
-            if let Err(err) = channel.get_from(m) {
+        let (_, message_integrity) =
+            if let Some(mi) = self.authenticate_request(m, METHOD_CHANNEL_BIND).await? {
+                mi
+            } else {
+                log::debug!("no MessageIntegrity");
+                return Ok(());
+            };
+        let mut channel = ChannelNumber::default();
+        if let Err(err) = channel.get_from(m) {
+            return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+                .await;
+        }
+
+        let mut peer_addr = PeerAddress::default();
+        match peer_addr.get_from(m) {
+            Err(err) => {
                 return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
                     .await;
             }
-
-            let mut peer_addr = PeerAddress::default();
-            match peer_addr.get_from(m) {
-                Err(err) => {
+            _ => {
+                // If the XOR-PEER-ADDRESS attribute contains an address of an address
+                // family different than that of the relayed transport address for the
+                // allocation, the server MUST generate an error response with the 443
+                // (Peer Address Family Mismatch) response code. [RFC 6156, Section 7.2]
+                if (peer_addr.ip.is_ipv4() && !a.relay_addr.is_ipv4())
+                    || (peer_addr.ip.is_ipv6() && !a.relay_addr.is_ipv6())
+                {
+                    let peer_address_family_mismatch_msg = build_msg(
+                        m.transaction_id,
+                        MessageType::new(METHOD_CHANNEL_BIND, CLASS_ERROR_RESPONSE),
+                        vec![Box::new(ErrorCodeAttribute {
+                            code: CODE_PEER_ADDR_FAMILY_MISMATCH,
+                            reason: vec![],
+                        })],
+                    )?;
                     return build_and_send_err(
                         &self.conn,
                         self.src_addr,
-                        bad_request_msg,
-                        err.into(),
+                        peer_address_family_mismatch_msg,
+                        Error::ErrPeerAddressFamilyMismatch,
                     )
                     .await;
                 }
-                _ => {
-                    // If the XOR-PEER-ADDRESS attribute contains an address of an address
-                    // family different than that of the relayed transport address for the
-                    // allocation, the server MUST generate an error response with the 443
-                    // (Peer Address Family Mismatch) response code. [RFC 6156, Section 7.2]
-                    if (peer_addr.ip.is_ipv4() && !a.relay_addr.is_ipv4())
-                        || (peer_addr.ip.is_ipv6() && !a.relay_addr.is_ipv6())
-                    {
-                        let peer_address_family_mismatch_msg = build_msg(
-                            m.transaction_id,
-                            MessageType::new(METHOD_CHANNEL_BIND, CLASS_ERROR_RESPONSE),
-                            vec![Box::new(ErrorCodeAttribute {
-                                code: CODE_PEER_ADDR_FAMILY_MISMATCH,
-                                reason: vec![],
-                            })],
-                        )?;
-                        return build_and_send_err(
-                            &self.conn,
-                            self.src_addr,
-                            peer_address_family_mismatch_msg,
-                            Error::ErrPeerAddressFamilyMismatch,
-                        )
-                        .await;
-                    }
-                }
             }
-
-            log::debug!(
-                "binding channel {} to {}",
-                channel,
-                format!("{}:{}", peer_addr.ip, peer_addr.port)
-            );
-
-            let result = {
-                a.add_channel_bind(
-                    ChannelBind::new(channel, SocketAddr::new(peer_addr.ip, peer_addr.port)),
-                    self.channel_bind_timeout,
-                )
-                .await
-            };
-            if let Err(err) = result {
-                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
-            }
-
-            let msg = build_msg(
-                m.transaction_id,
-                MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE),
-                vec![Box::new(message_integrity)],
-            )?;
-            build_and_send(&self.conn, self.src_addr, msg).await
-        } else {
-            Err(Error::ErrNoAllocationFound)
         }
+
+        log::debug!(
+            "binding channel {} to {}:{}",
+            channel,
+            peer_addr.ip,
+            peer_addr.port,
+        );
+
+        let result = {
+            a.add_channel_bind(
+                ChannelBind::new(channel, SocketAddr::new(peer_addr.ip, peer_addr.port)),
+                self.channel_bind_timeout,
+            )
+            .await
+        };
+        if let Err(err) = result {
+            return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
+        }
+
+        let msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE),
+            vec![Box::new(message_integrity)],
+        )?;
+        build_and_send(&self.conn, self.src_addr, msg).await
     }
 
     pub(crate) async fn handle_channel_data(&mut self, c: &ChannelData) -> Result<()> {
@@ -923,36 +911,30 @@ impl Request {
                 dst_addr: self.conn.local_addr()?,
                 protocol: PROTO_UDP,
             })
-            .await;
+            .await
+            .ok_or(Error::ErrNoAllocationFound)?;
 
-        if let Some(a) = a {
-            let channel = a.get_channel_addr(&c.number).await;
-            if let Some(peer) = channel {
-                let l = a.relay_socket.send_to(&c.data, peer).await?;
-                if l != c.data.len() {
-                    Err(Error::ErrShortWrite)
-                } else {
-                    #[cfg(feature = "metrics")]
-                    a.relayed_bytes.fetch_add(c.data.len(), Ordering::AcqRel);
-
-                    Ok(())
-                }
+        let channel = a.get_channel_addr(&c.number).await;
+        if let Some(peer) = channel {
+            let l = a.relay_socket.send_to(&c.data, peer).await?;
+            if l != c.data.len() {
+                Err(Error::ErrShortWrite)
             } else {
-                Err(Error::ErrNoSuchChannelBind)
+                #[cfg(feature = "metrics")]
+                a.relayed_bytes.fetch_add(c.data.len(), Ordering::AcqRel);
+
+                Ok(())
             }
         } else {
-            Err(Error::ErrNoAllocationFound)
+            Err(Error::ErrNoSuchChannelBind)
         }
     }
 }
 
 pub(crate) fn rand_seq(n: usize) -> String {
-    let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".as_bytes();
-    let mut buf = vec![0u8; n];
-    for b in &mut buf {
-        *b = letters[rand::random::<usize>() % letters.len()];
-    }
-    String::from_utf8(buf).unwrap_or_default()
+    use rand::distr::{Alphabetic, SampleString};
+
+    Alphabetic.sample_string(&mut rand::rng(), n)
 }
 
 pub(crate) fn build_nonce() -> Result<String> {

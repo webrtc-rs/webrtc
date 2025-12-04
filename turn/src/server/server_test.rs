@@ -242,7 +242,7 @@ async fn test_server_vnet_send_binding_request() -> Result<()> {
 
     log::debug!("sending a binding request.");
     let refl_addr = client.send_binding_request().await?;
-    log::debug!("mapped-address: {}", refl_addr);
+    log::debug!("mapped-address: {refl_addr}");
 
     // The mapped-address should have IP address that was assigned
     // to the LAN router.

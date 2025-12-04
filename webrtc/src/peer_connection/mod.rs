@@ -30,7 +30,7 @@ use async_trait::async_trait;
 use interceptor::{stats, Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use portable_atomic::{AtomicBool, AtomicU64, AtomicU8};
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use rcgen::KeyPair;
 use smol_str::SmolStr;
 use srtp::stream::Stream;
@@ -81,8 +81,7 @@ use crate::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
 use crate::rtp_transceiver::rtp_sender::RTCRtpSender;
 use crate::rtp_transceiver::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::rtp_transceiver::{
-    find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
-    RTCRtpTransceiverInit, SSRC,
+    find_by_mid, satisfy_type_and_direction, RTCRtpTransceiver, RTCRtpTransceiverInit, SSRC,
 };
 use crate::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::sctp_transport::sctp_transport_state::RTCSctpTransportState;
@@ -106,11 +105,11 @@ const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY
 
 /// math_rand_alpha generates a mathematical random alphabet sequence of the requested length.
 pub fn math_rand_alpha(n: usize) -> String {
-    let mut rng = thread_rng();
+    let mut rng = rng();
 
     let rand_string: String = (0..n)
         .map(|_| {
-            let idx = rng.gen_range(0..RUNES_ALPHA.len());
+            let idx = rng.random_range(0..RUNES_ALPHA.len());
             RUNES_ALPHA[idx] as char
         })
         .collect();
@@ -304,7 +303,7 @@ impl RTCPeerConnection {
     }
 
     async fn do_signaling_state_change(&self, new_state: RTCSignalingState) {
-        log::info!("signaling state changed to {}", new_state);
+        log::info!("signaling state changed to {new_state}");
         if let Some(handler) = &*self.internal.on_signaling_state_change_handler.load() {
             let mut f = handler.lock().await;
             f(new_state).await;
@@ -599,7 +598,7 @@ impl RTCPeerConnection {
         receiver: Arc<RTCRtpReceiver>,
         transceiver: Arc<RTCRtpTransceiver>,
     ) {
-        log::debug!("got new track: {:?}", track);
+        log::debug!("got new track: {track:?}");
 
         tokio::spawn(async move {
             if let Some(handler) = &*on_track_handler.load() {
@@ -626,7 +625,7 @@ impl RTCPeerConnection {
     ) {
         ice_connection_state.store(cs as u8, Ordering::SeqCst);
 
-        log::info!("ICE connection state changed: {}", cs);
+        log::info!("ICE connection state changed: {cs}");
         if let Some(handler) = &*handler.load() {
             let mut f = handler.lock().await;
             f(cs).await;
@@ -919,7 +918,7 @@ impl RTCPeerConnection {
             return;
         }
 
-        log::info!("peer connection state changed: {}", connection_state);
+        log::info!("peer connection state changed: {connection_state}");
         peer_connection_state.store(connection_state as u8, Ordering::SeqCst);
 
         RTCPeerConnection::do_peer_connection_state_change(
@@ -1602,9 +1601,7 @@ impl RTCPeerConnection {
                         let fp_hash = fingerprint_hash.clone();
                         Box::pin(async move {
                             log::trace!(
-                                "start_transports: ice_role={}, dtls_role={}",
-                                ice_role,
-                                dtls_role,
+                                "start_transports: ice_role={ice_role}, dtls_role={dtls_role}",
                             );
                             pc.start_transports(ice_role, dtls_role, ru, rp, fp, fp_hash)
                                 .await;

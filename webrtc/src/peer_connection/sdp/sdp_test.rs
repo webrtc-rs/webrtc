@@ -546,7 +546,7 @@ fn test_have_application_media_section() -> Result<()> {
             ..Default::default()
         };
 
-        assert!(!have_application_media_section(&s));
+        assert!(get_application_media_section_sctp_port(&s).is_none());
     }
 
     //"Application"
@@ -557,12 +557,16 @@ fn test_have_application_media_section() -> Result<()> {
                     media: MEDIA_SECTION_APPLICATION.to_owned(),
                     ..Default::default()
                 },
+                attributes: vec![Attribute {
+                    key: "sctp-port".to_string(),
+                    value: Some("5000".to_owned()),
+                }],
                 ..Default::default()
             }],
             ..Default::default()
         };
 
-        assert!(have_application_media_section(&s));
+        assert!(get_application_media_section_sctp_port(&s).is_some());
     }
 
     Ok(())
@@ -1444,7 +1448,7 @@ async fn test_populate_sdp_reject() -> Result<()> {
 
 #[test]
 fn test_get_rids() {
-    let m = vec![MediaDescription {
+    let m = [MediaDescription {
         media_name: MediaName {
             media: "video".to_owned(),
             ..Default::default()

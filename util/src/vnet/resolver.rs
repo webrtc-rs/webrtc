@@ -26,7 +26,7 @@ impl Resolver {
         };
 
         if let Err(err) = r.add_host("localhost".to_owned(), "127.0.0.1".to_owned()) {
-            log::warn!("failed to add localhost to Resolver: {}", err);
+            log::warn!("failed to add localhost to Resolver: {err}");
         }
         r
     }

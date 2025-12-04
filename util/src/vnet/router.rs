@@ -499,7 +499,7 @@ impl Router {
                         ni.on_inbound_chunk(c).await;
                     } else {
                         // NIC not found. drop it.
-                        log::debug!("[{}] {} unreachable", name, c);
+                        log::debug!("[{name}] {c} unreachable");
                     }
                 } else {
                     // the destination is outside of this subnet
@@ -513,7 +513,7 @@ impl Router {
                         }
                     } else {
                         // this WAN. No route for this chunk
-                        log::debug!("[{}] no route found for {}", name, c);
+                        log::debug!("[{name}] no route found for {c}");
                     }
                 }
             } else {
@@ -536,7 +536,7 @@ impl RouterInternal {
         if ips.is_empty() {
             // assign an IP address
             let ip = self.assign_ip_address()?;
-            log::debug!("assign_ip_address: {}", ip);
+            log::debug!("assign_ip_address: {ip}");
             ips.push(ip);
         }
 

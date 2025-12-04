@@ -47,12 +47,12 @@ pub trait TrackLocalWriter: fmt::Debug {
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used
 /// in Interceptors.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct TrackLocalContext {
     pub(crate) id: String,
     pub(crate) params: RTCRtpParameters,
     pub(crate) ssrc: SSRC,
-    pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
+    pub(crate) write_stream: Arc<dyn TrackLocalWriter + Send + Sync>,
     pub(crate) paused: Arc<AtomicBool>,
     pub(crate) mid: Option<SmolStr>,
 }
@@ -78,7 +78,7 @@ impl TrackLocalContext {
 
     /// write_stream returns the write_stream for this TrackLocal. The implementer writes the outbound
     /// media packets to it
-    pub fn write_stream(&self) -> Option<Arc<dyn TrackLocalWriter + Send + Sync>> {
+    pub fn write_stream(&self) -> Arc<dyn TrackLocalWriter + Send + Sync> {
         self.write_stream.clone()
     }
 
@@ -131,13 +131,13 @@ pub trait TrackLocal {
 /// TrackBinding is a single bind for a Track
 /// Bind can be called multiple times, this stores the
 /// result for a single bind call so that it can be used when writing
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct TrackBinding {
     id: String,
     ssrc: SSRC,
     payload_type: PayloadType,
     params: RTCRtpParameters,
-    write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
+    write_stream: Arc<dyn TrackLocalWriter + Send + Sync>,
     sender_paused: Arc<AtomicBool>,
     hdr_ext_ids: Vec<rtp::header::Extension>,
 }

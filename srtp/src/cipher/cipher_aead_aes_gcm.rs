@@ -1,6 +1,10 @@
+use std::marker::PhantomData;
+
+use aead::consts::{U12, U16};
+use aes::cipher::{BlockEncrypt, BlockSizeUser, Unsigned};
 use aes_gcm::aead::generic_array::GenericArray;
 use aes_gcm::aead::{Aead, Payload};
-use aes_gcm::{Aes128Gcm, KeyInit, Nonce};
+use aes_gcm::{AesGcm, KeyInit, Nonce};
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Bytes, BytesMut};
 use util::marshal::*;
@@ -15,16 +19,24 @@ pub const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
 const RTCP_ENCRYPTION_FLAG: u8 = 0x80;
 
 /// AEAD Cipher based on AES.
-pub(crate) struct CipherAeadAesGcm {
+pub(crate) struct CipherAeadAesGcm<AES, NonceSize = U12>
+where
+    NonceSize: Unsigned,
+{
     profile: ProtectionProfile,
-    srtp_cipher: aes_gcm::Aes128Gcm,
-    srtcp_cipher: aes_gcm::Aes128Gcm,
+    srtp_cipher: aes_gcm::AesGcm<AES, NonceSize>,
+    srtcp_cipher: aes_gcm::AesGcm<AES, NonceSize>,
     srtp_session_salt: Vec<u8>,
     srtcp_session_salt: Vec<u8>,
+    _tag: PhantomData<AES>,
 }
 
-impl Cipher for CipherAeadAesGcm {
-    /// Get RTP authenticated tag length.
+impl<AES, NS> Cipher for CipherAeadAesGcm<AES, NS>
+where
+    NS: Unsigned,
+    AES: BlockEncrypt + KeyInit + BlockSizeUser<BlockSize = U16> + 'static,
+    AesGcm<AES, NS>: Aead,
+{
     fn rtp_auth_tag_len(&self) -> usize {
         self.profile.rtp_auth_tag_len()
     }
@@ -144,14 +156,31 @@ impl Cipher for CipherAeadAesGcm {
     }
 }
 
-impl CipherAeadAesGcm {
+impl<AES, NS> CipherAeadAesGcm<AES, NS>
+where
+    NS: Unsigned,
+    AES: BlockEncrypt + KeyInit + BlockSizeUser<BlockSize = U16> + 'static,
+    AesGcm<AES, NS>: Aead,
+{
     /// Create a new AEAD instance.
     pub(crate) fn new(
         profile: ProtectionProfile,
         master_key: &[u8],
         master_salt: &[u8],
-    ) -> Result<CipherAeadAesGcm> {
-        let srtp_session_key = aes_cm_key_derivation(
+    ) -> Result<CipherAeadAesGcm<AES>> {
+        assert_eq!(profile.aead_auth_tag_len(), AES::block_size());
+        assert_eq!(profile.key_len(), AES::key_size());
+        assert_eq!(profile.salt_len(), master_salt.len());
+
+        type Kdf = fn(u8, &[u8], &[u8], usize, usize) -> Result<Vec<u8>>;
+        let kdf: Kdf = match profile {
+            ProtectionProfile::AeadAes128Gcm => aes_cm_key_derivation,
+            // AES_256_GCM must use AES_256_CM_PRF as per https://datatracker.ietf.org/doc/html/rfc7714#section-11
+            ProtectionProfile::AeadAes256Gcm => aes_256_cm_key_derivation,
+            _ => unreachable!(),
+        };
+
+        let srtp_session_key = kdf(
             LABEL_SRTP_ENCRYPTION,
             master_key,
             master_salt,
@@ -161,9 +190,9 @@ impl CipherAeadAesGcm {
 
         let srtp_block = GenericArray::from_slice(&srtp_session_key);
 
-        let srtp_cipher = Aes128Gcm::new(srtp_block);
+        let srtp_cipher = AesGcm::<AES, U12>::new(srtp_block);
 
-        let srtcp_session_key = aes_cm_key_derivation(
+        let srtcp_session_key = kdf(
             LABEL_SRTCP_ENCRYPTION,
             master_key,
             master_salt,
@@ -173,9 +202,9 @@ impl CipherAeadAesGcm {
 
         let srtcp_block = GenericArray::from_slice(&srtcp_session_key);
 
-        let srtcp_cipher = Aes128Gcm::new(srtcp_block);
+        let srtcp_cipher = AesGcm::<AES, U12>::new(srtcp_block);
 
-        let srtp_session_salt = aes_cm_key_derivation(
+        let srtp_session_salt = kdf(
             LABEL_SRTP_SALT,
             master_key,
             master_salt,
@@ -183,7 +212,7 @@ impl CipherAeadAesGcm {
             master_salt.len(),
         )?;
 
-        let srtcp_session_salt = aes_cm_key_derivation(
+        let srtcp_session_salt = kdf(
             LABEL_SRTCP_SALT,
             master_key,
             master_salt,
@@ -197,6 +226,7 @@ impl CipherAeadAesGcm {
             srtcp_cipher,
             srtp_session_salt,
             srtcp_session_salt,
+            _tag: PhantomData,
         })
     }
 
@@ -261,5 +291,54 @@ impl CipherAeadAesGcm {
 
         aad[8] |= RTCP_ENCRYPTION_FLAG;
         aad
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aes::{Aes128, Aes256};
+
+    use super::*;
+
+    #[test]
+    fn test_aead_aes_gcm_128() {
+        let profile = ProtectionProfile::AeadAes128Gcm;
+        let master_key = vec![0u8; profile.key_len()];
+        let master_salt = vec![0u8; 12];
+
+        let mut cipher =
+            CipherAeadAesGcm::<Aes128>::new(profile, &master_key, &master_salt).unwrap();
+
+        let header = rtp::header::Header {
+            ssrc: 0x12345678,
+            ..Default::default()
+        };
+
+        let payload = vec![0u8; 100];
+        let encrypted = cipher.encrypt_rtp(&payload, &header, 0).unwrap();
+
+        let decrypted = cipher.decrypt_rtp(&encrypted, &header, 0).unwrap();
+        assert_eq!(&decrypted[..], &payload[..]);
+    }
+
+    #[test]
+    fn test_aead_aes_gcm_256() {
+        let profile = ProtectionProfile::AeadAes256Gcm;
+        let master_key = vec![0u8; profile.key_len()];
+        let master_salt = vec![0u8; 12];
+
+        let mut cipher =
+            CipherAeadAesGcm::<Aes256>::new(profile, &master_key, &master_salt).unwrap();
+
+        let header = rtp::header::Header {
+            ssrc: 0x12345678,
+            ..Default::default()
+        };
+
+        let payload = vec![0u8; 100];
+        let encrypted = cipher.encrypt_rtp(&payload, &header, 0).unwrap();
+
+        let decrypted = cipher.decrypt_rtp(&encrypted, &header, 0).unwrap();
+        assert_eq!(&decrypted[..], &payload[..]);
     }
 }

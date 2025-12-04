@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-media"
-version = "0.9.0"
+version = "0.11.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of WebRTC Media API"
@@ -10,12 +10,12 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/media"
 
 [dependencies]
-rtp = { version = "0.12.0", path = "../rtp" }
+rtp = { version = "0.14.0", path = "../rtp" }
 
 byteorder = "1"
 bytes = "1"
 thiserror = "1"
-rand = "0.8"
+rand = "0.9"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

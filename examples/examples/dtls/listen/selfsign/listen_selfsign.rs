@@ -2,13 +2,13 @@ use std::io::Write;
 use std::sync::Arc;
 
 use clap::{App, AppSettings, Arg};
-use hub::utilities::load_certificate;
+use dtls::config::{Config, ExtendedMasterSecretType};
+use dtls::crypto::Certificate;
+use dtls::listener::listen;
+use dtls::Error;
 use util::conn::*;
-use webrtc_dtls::config::{ClientAuthType, Config, ExtendedMasterSecretType};
-use webrtc_dtls::listener::listen;
-use webrtc_dtls::Error;
 
-// cargo run --example listen_verify -- --host 127.0.0.1:4444
+// cargo run --example listen_selfsign -- --host 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -56,24 +56,12 @@ async fn main() -> Result<(), Error> {
 
     let host = matches.value_of("host").unwrap().to_owned();
 
-    let certificate = hub::utilities::load_key_and_certificate(
-        "dtls/examples/certificates/server.pem.private_key.pem".into(),
-        "dtls/examples/certificates/server.pub.pem".into(),
-    )?;
-
-    let mut cert_pool = rustls::RootCertStore::empty();
-    let certs = load_certificate("dtls/examples/certificates/server.pub.pem".into())?;
-    for cert in &certs {
-        if cert_pool.add(cert.to_owned()).is_err() {
-            return Err(Error::Other("cert_pool add_pem_file failed".to_owned()));
-        }
-    }
+    // Generate a certificate and private key to secure the connection
+    let certificate = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
 
     let cfg = Config {
         certificates: vec![certificate],
         extended_master_secret: ExtendedMasterSecretType::Require,
-        client_auth: ClientAuthType::RequireAndVerifyClientCert, //RequireAnyClientCert, //
-        client_cas: cert_pool,
         ..Default::default()
     };
 
@@ -84,35 +72,16 @@ async fn main() -> Result<(), Error> {
     // Simulate a chat session
     let h = Arc::new(hub::Hub::new());
 
-    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
-    let mut done_tx = Some(done_tx);
-
     let listener2 = Arc::clone(&listener);
     let h2 = Arc::clone(&h);
     tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = done_rx.recv() => {
-                    break;
-                }
-                result = listener2.accept() => {
-                    match result{
-                        Ok((dtls_conn, _)) => {
-                            // Register the connection with the chat hub
-                            h2.register(dtls_conn).await;
-                        }
-                        Err(err) => {
-                            println!("connecting failed with error: {err}");
-                        }
-                    }
-                }
-            }
+        while let Ok((dtls_conn, _remote_addr)) = listener2.accept().await {
+            // Register the connection with the chat hub
+            h2.register(dtls_conn).await;
         }
     });
 
     h.chat().await;
-
-    done_tx.take();
 
     Ok(listener.close().await?)
 }

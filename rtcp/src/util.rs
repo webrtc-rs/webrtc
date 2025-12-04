@@ -4,7 +4,7 @@ use crate::error::{Error, Result};
 
 // returns the padding required to make the length a multiple of 4
 pub(crate) fn get_padding_size(len: usize) -> usize {
-    if len % 4 == 0 {
+    if len.is_multiple_of(4) {
         0
     } else {
         4 - (len % 4)

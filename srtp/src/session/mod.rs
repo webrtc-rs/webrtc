@@ -28,7 +28,8 @@ const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
 pub struct Session {
     local_context: Arc<Mutex<Context>>,
     streams_map: Arc<Mutex<HashMap<u32, Arc<Stream>>>>,
-    new_stream_rx: Arc<Mutex<mpsc::Receiver<Arc<Stream>>>>,
+    #[allow(clippy::type_complexity)]
+    new_stream_rx: Arc<Mutex<mpsc::Receiver<(Arc<Stream>, Option<rtp::header::Header>)>>>,
     close_stream_tx: mpsc::Sender<u32>,
     close_session_tx: mpsc::Sender<()>,
     pub(crate) udp_tx: Arc<dyn Conn + Send + Sync>,
@@ -97,7 +98,7 @@ impl Session {
                 tokio::select! {
                     result = incoming_stream => match result{
                         Ok(()) => {},
-                        Err(err) => log::info!("{}", err),
+                        Err(err) => log::info!("{err}"),
                     },
                     opt = close_stream => if let Some(ssrc) = opt {
                         Session::close_stream(&cloned_streams_map, ssrc).await
@@ -128,7 +129,7 @@ impl Session {
         buf: &mut [u8],
         streams_map: &Arc<Mutex<HashMap<u32, Arc<Stream>>>>,
         close_stream_tx: &mpsc::Sender<u32>,
-        new_stream_tx: &mut mpsc::Sender<Arc<Stream>>,
+        new_stream_tx: &mut mpsc::Sender<(Arc<Stream>, Option<rtp::header::Header>)>,
         remote_context: &mut Context,
         is_rtp: bool,
     ) -> Result<()> {
@@ -144,24 +145,28 @@ impl Session {
         };
 
         let mut buf = &decrypted[..];
-        let ssrcs = if is_rtp {
-            vec![rtp::header::Header::unmarshal(&mut buf)?.ssrc]
+        let (ssrcs, header) = if is_rtp {
+            let header = rtp::header::Header::unmarshal(&mut buf)?;
+            (vec![header.ssrc], Some(header))
         } else {
             let pkts = rtcp::packet::unmarshal(&mut buf)?;
-            destination_ssrc(&pkts)
+            (destination_ssrc(&pkts), None)
         };
 
         for ssrc in ssrcs {
             let (stream, is_new) =
                 Session::get_or_create_stream(streams_map, close_stream_tx.clone(), is_rtp, ssrc)
                     .await;
+
             if is_new {
                 log::trace!(
                     "srtp session got new {} stream {}",
                     if is_rtp { "rtp" } else { "rtcp" },
                     ssrc
                 );
-                new_stream_tx.send(Arc::clone(&stream)).await?;
+                new_stream_tx
+                    .send((Arc::clone(&stream), header.clone()))
+                    .await?;
             }
 
             match stream.buffer.write(&decrypted).await {
@@ -210,14 +215,13 @@ impl Session {
     }
 
     /// accept returns a stream to handle RTCP for a single SSRC
-    pub async fn accept(&self) -> Result<Arc<Stream>> {
+    pub async fn accept(&self) -> Result<(Arc<Stream>, Option<rtp::header::Header>)> {
         let mut new_stream_rx = self.new_stream_rx.lock().await;
-        let result = new_stream_rx.recv().await;
-        if let Some(stream) = result {
-            Ok(stream)
-        } else {
-            Err(Error::SessionSrtpAlreadyClosed)
-        }
+
+        new_stream_rx
+            .recv()
+            .await
+            .ok_or(Error::SessionSrtpAlreadyClosed)
     }
 
     pub async fn close(&self) -> Result<()> {

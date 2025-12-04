@@ -26,14 +26,9 @@ pub struct MappedAddress {
 
 impl fmt::Display for MappedAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let family = match self.ip {
-            IpAddr::V4(_) => FAMILY_IPV4,
-            IpAddr::V6(_) => FAMILY_IPV6,
-        };
-        if family == FAMILY_IPV4 {
-            write!(f, "{}:{}", self.ip, self.port)
-        } else {
-            write!(f, "[{}]:{}", self.ip, self.port)
+        match self.ip {
+            IpAddr::V4(ipv4) => write!(f, "{}:{}", ipv4, self.port),
+            IpAddr::V6(ipv6) => write!(f, "[{}]:{}", ipv6, self.port),
         }
     }
 }

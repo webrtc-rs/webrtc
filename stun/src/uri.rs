@@ -21,7 +21,7 @@ pub struct Uri {
 impl fmt::Display for Uri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let host = if self.host.contains("::") {
-            "[".to_owned() + self.host.as_str() + "]"
+            format!("[{}]", self.host)
         } else {
             self.host.clone()
         };
@@ -44,11 +44,8 @@ impl Uri {
 
         let mut s = raw.to_string();
         let pos = raw.find(':');
-        if let Some(p) = pos {
-            s.replace_range(p..p + 1, "://");
-        } else {
-            return Err(Error::ErrSchemeType);
-        }
+        let p = pos.ok_or(Error::ErrSchemeType)?;
+        s.replace_range(p..p + 1, "://");
 
         let raw_parts = url::Url::parse(&s)?;
 
@@ -57,14 +54,13 @@ impl Uri {
             return Err(Error::ErrSchemeType);
         }
 
-        let host = if let Some(host) = raw_parts.host_str() {
-            host.trim()
-                .trim_start_matches('[')
-                .trim_end_matches(']')
-                .to_owned()
-        } else {
-            return Err(Error::ErrHost);
-        };
+        let host = raw_parts
+            .host_str()
+            .ok_or(Error::ErrHost)?
+            .trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_owned();
 
         let port = raw_parts.port();
 

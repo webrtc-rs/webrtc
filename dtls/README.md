@@ -12,11 +12,11 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/dtls">
   <img src="https://deps.rs/repo/github/webrtc-rs/dtls/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-dtls">
-  <img src="https://img.shields.io/crates/v/webrtc-dtls.svg">
+ <a href="https://crates.io/crates/dtls">
+  <img src="https://img.shields.io/crates/v/dtls.svg">
  </a>
- <a href="https://docs.rs/webrtc-dtls">
-  <img src="https://docs.rs/webrtc-dtls/badge.svg">
+ <a href="https://docs.rs/dtls">
+  <img src="https://docs.rs/dtls/badge.svg">
  </a>
  <a href="https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license">
   <img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue" alt="License: MIT/Apache 2.0">

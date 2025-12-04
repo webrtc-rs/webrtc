@@ -319,7 +319,7 @@ impl Flight for Flight3 {
                 }
             };
 
-            if let Err((alert, err)) = handle_server_key_exchange(state, cfg, h) {
+            if let Err((alert, err)) = handle_server_key_exchange(state, cfg, h).await {
                 return Err((alert, err));
             }
         }
@@ -411,13 +411,13 @@ impl Flight for Flight3 {
     }
 }
 
-pub(crate) fn handle_server_key_exchange(
+pub(crate) async fn handle_server_key_exchange(
     state: &mut State,
     cfg: &HandshakeConfig,
     h: &HandshakeMessageServerKeyExchange,
 ) -> Result<(), (Option<Alert>, Option<Error>)> {
     if let Some(local_psk_callback) = &cfg.local_psk_callback {
-        let psk = match local_psk_callback(&h.identity_hint) {
+        let psk = match local_psk_callback(&h.identity_hint).await {
             Ok(psk) => psk,
             Err(err) => {
                 return Err((

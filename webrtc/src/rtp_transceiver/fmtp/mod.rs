@@ -17,14 +17,14 @@ pub trait Fmtp: fmt::Debug {
 
     /// match_fmtp compares two fmtp descriptions for
     /// compatibility based on the mime_type    
-    fn match_fmtp(&self, f: &(dyn Fmtp)) -> bool;
+    fn match_fmtp(&self, f: &dyn Fmtp) -> bool;
 
     /// parameter returns a value for the associated key
     /// if contained in the parsed fmtp string
     fn parameter(&self, key: &str) -> Option<&String>;
 
-    fn equal(&self, other: &(dyn Fmtp)) -> bool;
-    fn as_any(&self) -> &(dyn Any);
+    fn equal(&self, other: &dyn Fmtp) -> bool;
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl PartialEq for dyn Fmtp {

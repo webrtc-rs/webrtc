@@ -507,10 +507,7 @@ impl Packet for TransportLayerCc {
     }
 
     fn equal(&self, other: &(dyn Packet + Send + Sync)) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<TransportLayerCc>()
-            .map_or(false, |a| self == a)
+        other.as_any().downcast_ref::<TransportLayerCc>() == Some(self)
     }
 
     fn cloned(&self) -> Box<dyn Packet + Send + Sync> {

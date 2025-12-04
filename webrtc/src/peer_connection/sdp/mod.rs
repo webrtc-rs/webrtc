@@ -20,6 +20,7 @@ pub mod session_description;
 use std::collections::HashMap;
 use std::convert::From;
 use std::io::BufReader;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use ice::candidate::candidate_base::unmarshal_candidate;
@@ -111,14 +112,14 @@ pub(crate) fn track_details_from_sdp(
                                 let base_ssrc = match split[1].parse::<u32>() {
                                     Ok(ssrc) => ssrc,
                                     Err(err) => {
-                                        log::warn!("Failed to parse SSRC: {}", err);
+                                        log::warn!("Failed to parse SSRC: {err}");
                                         continue;
                                     }
                                 };
                                 let rtx_repair_flow = match split[2].parse::<u32>() {
                                     Ok(n) => n,
                                     Err(err) => {
-                                        log::warn!("Failed to parse SSRC: {}", err);
+                                        log::warn!("Failed to parse SSRC: {err}");
                                         continue;
                                     }
                                 };
@@ -155,7 +156,7 @@ pub(crate) fn track_details_from_sdp(
                         let ssrc = match split[0].parse::<u32>() {
                             Ok(ssrc) => ssrc,
                             Err(err) => {
-                                log::warn!("Failed to parse SSRC: {}", err);
+                                log::warn!("Failed to parse SSRC: {err}");
                                 continue;
                             }
                         };
@@ -242,7 +243,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> Vec<SimulcastRid> {
                 .and_then(SimulcastRid::try_from)
                 .map(|rid| rids.push(rid))
             {
-                log::warn!("Failed to parse RID: {}", err);
+                log::warn!("Failed to parse RID: {err}");
             }
         } else if attr.key.as_str() == SDP_ATTRIBUTE_SIMULCAST {
             simulcast_attr.clone_from(&attr.value);
@@ -1019,14 +1020,42 @@ pub(crate) async fn extract_ice_details(
     Ok((remote_ufrag.to_owned(), remote_pwd.to_owned(), candidates))
 }
 
-pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool {
+pub(crate) fn get_application_media_section_sctp_port(desc: &SessionDescription) -> Option<u16> {
     for m in &desc.media_descriptions {
         if m.media_name.media == MEDIA_SECTION_APPLICATION {
-            return true;
+            return if let Some(sctp_port_attr) =
+                m.attributes.iter().find(|attr| attr.key == "sctp-port")
+            {
+                let sctp_port_value = sctp_port_attr.value.as_ref();
+
+                sctp_port_value.and_then(|attr| attr.parse::<u16>().ok())
+            } else if let Some(sctp_port_attr) =
+                m.attributes.iter().find(|attr| attr.key == "sctpmap")
+            {
+                if let Some(sctp_port_attr_value) = sctp_port_attr.value.as_ref() {
+                    sctp_port_attr_value
+                        .split(" ")
+                        .next()
+                        .and_then(|port| u16::from_str(port).ok())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
         }
     }
 
-    false
+    None
+}
+
+pub(crate) fn get_application_media_section_max_message_size(
+    desc: &SessionDescription,
+) -> Option<u32> {
+    get_application_media(desc)?
+        .attribute(ATTR_KEY_MAX_MESSAGE_SIZE)??
+        .parse()
+        .ok()
 }
 
 pub(crate) fn get_by_mid<'a>(
@@ -1045,18 +1074,17 @@ pub(crate) fn get_by_mid<'a>(
     None
 }
 
+pub(crate) fn get_application_media(desc: &SessionDescription) -> Option<&MediaDescription> {
+    desc.media_descriptions
+        .iter()
+        .find(|media_description| media_description.media_name.media == MEDIA_SECTION_APPLICATION)
+}
+
 /// have_data_channel return MediaDescription with MediaName equal application
 pub(crate) fn have_data_channel(
     desc: &session_description::RTCSessionDescription,
 ) -> Option<&MediaDescription> {
-    if let Some(parsed) = &desc.parsed {
-        for d in &parsed.media_descriptions {
-            if d.media_name.media == MEDIA_SECTION_APPLICATION {
-                return Some(d);
-            }
-        }
-    }
-    None
+    get_application_media(desc.parsed.as_ref()?)
 }
 
 pub(crate) fn codecs_from_media_description(

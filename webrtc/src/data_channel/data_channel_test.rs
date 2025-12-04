@@ -8,6 +8,7 @@ use waitgroup::WaitGroup;
 
 use super::*;
 use crate::api::media_engine::MediaEngine;
+use crate::api::setting_engine::SctpMaxMessageSize;
 use crate::api::{APIBuilder, API};
 use crate::data_channel::data_channel_init::RTCDataChannelInit;
 //use log::LevelFilter;
@@ -1142,7 +1143,7 @@ async fn test_eof_detach() -> Result<()> {
                     let detached = match dc4.detach().await {
                         Ok(detached) => detached,
                         Err(err) => {
-                            log::debug!("Detach failed: {}", err);
+                            log::debug!("Detach failed: {err}");
                             panic!();
                         }
                     };
@@ -1271,7 +1272,7 @@ async fn test_eof_no_detach() -> Result<()> {
     let dca2 = Arc::clone(&dca);
     dca.on_open(Box::new(move || {
         log::debug!("pca: data channel opened");
-        log::debug!("pca: sending {:?}", test_data);
+        log::debug!("pca: sending {test_data:?}");
         let dca3 = Arc::clone(&dca2);
         Box::pin(async move {
             let _ = dca3.send(&Bytes::from_static(test_data)).await;
@@ -1375,6 +1376,203 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
     Ok(())
 }
 
+async fn create_data_channel_with_max_message_size(
+    remote_max_message_size: Option<u32>,
+    can_send_max_message_size: Option<SctpMaxMessageSize>,
+) -> Result<Arc<RTCDataChannel>> {
+    let mut m = MediaEngine::default();
+    let mut s: SettingEngine = SettingEngine::default();
+    s.detach_data_channels();
+    m.register_default_codecs()?;
+    let api_builder = APIBuilder::new().with_media_engine(m);
+
+    if let Some(can_send_max_message_size) = can_send_max_message_size {
+        s.set_sctp_max_message_size_can_send(can_send_max_message_size);
+    }
+
+    let api = api_builder.with_setting_engine(s).build();
+
+    let (offer_pc, answer_pc) = new_pair(&api).await?;
+    let (data_channel_tx, mut data_channel_rx) = mpsc::channel::<Arc<RTCDataChannel>>(1);
+    let data_channel_tx = Arc::new(data_channel_tx);
+    answer_pc.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
+        let data_channel_tx2 = Arc::clone(&data_channel_tx);
+        Box::pin(async move {
+            data_channel_tx2.send(dc).await.unwrap();
+        })
+    }));
+
+    let _ = offer_pc.create_data_channel("foo", None).await?;
+
+    let offer = offer_pc.create_offer(None).await?;
+    let mut offer_gathering_complete = offer_pc.gathering_complete_promise().await;
+    offer_pc.set_local_description(offer).await?;
+    let _ = offer_gathering_complete.recv().await;
+    let mut offer = offer_pc.local_description().await.unwrap();
+
+    if let Some(remote_max_message_size) = remote_max_message_size {
+        offer
+            .sdp
+            .push_str(format!("a=max-message-size:{}\r\n", remote_max_message_size).as_str());
+    }
+
+    answer_pc.set_remote_description(offer).await?;
+
+    let answer = answer_pc.create_answer(None).await?;
+
+    let mut answer_gathering_complete = answer_pc.gathering_complete_promise().await;
+    answer_pc.set_local_description(answer).await?;
+    let _ = answer_gathering_complete.recv().await;
+
+    let answer = answer_pc.local_description().await.unwrap();
+    offer_pc.set_remote_description(answer).await?;
+
+    Ok(data_channel_rx.recv().await.unwrap())
+}
+
+// 128 KB
+const EXPECTED_MAX_MESSAGE_SIZE: u32 = 131072;
+
+#[tokio::test]
+async fn test_data_channel_max_message_size_respected_on_send() -> Result<()> {
+    let data_channel = create_data_channel_with_max_message_size(
+        Some(EXPECTED_MAX_MESSAGE_SIZE),
+        Some(SctpMaxMessageSize::Unbounded),
+    )
+    .await?;
+
+    // A buffer with a size greater than the default size of 64KB.
+    let buffer = vec![0; 68000];
+    let bytes = bytes::Bytes::copy_from_slice(buffer.as_slice());
+    data_channel.send(&bytes).await.unwrap();
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_given_remote_max_message_size_is_none_when_data_channel_can_send_max_message_size_respected_on_send(
+) -> Result<()> {
+    const EXPECTED_CAN_SEND_MAX_MESSAGE_SIZE: u32 = 1024;
+    let data_channel = create_data_channel_with_max_message_size(
+        None,
+        Some(SctpMaxMessageSize::Bounded(
+            EXPECTED_CAN_SEND_MAX_MESSAGE_SIZE,
+        )),
+    )
+    .await?;
+
+    let buffer = vec![0; 65536];
+    let bytes = bytes::Bytes::copy_from_slice(buffer.as_slice());
+
+    let actual = data_channel.send(&bytes).await;
+
+    assert!(matches!(
+        actual,
+        Err(Error::Data(data::Error::Sctp(
+            sctp::Error::ErrOutboundPacketTooLarge
+        )))
+    ));
+
+    Ok(())
+}
+
+async fn run_data_channel_config_max_message_size(
+    remote_max_message_size: Option<u32>,
+    can_send_max_message_size: Option<SctpMaxMessageSize>,
+) -> Result<u32> {
+    let data_channel = create_data_channel_with_max_message_size(
+        remote_max_message_size,
+        can_send_max_message_size,
+    )
+    .await?;
+    let data_channel = data_channel.detach().await?;
+    Ok(data_channel.config.max_message_size)
+}
+
+#[tokio::test]
+async fn test_data_channel_max_message_size_reflected_on_data_channel_config() -> Result<()> {
+    assert_eq!(
+        run_data_channel_config_max_message_size(
+            Some(EXPECTED_MAX_MESSAGE_SIZE),
+            Some(SctpMaxMessageSize::Unbounded)
+        )
+        .await?,
+        EXPECTED_MAX_MESSAGE_SIZE
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_can_send_max_message_size_unspecified_then_remote_default_value_is_respected(
+) -> Result<()> {
+    assert_eq!(
+        run_data_channel_config_max_message_size(Some(EXPECTED_MAX_MESSAGE_SIZE), None).await?,
+        SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_given_can_send_channel_max_message_size_less_than_remote_max_message_size_respect_send_channel_max_message_size(
+) -> Result<()> {
+    let remote_max_message_size = 1024;
+    let can_send_channel_max_message_size = 256;
+    assert_eq!(
+        run_data_channel_config_max_message_size(
+            Some(remote_max_message_size),
+            Some(SctpMaxMessageSize::Bounded(
+                can_send_channel_max_message_size
+            ))
+        )
+        .await?,
+        can_send_channel_max_message_size
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_can_send_max_message_size_respected_on_data_channel_config() -> Result<()> {
+    let can_send_channel_max_message_size = 1024;
+    assert_eq!(
+        run_data_channel_config_max_message_size(
+            None,
+            Some(SctpMaxMessageSize::Bounded(
+                can_send_channel_max_message_size
+            ))
+        )
+        .await?,
+        can_send_channel_max_message_size
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_given_no_remote_message_size_or_can_send_max_message_size_max_size_is_65536(
+) -> Result<()> {
+    assert_eq!(
+        run_data_channel_config_max_message_size(None, None).await?,
+        SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_respect_default_remote_max_message_size_when_can_send_max_message_size_is_greater_than_default(
+) -> Result<()> {
+    assert_eq!(
+        run_data_channel_config_max_message_size(None, Some(SctpMaxMessageSize::Bounded(70000)))
+            .await?,
+        SctpMaxMessageSize::DEFAULT_MESSAGE_SIZE
+    );
+
+    Ok(())
+}
+
 struct TestOrtcStack {
     //api      *API
     gatherer: Arc<RTCIceGatherer>,
@@ -1428,7 +1626,7 @@ impl TestOrtcStack {
         self.dtls.start(sig.dtls_parameters.clone()).await?;
 
         // Start the SCTP transport
-        self.sctp.start(sig.sctp_capabilities).await?;
+        self.sctp.start(sig.sctp_capabilities, 5000, 5000).await?;
 
         Ok(())
     }

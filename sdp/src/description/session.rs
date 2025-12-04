@@ -31,6 +31,7 @@ pub const ATTR_KEY_SEND_ONLY: &str = "sendonly";
 pub const ATTR_KEY_SEND_RECV: &str = "sendrecv";
 pub const ATTR_KEY_EXT_MAP: &str = "extmap";
 pub const ATTR_KEY_EXTMAP_ALLOW_MIXED: &str = "extmap-allow-mixed";
+pub const ATTR_KEY_MAX_MESSAGE_SIZE: &str = "max-message-size";
 
 /// Constants for semantic tokens used in JSEP
 pub const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &str = "LS";
@@ -1151,7 +1152,7 @@ fn unmarshal_time_zones<'a, R: io::BufRead + io::Seek>(
     // z=<adjustment time> <offset> <adjustment time> <offset> ....
     // so we are making sure that there are actually multiple of 2 total.
     let fields: Vec<&str> = value.split_whitespace().collect();
-    if fields.len() % 2 != 0 {
+    if !fields.len().is_multiple_of(2) {
         return Err(Error::SdpInvalidSyntax(format!("`t={value}`")));
     }
 

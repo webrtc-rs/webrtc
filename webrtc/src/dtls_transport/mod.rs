@@ -427,7 +427,7 @@ impl RTCDtlsTransport {
                 }
                 _ => {
                     if let Err(err) = dtls_conn.close().await {
-                        log::error!("{}", err);
+                        log::error!("{err}");
                     }
 
                     self.state_change(RTCDtlsTransportState::Failed).await;
@@ -440,7 +440,7 @@ impl RTCDtlsTransport {
         let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
         if remote_certs.is_empty() {
             if let Err(err) = dtls_conn.close().await {
-                log::error!("{}", err);
+                log::error!("{err}");
             }
 
             self.state_change(RTCDtlsTransportState::Failed).await;
@@ -458,7 +458,7 @@ impl RTCDtlsTransport {
         {
             if let Err(err) = self.validate_fingerprint(&remote_certs[0]).await {
                 if let Err(close_err) = dtls_conn.close().await {
-                    log::error!("{}", close_err);
+                    log::error!("{close_err}");
                 }
 
                 self.state_change(RTCDtlsTransportState::Failed).await;

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod rand_test;
 
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 
 const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const RUNES_CANDIDATE_ID_FOUNDATION: &[u8] =
@@ -12,11 +12,11 @@ const LEN_PWD: usize = 32;
 
 // TODO: cryptographically strong random source
 pub fn generate_crypto_random_string(n: usize, runes: &[u8]) -> String {
-    let mut rng = thread_rng();
+    let mut rng = rng();
 
     let rand_string: String = (0..n)
         .map(|_| {
-            let idx = rng.gen_range(0..runes.len());
+            let idx = rng.random_range(0..runes.len());
             runes[idx] as char
         })
         .collect();

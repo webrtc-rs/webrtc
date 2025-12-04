@@ -65,6 +65,13 @@ struct SerializedState {
     is_client: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KeyLogData {
+    pub local_random: Vec<u8>,
+    pub remote_random: Vec<u8>,
+    pub master_secret: Vec<u8>,
+}
+
 impl Default for State {
     fn default() -> Self {
         State {
@@ -248,6 +255,26 @@ impl State {
         self.init_cipher_suite().await?;
 
         Ok(())
+    }
+
+    /// key_log_data returns the key log data for the current state.
+    pub fn key_log_data(&self) -> Result<KeyLogData> {
+        let mut local_random = vec![];
+        {
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(local_random.as_mut());
+            self.local_random.marshal(&mut writer)?;
+        }
+        let mut remote_random = vec![];
+        {
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(remote_random.as_mut());
+            self.remote_random.marshal(&mut writer)?;
+        }
+
+        Ok(KeyLogData {
+            local_random,
+            remote_random,
+            master_secret: self.master_secret.clone(),
+        })
     }
 }
 

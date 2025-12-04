@@ -1599,8 +1599,8 @@ async fn test_agent_credentials() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
     {
         let ufrag_pwd = a.internal.ufrag_pwd.lock().await;
-        assert!(ufrag_pwd.local_ufrag.as_bytes().len() * 8 >= 24);
-        assert!(ufrag_pwd.local_pwd.as_bytes().len() * 8 >= 128);
+        assert!(ufrag_pwd.local_ufrag.len() * 8 >= 24);
+        assert!(ufrag_pwd.local_pwd.len() * 8 >= 128);
     }
     a.close().await?;
 

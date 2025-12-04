@@ -2,14 +2,14 @@ use std::io::Write;
 use std::sync::Arc;
 
 use clap::{App, AppSettings, Arg};
+use dtls::cipher_suite::CipherSuiteId;
+use dtls::config::*;
+use dtls::conn::DTLSConn;
+use dtls::Error;
 use tokio::net::UdpSocket;
 use util::Conn;
-use webrtc_dtls::config::*;
-use webrtc_dtls::conn::DTLSConn;
-use webrtc_dtls::crypto::Certificate;
-use webrtc_dtls::Error;
 
-// cargo run --example dial_selfsign -- --server 127.0.0.1:4444
+// cargo run --example dial_psk -- --server 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -61,12 +61,16 @@ async fn main() -> Result<(), Error> {
     conn.connect(server).await?;
     println!("connecting {server}..");
 
-    // Generate a certificate and private key to secure the connection
-    let certificate = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
-
     let config = Config {
-        certificates: vec![certificate],
-        insecure_skip_verify: true,
+        psk: Some(Arc::new(|hint: &[u8]| {
+            let hint = hint.to_owned();
+            Box::pin(async move {
+                println!("Server's hint: {}", String::from_utf8(hint.to_vec())?);
+                Ok(vec![0xAB, 0xC1, 0x23])
+            })
+        })),
+        psk_identity_hint: Some("webrtc-rs DTLS Server".as_bytes().to_vec()),
+        cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
         extended_master_secret: ExtendedMasterSecretType::Require,
         ..Default::default()
     };

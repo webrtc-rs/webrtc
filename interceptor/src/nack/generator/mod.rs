@@ -107,14 +107,12 @@ impl Generator {
         internal: Arc<GeneratorInternal>,
     ) -> Result<()> {
         let mut ticker = tokio::time::interval(internal.interval);
-        let mut close_rx = {
-            let mut close_rx = internal.close_rx.lock().await;
-            if let Some(close) = close_rx.take() {
-                close
-            } else {
-                return Err(Error::ErrInvalidCloseRx);
-            }
-        };
+        let mut close_rx = internal
+            .close_rx
+            .lock()
+            .await
+            .take()
+            .ok_or(Error::ErrInvalidCloseRx)?;
 
         let sender_ssrc = rand::random::<u32>();
         loop {
@@ -141,7 +139,7 @@ impl Generator {
                     let a = Attributes::new();
                     for nack in nacks{
                         if let Err(err) = rtcp_writer.write(&[Box::new(nack)], &a).await{
-                            log::warn!("failed sending nack: {}", err);
+                            log::warn!("failed sending nack: {err}");
                         }
                     }
                 }
@@ -183,7 +181,7 @@ impl Interceptor for Generator {
         tokio::spawn(async move {
             let _d = w.take();
             if let Err(err) = Generator::run(writer2, internal).await {
-                log::warn!("bind_rtcp_writer NACK Generator::run got error: {}", err);
+                log::warn!("bind_rtcp_writer NACK Generator::run got error: {err}");
             }
         });
 

@@ -248,6 +248,15 @@ fn test_replay_detector() {
                 0xFFFD, 0xFFFC, 0x0002, 0xFFFE, 0x0000, 0x0001, 0xFFFF, 0x0003,
             ],
         ),
+        (
+            "RepeatedReorderedAfterWrap",
+            4,
+            0xFFFF,
+            vec![0x0, 0xFFFF, 0xFFFF],
+            vec![true, true, true],
+            vec![0x0, 0xFFFF],
+            vec![0x0, 0xFFFF],
+        ),
     ];
 
     for (name, windows_size, max_seq, input, valid, expected, mut expected_wrap) in tests {

@@ -86,10 +86,7 @@ impl Packet for VoIPMetricsReportBlock {
         self
     }
     fn equal(&self, other: &(dyn Packet + Send + Sync)) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<VoIPMetricsReportBlock>()
-            .map_or(false, |a| self == a)
+        other.as_any().downcast_ref::<VoIPMetricsReportBlock>() == Some(self)
     }
     fn cloned(&self) -> Box<dyn Packet + Send + Sync> {
         Box::new(self.clone())
@@ -152,7 +149,10 @@ impl Unmarshal for VoIPMetricsReportBlock {
         }
 
         let xr_header = XRHeader::unmarshal(raw_packet)?;
-        let block_length = xr_header.block_length * 4;
+        let block_length = match xr_header.block_length.checked_mul(4) {
+            Some(length) => length,
+            None => return Err(error::Error::InvalidBlockSize.into()),
+        };
         if block_length != VM_REPORT_BLOCK_LENGTH || raw_packet.remaining() < block_length as usize
         {
             return Err(error::Error::PacketTooShort.into());

@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-ice"
-version = "0.12.0"
+version = "0.14.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of ICE"
@@ -10,16 +10,16 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/ice"
 
 [dependencies]
-util = { version = "0.10.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
-turn = { version = "0.9.0", path = "../turn" }
-stun = { version = "0.7.0", path = "../stun" }
-mdns = { version = "0.8.0", path = "../mdns", package = "webrtc-mdns" }
+util = { version = "0.12.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
+turn = { version = "0.11.0", path = "../turn" }
+stun = { version = "0.9.0", path = "../stun" }
+mdns = { version = "0.10.0", path = "../mdns", package = "webrtc-mdns" }
 
 arc-swap = "1"
 async-trait = "0.1"
 crc = "3"
 log = "0.4"
-rand = "0.8"
+rand = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
@@ -41,7 +41,6 @@ waitgroup = "0.1"
 portable-atomic = "1.6"
 
 [dev-dependencies]
-tokio-test = "0.4"
 regex = "1.9.5"
 env_logger = "0.11.3"
 chrono = "0.4.28"

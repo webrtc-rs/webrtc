@@ -28,9 +28,9 @@ use crate::stats::StatsReportType::Codec;
 /// MIME_TYPE_H264 H264 MIME type.
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_H264: &str = "video/H264";
-/// MIME_TYPE_HEVC HEVC MIME type.
+/// MIME_TYPE_HEVC HEVC/H265 MIME type.
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_HEVC: &str = "video/HEVC";
+pub const MIME_TYPE_HEVC: &str = "video/H265";
 /// MIME_TYPE_OPUS Opus MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_OPUS: &str = "audio/opus";
@@ -88,6 +88,7 @@ pub struct MediaEngine {
     // If we have attempted to negotiate a codec type yet.
     pub(crate) negotiated_video: AtomicBool,
     pub(crate) negotiated_audio: AtomicBool,
+    pub(crate) negotiate_multi_codecs: AtomicBool,
 
     pub(crate) video_codecs: Vec<RTCRtpCodecParameters>,
     pub(crate) audio_codecs: Vec<RTCRtpCodecParameters>,
@@ -104,7 +105,7 @@ impl MediaEngine {
     /// register_default_codecs is not safe for concurrent use.
     pub fn register_default_codecs(&mut self) -> Result<()> {
         // Default Audio Codecs
-        for codec in vec![
+        for codec in [
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
@@ -461,6 +462,17 @@ impl MediaEngine {
         }
     }
 
+    /// set_multi_codec_negotiation enables or disables the negotiation of multiple codecs.
+    pub(crate) fn set_multi_codec_negotiation(&self, negotiate_multi_codecs: bool) {
+        self.negotiate_multi_codecs
+            .store(negotiate_multi_codecs, Ordering::SeqCst);
+    }
+
+    /// multi_codec_negotiation returns the current state of the negotiation of multiple codecs.
+    pub(crate) fn multi_codec_negotiation(&self) -> bool {
+        self.negotiate_multi_codecs.load(Ordering::SeqCst)
+    }
+
     pub(crate) async fn get_codec_by_payload(
         &self,
         payload_type: PayloadType,
@@ -609,7 +621,7 @@ impl MediaEngine {
                     n_ext.1.is_audio |= typ == RTPCodecType::Audio;
                 } else {
                     let nid = n_ext.0;
-                    log::warn!("Invalid ext id mapping in update_header_extension. {} was negotiated as {}, but was {} in call", extension, nid, id);
+                    log::warn!("Invalid ext id mapping in update_header_extension. {extension} was negotiated as {nid}, but was {id} in call");
                 }
             } else {
                 // We either only have a proposal or we have neither proposal nor a negotiated id
@@ -617,7 +629,7 @@ impl MediaEngine {
 
                 if let Some(prev_ext) = negotiated_header_extensions.get(&id) {
                     let prev_uri = &prev_ext.uri;
-                    log::warn!("Assigning {} to {} would override previous assignment to {}, no action taken", id, extension, prev_uri);
+                    log::warn!("Assigning {id} to {extension} would override previous assignment to {prev_uri}, no action taken");
                 } else {
                     let h = MediaEngineHeaderExtension {
                         uri: extension.to_owned(),
@@ -653,12 +665,14 @@ impl MediaEngine {
         desc: &SessionDescription,
     ) -> Result<()> {
         for media in &desc.media_descriptions {
-            let typ = if !self.negotiated_audio.load(Ordering::SeqCst)
+            let typ = if (!self.negotiated_audio.load(Ordering::SeqCst)
+                || self.negotiate_multi_codecs.load(Ordering::SeqCst))
                 && media.media_name.media.to_lowercase() == "audio"
             {
                 self.negotiated_audio.store(true, Ordering::SeqCst);
                 RTPCodecType::Audio
-            } else if !self.negotiated_video.load(Ordering::SeqCst)
+            } else if (!self.negotiated_video.load(Ordering::SeqCst)
+                || self.negotiate_multi_codecs.load(Ordering::SeqCst))
                 && media.media_name.media.to_lowercase() == "video"
             {
                 self.negotiated_video.store(true, Ordering::SeqCst);

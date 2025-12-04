@@ -83,30 +83,27 @@ impl Server {
     pub async fn delete_allocations_by_username(&self, username: String) -> Result<()> {
         let tx = {
             let command_tx = self.command_tx.lock().await;
-            command_tx.clone()
+            command_tx.clone().ok_or(Error::ErrClosed)?
         };
-        if let Some(tx) = tx {
-            let (closed_tx, closed_rx) = mpsc::channel(1);
-            tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
-                .map_err(|_| Error::ErrClosed)?;
 
-            closed_tx.closed().await;
+        let (closed_tx, closed_rx) = mpsc::channel(1);
+        tx.send(Command::DeleteAllocations(username, Arc::new(closed_rx)))
+            .map_err(|_| Error::ErrClosed)?;
 
-            Ok(())
-        } else {
-            Err(Error::ErrClosed)
-        }
+        closed_tx.closed().await;
+
+        Ok(())
     }
 
     /// Get information of [`Allocation`][`Allocation`]s by specified [`FiveTuple`]s.
     ///
     /// If `five_tuples` is:
-    /// - [`None`]:               It returns information about the all
-    ///                           [`Allocation`][`Allocation`]s.
+    /// - [`None`]: It returns information about the all
+    ///   [`Allocation`][`Allocation`]s.
     /// - [`Some`] and not empty: It returns information about
-    ///                           the [`Allocation`][`Allocation`]s associated with
-    ///                           the specified [`FiveTuples`].
-    /// - [`Some`], but empty:    It returns an empty [`HashMap`].
+    ///   the [`Allocation`][`Allocation`]s associated with
+    ///   the specified [`FiveTuples`].
+    /// - [`Some`], but empty: It returns an empty [`HashMap`].
     ///
     /// [`Allocation`]: crate::allocation::Allocation
     pub async fn get_allocations_info(
@@ -121,23 +118,20 @@ impl Server {
 
         let tx = {
             let command_tx = self.command_tx.lock().await;
-            command_tx.clone()
+            command_tx.clone().ok_or(Error::ErrClosed)?
         };
-        if let Some(tx) = tx {
-            let (infos_tx, mut infos_rx) = mpsc::channel(1);
-            tx.send(Command::GetAllocationsInfo(five_tuples, infos_tx))
-                .map_err(|_| Error::ErrClosed)?;
 
-            let mut info: HashMap<FiveTuple, AllocationInfo> = HashMap::new();
+        let (infos_tx, mut infos_rx) = mpsc::channel(1);
+        tx.send(Command::GetAllocationsInfo(five_tuples, infos_tx))
+            .map_err(|_| Error::ErrClosed)?;
 
-            for _ in 0..tx.receiver_count() {
-                info.extend(infos_rx.recv().await.ok_or(Error::ErrClosed)?);
-            }
+        let mut info: HashMap<FiveTuple, AllocationInfo> = HashMap::new();
 
-            Ok(info)
-        } else {
-            Err(Error::ErrClosed)
+        for _ in 0..tx.receiver_count() {
+            info.extend(infos_rx.recv().await.ok_or(Error::ErrClosed)?);
         }
+
+        Ok(info)
     }
 
     async fn read_loop(
@@ -176,7 +170,7 @@ impl Server {
                             break;
                         }
                         Err(RecvError::Lagged(n)) => {
-                            log::warn!("Turn server has lagged by {} messages", n);
+                            log::warn!("Turn server has lagged by {n} messages");
                             continue;
                         }
                     }
@@ -190,7 +184,7 @@ impl Server {
                     match v {
                         Ok(v) => v,
                         Err(err) => {
-                            log::debug!("exit read loop on error: {}", err);
+                            log::debug!("exit read loop on error: {err}");
                             break;
                         }
                     }
@@ -210,7 +204,7 @@ impl Server {
             };
 
             if let Err(err) = r.handle_request().await {
-                log::error!("error when handling datagram: {}", err);
+                log::error!("error when handling datagram: {err}");
             }
         }
 

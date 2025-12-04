@@ -125,7 +125,7 @@ impl UDPMuxDefault {
 
         match result {
             Err(err) => {
-                log::warn!("Failed to handle decode ICE from {}: {}", addr, err);
+                log::warn!("Failed to handle decode ICE from {addr}: {err}");
                 None
             }
             Ok(_) => {
@@ -139,10 +139,7 @@ impl UDPMuxDefault {
                     // Per the RFC this shouldn't happen
                     // https://datatracker.ietf.org/doc/html/rfc5389#section-15.3
                     Err(err) => {
-                        log::warn!(
-                            "Failed to decode USERNAME from STUN message as UTF-8: {}",
-                            err
-                        );
+                        log::warn!("Failed to decode USERNAME from STUN message as UTF-8: {err}");
                         return None;
                     }
                     Ok(s) => s,
@@ -197,14 +194,14 @@ impl UDPMuxDefault {
                                     }
                                     Some(conn) => {
                                         if let Err(err) = conn.write_packet(&buffer[..len], addr).await {
-                                            log::error!("Failed to write packet: {}", err);
+                                            log::error!("Failed to write packet: {err}");
                                         }
                                     }
                                 }
                             }
                             Err(Error::Io(err)) if err.0.kind() == ErrorKind::TimedOut => continue,
                             Err(err) => {
-                                log::error!("Could not read udp packet: {}", err);
+                                log::error!("Could not read udp packet: {err}");
                                 break;
                             }
                         }
@@ -325,14 +322,10 @@ impl UDPMuxWriter for UDPMuxDefault {
                 .or_insert_with(|| conn.clone());
         }
 
-        log::debug!("Registered {} for {}", addr, key);
+        log::debug!("Registered {addr} for {key}");
     }
 
     async fn send_to(&self, buf: &[u8], target: &SocketAddr) -> Result<usize, Error> {
-        self.params
-            .conn
-            .send_to(buf, *target)
-            .await
-            .map_err(Into::into)
+        self.params.conn.send_to(buf, *target).await
     }
 }

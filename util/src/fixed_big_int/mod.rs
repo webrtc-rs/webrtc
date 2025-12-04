@@ -23,7 +23,7 @@ impl fmt::Display for FixedBigInt {
 
 impl FixedBigInt {
     pub(crate) fn new(n: usize) -> Self {
-        let mut chunk_size = (n + 63) / 64;
+        let mut chunk_size = n.div_ceil(64);
         if chunk_size == 0 {
             chunk_size = 1;
         }
@@ -31,7 +31,7 @@ impl FixedBigInt {
         FixedBigInt {
             bits: vec![0; chunk_size],
             n,
-            msb_mask: if n % 64 == 0 {
+            msb_mask: if n.is_multiple_of(64) {
                 u64::MAX
             } else {
                 (1 << (64 - n % 64)) - 1

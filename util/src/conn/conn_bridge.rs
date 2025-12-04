@@ -24,7 +24,7 @@ struct BridgeConn {
 #[async_trait]
 impl Conn for BridgeConn {
     async fn connect(&self, _addr: SocketAddr) -> Result<()> {
-        Err(Error::new(ErrorKind::Other, "Not applicable").into())
+        Err(Error::other("Not applicable").into())
     }
 
     async fn recv(&self, b: &mut [u8]) -> Result<usize> {
@@ -52,7 +52,7 @@ impl Conn for BridgeConn {
     }
 
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
-        Err(Error::new(ErrorKind::Other, "Not applicable").into())
+        Err(Error::other("Not applicable").into())
     }
 
     fn local_addr(&self) -> Result<SocketAddr> {

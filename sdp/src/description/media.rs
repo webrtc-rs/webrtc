@@ -192,10 +192,7 @@ impl MediaDescription {
         let uri = {
             let m = ext_map_uri();
             if let Some(uri_str) = m.get(&EXT_MAP_VALUE_TRANSPORT_CC_KEY) {
-                match Url::parse(uri_str) {
-                    Ok(uri) => Some(uri),
-                    Err(_) => None,
-                }
+                Url::parse(uri_str).ok()
             } else {
                 None
             }
@@ -248,14 +245,14 @@ impl fmt::Display for MediaName {
         for part in &self.protos {
             if first {
                 first = false;
-                write!(f, " {}", part)?;
+                write!(f, " {part}")?;
             } else {
-                write!(f, "/{}", part)?;
+                write!(f, "/{part}")?;
             }
         }
 
         for part in &self.formats {
-            write!(f, " {}", part)?;
+            write!(f, " {part}")?;
         }
 
         Ok(())

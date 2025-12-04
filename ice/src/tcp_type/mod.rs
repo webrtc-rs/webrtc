@@ -10,9 +10,10 @@ use std::fmt;
 /// * [RFC 6544 §4.5]
 ///
 /// [RFC 6544 §4.5]: https://tools.ietf.org/html/rfc6544#section-4.5
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum TcpType {
     /// The default value. For example UDP candidates do not need this field.
+    #[default]
     Unspecified,
     /// Active TCP candidate, which initiates TCP connections.
     Active,
@@ -43,11 +44,5 @@ impl fmt::Display for TcpType {
             Self::Unspecified => "unspecified",
         };
         write!(f, "{s}")
-    }
-}
-
-impl Default for TcpType {
-    fn default() -> Self {
-        Self::Unspecified
     }
 }

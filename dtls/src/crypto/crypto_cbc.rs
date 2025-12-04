@@ -68,7 +68,7 @@ impl CryptoCbc {
         payload.extend_from_slice(&mac);
 
         let mut iv: Vec<u8> = vec![0; Self::BLOCK_SIZE];
-        rand::thread_rng().fill(iv.as_mut_slice());
+        rand::rng().fill(iv.as_mut_slice());
 
         let write_cbc = Aes256CbcEnc::new_from_slices(&self.local_key, &iv)?;
         let encrypted = write_cbc.encrypt_padded_vec_mut::<DtlsPadding>(&payload);
@@ -94,10 +94,17 @@ impl CryptoCbc {
             return Ok(r.to_vec());
         }
 
+        if r.len() < RECORD_LAYER_HEADER_SIZE + Self::BLOCK_SIZE {
+            return Err(Error::ErrInvalidPacketLength);
+        }
+
         let body = &r[RECORD_LAYER_HEADER_SIZE..];
         let iv = &body[0..Self::BLOCK_SIZE];
         let body = &body[Self::BLOCK_SIZE..];
-        //TODO: add body.len() check
+
+        if body.is_empty() || !body.len().is_multiple_of(Self::BLOCK_SIZE) {
+            return Err(Error::ErrInvalidPacketLength);
+        }
 
         let read_cbc = Aes256CbcDec::new_from_slices(&self.remote_key, iv)?;
 

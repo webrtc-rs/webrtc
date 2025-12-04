@@ -143,7 +143,7 @@ impl Message {
     // NewTransactionID sets m.TransactionID to random value from crypto/rand
     // and returns error if any.
     pub fn new_transaction_id(&mut self) -> Result<()> {
-        rand::thread_rng().fill(&mut self.transaction_id.0);
+        rand::rng().fill(&mut self.transaction_id.0);
         self.write_transaction_id();
         Ok(())
     }
@@ -201,7 +201,7 @@ impl Message {
         };
 
         // Checking that attribute value needs padding.
-        if attr.length as usize % PADDING != 0 {
+        if !(attr.length as usize).is_multiple_of(PADDING) {
             // Performing padding.
             let bytes_to_add = nearest_padded_value_length(v.len()) - v.len();
             last += bytes_to_add;

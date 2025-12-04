@@ -150,14 +150,12 @@ impl RelayConnObserver for ClientInternal {
         }
 
         // wait_for_result waits for the transaction result
-        if let Some(mut result_ch_rx) = result_ch_rx {
-            match result_ch_rx.recv().await {
-                Some(tr) => Ok(tr),
-                None => Err(Error::ErrTransactionClosed),
-            }
-        } else {
-            Err(Error::ErrWaitForResultOnNonResultTransaction)
-        }
+        let mut result_ch_rx = result_ch_rx.ok_or(Error::ErrWaitForResultOnNonResultTransaction)?;
+        let tr = result_ch_rx
+            .recv()
+            .await
+            .ok_or(Error::ErrTransactionClosed)?;
+        Ok(tr)
     }
 }
 
@@ -181,7 +179,7 @@ impl ClientInternal {
             let stun_serv = net
                 .resolve_addr(local_addr.is_ipv4(), &config.stun_serv_addr)
                 .await?;
-            log::debug!("stunServ: {}", stun_serv);
+            log::debug!("stunServ: {stun_serv}");
             stun_serv.to_string()
         };
 
@@ -193,7 +191,7 @@ impl ClientInternal {
             let turn_serv = net
                 .resolve_addr(local_addr.is_ipv4(), &config.turn_serv_addr)
                 .await?;
-            log::debug!("turnServ: {}", turn_serv);
+            log::debug!("turnServ: {turn_serv}");
             turn_serv.to_string()
         };
 
@@ -250,12 +248,12 @@ impl ClientInternal {
                     result = conn.recv_from(&mut buf) => match result {
                         Ok((n, from)) => (n, from),
                         Err(err) => {
-                            log::debug!("exiting read loop: {}", err);
+                            log::debug!("exiting read loop: {err}");
                             break;
                         }
                     }
                 };
-                log::debug!("received {} bytes of udp from {}", n, from);
+                log::debug!("received {n} bytes of udp from {from}");
 
                 select! {
                     biased;
@@ -273,7 +271,7 @@ impl ClientInternal {
                         &binding_mgr,
                     ) => {
                         if let Err(err) = result {
-                            log::debug!("exiting read loop: {}", err);
+                            log::debug!("exiting read loop: {err}");
                             break;
                         }
                     }
@@ -358,7 +356,7 @@ impl ClientInternal {
                 let mut data = Data::default();
                 data.get_from(&msg)?;
 
-                log::debug!("data indication received from {}", from);
+                log::debug!("data indication received from {from}");
 
                 let _ = ClientInternal::handle_inbound_relay_conn(read_ch_tx, &data.0, from).await;
             }
@@ -376,7 +374,7 @@ impl ClientInternal {
         let mut tm = tr_map.lock().await;
         if tm.find(&tr_key).is_none() {
             // silently discard
-            log::debug!("no transaction for {}", msg);
+            log::debug!("no transaction for {msg}");
             return Ok(());
         }
 
@@ -393,7 +391,7 @@ impl ClientInternal {
                 })
                 .await
             {
-                log::debug!("no listener for msg.raw {:?}", data);
+                log::debug!("no listener for msg.raw {data:?}");
             }
         }
 
@@ -435,7 +433,7 @@ impl ClientInternal {
         let read_ch_tx_opt = read_ch_tx.lock().await;
         log::debug!("read_ch_tx_opt = {}", read_ch_tx_opt.is_some());
         if let Some(tx) = &*read_ch_tx_opt {
-            log::debug!("try_send data = {:?}, from = {}", data, from);
+            log::debug!("try_send data = {data:?}, from = {from}");
             if tx
                 .try_send(InboundData {
                     data: data.to_vec(),

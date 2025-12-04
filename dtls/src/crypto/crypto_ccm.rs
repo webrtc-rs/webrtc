@@ -109,7 +109,7 @@ impl CryptoCcm {
 
         let mut nonce = vec![0u8; CRYPTO_CCM_NONCE_LENGTH];
         nonce[..4].copy_from_slice(&self.local_write_iv[..4]);
-        rand::thread_rng().fill(&mut nonce[4..]);
+        rand::rng().fill(&mut nonce[4..]);
         let nonce = GenericArray::from_slice(&nonce);
 
         let additional_data = generate_aead_additional_data(pkt_rlh, payload.len());

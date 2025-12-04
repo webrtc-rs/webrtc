@@ -658,8 +658,8 @@ async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats()
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()
     };
-    log::debug!("natType0: {:?}", nat_type0);
-    log::debug!("natType1: {:?}", nat_type1);
+    log::debug!("natType0: {nat_type0:?}");
+    log::debug!("natType1: {nat_type1:?}");
 
     let v = build_vnet(nat_type0, nat_type1).await?;
 
@@ -711,8 +711,8 @@ async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats(
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()
     };
-    log::debug!("natType0: {:?}", nat_type0);
-    log::debug!("natType1: {:?}", nat_type1);
+    log::debug!("natType0: {nat_type0:?}");
+    log::debug!("natType1: {nat_type1:?}");
 
     let v = build_vnet(nat_type0, nat_type1).await?;
 
@@ -1002,7 +1002,7 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
     log::debug!("controlled_agent start_connectivity_checks done...");
 
     let test_message = "Test Message";
-    let mut read_buf = vec![0u8; test_message.as_bytes().len()];
+    let mut read_buf = vec![0u8; test_message.len()];
     controlled_agent_conn.recv(&mut read_buf).await?;
 
     assert_eq!(read_buf, test_message.as_bytes(), "should match");

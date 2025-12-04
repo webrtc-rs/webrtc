@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod url_test;
 
-use std::borrow::Cow;
 use std::convert::From;
 use std::fmt;
+
+use stun::{DEFAULT_PORT, DEFAULT_TLS_PORT};
 
 use crate::error::*;
 
 /// The type of server used in the ice.URL structure.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum SchemeType {
     /// The URL represents a STUN server.
     Stun,
@@ -23,13 +24,8 @@ pub enum SchemeType {
     Turns,
 
     /// Default public constant to use for "enum" like struct comparisons when no value was defined.
+    #[default]
     Unknown,
-}
-
-impl Default for SchemeType {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl From<&str> for SchemeType {
@@ -60,21 +56,16 @@ impl fmt::Display for SchemeType {
 }
 
 /// The transport protocol type that is used in the `ice::url::Url` structure.
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum ProtoType {
     /// The URL uses a UDP transport.
+    #[default]
     Udp,
 
     /// The URL uses a TCP transport.
     Tcp,
 
     Unknown,
-}
-
-impl Default for ProtoType {
-    fn default() -> Self {
-        Self::Udp
-    }
 }
 
 // defines a procedure for creating a new ProtoType from a raw
@@ -166,9 +157,9 @@ impl Url {
         let port = if let Some(port) = raw_parts.port() {
             port
         } else if scheme == SchemeType::Stun || scheme == SchemeType::Turn {
-            3478
+            DEFAULT_PORT
         } else {
-            5349
+            DEFAULT_TLS_PORT
         };
 
         let mut q_args = raw_parts.query_pairs();
@@ -190,7 +181,7 @@ impl Url {
                     return Err(Error::ErrInvalidQuery);
                 }
                 if let Some((key, value)) = q_args.next() {
-                    if key == Cow::Borrowed("transport") {
+                    if key == "transport" {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
                             return Err(Error::ErrProtoType);
@@ -208,7 +199,7 @@ impl Url {
                     return Err(Error::ErrInvalidQuery);
                 }
                 if let Some((key, value)) = q_args.next() {
-                    if key == Cow::Borrowed("transport") {
+                    if key == "transport" {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
                             return Err(Error::ErrProtoType);

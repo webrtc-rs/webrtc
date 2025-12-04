@@ -89,9 +89,10 @@ pub trait Candidate: fmt::Display {
 }
 
 /// Represents the type of candidate `CandidateType` enum.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidateType {
     #[serde(rename = "unspecified")]
+    #[default]
     Unspecified,
     #[serde(rename = "host")]
     Host,
@@ -114,12 +115,6 @@ impl fmt::Display for CandidateType {
             CandidateType::Unspecified => "Unknown candidate type",
         };
         write!(f, "{s}")
-    }
-}
-
-impl Default for CandidateType {
-    fn default() -> Self {
-        Self::Unspecified
     }
 }
 
@@ -171,9 +166,10 @@ impl fmt::Display for CandidateRelatedAddress {
 }
 
 /// Represent the ICE candidate pair state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CandidatePairState {
     #[serde(rename = "unspecified")]
+    #[default]
     Unspecified = 0,
 
     /// Means a check has not been performed for this pair.
@@ -206,12 +202,6 @@ impl From<u8> for CandidatePairState {
     }
 }
 
-impl Default for CandidatePairState {
-    fn default() -> Self {
-        Self::Unspecified
-    }
-}
-
 impl fmt::Display for CandidatePairState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
@@ -234,6 +224,7 @@ pub struct CandidatePair {
     pub(crate) binding_request_count: AtomicU16,
     pub(crate) state: AtomicU8, // convert it to CandidatePairState,
     pub(crate) nominated: AtomicBool,
+    pub(crate) nominate_on_binding_success: AtomicBool,
 }
 
 impl Default for CandidatePair {
@@ -245,6 +236,7 @@ impl Default for CandidatePair {
             state: AtomicU8::new(CandidatePairState::Waiting as u8),
             binding_request_count: AtomicU16::new(0),
             nominated: AtomicBool::new(false),
+            nominate_on_binding_success: AtomicBool::new(false),
         }
     }
 }
@@ -297,6 +289,7 @@ impl CandidatePair {
             state: AtomicU8::new(CandidatePairState::Waiting as u8),
             binding_request_count: AtomicU16::new(0),
             nominated: AtomicBool::new(false),
+            nominate_on_binding_success: AtomicBool::new(false),
         }
     }
 

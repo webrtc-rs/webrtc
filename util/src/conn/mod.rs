@@ -62,12 +62,9 @@ where
         }
     }
 
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!(
-            "No available {} IP address found!",
-            if use_ipv4 { "ipv4" } else { "ipv6" },
-        ),
-    )
+    Err(std::io::Error::other(format!(
+        "No available {} IP address found!",
+        if use_ipv4 { "ipv4" } else { "ipv6" },
+    ))
     .into())
 }

@@ -54,6 +54,30 @@ pub struct ReplayProtection {
     pub srtcp: usize,
 }
 
+#[derive(Clone)]
+pub enum SctpMaxMessageSize {
+    Bounded(u32),
+    Unbounded,
+}
+
+impl SctpMaxMessageSize {
+    pub const DEFAULT_MESSAGE_SIZE: u32 = 65536;
+    pub fn as_u32(&self) -> u32 {
+        match self {
+            Self::Bounded(result) => *result,
+            Self::Unbounded => 0,
+        }
+    }
+}
+
+impl Default for SctpMaxMessageSize {
+    fn default() -> Self {
+        // https://datatracker.ietf.org/doc/html/rfc8841#section-6.1-4
+        // > If the SDP "max-message-size" attribute is not present, the default value is 64K.
+        Self::Bounded(Self::DEFAULT_MESSAGE_SIZE)
+    }
+}
+
 /// SettingEngine allows influencing behavior in ways that are not
 /// supported by the WebRTC API. This allows us to support additional
 /// use-cases without deviating from the WebRTC API elsewhere.
@@ -75,10 +99,13 @@ pub struct SettingEngine {
     //iceProxyDialer                            :proxy.Dialer,?
     pub(crate) udp_network: UDPNetwork,
     pub(crate) disable_media_engine_copy: bool,
+    pub(crate) disable_media_engine_multiple_codecs: bool,
     pub(crate) srtp_protection_profiles: Vec<SrtpProtectionProfile>,
     pub(crate) receive_mtu: usize,
     pub(crate) mid_generator: Option<Arc<dyn Fn(isize) -> String + Send + Sync>>,
     pub(crate) enable_sender_rtx: bool,
+    /// Determines the max size of any message that may be sent through an SCTP transport.
+    pub(crate) sctp_max_message_size_can_send: SctpMaxMessageSize,
 }
 
 impl SettingEngine {
@@ -316,6 +343,16 @@ impl SettingEngine {
         self.disable_media_engine_copy = is_disabled;
     }
 
+    /// disable_media_engine_multiple_codecs disables the MediaEngine negotiating different codecs.
+    /// With the default value multiple media sections in the SDP can each negotiate different
+    /// codecs. This is the new default behvior, because it makes Pion more spec compliant.
+    /// The value of this setting will get copied to every copy of the MediaEngine generated
+    /// for new PeerConnections (assuming DisableMediaEngineCopy is set to false).
+    /// Note: this setting is targeted to be removed in release 4.2.0 (or later).
+    pub fn disable_media_engine_multiple_codecs(&mut self, is_disabled: bool) {
+        self.disable_media_engine_multiple_codecs = is_disabled;
+    }
+
     /// set_receive_mtu sets the size of read buffer that copies incoming packets. This is optional.
     /// Leave this 0 for the default receive_mtu
     pub fn set_receive_mtu(&mut self, receive_mtu: usize) {
@@ -341,5 +378,12 @@ impl SettingEngine {
     /// codec is configured.
     pub fn enable_sender_rtx(&mut self, is_enabled: bool) {
         self.enable_sender_rtx = is_enabled;
+    }
+
+    pub fn set_sctp_max_message_size_can_send(
+        &mut self,
+        max_message_size_can_send: SctpMaxMessageSize,
+    ) {
+        self.sctp_max_message_size_can_send = max_message_size_can_send
     }
 }

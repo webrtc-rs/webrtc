@@ -106,11 +106,11 @@ impl<T: 'static + RelayConnObserver + Send + Sync> RelayConn<T> {
 #[async_trait]
 impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
     async fn connect(&self, _addr: SocketAddr) -> Result<(), util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     async fn recv(&self, _buf: &mut [u8]) -> Result<usize, util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     /// Reads a packet from the connection,
@@ -147,7 +147,7 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
     }
 
     async fn send(&self, _buf: &[u8]) -> Result<usize, util::Error> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        Err(io::Error::other("Not applicable").into())
     }
 
     /// Writes a packet with payload `p` to `addr`.
@@ -159,7 +159,7 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
         let mut relay_conn = self.relay_conn.lock().await;
         match relay_conn.send_to(p, addr).await {
             Ok(n) => Ok(n),
-            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
+            Err(err) => Err(io::Error::other(err.to_string()).into()),
         }
     }
 
@@ -283,7 +283,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                                 }
 
                                 // keep going...
-                                log::warn!("bind() failed: {}", err);
+                                log::warn!("bind() failed: {err}");
                             } else if let Some(b) = bm.get_by_addr(&bind_addr) {
                                 b.set_state(BindingState::Ready);
                             }
@@ -342,7 +342,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                             }
 
                             // keep going...
-                            log::warn!("bind() for refresh failed: {}", err);
+                            log::warn!("bind() for refresh failed: {err}");
                         } else if let Some(b) = bm.get_by_addr(&bind_addr) {
                             b.set_refreshed_at(Instant::now());
                             b.set_state(BindingState::Ready);
@@ -478,7 +478,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                 Box::new(FINGERPRINT),
             ])?;
 
-            log::debug!("send refresh request (dont_wait={})", dont_wait);
+            log::debug!("send refresh request (dont_wait={dont_wait})");
             let turn_server_addr = obs.turn_server_addr();
             let tr_res = obs
                 .perform_transaction(&msg, &turn_server_addr, dont_wait)
@@ -525,7 +525,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 
         if let Err(err) = self.create_permissions(&addrs).await {
             if Error::ErrTryAgain != err {
-                log::error!("fail to refresh permissions: {}", err);
+                log::error!("fail to refresh permissions: {err}");
             }
             return Err(err);
         }
@@ -575,7 +575,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             return Err(Error::ErrUnexpectedResponse);
         }
 
-        log::debug!("channel binding successful: {} {}", bind_addr, bind_number);
+        log::debug!("channel binding successful: {bind_addr} {bind_number}");
 
         // Success.
         Ok(())
@@ -585,7 +585,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 #[async_trait]
 impl<T: RelayConnObserver + Send + Sync> PeriodicTimerTimeoutHandler for RelayConnInternal<T> {
     async fn on_timeout(&mut self, id: TimerIdRefresh) {
-        log::debug!("refresh timer {:?} expired", id);
+        log::debug!("refresh timer {id:?} expired");
         match id {
             TimerIdRefresh::Alloc => {
                 let lifetime = self.lifetime;

@@ -206,16 +206,21 @@ pub struct H264Packet {
 impl Depacketizer for H264Packet {
     /// depacketize parses the passed byte slice and stores the result in the H264Packet this method is called upon
     fn depacketize(&mut self, packet: &Bytes) -> Result<Bytes> {
-        if packet.len() <= 2 {
+        if packet.len() <= 1 {
             return Err(Error::ErrShortPacket);
         }
-
-        let mut payload = BytesMut::new();
 
         // NALU Types
         // https://tools.ietf.org/html/rfc6184#section-5.4
         let b0 = packet[0];
         let nalu_type = b0 & NALU_TYPE_BITMASK;
+
+        // The AUD NALU can be size 2 (1 byte header, 1 byte payload)
+        if packet.len() <= 2 && nalu_type != AUD_NALU_TYPE {
+            return Err(Error::ErrShortPacket);
+        }
+
+        let mut payload = BytesMut::new();
 
         match nalu_type {
             1..=23 => {

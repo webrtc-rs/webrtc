@@ -6,6 +6,9 @@ use util::vnet::net::*;
 use super::*;
 use crate::error::*;
 
+/// Default maximum number of retries when allocating a random port in the defined range.
+const DEFAULT_MAX_RETRIES: u16 = 10;
+
 /// `RelayAddressGeneratorRanges` can be used to only allocate connections inside a defined port range.
 pub struct RelayAddressGeneratorRanges {
     /// `relay_address` is the IP returned to the user when the relay is created.
@@ -48,7 +51,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
         let max_retries = if self.max_retries == 0 {
-            10
+            DEFAULT_MAX_RETRIES
         } else {
             self.max_retries
         };

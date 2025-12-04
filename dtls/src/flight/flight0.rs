@@ -8,6 +8,7 @@ use super::flight2::*;
 use super::*;
 use crate::config::*;
 use crate::conn::*;
+use crate::curve::named_curve::NamedCurve;
 use crate::error::Error;
 use crate::extension::*;
 use crate::handshake::*;
@@ -111,7 +112,12 @@ impl Flight for Flight0 {
                                 Some(Error::ErrNoSupportedEllipticCurves),
                             ));
                         }
-                        state.named_curve = e.elliptic_curves[0];
+                        for curve in e.elliptic_curves.iter() {
+                            if curve != &NamedCurve::Unsupported {
+                                state.named_curve = *curve;
+                                break;
+                            }
+                        }
                     }
                     Extension::UseSrtp(e) => {
                         if let Ok(profile) = find_matching_srtp_profile(
@@ -188,7 +194,7 @@ impl Flight for Flight0 {
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         // Initialize
         state.cookie = vec![0; COOKIE_LENGTH];
-        rand::thread_rng().fill(state.cookie.as_mut_slice());
+        rand::rng().fill(state.cookie.as_mut_slice());
 
         //TODO: figure out difference between golang's atom store and rust atom store
         let zero_epoch = 0;

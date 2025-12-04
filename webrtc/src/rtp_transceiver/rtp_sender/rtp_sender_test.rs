@@ -75,7 +75,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
                 Ok((pkt, _)) => pkt,
                 Err(err) => {
                     //assert!(errors.Is(io.EOF, err))
-                    log::debug!("{}", err);
+                    log::debug!("{err}");
                     return;
                 }
             };

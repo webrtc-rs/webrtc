@@ -17,11 +17,13 @@ impl fmt::Display for UnknownAttributes {
         if self.0.is_empty() {
             write!(f, "<nil>")
         } else {
-            let mut s = vec![];
-            for t in &self.0 {
-                s.push(t.to_string());
-            }
-            write!(f, "{}", s.join(", "))
+            let s = self
+                .0
+                .iter()
+                .map(|t| t.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            write!(f, "{s}")
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-mdns"
-version = "0.8.0"
+version = "0.10.0"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2021"
 description = "A pure Rust implementation of mDNS"
@@ -10,11 +10,11 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/mdns"
 
 [features]
-default = [ "reuse_port" ]
+default = ["reuse_port"]
 reuse_port = []
 
 [dependencies]
-util = { version = "0.10.0", path = "../util", package = "webrtc-util", default-features = false, features = ["ifaces"] }
+util = { version = "0.12.0", path = "../util", package = "webrtc-util", default-features = false, features = ["ifaces"] }
 
 tokio = { version = "1.32.0", features = [
     "fs",

@@ -75,22 +75,16 @@ impl CipherSuite for CipherSuiteTlsPskWithAes128GcmSha256 {
     }
 
     fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>> {
-        if let Some(cg) = &self.gcm {
-            cg.encrypt(pkt_rlh, raw)
-        } else {
-            Err(Error::Other(
-                "CipherSuite has not been initialized, unable to encrypt".to_owned(),
-            ))
-        }
+        let cg = self.gcm.as_ref().ok_or(Error::Other(
+            "CipherSuite has not been initialized, unable to encrypt".to_owned(),
+        ))?;
+        cg.encrypt(pkt_rlh, raw)
     }
 
     fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>> {
-        if let Some(cg) = &self.gcm {
-            cg.decrypt(input)
-        } else {
-            Err(Error::Other(
-                "CipherSuite has not been initialized, unable to decrypt".to_owned(),
-            ))
-        }
+        let cg = self.gcm.as_ref().ok_or(Error::Other(
+            "CipherSuite has not been initialized, unable to decrypt".to_owned(),
+        ))?;
+        cg.decrypt(input)
     }
 }

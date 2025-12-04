@@ -3,6 +3,7 @@ mod crypto_test;
 
 pub mod crypto_cbc;
 pub mod crypto_ccm;
+pub mod crypto_chacha20;
 pub mod crypto_gcm;
 pub mod padding;
 
@@ -341,7 +342,7 @@ fn verify_signature(
         _ => return Err(Error::ErrKeySignatureVerifyUnimplemented),
     };
 
-    log::trace!("Picked an algorithm {:?}", verify_alg);
+    log::trace!("Picked an algorithm {verify_alg:?}");
 
     let public_key = ring::signature::UnparsedPublicKey::new(
         verify_alg,

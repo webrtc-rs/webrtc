@@ -87,11 +87,7 @@ impl ConnObserver for VNetInternal {
         }
 
         if dst_ip.is_loopback() {
-            let src_ip = if let Ok(src_ip) = IpAddr::from_str("127.0.0.1") {
-                Some(src_ip)
-            } else {
-                None
-            };
+            let src_ip = IpAddr::from_str("127.0.0.1").ok();
             return src_ip;
         }
 
@@ -352,7 +348,7 @@ impl VNet {
         Ok(conn)
     }
 
-    pub(crate) async fn dail(
+    pub(crate) async fn dial(
         &self,
         use_ipv4: bool,
         remote_addr: &str,
@@ -528,7 +524,7 @@ impl Net {
         }
     }
 
-    pub async fn dail(
+    pub async fn dial(
         &self,
         use_ipv4: bool,
         remote_addr: &str,
@@ -536,7 +532,7 @@ impl Net {
         match self {
             Net::VNet(vnet) => {
                 let net = vnet.lock().await;
-                net.dail(use_ipv4, remote_addr).await
+                net.dial(use_ipv4, remote_addr).await
             }
             Net::Ifs(_) => {
                 let any_ip = if use_ipv4 {

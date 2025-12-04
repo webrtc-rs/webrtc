@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::io;
 use std::time::Duration;
 
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use sha1::{Digest, Sha1};
 use stun::message::{Message, BINDING_REQUEST};
 use tokio::net::UdpSocket;
@@ -62,7 +62,7 @@ async fn test_udp_mux() -> Result<()> {
     let udp_socket = UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0)).await?;
 
     let addr = udp_socket.local_addr()?;
-    log::info!("Listening on {}", addr);
+    log::info!("Listening on {addr}");
 
     let udp_mux = UDPMuxDefault::new(UDPMuxParams::new(udp_socket));
     let udp_mux_dyn = Arc::clone(&udp_mux) as Arc<dyn UDPMux + Send + Sync>;
@@ -164,9 +164,9 @@ async fn test_mux_connection(
         .unwrap();
 
     let remote_connection = Arc::new(network.bind().await?);
-    log::info!("Bound for ufrag: {}", ufrag);
+    log::info!("Bound for ufrag: {ufrag}");
     remote_connection.connect(connect_addr).await?;
-    log::info!("Connected to {} for ufrag: {}", connect_addr, ufrag);
+    log::info!("Connected to {connect_addr} for ufrag: {ufrag}");
     log::info!(
         "Testing muxing from {} over {}",
         remote_connection.local_addr().unwrap(),
@@ -222,7 +222,7 @@ async fn test_mux_connection(
                 .expect("Failed to write to muxxed connection");
 
             read += n;
-            log::debug!("Muxxed read {}, sequence: {}", read, next_sequence);
+            log::debug!("Muxxed read {read}, sequence: {next_sequence}");
             next_sequence += 1;
         }
     });
@@ -243,7 +243,7 @@ async fn test_mux_connection(
 
             verify_packet(&buffer[..n], next_sequence);
             read += n;
-            log::debug!("Remote read {}, sequence: {}", read, next_sequence);
+            log::debug!("Remote read {read}, sequence: {next_sequence}");
             next_sequence += 1;
         }
     });
@@ -252,7 +252,7 @@ async fn test_mux_connection(
     let mut written = 0;
     let mut buffer = vec![0u8; RECEIVE_MTU];
     while written < TARGET_SIZE {
-        thread_rng().fill(&mut buffer[24..]);
+        rng().fill(&mut buffer[24..]);
 
         let hash = sha1_hash(&buffer[24..]);
         buffer[4..24].copy_from_slice(&hash);
@@ -261,7 +261,7 @@ async fn test_mux_connection(
         let len = remote_connection.send(&buffer).await?;
 
         written += len;
-        log::debug!("Data written {}, sequence: {}", written, sequence);
+        log::debug!("Data written {written}, sequence: {sequence}");
         sequence += 1;
 
         sleep(Duration::from_millis(1)).await;

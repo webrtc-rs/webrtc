@@ -4,8 +4,9 @@ mod state_test;
 use std::fmt;
 
 /// An enum showing the state of a ICE Connection List of supported States.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ConnectionState {
+    #[default]
     Unspecified,
 
     /// ICE agent is gathering addresses.
@@ -28,12 +29,6 @@ pub enum ConnectionState {
 
     /// ICE agent has finished and is no longer handling requests.
     Closed,
-}
-
-impl Default for ConnectionState {
-    fn default() -> Self {
-        Self::Unspecified
-    }
 }
 
 impl fmt::Display for ConnectionState {
@@ -68,8 +63,9 @@ impl From<u8> for ConnectionState {
 }
 
 /// Describes the state of the candidate gathering process.
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(Default, PartialEq, Eq, Copy, Clone)]
 pub enum GatheringState {
+    #[default]
     Unspecified,
 
     /// Indicates candidate gathering is not yet started.
@@ -90,12 +86,6 @@ impl From<u8> for GatheringState {
             3 => Self::Complete,
             _ => Self::Unspecified,
         }
-    }
-}
-
-impl Default for GatheringState {
-    fn default() -> Self {
-        Self::Unspecified
     }
 }
 

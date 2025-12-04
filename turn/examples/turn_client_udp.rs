@@ -185,7 +185,7 @@ async fn do_ping_test(
     // Send 10 packets from relay_conn to the echo server
     for _ in 0..2 {
         let msg = "12345678910".to_owned(); //format!("{:?}", tokio::time::Instant::now());
-        println!("sending msg={} with size={}", msg, msg.as_bytes().len());
+        println!("sending msg={} with size={}", msg, msg.len());
         pinger_conn_tx.send_to(msg.as_bytes(), relay_addr).await?;
 
         // For simplicity, this example does not wait for the pong (reply).
