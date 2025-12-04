@@ -131,3 +131,10 @@ Commonly includes:
 
 ## Interoperability 
 Check [WebRTC interoperability tests](https://github.com/sipsorcery/webrtc-interop) for samples in other WebRTC libraries like libwebrtc, pion, SipSorcery and whether they can interoperate with each other. 
+
+## Extras
+### Selective Forwarding Unit (SFU)
+This is not peer-to-peer WebRTC; a central server manages the media streams. This is how certain "mute" functions or noise detection is implemented in multiuser video conferencing. Used to restrict audio/video flow from users, due to administrative controls or due to being "idle" in a video/audio call.  
+
+### Multipoint Control Unit (MCU)
+This is an alternate architecture to the above, still not peer to peer but the central server itself takes the responsibility to mix/re-encode the streams.  
