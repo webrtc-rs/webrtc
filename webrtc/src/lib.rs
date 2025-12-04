@@ -1,6 +1,12 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+//! # Feature flags
+//!
+//! - **openssl** — Enables OpenSSL backend.
+//! - **pem** — Adds support for loading PEM certificates.
+//! - **vendored-openssl** — Builds and statically links vendored OpenSSL.
+
 pub use {data, dtls, ice, interceptor, mdns, media, rtcp, rtp, sctp, sdp, srtp, stun, turn, util};
 
 /// [`peer_connection::RTCPeerConnection`] allows to establish connection between two peers given RTC configuration. Its API is similar to one in JavaScript.
