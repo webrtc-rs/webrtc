@@ -29,7 +29,7 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of WebRTC stack. Rewrite <a href="http://Pion.ly">Pion</a> WebRTC stack in Rust
+ Async-friendly WebRTC implementation in Rust
 </p>
 
 <p align="center">
@@ -59,8 +59,6 @@ alt="Recall.ai">
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-    - [Toolchain](#toolchain)
-    - [Monorepo Setup](#monorepo-setup)
 - [Open Source License](#open-source-license)
 - [Contributing](#contributing)
 
@@ -68,12 +66,16 @@ alt="Recall.ai">
 
 ## Overview
 
-WebRTC.rs is a pure Rust implementation of WebRTC stack, which
-rewrites <a href="https://github.com/pion/webrtc/releases/tag/v3.1.5">Pion</a> stack in Rust.
-This project is still in active and early development stage, please refer to
-the [Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) to track the major milestones and releases.
-[Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) provide code samples to show how
-to use webrtc-rs to build media and data channel applications.
+WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion
+stack. The project is under active development and should be considered early stage; please refer to the
+[Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) for planned milestones and releases.
+The [Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) demonstrate how to build
+media and data-channel applications using webrtc-rs.
+
+The project is shifting its focus toward a Sans-IO WebRTC implementation in Rust.
+Going forward, the [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) crate will be built on top of the
+[webrtc-rs/rtc](https://github.com/webrtc-rs/rtc) crate, which provides a clean, protocol-centric Sans-IO core.
+This architecture enables a fully async-friendly WebRTC implementation in Rust.
 
 ## Features
 
@@ -108,19 +110,6 @@ to use webrtc-rs to build media and data channel applications.
 
 ## Building
 
-### Toolchain
-
-**Minimum Supported Rust Version:** `1.65.0`
-
-Our minimum supported rust version(MSRV) policy is to support versions of the compiler released within the last six
-months. We don't eagerly bump the minimum version we support, instead the minimum will be bumped on a needed by needed
-basis, usually because downstream dependencies force us to.
-
-**Note:** Changes to the minimum supported version are not consider breaking from a [semver](https://semver.org/)
-perspective.
-
-### Monorepo Setup
-
 All webrtc dependent crates and examples are included in this repository at the top level in a Cargo workspace.
 
 To build all webrtc examples:
@@ -141,29 +130,6 @@ To build webrtc crate:
 cargo build [or clippy or test or fmt]
 ```
 
-### Devbox
-
-This repo now supports [devbox](https://www.jetify.com/devspace) for a better development experience.
-In short, devbox allows to define a development environment by modifying the `PATH` variable in your shell.
-It is based on nix and runs on Linux, MacOS, and WSL.
-To use devbox, install it from [devbox installation](https://www.jetify.com/docs/devbox/installing_devbox/):
-
-```bash
-curl -fsSL https://get.jetify.com/devbox | bash
-```
-
-Now you can either use the different devbox scripts:
-
-- test it: `devbox run test`
-- build it: `devbox run build`
-- format it: `devbux run format`
-
-Or you can enter a shell with everything pre-installed:
-
-```bash
-devbox shell
-```
-
 ## Open Source License
 
 Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has
@@ -174,11 +140,3 @@ community standards, webrtc-rs is using the dual MIT+Apache-2.0 license.
 ## Contributing
 
 Contributors or Pull Requests are Welcome!!!
-
-If you want to contribute, please be sure to install the pre-commit hooks:
-
-```bash
-pre-commit install
-```
-
-Or use the devbox environment described above, which will do so automatically.
