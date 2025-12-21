@@ -5,6 +5,7 @@ use subtle::ConstantTimeEq;
 use util::marshal::*;
 
 use super::{Cipher, CipherInner};
+use crate::cipher::Kdf;
 use crate::protection_profile::ProtectionProfile;
 use crate::{
     error::{Error, Result},
@@ -19,16 +20,30 @@ pub(crate) struct CipherAesCmHmacSha1 {
 
 impl CipherAesCmHmacSha1 {
     pub fn new(profile: ProtectionProfile, master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
-        let inner = CipherInner::new(profile, master_key, master_salt)?;
+        let kdf: Kdf = match profile {
+            ProtectionProfile::Aes128CmHmacSha1_32 | ProtectionProfile::Aes128CmHmacSha1_80 => {
+                aes_cm_key_derivation
+            }
+            ProtectionProfile::Aes256CmHmacSha1_80 | ProtectionProfile::Aes256CmHmacSha1_32 => {
+                aes_256_cm_key_derivation
+            }
+            _ => {
+                return Err(Error::Other(String::from(
+                    "no AES protection profile passed to CipherAesCmHmacSha1",
+                )))
+            }
+        };
 
-        let srtp_session_key = aes_cm_key_derivation(
+        let inner = CipherInner::new(profile, kdf, master_key, master_salt)?;
+
+        let srtp_session_key = kdf(
             LABEL_SRTP_ENCRYPTION,
             master_key,
             master_salt,
             0,
             master_key.len(),
         )?;
-        let srtcp_session_key = aes_cm_key_derivation(
+        let srtcp_session_key = kdf(
             LABEL_SRTCP_ENCRYPTION,
             master_key,
             master_salt,
@@ -36,13 +51,21 @@ impl CipherAesCmHmacSha1 {
             master_key.len(),
         )?;
 
-        let t = openssl::cipher::Cipher::aes_128_ctr();
+        let t = if profile.key_len() == 16 {
+            openssl::cipher::Cipher::aes_128_ctr()
+        } else {
+            openssl::cipher::Cipher::aes_256_ctr()
+        };
         let mut rtp_ctx = CipherCtx::new().map_err(|e| Error::Other(e.to_string()))?;
         rtp_ctx
             .encrypt_init(Some(t), Some(&srtp_session_key[..]), None)
             .map_err(|e| Error::Other(e.to_string()))?;
 
-        let t = openssl::cipher::Cipher::aes_128_ctr();
+        let t = if profile.key_len() == 16 {
+            openssl::cipher::Cipher::aes_128_ctr()
+        } else {
+            openssl::cipher::Cipher::aes_256_ctr()
+        };
         let mut rtcp_ctx = CipherCtx::new().map_err(|e| Error::Other(e.to_string()))?;
         rtcp_ctx
             .encrypt_init(Some(t), Some(&srtcp_session_key[..]), None)

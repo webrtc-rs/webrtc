@@ -1,3 +1,8 @@
+use super::{Cipher, CipherInner};
+use crate::cipher::Kdf;
+use crate::error::{Error, Result};
+use crate::key_derivation::*;
+use crate::protection_profile::ProtectionProfile;
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
 use bytes::{BufMut, Bytes};
@@ -5,12 +10,8 @@ use rtcp::header::{HEADER_LENGTH, SSRC_LENGTH};
 use subtle::ConstantTimeEq;
 use util::marshal::*;
 
-use super::{Cipher, CipherInner};
-use crate::error::{Error, Result};
-use crate::key_derivation::*;
-use crate::protection_profile::ProtectionProfile;
-
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
+type Aes256Ctr = ctr::Ctr128BE<aes::Aes256>;
 
 pub(crate) struct CipherAesCmHmacSha1 {
     inner: CipherInner,
@@ -20,16 +21,29 @@ pub(crate) struct CipherAesCmHmacSha1 {
 
 impl CipherAesCmHmacSha1 {
     pub fn new(profile: ProtectionProfile, master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
-        let inner = CipherInner::new(profile, master_key, master_salt)?;
+        let kdf: Kdf = match profile {
+            ProtectionProfile::Aes128CmHmacSha1_32 | ProtectionProfile::Aes128CmHmacSha1_80 => {
+                aes_cm_key_derivation
+            }
+            ProtectionProfile::Aes256CmHmacSha1_80 | ProtectionProfile::Aes256CmHmacSha1_32 => {
+                aes_256_cm_key_derivation
+            }
+            _ => {
+                return Err(Error::Other(String::from(
+                    "no AES protection profile passed to CipherAesCmHmacSha1",
+                )))
+            }
+        };
+        let inner = CipherInner::new(profile, kdf, master_key, master_salt)?;
 
-        let srtp_session_key = aes_cm_key_derivation(
+        let srtp_session_key = kdf(
             LABEL_SRTP_ENCRYPTION,
             master_key,
             master_salt,
             0,
             master_key.len(),
         )?;
-        let srtcp_session_key = aes_cm_key_derivation(
+        let srtcp_session_key = kdf(
             LABEL_SRTCP_ENCRYPTION,
             master_key,
             master_salt,
@@ -83,10 +97,18 @@ impl Cipher for CipherAesCmHmacSha1 {
             header.ssrc,
             &self.inner.srtp_session_salt,
         );
-        let key = GenericArray::from_slice(&self.srtp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-        stream.apply_keystream(&mut writer[header.marshal_size()..]);
+
+        if self.inner.profile.key_len() == 16 {
+            let key = GenericArray::from_slice(&self.srtp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes128Ctr::new(key, nonce);
+            stream.apply_keystream(&mut writer[header.marshal_size()..]);
+        } else {
+            let key = GenericArray::from_slice(&self.srtp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes256Ctr::new(key, nonce);
+            stream.apply_keystream(&mut writer[header.marshal_size()..]);
+        }
 
         // Generate the auth tag.
         let auth_tag = &self.inner.generate_srtp_auth_tag(&writer, roc)[..self.rtp_auth_tag_len()];
@@ -133,11 +155,19 @@ impl Cipher for CipherAesCmHmacSha1 {
             &self.inner.srtp_session_salt,
         );
 
-        let key = GenericArray::from_slice(&self.srtp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-        stream.seek(0);
-        stream.apply_keystream(&mut writer[header.marshal_size()..]);
+        if self.inner.profile.key_len() == 16 {
+            let key = GenericArray::from_slice(&self.srtp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes128Ctr::new(key, nonce);
+            stream.seek(0);
+            stream.apply_keystream(&mut writer[header.marshal_size()..]);
+        } else {
+            let key = GenericArray::from_slice(&self.srtp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes256Ctr::new(key, nonce);
+            stream.seek(0);
+            stream.apply_keystream(&mut writer[header.marshal_size()..]);
+        }
 
         Ok(Bytes::from(writer))
     }
@@ -157,11 +187,17 @@ impl Cipher for CipherAesCmHmacSha1 {
             &self.inner.srtcp_session_salt,
         );
 
-        let key = GenericArray::from_slice(&self.srtcp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-
-        stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
+        if self.inner.profile.key_len() == 16 {
+            let key = GenericArray::from_slice(&self.srtcp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes128Ctr::new(key, nonce);
+            stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
+        } else {
+            let key = GenericArray::from_slice(&self.srtcp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes256Ctr::new(key, nonce);
+            stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
+        }
 
         // Add SRTCP index and set Encryption bit
         writer.put_u32(srtcp_index as u32 | (1u32 << 31));
@@ -224,12 +260,19 @@ impl Cipher for CipherAesCmHmacSha1 {
             &self.inner.srtcp_session_salt,
         );
 
-        let key = GenericArray::from_slice(&self.srtcp_session_key);
-        let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(key, nonce);
-
-        stream.seek(0);
-        stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
+        if self.inner.profile.key_len() == 16 {
+            let key = GenericArray::from_slice(&self.srtcp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes128Ctr::new(key, nonce);
+            stream.seek(0);
+            stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
+        } else {
+            let key = GenericArray::from_slice(&self.srtcp_session_key);
+            let nonce = GenericArray::from_slice(&counter);
+            let mut stream = Aes256Ctr::new(key, nonce);
+            stream.seek(0);
+            stream.apply_keystream(&mut writer[HEADER_LENGTH + SSRC_LENGTH..]);
+        }
 
         Ok(Bytes::from(writer))
     }

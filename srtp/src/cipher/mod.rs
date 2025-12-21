@@ -5,6 +5,8 @@ use bytes::Bytes;
 
 use crate::error::Result;
 
+type Kdf = fn(u8, &[u8], &[u8], usize, usize) -> Result<Vec<u8>>;
+
 ///NOTE: Auth tag and AEAD auth tag are placed at the different position in SRTCP
 ///
 ///In non-AEAD cipher, the authentication tag is placed *after* the ESRTCP word
