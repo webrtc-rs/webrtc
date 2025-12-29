@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::io::Cursor;
 
 use sdp::description::session::SessionDescription;
@@ -25,6 +26,17 @@ pub struct RTCSessionDescription {
     /// This will never be initialized by callers, internal use only
     #[serde(skip)]
     pub(crate) parsed: Option<SessionDescription>,
+}
+
+impl Display for RTCSessionDescription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "type: {}, sdp:\n{}",
+            self.sdp_type,
+            self.sdp.replace("\r\n", "\n")
+        )
+    }
 }
 
 impl RTCSessionDescription {

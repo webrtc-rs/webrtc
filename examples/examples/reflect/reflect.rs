@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -48,6 +49,13 @@ async fn main() -> Result<()> {
                 .long("video")
                 .short('v')
                 .help("Enable video reflect"),
+        ).arg(
+            Arg::new("input_sdp_file")
+                .takes_value(true)
+                .default_value("")
+                .long("input_sdp_file")
+                .short('i')
+                .help("Input SDP file"),
         );
 
     let matches = app.clone().get_matches();
@@ -57,6 +65,7 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 
+    let input_sdp_file = matches.value_of("input_sdp_file").unwrap_or("");
     let audio = matches.is_present("audio");
     let video = matches.is_present("video");
     if !audio && !video {
@@ -187,9 +196,16 @@ async fn main() -> Result<()> {
     }
 
     // Wait for the offer to be pasted
-    let line = signal::must_read_stdin()?;
+    print!("Paste offer from browser and press Enter: ");
+
+    let line = if input_sdp_file.is_empty() {
+        signal::must_read_stdin()?
+    } else {
+        fs::read_to_string(input_sdp_file)?
+    };
     let desc_data = signal::decode(line.as_str())?;
     let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
+    println!("Offer received: {}", offer);
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
@@ -297,6 +313,7 @@ async fn main() -> Result<()> {
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
+        println!("answer created: {}", local_desc);
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
         println!("{b64}");
