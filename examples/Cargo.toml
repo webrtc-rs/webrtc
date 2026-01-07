@@ -15,6 +15,8 @@ repository = "https://github.com/webrtc-rs/webrtc/tree/master/examples"
 [dev-dependencies]
 webrtc = { path = "../webrtc" }
 
+actix-web = { version = "4.12.1", features = ["macros"] }
+actix-rt = "2.11.0"
 tokio = { version = "1.32.0", features = ["full"] }
 env_logger = "0.11.3"
 clap = "3"
@@ -26,6 +28,7 @@ chrono = "0.4.28"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+uuid = { version = "1.19.0", features = ["v4", "serde"] }
 bytes = "1"
 lazy_static = "1"
 rand = "0.9"
@@ -150,4 +153,9 @@ bench = false
 [[example]]
 name = "ice-restart"
 path = "examples/ice-restart/ice-restart.rs"
+bench = false
+
+[[example]]
+name = "http-html"
+path = "examples/reflect-http-html/http-html.rs"
 bench = false

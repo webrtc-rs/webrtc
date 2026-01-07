@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>WebRTC Example</title>
+</head>
+<body>
+<h1>WebRTC Example</h1>
+<button onclick="start()">Start</button>
+<button onclick="stop()">Stop</button>
+<code id="state"></code>
+</body>
+
+<script type="application/javascript">
+    let audioEl, pc, connectionId;
+
+    const base = window.location.href;
+    async function post(path, body) {
+        return await fetch(`${base}${path}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: body ? JSON.stringify(body) : null
+        })
+    }
+
+    async function get(path) {
+        return await fetch(`${base}${path}`, {
+            headers: {
+                'Accept': 'application/json',
+            },
+        })
+    }
+
+    function logState(state) {
+        console.log('state', state)
+        document.getElementById('state').innerHTML = state
+    }
+
+    async function start() {
+        const configuration = {
+            "iceServers": [{
+                "urls": "stun:stun.l.google.com:19302"
+            }]
+        };
+
+        pc = new RTCPeerConnection(configuration);
+
+        pc.addEventListener("icecandidate", (ev) => onLocalIceCandidateEvent(ev));
+        pc.addEventListener("track", (ev) => onTrackEvent(ev));
+        pc.addEventListener("connectionstatechange", () => onStateChangeEvent());
+        pc.addEventListener("signalingstatechange", () => onStateChangeEvent());
+
+        const localStream = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
+        const firstTrack = localStream.getTracks().at(0);
+        if (firstTrack) {
+            pc.addTrack(firstTrack, localStream);
+        }
+
+        const offer = await pc.createOffer();
+        const startRes = await post('start', {
+            "request": offer,
+        })
+        const startJson = await startRes.json()
+
+        const answer = startJson['response'];
+        connectionId = startJson['connection_id'];
+
+        await pc.setLocalDescription(offer);
+        await pc.setRemoteDescription(answer);
+
+        while (true) {
+            const candidate = await get(`trickle/${connectionId}`)
+            if (candidate.status === 204) {
+                console.log('no more remote ice-candidates')
+                break
+            }
+            const candidateJson = await candidate.json();
+            console.log('remote ice-candidate', candidateJson)
+            await pc.addIceCandidate(candidateJson.ice_candidate);
+        }
+
+        async function onLocalIceCandidateEvent(ev) {
+            if (!ev.candidate) {
+                return
+            }
+
+            const ice_candidate = {
+                "sdpMid": ev.candidate.sdpMid,
+                "sdpMLineIndex": ev.candidate.sdpMLineIndex,
+                "candidate": ev.candidate.candidate,
+            };
+            if (ice_candidate.candidate) {
+                console.log('local ice-candidate', ice_candidate)
+            } else {
+                console.log('no more local ice-candidates')
+            }
+            await post(`trickle/${connectionId}`, {
+                "ice_candidate": ice_candidate
+            })
+        }
+
+        async function onStateChangeEvent() {
+            logState(pc.connectionState + ' ' + pc.signalingState);
+        }
+
+        async function onTrackEvent(ev) {
+            if (ev.track.kind !== "audio") return
+
+            if (audioEl) {
+                document.body.removeChild(audioEl)
+                audioEl = undefined
+            }
+
+            if (!ev.track.enabled) {
+                // Track removed, just remove audio element
+                return
+            }
+
+            const stream = new MediaStream([ev.track])
+            audioEl = document.createElement("audio")
+            document.body.appendChild(audioEl)
+            audioEl.autoplay = true
+            audioEl.srcObject = stream
+            audioEl.play().then(() => onPlaying())
+
+            // show volume
+        }
+
+        async function onPlaying() {
+            logState('playing')
+        }
+    }
+
+    async function stop() {
+        logState('stopping')
+        await post(`stop/${connectionId}`)
+
+        pc.getSenders().forEach((sender) => {
+            sender.track.stop();
+            pc.removeTrack(sender)
+        })
+
+        pc.close()
+        pc = null
+        logState('stopped')
+    }
+</script>
+</html>
