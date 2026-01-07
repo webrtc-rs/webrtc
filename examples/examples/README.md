@@ -6,6 +6,7 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 
 #### Media API
 - [x] [Reflect](reflect): The reflect example demonstrates how to have webrtc-rs send back to the user exactly what it receives using the same PeerConnection.
+- [x] [Reflect with HTTP+HTML](reflect-http-html): The reflect with HTTP and HTML example on how to set up a WebRTC-Connection over HTTP and with HTML and JavaScript.
 - [x] [Play from Disk VPx](play-from-disk-vpx): The play-from-disk-vp8 example demonstrates how to send VP8/VP9 video to your browser from a file saved to disk.
 - [x] [Play from Disk H264](play-from-disk-h264): The play-from-disk-h264 example demonstrates how to send H264 video to your browser from a file saved to disk.
 - [x] [Play from Disk Renegotiation](play-from-disk-renegotiation): The play-from-disk-renegotiation example is an extension of the play-from-disk example, but demonstrates how you can add/remove video tracks from an already negotiated PeerConnection.
