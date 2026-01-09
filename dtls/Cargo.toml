@@ -44,8 +44,8 @@ der-parser = "9.0"
 rcgen = "0.13"
 ring = "0.17.14"
 rustls = { version = "0.23.27", default-features = false, features = ["std", "ring"] }
-bincode = "1"
-serde = { version = "1", features = ["derive"] }
+rkyv = "0.8"
+bytecheck = "0.8"
 log = "0.4"
 thiserror = "1"
 pem = { version = "3", optional = true }
