@@ -875,3 +875,43 @@ a=ssrc:4281768245 msid:6ff05509-be96-4ef1-a74f-425e14720983 16d5d7fe-d076-4718-9
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_h264_high_profile_codecs() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+
+    // Verify High Profile Level 4.0
+    let (codec, _) = m.get_codec_by_payload(118).await?;
+    assert_eq!(codec.capability.mime_type, MIME_TYPE_H264);
+    assert!(codec
+        .capability
+        .sdp_fmtp_line
+        .contains("profile-level-id=640028"));
+
+    // Verify High Profile Level 4.1
+    let (codec, _) = m.get_codec_by_payload(119).await?;
+    assert_eq!(codec.capability.mime_type, MIME_TYPE_H264);
+    assert!(codec
+        .capability
+        .sdp_fmtp_line
+        .contains("profile-level-id=640029"));
+
+    // Verify High Profile Level 4.2
+    let (codec, _) = m.get_codec_by_payload(120).await?;
+    assert_eq!(codec.capability.mime_type, MIME_TYPE_H264);
+    assert!(codec
+        .capability
+        .sdp_fmtp_line
+        .contains("profile-level-id=64002a"));
+
+    // Verify High Profile Level 5.1
+    let (codec, _) = m.get_codec_by_payload(121).await?;
+    assert_eq!(codec.capability.mime_type, MIME_TYPE_H264);
+    assert!(codec
+        .capability
+        .sdp_fmtp_line
+        .contains("profile-level-id=640033"));
+
+    Ok(())
+}
