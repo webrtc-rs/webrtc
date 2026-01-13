@@ -284,6 +284,62 @@ impl MediaEngine {
                 payload_type: 123,
                 ..Default::default()
             },
+            // H.264 High Profile, Level 4.0 (20 Mbps, 720p60/1080p30)
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640028"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 118,
+                ..Default::default()
+            },
+            // H.264 High Profile, Level 4.1 (50 Mbps, 720p120/1080p60)
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640029"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 119,
+                ..Default::default()
+            },
+            // H.264 High Profile, Level 4.2 (50 Mbps, 1080p64)
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64002a"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 120,
+                ..Default::default()
+            },
+            // H.264 High Profile, Level 5.1 (240 Mbps, 4K30)
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640033"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 121,
+                ..Default::default()
+            },
             RTCRtpCodecParameters {
                 capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_AV1.to_owned(),
