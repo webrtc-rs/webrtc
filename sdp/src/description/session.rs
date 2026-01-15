@@ -1070,15 +1070,9 @@ fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth> {
     let experimental = parts[0].starts_with("X-");
     if experimental {
         parts[0] = parts[0].trim_start_matches("X-");
-    } else {
-        // Set according to currently registered with IANA
-        // https://tools.ietf.org/html/rfc4566#section-5.8 and
-        // https://datatracker.ietf.org/doc/html/rfc3890
-        let i = index_of(parts[0], &["CT", "AS", "TIAS"]);
-        if i == -1 {
-            return Err(Error::SdpInvalidValue(parts[0].to_owned()));
-        }
     }
+    // RFC 8866 section 5.8: SDP parsers MUST ignore bandwidth-fields with unknown <bwtype> names.
+    // Accept any bandwidth type instead of validating against a specific list.
 
     let bandwidth = parts[1].parse::<u64>()?;
 
