@@ -541,6 +541,93 @@ impl SessionDescription {
     /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
     /// ```
     pub fn unmarshal<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<Self> {
+        Self::unmarshal_with_config(reader, UnmarshalConfig::default())
+    }
+
+    /// Unmarshal is the primary function that deserializes the session description
+    /// message and stores it inside of a structured SessionDescription object.
+    ///
+    /// This function accepts an [`UnmarshalConfig`] to customize the parsing behavior.
+    ///
+    /// The States Transition Table describes the computation flow between functions
+    /// (namely s1, s2, s3, ...) for a parsing procedure that complies with the
+    /// specifications laid out by the rfc4566#section-5 as well as by JavaScript
+    /// Session Establishment Protocol draft. Links:
+    ///     <https://tools.ietf.org/html/rfc4566#section-5>
+    ///     <https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-24>
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5>
+    ///
+    /// Session description
+    ///    v=  (protocol version)
+    ///    o=  (originator and session identifier)
+    ///    s=  (session name)
+    ///    i=* (session information)
+    ///    u=* (URI of description)
+    ///    e=* (email address)
+    ///    p=* (phone number)
+    ///    c=* (connection information -- not required if included in
+    ///         all media)
+    ///    b=* (zero or more bandwidth information lines)
+    ///    One or more time descriptions ("t=" and "r=" lines; see below)
+    ///    z=* (time zone adjustments)
+    ///    k=* (encryption key)
+    ///    a=* (zero or more session attribute lines)
+    ///    Zero or more media descriptions
+    ///
+    /// Time description
+    ///    t=  (time the session is active)
+    ///    r=* (zero or more repeat times)
+    ///
+    /// Media description, if present
+    ///    m=  (media name and transport address)
+    ///    i=* (media title)
+    ///    c=* (connection information -- optional if included at
+    ///         session level)
+    ///    b=* (zero or more bandwidth information lines)
+    ///    k=* (encryption key)
+    ///    a=* (zero or more media attribute lines)
+    ///
+    /// In order to generate the following state table and draw subsequent
+    /// deterministic finite-state automota ("DFA") the following regex was used to
+    /// derive the DFA:
+    ///    vosi?u?e?p?c?b*(tr*)+z?k?a*(mi?c?b*k?a*)*
+    /// possible place and state to exit:
+    ///                    **   * * *  ** * * * *
+    ///                    99   1 1 1  11 1 1 1 1
+    ///                         3 1 1  26 5 5 4 4
+    ///
+    /// Please pay close attention to the `k`, and `a` parsing states. In the table
+    /// below in order to distinguish between the states belonging to the media
+    /// description as opposed to the session description, the states are marked
+    /// with an asterisk ("a*", "k*").
+    ///
+    /// ```ignore
+    /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
+    /// | STATES | a* | a*,k* | a  | a,k | b  | b,c | e | i  | m  | o | p | r,t | s | t | u  | v | z  |
+    /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
+    /// |   s1   |    |       |    |     |    |     |   |    |    |   |   |     |   |   |    | 2 |    |
+    /// |   s2   |    |       |    |     |    |     |   |    |    | 3 |   |     |   |   |    |   |    |
+    /// |   s3   |    |       |    |     |    |     |   |    |    |   |   |     | 4 |   |    |   |    |
+    /// |   s4   |    |       |    |     |    |   5 | 6 |  7 |    |   | 8 |     |   | 9 | 10 |   |    |
+    /// |   s5   |    |       |    |     |  5 |     |   |    |    |   |   |     |   | 9 |    |   |    |
+    /// |   s6   |    |       |    |     |    |   5 |   |    |    |   | 8 |     |   | 9 |    |   |    |
+    /// |   s7   |    |       |    |     |    |   5 | 6 |    |    |   | 8 |     |   | 9 | 10 |   |    |
+    /// |   s8   |    |       |    |     |    |   5 |   |    |    |   |   |     |   | 9 |    |   |    |
+    /// |   s9   |    |       |    |  11 |    |     |   |    | 12 |   |   |   9 |   |   |    |   | 13 |
+    /// |   s10  |    |       |    |     |    |   5 | 6 |    |    |   | 8 |     |   | 9 |    |   |    |
+    /// |   s11  |    |       | 11 |     |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s12  |    |    14 |    |     |    |  15 |   | 16 | 12 |   |   |     |   |   |    |   |    |
+    /// |   s13  |    |       |    |  11 |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s14  | 14 |       |    |     |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s15  |    |    14 |    |     | 15 |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s16  |    |    14 |    |     |    |  15 |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
+    /// ```
+    pub fn unmarshal_with_config<R: io::BufRead + io::Seek>(
+        reader: &mut R,
+        config: UnmarshalConfig,
+    ) -> Result<Self> {
         let mut lexer = Lexer {
             desc: SessionDescription {
                 version: 0,
@@ -559,6 +646,7 @@ impl SessionDescription {
                 media_descriptions: vec![],
             },
             reader,
+            config,
         };
 
         let mut state = Some(StateFn { f: s1 });
@@ -568,6 +656,13 @@ impl SessionDescription {
 
         Ok(lexer.desc)
     }
+}
+
+/// UnmarshalConfig provides configuration options for deserializing a SessionDescription.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct UnmarshalConfig {
+    /// Additional allowed `<proto>` values not present in <https://tools.ietf.org/html/rfc4566#section-5.14>.
+    pub additional_protos: Vec<String>,
 }
 
 impl From<SessionDescription> for String {
@@ -1236,7 +1331,7 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
                 "UDP", "RTP", "AVP", "SAVP", "SAVPF", "TLS", "DTLS", "SCTP", "AVPF", "udptl",
             ],
         );
-        if i == -1 {
+        if i == -1 && !lexer.config.additional_protos.iter().any(|p| p == proto) {
             return Err(Error::SdpInvalidValue(fields[2].to_owned()));
         }
         protos.push(proto.to_owned());
