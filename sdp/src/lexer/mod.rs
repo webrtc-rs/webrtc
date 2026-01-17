@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::SeekFrom;
 
-use super::description::session::SessionDescription;
+use super::description::session::{SessionDescription, UnmarshalConfig};
 use super::error::{Error, Result};
 
 pub(crate) const END_LINE: &str = "\r\n";
@@ -11,6 +11,7 @@ pub(crate) const END_LINE: &str = "\r\n";
 pub struct Lexer<'a, R: io::BufRead + io::Seek> {
     pub desc: SessionDescription,
     pub reader: &'a mut R,
+    pub config: UnmarshalConfig,
 }
 
 pub type StateFnType<'a, R> = fn(&mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>>;
