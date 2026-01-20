@@ -605,3 +605,72 @@ fn test_unmarshal_non_nil_address() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn test_unmarshal_additional_proto() -> Result<()> {
+    let input = "v=0\r\n\
+o=alice 2890844526 2890842807 IN IP4 192.0.2.1\r\n\
+s=BFCP Session\r\n\
+t=0 0\r\n\
+m=application 50000 UDP/BFCP *\r\n\
+a=floorctrl:c-s\r\n\
+a=confid:1\r\n\
+a=userid:1\r\n\
+a=floorid:1 m-stream:10\r\n";
+
+    let mut reader = Cursor::new(input.as_bytes());
+    let result = SessionDescription::unmarshal(&mut reader);
+    assert_eq!(
+        Error::SdpInvalidValue("UDP/BFCP".to_string()),
+        result.unwrap_err()
+    );
+
+    let mut reader = Cursor::new(input.as_bytes());
+    let sdp = SessionDescription::unmarshal_with_config(
+        &mut reader,
+        UnmarshalConfig {
+            additional_protos: vec!["BFCP".to_owned()],
+        },
+    )?;
+
+    assert_eq!(sdp.media_descriptions.len(), 1);
+    assert_eq!(sdp.media_descriptions[0].media_name.media, "application");
+    assert_eq!(
+        sdp.media_descriptions[0].media_name.protos,
+        vec!["UDP", "BFCP"]
+    );
+
+    let output = sdp.marshal();
+    assert_eq!(output, input);
+
+    Ok(())
+}
+
+#[test]
+fn test_unmarshal_multiple_additional_protos() -> Result<()> {
+    let input = "v=0\r\n\
+o=alice 2890844526 2890842807 IN IP4 192.0.2.1\r\n\
+s=IX Session\r\n\
+t=0 0\r\n\
+m=application 9 UDP/UDT/IX 0\r\n";
+
+    let mut reader = Cursor::new(input.as_bytes());
+    let sdp = SessionDescription::unmarshal_with_config(
+        &mut reader,
+        UnmarshalConfig {
+            additional_protos: vec!["UDT".to_owned(), "IX".to_owned()],
+        },
+    )?;
+
+    assert_eq!(sdp.media_descriptions.len(), 1);
+    assert_eq!(sdp.media_descriptions[0].media_name.media, "application");
+    assert_eq!(
+        sdp.media_descriptions[0].media_name.protos,
+        vec!["UDP", "UDT", "IX"]
+    );
+
+    let output = sdp.marshal();
+    assert_eq!(output, input);
+
+    Ok(())
+}
