@@ -40,7 +40,7 @@ impl AuthHandler for MyAuthHandler {
     }
 }
 
-// RUST_LOG=trace cargo run --color=always --package turn --example turn_server_udp -- --public-ip 0.0.0.0 --users user=pass
+// RUST_LOG=trace cargo run --color=always --package turn --example turn_server_udp -- --public-ip 127.0.0.1 --users user=pass
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
