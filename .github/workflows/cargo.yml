@@ -14,82 +14,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test
+  build:
+    name: Build and test
     strategy:
       matrix:
-        os: ["ubuntu-latest"] #, "macos-latest"]
-        toolchain:
-          # - 1.65.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
-          - stable
+        os: ['ubuntu-latest'] #, 'macos-latest', 'windows-latest']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
-      - name: Install Rust ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          override: true
-      - name: Install Rust
-        run: rustup update stable
-      - name: 📦 Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          profile: minimal
-          override: true
-      - name: 🏭 Cache dependencies
-        uses: Swatinem/rust-cache@v2
-      - name: Test
-        run: cargo test
-      - name: Test with all features enabled
-        run: cargo test --all-features
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
 
-  test_windows:
-    name: Test (windows)
-    strategy:
-      matrix:
-        toolchain:
-          # - 1.63.0 # min supported version (https://github.com/webrtc-rs/webrtc/#toolchain)
-          - stable
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          override: true
-      - name: Install Rust
-        run: rustup update stable
-      - name: 📦 Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          profile: minimal
-          override: true
-      - name: Copy to C drive
-        run: cp D:\a C:\ -Recurse
-      # - name: 🏭 Cache dependencies
-      #   uses: Swatinem/rust-cache@v2
-      - name: Test
-        working-directory: "C:\\a\\webrtc\\webrtc"
-        run: cargo test --features metrics
-
-  quality:
-    name: Check formatting style and run clippy
+  rustfmt_and_clippy:
+    name: Check rustfmt style && run clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -99,22 +38,17 @@ jobs:
           profile: minimal
           components: clippy, rustfmt
           override: true
-      - name: 📦 Cache cargo registry
+      - name: Cache cargo registry
         uses: actions/cache@v3
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-      - name: 📎 Run clippy
+      - name: Run clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --workspace --all-targets --all-features --all -- -D warnings
-      - name: 💬 Check formatting
+      - name: Check formating
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-      # - name: Check for typos
-      #   uses: crate-ci/typos@master

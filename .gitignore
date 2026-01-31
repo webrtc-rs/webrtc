@@ -10,3 +10,4 @@
 
 # Editor configs
 .vscode
+Cargo.lock

@@ -1,28 +1,5 @@
-[workspace]
-members = [
-    "data",
-    "dtls",
-    "examples",
-    "ice",
-    "interceptor",
-    "mdns",
-    "media",
-    "rtcp",
-    "rtp",
-    "sctp",
-    "sdp",
-    "srtp",
-    "stun",
-    "turn",
-    "util",
-    "webrtc",
-]
-resolver = "2"
-
-[profile.dev]
-opt-level = 0
-
-[workspace.package]
+[package]
+name = "webrtc"
 version = "0.17.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
@@ -32,20 +9,196 @@ documentation = "https://docs.rs/webrtc"
 repository = "https://github.com/webrtc-rs/webrtc"
 keywords = ["sansio", "networking", "protocols"]
 categories = ["network-programming"]
+description = "A pure Rust implementation of WebRTC API"
 
-[workspace.dependencies]
-webrtc = { version = "0.17.0", path = "webrtc" }
-data = { version = "0.17.0", path = "data", package = "webrtc-data" }
-dtls = { version = "0.17.0", path = "dtls" }
-ice = { version = "0.17.0", path = "ice", package = "webrtc-ice" }
-interceptor = { version = "0.17.0", path = "interceptor" }
-mdns = { version = "0.17.0", path = "mdns", package = "webrtc-mdns" }
-media = { version = "0.17.0", path = "media", package = "webrtc-media" }
-rtcp = { version = "0.17.0", path = "rtcp" }
-rtp = { version = "0.17.0", path = "rtp" }
-sctp = { version = "0.17.0", path = "sctp", package = "webrtc-sctp" }
-sdp = { version = "0.17.0", path = "sdp" }
-srtp = { version = "0.17.0", path = "srtp", package = "webrtc-srtp" }
-stun = { version ="0.17.0", path = "stun" }
-turn = { version = "0.17.0", path = "turn" }
-util = { version = "0.17.0", path = "util", package = "webrtc-util", default-features = false }
+[dependencies]
+data = { version = "0.17.0", package = "webrtc-data" }
+dtls = { version = "0.17.0" }
+ice = { version = "0.17.0", package = "webrtc-ice" }
+interceptor = { version = "0.17.0" }
+mdns = { version = "0.17.0", package = "webrtc-mdns" }
+media = { version = "0.17.0", package = "webrtc-media" }
+rtcp = { version = "0.17.0" }
+rtp = { version = "0.17.0" }
+sctp = { version = "0.17.0", package = "webrtc-sctp" }
+sdp = { version = "0.17.0" }
+srtp = { version = "0.17.0", package = "webrtc-srtp" }
+stun = { version ="0.17.0"}
+turn = { version = "0.17.0" }
+util = { version = "0.17.0", package = "webrtc-util", default-features = false }
+
+arc-swap = "1"
+tokio = { version = "1.32.0", features = [
+    "fs",
+    "io-util",
+    "io-std",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
+log = "0.4"
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.9.1"
+bytes = "1"
+thiserror = "1"
+waitgroup = "0.1"
+regex = "1.9.5"
+smol_str = { version = "0.2", features = ["serde"] }
+url = "2"
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+ring = "0.17.14"
+sha2 = "0.10"
+lazy_static = "1.4"
+hex = "0.4"
+pem = { version = "3", optional = true }
+portable-atomic = "1.6"
+unicase = "2.8"
+
+[dev-dependencies]
+env_logger = "0.11.3"
+tokio = { version = "1.32.0", features = ["full"] }
+clap = "3"
+hyper = { version = "0.14.27", features = ["full"] }
+signal = { version = "0.17.0", path = "examples/signal", package = "webrtc-signal" }
+tokio-util = { version = "0.7", features = ["codec"] }
+anyhow = "1"
+chrono = "0.4.28"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bytes = "1"
+lazy_static = "1"
+rand = "0.9"
+memchr = "2.1.1"
+
+[features]
+pem = ["dep:pem", "dtls/pem"]
+openssl = ["srtp/openssl"]
+vendored-openssl = ["srtp/vendored-openssl"]
+
+
+[[example]]
+name = "rc-cycle"
+path = "examples/rc-cycle/rc-cycle.rs"
+bench = false
+
+[[example]]
+name = "broadcast"
+path = "examples/broadcast/broadcast.rs"
+bench = false
+
+[[example]]
+name = "data-channels"
+path = "examples/data-channels/data-channels.rs"
+bench = false
+
+[[example]]
+name = "data-channels-close"
+path = "examples/data-channels-close/data-channels-close.rs"
+bench = false
+
+[[example]]
+name = "data-channels-create"
+path = "examples/data-channels-create/data-channels-create.rs"
+bench = false
+
+[[example]]
+name = "data-channels-detach"
+path = "examples/data-channels-detach/data-channels-detach.rs"
+bench = false
+
+[[example]]
+name = "data-channels-detach-create"
+path = "examples/data-channels-detach-create/data-channels-detach-create.rs"
+bench = false
+
+[[example]]
+name = "data-channels-flow-control"
+path = "examples/data-channels-flow-control/data-channels-flow-control.rs"
+bench = false
+
+[[example]]
+name = "insertable-streams"
+path = "examples/insertable-streams/insertable-streams.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-vpx"
+path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-h264"
+path = "examples/play-from-disk-h264/play-from-disk-h264.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-hevc"
+path = "examples/play-from-disk-hevc/play-from-disk-hevc.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-renegotiation"
+path = "examples/play-from-disk-renegotiation/play-from-disk-renegotiation.rs"
+bench = false
+
+[[example]]
+name = "reflect"
+path = "examples/reflect/reflect.rs"
+bench = false
+
+[[example]]
+name = "rtp-forwarder"
+path = "examples/rtp-forwarder/rtp-forwarder.rs"
+bench = false
+
+[[example]]
+name = "rtp-to-webrtc"
+path = "examples/rtp-to-webrtc/rtp-to-webrtc.rs"
+bench = false
+
+[[example]]
+name = "save-to-disk-vpx"
+path = "examples/save-to-disk-vpx/save-to-disk-vpx.rs"
+bench = false
+
+[[example]]
+name = "save-to-disk-h264"
+path = "examples/save-to-disk-h264/save-to-disk-h264.rs"
+bench = false
+
+[[example]]
+name = "simulcast"
+path = "examples/simulcast/simulcast.rs"
+bench = false
+
+[[example]]
+name = "swap-tracks"
+path = "examples/swap-tracks/swap-tracks.rs"
+bench = false
+
+[[example]]
+name = "ortc"
+path = "examples/ortc/ortc.rs"
+bench = false
+
+[[example]]
+name = "offer"
+path = "examples/offer-answer/offer.rs"
+bench = false
+
+[[example]]
+name = "answer"
+path = "examples/offer-answer/answer.rs"
+bench = false
+
+[[example]]
+name = "ice-restart"
+path = "examples/ice-restart/ice-restart.rs"
+bench = false

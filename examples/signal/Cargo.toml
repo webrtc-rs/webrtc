@@ -1,0 +1,17 @@
+[package]
+name = "webrtc-signal"
+version = "0.17.0"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2021"
+description = "Examples of WebRTC.rs stack"
+license = "MIT OR Apache-2.0"
+documentation = "https://docs.rs/examples"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/webrtc/tree/master/examples"
+
+[dependencies]
+tokio = { version = "1.32.0", features = ["full"] }
+anyhow = "1"
+base64 = "0.22.1"
+lazy_static = "1"
+hyper = { version = "0.14.27", features = ["full"] }

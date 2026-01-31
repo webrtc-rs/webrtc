@@ -27,41 +27,35 @@ jobs:
           - "--all-features"
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.toolchain }}
-          override: true
+          components: llvm-tools-preview
 
       - name: Install grcov
-        uses: actions-rs/install@v0.1
+        uses: taiki-e/install-action@v2
         with:
-          crate: grcov
-          version: latest
-          use-tool-cache: true
+          tool: grcov
 
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --no-fail-fast ${{ matrix.cargo_flags }}
+        run: cargo test --all --no-fail-fast ${{ matrix.cargo_flags }}
         env:
           CARGO_INCREMENTAL: "0"
-          RUSTFLAGS: '-Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off -Cprofile-generate=target/debug'
-          RUSTDOCFLAGS: '-Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off -Cprofile-generate=target/debug'
+          RUSTFLAGS: "-Cinstrument-coverage"
+          LLVM_PROFILE_FILE: "cargo-test-%p-%m.profraw"
 
       - name: Generate coverage data
         id: grcov
-        # uses: actions-rs/grcov@v0.1
         run: |
-          grcov target/debug/ \
-              --branch \
-              --llvm \
+          grcov . \
+              --binary-path ./target/debug/ \
               --source-dir . \
+              --output-type lcov \
               --output-path lcov.info \
+              --branch \
               --ignore='/**' \
               --ignore='C:/**' \
               --ignore='../**' \
@@ -69,11 +63,7 @@ jobs:
               --excl-line "#\\[derive\\(" \
               --excl-br-line "#\\[derive\\(" \
               --excl-start "#\\[cfg\\(test\\)\\]" \
-              --excl-br-start "#\\[cfg\\(test\\)\\]" \
-              --commit-sha ${{ github.sha }} \
-              --service-job-id ${{ github.job }} \
-              --service-name "GitHub Actions" \
-              --service-number ${{ github.run_id }}
+              --excl-br-start "#\\[cfg\\(test\\)\\]"
       - name: Upload coverage as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -82,8 +72,7 @@ jobs:
           path: lcov.info
 
       - name: Upload coverage to codecov.io
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v5
         with:
-          # file: ${{ steps.grcov.outputs.report }}
-          file: lcov.info
+          files: lcov.info
           fail_ci_if_error: true
