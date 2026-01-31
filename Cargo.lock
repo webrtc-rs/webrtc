@@ -842,7 +842,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "examples"
-version = "0.5.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3072,7 +3072,7 @@ dependencies = [
 
 [[package]]
 name = "webrtc-signal"
-version = "0.1.1"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "base64",
