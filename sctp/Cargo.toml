@@ -1,16 +1,16 @@
 [package]
 name = "webrtc-sctp"
-version = "0.13.0"
-authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "A pure Rust implementation of SCTP"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 documentation = "https://docs.rs/webrtc-sctp"
-homepage = "https://webrtc.rs"
+homepage.workspace = true
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/sctp"
 
 [dependencies]
-util = { version = "0.12.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn"] }
+util = { workspace = true, default-features = false, features = ["conn"] }
 
 arc-swap = "1"
 tokio = { version = "1.32.0", features = [

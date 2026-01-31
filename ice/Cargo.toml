@@ -1,19 +1,19 @@
 [package]
 name = "webrtc-ice"
-version = "0.14.0"
-authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "A pure Rust implementation of ICE"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 documentation = "https://docs.rs/webrtc-ice"
-homepage = "https://webrtc.rs"
+homepage.workspace = true
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/ice"
 
 [dependencies]
-util = { version = "0.12.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet", "sync"] }
-turn = { version = "0.11.0", path = "../turn" }
-stun = { version = "0.9.0", path = "../stun" }
-mdns = { version = "0.10.0", path = "../mdns", package = "webrtc-mdns" }
+util = { workspace = true, default-features = false, features = ["conn", "vnet", "sync"] }
+turn.workspace = true
+stun.workspace = true
+mdns.workspace = true
 
 arc-swap = "1"
 async-trait = "0.1"

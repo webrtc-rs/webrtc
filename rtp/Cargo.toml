@@ -1,16 +1,16 @@
 [package]
 name = "rtp"
-version = "0.14.0"
-authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "A pure Rust implementation of RTP"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 documentation = "https://docs.rs/rtp"
-homepage = "https://webrtc.rs"
+homepage.workspace = true
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/rtp"
 
 [dependencies]
-util = { version = "0.12.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
+util = { workspace = true, default-features = false, features = ["marshal"] }
 
 bytes = "1"
 rand = "0.9"

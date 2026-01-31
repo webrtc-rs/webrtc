@@ -21,3 +21,31 @@ resolver = "2"
 
 [profile.dev]
 opt-level = 0
+
+[workspace.package]
+version = "0.17.0"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2021"
+license = "MIT/Apache-2.0"
+homepage = "https://webrtc.rs"
+documentation = "https://docs.rs/webrtc"
+repository = "https://github.com/webrtc-rs/webrtc"
+keywords = ["sansio", "networking", "protocols"]
+categories = ["network-programming"]
+
+[workspace.dependencies]
+webrtc = { version = "0.17.0", path = "webrtc" }
+data = { version = "0.17.0", path = "data", package = "webrtc-data" }
+dtls = { version = "0.17.0", path = "dtls" }
+ice = { version = "0.17.0", path = "ice", package = "webrtc-ice" }
+interceptor = { version = "0.17.0", path = "interceptor" }
+mdns = { version = "0.17.0", path = "mdns", package = "webrtc-mdns" }
+media = { version = "0.17.0", path = "media", package = "webrtc-media" }
+rtcp = { version = "0.17.0", path = "rtcp" }
+rtp = { version = "0.17.0", path = "rtp" }
+sctp = { version = "0.17.0", path = "sctp", package = "webrtc-sctp" }
+sdp = { version = "0.17.0", path = "sdp" }
+srtp = { version = "0.17.0", path = "srtp", package = "webrtc-srtp" }
+stun = { version ="0.17.0", path = "stun" }
+turn = { version = "0.17.0", path = "turn" }
+util = { version = "0.17.0", path = "util", package = "webrtc-util", default-features = false }

@@ -1,17 +1,17 @@
 [package]
 name = "turn"
-version = "0.11.0"
-authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "A pure Rust implementation of TURN"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 documentation = "https://docs.rs/turn"
-homepage = "https://webrtc.rs"
+homepage.workspace = true
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/turn"
 
 [dependencies]
-util = { version = "0.12.0", path = "../util", package = "webrtc-util", default-features = false, features = ["conn", "vnet"] }
-stun = { version = "0.9.0", path = "../stun" }
+util = { workspace = true, default-features = false, features = ["conn", "vnet"] }
+stun.workspace = true
 
 tokio = { version = "1.32.0", features = [
     "fs",

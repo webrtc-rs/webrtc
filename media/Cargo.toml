@@ -1,16 +1,16 @@
 [package]
 name = "webrtc-media"
-version = "0.11.0"
-authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "A pure Rust implementation of WebRTC Media API"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 documentation = "https://docs.rs/webrtc-media"
-homepage = "https://webrtc.rs"
+homepage.workspace = true
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/media"
 
 [dependencies]
-rtp = { version = "0.14.0", path = "../rtp" }
+rtp.workspace = true
 
 byteorder = "1"
 bytes = "1"

@@ -72,10 +72,22 @@ stack. The project is under active development and should be considered early st
 The [Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) demonstrate how to build
 media and data-channel applications using webrtc-rs.
 
-The project is shifting its focus toward a Sans-IO WebRTC implementation in Rust.
-Going forward, the [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) crate will be built on top of the
-[webrtc-rs/rtc](https://github.com/webrtc-rs/rtc) crate, which provides a clean, protocol-centric Sans-IO core.
-This architecture enables a fully async-friendly WebRTC implementation in Rust.
+## 🚨 Important Notice: v0.17.x Release and Future Direction
+
+**v0.17.x is the final feature release of the Tokio-coupled async WebRTC implementation.**
+
+- **v0.17.x branch**: A dedicated branch will be created for v0.17.x that will receive **bug fixes only** (no new features).
+- **Master branch**: Will transition to a new Sans-IO based architecture built on top of [webrtc-rs/rtc](https://github.com/webrtc-rs/rtc).
+
+### **Why this change?**
+
+The project is shifting toward a Sans-IO WebRTC implementation that decouples the protocol logic from any specific async runtime. This new architecture will:
+
+- ✅ Support multiple async runtimes (Tokio, smol, async-std, etc.)
+- ✅ Provide a clean, protocol-centric Sans-IO core via [webrtc-rs/rtc](https://github.com/webrtc-rs/rtc)
+- ✅ Enable a truly runtime-agnostic, async-friendly WebRTC implementation in Rust
+
+If you need Tokio-specific stability, please use the v0.17.x branch. If you want to adopt the new runtime-agnostic approach, follow development on the master branch.
 
 ## Features
 

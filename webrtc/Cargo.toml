@@ -1,30 +1,30 @@
 [package]
 name = "webrtc"
-version = "0.14.0"
-authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "A pure Rust implementation of WebRTC API"
-license = "MIT OR Apache-2.0"
-documentation = "https://docs.rs/webrtc"
-homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/webrtc"
+license.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+repository.workspace = true
 readme = "../README.md"
 
 [dependencies]
-data = { version = "0.12.0", path = "../data", package = "webrtc-data" }
-dtls = { version = "0.13.0", path = "../dtls" }
-ice = { version = "0.14.0", path = "../ice", package = "webrtc-ice" }
-interceptor = { version = "0.15.0", path = "../interceptor" }
-mdns = { version = "0.10.0", path = "../mdns", package = "webrtc-mdns" }
-media = { version = "0.11.0", path = "../media", package = "webrtc-media" }
-rtcp = { version = "0.14.0", path = "../rtcp" }
-rtp = { version = "0.14.0", path = "../rtp" }
-sctp = { version = "0.13.0", path = "../sctp", package = "webrtc-sctp" }
-sdp = { version = "0.10.0", path = "../sdp" }
-srtp = { version = "0.16.0", path = "../srtp", package = "webrtc-srtp" }
-stun = { version = "0.9.0", path = "../stun" }
-turn = { version = "0.11.0", path = "../turn" }
-util = { version = "0.12.0", path = "../util", package = "webrtc-util" }
+data.workspace = true
+dtls.workspace = true
+ice.workspace = true
+interceptor.workspace = true
+mdns.workspace = true
+media.workspace = true
+rtcp.workspace = true
+rtp.workspace = true
+sctp.workspace = true
+sdp.workspace = true
+srtp.workspace = true
+stun.workspace = true
+turn.workspace = true
+util.workspace = true
 
 arc-swap = "1"
 tokio = { version = "1.32.0", features = [

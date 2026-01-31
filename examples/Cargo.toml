@@ -13,7 +13,7 @@ repository = "https://github.com/webrtc-rs/webrtc/tree/master/examples"
 
 
 [dev-dependencies]
-webrtc = { path = "../webrtc" }
+webrtc.workspace = true
 
 tokio = { version = "1.32.0", features = ["full"] }
 env_logger = "0.11.3"

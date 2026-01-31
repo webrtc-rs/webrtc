@@ -1,16 +1,16 @@
 [package]
 name = "rtcp"
-version = "0.14.0"
+version.workspace = true
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
-edition = "2021"
+edition.workspace = true
 description = "A pure Rust implementation of RTCP"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 documentation = "https://docs.rs/rtcp"
-homepage = "https://webrtc.rs"
+homepage.workspace = true
 repository = "https://github.com/webrtc-rs/webrtc/tree/master/rtcp"
 
 [dependencies]
-util = { version = "0.12.0", path = "../util", package = "webrtc-util", default-features = false, features = ["marshal"] }
+util = { workspace = true, default-features = false, features = ["marshal"] }
 
 bytes = "1"
 thiserror = "1"
