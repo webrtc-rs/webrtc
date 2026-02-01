@@ -47,6 +47,10 @@ impl PeerConnectionDriver {
         socket: Box<dyn AsyncUdpSocket>,
     ) -> Result<Self, std::io::Error> {
         let local_addr = socket.local_addr()?;
+        
+        // Store local address in inner for ICE gathering
+        *inner.local_addr.lock().unwrap() = Some(local_addr);
+        
         let sender = socket.create_sender();
         let timer = inner.runtime.new_timer(Instant::now());
 

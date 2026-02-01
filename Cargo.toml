@@ -17,7 +17,7 @@ runtime-tokio = ["dep:tokio"]
 runtime-smol = ["dep:smol", "dep:async-io"]
 
 [dependencies]
-rtc = "0.8.3"
+rtc = { version = "0.8.4" } #, path = "../rtc/rtc" }
 bytes = "1.9"
 async-trait = "0.1"
 log = "0.4.29"

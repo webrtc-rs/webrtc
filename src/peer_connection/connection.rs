@@ -30,6 +30,8 @@ pub(crate) struct PeerConnectionInner {
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
+    /// Local socket address (set after bind)
+    pub(crate) local_addr: Mutex<Option<SocketAddr>>,
     /// Data channels  
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
@@ -89,6 +91,7 @@ impl PeerConnection {
                 core: Mutex::new(core),
                 runtime,
                 handler,
+                local_addr: Mutex::new(None),
                 data_channels: Mutex::new(HashMap::new()),
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 data_tx,
@@ -138,8 +141,29 @@ impl PeerConnection {
         &self,
         desc: RTCSessionDescription,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().unwrap();
-        core.set_local_description(desc)?;
+        {
+            let mut core = self.inner.core.lock().unwrap();
+            core.set_local_description(desc)?;
+        }
+        
+        // Trigger ICE candidate gathering
+        if let Some(local_addr) = *self.inner.local_addr.lock().unwrap() {
+            let inner = self.inner.clone();
+            
+            // Gather host candidates
+            let candidates = crate::ice_gatherer::gather_host_candidates(local_addr);
+            
+            // Add candidates to rtc core
+            // The core will emit OnIceCandidateEvent and OnIceGatheringStateChange events
+            // which the driver will dispatch to the handler
+            for candidate_init in candidates {
+                let mut core = inner.core.lock().unwrap();
+                if let Err(e) = core.add_local_candidate(candidate_init) {
+                    log::warn!("Failed to add local candidate: {}", e);
+                }
+            }
+        }
+        
         Ok(())
     }
 
