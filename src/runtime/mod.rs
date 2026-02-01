@@ -215,7 +215,7 @@ pub fn default_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
 
     #[cfg(feature = "runtime-smol")]
     {
-        return Some(std::sync::Arc::new(SmolRuntime));
+        Some(std::sync::Arc::new(SmolRuntime))
     }
 
     #[cfg(not(feature = "runtime-smol"))]

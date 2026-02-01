@@ -19,4 +19,5 @@
 //! // Coming soon: PeerConnection example
 //! ```
 
+pub mod peer_connection;
 pub mod runtime;

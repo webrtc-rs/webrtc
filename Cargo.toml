@@ -18,7 +18,8 @@ runtime-smol = ["dep:smol", "dep:async-io"]
 
 [dependencies]
 rtc = "0.8.3"
-
+bytes = "1.9"
+async-trait = "0.1"
 log = "0.4.29"
 pin-project-lite = "0.2"
 thiserror = "2.0"
@@ -29,7 +30,14 @@ smol = { version = "2.0", optional = true }
 async-io = { version = "2.4", optional = true }
 
 [dev-dependencies]
+async-trait = "0.1"
 env_logger = "0.11.3"
+tokio = { version = "1.43", features = ["macros", "rt-multi-thread"] }
+
+#[[example]]
+#name = "simple"
+#path = "examples/simple.rs"
+#required-features = ["runtime-tokio"]
 
 #[[example]]
 #name = "broadcast"
