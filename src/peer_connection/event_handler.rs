@@ -1,6 +1,7 @@
 //! Event handler trait for peer connection events
 
 use super::*;
+use std::sync::Arc;
 
 /// Trait for handling peer connection events asynchronously
 ///
@@ -47,7 +48,10 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
     /// Called when the peer connection state changes
     async fn on_connection_state_change(&self, _state: RTCPeerConnectionState) {}
 
-    /// Called when a new data channel is created by the remote peer
+    /// Called when a remote peer creates a data channel
+    async fn on_data_channel_open(&self, _data_channel: Arc<crate::data_channel::DataChannel>) {}
+
+    /// Called for data channel lifecycle events  
     async fn on_data_channel(&self, _event: RTCDataChannelEvent) {}
 
     /// Called when a new remote track is received

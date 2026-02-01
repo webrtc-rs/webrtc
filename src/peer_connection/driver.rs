@@ -29,6 +29,8 @@ pub struct PeerConnectionDriver {
     timer: Pin<Box<dyn AsyncTimer>>,
     recv_buf: Vec<u8>,
     local_addr: SocketAddr,
+    /// Channel for receiving outgoing data channel messages
+    data_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::data_channel::OutgoingMessage>>,
 }
 
 impl PeerConnectionDriver {
@@ -40,6 +42,10 @@ impl PeerConnectionDriver {
         let local_addr = socket.local_addr()?;
         let sender = socket.create_sender();
         let timer = inner.runtime.new_timer(Instant::now());
+
+        // Take the data channel receiver (can only be done once)
+        let data_rx = inner.data_rx.lock().unwrap().take();
+
         Ok(Self {
             inner,
             socket,
@@ -47,6 +53,7 @@ impl PeerConnectionDriver {
             timer,
             recv_buf: vec![0u8; 2000], // Standard MTU size
             local_addr,
+            data_rx,
         })
     }
 }
@@ -87,6 +94,24 @@ impl Future for PeerConnectionDriver {
                             // TODO: Buffer unsent messages
                             break;
                         }
+                    }
+                }
+            }
+
+            // 1.5. Handle outgoing DataChannel messages
+            if let Some(ref mut data_rx) = this.data_rx {
+                while let Poll::Ready(Some(outgoing)) = data_rx.poll_recv(cx) {
+                    // Create RTCMessage from OutgoingMessage
+                    let rtc_message = rtc::peer_connection::message::RTCMessage::DataChannelMessage(
+                        outgoing.channel_id,
+                        outgoing.message,
+                    );
+
+                    // Send via core
+                    let mut core = this.inner.core.lock().unwrap();
+                    if let Err(e) = core.handle_write(rtc_message) {
+                        log::error!("Failed to send DataChannel message: {}", e);
+                        return Poll::Ready(Err(Box::new(e)));
                     }
                 }
             }
@@ -135,9 +160,41 @@ impl Future for PeerConnectionDriver {
             // 3. Read application messages (RTP/RTCP/data)
             {
                 let mut core = this.inner.core.lock().unwrap();
-                while let Some(_message) = core.poll_read() {
-                    // TODO: Handle application messages
-                    // These will be handled by Track and DataChannel wrappers later
+                while let Some(message) = core.poll_read() {
+                    match message {
+                        rtc::peer_connection::message::RTCMessage::DataChannelMessage(
+                            channel_id,
+                            dc_message,
+                        ) => {
+                            // Send message to the appropriate data channel
+                            let data_channel_rxs = this.inner.data_channel_rxs.lock().unwrap();
+                            if let Some(tx) = data_channel_rxs.get(&channel_id) {
+                                if let Err(e) = tx.send(dc_message) {
+                                    log::warn!(
+                                        "Failed to send message to data channel {}: {}",
+                                        channel_id,
+                                        e
+                                    );
+                                }
+                            } else {
+                                log::warn!(
+                                    "Received message for unknown data channel: {}",
+                                    channel_id
+                                );
+                            }
+                        }
+                        rtc::peer_connection::message::RTCMessage::RtpPacket(track_id, _packet) => {
+                            // TODO: Handle RTP packets (will implement with Track wrappers)
+                            log::trace!("Received RTP packet for track: {:?}", track_id);
+                        }
+                        rtc::peer_connection::message::RTCMessage::RtcpPacket(
+                            track_id,
+                            _packets,
+                        ) => {
+                            // TODO: Handle RTCP packets (will implement with Track wrappers)
+                            log::trace!("Received RTCP packets for track: {:?}", track_id);
+                        }
+                    }
                 }
             }
 

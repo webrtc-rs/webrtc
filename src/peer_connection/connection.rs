@@ -1,12 +1,16 @@
 //! Async peer connection wrapper
 
 use super::*;
+use crate::data_channel::DataChannel;
 use crate::runtime::Runtime;
+use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage};
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::sansio::Protocol;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 
 /// Async-friendly peer connection
 ///
@@ -23,6 +27,16 @@ pub(crate) struct PeerConnectionInner {
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
+    /// Data channels  
+    pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
+    /// Data channel message senders (for incoming messages from network)
+    pub(crate) data_channel_rxs:
+        Mutex<HashMap<RTCDataChannelId, mpsc::UnboundedSender<RTCDataChannelMessage>>>,
+    /// Channel for outgoing data channel messages
+    pub(crate) data_tx: mpsc::UnboundedSender<crate::data_channel::OutgoingMessage>,
+    /// Channel for receiving outgoing data channel messages (taken by driver)
+    pub(crate) data_rx:
+        Mutex<Option<mpsc::UnboundedReceiver<crate::data_channel::OutgoingMessage>>>,
 }
 
 // Safety: we protect it with Mutex to make it Send + Sync
@@ -37,12 +51,17 @@ impl PeerConnection {
         handler: Arc<dyn PeerConnectionEventHandler>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let core = RTCPeerConnection::new(config)?;
+        let (data_tx, data_rx) = mpsc::unbounded_channel();
 
         Ok(Self {
             inner: Arc::new(PeerConnectionInner {
                 core: Mutex::new(core),
                 runtime,
                 handler,
+                data_channels: Mutex::new(HashMap::new()),
+                data_channel_rxs: Mutex::new(HashMap::new()),
+                data_tx,
+                data_rx: Mutex::new(Some(data_rx)),
             }),
         })
     }
@@ -112,6 +131,75 @@ impl PeerConnection {
         let mut core = self.inner.core.lock().unwrap();
         core.close()?;
         Ok(())
+    }
+
+    /// Create a data channel
+    ///
+    /// Creates a new data channel with the specified label and configuration.
+    /// The data channel will be in the "connecting" state until the peer connection
+    /// is established.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use webrtc::peer_connection::*;
+    /// # use webrtc::data_channel::RTCDataChannelInit;
+    /// # use std::sync::Arc;
+    /// # #[derive(Clone)]
+    /// # struct MyHandler;
+    /// # #[async_trait::async_trait]
+    /// # impl PeerConnectionEventHandler for MyHandler {}
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = RTCConfigurationBuilder::new().build();
+    /// let handler = Arc::new(MyHandler);
+    /// let pc = PeerConnection::new(config, handler)?;
+    ///
+    /// // Create a data channel
+    /// let dc = pc.create_data_channel("my-channel", None).await?;
+    ///
+    /// // Send messages
+    /// dc.send_text("Hello!").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn create_data_channel(
+        &self,
+        label: impl Into<String>,
+        options: Option<crate::data_channel::RTCDataChannelInit>,
+    ) -> Result<Arc<DataChannel>, Box<dyn std::error::Error>> {
+        let label = label.into();
+
+        // Create the data channel via the core
+        let channel_id = {
+            let mut core = self.inner.core.lock().unwrap();
+            let rtc_dc = core.create_data_channel(&label, options)?;
+            rtc_dc.id()
+        };
+
+        // Create a channel for receiving messages for this data channel
+        let (dc_tx, dc_rx) = mpsc::unbounded_channel();
+
+        // Create our async wrapper
+        let dc = Arc::new(DataChannel::new(
+            channel_id,
+            label,
+            self.inner.data_tx.clone(),
+            dc_rx,
+        ));
+
+        // Store in the maps
+        self.inner
+            .data_channels
+            .lock()
+            .unwrap()
+            .insert(channel_id, dc.clone());
+        self.inner
+            .data_channel_rxs
+            .lock()
+            .unwrap()
+            .insert(channel_id, dc_tx);
+
+        Ok(dc)
     }
 
     /// Bind a UDP socket and create a driver for this peer connection
