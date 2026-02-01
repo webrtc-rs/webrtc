@@ -165,6 +165,71 @@ impl PeerConnection {
         core.remote_description().cloned()
     }
 
+    /// Add an ICE candidate received from the remote peer
+    ///
+    /// This method adds a remote ICE candidate received through the signaling channel.
+    /// The remote description must be set before calling this method.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use webrtc::peer_connection::{PeerConnection, RTCIceCandidateInit};
+    /// # use std::sync::Arc;
+    /// # struct Handler;
+    /// # #[async_trait::async_trait]
+    /// # impl webrtc::peer_connection::PeerConnectionEventHandler for Handler {}
+    /// # async fn example(pc: PeerConnection) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Receive candidate from signaling channel
+    /// let candidate_init = RTCIceCandidateInit {
+    ///     candidate: "candidate:1 1 UDP 2130706431 192.168.1.100 54321 typ host".to_string(),
+    ///     sdp_mid: Some("0".to_string()),
+    ///     sdp_mline_index: Some(0),
+    ///     username_fragment: None,
+    ///     url: None,
+    /// };
+    ///
+    /// pc.add_ice_candidate(candidate_init)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn add_ice_candidate(
+        &self,
+        candidate: RTCIceCandidateInit,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut core = self.inner.core.lock().unwrap();
+        core.add_remote_candidate(candidate)?;
+        Ok(())
+    }
+
+    /// Restart ICE
+    ///
+    /// Triggers an ICE restart. The next call to `create_offer()` will generate
+    /// an offer with new ICE credentials, causing a full ICE restart.
+    ///
+    /// This is useful when the ICE connection has failed or when network conditions
+    /// have changed (e.g., switching networks on a mobile device).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use webrtc::peer_connection::PeerConnection;
+    /// # async fn example(pc: PeerConnection) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Trigger ICE restart on connection failure
+    /// pc.restart_ice()?;
+    ///
+    /// // Create new offer with new ICE credentials
+    /// let offer = pc.create_offer(None)?;
+    /// pc.set_local_description(offer.clone())?;
+    /// // Send offer to remote peer through signaling
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn restart_ice(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut core = self.inner.core.lock().unwrap();
+        core.restart_ice();
+        Ok(())
+    }
+
     /// Close the peer connection
     pub fn close(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut core = self.inner.core.lock().unwrap();

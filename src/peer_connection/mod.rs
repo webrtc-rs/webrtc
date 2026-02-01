@@ -128,4 +128,5 @@ pub use rtc::peer_connection::{
     state::{
         RTCIceConnectionState, RTCIceGatheringState, RTCPeerConnectionState, RTCSignalingState,
     },
+    transport::{RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceProtocol},
 };
