@@ -64,8 +64,8 @@ alt="Recall.ai">
 
 ## Overview
 
-WebRTC.rs is a runtime-agnostic WebRTC implementation in Rust, built on a Sans-I/O foundation. Originally inspired by the Pion stack, 
-the project is evolving into a clean, ergonomic implementation that works with any async runtime (Tokio, async-std, smol, embassy).
+WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion
+stack. The project is currently evolving into a clean, ergonomic, runtime-agnostic implementation that works with any async runtime (Tokio, async-std, smol, embassy).
 
 **Architecture:**
 - **[rtc](https://github.com/webrtc-rs/rtc)**: Sans-I/O protocol core with complete WebRTC stack (95%+ W3C API compliance)
