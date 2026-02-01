@@ -53,94 +53,67 @@ alt="Recall.ai">
 <a href="https://github.com/AdrianEddy" target="_blank">AdrianEddy</a><br>
 </p>
 
-<details>
+<!--details>
 <summary><b>Table of Content</b></summary>
 
 - [Overview](#overview)
-- [Features](#features)
-- [Building](#building)
 - [Open Source License](#open-source-license)
 - [Contributing](#contributing)
 
-</details>
+</details-->
 
 ## Overview
 
-WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion
-stack. The project is under active development and should be considered early stage; please refer to the
-[Roadmap](https://github.com/webrtc-rs/webrtc/issues/1) for planned milestones and releases.
-The [Examples](https://github.com/webrtc-rs/webrtc/blob/master/examples/examples/README.md) demonstrate how to build
-media and data-channel applications using webrtc-rs.
+WebRTC.rs is a runtime-agnostic WebRTC implementation in Rust, built on a Sans-I/O foundation. Originally inspired by the Pion stack, 
+the project is evolving into a clean, ergonomic implementation that works with any async runtime (Tokio, async-std, smol, embassy).
 
-## 🚨 Important Notice: v0.17.x Release and Future Direction
+**Architecture:**
+- **[rtc](https://github.com/webrtc-rs/rtc)**: Sans-I/O protocol core with complete WebRTC stack (95%+ W3C API compliance)
+- **webrtc** (this crate): Async-friendly API with runtime abstraction layer
+
+**📖 Learn more:** Read our [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html) for design details and roadmap.
+
+### 🚨 Important Notice: v0.17.x Feature Freeze & v0.20.0+ Development
 
 **v0.17.x is the final feature release of the Tokio-coupled async WebRTC implementation.**
 
-- **v0.17.x branch**: A dedicated branch will be created for v0.17.x that will receive **bug fixes only** (no new features).
-- **Master branch**: Will transition to a new Sans-IO based architecture built on top of [webrtc-rs/rtc](https://github.com/webrtc-rs/rtc).
+#### Current Status (February 2026)
 
-### **Why this change?**
+- **v0.17.x branch**: Receives **bug fixes only** (no new features). Use this for Tokio-based production applications.
+- **Master branch**: Under active development for **v0.20.0** with new Sans-I/O architecture and runtime abstraction.
 
-The project is shifting toward a Sans-IO WebRTC implementation that decouples the protocol logic from any specific async runtime. This new architecture will:
+#### **What's Changing in upcoming v0.20.0+?**
 
-- ✅ Support multiple async runtimes (Tokio, smol, async-std, etc.)
-- ✅ Provide a clean, protocol-centric Sans-IO core via [webrtc-rs/rtc](https://github.com/webrtc-rs/rtc)
-- ✅ Enable a truly runtime-agnostic, async-friendly WebRTC implementation in Rust
+The new architecture will address critical issues in v0.17.x:
+- ❌ Callback hell and Arc explosion
+- ❌ Resources leak in callback
+- ❌ Tight Tokio coupling (cannot use async-std, smol, embassy)
 
-If you need Tokio-specific stability, please use the v0.17.x branch. If you want to adopt the new runtime-agnostic approach, follow development on the master branch.
+**v0.20.0+ will provide:**
 
-## Features
+✅ **Runtime Independence**
+- Support for Tokio, async-std, smol, embassy via Quinn-style runtime abstraction
+- Feature flags: `runtime-tokio` (default), `runtime-async-std`, `runtime-smol`, `runtime-embassy`
 
-<p align="center">
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">WebRTC<a href="https://crates.io/crates/webrtc"><img src="https://img.shields.io/crates/v/webrtc.svg"></a>
-    <br>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">Media<a href="https://crates.io/crates/webrtc-media"><img src="https://img.shields.io/crates/v/webrtc-media.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">Interceptor<a href="https://crates.io/crates/interceptor"><img src="https://img.shields.io/crates/v/interceptor.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">Data<a href="https://crates.io/crates/webrtc-data"><img src="https://img.shields.io/crates/v/webrtc-data.svg"></a>
-    <br>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">RTP<a href="https://crates.io/crates/rtp"><img src="https://img.shields.io/crates/v/rtp.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">RTCP<a href="https://crates.io/crates/rtcp"><img src="https://img.shields.io/crates/v/rtcp.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">SRTP<a href="https://crates.io/crates/webrtc-srtp"><img src="https://img.shields.io/crates/v/webrtc-srtp.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">SCTP<a href="https://crates.io/crates/webrtc-sctp"><img src="https://img.shields.io/crates/v/webrtc-sctp.svg"></a>
-    <br>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">DTLS<a href="https://crates.io/crates/dtls"><img src="https://img.shields.io/crates/v/dtls.svg"></a>
-    <br>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">mDNS<a href="https://crates.io/crates/webrtc-mdns"><img src="https://img.shields.io/crates/v/webrtc-mdns.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">STUN<a href="https://crates.io/crates/stun"><img src="https://img.shields.io/crates/v/stun.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">TURN<a href="https://crates.io/crates/turn"><img src="https://img.shields.io/crates/v/turn.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">ICE<a href="https://crates.io/crates/webrtc-ice"><img src="https://img.shields.io/crates/v/webrtc-ice.svg"></a>
-    <br>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">SDP<a href="https://crates.io/crates/sdp"><img src="https://img.shields.io/crates/v/sdp.svg"></a>
-    <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/check.png">Util<a href="https://crates.io/crates/webrtc-util"><img src="https://img.shields.io/crates/v/webrtc-util.svg"></a>
-</p>
-<p align="center">
- <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/webrtc_crates_dep_graph.png" alt="WebRTC Crates Dependency Graph">
-</p>
-<p align="center">
- <img src="https://raw.githubusercontent.com/webrtc-rs/webrtc-rs.github.io/master/res/webrtc_stack.png" alt="WebRTC Stack">
-</p>
+✅ **Clean Event Handling**
+- Trait-based event handlers with native `async fn in trait`
+- No more callback Arc cloning or `Box::new(move |...| Box::pin(async move { ... }))`
+- Centralized state management with `&mut self`
 
-## Building
+✅ **Sans-I/O Foundation**
+- Protocol logic completely separate from I/O (via [rtc](https://github.com/webrtc-rs/rtc) crate)
+- Deterministic testing without real network I/O
+- Zero-cost abstractions
 
-All webrtc dependent crates and examples are included in this repository at the top level in a Cargo workspace.
+#### **How to Provide Feedback**
 
-To build all webrtc examples:
+We're actively designing v0.20.0+ and welcome your input:
+- Review the [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html)
+- Join discussions on [GitHub Issues](https://github.com/webrtc-rs/webrtc/issues)
+- Chat with us on [Discord](https://discord.gg/4Ju8UHdXMs)
 
-```shell
-cd examples
-cargo test # build all examples (maybe very slow)
-#[ or just build single example (much faster)
-cargo build --example play-from-disk-vpx # build play-from-disk-vpx example only
-cargo build --example play-from-disk-h264 # build play-from-disk-h264 example only
-#...
-#]
-```
-
-To build webrtc crate:
-
-```shell
-cargo build [or clippy or test or fmt]
-```
+**For production use:** Stick with v0.17.x branch until v0.20.0+ is stable.  
+**For early adopters:** Follow master branch development and provide feedback!
 
 ## Open Source License
 
