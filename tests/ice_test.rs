@@ -2,10 +2,12 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::Mutex;
 use tokio::time::Duration;
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder,
-    RTCIceCandidateInit, RTCIceGatheringState, RTCPeerConnectionIceEvent,
+    RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceGatheringState,
+    RTCIceServer, RTCPeerConnectionIceEvent,
 };
 
 #[derive(Clone)]
@@ -32,6 +34,23 @@ impl PeerConnectionEventHandler for IceGatheringHandler {
         if state == RTCIceGatheringState::Complete {
             self.gathering_complete.store(true, Ordering::SeqCst);
         }
+    }
+}
+
+// Handler that tracks candidate types for STUN testing
+struct CandidateTypeTracker {
+    candidates: Arc<Mutex<Vec<RTCIceCandidateType>>>,
+}
+
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for CandidateTypeTracker {
+    async fn on_ice_candidate(&self, event: RTCPeerConnectionIceEvent) {
+        let typ = event.candidate.typ;
+        println!(
+            "✅ Received {:?} candidate: {} (port {})",
+            typ, event.candidate.address, event.candidate.port
+        );
+        self.candidates.lock().await.push(typ);
     }
 }
 
@@ -198,4 +217,86 @@ async fn test_automatic_host_candidate_gathering() {
     );
 
     println!("✅ Host candidate gathering successful!");
+}
+
+#[tokio::test]
+#[ignore] // Run with --include-ignored to test with real STUN server
+async fn test_stun_gathering_with_google_stun() {
+    // Test STUN gathering with Google's public STUN server
+    let mut media_engine = MediaEngine::default();
+    media_engine
+        .register_default_codecs()
+        .expect("Failed to register codecs");
+
+    let ice_servers = vec![RTCIceServer {
+        urls: vec!["stun:stun.l.google.com:19302".to_string()],
+        username: String::new(),
+        credential: String::new(),
+    }];
+
+    let config = RTCConfigurationBuilder::new()
+        .with_media_engine(media_engine)
+        .with_ice_servers(ice_servers)
+        .build();
+
+    // Track candidate types to verify we get both host and srflx
+    let candidates = Arc::new(Mutex::new(Vec::new()));
+    let handler = Arc::new(CandidateTypeTracker {
+        candidates: candidates.clone(),
+    });
+
+    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+
+    // Bind socket and spawn driver
+    let driver = pc
+        .bind("0.0.0.0:0".parse::<std::net::SocketAddr>().unwrap())
+        .await
+        .expect("Failed to bind");
+
+    let _driver_handle = tokio::spawn(async move { driver.await });
+
+    // Add track to create media
+    let track = rtc::media_stream::MediaStreamTrack::new(
+        "stream".to_string(),
+        "video".to_string(),
+        "track".to_string(),
+        rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
+        vec![],
+    );
+    pc.add_track(track).await.expect("Failed to add track");
+
+    // Create and set local description - this should trigger gathering
+    let offer = pc.create_offer(None).expect("Failed to create offer");
+    pc.set_local_description(offer)
+        .expect("Failed to set local description");
+
+    // Wait for both host and STUN gathering to complete
+    // Host gathering is immediate, STUN takes a few seconds
+    // We need to wait long enough for the driver to poll events after STUN completes
+    println!("⏳ Waiting for ICE gathering to complete...");
+    tokio::time::sleep(Duration::from_secs(20)).await;
+
+    // Verify we got both host and srflx candidates
+    let gathered: Vec<RTCIceCandidateType> = candidates.lock().await.clone();
+    println!("📊 Gathered {} candidates: {:?}", gathered.len(), gathered);
+
+    // Should have at least 2 candidates: host + srflx
+    assert!(
+        gathered.len() >= 2,
+        "Expected at least 2 candidates (host + srflx), got {}",
+        gathered.len()
+    );
+
+    // Verify we have a host candidate
+    let has_host = gathered.iter().any(|t| *t == RTCIceCandidateType::Host);
+    assert!(has_host, "Missing host candidate");
+
+    // Verify we have an srflx candidate from STUN
+    let has_srflx = gathered.iter().any(|t| *t == RTCIceCandidateType::Srflx);
+    assert!(
+        has_srflx,
+        "Missing srflx candidate - STUN gathering may have failed"
+    );
+
+    println!("✅ STUN candidate gathering successful! Got both host and srflx candidates.");
 }

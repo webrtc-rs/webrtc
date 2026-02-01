@@ -85,7 +85,12 @@ impl Future for PeerConnectionDriver {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = &mut *self;
 
+        // Store the waker so async tasks can wake the driver
+        *this.inner.driver_waker.lock().unwrap() = Some(cx.waker().clone());
+        eprintln!("🚗 Driver poll() called, waker stored, core ptr: {:p}", &*this.inner.core.lock().unwrap());
+
         loop {
+            // 1. Send outgoing packets
             // 1. Send outgoing packets
             {
                 let mut core = this.inner.core.lock().unwrap();
@@ -197,7 +202,11 @@ impl Future for PeerConnectionDriver {
             // 2. Process events and dispatch to handler
             {
                 let mut core = this.inner.core.lock().unwrap();
+                eprintln!("🔍 Driver checking for events, core ptr: {:p}...", &*core);
+                let mut event_count = 0;
                 while let Some(event) = core.poll_event() {
+                    event_count += 1;
+                    eprintln!("🎯 Driver processing event #{}: {:?}", event_count, std::mem::discriminant(&event));
                     // Spawn event handler in background
                     let handler = this.inner.handler.clone();
                     let future = async move {

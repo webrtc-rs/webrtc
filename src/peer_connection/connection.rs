@@ -13,6 +13,7 @@ use rtc::sansio::Protocol;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::sync::mpsc;
 
 /// Async-friendly peer connection
@@ -30,8 +31,12 @@ pub(crate) struct PeerConnectionInner {
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
+    /// ICE servers for STUN/TURN gathering
+    pub(crate) ice_servers: Vec<RTCIceServer>,
     /// Local socket address (set after bind)
     pub(crate) local_addr: Mutex<Option<SocketAddr>>,
+    /// Waker for the driver task (to wake it when events are added asynchronously)
+    pub(crate) driver_waker: Mutex<Option<std::task::Waker>>,
     /// Data channels  
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
@@ -65,6 +70,23 @@ pub(crate) struct PeerConnectionInner {
 unsafe impl Send for PeerConnectionInner {}
 unsafe impl Sync for PeerConnectionInner {}
 
+impl PeerConnectionInner {
+    /// Wake the driver task to process pending events
+    ///
+    /// This is called when async tasks add events to the core (e.g., ICE candidates)
+    /// to ensure the driver polls and dispatches them to the event handler.
+    pub(crate) fn wake_driver(&self) {
+        let waker_opt = self.driver_waker.lock().unwrap().take();
+        if let Some(waker) = waker_opt {
+            eprintln!("🔔 Waking driver with waker.wake() (consumes waker)");
+            waker.wake();  // Use wake() instead of wake_by_ref()
+            eprintln!("🔔 Driver waker.wake() called");
+        } else {
+            eprintln!("⚠️  No driver waker available!");
+        }
+    }
+}
+
 impl PeerConnection {
     /// Create a new peer connection with a custom runtime
     pub fn new_with_runtime(
@@ -72,6 +94,8 @@ impl PeerConnection {
         config: RTCConfiguration,
         handler: Arc<dyn PeerConnectionEventHandler>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Store ice_servers for STUN/TURN gathering
+        let ice_servers = config.ice_servers().to_vec();
         let core = RTCPeerConnection::new(config)?;
 
         // Create channel for data channel messages
@@ -91,7 +115,9 @@ impl PeerConnection {
                 core: Mutex::new(core),
                 runtime,
                 handler,
+                ice_servers,
                 local_addr: Mutex::new(None),
+                driver_waker: Mutex::new(None),
                 data_channels: Mutex::new(HashMap::new()),
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 data_tx,
@@ -150,17 +176,63 @@ impl PeerConnection {
         if let Some(local_addr) = *self.inner.local_addr.lock().unwrap() {
             let inner = self.inner.clone();
             
-            // Gather host candidates
-            let candidates = crate::ice_gatherer::gather_host_candidates(local_addr);
+            // Gather host candidates (synchronous)
+            let host_candidates = crate::ice_gatherer::gather_host_candidates(local_addr);
             
-            // Add candidates to rtc core
-            // The core will emit OnIceCandidateEvent and OnIceGatheringStateChange events
-            // which the driver will dispatch to the handler
-            for candidate_init in candidates {
+            // Add host candidates to rtc core
+            for candidate_init in host_candidates {
                 let mut core = inner.core.lock().unwrap();
                 if let Err(e) = core.add_local_candidate(candidate_init) {
-                    log::warn!("Failed to add local candidate: {}", e);
+                    log::warn!("Failed to add host candidate: {}", e);
                 }
+            }
+            
+            // Spawn background task for STUN gathering (server reflexive candidates)
+            if !inner.ice_servers.is_empty() {
+                eprintln!("🚀 Spawning STUN gathering task with {} ice_servers", inner.ice_servers.len());
+                let ice_servers = inner.ice_servers.clone();
+                let inner_clone = inner.clone();
+                
+                self.inner.runtime.spawn(Box::pin(async move {
+                    eprintln!("🔄 STUN gathering task started, core ptr: {:p}", &*inner_clone.core.lock().unwrap());
+                    let srflx_candidates = crate::ice_gatherer::gather_srflx_candidates(
+                        local_addr,
+                        &ice_servers,
+                    ).await;
+                    
+                    eprintln!("📥 STUN gathering returned {} candidates", srflx_candidates.len());
+                    
+                    // Add srflx candidates to rtc core
+                    {
+                        let mut core = inner_clone.core.lock().unwrap();
+                        eprintln!("🔄 STUN task acquired core lock, ptr: {:p}", &*core);
+                        for candidate_init in srflx_candidates {
+                            eprintln!("🔍 Adding srflx candidate to core: {:?}", candidate_init.candidate);
+                            match core.add_local_candidate(candidate_init) {
+                                Ok(()) => {
+                                    eprintln!("✅ add_local_candidate returned Ok - event should be queued");
+                                },
+                                Err(e) => {
+                                    log::warn!("Failed to add srflx candidate: {}", e);
+                                    eprintln!("❌ add_local_candidate returned Err: {}", e);
+                                }
+                            }
+                        }
+                        
+                        // Try to flush events by calling handle_timeout
+                        if let Err(e) = core.handle_timeout(Instant::now()) {
+                            eprintln!("⚠️  handle_timeout error: {}", e);
+                        }
+                        eprintln!("🔓 STUN task releasing core lock");
+                    }
+                    
+                    // Wake the driver IMMEDIATELY to process the new candidate events
+                    eprintln!("🔔 Waking driver to process srflx candidate events");
+                    inner_clone.wake_driver();
+                    eprintln!("🏁 STUN gathering task complete");
+                }));
+            } else {
+                eprintln!("ℹ️  No ICE servers configured, skipping STUN gathering");
             }
         }
         
