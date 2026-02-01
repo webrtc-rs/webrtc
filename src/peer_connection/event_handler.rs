@@ -54,6 +54,9 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
     /// Called for data channel lifecycle events  
     async fn on_data_channel(&self, _event: RTCDataChannelEvent) {}
 
-    /// Called when a new remote track is received
+    /// Called when a remote track is received
+    async fn on_track_open(&self, _track: Arc<crate::track::TrackRemote>) {}
+
+    /// Called for track lifecycle events
     async fn on_track(&self, _event: RTCTrackEvent) {}
 }

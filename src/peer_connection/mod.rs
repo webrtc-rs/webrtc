@@ -13,7 +13,9 @@ pub use event_handler::PeerConnectionEventHandler;
 // Re-export common types from rtc
 pub use rtc::peer_connection::{
     RTCPeerConnection as RTCPeerConnectionCore,
-    configuration::{RTCConfiguration, RTCConfigurationBuilder},
+    configuration::{
+        media_engine::MediaEngine, RTCConfiguration, RTCConfigurationBuilder,
+    },
     event::{
         RTCDataChannelEvent, RTCPeerConnectionEvent, RTCPeerConnectionIceErrorEvent,
         RTCPeerConnectionIceEvent, RTCTrackEvent,

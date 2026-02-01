@@ -31,6 +31,13 @@ pub struct PeerConnectionDriver {
     local_addr: SocketAddr,
     /// Channel for receiving outgoing data channel messages
     data_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::data_channel::OutgoingMessage>>,
+    /// Channel for receiving outgoing RTP packets
+    rtp_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::track::OutgoingRtpPacket>>,
+    /// Channel for receiving outgoing RTCP packets from senders
+    rtcp_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::track::OutgoingRtcpPackets>>,
+    /// Channel for receiving outgoing RTCP packets from receivers
+    receiver_rtcp_rx:
+        Option<tokio::sync::mpsc::UnboundedReceiver<crate::track::OutgoingReceiverRtcpPackets>>,
 }
 
 impl PeerConnectionDriver {
@@ -46,6 +53,13 @@ impl PeerConnectionDriver {
         // Take the data channel receiver (can only be done once)
         let data_rx = inner.data_rx.lock().unwrap().take();
 
+        // Take the RTP receiver (can only be done once)
+        let rtp_rx = inner.rtp_rx.lock().unwrap().take();
+
+        // Take the RTCP receivers (can only be done once)
+        let rtcp_rx = inner.rtcp_rx.lock().unwrap().take();
+        let receiver_rtcp_rx = inner.receiver_rtcp_rx.lock().unwrap().take();
+
         Ok(Self {
             inner,
             socket,
@@ -54,6 +68,9 @@ impl PeerConnectionDriver {
             recv_buf: vec![0u8; 2000], // Standard MTU size
             local_addr,
             data_rx,
+            rtp_rx,
+            rtcp_rx,
+            receiver_rtcp_rx,
         })
     }
 }
@@ -112,6 +129,63 @@ impl Future for PeerConnectionDriver {
                     if let Err(e) = core.handle_write(rtc_message) {
                         log::error!("Failed to send DataChannel message: {}", e);
                         return Poll::Ready(Err(Box::new(e)));
+                    }
+                }
+            }
+
+            // 1.6. Handle outgoing RTP packets
+            if let Some(ref mut rtp_rx) = this.rtp_rx {
+                while let Poll::Ready(Some(outgoing)) = rtp_rx.poll_recv(cx) {
+                    // Get sender and write RTP
+                    let mut core = this.inner.core.lock().unwrap();
+                    if let Some(mut sender) = core.rtp_sender(outgoing.sender_id)
+                        && let Err(e) = sender.write_rtp(outgoing.packet)
+                    {
+                        log::error!("Failed to send RTP packet: {}", e);
+                    }
+                }
+            }
+
+            // 1.7. Handle outgoing RTCP packets from senders
+            if let Some(ref mut rtcp_rx) = this.rtcp_rx {
+                while let Poll::Ready(Some(outgoing)) = rtcp_rx.poll_recv(cx) {
+                    // Get sender and write RTCP
+                    let mut core = this.inner.core.lock().unwrap();
+                    if let Some(mut sender) = core.rtp_sender(outgoing.sender_id) {
+                        // Convert Send packets to non-Send (safe because we're about to consume them)
+                        let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
+                            .packets
+                            .into_iter()
+                            .map(|p| {
+                                // Re-box without Send bound
+                                unsafe { std::mem::transmute(p) }
+                            })
+                            .collect();
+                        if let Err(e) = sender.write_rtcp(packets) {
+                            log::error!("Failed to send RTCP packets: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // 1.8. Handle outgoing RTCP packets from receivers
+            if let Some(ref mut receiver_rtcp_rx) = this.receiver_rtcp_rx {
+                while let Poll::Ready(Some(outgoing)) = receiver_rtcp_rx.poll_recv(cx) {
+                    // Get receiver and write RTCP
+                    let mut core = this.inner.core.lock().unwrap();
+                    if let Some(mut receiver) = core.rtp_receiver(outgoing.receiver_id) {
+                        // Convert Send packets to non-Send (safe because we're about to consume them)
+                        let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
+                            .packets
+                            .into_iter()
+                            .map(|p| {
+                                // Re-box without Send bound
+                                unsafe { std::mem::transmute(p) }
+                            })
+                            .collect();
+                        if let Err(e) = receiver.write_rtcp(packets) {
+                            log::error!("Failed to send RTCP feedback: {}", e);
+                        }
                     }
                 }
             }

@@ -3,9 +3,12 @@
 use super::*;
 use crate::data_channel::DataChannel;
 use crate::runtime::Runtime;
+use crate::track::TrackRemote;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage};
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
+use rtc::rtp::packet::Packet as RtpPacket;
+use rtc::rtp_transceiver::RTCRtpReceiverId;
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -37,6 +40,23 @@ pub(crate) struct PeerConnectionInner {
     /// Channel for receiving outgoing data channel messages (taken by driver)
     pub(crate) data_rx:
         Mutex<Option<mpsc::UnboundedReceiver<crate::data_channel::OutgoingMessage>>>,
+    /// Remote tracks (incoming media)
+    pub(crate) remote_tracks: Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
+    /// RTP packet senders for remote tracks
+    pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, mpsc::UnboundedSender<RtpPacket>>>,
+    /// Channel for outgoing RTP packets
+    pub(crate) rtp_tx: mpsc::UnboundedSender<crate::track::OutgoingRtpPacket>,
+    /// Channel for receiving outgoing RTP packets (taken by driver)
+    pub(crate) rtp_rx: Mutex<Option<mpsc::UnboundedReceiver<crate::track::OutgoingRtpPacket>>>,
+    /// Channel for outgoing RTCP packets from senders
+    pub(crate) rtcp_tx: mpsc::UnboundedSender<crate::track::OutgoingRtcpPackets>,
+    /// Channel for receiving outgoing RTCP packets from senders (taken by driver)
+    pub(crate) rtcp_rx: Mutex<Option<mpsc::UnboundedReceiver<crate::track::OutgoingRtcpPackets>>>,
+    /// Channel for outgoing RTCP packets from receivers
+    pub(crate) receiver_rtcp_tx: mpsc::UnboundedSender<crate::track::OutgoingReceiverRtcpPackets>,
+    /// Channel for receiving outgoing RTCP packets from receivers (taken by driver)
+    pub(crate) receiver_rtcp_rx:
+        Mutex<Option<mpsc::UnboundedReceiver<crate::track::OutgoingReceiverRtcpPackets>>>,
 }
 
 // Safety: we protect it with Mutex to make it Send + Sync
@@ -51,7 +71,18 @@ impl PeerConnection {
         handler: Arc<dyn PeerConnectionEventHandler>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let core = RTCPeerConnection::new(config)?;
+
+        // Create channel for data channel messages
         let (data_tx, data_rx) = mpsc::unbounded_channel();
+
+        // Create channel for RTP packets
+        let (rtp_tx, rtp_rx) = mpsc::unbounded_channel();
+
+        // Create channel for RTCP packets from senders
+        let (rtcp_tx, rtcp_rx) = mpsc::unbounded_channel();
+
+        // Create channel for RTCP packets from receivers
+        let (receiver_rtcp_tx, receiver_rtcp_rx) = mpsc::unbounded_channel();
 
         Ok(Self {
             inner: Arc::new(PeerConnectionInner {
@@ -62,6 +93,14 @@ impl PeerConnection {
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 data_tx,
                 data_rx: Mutex::new(Some(data_rx)),
+                remote_tracks: Mutex::new(HashMap::new()),
+                track_rxs: Mutex::new(HashMap::new()),
+                rtp_tx,
+                rtp_rx: Mutex::new(Some(rtp_rx)),
+                rtcp_tx,
+                rtcp_rx: Mutex::new(Some(rtcp_rx)),
+                receiver_rtcp_tx,
+                receiver_rtcp_rx: Mutex::new(Some(receiver_rtcp_rx)),
             }),
         })
     }
@@ -200,6 +239,65 @@ impl PeerConnection {
             .insert(channel_id, dc_tx);
 
         Ok(dc)
+    }
+
+    /// Add a track to the peer connection
+    ///
+    /// This creates a new media track for sending audio or video.
+    /// The track will be negotiated with the remote peer during offer/answer.
+    ///
+    /// Returns the created TrackLocal that can be used to send RTP packets.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use webrtc::peer_connection::*;
+    /// # use webrtc::track::MediaStreamTrack;
+    /// # use std::sync::Arc;
+    /// # #[derive(Clone)]
+    /// # struct MyHandler;
+    /// # #[async_trait::async_trait]
+    /// # impl PeerConnectionEventHandler for MyHandler {}
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use rtc::media_stream::MediaStreamTrack;
+    /// use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
+    ///
+    /// let config = RTCConfigurationBuilder::new().build();
+    /// let handler = Arc::new(MyHandler);
+    /// let pc = PeerConnection::new(config, handler)?;
+    ///
+    /// // Create a video track
+    /// let track = MediaStreamTrack::new(
+    ///     "stream".to_string(),
+    ///     "video".to_string(),
+    ///     "my-video".to_string(),
+    ///     RtpCodecKind::Video,
+    ///     vec![],  // Encodings will be added during negotiation
+    /// );
+    ///
+    /// // Add it to the peer connection
+    /// let local_track = pc.add_track(track).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn add_track(
+        &self,
+        track: rtc::media_stream::MediaStreamTrack,
+    ) -> Result<Arc<crate::track::TrackLocal>, Box<dyn std::error::Error>> {
+        // Add track via the core
+        let sender_id = {
+            let mut core = self.inner.core.lock().unwrap();
+            core.add_track(track)?
+        };
+
+        // Create the local track wrapper
+        let local_track = Arc::new(crate::track::TrackLocal::new(
+            sender_id,
+            self.inner.rtp_tx.clone(),
+            self.inner.rtcp_tx.clone(),
+        ));
+
+        Ok(local_track)
     }
 
     /// Bind a UDP socket and create a driver for this peer connection
