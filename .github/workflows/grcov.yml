@@ -15,7 +15,7 @@ env:
 
 jobs:
   grcov:
-    name: Coverage (${{ matrix.runtime }})
+    name: Coverage (${{ matrix.runtime.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
