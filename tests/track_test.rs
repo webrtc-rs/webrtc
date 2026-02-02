@@ -7,7 +7,8 @@ use std::time::Duration;
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder,
 };
-use webrtc::runtime::sync::{Mutex, sleep};
+use webrtc::runtime::sync::Mutex;
+use webrtc::runtime::sleep;
 use webrtc::track::TrackRemote;
 
 struct TrackTestHandler {

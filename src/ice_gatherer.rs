@@ -5,7 +5,7 @@
 //! - Server Reflexive (srflx) candidates via STUN
 //! - Relay candidates via TURN (TODO)
 
-use crate::runtime::sync;
+use crate::runtime;
 use bytes::BytesMut;
 use rtc::ice::candidate::CandidateConfig;
 use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
@@ -102,7 +102,7 @@ async fn gather_from_stun_server(
     log::debug!("Resolving STUN server: {}", stun_server_addr_str);
 
     // Resolve hostname to IP address using runtime-agnostic helper
-    let stun_server_addr: SocketAddr = sync::resolve_host(&stun_server_addr_str)
+    let stun_server_addr: SocketAddr = runtime::resolve_host(&stun_server_addr_str)
         .await?
         .into_iter()
         .next()
@@ -120,7 +120,7 @@ async fn gather_from_stun_server(
     } else {
         "0.0.0.0:0"
     };
-    let stun_socket = sync::UdpSocket::bind(bind_addr).await?;
+    let stun_socket = runtime::UdpSocket::bind(bind_addr).await?;
     let stun_local_addr = stun_socket.local_addr()?;
 
     log::debug!("STUN client bound to {}", stun_local_addr);
@@ -148,7 +148,7 @@ async fn gather_from_stun_server(
     }
 
     // Wait for response with timeout
-    let xor_addr = sync::timeout(Duration::from_secs(5), async {
+    let xor_addr = runtime::timeout(Duration::from_secs(5), async {
         let mut buf = vec![0u8; 1500];
         let (n, peer_addr) = stun_socket.recv_from(&mut buf).await?;
 

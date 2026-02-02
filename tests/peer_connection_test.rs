@@ -7,7 +7,7 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder, RTCIceConnectionState,
     RTCPeerConnectionIceEvent, RTCPeerConnectionState, RTCSdpType,
 };
-use webrtc::runtime::sync::sleep;
+use webrtc::runtime::sleep;
 
 #[derive(Clone)]
 struct TestHandler;

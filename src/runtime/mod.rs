@@ -7,7 +7,42 @@
 
 use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, time::Instant};
 
+pub mod net;
 pub mod sync;
+
+// Re-export commonly used items for convenience
+pub use net::{resolve_host, UdpSocket};
+
+/// Runtime-agnostic sleep function
+#[cfg(feature = "runtime-tokio")]
+pub async fn sleep(duration: std::time::Duration) {
+    ::tokio::time::sleep(duration).await
+}
+
+#[cfg(feature = "runtime-smol")]
+pub async fn sleep(duration: std::time::Duration) {
+    ::smol::Timer::after(duration).await;
+}
+
+/// Runtime-agnostic timeout helper
+pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, ()>
+where
+    F: std::future::Future<Output = T>,
+{
+    #[cfg(feature = "runtime-tokio")]
+    {
+        ::tokio::time::timeout(duration, future).await.map_err(|_| ())
+    }
+
+    #[cfg(feature = "runtime-smol")]
+    {
+        ::smol::future::or(async { Ok(future.await) }, async {
+            sleep(duration).await;
+            Err(())
+        })
+        .await
+    }
+}
 
 /// Abstracts I/O and timer operations for runtime independence
 ///

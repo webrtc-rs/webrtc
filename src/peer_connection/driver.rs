@@ -188,7 +188,7 @@ impl PeerConnectionDriver {
                 continue;
             }
 
-            let timer = sync::sleep(delay_from_now);
+            let timer = crate::runtime::sleep(delay_from_now);
             futures::pin_mut!(timer);
 
             // Runtime-agnostic select! using futures::select! (works with both tokio and smol)
