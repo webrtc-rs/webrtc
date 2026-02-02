@@ -15,7 +15,7 @@ env:
 
 jobs:
   grcov:
-    name: Coverage
+    name: Coverage (${{ matrix.runtime }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -23,8 +23,11 @@ jobs:
           - ubuntu-latest
         toolchain:
           - nightly
-        cargo_flags:
-          - "--all-features"
+        runtime:
+          - name: tokio
+            flags: ""
+          - name: smol
+            flags: "--no-default-features --features runtime-smol"
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -41,7 +44,7 @@ jobs:
           tool: grcov
 
       - name: Test
-        run: cargo test --all --no-fail-fast ${{ matrix.cargo_flags }}
+        run: cargo test --all --no-fail-fast ${{ matrix.runtime.flags }}
         env:
           CARGO_INCREMENTAL: "0"
           RUSTFLAGS: "-Cinstrument-coverage"
@@ -67,12 +70,12 @@ jobs:
       - name: Upload coverage as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lcov.info
-          # path: ${{ steps.grcov.outputs.report }}
+          name: lcov-${{ matrix.runtime.name }}.info
           path: lcov.info
 
       - name: Upload coverage to codecov.io
         uses: codecov/codecov-action@v5
         with:
           files: lcov.info
+          flags: ${{ matrix.runtime.name }}
           fail_ci_if_error: true
