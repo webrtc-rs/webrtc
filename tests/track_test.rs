@@ -76,7 +76,7 @@ async fn test_send_rtp_packets() {
     let local_track = pc.add_track(track).await.expect("Failed to add track");
 
     // Create offer to initialize negotiation
-    let _offer = pc.create_offer(None).expect("Failed to create offer");
+    let _offer = pc.create_offer(None).await.expect("Failed to create offer");
 
     // Create and send RTP packets
     for seq in 1000..1010 {
@@ -177,16 +177,26 @@ async fn test_track_negotiation() {
     let local_track = pc_a.add_track(track).await.expect("Failed to add track");
 
     // Create offer/answer exchange
-    let offer = pc_a.create_offer(None).expect("Failed to create offer");
+    let offer = pc_a
+        .create_offer(None)
+        .await
+        .expect("Failed to create offer");
     pc_a.set_local_description(offer.clone())
+        .await
         .expect("Failed to set local description");
     pc_b.set_remote_description(offer)
+        .await
         .expect("Failed to set remote description");
 
-    let answer = pc_b.create_answer(None).expect("Failed to create answer");
+    let answer = pc_b
+        .create_answer(None)
+        .await
+        .expect("Failed to create answer");
     pc_b.set_local_description(answer.clone())
+        .await
         .expect("Failed to set local description");
     pc_a.set_remote_description(answer)
+        .await
         .expect("Failed to set remote description");
 
     // Bind and start drivers (in background)
@@ -197,11 +207,11 @@ async fn test_track_negotiation() {
     let driver_b = pc_b.bind(addr_b).await.expect("Failed to bind B");
 
     let handle_a = tokio::spawn(async move {
-        let _ = driver_a.await;
+        let _ = driver_a.run().await;
     });
 
     let handle_b = tokio::spawn(async move {
-        let _ = driver_b.await;
+        let _ = driver_b.run().await;
     });
 
     // Wait for track to be negotiated on peer B
@@ -273,16 +283,26 @@ async fn test_send_rtcp_feedback() {
     let _local_track = pc_b.add_track(track).await.expect("Failed to add track");
 
     // Create offer/answer
-    let offer = pc_b.create_offer(None).expect("Failed to create offer");
+    let offer = pc_b
+        .create_offer(None)
+        .await
+        .expect("Failed to create offer");
     pc_b.set_local_description(offer.clone())
+        .await
         .expect("Failed to set local description");
     pc_a.set_remote_description(offer)
+        .await
         .expect("Failed to set remote description");
 
-    let answer = pc_a.create_answer(None).expect("Failed to create answer");
+    let answer = pc_a
+        .create_answer(None)
+        .await
+        .expect("Failed to create answer");
     pc_a.set_local_description(answer.clone())
+        .await
         .expect("Failed to set local description");
     pc_b.set_remote_description(answer)
+        .await
         .expect("Failed to set remote description");
 
     // Bind peers
@@ -293,11 +313,11 @@ async fn test_send_rtcp_feedback() {
     let driver_b = pc_b.bind(addr_b).await.expect("Failed to bind B");
 
     let handle_a = tokio::spawn(async move {
-        let _ = driver_a.await;
+        let _ = driver_a.run().await;
     });
 
     let handle_b = tokio::spawn(async move {
-        let _ = driver_b.await;
+        let _ = driver_b.run().await;
     });
 
     // Wait for negotiation

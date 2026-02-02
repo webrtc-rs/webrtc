@@ -21,11 +21,9 @@ rtc = { version = "0.8.4", path = "../rtc/rtc" }
 bytes = "1.9"
 async-trait = "0.1"
 log = "0.4.29"
-pin-project-lite = "0.2"
-thiserror = "2.0"
 
 # Async runtimes (all optional)
-tokio = { version = "1.43", features = ["net", "time", "sync", "rt"], optional = true }
+tokio = { version = "1.43", features = ["net", "time", "sync", "rt", "macros"], optional = true }
 smol = { version = "2.0", optional = true }
 async-io = { version = "2.4", optional = true }
 

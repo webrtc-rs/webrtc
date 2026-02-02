@@ -5,8 +5,8 @@
 //! - Server Reflexive (srflx) candidates via STUN
 //! - Relay candidates via TURN (TODO)
 
-use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::peer_connection::configuration::RTCIceServer;
+use rtc::peer_connection::transport::RTCIceCandidateInit;
 use std::net::SocketAddr;
 
 /// Gather host ICE candidates from a local socket address
@@ -52,7 +52,7 @@ pub(crate) async fn gather_srflx_candidates(
             // Parse STUN URLs (format: "stun:hostname:port" or "stun:hostname")
             if let Some(stun_url) = url.strip_prefix("stun:") {
                 log::info!("Gathering srflx candidate via STUN server: {}", url);
-                
+
                 // Try to gather from this STUN server
                 match gather_from_stun_server(stun_url, local_addr, url).await {
                     Ok(candidate) => {
@@ -65,7 +65,7 @@ pub(crate) async fn gather_srflx_candidates(
                 }
             }
         }
-        
+
         if !candidates.is_empty() {
             break; // Got a successful srflx candidate
         }
@@ -85,12 +85,12 @@ async fn gather_from_stun_server(
     use bytes::BytesMut;
     use rtc::sansio::Protocol;
     use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
-    use rtc::stun::client::{ClientBuilder};
+    use rtc::stun::client::ClientBuilder;
     use rtc::stun::message::*;
     use rtc::stun::xoraddr::XorMappedAddress;
-    use tokio::net::UdpSocket;
-    use tokio::time::{timeout, Duration};
     use std::time::Instant;
+    use tokio::net::UdpSocket;
+    use tokio::time::{Duration, timeout};
 
     // Resolve STUN server address (add default port 3478 if not specified)
     let stun_server_addr_str = if stun_url.contains(':') {
@@ -100,14 +100,18 @@ async fn gather_from_stun_server(
     };
 
     log::debug!("Resolving STUN server: {}", stun_server_addr_str);
-    
+
     // Resolve hostname to IP address
     let stun_server_addr: SocketAddr = tokio::net::lookup_host(&stun_server_addr_str)
         .await?
         .next()
         .ok_or("Failed to resolve STUN server hostname")?;
 
-    log::debug!("Resolved STUN server {} to {}", stun_server_addr_str, stun_server_addr);
+    log::debug!(
+        "Resolved STUN server {} to {}",
+        stun_server_addr_str,
+        stun_server_addr
+    );
 
     // Create a temporary UDP socket for STUN (match IP version of STUN server)
     let bind_addr = if stun_server_addr.is_ipv6() {
@@ -134,9 +138,11 @@ async fn gather_from_stun_server(
 
     // Send the request
     client.handle_write(msg)?;
-    
+
     while let Some(transmit) = client.poll_write() {
-        stun_socket.send_to(&transmit.message, stun_server_addr).await?;
+        stun_socket
+            .send_to(&transmit.message, stun_server_addr)
+            .await?;
         log::debug!("Sent STUN binding request to {}", stun_server_addr);
     }
 
@@ -144,9 +150,9 @@ async fn gather_from_stun_server(
     let xor_addr = timeout(Duration::from_secs(5), async {
         let mut buf = vec![0u8; 1500];
         let (n, peer_addr) = stun_socket.recv_from(&mut buf).await?;
-        
+
         log::debug!("Received {} bytes from {}", n, peer_addr);
-        
+
         // Feed response to client
         client.handle_read(TaggedBytesMut {
             now: Instant::now(),
@@ -169,15 +175,16 @@ async fn gather_from_stun_server(
         } else {
             Err("No STUN response event".into())
         }
-    }).await??;
+    })
+    .await??;
 
     // Close the STUN client
     client.close()?;
 
     // Create server reflexive candidate
-    use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
     use rtc::ice::candidate::CandidateConfig;
-    
+    use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
+
     let candidate = CandidateServerReflexiveConfig {
         base_config: CandidateConfig {
             network: "udp".to_owned(),
@@ -192,9 +199,10 @@ async fn gather_from_stun_server(
     }
     .new_candidate_server_reflexive()?;
 
-    let mut candidate_init = rtc::peer_connection::transport::RTCIceCandidate::from(&candidate).to_json()?;
+    let mut candidate_init =
+        rtc::peer_connection::transport::RTCIceCandidate::from(&candidate).to_json()?;
     candidate_init.url = Some(original_url.to_string());
-    
+
     log::info!("Generated srflx candidate: {}", candidate_init.candidate);
     Ok(candidate_init)
 }

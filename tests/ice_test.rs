@@ -6,8 +6,8 @@ use tokio::sync::Mutex;
 use tokio::time::Duration;
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder,
-    RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceGatheringState,
-    RTCIceServer, RTCPeerConnectionIceEvent,
+    RTCIceCandidateInit, RTCIceCandidateType, RTCIceGatheringState, RTCIceServer,
+    RTCPeerConnectionIceEvent,
 };
 
 #[derive(Clone)]
@@ -92,16 +92,26 @@ async fn test_add_ice_candidate() {
     pc_a.add_track(track).await.expect("Failed to add track");
 
     // Create offer/answer
-    let offer = pc_a.create_offer(None).expect("Failed to create offer");
+    let offer = pc_a
+        .create_offer(None)
+        .await
+        .expect("Failed to create offer");
     pc_a.set_local_description(offer.clone())
+        .await
         .expect("Failed to set local description");
     pc_b.set_remote_description(offer)
+        .await
         .expect("Failed to set remote description");
 
-    let answer = pc_b.create_answer(None).expect("Failed to create answer");
+    let answer = pc_b
+        .create_answer(None)
+        .await
+        .expect("Failed to create answer");
     pc_b.set_local_description(answer.clone())
+        .await
         .expect("Failed to set local description");
     pc_a.set_remote_description(answer)
+        .await
         .expect("Failed to set remote description");
 
     // Now we can add ICE candidates
@@ -115,7 +125,7 @@ async fn test_add_ice_candidate() {
 
     // Should succeed after remote description is set
     let result = pc_a.add_ice_candidate(candidate_init);
-    assert!(result.is_ok(), "Adding ICE candidate should succeed");
+    assert!(result.await.is_ok(), "Adding ICE candidate should succeed");
 }
 
 #[tokio::test]
@@ -144,18 +154,23 @@ async fn test_restart_ice() {
     );
     pc.add_track(track).await.expect("Failed to add track");
 
-    let offer1 = pc.create_offer(None).expect("Failed to create first offer");
+    let offer1 = pc
+        .create_offer(None)
+        .await
+        .expect("Failed to create first offer");
     let sdp1 = offer1.sdp.clone();
 
     pc.set_local_description(offer1)
+        .await
         .expect("Failed to set local description");
 
     // Trigger ICE restart
-    pc.restart_ice().expect("Failed to restart ICE");
+    pc.restart_ice().await.expect("Failed to restart ICE");
 
     // Create new offer - should have different ICE credentials
     let offer2 = pc
         .create_offer(None)
+        .await
         .expect("Failed to create second offer");
     let sdp2 = offer2.sdp.clone();
 
@@ -190,7 +205,7 @@ async fn test_automatic_host_candidate_gathering() {
         .await
         .expect("Failed to bind");
 
-    let _driver_handle = tokio::spawn(async move { driver.await });
+    let _driver_handle = tokio::spawn(async move { driver.run().await });
 
     // Add track to create media
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -203,8 +218,9 @@ async fn test_automatic_host_candidate_gathering() {
     pc.add_track(track).await.expect("Failed to add track");
 
     // Create and set local description - this should trigger gathering
-    let offer = pc.create_offer(None).expect("Failed to create offer");
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
     pc.set_local_description(offer)
+        .await
         .expect("Failed to set local description");
 
     // Give the driver time to process events
@@ -220,7 +236,6 @@ async fn test_automatic_host_candidate_gathering() {
 }
 
 #[tokio::test]
-#[ignore] // Run with --include-ignored to test with real STUN server
 async fn test_stun_gathering_with_google_stun() {
     // Test STUN gathering with Google's public STUN server
     let mut media_engine = MediaEngine::default();
@@ -253,7 +268,7 @@ async fn test_stun_gathering_with_google_stun() {
         .await
         .expect("Failed to bind");
 
-    let _driver_handle = tokio::spawn(async move { driver.await });
+    let _driver_handle = tokio::spawn(async move { driver.run().await });
 
     // Add track to create media
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -266,15 +281,29 @@ async fn test_stun_gathering_with_google_stun() {
     pc.add_track(track).await.expect("Failed to add track");
 
     // Create and set local description - this should trigger gathering
-    let offer = pc.create_offer(None).expect("Failed to create offer");
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
     pc.set_local_description(offer)
+        .await
         .expect("Failed to set local description");
 
-    // Wait for both host and STUN gathering to complete
-    // Host gathering is immediate, STUN takes a few seconds
-    // We need to wait long enough for the driver to poll events after STUN completes
-    println!("⏳ Waiting for ICE gathering to complete...");
-    tokio::time::sleep(Duration::from_secs(20)).await;
+    // Wait for both host and STUN candidates to arrive
+    // We expect at least: 1 host + 1 srflx = 2 candidates
+    println!("⏳ Waiting for ICE candidates...");
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(15);
+
+    loop {
+        let count = candidates.lock().await.len();
+        if count >= 2 {
+            println!("✅ Received {} candidates in {:?}", count, start.elapsed());
+            break;
+        }
+        if start.elapsed() > timeout {
+            let count = candidates.lock().await.len();
+            panic!("Timeout waiting for candidates. Got {} candidates", count);
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     // Verify we got both host and srflx candidates
     let gathered: Vec<RTCIceCandidateType> = candidates.lock().await.clone();

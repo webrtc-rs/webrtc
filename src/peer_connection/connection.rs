@@ -26,7 +26,7 @@ pub struct PeerConnection {
 
 pub(crate) struct PeerConnectionInner {
     /// The sans-I/O peer connection core (uses default NoopInterceptor)
-    pub(crate) core: Mutex<RTCPeerConnection>,
+    pub(crate) core: tokio::sync::Mutex<RTCPeerConnection>,
     /// Runtime for async operations
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
@@ -35,8 +35,8 @@ pub(crate) struct PeerConnectionInner {
     pub(crate) ice_servers: Vec<RTCIceServer>,
     /// Local socket address (set after bind)
     pub(crate) local_addr: Mutex<Option<SocketAddr>>,
-    /// Waker for the driver task (to wake it when events are added asynchronously)
-    pub(crate) driver_waker: Mutex<Option<std::task::Waker>>,
+    /// Notify to wake the driver when background tasks add events
+    pub(crate) driver_notify: Arc<tokio::sync::Notify>,
     /// Data channels  
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
@@ -74,16 +74,8 @@ impl PeerConnectionInner {
     /// Wake the driver task to process pending events
     ///
     /// This is called when async tasks add events to the core (e.g., ICE candidates)
-    /// to ensure the driver polls and dispatches them to the event handler.
     pub(crate) fn wake_driver(&self) {
-        let waker_opt = self.driver_waker.lock().unwrap().take();
-        if let Some(waker) = waker_opt {
-            eprintln!("🔔 Waking driver with waker.wake() (consumes waker)");
-            waker.wake();  // Use wake() instead of wake_by_ref()
-            eprintln!("🔔 Driver waker.wake() called");
-        } else {
-            eprintln!("⚠️  No driver waker available!");
-        }
+        self.driver_notify.notify_one();
     }
 }
 
@@ -112,12 +104,12 @@ impl PeerConnection {
 
         Ok(Self {
             inner: Arc::new(PeerConnectionInner {
-                core: Mutex::new(core),
+                core: tokio::sync::Mutex::new(core),
                 runtime,
                 handler,
                 ice_servers,
                 local_addr: Mutex::new(None),
-                driver_waker: Mutex::new(None),
+                driver_notify: Arc::new(tokio::sync::Notify::new()),
                 data_channels: Mutex::new(HashMap::new()),
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 data_tx,
@@ -145,87 +137,90 @@ impl PeerConnection {
     }
 
     /// Create an SDP offer
-    pub fn create_offer(
+    pub async fn create_offer(
         &self,
         options: Option<RTCOfferOptions>,
     ) -> Result<RTCSessionDescription, Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().unwrap();
+        let mut core = self.inner.core.lock().await;
         Ok(core.create_offer(options)?)
     }
 
     /// Create an SDP answer
-    pub fn create_answer(
+    pub async fn create_answer(
         &self,
         options: Option<RTCAnswerOptions>,
     ) -> Result<RTCSessionDescription, Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().unwrap();
+        let mut core = self.inner.core.lock().await;
         Ok(core.create_answer(options)?)
     }
 
     /// Set the local description
-    pub fn set_local_description(
+    pub async fn set_local_description(
         &self,
         desc: RTCSessionDescription,
     ) -> Result<(), Box<dyn std::error::Error>> {
         {
-            let mut core = self.inner.core.lock().unwrap();
+            let mut core = self.inner.core.lock().await;
             core.set_local_description(desc)?;
         }
-        
+
         // Trigger ICE candidate gathering
         if let Some(local_addr) = *self.inner.local_addr.lock().unwrap() {
             let inner = self.inner.clone();
-            
+
             // Gather host candidates (synchronous)
             let host_candidates = crate::ice_gatherer::gather_host_candidates(local_addr);
-            
+
             // Add host candidates to rtc core
             for candidate_init in host_candidates {
-                let mut core = inner.core.lock().unwrap();
+                let mut core = inner.core.lock().await;
                 if let Err(e) = core.add_local_candidate(candidate_init) {
                     log::warn!("Failed to add host candidate: {}", e);
                 }
             }
-            
+
             // Spawn background task for STUN gathering (server reflexive candidates)
             if !inner.ice_servers.is_empty() {
-                eprintln!("🚀 Spawning STUN gathering task with {} ice_servers", inner.ice_servers.len());
+                eprintln!(
+                    "🚀 Spawning STUN gathering task with {} ice_servers",
+                    inner.ice_servers.len()
+                );
                 let ice_servers = inner.ice_servers.clone();
                 let inner_clone = inner.clone();
-                
+
                 self.inner.runtime.spawn(Box::pin(async move {
-                    eprintln!("🔄 STUN gathering task started, core ptr: {:p}", &*inner_clone.core.lock().unwrap());
+                    eprintln!("🔄 STUN gathering task started, core ptr: {:p}", &*inner_clone.core.lock().await);
                     let srflx_candidates = crate::ice_gatherer::gather_srflx_candidates(
                         local_addr,
                         &ice_servers,
                     ).await;
-                    
+
                     eprintln!("📥 STUN gathering returned {} candidates", srflx_candidates.len());
-                    
+
                     // Add srflx candidates to rtc core
                     {
-                        let mut core = inner_clone.core.lock().unwrap();
+                        let mut core = inner_clone.core.lock().await;
                         eprintln!("🔄 STUN task acquired core lock, ptr: {:p}", &*core);
                         for candidate_init in srflx_candidates {
                             eprintln!("🔍 Adding srflx candidate to core: {:?}", candidate_init.candidate);
                             match core.add_local_candidate(candidate_init) {
                                 Ok(()) => {
                                     eprintln!("✅ add_local_candidate returned Ok - event should be queued");
-                                },
+                                }
                                 Err(e) => {
                                     log::warn!("Failed to add srflx candidate: {}", e);
                                     eprintln!("❌ add_local_candidate returned Err: {}", e);
                                 }
                             }
                         }
-                        
+
                         // Try to flush events by calling handle_timeout
                         if let Err(e) = core.handle_timeout(Instant::now()) {
                             eprintln!("⚠️  handle_timeout error: {}", e);
                         }
                         eprintln!("🔓 STUN task releasing core lock");
                     }
-                    
+
                     // Wake the driver IMMEDIATELY to process the new candidate events
                     eprintln!("🔔 Waking driver to process srflx candidate events");
                     inner_clone.wake_driver();
@@ -235,29 +230,29 @@ impl PeerConnection {
                 eprintln!("ℹ️  No ICE servers configured, skipping STUN gathering");
             }
         }
-        
+
         Ok(())
     }
 
     /// Set the remote description
-    pub fn set_remote_description(
+    pub async fn set_remote_description(
         &self,
         desc: RTCSessionDescription,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().unwrap();
+        let mut core = self.inner.core.lock().await;
         core.set_remote_description(desc)?;
         Ok(())
     }
 
     /// Get the local description
-    pub fn local_description(&self) -> Option<RTCSessionDescription> {
-        let core = self.inner.core.lock().unwrap();
+    pub async fn local_description(&self) -> Option<RTCSessionDescription> {
+        let core = self.inner.core.lock().await;
         core.local_description().cloned()
     }
 
     /// Get the remote description
-    pub fn remote_description(&self) -> Option<RTCSessionDescription> {
-        let core = self.inner.core.lock().unwrap();
+    pub async fn remote_description(&self) -> Option<RTCSessionDescription> {
+        let core = self.inner.core.lock().await;
         core.remote_description().cloned()
     }
 
@@ -284,15 +279,15 @@ impl PeerConnection {
     ///     url: None,
     /// };
     ///
-    /// pc.add_ice_candidate(candidate_init)?;
+    /// pc.add_ice_candidate(candidate_init).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn add_ice_candidate(
+    pub async fn add_ice_candidate(
         &self,
         candidate: RTCIceCandidateInit,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().unwrap();
+        let mut core = self.inner.core.lock().await;
         core.add_remote_candidate(candidate)?;
         Ok(())
     }
@@ -311,24 +306,24 @@ impl PeerConnection {
     /// # use webrtc::peer_connection::PeerConnection;
     /// # async fn example(pc: PeerConnection) -> Result<(), Box<dyn std::error::Error>> {
     /// // Trigger ICE restart on connection failure
-    /// pc.restart_ice()?;
+    /// pc.restart_ice().await?;
     ///
     /// // Create new offer with new ICE credentials
-    /// let offer = pc.create_offer(None)?;
-    /// pc.set_local_description(offer.clone())?;
+    /// let offer = pc.create_offer(None).await?;
+    /// pc.set_local_description(offer.clone()).await?;
     /// // Send offer to remote peer through signaling
     /// # Ok(())
     /// # }
     /// ```
-    pub fn restart_ice(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().unwrap();
+    pub async fn restart_ice(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut core = self.inner.core.lock().await;
         core.restart_ice();
         Ok(())
     }
 
     /// Close the peer connection
-    pub fn close(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().unwrap();
+    pub async fn close(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut core = self.inner.core.lock().await;
         core.close()?;
         Ok(())
     }
@@ -371,7 +366,7 @@ impl PeerConnection {
 
         // Create the data channel via the core
         let channel_id = {
-            let mut core = self.inner.core.lock().unwrap();
+            let mut core = self.inner.core.lock().await;
             let rtc_dc = core.create_data_channel(&label, options)?;
             rtc_dc.id()
         };
@@ -447,7 +442,7 @@ impl PeerConnection {
     ) -> Result<Arc<crate::track::TrackLocal>, Box<dyn std::error::Error>> {
         // Add track via the core
         let sender_id = {
-            let mut core = self.inner.core.lock().unwrap();
+            let mut core = self.inner.core.lock().await;
             core.add_track(track)?
         };
 
@@ -486,7 +481,7 @@ impl PeerConnection {
     ///
     /// // Spawn the driver in the background
     /// tokio::spawn(async move {
-    ///     if let Err(e) = driver.await {
+    ///     if let Err(e) = driver.run().await {
     ///         eprintln!("Driver error: {}", e);
     ///     }
     /// });

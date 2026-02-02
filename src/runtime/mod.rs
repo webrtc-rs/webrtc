@@ -3,15 +3,7 @@
 //! This module provides traits that abstract over different async runtimes,
 //! allowing the WebRTC implementation to work with Tokio, async-std, smol, and others.
 
-use std::{
-    fmt::{self, Debug},
-    future::Future,
-    io::{self, IoSliceMut},
-    net::SocketAddr,
-    pin::Pin,
-    task::{Context, Poll},
-    time::Instant,
-};
+use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, time::Instant};
 
 /// Abstracts I/O and timer operations for runtime independence
 ///
@@ -46,173 +38,55 @@ pub trait AsyncTimer: Send + Debug + 'static {
     fn reset(self: Pin<&mut Self>, deadline: Instant);
 
     /// Check whether the timer has expired, and register to be woken if not
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()>;
-}
-
-/// Metadata for a received UDP datagram
-#[derive(Debug, Clone)]
-pub struct RecvMeta {
-    /// The source address of the datagram
-    pub addr: SocketAddr,
-    /// The number of bytes in the datagram
-    pub len: usize,
-    /// The destination address (local address that received the packet)
-    pub dst_addr: Option<SocketAddr>,
-}
-
-/// A UDP datagram to be transmitted
-#[derive(Debug, Clone)]
-pub struct Transmit<'a> {
-    /// The destination address
-    pub destination: SocketAddr,
-    /// The payload to send
-    pub contents: &'a [u8],
-    /// Optional source address override
-    pub src_addr: Option<SocketAddr>,
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()>;
 }
 
 /// Abstract implementation of a UDP socket for runtime independence
+///
+/// Simple async wrapper around UDP sockets, compatible with tokio::net::UdpSocket API
 pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
-    /// Create a [`UdpSender`] that can send datagrams
-    ///
-    /// This allows multiple tasks to send on the same socket concurrently
-    /// by creating separate sender instances, each with their own waker.
-    fn create_sender(&self) -> Pin<Box<dyn UdpSender>>;
+    /// Send data to the specified address
+    fn send_to<'a>(
+        &'a self,
+        buf: &'a [u8],
+        target: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>>;
 
-    /// Receive UDP datagrams, or register to be woken if receiving may succeed in the future
-    fn poll_recv(
-        &mut self,
-        cx: &mut Context<'_>,
-        bufs: &mut [IoSliceMut<'_>],
-        meta: &mut [RecvMeta],
-    ) -> Poll<io::Result<usize>>;
+    /// Receive a datagram from the socket
+    fn recv_from<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>>;
 
-    /// Look up the local IP address and port used by this socket
+    /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
-
-    /// Maximum number of datagrams that might be received in a single call
-    fn max_receive_segments(&self) -> usize {
-        1
-    }
-
-    /// Whether datagrams might get fragmented into multiple parts
-    fn may_fragment(&self) -> bool {
-        true
-    }
 }
 
-/// An object for asynchronously writing to an associated [`AsyncUdpSocket`]
+/// Get the default runtime for the current build configuration
 ///
-/// Any number of [`UdpSender`]s may exist for a single [`AsyncUdpSocket`]. Each [`UdpSender`] is
-/// responsible for notifying at most one task for send readiness.
-pub trait UdpSender: Send + Sync + Debug + 'static {
-    /// Send a UDP datagram, or register to be woken if sending may succeed in the future
-    fn poll_send(
-        self: Pin<&mut Self>,
-        transmit: &Transmit<'_>,
-        cx: &mut Context<'_>,
-    ) -> Poll<io::Result<()>>;
-
-    /// Maximum number of datagrams that may be sent in a single call
-    fn max_transmit_segments(&self) -> usize {
-        1
-    }
-}
-
-pin_project_lite::pin_project! {
-    /// A helper for constructing [`UdpSender`]s from an underlying socket type
-    pub(crate) struct UdpSenderHelper<Socket, MakeWritableFn, WritableFut> {
-        socket: Socket,
-        make_writable_fn: MakeWritableFn,
-        #[pin]
-        writable_fut: Option<WritableFut>,
-    }
-}
-
-impl<Socket, MakeWritableFn, WritableFut> Debug
-    for UdpSenderHelper<Socket, MakeWritableFn, WritableFut>
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("UdpSender")
-    }
-}
-
-impl<Socket, MakeWritableFn, WritableFut> UdpSenderHelper<Socket, MakeWritableFn, WritableFut> {
-    /// Create a new UDP sender helper
-    #[cfg(any(feature = "runtime-tokio", feature = "runtime-smol"))]
-    pub(crate) fn new(socket: Socket, make_writable_fn: MakeWritableFn) -> Self {
-        Self {
-            socket,
-            make_writable_fn,
-            writable_fut: None,
-        }
-    }
-}
-
-impl<Socket, MakeWritableFn, WritableFut> UdpSender
-    for UdpSenderHelper<Socket, MakeWritableFn, WritableFut>
-where
-    Socket: UdpSenderHelperSocket,
-    MakeWritableFn: Fn(&Socket) -> WritableFut + Send + Sync + 'static,
-    WritableFut: Future<Output = io::Result<()>> + Send + Sync + 'static,
-{
-    fn poll_send(
-        self: Pin<&mut Self>,
-        transmit: &Transmit<'_>,
-        cx: &mut Context<'_>,
-    ) -> Poll<io::Result<()>> {
-        let mut this = self.project();
-        loop {
-            if this.writable_fut.is_none() {
-                this.writable_fut
-                    .set(Some((this.make_writable_fn)(this.socket)));
-            }
-
-            let result =
-                std::task::ready!(this.writable_fut.as_mut().as_pin_mut().unwrap().poll(cx));
-
-            // Clear the future so a new one is created on next call
-            this.writable_fut.set(None);
-
-            // If waiting for writability failed, propagate the error
-            result?;
-
-            match this.socket.try_send(transmit) {
-                // Socket wasn't actually writable, retry
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
-                // Either success or a real error
-                result => return Poll::Ready(result),
-            }
-        }
-    }
-
-    fn max_transmit_segments(&self) -> usize {
-        self.socket.max_transmit_segments()
-    }
-}
-
-/// Helper trait for socket types used with [`UdpSenderHelper`]
-pub(crate) trait UdpSenderHelperSocket: Send + Sync + 'static {
-    /// Try to send a datagram if the socket is write-ready
-    fn try_send(&self, transmit: &Transmit<'_>) -> io::Result<()>;
-
-    /// Maximum number of segments that can be sent
-    fn max_transmit_segments(&self) -> usize;
-}
-
-/// Automatically select an appropriate runtime from those enabled at compile time
-///
-/// If `runtime-tokio` is enabled and this function is called from within a Tokio runtime context,
-/// then `TokioRuntime` is returned. Otherwise, if `runtime-smol` is enabled, `SmolRuntime` is returned.
+/// Returns the runtime for whichever runtime feature is enabled.
+/// If multiple runtimes are enabled, tokio takes precedence.
 #[cfg(any(feature = "runtime-tokio", feature = "runtime-smol"))]
 pub fn default_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
     #[cfg(feature = "runtime-tokio")]
     {
-        if ::tokio::runtime::Handle::try_current().is_ok() {
-            return Some(std::sync::Arc::new(TokioRuntime));
-        }
+        Some(std::sync::Arc::new(TokioRuntime))
     }
 
+    #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
+    {
+        Some(std::sync::Arc::new(SmolRuntime))
+    }
+}
+
+#[cfg(not(any(feature = "runtime-tokio", feature = "runtime-smol")))]
+pub fn default_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
+    None
+}
+
+/// Get smol runtime if enabled
+#[cfg(any(feature = "runtime-tokio", feature = "runtime-smol"))]
+pub fn smol_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
     #[cfg(feature = "runtime-smol")]
     {
         Some(std::sync::Arc::new(SmolRuntime))

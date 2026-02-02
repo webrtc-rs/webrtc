@@ -39,7 +39,7 @@ async fn test_media_engine_configuration() {
     pc.add_track(track).await.expect("Failed to add track");
 
     // Create offer should work with registered codecs
-    let offer = pc.create_offer(None).expect("Failed to create offer");
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
     assert!(!offer.sdp.is_empty(), "Offer SDP should not be empty");
 }
 
@@ -69,7 +69,7 @@ async fn test_setting_engine_ice_timeouts() {
     let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
 
     // Should be able to create offer with custom settings
-    let offer = pc.create_offer(None).expect("Failed to create offer");
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
     assert!(!offer.sdp.is_empty());
 }
 
@@ -95,7 +95,7 @@ async fn test_setting_engine_replay_protection() {
     let handler = Arc::new(ConfigTestHandler);
     let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
 
-    let offer = pc.create_offer(None).expect("Failed to create offer");
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
     assert!(!offer.sdp.is_empty());
 }
 
@@ -124,13 +124,15 @@ async fn test_combined_configuration() {
     let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
 
     // Create and set local description
-    let offer = pc.create_offer(None).expect("Failed to create offer");
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
     pc.set_local_description(offer.clone())
+        .await
         .expect("Failed to set local description");
 
     // Verify local description was set
     let local_desc = pc
         .local_description()
+        .await
         .expect("Local description should be set");
     assert_eq!(local_desc.sdp, offer.sdp);
 }
@@ -190,23 +192,33 @@ async fn test_peer_connection_with_full_configuration() {
     pc_a.add_track(track).await.expect("Failed to add track");
 
     // Perform offer/answer exchange
-    let offer = pc_a.create_offer(None).expect("Failed to create offer");
+    let offer = pc_a
+        .create_offer(None)
+        .await
+        .expect("Failed to create offer");
     pc_a.set_local_description(offer.clone())
+        .await
         .expect("Failed to set local description");
     pc_b.set_remote_description(offer)
+        .await
         .expect("Failed to set remote description");
 
-    let answer = pc_b.create_answer(None).expect("Failed to create answer");
+    let answer = pc_b
+        .create_answer(None)
+        .await
+        .expect("Failed to create answer");
     pc_b.set_local_description(answer.clone())
+        .await
         .expect("Failed to set local description");
     pc_a.set_remote_description(answer)
+        .await
         .expect("Failed to set remote description");
 
     // Both peers should have local and remote descriptions set
-    assert!(pc_a.local_description().is_some());
-    assert!(pc_a.remote_description().is_some());
-    assert!(pc_b.local_description().is_some());
-    assert!(pc_b.remote_description().is_some());
+    assert!(pc_a.local_description().await.is_some());
+    assert!(pc_a.remote_description().await.is_some());
+    assert!(pc_b.local_description().await.is_some());
+    assert!(pc_b.remote_description().await.is_some());
 }
 
 #[tokio::test]
@@ -245,7 +257,7 @@ async fn test_media_engine_required_for_tracks() {
     // Creating offer should also succeed
     let offer_result = pc.create_offer(None);
     assert!(
-        offer_result.is_ok(),
+        offer_result.await.is_ok(),
         "Creating offer with track should succeed"
     );
 }
@@ -276,7 +288,7 @@ async fn test_ice_servers_configuration() {
 
     // Should be able to create offers/answers with ICE servers configured
     let offer = pc.create_offer(None);
-    assert!(offer.is_ok(), "Should create offer with ICE servers");
+    assert!(offer.await.is_ok(), "Should create offer with ICE servers");
 }
 
 #[tokio::test]
@@ -299,8 +311,8 @@ async fn test_ice_transport_policy() {
         .expect("Failed to create PC with 'relay' policy");
 
     // Both should succeed
-    assert!(pc_all.create_offer(None).is_ok());
-    assert!(pc_relay.create_offer(None).is_ok());
+    assert!(pc_all.create_offer(None).await.is_ok());
+    assert!(pc_relay.create_offer(None).await.is_ok());
 }
 
 #[tokio::test]
@@ -327,9 +339,9 @@ async fn test_bundle_policy() {
         PeerConnection::new(config_max_bundle, handler).expect("Failed with max-bundle policy");
 
     // All should create offers successfully
-    assert!(pc_balanced.create_offer(None).is_ok());
-    assert!(pc_compat.create_offer(None).is_ok());
-    assert!(pc_bundle.create_offer(None).is_ok());
+    assert!(pc_balanced.create_offer(None).await.is_ok());
+    assert!(pc_compat.create_offer(None).await.is_ok());
+    assert!(pc_bundle.create_offer(None).await.is_ok());
 }
 
 #[tokio::test]
@@ -344,7 +356,7 @@ async fn test_rtcp_mux_policy() {
         .expect("Failed to create PC with RTCP mux policy");
 
     let offer = pc.create_offer(None);
-    assert!(offer.is_ok(), "Should create offer with RTCP mux");
+    assert!(offer.await.is_ok(), "Should create offer with RTCP mux");
 }
 
 #[tokio::test]
@@ -357,7 +369,7 @@ async fn test_peer_identity() {
     let handler = Arc::new(ConfigTestHandler);
     let pc = PeerConnection::new(config, handler).expect("Failed to create PC with peer identity");
 
-    assert!(pc.create_offer(None).is_ok());
+    assert!(pc.create_offer(None).await.is_ok());
 }
 
 #[tokio::test]
@@ -373,7 +385,7 @@ async fn test_certificates() {
     let handler = Arc::new(ConfigTestHandler);
     let pc = PeerConnection::new(config, handler).expect("Failed to create PC with certificates");
 
-    assert!(pc.create_offer(None).is_ok());
+    assert!(pc.create_offer(None).await.is_ok());
 }
 
 #[tokio::test]
@@ -387,7 +399,7 @@ async fn test_ice_candidate_pool_size() {
     let pc =
         PeerConnection::new(config, handler).expect("Failed to create PC with candidate pool size");
 
-    assert!(pc.create_offer(None).is_ok());
+    assert!(pc.create_offer(None).await.is_ok());
 }
 
 #[tokio::test]
@@ -436,6 +448,6 @@ async fn test_all_configuration_options_combined() {
     pc.add_track(track).await.expect("Failed to add track");
 
     // Should create offer successfully with all options
-    let offer = pc.create_offer(None).expect("Failed to create offer");
+    let offer = pc.create_offer(None).await.expect("Failed to create offer");
     assert!(!offer.sdp.is_empty(), "Offer should have SDP content");
 }
