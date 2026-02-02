@@ -111,6 +111,7 @@ mod ice_gatherer;
 pub use connection::PeerConnection;
 pub use driver::PeerConnectionDriver;
 pub use event_handler::PeerConnectionEventHandler;
+pub use ice_gatherer::{RTCIceGatherer, RTCIceGathererState};
 
 // Re-export common types from rtc
 pub use rtc::peer_connection::{

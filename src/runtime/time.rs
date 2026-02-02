@@ -32,13 +32,10 @@ where
 
     #[cfg(feature = "runtime-smol")]
     {
-        ::smol::future::or(
-            async { Ok(future.await) },
-            async {
-                sleep(duration).await;
-                Err(())
-            },
-        )
+        ::smol::future::or(async { Ok(future.await) }, async {
+            sleep(duration).await;
+            Err(())
+        })
         .await
     }
 }

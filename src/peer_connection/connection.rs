@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::data_channel::DataChannel;
+use crate::peer_connection::ice_gatherer::RTCIceGatherOptions;
 use crate::runtime::Runtime;
 use crate::runtime::sync;
 use crate::track::TrackRemote;
@@ -13,8 +14,7 @@ use rtc::rtp_transceiver::RTCRtpReceiverId;
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::sync::Arc;
 
 /// Async-friendly peer connection
 ///
@@ -31,52 +31,43 @@ pub(crate) struct PeerConnectionInner {
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
-    /// ICE servers for STUN/TURN gathering
-    pub(crate) ice_servers: Vec<RTCIceServer>,
+    /// ICE gatherer for managing ICE candidate gathering
+    pub(crate) ice_gatherer: RTCIceGatherer,
     /// Local socket address (set after bind)
-    pub(crate) local_addr: Mutex<Option<SocketAddr>>,
-    /// Notify to wake the driver when background tasks add events
-    pub(crate) driver_notify: Arc<sync::Notify>,
+    pub(crate) local_addr: sync::Mutex<Option<SocketAddr>>,
     /// Data channels  
-    pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
+    pub(crate) data_channels: sync::Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
     pub(crate) data_channel_rxs:
-        Mutex<HashMap<RTCDataChannelId, sync::Sender<RTCDataChannelMessage>>>,
+        sync::Mutex<HashMap<RTCDataChannelId, sync::Sender<RTCDataChannelMessage>>>,
     /// Channel for outgoing data channel messages
     pub(crate) data_tx: sync::Sender<crate::data_channel::OutgoingMessage>,
     /// Channel for receiving outgoing data channel messages (taken by driver)
-    pub(crate) data_rx: Mutex<Option<sync::Receiver<crate::data_channel::OutgoingMessage>>>,
+    pub(crate) data_rx: sync::Mutex<Option<sync::Receiver<crate::data_channel::OutgoingMessage>>>,
     /// Remote tracks (incoming media)
-    pub(crate) remote_tracks: Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
+    pub(crate) remote_tracks: sync::Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
     /// RTP packet senders for remote tracks
-    pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, sync::Sender<RtpPacket>>>,
+    pub(crate) track_rxs: sync::Mutex<HashMap<RTCRtpReceiverId, sync::Sender<RtpPacket>>>,
     /// Channel for outgoing RTP packets
     pub(crate) rtp_tx: sync::Sender<crate::track::OutgoingRtpPacket>,
     /// Channel for receiving outgoing RTP packets (taken by driver)
-    pub(crate) rtp_rx: Mutex<Option<sync::Receiver<crate::track::OutgoingRtpPacket>>>,
+    pub(crate) rtp_rx: sync::Mutex<Option<sync::Receiver<crate::track::OutgoingRtpPacket>>>,
     /// Channel for outgoing RTCP packets from senders
     pub(crate) rtcp_tx: sync::Sender<crate::track::OutgoingRtcpPackets>,
     /// Channel for receiving outgoing RTCP packets from senders (taken by driver)
-    pub(crate) rtcp_rx: Mutex<Option<sync::Receiver<crate::track::OutgoingRtcpPackets>>>,
+    pub(crate) rtcp_rx: sync::Mutex<Option<sync::Receiver<crate::track::OutgoingRtcpPackets>>>,
     /// Channel for outgoing RTCP packets from receivers
     pub(crate) receiver_rtcp_tx: sync::Sender<crate::track::OutgoingReceiverRtcpPackets>,
     /// Channel for receiving outgoing RTCP packets from receivers (taken by driver)
     pub(crate) receiver_rtcp_rx:
-        Mutex<Option<sync::Receiver<crate::track::OutgoingReceiverRtcpPackets>>>,
+        sync::Mutex<Option<sync::Receiver<crate::track::OutgoingReceiverRtcpPackets>>>,
+    /// Channel for receiving local candidate (taken by driver)
+    pub(crate) candidate_rx: sync::Mutex<Option<sync::Receiver<RTCIceCandidateInit>>>,
 }
 
 // Safety: we protect it with Mutex to make it Send + Sync
 unsafe impl Send for PeerConnectionInner {}
 unsafe impl Sync for PeerConnectionInner {}
-
-impl PeerConnectionInner {
-    /// Wake the driver task to process pending events
-    ///
-    /// This is called when async tasks add events to the core (e.g., ICE candidates)
-    pub(crate) fn wake_driver(&self) {
-        self.driver_notify.notify_one();
-    }
-}
 
 impl PeerConnection {
     /// Create a new peer connection with a custom runtime
@@ -85,8 +76,8 @@ impl PeerConnection {
         config: RTCConfiguration,
         handler: Arc<dyn PeerConnectionEventHandler>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        // Store ice_servers for STUN/TURN gathering
         let ice_servers = config.ice_servers().to_vec();
+
         let core = RTCPeerConnection::new(config)?;
 
         // Create channel for data channel messages
@@ -101,26 +92,38 @@ impl PeerConnection {
         // Create channel for RTCP packets from receivers
         let (receiver_rtcp_tx, receiver_rtcp_rx) = sync::channel();
 
+        // Create channel for local candidate
+        let (candidate_tx, candidate_rx) = sync::channel();
+
+        // Create ICE gatherer with servers from config
+        let ice_gatherer = RTCIceGatherer::new(
+            candidate_tx,
+            RTCIceGatherOptions {
+                ice_servers,
+                ice_gather_policy: RTCIceTransportPolicy::All,
+            },
+        );
+
         Ok(Self {
             inner: Arc::new(PeerConnectionInner {
                 core: sync::Mutex::new(core),
                 runtime,
                 handler,
-                ice_servers,
-                local_addr: Mutex::new(None),
-                driver_notify: Arc::new(sync::Notify::new()),
-                data_channels: Mutex::new(HashMap::new()),
-                data_channel_rxs: Mutex::new(HashMap::new()),
+                ice_gatherer,
+                local_addr: sync::Mutex::new(None),
+                data_channels: sync::Mutex::new(HashMap::new()),
+                data_channel_rxs: sync::Mutex::new(HashMap::new()),
                 data_tx,
-                data_rx: Mutex::new(Some(data_rx)),
-                remote_tracks: Mutex::new(HashMap::new()),
-                track_rxs: Mutex::new(HashMap::new()),
+                data_rx: sync::Mutex::new(Some(data_rx)),
+                remote_tracks: sync::Mutex::new(HashMap::new()),
+                track_rxs: sync::Mutex::new(HashMap::new()),
                 rtp_tx,
-                rtp_rx: Mutex::new(Some(rtp_rx)),
+                rtp_rx: sync::Mutex::new(Some(rtp_rx)),
                 rtcp_tx,
-                rtcp_rx: Mutex::new(Some(rtcp_rx)),
+                rtcp_rx: sync::Mutex::new(Some(rtcp_rx)),
                 receiver_rtcp_tx,
-                receiver_rtcp_rx: Mutex::new(Some(receiver_rtcp_rx)),
+                receiver_rtcp_rx: sync::Mutex::new(Some(receiver_rtcp_rx)),
+                candidate_rx: sync::Mutex::new(Some(candidate_rx)),
             }),
         })
     }
@@ -163,55 +166,12 @@ impl PeerConnection {
             core.set_local_description(desc)?;
         }
 
-        // Trigger ICE candidate gathering
-        let local_addr_opt = *self.inner.local_addr.lock().unwrap();
+        let local_addr_opt = *self.inner.local_addr.lock().await;
         if let Some(local_addr) = local_addr_opt {
-            let inner = self.inner.clone();
-
-            // Gather host candidates (synchronous)
-            let host_candidates = super::ice_gatherer::gather_host_candidates(local_addr);
-
-            // Add host candidates to rtc core
-            for candidate_init in host_candidates {
-                let mut core = inner.core.lock().await;
-                if let Err(e) = core.add_local_candidate(candidate_init) {
-                    log::warn!("Failed to add host candidate: {}", e);
-                }
-            }
-
-            // Spawn background task for STUN gathering (server reflexive candidates)
-            if !inner.ice_servers.is_empty() {
-                let ice_servers = inner.ice_servers.clone();
-                let inner_clone = inner.clone();
-
-                self.inner.runtime.spawn(Box::pin(async move {
-                    let srflx_candidates = super::ice_gatherer::gather_srflx_candidates(
-                        local_addr,
-                        &ice_servers,
-                    ).await;
-
-                    // Add srflx candidates to rtc core
-                    {
-                        let mut core = inner_clone.core.lock().await;
-                        for candidate_init in srflx_candidates {
-                            match core.add_local_candidate(candidate_init) {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    log::warn!("Failed to add srflx candidate: {}", e);
-                                }
-                            }
-                        }
-
-                        // Try to flush events by calling handle_timeout
-                        if let Err(e) = core.handle_timeout(Instant::now()) {
-                            log::warn!("handle_timeout error: {}", e);
-                        }
-                    }
-
-                    // Wake the driver IMMEDIATELY to process the new candidate events
-                    inner_clone.wake_driver();
-                }));
-            }
+            self.inner
+                .ice_gatherer
+                .gather(Arc::clone(&self.inner.runtime), local_addr)
+                .await;
         }
 
         Ok(())
@@ -299,8 +259,19 @@ impl PeerConnection {
     /// # }
     /// ```
     pub async fn restart_ice(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().await;
-        core.restart_ice();
+        {
+            let mut core = self.inner.core.lock().await;
+            core.restart_ice();
+        }
+
+        let local_addr_opt = *self.inner.local_addr.lock().await;
+        if let Some(local_addr) = local_addr_opt {
+            self.inner
+                .ice_gatherer
+                .gather(Arc::clone(&self.inner.runtime), local_addr)
+                .await;
+        }
+
         Ok(())
     }
 
@@ -369,12 +340,12 @@ impl PeerConnection {
         self.inner
             .data_channels
             .lock()
-            .unwrap()
+            .await
             .insert(channel_id, dc.clone());
         self.inner
             .data_channel_rxs
             .lock()
-            .unwrap()
+            .await
             .insert(channel_id, dc_tx);
 
         Ok(dc)
@@ -480,7 +451,7 @@ impl PeerConnection {
         socket.set_nonblocking(true)?;
 
         let async_socket = self.inner.runtime.wrap_udp_socket(socket)?;
-        let driver = PeerConnectionDriver::new(self.inner.clone(), async_socket)?;
+        let driver = PeerConnectionDriver::new(self.inner.clone(), async_socket).await?;
 
         Ok(driver)
     }

@@ -471,4 +471,3 @@ pub type Notify = SmolNotify;
 pub type Sender<T> = SmolSender<T>;
 #[cfg(feature = "runtime-smol")]
 pub type Receiver<T> = SmolReceiver<T>;
-

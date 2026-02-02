@@ -9,6 +9,7 @@ use crate::runtime::{AsyncUdpSocket, sync};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
+use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use std::net::SocketAddr;
@@ -32,24 +33,30 @@ pub struct PeerConnectionDriver {
     rtcp_rx: Option<sync::Receiver<crate::track::OutgoingRtcpPackets>>,
     /// Channel for receiving outgoing RTCP packets from receivers
     receiver_rtcp_rx: Option<sync::Receiver<crate::track::OutgoingReceiverRtcpPackets>>,
+    /// Channel for receiving local candidate (taken by driver)
+    candidate_rx: Option<sync::Receiver<RTCIceCandidateInit>>,
 }
 
 impl PeerConnectionDriver {
     /// Create a new driver for the given peer connection
-    pub(crate) fn new(
+    pub(crate) async fn new(
         inner: Arc<PeerConnectionInner>,
         socket: Box<dyn AsyncUdpSocket>,
     ) -> Result<Self, std::io::Error> {
         let local_addr = socket.local_addr()?;
 
         // Store local address in inner for ICE gathering
-        *inner.local_addr.lock().unwrap() = Some(local_addr);
+        {
+            let mut inner_local_addr = inner.local_addr.lock().await;
+            *inner_local_addr = Some(local_addr);
+        }
 
         // Take the receivers (can only be done once)
-        let data_rx = inner.data_rx.lock().unwrap().take();
-        let rtp_rx = inner.rtp_rx.lock().unwrap().take();
-        let rtcp_rx = inner.rtcp_rx.lock().unwrap().take();
-        let receiver_rtcp_rx = inner.receiver_rtcp_rx.lock().unwrap().take();
+        let data_rx = inner.data_rx.lock().await.take();
+        let rtp_rx = inner.rtp_rx.lock().await.take();
+        let rtcp_rx = inner.rtcp_rx.lock().await.take();
+        let receiver_rtcp_rx = inner.receiver_rtcp_rx.lock().await.take();
+        let candidate_rx = inner.candidate_rx.lock().await.take();
 
         Ok(Self {
             inner,
@@ -59,6 +66,7 @@ impl PeerConnectionDriver {
             rtp_rx,
             rtcp_rx,
             receiver_rtcp_rx,
+            candidate_rx,
         })
     }
 
@@ -68,7 +76,7 @@ impl PeerConnectionDriver {
     pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut recv_buf = vec![0u8; 2000];
 
-        'EventLoop: loop {
+        loop {
             // 1. poll_write() - Send all outgoing packets
             {
                 let mut core = self.inner.core.lock().await;
@@ -146,7 +154,7 @@ impl PeerConnectionDriver {
                             channel_id,
                             dc_message,
                         ) => {
-                            let data_channel_rxs = self.inner.data_channel_rxs.lock().unwrap();
+                            let data_channel_rxs = self.inner.data_channel_rxs.lock().await;
                             if let Some(tx) = data_channel_rxs.get(&channel_id) {
                                 if let Err(e) = tx.try_send(dc_message) {
                                     log::warn!(
@@ -193,12 +201,6 @@ impl PeerConnectionDriver {
 
             // Runtime-agnostic select! using futures::select! (works with both tokio and smol)
             futures::select! {
-                // Driver wake notification (from STUN gathering, etc.)
-                _ = self.inner.driver_notify.notified().fuse() => {
-                    log::trace!("Driver notified by background task");
-                    continue 'EventLoop;
-                }
-
                 // Timer expired
                 _ = timer.fuse() => {
                     {
@@ -289,6 +291,21 @@ impl PeerConnectionDriver {
                                     log::error!("Failed to send RTCP feedback: {}", e);
                                 }
                             }
+                        }
+                    }
+                }
+
+                // Outgoing RTCP from receivers
+                candidate = async {
+                    match &mut self.candidate_rx {
+                        Some(rx) => rx.recv().await,
+                        None => std::future::pending().await,
+                    }
+                }.fuse() => {
+                    if let Some(candidate) = candidate {
+                        let mut core = self.inner.core.lock().await;
+                        if let Err(err) = core.add_local_candidate(candidate) {
+                             log::warn!("Failed to add local candidate: {}", err);
                         }
                     }
                 }

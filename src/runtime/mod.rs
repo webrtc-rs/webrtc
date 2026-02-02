@@ -12,7 +12,7 @@ pub mod sync;
 pub mod time;
 
 // Re-export commonly used items for convenience
-pub use net::{resolve_host, UdpSocket};
+pub use net::{UdpSocket, resolve_host};
 pub use time::{sleep, timeout};
 
 /// Abstracts I/O and timer operations for runtime independence
