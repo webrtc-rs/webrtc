@@ -169,7 +169,7 @@ impl PeerConnection {
             let inner = self.inner.clone();
 
             // Gather host candidates (synchronous)
-            let host_candidates = crate::ice_gatherer::gather_host_candidates(local_addr);
+            let host_candidates = super::ice_gatherer::gather_host_candidates(local_addr);
 
             // Add host candidates to rtc core
             for candidate_init in host_candidates {
@@ -185,7 +185,7 @@ impl PeerConnection {
                 let inner_clone = inner.clone();
 
                 self.inner.runtime.spawn(Box::pin(async move {
-                    let srflx_candidates = crate::ice_gatherer::gather_srflx_candidates(
+                    let srflx_candidates = super::ice_gatherer::gather_srflx_candidates(
                         local_addr,
                         &ice_servers,
                     ).await;

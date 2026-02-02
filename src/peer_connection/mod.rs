@@ -106,6 +106,7 @@
 mod connection;
 mod driver;
 mod event_handler;
+mod ice_gatherer;
 
 pub use connection::PeerConnection;
 pub use driver::PeerConnectionDriver;
