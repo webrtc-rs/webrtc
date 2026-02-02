@@ -5,13 +5,6 @@ use rtc::media_stream::MediaStreamTrackId;
 use rtc::rtp::packet::Packet as RtpPacket;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
 
-/// Message for outgoing RTCP packets from receiver (crate-internal)
-#[derive(Debug)]
-pub(crate) struct OutgoingReceiverRtcpPackets {
-    pub(crate) receiver_id: RTCRtpReceiverId,
-    pub(crate) packets: Vec<Box<dyn rtc::rtcp::Packet + Send>>,
-}
-
 /// A remote track that receives RTP/RTCP packets
 ///
 /// This represents an incoming media track from a remote peer.
@@ -41,8 +34,8 @@ pub struct TrackRemote {
     pub(crate) rid: Option<String>,
     /// Channel for receiving RTP packets
     rtp_rx: sync::Mutex<sync::Receiver<RtpPacket>>,
-    /// Channel for sending RTCP packets (feedback)
-    rtcp_tx: sync::Sender<OutgoingReceiverRtcpPackets>,
+    /// Channel for sending outgoing messages
+    tx: sync::Sender<crate::peer_connection::InnerMessage>,
 }
 
 impl TrackRemote {
@@ -53,7 +46,7 @@ impl TrackRemote {
         stream_ids: Vec<rtc::media_stream::MediaStreamId>,
         rid: Option<String>,
         rtp_rx: sync::Receiver<RtpPacket>,
-        rtcp_tx: sync::Sender<OutgoingReceiverRtcpPackets>,
+        tx: sync::Sender<crate::peer_connection::InnerMessage>,
     ) -> Self {
         Self {
             receiver_id,
@@ -61,7 +54,7 @@ impl TrackRemote {
             stream_ids,
             rid,
             rtp_rx: sync::Mutex::new(rtp_rx),
-            rtcp_tx,
+            tx,
         }
     }
 
@@ -79,13 +72,13 @@ impl TrackRemote {
     /// PLI (picture loss indication), or receiver reports.
     pub async fn write_rtcp(
         &self,
-        packets: Vec<Box<dyn rtc::rtcp::Packet + Send>>,
+        packets: Vec<Box<dyn rtc::rtcp::Packet>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.rtcp_tx
-            .try_send(OutgoingReceiverRtcpPackets {
-                receiver_id: self.receiver_id,
+        self.tx
+            .try_send(crate::peer_connection::InnerMessage::ReceiverRtcp(
+                self.receiver_id,
                 packets,
-            })
+            ))
             .map_err(|e| format!("Failed to send RTCP packets: {:?}", e))?;
         Ok(())
     }

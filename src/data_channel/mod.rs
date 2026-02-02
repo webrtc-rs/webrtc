@@ -4,7 +4,7 @@
 
 mod channel;
 
-pub use channel::{DataChannel, OutgoingMessage};
+pub use channel::DataChannel;
 
 // Re-export common types from rtc
 pub use rtc::data_channel::{

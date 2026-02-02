@@ -108,6 +108,7 @@ mod driver;
 mod event_handler;
 mod ice_gatherer;
 
+pub(crate) use connection::InnerMessage;
 pub use connection::PeerConnection;
 pub use driver::PeerConnectionDriver;
 pub use event_handler::PeerConnectionEventHandler;

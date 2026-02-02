@@ -1,5 +1,6 @@
 //! Async DataChannel implementation
 
+use crate::peer_connection::InnerMessage;
 use crate::runtime::sync;
 use bytes::BytesMut;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage, RTCDataChannelState};
@@ -19,17 +20,10 @@ pub struct DataChannel {
     state: Arc<sync::Mutex<RTCDataChannelState>>,
 
     /// Channel for sending messages to the driver
-    tx: sync::Sender<OutgoingMessage>,
+    tx: sync::Sender<InnerMessage>,
 
     /// Channel for receiving messages from the driver
     rx: Arc<sync::Mutex<sync::Receiver<RTCDataChannelMessage>>>,
-}
-
-/// Internal message type for sending data
-#[derive(Debug)]
-pub struct OutgoingMessage {
-    pub channel_id: RTCDataChannelId,
-    pub message: RTCDataChannelMessage,
 }
 
 impl DataChannel {
@@ -37,7 +31,7 @@ impl DataChannel {
     pub(crate) fn new(
         id: RTCDataChannelId,
         label: String,
-        tx: sync::Sender<OutgoingMessage>,
+        tx: sync::Sender<InnerMessage>,
         rx: sync::Receiver<RTCDataChannelMessage>,
     ) -> Self {
         Self {
@@ -67,10 +61,7 @@ impl DataChannel {
         };
 
         self.tx
-            .try_send(OutgoingMessage {
-                channel_id: self.id,
-                message,
-            })
+            .try_send(InnerMessage::DataChannelMessage(self.id, message))
             .map_err(|e| format!("Failed to send: {:?}", e))?;
 
         Ok(())
@@ -99,10 +90,7 @@ impl DataChannel {
         };
 
         self.tx
-            .try_send(OutgoingMessage {
-                channel_id: self.id,
-                message,
-            })
+            .try_send(InnerMessage::DataChannelMessage(self.id, message))
             .map_err(|e| format!("Failed to send: {:?}", e))?;
 
         Ok(())

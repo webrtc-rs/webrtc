@@ -4,20 +4,6 @@ use crate::runtime::sync;
 use rtc::rtp::packet::Packet as RtpPacket;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 
-/// Message for outgoing RTP packets (crate-internal)
-#[derive(Debug)]
-pub(crate) struct OutgoingRtpPacket {
-    pub(crate) sender_id: RTCRtpSenderId,
-    pub(crate) packet: RtpPacket,
-}
-
-/// Message for outgoing RTCP packets (crate-internal)
-#[derive(Debug)]
-pub(crate) struct OutgoingRtcpPackets {
-    pub(crate) sender_id: RTCRtpSenderId,
-    pub(crate) packets: Vec<Box<dyn rtc::rtcp::Packet + Send>>,
-}
-
 /// A local track that sends RTP packets
 ///
 /// This represents an outgoing media track to a remote peer.
@@ -50,24 +36,17 @@ pub(crate) struct OutgoingRtcpPackets {
 pub struct TrackLocal {
     /// Sender ID in the peer connection (crate-internal)
     pub(crate) sender_id: RTCRtpSenderId,
-    /// Channel for sending RTP packets to the driver
-    rtp_tx: sync::Sender<OutgoingRtpPacket>,
-    /// Channel for sending RTCP packets to the driver
-    rtcp_tx: sync::Sender<OutgoingRtcpPackets>,
+    /// Channel for sending outgoing messages to the driver
+    tx: sync::Sender<crate::peer_connection::InnerMessage>,
 }
 
 impl TrackLocal {
     /// Create a new local track
     pub(crate) fn new(
         sender_id: RTCRtpSenderId,
-        rtp_tx: sync::Sender<OutgoingRtpPacket>,
-        rtcp_tx: sync::Sender<OutgoingRtcpPackets>,
+        tx: sync::Sender<crate::peer_connection::InnerMessage>,
     ) -> Self {
-        Self {
-            sender_id,
-            rtp_tx,
-            rtcp_tx,
-        }
+        Self { sender_id, tx }
     }
 
     /// Send an RTP packet
@@ -75,11 +54,11 @@ impl TrackLocal {
     /// This queues the packet for transmission. The actual sending happens
     /// in the driver's event loop via RTCRtpSender::write_rtp().
     pub async fn write_rtp(&self, packet: RtpPacket) -> Result<(), Box<dyn std::error::Error>> {
-        self.rtp_tx
-            .try_send(OutgoingRtpPacket {
-                sender_id: self.sender_id,
+        self.tx
+            .try_send(crate::peer_connection::InnerMessage::SenderRtp(
+                self.sender_id,
                 packet,
-            })
+            ))
             .map_err(|e| format!("Failed to send RTP packet: {:?}", e))?;
         Ok(())
     }
@@ -89,13 +68,13 @@ impl TrackLocal {
     /// This queues RTCP packets (sender reports, etc.) for transmission.
     pub async fn write_rtcp(
         &self,
-        packets: Vec<Box<dyn rtc::rtcp::Packet + Send>>,
+        packets: Vec<Box<dyn rtc::rtcp::Packet>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.rtcp_tx
-            .try_send(OutgoingRtcpPackets {
-                sender_id: self.sender_id,
+        self.tx
+            .try_send(crate::peer_connection::InnerMessage::SenderRtcp(
+                self.sender_id,
                 packets,
-            })
+            ))
             .map_err(|e| format!("Failed to send RTCP packets: {:?}", e))?;
         Ok(())
     }

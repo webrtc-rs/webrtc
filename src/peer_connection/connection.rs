@@ -1,20 +1,35 @@
 //! Async peer connection wrapper
 
+use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
 use crate::data_channel::DataChannel;
-use crate::peer_connection::ice_gatherer::RTCIceGatherOptions;
 use crate::runtime::Runtime;
 use crate::runtime::sync;
 use crate::track::TrackRemote;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage};
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
-use rtc::rtp::packet::Packet as RtpPacket;
-use rtc::rtp_transceiver::RTCRtpReceiverId;
+use rtc::peer_connection::transport::RTCIceCandidateInit;
+use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+/// Unified inner message type for the peer connection driver
+#[derive(Debug)]
+pub(crate) enum InnerMessage {
+    /// Outgoing data channel message
+    DataChannelMessage(RTCDataChannelId, RTCDataChannelMessage),
+    /// Outgoing RTP packet from local track
+    SenderRtp(RTCRtpSenderId, rtc::rtp::Packet),
+    /// Outgoing RTCP packets from sender
+    SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtc::rtcp::Packet>>),
+    /// Outgoing RTCP packets from receiver
+    ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
+    /// New local ICE candidate
+    LocalIceCandidate(RTCIceCandidateInit),
+}
 
 /// Async-friendly peer connection
 ///
@@ -40,29 +55,14 @@ pub(crate) struct PeerConnectionInner {
     /// Data channel message senders (for incoming messages from network)
     pub(crate) data_channel_rxs:
         sync::Mutex<HashMap<RTCDataChannelId, sync::Sender<RTCDataChannelMessage>>>,
-    /// Channel for outgoing data channel messages
-    pub(crate) data_tx: sync::Sender<crate::data_channel::OutgoingMessage>,
-    /// Channel for receiving outgoing data channel messages (taken by driver)
-    pub(crate) data_rx: sync::Mutex<Option<sync::Receiver<crate::data_channel::OutgoingMessage>>>,
     /// Remote tracks (incoming media)
     pub(crate) remote_tracks: sync::Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
     /// RTP packet senders for remote tracks
-    pub(crate) track_rxs: sync::Mutex<HashMap<RTCRtpReceiverId, sync::Sender<RtpPacket>>>,
-    /// Channel for outgoing RTP packets
-    pub(crate) rtp_tx: sync::Sender<crate::track::OutgoingRtpPacket>,
-    /// Channel for receiving outgoing RTP packets (taken by driver)
-    pub(crate) rtp_rx: sync::Mutex<Option<sync::Receiver<crate::track::OutgoingRtpPacket>>>,
-    /// Channel for outgoing RTCP packets from senders
-    pub(crate) rtcp_tx: sync::Sender<crate::track::OutgoingRtcpPackets>,
-    /// Channel for receiving outgoing RTCP packets from senders (taken by driver)
-    pub(crate) rtcp_rx: sync::Mutex<Option<sync::Receiver<crate::track::OutgoingRtcpPackets>>>,
-    /// Channel for outgoing RTCP packets from receivers
-    pub(crate) receiver_rtcp_tx: sync::Sender<crate::track::OutgoingReceiverRtcpPackets>,
-    /// Channel for receiving outgoing RTCP packets from receivers (taken by driver)
-    pub(crate) receiver_rtcp_rx:
-        sync::Mutex<Option<sync::Receiver<crate::track::OutgoingReceiverRtcpPackets>>>,
-    /// Channel for receiving local candidate (taken by driver)
-    pub(crate) candidate_rx: sync::Mutex<Option<sync::Receiver<RTCIceCandidateInit>>>,
+    pub(crate) track_rxs: sync::Mutex<HashMap<RTCRtpReceiverId, sync::Sender<rtc::rtp::Packet>>>,
+    /// Unified channel for all outgoing messages
+    pub(crate) msg_tx: sync::Sender<InnerMessage>,
+    /// Unified channel receiver for all outgoing messages (taken by driver)
+    pub(crate) msg_rx: sync::Mutex<Option<sync::Receiver<InnerMessage>>>,
 }
 
 // Safety: we protect it with Mutex to make it Send + Sync
@@ -80,24 +80,12 @@ impl PeerConnection {
 
         let core = RTCPeerConnection::new(config)?;
 
-        // Create channel for data channel messages
-        let (data_tx, data_rx) = sync::channel();
-
-        // Create channel for RTP packets
-        let (rtp_tx, rtp_rx) = sync::channel();
-
-        // Create channel for RTCP packets from senders
-        let (rtcp_tx, rtcp_rx) = sync::channel();
-
-        // Create channel for RTCP packets from receivers
-        let (receiver_rtcp_tx, receiver_rtcp_rx) = sync::channel();
-
-        // Create channel for local candidate
-        let (candidate_tx, candidate_rx) = sync::channel();
+        // Create unified channel for all outgoing messages
+        let (outgoing_tx, outgoing_rx) = sync::channel();
 
         // Create ICE gatherer with servers from config
         let ice_gatherer = RTCIceGatherer::new(
-            candidate_tx,
+            outgoing_tx.clone(),
             RTCIceGatherOptions {
                 ice_servers,
                 ice_gather_policy: RTCIceTransportPolicy::All,
@@ -113,17 +101,10 @@ impl PeerConnection {
                 local_addr: sync::Mutex::new(None),
                 data_channels: sync::Mutex::new(HashMap::new()),
                 data_channel_rxs: sync::Mutex::new(HashMap::new()),
-                data_tx,
-                data_rx: sync::Mutex::new(Some(data_rx)),
                 remote_tracks: sync::Mutex::new(HashMap::new()),
                 track_rxs: sync::Mutex::new(HashMap::new()),
-                rtp_tx,
-                rtp_rx: sync::Mutex::new(Some(rtp_rx)),
-                rtcp_tx,
-                rtcp_rx: sync::Mutex::new(Some(rtcp_rx)),
-                receiver_rtcp_tx,
-                receiver_rtcp_rx: sync::Mutex::new(Some(receiver_rtcp_rx)),
-                candidate_rx: sync::Mutex::new(Some(candidate_rx)),
+                msg_tx: outgoing_tx,
+                msg_rx: sync::Mutex::new(Some(outgoing_rx)),
             }),
         })
     }
@@ -332,7 +313,7 @@ impl PeerConnection {
         let dc = Arc::new(DataChannel::new(
             channel_id,
             label,
-            self.inner.data_tx.clone(),
+            self.inner.msg_tx.clone(),
             dc_rx,
         ));
 
@@ -403,8 +384,7 @@ impl PeerConnection {
         // Create the local track wrapper
         let local_track = Arc::new(crate::track::TrackLocal::new(
             sender_id,
-            self.inner.rtp_tx.clone(),
-            self.inner.rtcp_tx.clone(),
+            self.inner.msg_tx.clone(),
         ));
 
         Ok(local_track)

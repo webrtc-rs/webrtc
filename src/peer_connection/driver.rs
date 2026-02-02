@@ -4,12 +4,13 @@
 
 #![allow(clippy::collapsible_if)]
 
+use super::connection::InnerMessage;
 use super::connection::PeerConnectionInner;
 use crate::runtime::{AsyncUdpSocket, sync};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
-use rtc::peer_connection::transport::RTCIceCandidateInit;
+use rtc::peer_connection::message::RTCMessage;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use std::net::SocketAddr;
@@ -25,16 +26,8 @@ pub struct PeerConnectionDriver {
     inner: Arc<PeerConnectionInner>,
     socket: Box<dyn AsyncUdpSocket>,
     local_addr: SocketAddr,
-    /// Channel for receiving outgoing data channel messages
-    data_rx: Option<sync::Receiver<crate::data_channel::OutgoingMessage>>,
-    /// Channel for receiving outgoing RTP packets
-    rtp_rx: Option<sync::Receiver<crate::track::OutgoingRtpPacket>>,
-    /// Channel for receiving outgoing RTCP packets from senders
-    rtcp_rx: Option<sync::Receiver<crate::track::OutgoingRtcpPackets>>,
-    /// Channel for receiving outgoing RTCP packets from receivers
-    receiver_rtcp_rx: Option<sync::Receiver<crate::track::OutgoingReceiverRtcpPackets>>,
-    /// Channel for receiving local candidate (taken by driver)
-    candidate_rx: Option<sync::Receiver<RTCIceCandidateInit>>,
+    /// Channel for receiving outgoing messages
+    msg_rx: Option<sync::Receiver<InnerMessage>>,
 }
 
 impl PeerConnectionDriver {
@@ -51,22 +44,14 @@ impl PeerConnectionDriver {
             *inner_local_addr = Some(local_addr);
         }
 
-        // Take the receivers (can only be done once)
-        let data_rx = inner.data_rx.lock().await.take();
-        let rtp_rx = inner.rtp_rx.lock().await.take();
-        let rtcp_rx = inner.rtcp_rx.lock().await.take();
-        let receiver_rtcp_rx = inner.receiver_rtcp_rx.lock().await.take();
-        let candidate_rx = inner.candidate_rx.lock().await.take();
+        // Take the receiver (can only be done once)
+        let msg_rx = inner.msg_rx.lock().await.take();
 
         Ok(Self {
             inner,
             socket,
             local_addr,
-            data_rx,
-            rtp_rx,
-            rtcp_rx,
-            receiver_rtcp_rx,
-            candidate_rx,
+            msg_rx,
         })
     }
 
@@ -150,10 +135,7 @@ impl PeerConnectionDriver {
                 let mut core = self.inner.core.lock().await;
                 while let Some(message) = core.poll_read() {
                     match message {
-                        rtc::peer_connection::message::RTCMessage::DataChannelMessage(
-                            channel_id,
-                            dc_message,
-                        ) => {
+                        RTCMessage::DataChannelMessage(channel_id, dc_message) => {
                             let data_channel_rxs = self.inner.data_channel_rxs.lock().await;
                             if let Some(tx) = data_channel_rxs.get(&channel_id) {
                                 if let Err(e) = tx.try_send(dc_message) {
@@ -165,13 +147,10 @@ impl PeerConnectionDriver {
                                 }
                             }
                         }
-                        rtc::peer_connection::message::RTCMessage::RtpPacket(track_id, _packet) => {
+                        RTCMessage::RtpPacket(track_id, _packet) => {
                             log::trace!("Received RTP packet for track: {:?}", track_id);
                         }
-                        rtc::peer_connection::message::RTCMessage::RtcpPacket(
-                            track_id,
-                            _packets,
-                        ) => {
+                        RTCMessage::RtcpPacket(track_id, _packets) => {
                             log::trace!("Received RTCP packets for track: {:?}", track_id);
                         }
                     }
@@ -209,103 +188,56 @@ impl PeerConnectionDriver {
                     }
                 }
 
-                // Outgoing data channel message
-                outgoing = async {
-                    match &mut self.data_rx {
+                // Inner message (DataChannel, RTP, RTCP, or ICE candidate)
+                msg = async {
+                    match &mut self.msg_rx {
                         Some(rx) => rx.recv().await,
                         None => std::future::pending().await,
                     }
                 }.fuse() => {
-                    if let Some(outgoing) = outgoing {
-                        let rtc_message = rtc::peer_connection::message::RTCMessage::DataChannelMessage(
-                            outgoing.channel_id,
-                            outgoing.message,
-                        );
-                        {
-                            let mut core = self.inner.core.lock().await;
-                            core.handle_write(rtc_message)?;
-                        }
-                    }
-                }
-
-                // Outgoing RTP packet
-                outgoing = async {
-                    match &mut self.rtp_rx {
-                        Some(rx) => rx.recv().await,
-                        None => std::future::pending().await,
-                    }
-                }.fuse() => {
-                    if let Some(outgoing) = outgoing {
-                        {
-                            let mut core = self.inner.core.lock().await;
-                            if let Some(mut sender) = core.rtp_sender(outgoing.sender_id) {
-                                if let Err(e) = sender.write_rtp(outgoing.packet) {
-                                    log::error!("Failed to send RTP: {}", e);
+                    if let Some(msg) = msg {
+                        match msg {
+                            InnerMessage::DataChannelMessage(channel_id, message) => {
+                                let mut core = self.inner.core.lock().await;
+                                if core.data_channel(channel_id).is_some() {
+                                    if let Err(err) = core.handle_write(RTCMessage::DataChannelMessage(
+                                        channel_id,
+                                        message,
+                                    )) {
+                                        log::error!("Failed to send data channel message: {}", err);
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
-
-                // Outgoing RTCP from senders
-                outgoing = async {
-                    match &mut self.rtcp_rx {
-                        Some(rx) => rx.recv().await,
-                        None => std::future::pending().await,
-                    }
-                }.fuse() => {
-                    if let Some(outgoing) = outgoing {
-                        {
-                            let mut core = self.inner.core.lock().await;
-                            if let Some(mut sender) = core.rtp_sender(outgoing.sender_id) {
-                                let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
-                                    .packets
-                                    .into_iter()
-                                    .map(|p| unsafe { std::mem::transmute(p) })
-                                    .collect();
-                                if let Err(e) = sender.write_rtcp(packets) {
-                                    log::error!("Failed to send RTCP: {}", e);
+                            InnerMessage::SenderRtp(sender_id, packet) => {
+                                let mut core = self.inner.core.lock().await;
+                                if let Some(mut sender) = core.rtp_sender(sender_id) {
+                                    if let Err(err) = sender.write_rtp(packet) {
+                                        log::error!("Failed to send RTP: {}", err);
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
-
-                // Outgoing RTCP from receivers
-                outgoing = async {
-                    match &mut self.receiver_rtcp_rx {
-                        Some(rx) => rx.recv().await,
-                        None => std::future::pending().await,
-                    }
-                }.fuse() => {
-                    if let Some(outgoing) = outgoing {
-                        {
-                            let mut core = self.inner.core.lock().await;
-                            if let Some(mut receiver) = core.rtp_receiver(outgoing.receiver_id) {
-                                let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
-                                    .packets
-                                    .into_iter()
-                                    .map(|p| unsafe { std::mem::transmute(p) })
-                                    .collect();
-                                if let Err(e) = receiver.write_rtcp(packets) {
-                                    log::error!("Failed to send RTCP feedback: {}", e);
+                            InnerMessage::SenderRtcp(sender_id, rtcp_packets) => {
+                                let mut core = self.inner.core.lock().await;
+                                if let Some(mut sender) = core.rtp_sender(sender_id) {
+                                    if let Err(err) = sender.write_rtcp(rtcp_packets) {
+                                        log::error!("Failed to send RTCP: {}", err);
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
-
-                // Outgoing RTCP from receivers
-                candidate = async {
-                    match &mut self.candidate_rx {
-                        Some(rx) => rx.recv().await,
-                        None => std::future::pending().await,
-                    }
-                }.fuse() => {
-                    if let Some(candidate) = candidate {
-                        let mut core = self.inner.core.lock().await;
-                        if let Err(err) = core.add_local_candidate(candidate) {
-                             log::warn!("Failed to add local candidate: {}", err);
+                            InnerMessage::ReceiverRtcp(receiver_id, rtcp_packets) => {
+                                let mut core = self.inner.core.lock().await;
+                                if let Some(mut receiver) = core.rtp_receiver(receiver_id) {
+                                    if let Err(err) = receiver.write_rtcp(rtcp_packets) {
+                                        log::error!("Failed to send RTCP feedback: {}", err);
+                                    }
+                                }
+                            }
+                            InnerMessage::LocalIceCandidate(candidate) => {
+                                let mut core = self.inner.core.lock().await;
+                                if let Err(err) = core.add_local_candidate(candidate) {
+                                    log::error!("Failed to add local candidate: {}", err);
+                                }
+                            }
                         }
                     }
                 }

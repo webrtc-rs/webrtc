@@ -139,7 +139,7 @@ async fn test_send_rtcp_packets() {
     };
 
     // Send RTCP packets
-    let packets: Vec<Box<dyn rtc::rtcp::Packet + Send>> = vec![Box::new(sr)];
+    let packets: Vec<Box<dyn rtc::rtcp::Packet>> = vec![Box::new(sr)];
     local_track
         .write_rtcp(packets)
         .await
@@ -334,7 +334,7 @@ async fn test_send_rtcp_feedback() {
             profile_extensions: Bytes::new(),
         };
 
-        let packets: Vec<Box<dyn rtc::rtcp::Packet + Send>> = vec![Box::new(rr)];
+        let packets: Vec<Box<dyn rtc::rtcp::Packet>> = vec![Box::new(rr)];
         remote_track
             .write_rtcp(packets)
             .await

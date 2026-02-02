@@ -33,7 +33,7 @@ pub enum RTCIceGathererState {
 ///
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
 pub struct RTCIceGatherer {
-    candidate_tx: sync::Sender<RTCIceCandidateInit>,
+    msg_tx: sync::Sender<super::InnerMessage>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
     state: RTCIceGathererState,
@@ -42,11 +42,11 @@ pub struct RTCIceGatherer {
 impl RTCIceGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
     pub(crate) fn new(
-        candidate_tx: sync::Sender<RTCIceCandidateInit>,
+        outgoing_tx: sync::Sender<super::InnerMessage>,
         opts: RTCIceGatherOptions,
     ) -> Self {
         Self {
-            candidate_tx,
+            msg_tx: outgoing_tx,
             ice_servers: opts.ice_servers,
             gather_policy: opts.ice_gather_policy,
             state: RTCIceGathererState::New,
@@ -83,20 +83,27 @@ impl RTCIceGatherer {
 
         // Gather host candidates (synchronous)
         for host_candidate in RTCIceGatherer::gather_host_candidates(local_addr) {
-            if let Err(e) = self.candidate_tx.send(host_candidate).await {
+            if let Err(e) = self
+                .msg_tx
+                .send(super::InnerMessage::LocalIceCandidate(host_candidate))
+                .await
+            {
                 log::warn!("Failed to send host candidate: {}", e);
             }
         }
 
         if !self.ice_servers.is_empty() {
             let ice_servers = self.ice_servers.clone();
-            let candidate_tx = self.candidate_tx.clone();
+            let outgoing_tx = self.msg_tx.clone();
             runtime.spawn(Box::pin(async move {
                 // Spawn background task for STUN gathering (server reflexive candidates)
                 for srflx_candidate in
                     RTCIceGatherer::gather_srflx_candidates(local_addr, ice_servers).await
                 {
-                    if let Err(e) = candidate_tx.send(srflx_candidate).await {
+                    if let Err(e) = outgoing_tx
+                        .send(super::InnerMessage::LocalIceCandidate(srflx_candidate))
+                        .await
+                    {
                         log::warn!("Failed to send SRFLX candidate: {}", e);
                     }
                 }
