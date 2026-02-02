@@ -3,10 +3,11 @@
 use bytes::Bytes;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::time::Duration;
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder,
 };
+use webrtc::runtime::sync::{Mutex, sleep};
 use webrtc::track::TrackRemote;
 
 struct TrackTestHandler {
@@ -215,7 +216,7 @@ async fn test_track_negotiation() {
     });
 
     // Wait for track to be negotiated on peer B
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    sleep(Duration::from_millis(200)).await;
 
     // Send some RTP packets from A
     for seq in 2000..2005 {
@@ -244,7 +245,7 @@ async fn test_track_negotiation() {
     }
 
     // Give time for cleanup
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    sleep(Duration::from_millis(100)).await;
 
     // Cleanup
     handle_a.abort();
@@ -321,7 +322,7 @@ async fn test_send_rtcp_feedback() {
     });
 
     // Wait for negotiation
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    sleep(Duration::from_millis(200)).await;
 
     // Check if we got a remote track and send feedback
     if let Some(remote_track) = handler_a.remote_track.lock().await.as_ref() {
@@ -340,7 +341,7 @@ async fn test_send_rtcp_feedback() {
     }
 
     // Cleanup
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    sleep(Duration::from_millis(100)).await;
     handle_a.abort();
     handle_b.abort();
 }

@@ -1,8 +1,8 @@
 //! Local track for sending media
 
+use crate::runtime::sync;
 use rtc::rtp::packet::Packet as RtpPacket;
 use rtc::rtp_transceiver::RTCRtpSenderId;
-use tokio::sync::mpsc;
 
 /// Message for outgoing RTP packets (crate-internal)
 #[derive(Debug)]
@@ -51,17 +51,17 @@ pub struct TrackLocal {
     /// Sender ID in the peer connection (crate-internal)
     pub(crate) sender_id: RTCRtpSenderId,
     /// Channel for sending RTP packets to the driver
-    rtp_tx: mpsc::UnboundedSender<OutgoingRtpPacket>,
+    rtp_tx: sync::Sender<OutgoingRtpPacket>,
     /// Channel for sending RTCP packets to the driver
-    rtcp_tx: mpsc::UnboundedSender<OutgoingRtcpPackets>,
+    rtcp_tx: sync::Sender<OutgoingRtcpPackets>,
 }
 
 impl TrackLocal {
     /// Create a new local track
     pub(crate) fn new(
         sender_id: RTCRtpSenderId,
-        rtp_tx: mpsc::UnboundedSender<OutgoingRtpPacket>,
-        rtcp_tx: mpsc::UnboundedSender<OutgoingRtcpPackets>,
+        rtp_tx: sync::Sender<OutgoingRtpPacket>,
+        rtcp_tx: sync::Sender<OutgoingRtcpPackets>,
     ) -> Self {
         Self {
             sender_id,
@@ -76,11 +76,11 @@ impl TrackLocal {
     /// in the driver's event loop via RTCRtpSender::write_rtp().
     pub async fn write_rtp(&self, packet: RtpPacket) -> Result<(), Box<dyn std::error::Error>> {
         self.rtp_tx
-            .send(OutgoingRtpPacket {
+            .try_send(OutgoingRtpPacket {
                 sender_id: self.sender_id,
                 packet,
             })
-            .map_err(|e| format!("Failed to send RTP packet: {}", e))?;
+            .map_err(|e| format!("Failed to send RTP packet: {:?}", e))?;
         Ok(())
     }
 
@@ -92,11 +92,11 @@ impl TrackLocal {
         packets: Vec<Box<dyn rtc::rtcp::Packet + Send>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.rtcp_tx
-            .send(OutgoingRtcpPackets {
+            .try_send(OutgoingRtcpPackets {
                 sender_id: self.sender_id,
                 packets,
             })
-            .map_err(|e| format!("Failed to send RTCP packets: {}", e))?;
+            .map_err(|e| format!("Failed to send RTCP packets: {:?}", e))?;
         Ok(())
     }
 }

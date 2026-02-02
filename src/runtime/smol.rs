@@ -1,8 +1,10 @@
 //! smol runtime implementation
 
 use super::*;
-use async_io::{Async, Timer};
+use ::smol::net::UdpSocket as SmolUdpSocket;
+use ::smol::{Timer, spawn};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 /// A WebRTC runtime for smol
 #[derive(Debug)]
@@ -14,7 +16,7 @@ impl Runtime for SmolRuntime {
     }
 
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        ::smol::spawn(future).detach();
+        spawn(future).detach();
     }
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Box<dyn AsyncUdpSocket>> {
@@ -36,93 +38,38 @@ impl AsyncTimer for Timer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct UdpSocket {
-    io: Arc<Async<std::net::UdpSocket>>,
+    io: Arc<SmolUdpSocket>,
 }
 
 impl UdpSocket {
     fn new(sock: std::net::UdpSocket) -> io::Result<Self> {
+        // Wrap std socket in smol's Async
+        let async_sock = ::smol::Async::new(sock)?;
         Ok(Self {
-            io: Arc::new(Async::new_nonblocking(sock)?),
+            io: Arc::new(SmolUdpSocket::from(async_sock)),
         })
     }
 }
 
-impl UdpSenderHelperSocket for UdpSocket {
-    fn max_transmit_segments(&self) -> usize {
-        1 // TODO: Support GSO if available
-    }
-
-    fn try_send(&self, transmit: &Transmit<'_>) -> io::Result<()> {
-        match self
-            .io
-            .get_ref()
-            .send_to(transmit.contents, transmit.destination)
-        {
-            Ok(_) => Ok(()),
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Err(e),
-            Err(e) => Err(e),
-        }
-    }
-}
-
 impl AsyncUdpSocket for UdpSocket {
-    fn create_sender(&self) -> Pin<Box<dyn UdpSender>> {
-        Box::pin(UdpSenderHelper::new(self.clone(), |socket: &Self| {
-            let socket = socket.clone();
-            async move { socket.io.writable().await }
-        }))
+    fn send_to<'a>(
+        &'a self,
+        buf: &'a [u8],
+        target: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        Box::pin(async move { self.io.send_to(buf, target).await })
     }
 
-    fn poll_recv(
-        &mut self,
-        cx: &mut Context<'_>,
-        bufs: &mut [IoSliceMut<'_>],
-        meta: &mut [RecvMeta],
-    ) -> Poll<io::Result<usize>> {
-        if bufs.is_empty() || meta.is_empty() {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "empty buffers",
-            )));
-        }
-
-        loop {
-            match self.io.poll_readable(cx) {
-                Poll::Ready(Ok(())) => {}
-                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-                Poll::Pending => return Poll::Pending,
-            }
-
-            // Try to receive from the socket
-            match self.io.get_ref().recv_from(&mut bufs[0]) {
-                Ok((len, addr)) => {
-                    meta[0] = RecvMeta {
-                        addr,
-                        len,
-                        dst_addr: None,
-                    };
-                    return Poll::Ready(Ok(1));
-                }
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    // Socket wasn't actually readable, wait again
-                    continue;
-                }
-                Err(e) => return Poll::Ready(Err(e)),
-            }
-        }
+    fn recv_from<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>> {
+        Box::pin(async move { self.io.recv_from(buf).await })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.io.get_ref().local_addr()
-    }
-
-    fn may_fragment(&self) -> bool {
-        false // TODO: Check platform capabilities
-    }
-
-    fn max_receive_segments(&self) -> usize {
-        1 // TODO: Support GRO if available
+        self.io.local_addr()
     }
 }

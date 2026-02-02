@@ -7,6 +7,7 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder, RTCIceConnectionState,
     RTCPeerConnectionIceEvent, RTCPeerConnectionState, RTCSdpType,
 };
+use webrtc::runtime::sync::sleep;
 
 #[derive(Clone)]
 struct TestHandler;
@@ -102,7 +103,7 @@ async fn test_bind_and_driver() {
         .expect("Failed to set local description");
 
     // Let the driver run briefly
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    sleep(Duration::from_millis(100)).await;
 
     // Close and cleanup
     pc.close().await.expect("Failed to close peer connection");

@@ -1,10 +1,9 @@
 //! Async DataChannel implementation
 
+use crate::runtime::sync;
 use bytes::BytesMut;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage, RTCDataChannelState};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::sync::mpsc;
 
 /// Async-friendly data channel
 ///
@@ -17,16 +16,17 @@ pub struct DataChannel {
     pub label: String,
 
     /// Current state
-    state: Arc<Mutex<RTCDataChannelState>>,
+    state: Arc<sync::Mutex<RTCDataChannelState>>,
 
     /// Channel for sending messages to the driver
-    tx: mpsc::UnboundedSender<OutgoingMessage>,
+    tx: sync::Sender<OutgoingMessage>,
 
     /// Channel for receiving messages from the driver
-    rx: Arc<Mutex<mpsc::UnboundedReceiver<RTCDataChannelMessage>>>,
+    rx: Arc<sync::Mutex<sync::Receiver<RTCDataChannelMessage>>>,
 }
 
 /// Internal message type for sending data
+#[derive(Debug)]
 pub struct OutgoingMessage {
     pub channel_id: RTCDataChannelId,
     pub message: RTCDataChannelMessage,
@@ -37,15 +37,15 @@ impl DataChannel {
     pub(crate) fn new(
         id: RTCDataChannelId,
         label: String,
-        tx: mpsc::UnboundedSender<OutgoingMessage>,
-        rx: mpsc::UnboundedReceiver<RTCDataChannelMessage>,
+        tx: sync::Sender<OutgoingMessage>,
+        rx: sync::Receiver<RTCDataChannelMessage>,
     ) -> Self {
         Self {
             id,
             label,
-            state: Arc::new(Mutex::new(RTCDataChannelState::Connecting)),
+            state: Arc::new(sync::Mutex::new(RTCDataChannelState::Connecting)),
             tx,
-            rx: Arc::new(Mutex::new(rx)),
+            rx: Arc::new(sync::Mutex::new(rx)),
         }
     }
 
@@ -66,10 +66,12 @@ impl DataChannel {
             data,
         };
 
-        self.tx.send(OutgoingMessage {
-            channel_id: self.id,
-            message,
-        })?;
+        self.tx
+            .try_send(OutgoingMessage {
+                channel_id: self.id,
+                message,
+            })
+            .map_err(|e| format!("Failed to send: {:?}", e))?;
 
         Ok(())
     }
@@ -96,10 +98,12 @@ impl DataChannel {
             data,
         };
 
-        self.tx.send(OutgoingMessage {
-            channel_id: self.id,
-            message,
-        })?;
+        self.tx
+            .try_send(OutgoingMessage {
+                channel_id: self.id,
+                message,
+            })
+            .map_err(|e| format!("Failed to send: {:?}", e))?;
 
         Ok(())
     }

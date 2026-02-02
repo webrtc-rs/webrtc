@@ -3,7 +3,11 @@
 //! This module provides traits that abstract over different async runtimes,
 //! allowing the WebRTC implementation to work with Tokio, async-std, smol, and others.
 
+#![allow(clippy::type_complexity)]
+
 use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, time::Instant};
+
+pub mod sync;
 
 /// Abstracts I/O and timer operations for runtime independence
 ///

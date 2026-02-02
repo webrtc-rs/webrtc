@@ -1,10 +1,9 @@
 //! Remote track for receiving media
 
+use crate::runtime::sync;
 use rtc::media_stream::MediaStreamTrackId;
 use rtc::rtp::packet::Packet as RtpPacket;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
-use tokio::sync::Mutex as AsyncMutex;
-use tokio::sync::mpsc;
 
 /// Message for outgoing RTCP packets from receiver (crate-internal)
 #[derive(Debug)]
@@ -41,9 +40,9 @@ pub struct TrackRemote {
     /// RID (RTP stream ID) for simulcast (crate-internal)
     pub(crate) rid: Option<String>,
     /// Channel for receiving RTP packets
-    rtp_rx: AsyncMutex<mpsc::UnboundedReceiver<RtpPacket>>,
+    rtp_rx: sync::Mutex<sync::Receiver<RtpPacket>>,
     /// Channel for sending RTCP packets (feedback)
-    rtcp_tx: mpsc::UnboundedSender<OutgoingReceiverRtcpPackets>,
+    rtcp_tx: sync::Sender<OutgoingReceiverRtcpPackets>,
 }
 
 impl TrackRemote {
@@ -53,15 +52,15 @@ impl TrackRemote {
         track_id: MediaStreamTrackId,
         stream_ids: Vec<rtc::media_stream::MediaStreamId>,
         rid: Option<String>,
-        rtp_rx: mpsc::UnboundedReceiver<RtpPacket>,
-        rtcp_tx: mpsc::UnboundedSender<OutgoingReceiverRtcpPackets>,
+        rtp_rx: sync::Receiver<RtpPacket>,
+        rtcp_tx: sync::Sender<OutgoingReceiverRtcpPackets>,
     ) -> Self {
         Self {
             receiver_id,
             track_id,
             stream_ids,
             rid,
-            rtp_rx: AsyncMutex::new(rtp_rx),
+            rtp_rx: sync::Mutex::new(rtp_rx),
             rtcp_tx,
         }
     }
@@ -83,11 +82,11 @@ impl TrackRemote {
         packets: Vec<Box<dyn rtc::rtcp::Packet + Send>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.rtcp_tx
-            .send(OutgoingReceiverRtcpPackets {
+            .try_send(OutgoingReceiverRtcpPackets {
                 receiver_id: self.receiver_id,
                 packets,
             })
-            .map_err(|e| format!("Failed to send RTCP packets: {}", e))?;
+            .map_err(|e| format!("Failed to send RTCP packets: {:?}", e))?;
         Ok(())
     }
 }

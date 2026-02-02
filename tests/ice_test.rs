@@ -2,13 +2,13 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::Mutex;
-use tokio::time::Duration;
+use std::time::Duration;
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder,
     RTCIceCandidateInit, RTCIceCandidateType, RTCIceGatheringState, RTCIceServer,
     RTCPeerConnectionIceEvent,
 };
+use webrtc::runtime::sync::{Mutex, sleep};
 
 #[derive(Clone)]
 struct IceTestHandler;
@@ -224,7 +224,7 @@ async fn test_automatic_host_candidate_gathering() {
         .expect("Failed to set local description");
 
     // Give the driver time to process events
-    tokio::time::sleep(Duration::from_millis(1000)).await;
+    sleep(Duration::from_millis(1000)).await;
 
     // Verify that a host candidate was gathered
     assert!(
@@ -302,7 +302,7 @@ async fn test_stun_gathering_with_google_stun() {
             let count = candidates.lock().await.len();
             panic!("Timeout waiting for candidates. Got {} candidates", count);
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
     }
 
     // Verify we got both host and srflx candidates

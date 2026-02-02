@@ -5,9 +5,19 @@
 //! - Server Reflexive (srflx) candidates via STUN
 //! - Relay candidates via TURN (TODO)
 
+use crate::runtime::sync;
+use bytes::BytesMut;
+use rtc::ice::candidate::CandidateConfig;
+use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use rtc::peer_connection::configuration::RTCIceServer;
 use rtc::peer_connection::transport::RTCIceCandidateInit;
+use rtc::sansio::Protocol;
+use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
+use rtc::stun::client::ClientBuilder;
+use rtc::stun::message::*;
+use rtc::stun::xoraddr::XorMappedAddress;
 use std::net::SocketAddr;
+use std::time::{Duration, Instant};
 
 /// Gather host ICE candidates from a local socket address
 ///
@@ -82,16 +92,6 @@ async fn gather_from_stun_server(
     local_addr: SocketAddr,
     original_url: &str,
 ) -> Result<RTCIceCandidateInit, Box<dyn std::error::Error + Send + Sync>> {
-    use bytes::BytesMut;
-    use rtc::sansio::Protocol;
-    use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
-    use rtc::stun::client::ClientBuilder;
-    use rtc::stun::message::*;
-    use rtc::stun::xoraddr::XorMappedAddress;
-    use std::time::Instant;
-    use tokio::net::UdpSocket;
-    use tokio::time::{Duration, timeout};
-
     // Resolve STUN server address (add default port 3478 if not specified)
     let stun_server_addr_str = if stun_url.contains(':') {
         stun_url.to_string()
@@ -101,9 +101,10 @@ async fn gather_from_stun_server(
 
     log::debug!("Resolving STUN server: {}", stun_server_addr_str);
 
-    // Resolve hostname to IP address
-    let stun_server_addr: SocketAddr = tokio::net::lookup_host(&stun_server_addr_str)
+    // Resolve hostname to IP address using runtime-agnostic helper
+    let stun_server_addr: SocketAddr = sync::resolve_host(&stun_server_addr_str)
         .await?
+        .into_iter()
         .next()
         .ok_or("Failed to resolve STUN server hostname")?;
 
@@ -119,7 +120,7 @@ async fn gather_from_stun_server(
     } else {
         "0.0.0.0:0"
     };
-    let stun_socket = UdpSocket::bind(bind_addr).await?;
+    let stun_socket = sync::UdpSocket::bind(bind_addr).await?;
     let stun_local_addr = stun_socket.local_addr()?;
 
     log::debug!("STUN client bound to {}", stun_local_addr);
@@ -147,7 +148,7 @@ async fn gather_from_stun_server(
     }
 
     // Wait for response with timeout
-    let xor_addr = timeout(Duration::from_secs(5), async {
+    let xor_addr = sync::timeout(Duration::from_secs(5), async {
         let mut buf = vec![0u8; 1500];
         let (n, peer_addr) = stun_socket.recv_from(&mut buf).await?;
 
@@ -176,15 +177,13 @@ async fn gather_from_stun_server(
             Err("No STUN response event".into())
         }
     })
-    .await??;
+    .await
+    .map_err(|_| "STUN request timeout")??;
 
     // Close the STUN client
     client.close()?;
 
     // Create server reflexive candidate
-    use rtc::ice::candidate::CandidateConfig;
-    use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
-
     let candidate = CandidateServerReflexiveConfig {
         base_config: CandidateConfig {
             network: "udp".to_owned(),

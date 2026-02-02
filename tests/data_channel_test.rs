@@ -1,12 +1,12 @@
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use std::sync::Arc;
-use tokio::sync::Mutex as AsyncMutex;
 use webrtc::data_channel::DataChannel;
 use webrtc::peer_connection::*;
+use webrtc::runtime::sync::Mutex;
 
 #[derive(Clone)]
 struct TestHandler {
-    data_channels: Arc<AsyncMutex<Vec<Arc<DataChannel>>>>,
+    data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
 }
 
 #[async_trait::async_trait]
@@ -20,7 +20,7 @@ impl PeerConnectionEventHandler for TestHandler {
 async fn test_create_data_channel() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TestHandler {
-        data_channels: Arc::new(AsyncMutex::new(Vec::new())),
+        data_channels: Arc::new(Mutex::new(Vec::new())),
     });
     let pc = PeerConnection::new(config, handler.clone()).unwrap();
 
@@ -34,7 +34,7 @@ async fn test_create_data_channel() {
 async fn test_data_channel_send() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TestHandler {
-        data_channels: Arc::new(AsyncMutex::new(Vec::new())),
+        data_channels: Arc::new(Mutex::new(Vec::new())),
     });
     let pc = PeerConnection::new(config, handler.clone()).unwrap();
 
@@ -51,7 +51,7 @@ async fn test_data_channel_send() {
 async fn test_multiple_data_channels() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TestHandler {
-        data_channels: Arc::new(AsyncMutex::new(Vec::new())),
+        data_channels: Arc::new(Mutex::new(Vec::new())),
     });
     let pc = PeerConnection::new(config, handler.clone()).unwrap();
 

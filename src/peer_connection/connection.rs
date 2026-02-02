@@ -3,6 +3,7 @@
 use super::*;
 use crate::data_channel::DataChannel;
 use crate::runtime::Runtime;
+use crate::runtime::sync;
 use crate::track::TrackRemote;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage};
 use rtc::peer_connection::RTCPeerConnection;
@@ -14,7 +15,6 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tokio::sync::mpsc;
 
 /// Async-friendly peer connection
 ///
@@ -26,7 +26,7 @@ pub struct PeerConnection {
 
 pub(crate) struct PeerConnectionInner {
     /// The sans-I/O peer connection core (uses default NoopInterceptor)
-    pub(crate) core: tokio::sync::Mutex<RTCPeerConnection>,
+    pub(crate) core: sync::Mutex<RTCPeerConnection>,
     /// Runtime for async operations
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
@@ -36,34 +36,33 @@ pub(crate) struct PeerConnectionInner {
     /// Local socket address (set after bind)
     pub(crate) local_addr: Mutex<Option<SocketAddr>>,
     /// Notify to wake the driver when background tasks add events
-    pub(crate) driver_notify: Arc<tokio::sync::Notify>,
+    pub(crate) driver_notify: Arc<sync::Notify>,
     /// Data channels  
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
     pub(crate) data_channel_rxs:
-        Mutex<HashMap<RTCDataChannelId, mpsc::UnboundedSender<RTCDataChannelMessage>>>,
+        Mutex<HashMap<RTCDataChannelId, sync::Sender<RTCDataChannelMessage>>>,
     /// Channel for outgoing data channel messages
-    pub(crate) data_tx: mpsc::UnboundedSender<crate::data_channel::OutgoingMessage>,
+    pub(crate) data_tx: sync::Sender<crate::data_channel::OutgoingMessage>,
     /// Channel for receiving outgoing data channel messages (taken by driver)
-    pub(crate) data_rx:
-        Mutex<Option<mpsc::UnboundedReceiver<crate::data_channel::OutgoingMessage>>>,
+    pub(crate) data_rx: Mutex<Option<sync::Receiver<crate::data_channel::OutgoingMessage>>>,
     /// Remote tracks (incoming media)
     pub(crate) remote_tracks: Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
     /// RTP packet senders for remote tracks
-    pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, mpsc::UnboundedSender<RtpPacket>>>,
+    pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, sync::Sender<RtpPacket>>>,
     /// Channel for outgoing RTP packets
-    pub(crate) rtp_tx: mpsc::UnboundedSender<crate::track::OutgoingRtpPacket>,
+    pub(crate) rtp_tx: sync::Sender<crate::track::OutgoingRtpPacket>,
     /// Channel for receiving outgoing RTP packets (taken by driver)
-    pub(crate) rtp_rx: Mutex<Option<mpsc::UnboundedReceiver<crate::track::OutgoingRtpPacket>>>,
+    pub(crate) rtp_rx: Mutex<Option<sync::Receiver<crate::track::OutgoingRtpPacket>>>,
     /// Channel for outgoing RTCP packets from senders
-    pub(crate) rtcp_tx: mpsc::UnboundedSender<crate::track::OutgoingRtcpPackets>,
+    pub(crate) rtcp_tx: sync::Sender<crate::track::OutgoingRtcpPackets>,
     /// Channel for receiving outgoing RTCP packets from senders (taken by driver)
-    pub(crate) rtcp_rx: Mutex<Option<mpsc::UnboundedReceiver<crate::track::OutgoingRtcpPackets>>>,
+    pub(crate) rtcp_rx: Mutex<Option<sync::Receiver<crate::track::OutgoingRtcpPackets>>>,
     /// Channel for outgoing RTCP packets from receivers
-    pub(crate) receiver_rtcp_tx: mpsc::UnboundedSender<crate::track::OutgoingReceiverRtcpPackets>,
+    pub(crate) receiver_rtcp_tx: sync::Sender<crate::track::OutgoingReceiverRtcpPackets>,
     /// Channel for receiving outgoing RTCP packets from receivers (taken by driver)
     pub(crate) receiver_rtcp_rx:
-        Mutex<Option<mpsc::UnboundedReceiver<crate::track::OutgoingReceiverRtcpPackets>>>,
+        Mutex<Option<sync::Receiver<crate::track::OutgoingReceiverRtcpPackets>>>,
 }
 
 // Safety: we protect it with Mutex to make it Send + Sync
@@ -91,25 +90,25 @@ impl PeerConnection {
         let core = RTCPeerConnection::new(config)?;
 
         // Create channel for data channel messages
-        let (data_tx, data_rx) = mpsc::unbounded_channel();
+        let (data_tx, data_rx) = sync::channel();
 
         // Create channel for RTP packets
-        let (rtp_tx, rtp_rx) = mpsc::unbounded_channel();
+        let (rtp_tx, rtp_rx) = sync::channel();
 
         // Create channel for RTCP packets from senders
-        let (rtcp_tx, rtcp_rx) = mpsc::unbounded_channel();
+        let (rtcp_tx, rtcp_rx) = sync::channel();
 
         // Create channel for RTCP packets from receivers
-        let (receiver_rtcp_tx, receiver_rtcp_rx) = mpsc::unbounded_channel();
+        let (receiver_rtcp_tx, receiver_rtcp_rx) = sync::channel();
 
         Ok(Self {
             inner: Arc::new(PeerConnectionInner {
-                core: tokio::sync::Mutex::new(core),
+                core: sync::Mutex::new(core),
                 runtime,
                 handler,
                 ice_servers,
                 local_addr: Mutex::new(None),
-                driver_notify: Arc::new(tokio::sync::Notify::new()),
+                driver_notify: Arc::new(sync::Notify::new()),
                 data_channels: Mutex::new(HashMap::new()),
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 data_tx,
@@ -165,7 +164,8 @@ impl PeerConnection {
         }
 
         // Trigger ICE candidate gathering
-        if let Some(local_addr) = *self.inner.local_addr.lock().unwrap() {
+        let local_addr_opt = *self.inner.local_addr.lock().unwrap();
+        if let Some(local_addr) = local_addr_opt {
             let inner = self.inner.clone();
 
             // Gather host candidates (synchronous)
@@ -372,7 +372,7 @@ impl PeerConnection {
         };
 
         // Create a channel for receiving messages for this data channel
-        let (dc_tx, dc_rx) = mpsc::unbounded_channel();
+        let (dc_tx, dc_rx) = sync::channel();
 
         // Create our async wrapper
         let dc = Arc::new(DataChannel::new(

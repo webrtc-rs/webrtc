@@ -1,10 +1,13 @@
 //! Peer connection driver (event loop)
 //!
-//! Follows the rtc EventLoop pattern with tokio::select!
+//! Follows the rtc EventLoop pattern with async select
+
+#![allow(clippy::collapsible_if)]
 
 use super::connection::PeerConnectionInner;
-use crate::runtime::AsyncUdpSocket;
+use crate::runtime::{AsyncUdpSocket, sync};
 use bytes::BytesMut;
+use futures::FutureExt; // For .fuse() in futures::select!
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
@@ -22,14 +25,13 @@ pub struct PeerConnectionDriver {
     socket: Box<dyn AsyncUdpSocket>,
     local_addr: SocketAddr,
     /// Channel for receiving outgoing data channel messages
-    data_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::data_channel::OutgoingMessage>>,
+    data_rx: Option<sync::Receiver<crate::data_channel::OutgoingMessage>>,
     /// Channel for receiving outgoing RTP packets
-    rtp_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::track::OutgoingRtpPacket>>,
+    rtp_rx: Option<sync::Receiver<crate::track::OutgoingRtpPacket>>,
     /// Channel for receiving outgoing RTCP packets from senders
-    rtcp_rx: Option<tokio::sync::mpsc::UnboundedReceiver<crate::track::OutgoingRtcpPackets>>,
+    rtcp_rx: Option<sync::Receiver<crate::track::OutgoingRtcpPackets>>,
     /// Channel for receiving outgoing RTCP packets from receivers
-    receiver_rtcp_rx:
-        Option<tokio::sync::mpsc::UnboundedReceiver<crate::track::OutgoingReceiverRtcpPackets>>,
+    receiver_rtcp_rx: Option<sync::Receiver<crate::track::OutgoingReceiverRtcpPackets>>,
 }
 
 impl PeerConnectionDriver {
@@ -146,9 +148,9 @@ impl PeerConnectionDriver {
                         ) => {
                             let data_channel_rxs = self.inner.data_channel_rxs.lock().unwrap();
                             if let Some(tx) = data_channel_rxs.get(&channel_id) {
-                                if let Err(e) = tx.send(dc_message) {
+                                if let Err(e) = tx.try_send(dc_message) {
                                     log::warn!(
-                                        "Failed to send to data channel {}: {}",
+                                        "Failed to send to data channel {}: {:?}",
                                         channel_id,
                                         e
                                     );
@@ -186,22 +188,19 @@ impl PeerConnectionDriver {
                 continue;
             }
 
-            let timer = tokio::time::sleep(delay_from_now);
-            tokio::pin!(timer);
+            let timer = sync::sleep(delay_from_now);
+            futures::pin_mut!(timer);
 
-            // tokio::select! - Wait for one of multiple async events
-            // This is the KEY difference from our old poll-based approach
-            tokio::select! {
-                biased;
-
+            // Runtime-agnostic select! using futures::select! (works with both tokio and smol)
+            futures::select! {
                 // Driver wake notification (from STUN gathering, etc.)
-                _ = self.inner.driver_notify.notified() => {
+                _ = self.inner.driver_notify.notified().fuse() => {
                     log::trace!("Driver notified by background task");
                     continue 'EventLoop;
                 }
 
                 // Timer expired
-                _ = timer.as_mut() => {
+                _ = timer.fuse() => {
                     {
                         let mut core = self.inner.core.lock().await;
                         core.handle_timeout(Instant::now())?;
@@ -209,85 +208,93 @@ impl PeerConnectionDriver {
                 }
 
                 // Outgoing data channel message
-                Some(outgoing) = async {
+                outgoing = async {
                     match &mut self.data_rx {
                         Some(rx) => rx.recv().await,
                         None => std::future::pending().await,
                     }
-                } => {
-                    let rtc_message = rtc::peer_connection::message::RTCMessage::DataChannelMessage(
-                        outgoing.channel_id,
-                        outgoing.message,
-                    );
-                    {
-                        let mut core = self.inner.core.lock().await;
-                        core.handle_write(rtc_message)?;
+                }.fuse() => {
+                    if let Some(outgoing) = outgoing {
+                        let rtc_message = rtc::peer_connection::message::RTCMessage::DataChannelMessage(
+                            outgoing.channel_id,
+                            outgoing.message,
+                        );
+                        {
+                            let mut core = self.inner.core.lock().await;
+                            core.handle_write(rtc_message)?;
+                        }
                     }
                 }
 
                 // Outgoing RTP packet
-                Some(outgoing) = async {
+                outgoing = async {
                     match &mut self.rtp_rx {
                         Some(rx) => rx.recv().await,
                         None => std::future::pending().await,
                     }
-                } => {
-                    {
-                        let mut core = self.inner.core.lock().await;
-                        if let Some(mut sender) = core.rtp_sender(outgoing.sender_id) {
-                            if let Err(e) = sender.write_rtp(outgoing.packet) {
-                                log::error!("Failed to send RTP: {}", e);
+                }.fuse() => {
+                    if let Some(outgoing) = outgoing {
+                        {
+                            let mut core = self.inner.core.lock().await;
+                            if let Some(mut sender) = core.rtp_sender(outgoing.sender_id) {
+                                if let Err(e) = sender.write_rtp(outgoing.packet) {
+                                    log::error!("Failed to send RTP: {}", e);
+                                }
                             }
                         }
                     }
                 }
 
                 // Outgoing RTCP from senders
-                Some(outgoing) = async {
+                outgoing = async {
                     match &mut self.rtcp_rx {
                         Some(rx) => rx.recv().await,
                         None => std::future::pending().await,
                     }
-                } => {
-                    {
-                        let mut core = self.inner.core.lock().await;
-                        if let Some(mut sender) = core.rtp_sender(outgoing.sender_id) {
-                            let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
-                                .packets
-                                .into_iter()
-                                .map(|p| unsafe { std::mem::transmute(p) })
-                                .collect();
-                            if let Err(e) = sender.write_rtcp(packets) {
-                                log::error!("Failed to send RTCP: {}", e);
+                }.fuse() => {
+                    if let Some(outgoing) = outgoing {
+                        {
+                            let mut core = self.inner.core.lock().await;
+                            if let Some(mut sender) = core.rtp_sender(outgoing.sender_id) {
+                                let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
+                                    .packets
+                                    .into_iter()
+                                    .map(|p| unsafe { std::mem::transmute(p) })
+                                    .collect();
+                                if let Err(e) = sender.write_rtcp(packets) {
+                                    log::error!("Failed to send RTCP: {}", e);
+                                }
                             }
                         }
                     }
                 }
 
                 // Outgoing RTCP from receivers
-                Some(outgoing) = async {
+                outgoing = async {
                     match &mut self.receiver_rtcp_rx {
                         Some(rx) => rx.recv().await,
                         None => std::future::pending().await,
                     }
-                } => {
-                    {
-                        let mut core = self.inner.core.lock().await;
-                        if let Some(mut receiver) = core.rtp_receiver(outgoing.receiver_id) {
-                            let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
-                                .packets
-                                .into_iter()
-                                .map(|p| unsafe { std::mem::transmute(p) })
-                                .collect();
-                            if let Err(e) = receiver.write_rtcp(packets) {
-                                log::error!("Failed to send RTCP feedback: {}", e);
+                }.fuse() => {
+                    if let Some(outgoing) = outgoing {
+                        {
+                            let mut core = self.inner.core.lock().await;
+                            if let Some(mut receiver) = core.rtp_receiver(outgoing.receiver_id) {
+                                let packets: Vec<Box<dyn rtc::rtcp::Packet>> = outgoing
+                                    .packets
+                                    .into_iter()
+                                    .map(|p| unsafe { std::mem::transmute(p) })
+                                    .collect();
+                                if let Err(e) = receiver.write_rtcp(packets) {
+                                    log::error!("Failed to send RTCP feedback: {}", e);
+                                }
                             }
                         }
                     }
                 }
 
                 // Incoming network packet
-                res = self.socket.recv_from(&mut recv_buf) => {
+                res = self.socket.recv_from(&mut recv_buf).fuse() => {
                     match res {
                         Ok((n, peer_addr)) => {
                             log::trace!("Received {} bytes from {}", n, peer_addr);
