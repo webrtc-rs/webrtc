@@ -181,53 +181,36 @@ impl PeerConnection {
 
             // Spawn background task for STUN gathering (server reflexive candidates)
             if !inner.ice_servers.is_empty() {
-                eprintln!(
-                    "🚀 Spawning STUN gathering task with {} ice_servers",
-                    inner.ice_servers.len()
-                );
                 let ice_servers = inner.ice_servers.clone();
                 let inner_clone = inner.clone();
 
                 self.inner.runtime.spawn(Box::pin(async move {
-                    eprintln!("🔄 STUN gathering task started, core ptr: {:p}", &*inner_clone.core.lock().await);
                     let srflx_candidates = crate::ice_gatherer::gather_srflx_candidates(
                         local_addr,
                         &ice_servers,
                     ).await;
 
-                    eprintln!("📥 STUN gathering returned {} candidates", srflx_candidates.len());
-
                     // Add srflx candidates to rtc core
                     {
                         let mut core = inner_clone.core.lock().await;
-                        eprintln!("🔄 STUN task acquired core lock, ptr: {:p}", &*core);
                         for candidate_init in srflx_candidates {
-                            eprintln!("🔍 Adding srflx candidate to core: {:?}", candidate_init.candidate);
                             match core.add_local_candidate(candidate_init) {
-                                Ok(()) => {
-                                    eprintln!("✅ add_local_candidate returned Ok - event should be queued");
-                                }
+                                Ok(()) => {}
                                 Err(e) => {
                                     log::warn!("Failed to add srflx candidate: {}", e);
-                                    eprintln!("❌ add_local_candidate returned Err: {}", e);
                                 }
                             }
                         }
 
                         // Try to flush events by calling handle_timeout
                         if let Err(e) = core.handle_timeout(Instant::now()) {
-                            eprintln!("⚠️  handle_timeout error: {}", e);
+                            log::warn!("handle_timeout error: {}", e);
                         }
-                        eprintln!("🔓 STUN task releasing core lock");
                     }
 
                     // Wake the driver IMMEDIATELY to process the new candidate events
-                    eprintln!("🔔 Waking driver to process srflx candidate events");
                     inner_clone.wake_driver();
-                    eprintln!("🏁 STUN gathering task complete");
                 }));
-            } else {
-                eprintln!("ℹ️  No ICE servers configured, skipping STUN gathering");
             }
         }
 

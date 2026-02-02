@@ -2,19 +2,14 @@
 
 use super::*;
 use ::smol::net::UdpSocket as SmolUdpSocket;
-use ::smol::{Timer, spawn};
+use ::smol::spawn;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
 /// A WebRTC runtime for smol
 #[derive(Debug)]
 pub struct SmolRuntime;
 
 impl Runtime for SmolRuntime {
-    fn new_timer(&self, t: Instant) -> Pin<Box<dyn AsyncTimer>> {
-        Box::pin(Timer::at(t))
-    }
-
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
         spawn(future).detach();
     }
@@ -25,16 +20,6 @@ impl Runtime for SmolRuntime {
 
     fn now(&self) -> Instant {
         Instant::now()
-    }
-}
-
-impl AsyncTimer for Timer {
-    fn reset(mut self: Pin<&mut Self>, t: Instant) {
-        self.set_at(t)
-    }
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        Future::poll(self, cx).map(|_| ())
     }
 }
 

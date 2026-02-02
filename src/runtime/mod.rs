@@ -9,49 +9,17 @@ use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, time::Insta
 
 pub mod net;
 pub mod sync;
+pub mod time;
 
 // Re-export commonly used items for convenience
 pub use net::{resolve_host, UdpSocket};
-
-/// Runtime-agnostic sleep function
-#[cfg(feature = "runtime-tokio")]
-pub async fn sleep(duration: std::time::Duration) {
-    ::tokio::time::sleep(duration).await
-}
-
-#[cfg(feature = "runtime-smol")]
-pub async fn sleep(duration: std::time::Duration) {
-    ::smol::Timer::after(duration).await;
-}
-
-/// Runtime-agnostic timeout helper
-pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, ()>
-where
-    F: std::future::Future<Output = T>,
-{
-    #[cfg(feature = "runtime-tokio")]
-    {
-        ::tokio::time::timeout(duration, future).await.map_err(|_| ())
-    }
-
-    #[cfg(feature = "runtime-smol")]
-    {
-        ::smol::future::or(async { Ok(future.await) }, async {
-            sleep(duration).await;
-            Err(())
-        })
-        .await
-    }
-}
+pub use time::{sleep, timeout};
 
 /// Abstracts I/O and timer operations for runtime independence
 ///
 /// This trait allows the WebRTC implementation to work with different async runtimes
 /// without being tightly coupled to any specific runtime.
 pub trait Runtime: Send + Sync + Debug + 'static {
-    /// Construct a timer that will expire at the given instant
-    fn new_timer(&self, deadline: Instant) -> Pin<Box<dyn AsyncTimer>>;
-
     /// Drive a future to completion in the background
     ///
     /// The future must complete to `()` and will be spawned as a background task.
@@ -69,15 +37,6 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     fn now(&self) -> Instant {
         Instant::now()
     }
-}
-
-/// Abstract implementation of an async timer for runtime independence
-pub trait AsyncTimer: Send + Debug + 'static {
-    /// Update the timer to expire at a new instant
-    fn reset(self: Pin<&mut Self>, deadline: Instant);
-
-    /// Check whether the timer has expired, and register to be woken if not
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()>;
 }
 
 /// Abstract implementation of a UDP socket for runtime independence

@@ -8,10 +8,6 @@ use std::sync::Arc;
 pub struct TokioRuntime;
 
 impl Runtime for TokioRuntime {
-    fn new_timer(&self, deadline: Instant) -> Pin<Box<dyn AsyncTimer>> {
-        Box::pin(::tokio::time::sleep_until(deadline.into()))
-    }
-
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
         ::tokio::spawn(future);
     }
@@ -24,16 +20,6 @@ impl Runtime for TokioRuntime {
 
     fn now(&self) -> Instant {
         ::tokio::time::Instant::now().into_std()
-    }
-}
-
-impl AsyncTimer for ::tokio::time::Sleep {
-    fn reset(self: Pin<&mut Self>, deadline: Instant) {
-        Self::reset(self, deadline.into())
-    }
-
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
-        Future::poll(self, cx)
     }
 }
 
