@@ -58,3 +58,22 @@ impl AsyncUdpSocket for UdpSocket {
         self.io.local_addr()
     }
 }
+
+pub async fn sleep(duration: Duration) {
+    ::smol::Timer::after(duration).await;
+}
+
+/// Runtime-agnostic timeout helper
+///
+/// Returns Ok(result) if the future completes within the duration,
+/// or Err(()) if the timeout expires.
+pub async fn timeout<F, T>(duration: Duration, future: F) -> Result<T, ()>
+where
+    F: std::future::Future<Output = T>,
+{
+    ::smol::future::or(async { Ok(future.await) }, async {
+        sleep(duration).await;
+        Err(())
+    })
+    .await
+}

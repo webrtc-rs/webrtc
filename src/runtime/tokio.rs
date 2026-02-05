@@ -48,3 +48,23 @@ impl AsyncUdpSocket for UdpSocket {
         self.io.local_addr()
     }
 }
+
+
+/// Runtime-agnostic sleep function
+#[cfg(feature = "runtime-tokio")]
+pub async fn sleep(duration: Duration) {
+    ::tokio::time::sleep(duration).await
+}
+
+/// Runtime-agnostic timeout helper
+///
+/// Returns Ok(result) if the future completes within the duration,
+/// or Err(()) if the timeout expires.
+pub async fn timeout<F, T>(duration: Duration, future: F) -> Result<T, ()>
+where
+    F: std::future::Future<Output = T>,
+{
+    ::tokio::time::timeout(duration, future)
+        .await
+        .map_err(|_| ())
+}

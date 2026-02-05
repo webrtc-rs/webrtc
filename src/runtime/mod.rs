@@ -6,14 +6,13 @@
 #![allow(clippy::type_complexity)]
 
 use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, time::Instant};
+use std::time::Duration;
 
 pub mod net;
 pub mod sync;
-pub mod time;
 
 // Re-export commonly used items for convenience
 pub use net::{UdpSocket, resolve_host};
-pub use time::{sleep, timeout};
 
 /// Abstracts I/O and timer operations for runtime independence
 ///
@@ -99,8 +98,12 @@ pub fn smol_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
 mod tokio;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::TokioRuntime;
+#[cfg(feature = "runtime-tokio")]
+pub use tokio::{sleep, timeout};
 
 #[cfg(feature = "runtime-smol")]
 mod smol;
 #[cfg(feature = "runtime-smol")]
 pub use smol::SmolRuntime;
+#[cfg(feature = "runtime-smol")]
+pub use smol::{sleep, timeout};
