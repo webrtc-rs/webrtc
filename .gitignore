@@ -9,5 +9,4 @@
 **/*.rs.bk
 
 # Editor configs
-.vscode
 Cargo.lock
