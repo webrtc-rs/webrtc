@@ -95,10 +95,12 @@ impl RTCIceGatherer {
         if !self.ice_servers.is_empty() {
             let ice_servers = self.ice_servers.clone();
             let outgoing_tx = self.msg_tx.clone();
+            let runtime_cloned = runtime.clone();
             runtime.spawn(Box::pin(async move {
                 // Spawn background task for STUN gathering (server reflexive candidates)
                 for srflx_candidate in
-                    RTCIceGatherer::gather_srflx_candidates(local_addr, ice_servers).await
+                    RTCIceGatherer::gather_srflx_candidates(runtime_cloned, local_addr, ice_servers)
+                        .await
                 {
                     if let Err(e) = outgoing_tx
                         .send(super::InnerMessage::LocalIceCandidate(srflx_candidate))
@@ -142,6 +144,7 @@ impl RTCIceGatherer {
     /// This performs actual I/O to query STUN servers and should be called
     /// in an async context.
     async fn gather_srflx_candidates(
+        runtime: Arc<dyn Runtime>,
         local_addr: SocketAddr,
         ice_servers: Vec<RTCIceServer>,
     ) -> Vec<RTCIceCandidateInit> {
@@ -154,7 +157,9 @@ impl RTCIceGatherer {
                     continue;
                 }
 
-                match RTCIceGatherer::gather_from_stun_server(local_addr, url).await {
+                match RTCIceGatherer::gather_from_stun_server(runtime.clone(), local_addr, url)
+                    .await
+                {
                     Ok(candidate) => {
                         candidates.push(candidate);
                     }
@@ -170,6 +175,7 @@ impl RTCIceGatherer {
 
     /// Gather a single srflx candidate from a STUN server
     async fn gather_from_stun_server(
+        runtime: Arc<dyn Runtime>,
         local_addr: SocketAddr,
         stun_url: &str,
     ) -> Result<RTCIceCandidateInit, Box<dyn std::error::Error + Send + Sync>> {
@@ -218,7 +224,7 @@ impl RTCIceGatherer {
         } else {
             "0.0.0.0:0"
         };
-        let stun_socket = runtime::UdpSocket::bind(bind_addr).await?;
+        let stun_socket = runtime.wrap_udp_socket(std::net::UdpSocket::bind(bind_addr)?)?;
         let stun_local_addr = stun_socket.local_addr()?;
 
         log::debug!("STUN client bound to {}", stun_local_addr);

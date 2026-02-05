@@ -49,7 +49,6 @@ impl AsyncUdpSocket for UdpSocket {
     }
 }
 
-
 /// Runtime-agnostic sleep function
 #[cfg(feature = "runtime-tokio")]
 pub async fn sleep(duration: Duration) {
@@ -67,4 +66,11 @@ where
     ::tokio::time::timeout(duration, future)
         .await
         .map_err(|_| ())
+}
+
+/// Runtime-agnostic DNS resolution
+pub async fn resolve_host(host: &str) -> io::Result<Vec<SocketAddr>> {
+    ::tokio::net::lookup_host(host)
+        .await
+        .map(|iter| iter.collect())
 }

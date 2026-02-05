@@ -77,3 +77,8 @@ where
     })
     .await
 }
+
+/// Runtime-agnostic DNS resolution
+pub async fn resolve_host(host: &str) -> io::Result<Vec<SocketAddr>> {
+    ::smol::net::resolve(host).await
+}
