@@ -6,7 +6,6 @@ use crate::data_channel::DataChannel;
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_track::{TrackLocal, TrackRemote};
 use crate::peer_connection_driver::PeerConnectionDriver;
-use crate::peer_connection_event_handler::PeerConnectionEventHandler;
 use crate::runtime::Runtime;
 use crate::runtime::{Mutex, Receiver, Sender, channel};
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
@@ -18,6 +17,64 @@ use rtc::sansio::Protocol;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+
+/// Trait for handling peer connection events asynchronously
+///
+/// This trait defines callbacks that are invoked when various WebRTC events occur.
+/// All methods are async and have default no-op implementations.
+///
+/// # Example
+///
+/// ```no_run
+/// use webrtc::peer_connection::*;
+/// use webrtc::RTCPeerConnectionIceEvent;
+///
+/// #[derive(Clone)]
+/// struct MyHandler;
+///
+/// #[async_trait::async_trait]
+/// impl PeerConnectionEventHandler for MyHandler {
+///     async fn on_ice_candidate(&self, event: RTCPeerConnectionIceEvent) {
+///         println!("New ICE candidate: {:?}", event.candidate);
+///         // Send to remote peer via signaling
+///     }
+/// }
+/// ```
+#[async_trait::async_trait]
+pub trait PeerConnectionEventHandler: Send + Sync + 'static {
+    /// Called when negotiation is needed
+    async fn on_negotiation_needed(&self) {}
+
+    /// Called when a new ICE candidate is available
+    async fn on_ice_candidate(&self, _event: RTCPeerConnectionIceEvent) {}
+
+    /// Called when an ICE candidate error occurs
+    async fn on_ice_candidate_error(&self, _event: RTCPeerConnectionIceErrorEvent) {}
+
+    /// Called when the signaling state changes
+    async fn on_signaling_state_change(&self, _state: RTCSignalingState) {}
+
+    /// Called when the ICE connection state changes
+    async fn on_ice_connection_state_change(&self, _state: RTCIceConnectionState) {}
+
+    /// Called when the ICE gathering state changes
+    async fn on_ice_gathering_state_change(&self, _state: RTCIceGatheringState) {}
+
+    /// Called when the peer connection state changes
+    async fn on_connection_state_change(&self, _state: RTCPeerConnectionState) {}
+
+    /// Called when a remote peer creates a data channel
+    async fn on_data_channel_open(&self, _data_channel: Arc<DataChannel>) {}
+
+    /// Called for data channel lifecycle events
+    async fn on_data_channel(&self, _event: RTCDataChannelEvent) {}
+
+    /// Called when a remote track is received
+    async fn on_track_open(&self, _track: Arc<TrackRemote>) {}
+
+    /// Called for track lifecycle events
+    async fn on_track(&self, _event: RTCTrackEvent) {}
+}
 
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
@@ -190,12 +247,12 @@ impl PeerConnection {
     /// # Example
     ///
     /// ```no_run
-    /// use webrtc::peer_connection::PeerConnection;
+    /// use webrtc::peer_connection::*;
     /// use webrtc::RTCIceCandidateInit;
     /// # use std::sync::Arc;
     /// # struct Handler;
     /// # #[async_trait::async_trait]
-    /// # impl webrtc::peer_connection_event_handler::PeerConnectionEventHandler for Handler {}
+    /// # impl PeerConnectionEventHandler for Handler {}
     /// # async fn example(pc: PeerConnection) -> Result<(), Box<dyn std::error::Error>> {
     /// // Receive candidate from signaling channel
     /// let candidate_init = RTCIceCandidateInit {
@@ -276,7 +333,6 @@ impl PeerConnection {
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::*;
-    /// # use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
     /// # use webrtc::RTCDataChannelInit;
     /// # use webrtc::RTCConfigurationBuilder;
     /// # use std::sync::Arc;
@@ -348,7 +404,6 @@ impl PeerConnection {
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::*;
-    /// # use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
     /// # use webrtc::MediaStreamTrack;
     /// # use webrtc::RTCConfigurationBuilder;
     /// # use std::sync::Arc;
@@ -401,7 +456,6 @@ impl PeerConnection {
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::*;
-    /// # use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
     /// # use webrtc::RTCConfigurationBuilder;
     /// # use std::sync::Arc;
     /// # use std::net::SocketAddr;

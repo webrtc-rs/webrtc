@@ -3,8 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use webrtc::peer_connection::PeerConnection;
-use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
+use webrtc::peer_connection::*;
 use webrtc::runtime::Mutex;
 use webrtc::runtime::sleep;
 use webrtc::{

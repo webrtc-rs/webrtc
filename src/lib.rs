@@ -24,7 +24,6 @@ pub(crate) mod ice_gatherer;
 pub mod media_track;
 pub mod peer_connection;
 pub(crate) mod peer_connection_driver;
-pub mod peer_connection_event_handler;
 pub mod runtime;
 
 // Re-export common types from rtc
