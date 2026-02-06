@@ -219,12 +219,15 @@ impl RTCIceGatherer {
         );
 
         // Create a temporary UDP socket for STUN (match IP version of STUN server)
-        let bind_addr = if stun_server_addr.is_ipv6() {
+        let addr = if stun_server_addr.is_ipv6() {
             "[::]:0"
         } else {
             "0.0.0.0:0"
         };
-        let stun_socket = runtime.wrap_udp_socket(std::net::UdpSocket::bind(bind_addr)?)?;
+        let socket = std::net::UdpSocket::bind(addr)?;
+        socket.set_nonblocking(true)?;
+
+        let stun_socket = runtime.wrap_udp_socket(socket)?;
         let stun_local_addr = stun_socket.local_addr()?;
 
         log::debug!("STUN client bound to {}", stun_local_addr);
