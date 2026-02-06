@@ -12,8 +12,8 @@ use crate::ice_transport::ice_candidate::*;
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RTCIceCandidatePair {
     stats_id: String,
-    local: RTCIceCandidate,
-    remote: RTCIceCandidate,
+    pub local: RTCIceCandidate,
+    pub remote: RTCIceCandidate,
 }
 
 impl fmt::Display for RTCIceCandidatePair {
