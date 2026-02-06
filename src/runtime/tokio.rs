@@ -7,9 +7,24 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct TokioRuntime;
 
+struct TokioJoinHandle(::tokio::task::JoinHandle<()>);
+
+impl super::JoinHandleInner for TokioJoinHandle {
+    fn abort(&self) {
+        self.0.abort();
+    }
+    
+    fn is_finished(&self) -> bool {
+        self.0.is_finished()
+    }
+}
+
 impl Runtime for TokioRuntime {
-    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        ::tokio::spawn(future);
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
+        let handle = ::tokio::spawn(future);
+        super::JoinHandle {
+            inner: Box::new(TokioJoinHandle(handle)),
+        }
     }
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {

@@ -10,6 +10,7 @@ use crate::runtime::Runtime;
 use crate::runtime::{Mutex, Receiver, Sender, channel};
 use log::error;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
+use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::peer_connection::transport::RTCIceCandidateInit;
@@ -150,13 +151,32 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
 ///
 /// This wraps the Sans-I/O `RTCPeerConnection` from the rtc crate and provides
 /// an async API.
-pub struct PeerConnection {
-    pub(crate) inner: Arc<PeerConnectionRef>,
+pub struct PeerConnection<I = NoopInterceptor>
+where
+    I: Interceptor,
+{
+    pub(crate) inner: Arc<PeerConnectionRef<I>>,
+    driver_handle: Option<runtime::JoinHandle>,
 }
 
-pub(crate) struct PeerConnectionRef {
+impl<I> Drop for PeerConnection<I>
+where
+    I: Interceptor,
+{
+    fn drop(&mut self) {
+        // Abort the driver task when PeerConnection is dropped
+        if let Some(handle) = &self.driver_handle {
+            handle.abort();
+        }
+    }
+}
+
+pub(crate) struct PeerConnectionRef<I = NoopInterceptor>
+where
+    I: Interceptor,
+{
     /// The sans-I/O peer connection core (uses default NoopInterceptor)
-    pub(crate) core: Mutex<RTCPeerConnection>,
+    pub(crate) core: Mutex<RTCPeerConnection<I>>,
     /// Runtime for async operations
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
@@ -179,10 +199,13 @@ pub(crate) struct PeerConnectionRef {
     pub(crate) msg_rx: Mutex<Option<Receiver<MessageInner>>>,
 }
 
-impl PeerConnection {
+impl<I> PeerConnection<I>
+where
+    I: Interceptor + 'static,
+{
     /// Create a new peer connection with a custom runtime
     async fn new<A: ToSocketAddrs>(
-        config: RTCConfiguration,
+        config: RTCConfiguration<I>,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
         udp_addrs: Vec<A>,
@@ -212,7 +235,7 @@ impl PeerConnection {
             async_udp_sockets.push(async_udp_socket);
         }
 
-        let peer_connection = Self {
+        let mut peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
@@ -226,21 +249,22 @@ impl PeerConnection {
                 msg_tx: outgoing_tx,
                 msg_rx: Mutex::new(Some(outgoing_rx)),
             }),
+            driver_handle: None,
         };
 
         let mut driver =
             PeerConnectionDriver::new(peer_connection.inner.clone(), async_udp_sockets).await?;
-        runtime.spawn(Box::pin(async move {
+        peer_connection.driver_handle = Some(runtime.spawn(Box::pin(async move {
             if let Err(e) = driver.run().await {
                 error!("I/O error: {}", e);
             }
-        }));
+        })));
 
         Ok(peer_connection)
     }
 
     /// Close the peer connection
-    pub async fn close(&self) -> Result<()> {
+    pub async fn close(&mut self) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.close()?;
@@ -249,6 +273,9 @@ impl PeerConnection {
             .msg_tx
             .try_send(MessageInner::Close)
             .map_err(|e| Error::Other(format!("{:?}", e)))?;
+
+        self.driver_handle.take();
+
         Ok(())
     }
 
@@ -288,6 +315,30 @@ impl PeerConnection {
         Ok(())
     }
 
+    /// Get the local description
+    pub async fn local_description(&self) -> Option<RTCSessionDescription> {
+        let core = self.inner.core.lock().await;
+        core.local_description().cloned()
+    }
+
+    /// Get current local description
+    pub async fn current_local_description(&self) -> Option<RTCSessionDescription> {
+        let core = self.inner.core.lock().await;
+        core.current_local_description().cloned()
+    }
+
+    /// Get pending local description
+    pub async fn pending_local_description(&self) -> Option<RTCSessionDescription> {
+        let core = self.inner.core.lock().await;
+        core.pending_local_description().cloned()
+    }
+
+    /// Returns whether the remote peer supports trickle ICE.
+    pub async fn can_trickle_ice_candidates(&self) -> Option<bool> {
+        let core = self.inner.core.lock().await;
+        core.can_trickle_ice_candidates()
+    }
+
     /// Set the remote description
     pub async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
         let mut core = self.inner.core.lock().await;
@@ -295,16 +346,22 @@ impl PeerConnection {
         Ok(())
     }
 
-    /// Get the local description
-    pub async fn local_description(&self) -> Option<RTCSessionDescription> {
-        let core = self.inner.core.lock().await;
-        core.local_description().cloned()
-    }
-
     /// Get the remote description
     pub async fn remote_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
         core.remote_description().cloned()
+    }
+
+    /// Get current remote description
+    pub async fn current_remote_description(&self) -> Option<RTCSessionDescription> {
+        let core = self.inner.core.lock().await;
+        core.current_remote_description().cloned()
+    }
+
+    /// Get pending remote description
+    pub async fn pending_remote_description(&self) -> Option<RTCSessionDescription> {
+        let core = self.inner.core.lock().await;
+        core.pending_remote_description().cloned()
     }
 
     /// Add an ICE candidate received from the remote peer
@@ -370,6 +427,7 @@ impl PeerConnection {
             core.restart_ice();
         }
 
+        //TODO: ICE Gatherer?
         let local_addr_opt = *self.inner.local_addr.lock().await;
         if let Some(local_addr) = local_addr_opt {
             self.inner
@@ -379,6 +437,12 @@ impl PeerConnection {
         }
 
         Ok(())
+    }
+
+    /// set_configuration updates the configuration of this PeerConnection object.
+    pub async fn set_configuration(&self, configuration: RTCConfiguration<I>) -> Result<()> {
+        let mut core = self.inner.core.lock().await;
+        core.set_configuration(configuration)
     }
 
     /// Create a data channel
@@ -490,10 +554,7 @@ impl PeerConnection {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn add_track(
-        &self,
-        track: rtc::media_stream::MediaStreamTrack,
-    ) -> Result<Arc<TrackLocal>> {
+    pub async fn add_track(&self, track: MediaStreamTrack) -> Result<Arc<TrackLocal>> {
         // Add track via the core
         let sender_id = {
             let mut core = self.inner.core.lock().await;

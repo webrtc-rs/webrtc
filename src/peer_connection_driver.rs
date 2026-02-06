@@ -10,6 +10,7 @@ use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{AsyncUdpSocket, Receiver};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
+use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
 use rtc::peer_connection::message::RTCMessage;
 use rtc::sansio::Protocol;
@@ -22,17 +23,23 @@ const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day 
 /// The driver for a peer connection
 ///
 /// Runs the event loop following rtc's EventLoop pattern with tokio::select!
-pub struct PeerConnectionDriver {
-    inner: Arc<PeerConnectionRef>,
+pub struct PeerConnectionDriver<I = NoopInterceptor>
+where
+    I: Interceptor,
+{
+    inner: Arc<PeerConnectionRef<I>>,
     sockets: Vec<Arc<dyn AsyncUdpSocket>>,
     /// Channel for receiving outgoing messages
     msg_rx: Option<Receiver<MessageInner>>,
 }
 
-impl PeerConnectionDriver {
+impl<I> PeerConnectionDriver<I>
+where
+    I: Interceptor,
+{
     /// Create a new driver for the given peer connection
     pub(crate) async fn new(
-        inner: Arc<PeerConnectionRef>,
+        inner: Arc<PeerConnectionRef<I>>,
         sockets: Vec<Arc<dyn AsyncUdpSocket>>,
     ) -> Result<Self> {
         // Take the receiver (can only be done once)

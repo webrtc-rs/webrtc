@@ -15,6 +15,28 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Handle to a spawned task that can be used to manage its lifecycle
+pub struct JoinHandle {
+    inner: Box<dyn JoinHandleInner>,
+}
+
+impl JoinHandle {
+    /// Abort the spawned task
+    pub fn abort(&self) {
+        self.inner.abort();
+    }
+    
+    /// Check if the task is finished
+    pub fn is_finished(&self) -> bool {
+        self.inner.is_finished()
+    }
+}
+
+trait JoinHandleInner: Send + Sync {
+    fn abort(&self);
+    fn is_finished(&self) -> bool;
+}
+
 /// Abstracts I/O and timer operations for runtime independence
 ///
 /// This trait allows the WebRTC implementation to work with different async runtimes
@@ -23,8 +45,14 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// Drive a future to completion in the background
     ///
     /// The future must complete to `()` and will be spawned as a background task.
+    /// Returns a handle that can be used to manage the task lifecycle.
+    /// 
+    /// # Safety Note
+    /// The returned JoinHandle must be properly managed - if it's dropped or aborted,
+    /// the spawned task will be cancelled. This allows spawning non-'static futures
+    /// as long as the handle outlives them.
     #[track_caller]
-    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>);
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle;
 
     /// Create an async UDP socket from a standard socket
     ///

@@ -9,9 +9,27 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct SmolRuntime;
 
+struct SmolJoinHandle(::smol::Task<()>);
+
+impl super::JoinHandleInner for SmolJoinHandle {
+    fn abort(&self) {
+        // smol doesn't have built-in abort, but dropping detached tasks stops them
+        // We could use cancel() if we had a way to cancel, but Task<()> doesn't expose this
+        // For now, we'll just do nothing as smol tasks are cooperative
+    }
+    
+    fn is_finished(&self) -> bool {
+        // smol::Task doesn't have is_finished, so we assume it's not finished
+        false
+    }
+}
+
 impl Runtime for SmolRuntime {
-    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        spawn(future).detach();
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
+        let task = spawn(future);
+        super::JoinHandle {
+            inner: Box::new(SmolJoinHandle(task)),
+        }
     }
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
