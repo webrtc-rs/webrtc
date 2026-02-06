@@ -17,7 +17,7 @@ use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 /// Trait for handling peer connection events asynchronously
@@ -91,6 +91,7 @@ pub(crate) enum MessageInner {
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
     /// New local ICE candidate
     LocalIceCandidate(RTCIceCandidateInit),
+    IceGatheringComplete,
     Close,
 }
 
@@ -187,8 +188,6 @@ where
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
     /// ICE gatherer for managing ICE candidate gathering
     pub(crate) ice_gatherer: RTCIceGatherer,
-    /// Local socket address (set after bind)
-    pub(crate) local_addr: Mutex<Option<SocketAddr>>,
     /// Data channels  
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
@@ -220,16 +219,7 @@ where
         let core = RTCPeerConnection::new(config)?;
 
         // Create unified channel for all outgoing messages
-        let (outgoing_tx, outgoing_rx) = channel();
-
-        // Create ICE gatherer with servers from config
-        let ice_gatherer = RTCIceGatherer::new(
-            outgoing_tx.clone(),
-            RTCIceGatherOptions {
-                ice_servers,
-                ice_gather_policy: RTCIceTransportPolicy::All,
-            },
-        );
+        let (msg_tx, msg_rx) = channel();
 
         let mut async_udp_sockets = vec![];
         for addr in udp_addrs {
@@ -239,19 +229,29 @@ where
             async_udp_sockets.push(async_udp_socket);
         }
 
+        // Create ICE gatherer with servers from config
+        let ice_gatherer = RTCIceGatherer::new(
+            runtime.clone(),
+            msg_tx.clone(),
+            async_udp_sockets.clone(),
+            RTCIceGatherOptions {
+                ice_servers,
+                ice_gather_policy: RTCIceTransportPolicy::All,
+            },
+        );
+
         let mut peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
                 handler,
                 ice_gatherer,
-                local_addr: Mutex::new(None),
                 data_channels: Mutex::new(HashMap::new()),
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 remote_tracks: Mutex::new(HashMap::new()),
                 track_rxs: Mutex::new(HashMap::new()),
-                msg_tx: outgoing_tx,
-                msg_rx: Mutex::new(Some(outgoing_rx)),
+                msg_tx,
+                msg_rx: Mutex::new(Some(msg_rx)),
             }),
             driver_handle: None,
         };
@@ -308,15 +308,7 @@ where
             core.set_local_description(desc)?;
         }
 
-        let local_addr_opt = *self.inner.local_addr.lock().await;
-        if let Some(local_addr) = local_addr_opt {
-            self.inner
-                .ice_gatherer
-                .gather(Arc::clone(&self.inner.runtime), local_addr)
-                .await;
-        }
-
-        Ok(())
+        self.inner.ice_gatherer.gather().await
     }
 
     /// Get the local description
@@ -433,16 +425,7 @@ where
             core.restart_ice();
         }
 
-        //TODO: ICE Gatherer?
-        let local_addr_opt = *self.inner.local_addr.lock().await;
-        if let Some(local_addr) = local_addr_opt {
-            self.inner
-                .ice_gatherer
-                .gather(Arc::clone(&self.inner.runtime), local_addr)
-                .await;
-        }
-
-        Ok(())
+        self.inner.ice_gatherer.gather().await
     }
 
     /// set_configuration updates the configuration of this PeerConnection object.

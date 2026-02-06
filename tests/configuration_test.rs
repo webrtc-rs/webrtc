@@ -160,7 +160,6 @@ async fn test_combined_configuration() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_peer_connection_with_full_configuration() {
     // End-to-end test with full configuration
     let mut media_engine_a = MediaEngine::default();
@@ -212,16 +211,7 @@ async fn test_peer_connection_with_full_configuration() {
         .await
         .unwrap();
 
-    /*TODO:
-    // Add a track to peer A
-    let track = rtc::media_stream::MediaStreamTrack::new(
-        "stream".to_string(),
-        "video".to_string(),
-        "track".to_string(),
-        rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
-        vec![],
-    );
-    pc_a.add_track(track).await.expect("Failed to add track");*/
+    let _ = pc_a.create_data_channel("channel1", None).await.unwrap();
 
     // Perform offer/answer exchange
     let offer = pc_a

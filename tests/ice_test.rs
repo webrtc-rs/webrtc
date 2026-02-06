@@ -1,11 +1,10 @@
 //! Integration tests for ICE functionality
 
+use rtc::peer_connection::transport::RTCIceCandidate;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 use webrtc::peer_connection::*;
-use webrtc::runtime::Mutex;
-use webrtc::runtime::sleep;
+use webrtc::runtime::channel;
+use webrtc::runtime::{Mutex, Sender};
 use webrtc::{
     MediaEngine, RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType,
     RTCIceGatheringState, RTCIceServer, RTCPeerConnectionIceEvent,
@@ -19,21 +18,21 @@ impl PeerConnectionEventHandler for IceTestHandler {}
 
 #[derive(Clone)]
 struct IceGatheringHandler {
-    candidate_received: Arc<AtomicBool>,
-    gathering_complete: Arc<AtomicBool>,
+    candidate_tx: Sender<RTCIceCandidate>,
+    gathering_tx: Sender<()>,
 }
 
 #[async_trait::async_trait]
 impl PeerConnectionEventHandler for IceGatheringHandler {
     async fn on_ice_candidate(&self, event: RTCPeerConnectionIceEvent) {
         eprintln!("✅ Received ICE candidate event: {:?}", event.candidate);
-        self.candidate_received.store(true, Ordering::SeqCst);
+        let _ = self.candidate_tx.try_send(event.candidate);
     }
 
     async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
         eprintln!("ICE gathering state: {:?}", state);
         if state == RTCIceGatheringState::Complete {
-            self.gathering_complete.store(true, Ordering::SeqCst);
+            let _ = self.gathering_tx.try_send(());
         }
     }
 }
@@ -41,6 +40,7 @@ impl PeerConnectionEventHandler for IceGatheringHandler {
 // Handler that tracks candidate types for STUN testing
 struct CandidateTypeTracker {
     candidates: Arc<Mutex<Vec<RTCIceCandidateType>>>,
+    gathering_tx: Sender<()>,
 }
 
 #[async_trait::async_trait]
@@ -53,10 +53,16 @@ impl PeerConnectionEventHandler for CandidateTypeTracker {
         );
         self.candidates.lock().await.push(typ);
     }
+
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        eprintln!("ICE gathering state: {:?}", state);
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gathering_tx.try_send(());
+        }
+    }
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_add_ice_candidate() {
     // Test adding remote ICE candidates
     let mut media_engine = MediaEngine::default();
@@ -92,16 +98,7 @@ async fn test_add_ice_candidate() {
         .await
         .unwrap();
 
-    /*
-    // Add track to trigger negotiation
-    let track = rtc::media_stream::MediaStreamTrack::new(
-        "stream".to_string(),
-        "video".to_string(),
-        "track".to_string(),
-        rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
-        vec![],
-    );
-    pc_a.add_track(track).await.expect("Failed to add track");*/
+    let _ = pc_a.create_data_channel("channel1", None).await.unwrap();
 
     // Create offer/answer
     let offer = pc_a
@@ -141,7 +138,6 @@ async fn test_add_ice_candidate() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_restart_ice() {
     // Test ICE restart API
     let mut media_engine = MediaEngine::default();
@@ -161,17 +157,6 @@ async fn test_restart_ice() {
         .build()
         .await
         .unwrap();
-
-    /*
-    // Add track
-    let track = rtc::media_stream::MediaStreamTrack::new(
-        "stream".to_string(),
-        "video".to_string(),
-        "track".to_string(),
-        rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
-        vec![],
-    );
-    pc.add_track(track).await.expect("Failed to add track");*/
 
     let offer1 = pc
         .create_offer(None)
@@ -198,7 +183,6 @@ async fn test_restart_ice() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_automatic_host_candidate_gathering() {
     // Test that host candidates are automatically gathered when setLocalDescription is called
     let mut media_engine = MediaEngine::default();
@@ -210,12 +194,12 @@ async fn test_automatic_host_candidate_gathering() {
         .with_media_engine(media_engine)
         .build();
 
+    let (candidate_tx, mut candidate_rx) = channel();
+    let (gathering_tx, mut gathering_rx) = channel();
     let handler = Arc::new(IceGatheringHandler {
-        candidate_received: Arc::new(AtomicBool::new(false)),
-        gathering_complete: Arc::new(AtomicBool::new(false)),
+        candidate_tx,
+        gathering_tx,
     });
-    let candidate_flag = handler.candidate_received.clone();
-    let _complete_flag = handler.gathering_complete.clone();
 
     let pc = PeerConnectionBuilder::new(config)
         .with_handler(handler)
@@ -224,16 +208,7 @@ async fn test_automatic_host_candidate_gathering() {
         .await
         .unwrap();
 
-    /*
-    // Add track to create media
-    let track = rtc::media_stream::MediaStreamTrack::new(
-        "stream".to_string(),
-        "video".to_string(),
-        "track".to_string(),
-        rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
-        vec![],
-    );
-    pc.add_track(track).await.expect("Failed to add track");*/
+    let _ = pc.create_data_channel("channel1", None).await.unwrap();
 
     // Create and set local description - this should trigger gathering
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -242,11 +217,16 @@ async fn test_automatic_host_candidate_gathering() {
         .expect("Failed to set local description");
 
     // Give the driver time to process events
-    sleep(Duration::from_millis(1000)).await;
+    let _ = gathering_rx.recv().await;
 
     // Verify that a host candidate was gathered
+    let mut candidate_count = 0;
+    while let Some(_) = candidate_rx.recv().await {
+        candidate_count += 1;
+        break;
+    }
     assert!(
-        candidate_flag.load(Ordering::SeqCst),
+        candidate_count > 0,
         "Should have received at least one ICE candidate"
     );
 
@@ -254,7 +234,6 @@ async fn test_automatic_host_candidate_gathering() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_stun_gathering_with_google_stun() {
     // Test STUN gathering with Google's public STUN server
     let mut media_engine = MediaEngine::default();
@@ -275,8 +254,10 @@ async fn test_stun_gathering_with_google_stun() {
 
     // Track candidate types to verify we get both host and srflx
     let candidates = Arc::new(Mutex::new(Vec::new()));
+    let (gathering_tx, mut gathering_rx) = channel();
     let handler = Arc::new(CandidateTypeTracker {
         candidates: candidates.clone(),
+        gathering_tx,
     });
 
     let pc = PeerConnectionBuilder::new(config)
@@ -286,16 +267,7 @@ async fn test_stun_gathering_with_google_stun() {
         .await
         .unwrap();
 
-    /*
-    // Add track to create media
-    let track = rtc::media_stream::MediaStreamTrack::new(
-        "stream".to_string(),
-        "video".to_string(),
-        "track".to_string(),
-        rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
-        vec![],
-    );
-    pc.add_track(track).await.expect("Failed to add track");*/
+    let _ = pc.create_data_channel("channel1", None).await.unwrap();
 
     // Create and set local description - this should trigger gathering
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -306,21 +278,9 @@ async fn test_stun_gathering_with_google_stun() {
     // Wait for both host and STUN candidates to arrive
     // We expect at least: 1 host + 1 srflx = 2 candidates
     println!("⏳ Waiting for ICE candidates...");
-    let start = std::time::Instant::now();
-    let timeout = Duration::from_secs(15);
+    let _ = gathering_rx.recv().await;
 
-    loop {
-        let count = candidates.lock().await.len();
-        if count >= 2 {
-            println!("✅ Received {} candidates in {:?}", count, start.elapsed());
-            break;
-        }
-        if start.elapsed() > timeout {
-            let count = candidates.lock().await.len();
-            panic!("Timeout waiting for candidates. Got {} candidates", count);
-        }
-        sleep(Duration::from_millis(100)).await;
-    }
+    println!("⏳ ICE Gathering Completed!...");
 
     // Verify we got both host and srflx candidates
     let gathered: Vec<RTCIceCandidateType> = candidates.lock().await.clone();

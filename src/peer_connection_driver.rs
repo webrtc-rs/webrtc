@@ -13,6 +13,7 @@ use futures::FutureExt; // For .fuse() in futures::select!
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
 use rtc::peer_connection::message::RTCMessage;
+use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use std::sync::Arc;
@@ -87,40 +88,41 @@ where
                 while let Some(event) = core.poll_event() {
                     drop(core);
 
-                    let handler = self.inner.handler.clone();
-                    let runtime = self.inner.runtime.clone();
-                    let future = async move {
-                        match event {
-                            RTCPeerConnectionEvent::OnNegotiationNeededEvent => {
-                                handler.on_negotiation_needed().await;
-                            }
-                            RTCPeerConnectionEvent::OnIceCandidateEvent(evt) => {
-                                handler.on_ice_candidate(evt).await;
-                            }
-                            RTCPeerConnectionEvent::OnIceCandidateErrorEvent(evt) => {
-                                handler.on_ice_candidate_error(evt).await;
-                            }
-                            RTCPeerConnectionEvent::OnSignalingStateChangeEvent(state) => {
-                                handler.on_signaling_state_change(state).await;
-                            }
-                            RTCPeerConnectionEvent::OnIceConnectionStateChangeEvent(state) => {
-                                handler.on_ice_connection_state_change(state).await;
-                            }
-                            RTCPeerConnectionEvent::OnIceGatheringStateChangeEvent(state) => {
-                                handler.on_ice_gathering_state_change(state).await;
-                            }
-                            RTCPeerConnectionEvent::OnConnectionStateChangeEvent(state) => {
-                                handler.on_connection_state_change(state).await;
-                            }
-                            RTCPeerConnectionEvent::OnDataChannel(evt) => {
-                                handler.on_data_channel(evt).await;
-                            }
-                            RTCPeerConnectionEvent::OnTrack(evt) => {
-                                handler.on_track(evt).await;
-                            }
+                    match event {
+                        RTCPeerConnectionEvent::OnNegotiationNeededEvent => {
+                            self.inner.handler.on_negotiation_needed().await;
                         }
-                    };
-                    runtime.spawn(Box::pin(future));
+                        RTCPeerConnectionEvent::OnIceCandidateEvent(evt) => {
+                            self.inner.handler.on_ice_candidate(evt).await;
+                        }
+                        RTCPeerConnectionEvent::OnIceCandidateErrorEvent(evt) => {
+                            self.inner.handler.on_ice_candidate_error(evt).await;
+                        }
+                        RTCPeerConnectionEvent::OnSignalingStateChangeEvent(state) => {
+                            self.inner.handler.on_signaling_state_change(state).await;
+                        }
+                        RTCPeerConnectionEvent::OnIceConnectionStateChangeEvent(state) => {
+                            self.inner
+                                .handler
+                                .on_ice_connection_state_change(state)
+                                .await;
+                        }
+                        RTCPeerConnectionEvent::OnIceGatheringStateChangeEvent(state) => {
+                            self.inner
+                                .handler
+                                .on_ice_gathering_state_change(state)
+                                .await;
+                        }
+                        RTCPeerConnectionEvent::OnConnectionStateChangeEvent(state) => {
+                            self.inner.handler.on_connection_state_change(state).await;
+                        }
+                        RTCPeerConnectionEvent::OnDataChannel(evt) => {
+                            self.inner.handler.on_data_channel(evt).await;
+                        }
+                        RTCPeerConnectionEvent::OnTrack(evt) => {
+                            self.inner.handler.on_track(evt).await;
+                        }
+                    }
 
                     core = self.inner.core.lock().await;
                 }
@@ -234,6 +236,13 @@ where
                                 let mut core = self.inner.core.lock().await;
                                 if let Err(err) = core.add_local_candidate(candidate) {
                                     log::error!("Failed to add local candidate: {}", err);
+                                }
+                            }
+                            MessageInner::IceGatheringComplete => {
+                                let end_of_candidates = RTCIceCandidateInit::default();
+                                let mut core = self.inner.core.lock().await;
+                                if let Err(err) = core.add_local_candidate(end_of_candidates) {
+                                    log::error!("Failed to add end_of_candidates: {}", err);
                                 }
                             }
                             MessageInner::Close => {
