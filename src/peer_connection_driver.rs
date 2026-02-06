@@ -4,8 +4,8 @@
 
 #![allow(clippy::collapsible_if)]
 
-use super::connection::InnerMessage;
-use super::connection::PeerConnectionInner;
+use crate::peer_connection::InnerMessage;
+use crate::peer_connection::PeerConnectionInner;
 use crate::runtime::{AsyncUdpSocket, Receiver};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!

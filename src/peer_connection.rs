@@ -3,7 +3,10 @@
 use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
 use crate::data_channel::DataChannel;
+use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_track::{TrackLocal, TrackRemote};
+use crate::peer_connection_driver::PeerConnectionDriver;
+use crate::peer_connection_event_handler::PeerConnectionEventHandler;
 use crate::runtime::Runtime;
 use crate::runtime::{Mutex, Receiver, Sender, channel};
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
@@ -187,11 +190,12 @@ impl PeerConnection {
     /// # Example
     ///
     /// ```no_run
-    /// use webrtc::peer_connection::{PeerConnection, RTCIceCandidateInit};
+    /// use webrtc::peer_connection::PeerConnection;
+    /// use webrtc::RTCIceCandidateInit;
     /// # use std::sync::Arc;
     /// # struct Handler;
     /// # #[async_trait::async_trait]
-    /// # impl webrtc::peer_connection::PeerConnectionEventHandler for Handler {}
+    /// # impl webrtc::peer_connection_event_handler::PeerConnectionEventHandler for Handler {}
     /// # async fn example(pc: PeerConnection) -> Result<(), Box<dyn std::error::Error>> {
     /// // Receive candidate from signaling channel
     /// let candidate_init = RTCIceCandidateInit {
@@ -272,7 +276,9 @@ impl PeerConnection {
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::*;
-    /// # use webrtc::data_channel::RTCDataChannelInit;
+    /// # use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
+    /// # use webrtc::RTCDataChannelInit;
+    /// # use webrtc::RTCConfigurationBuilder;
     /// # use std::sync::Arc;
     /// # #[derive(Clone)]
     /// # struct MyHandler;
@@ -342,14 +348,15 @@ impl PeerConnection {
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::*;
-    /// # use webrtc::track::MediaStreamTrack;
+    /// # use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
+    /// # use webrtc::MediaStreamTrack;
+    /// # use webrtc::RTCConfigurationBuilder;
     /// # use std::sync::Arc;
     /// # #[derive(Clone)]
     /// # struct MyHandler;
     /// # #[async_trait::async_trait]
     /// # impl PeerConnectionEventHandler for MyHandler {}
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// use rtc::media_stream::MediaStreamTrack;
     /// use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
     ///
     /// let config = RTCConfigurationBuilder::new().build();
@@ -394,6 +401,8 @@ impl PeerConnection {
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::*;
+    /// # use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
+    /// # use webrtc::RTCConfigurationBuilder;
     /// # use std::sync::Arc;
     /// # use std::net::SocketAddr;
     /// # #[derive(Clone)]

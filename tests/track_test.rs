@@ -5,11 +5,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use webrtc::media_track::TrackRemote;
-use webrtc::peer_connection::{
-    MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder,
-};
+use webrtc::peer_connection::PeerConnection;
+use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
 use webrtc::runtime::Mutex;
 use webrtc::runtime::sleep;
+use webrtc::{MediaEngine, RTCConfigurationBuilder};
 
 struct TrackTestHandler {
     remote_track: Arc<Mutex<Option<Arc<TrackRemote>>>>,

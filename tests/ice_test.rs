@@ -3,13 +3,14 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use webrtc::peer_connection::{
-    MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCConfigurationBuilder,
-    RTCIceCandidateInit, RTCIceCandidateType, RTCIceGatheringState, RTCIceServer,
-    RTCPeerConnectionIceEvent,
-};
+use webrtc::peer_connection::PeerConnection;
+use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
 use webrtc::runtime::Mutex;
 use webrtc::runtime::sleep;
+use webrtc::{
+    MediaEngine, RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType,
+    RTCIceGatheringState, RTCIceServer, RTCPeerConnectionIceEvent,
+};
 
 #[derive(Clone)]
 struct IceTestHandler;

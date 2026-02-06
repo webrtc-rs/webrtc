@@ -13,8 +13,8 @@ use std::sync::Arc;
 /// # Example
 ///
 /// ```no_run
-/// use webrtc::peer_connection::PeerConnectionEventHandler;
-/// use webrtc::peer_connection::RTCPeerConnectionIceEvent;
+/// use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
+/// use webrtc::RTCPeerConnectionIceEvent;
 ///
 /// #[derive(Clone)]
 /// struct MyHandler;

@@ -2,9 +2,11 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use webrtc::peer_connection::{
-    MediaEngine, PeerConnection, PeerConnectionEventHandler, RTCBundlePolicy,
-    RTCConfigurationBuilder, RTCIceServer, RTCIceTransportPolicy, RTCRtcpMuxPolicy, SettingEngine,
+use webrtc::peer_connection::PeerConnection;
+use webrtc::peer_connection_event_handler::PeerConnectionEventHandler;
+use webrtc::{
+    MediaEngine, RTCBundlePolicy, RTCConfigurationBuilder, RTCIceServer, RTCIceTransportPolicy,
+    RTCRtcpMuxPolicy, SettingEngine,
 };
 
 #[derive(Clone)]

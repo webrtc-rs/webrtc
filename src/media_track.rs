@@ -14,7 +14,7 @@ use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 /// # Example
 ///
 /// ```no_run
-/// # use webrtc::track::TrackLocal;
+/// # use webrtc::media_track::TrackLocal;
 /// # async fn example(track: std::sync::Arc<TrackLocal>) -> Result<(), Box<dyn std::error::Error>> {
 /// # use bytes::Bytes;
 /// // Create an RTP packet
@@ -93,7 +93,7 @@ impl TrackLocal {
 /// # Example
 ///
 /// ```no_run
-/// # async fn example(track: webrtc::track::TrackRemote) {
+/// # async fn example(track: webrtc::media_track::TrackRemote) {
 /// // Receive RTP packets
 /// while let Some(packet) = track.read_rtp().await {
 ///     println!("Received RTP: seq={}, ts={}",
