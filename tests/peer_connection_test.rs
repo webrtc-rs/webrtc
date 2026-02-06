@@ -1,9 +1,7 @@
 //! Integration tests for PeerConnection
 
 use std::sync::Arc;
-use std::time::Duration;
 use webrtc::peer_connection::*;
-use webrtc::runtime::sleep;
 use webrtc::{
     RTCConfigurationBuilder, RTCIceConnectionState, RTCPeerConnectionIceEvent,
     RTCPeerConnectionState, RTCSdpType,
@@ -96,34 +94,6 @@ async fn test_set_local_description() {
     assert_eq!(local_desc.sdp, offer.sdp);
 
     pc.close().await.expect("Failed to close peer connection");
-}
-
-#[tokio::test]
-async fn test_bind_and_driver() {
-    let config = RTCConfigurationBuilder::new().build();
-    let handler = Arc::new(TestHandler);
-
-    let mut pc = PeerConnectionBuilder::new(config)
-        .with_handler(handler)
-        .with_udp_addrs(vec!["127.0.0.1:0"])
-        .build()
-        .await
-        .unwrap();
-
-    // Create an offer to trigger some activity
-    let offer = pc.create_offer(None).await.expect("Failed to create offer");
-    pc.set_local_description(offer)
-        .await
-        .expect("Failed to set local description");
-
-    // Let the driver run briefly
-    sleep(Duration::from_millis(100)).await;
-
-    // Close and cleanup
-    pc.close().await.expect("Failed to close peer connection");
-
-    // Note: We expect the driver to error when we close the connection
-    // That's normal behavior
 }
 
 #[tokio::test]

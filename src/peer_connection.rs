@@ -4,7 +4,7 @@ use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
 use crate::data_channel::DataChannel;
 use crate::ice_gatherer::RTCIceGatherer;
-use crate::media_track::{TrackLocal, TrackRemote};
+use crate::media_track::TrackRemote;
 use crate::peer_connection_driver::PeerConnectionDriver;
 use crate::runtime::{Mutex, Receiver, Sender, channel};
 use crate::runtime::{Runtime, default_runtime};
@@ -520,58 +520,5 @@ where
             .insert(channel_id, dc_tx);
 
         Ok(dc)
-    }
-
-    /// Add a track to the peer connection
-    ///
-    /// This creates a new media track for sending audio or video.
-    /// The track will be negotiated with the remote peer during offer/answer.
-    ///
-    /// Returns the created TrackLocal that can be used to send RTP packets.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use webrtc::peer_connection::*;
-    /// # use webrtc::MediaStreamTrack;
-    /// # use webrtc::RTCConfigurationBuilder;
-    /// # use std::sync::Arc;
-    /// # use webrtc::Result;
-    /// # #[derive(Clone)]
-    /// # struct MyHandler;
-    /// # #[async_trait::async_trait]
-    /// # impl PeerConnectionEventHandler for MyHandler {}
-    /// # async fn example() -> Result<()> {
-    /// use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
-    ///
-    /// let config = RTCConfigurationBuilder::new().build();
-    /// let handler = Arc::new(MyHandler);
-    /// let pc = PeerConnectionBuilder::new(config).with_handler(handler).with_udp_addrs(vec!["127.0.0.1:0"]).build().await?;
-    ///
-    /// // Create a video track
-    /// let track = MediaStreamTrack::new(
-    ///     "stream".to_string(),
-    ///     "video".to_string(),
-    ///     "my-video".to_string(),
-    ///     RtpCodecKind::Video,
-    ///     vec![],  // Encodings will be added during negotiation
-    /// );
-    ///
-    /// // Add it to the peer connection
-    /// let local_track = pc.add_track(track).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn add_track(&self, track: MediaStreamTrack) -> Result<Arc<TrackLocal>> {
-        // Add track via the core
-        let sender_id = {
-            let mut core = self.inner.core.lock().await;
-            core.add_track(track)?
-        };
-
-        // Create the local track wrapper
-        let local_track = Arc::new(TrackLocal::new(sender_id, self.inner.msg_tx.clone()));
-
-        Ok(local_track)
     }
 }
