@@ -4,7 +4,7 @@
 //! Unlike the old async version, this gatherer is a configuration object that holds
 //! the ICE servers and state.
 
-use crate::peer_connection::InnerMessage;
+use crate::peer_connection::MessageInner;
 use crate::runtime::{Runtime, Sender};
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::transport::RTCIceCandidateInit;
@@ -34,7 +34,7 @@ pub enum RTCIceGathererState {
 ///
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
 pub struct RTCIceGatherer {
-    msg_tx: Sender<InnerMessage>,
+    msg_tx: Sender<MessageInner>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
     state: RTCIceGathererState,
@@ -42,7 +42,7 @@ pub struct RTCIceGatherer {
 
 impl RTCIceGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
-    pub(crate) fn new(outgoing_tx: Sender<InnerMessage>, opts: RTCIceGatherOptions) -> Self {
+    pub(crate) fn new(outgoing_tx: Sender<MessageInner>, opts: RTCIceGatherOptions) -> Self {
         Self {
             msg_tx: outgoing_tx,
             ice_servers: opts.ice_servers,
@@ -83,7 +83,7 @@ impl RTCIceGatherer {
         for host_candidate in RTCIceGatherer::gather_host_candidates(local_addr) {
             if let Err(e) = self
                 .msg_tx
-                .send(InnerMessage::LocalIceCandidate(host_candidate))
+                .send(MessageInner::LocalIceCandidate(host_candidate))
                 .await
             {
                 log::warn!("Failed to send host candidate: {}", e);
@@ -101,7 +101,7 @@ impl RTCIceGatherer {
                         .await
                 {
                     if let Err(e) = outgoing_tx
-                        .send(InnerMessage::LocalIceCandidate(srflx_candidate))
+                        .send(MessageInner::LocalIceCandidate(srflx_candidate))
                         .await
                     {
                         log::warn!("Failed to send SRFLX candidate: {}", e);

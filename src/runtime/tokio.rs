@@ -12,8 +12,8 @@ impl Runtime for TokioRuntime {
         ::tokio::spawn(future);
     }
 
-    fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Box<dyn AsyncUdpSocket>> {
-        Ok(Box::new(UdpSocket {
+    fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
+        Ok(Arc::new(UdpSocket {
             io: Arc::new(::tokio::net::UdpSocket::from_std(sock)?),
         }))
     }

@@ -1,7 +1,8 @@
 //! Async DataChannel implementation
 
-use crate::peer_connection::InnerMessage;
+use crate::peer_connection::MessageInner;
 use crate::runtime::{Mutex, Receiver, Sender};
+use crate::{Error, Result};
 use bytes::BytesMut;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage, RTCDataChannelState};
 use std::sync::Arc;
@@ -20,7 +21,7 @@ pub struct DataChannel {
     state: Arc<Mutex<RTCDataChannelState>>,
 
     /// Channel for sending messages to the driver
-    tx: Sender<InnerMessage>,
+    tx: Sender<MessageInner>,
 
     /// Channel for receiving messages from the driver
     rx: Arc<Mutex<Receiver<RTCDataChannelMessage>>>,
@@ -31,7 +32,7 @@ impl DataChannel {
     pub(crate) fn new(
         id: RTCDataChannelId,
         label: String,
-        tx: Sender<InnerMessage>,
+        tx: Sender<MessageInner>,
         rx: Receiver<RTCDataChannelMessage>,
     ) -> Self {
         Self {
@@ -49,20 +50,20 @@ impl DataChannel {
     ///
     /// ```no_run
     /// # use bytes::BytesMut;
-    /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<()> {
     /// dc.send(BytesMut::from(&b"Hello, WebRTC!"[..])).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn send(&self, data: BytesMut) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send(&self, data: BytesMut) -> Result<()> {
         let message = RTCDataChannelMessage {
             is_string: false,
             data,
         };
 
         self.tx
-            .try_send(InnerMessage::DataChannelMessage(self.id, message))
-            .map_err(|e| format!("Failed to send: {:?}", e))?;
+            .try_send(MessageInner::DataChannelMessage(self.id, message))
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
 
         Ok(())
     }
@@ -72,15 +73,12 @@ impl DataChannel {
     /// # Example
     ///
     /// ```no_run
-    /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<()> {
     /// dc.send_text("Hello, WebRTC!").await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn send_text(
-        &self,
-        text: impl Into<String>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send_text(&self, text: impl Into<String>) -> Result<()> {
         let text = text.into();
         let data = BytesMut::from(text.as_bytes());
 
@@ -90,8 +88,8 @@ impl DataChannel {
         };
 
         self.tx
-            .try_send(InnerMessage::DataChannelMessage(self.id, message))
-            .map_err(|e| format!("Failed to send: {:?}", e))?;
+            .try_send(MessageInner::DataChannelMessage(self.id, message))
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
 
         Ok(())
     }

@@ -52,3 +52,4 @@ pub use rtc::peer_connection::{
 pub use rtc::rtp_transceiver::{
     RTCRtpReceiverId, RTCRtpSenderId, RTCRtpTransceiverDirection, RTCRtpTransceiverInit,
 };
+pub use rtc::shared::error::{Error, Result};

@@ -4,8 +4,9 @@
 
 #![allow(clippy::collapsible_if)]
 
-use crate::peer_connection::InnerMessage;
-use crate::peer_connection::PeerConnectionInner;
+use crate::Result;
+use crate::peer_connection::MessageInner;
+use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{AsyncUdpSocket, Receiver};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
@@ -13,44 +14,33 @@ use rtc::peer_connection::event::RTCPeerConnectionEvent;
 use rtc::peer_connection::message::RTCMessage;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
+const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
 
 /// The driver for a peer connection
 ///
 /// Runs the event loop following rtc's EventLoop pattern with tokio::select!
 pub struct PeerConnectionDriver {
-    inner: Arc<PeerConnectionInner>,
-    socket: Box<dyn AsyncUdpSocket>,
-    local_addr: SocketAddr,
+    inner: Arc<PeerConnectionRef>,
+    sockets: Vec<Arc<dyn AsyncUdpSocket>>,
     /// Channel for receiving outgoing messages
-    msg_rx: Option<Receiver<InnerMessage>>,
+    msg_rx: Option<Receiver<MessageInner>>,
 }
 
 impl PeerConnectionDriver {
     /// Create a new driver for the given peer connection
     pub(crate) async fn new(
-        inner: Arc<PeerConnectionInner>,
-        socket: Box<dyn AsyncUdpSocket>,
-    ) -> Result<Self, std::io::Error> {
-        let local_addr = socket.local_addr()?;
-
-        // Store local address in inner for ICE gathering
-        {
-            let mut inner_local_addr = inner.local_addr.lock().await;
-            *inner_local_addr = Some(local_addr);
-        }
-
+        inner: Arc<PeerConnectionRef>,
+        sockets: Vec<Arc<dyn AsyncUdpSocket>>,
+    ) -> Result<Self> {
         // Take the receiver (can only be done once)
         let msg_rx = inner.msg_rx.lock().await.take();
 
         Ok(Self {
             inner,
-            socket,
-            local_addr,
+            sockets,
             msg_rx,
         })
     }
@@ -58,7 +48,7 @@ impl PeerConnectionDriver {
     /// Run the driver event loop
     ///
     /// This follows rtc's EventLoop pattern exactly with tokio::select!
-    pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn run(&mut self) -> Result<()> {
         let mut recv_buf = vec![0u8; 2000];
 
         loop {
@@ -68,8 +58,7 @@ impl PeerConnectionDriver {
                 while let Some(msg) = core.poll_write() {
                     drop(core);
 
-                    match self
-                        .socket
+                    match self.sockets[0] //TODO: select correct socket
                         .send_to(&msg.message, msg.transport.peer_addr)
                         .await
                     {
@@ -149,9 +138,11 @@ impl PeerConnectionDriver {
                         }
                         RTCMessage::RtpPacket(track_id, _packet) => {
                             log::trace!("Received RTP packet for track: {:?}", track_id);
+                            //TODO:
                         }
                         RTCMessage::RtcpPacket(track_id, _packets) => {
                             log::trace!("Received RTCP packets for track: {:?}", track_id);
+                            //TODO:
                         }
                     }
                 }
@@ -197,7 +188,7 @@ impl PeerConnectionDriver {
                 }.fuse() => {
                     if let Some(msg) = msg {
                         match msg {
-                            InnerMessage::DataChannelMessage(channel_id, message) => {
+                            MessageInner::DataChannelMessage(channel_id, message) => {
                                 let mut core = self.inner.core.lock().await;
                                 if core.data_channel(channel_id).is_some() {
                                     if let Err(err) = core.handle_write(RTCMessage::DataChannelMessage(
@@ -208,7 +199,7 @@ impl PeerConnectionDriver {
                                     }
                                 }
                             }
-                            InnerMessage::SenderRtp(sender_id, packet) => {
+                            MessageInner::SenderRtp(sender_id, packet) => {
                                 let mut core = self.inner.core.lock().await;
                                 if let Some(mut sender) = core.rtp_sender(sender_id) {
                                     if let Err(err) = sender.write_rtp(packet) {
@@ -216,7 +207,7 @@ impl PeerConnectionDriver {
                                     }
                                 }
                             }
-                            InnerMessage::SenderRtcp(sender_id, rtcp_packets) => {
+                            MessageInner::SenderRtcp(sender_id, rtcp_packets) => {
                                 let mut core = self.inner.core.lock().await;
                                 if let Some(mut sender) = core.rtp_sender(sender_id) {
                                     if let Err(err) = sender.write_rtcp(rtcp_packets) {
@@ -224,7 +215,7 @@ impl PeerConnectionDriver {
                                     }
                                 }
                             }
-                            InnerMessage::ReceiverRtcp(receiver_id, rtcp_packets) => {
+                            MessageInner::ReceiverRtcp(receiver_id, rtcp_packets) => {
                                 let mut core = self.inner.core.lock().await;
                                 if let Some(mut receiver) = core.rtp_receiver(receiver_id) {
                                     if let Err(err) = receiver.write_rtcp(rtcp_packets) {
@@ -232,25 +223,29 @@ impl PeerConnectionDriver {
                                     }
                                 }
                             }
-                            InnerMessage::LocalIceCandidate(candidate) => {
+                            MessageInner::LocalIceCandidate(candidate) => {
                                 let mut core = self.inner.core.lock().await;
                                 if let Err(err) = core.add_local_candidate(candidate) {
                                     log::error!("Failed to add local candidate: {}", err);
                                 }
+                            }
+                            MessageInner::Close => {
+                                return Ok(())
                             }
                         }
                     }
                 }
 
                 // Incoming network packet
-                res = self.socket.recv_from(&mut recv_buf).fuse() => {
+                //TODO: select correct socket
+                res = self.sockets[0].recv_from(&mut recv_buf).fuse() => {
                     match res {
                         Ok((n, peer_addr)) => {
                             log::trace!("Received {} bytes from {}", n, peer_addr);
                             let tagged_msg = TaggedBytesMut {
                                 now: Instant::now(),
                                 transport: TransportContext {
-                                    local_addr: self.local_addr,
+                                    local_addr: self.sockets[0].local_addr()?,//todo: select correct socket
                                     peer_addr,
                                     ecn: None,
                                     transport_protocol: TransportProtocol::UDP,
@@ -262,9 +257,8 @@ impl PeerConnectionDriver {
                                 core.handle_read(tagged_msg)?;
                             }
                         }
-                        Err(e) => {
-                            log::error!("Socket recv error: {}", e);
-                            return Err(Box::new(e));
+                        Err(err) => {
+                            log::error!("Socket recv error: {}", err);
                         }
                     }
                 }

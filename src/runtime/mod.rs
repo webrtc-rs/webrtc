@@ -11,6 +11,7 @@ use std::{
     io,
     net::SocketAddr,
     pin::Pin,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -28,7 +29,16 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// Create an async UDP socket from a standard socket
     ///
     /// The socket should be bound and configured before being wrapped.
-    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Box<dyn AsyncUdpSocket>>;
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>>;
+
+    /*
+    /// Create an async TCP socket from a standard socket
+    ///
+    /// The socket should be bound and configured before being wrapped.
+    fn wrap_tcp_listener(
+        &self,
+        socket: std::net::TcpListener,
+    ) -> io::Result<Box<dyn AsyncTcpListener>>;*/
 
     /// Get the current time
     ///

@@ -14,8 +14,8 @@ impl Runtime for SmolRuntime {
         spawn(future).detach();
     }
 
-    fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Box<dyn AsyncUdpSocket>> {
-        Ok(Box::new(UdpSocket::new(sock)?))
+    fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
+        Ok(Arc::new(UdpSocket::new(sock)?))
     }
 
     fn now(&self) -> Instant {

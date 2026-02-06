@@ -8,6 +8,7 @@ use crate::media_track::{TrackLocal, TrackRemote};
 use crate::peer_connection_driver::PeerConnectionDriver;
 use crate::runtime::Runtime;
 use crate::runtime::{Mutex, Receiver, Sender, channel};
+use log::error;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
@@ -15,7 +16,7 @@ use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
 /// Trait for handling peer connection events asynchronously
@@ -78,7 +79,7 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
 
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
-pub(crate) enum InnerMessage {
+pub(crate) enum MessageInner {
     /// Outgoing data channel message
     DataChannelMessage(RTCDataChannelId, RTCDataChannelMessage),
     /// Outgoing RTP packet from local track
@@ -89,6 +90,60 @@ pub(crate) enum InnerMessage {
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
     /// New local ICE candidate
     LocalIceCandidate(RTCIceCandidateInit),
+    Close,
+}
+
+pub struct PeerConnectionBuilder<A: ToSocketAddrs> {
+    config: RTCConfiguration,
+    runtime: Option<Arc<dyn Runtime>>,
+    handler: Option<Arc<dyn PeerConnectionEventHandler>>,
+    udp_addrs: Vec<A>,
+    tcp_addrs: Vec<A>,
+}
+
+impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
+    pub fn new(config: RTCConfiguration) -> Self {
+        Self {
+            config,
+            runtime: None,
+            handler: None,
+            udp_addrs: vec![],
+            tcp_addrs: vec![],
+        }
+    }
+
+    pub fn with_runtime(mut self, runtime: Option<Arc<dyn Runtime>>) -> Self {
+        self.runtime = runtime;
+        self
+    }
+
+    pub fn with_handler(mut self, handler: Option<Arc<dyn PeerConnectionEventHandler>>) -> Self {
+        self.handler = handler;
+        self
+    }
+
+    pub fn with_udp_addrs(mut self, udp_addrs: Vec<A>) -> Self {
+        self.udp_addrs = udp_addrs;
+        self
+    }
+
+    pub fn with_tcp_addrs(mut self, tcp_addrs: Vec<A>) -> Self {
+        self.tcp_addrs = tcp_addrs;
+        self
+    }
+
+    pub async fn build(self) -> Result<PeerConnection> {
+        PeerConnection::new(
+            self.config,
+            self.runtime
+                .ok_or_else(|| std::io::Error::other("no async runtime found"))?,
+            self.handler
+                .ok_or_else(|| std::io::Error::other("no event handler found"))?,
+            self.udp_addrs,
+            self.tcp_addrs,
+        )
+        .await
+    }
 }
 
 /// Async-friendly peer connection
@@ -96,10 +151,10 @@ pub(crate) enum InnerMessage {
 /// This wraps the Sans-I/O `RTCPeerConnection` from the rtc crate and provides
 /// an async API.
 pub struct PeerConnection {
-    pub(crate) inner: Arc<PeerConnectionInner>,
+    pub(crate) inner: Arc<PeerConnectionRef>,
 }
 
-pub(crate) struct PeerConnectionInner {
+pub(crate) struct PeerConnectionRef {
     /// The sans-I/O peer connection core (uses default NoopInterceptor)
     pub(crate) core: Mutex<RTCPeerConnection>,
     /// Runtime for async operations
@@ -119,22 +174,20 @@ pub(crate) struct PeerConnectionInner {
     /// RTP packet senders for remote tracks
     pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, Sender<rtc::rtp::Packet>>>,
     /// Unified channel for all outgoing messages
-    pub(crate) msg_tx: Sender<InnerMessage>,
+    pub(crate) msg_tx: Sender<MessageInner>,
     /// Unified channel receiver for all outgoing messages (taken by driver)
-    pub(crate) msg_rx: Mutex<Option<Receiver<InnerMessage>>>,
+    pub(crate) msg_rx: Mutex<Option<Receiver<MessageInner>>>,
 }
-
-// Safety: we protect it with Mutex to make it Send + Sync
-unsafe impl Send for PeerConnectionInner {}
-unsafe impl Sync for PeerConnectionInner {}
 
 impl PeerConnection {
     /// Create a new peer connection with a custom runtime
-    pub fn new_with_runtime(
-        runtime: Arc<dyn Runtime>,
+    async fn new<A: ToSocketAddrs>(
         config: RTCConfiguration,
+        runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+        udp_addrs: Vec<A>,
+        _tcp_addrs: Vec<A>,
+    ) -> Result<Self> {
         let ice_servers = config.ice_servers().to_vec();
 
         let core = RTCPeerConnection::new(config)?;
@@ -151,10 +204,18 @@ impl PeerConnection {
             },
         );
 
-        Ok(Self {
-            inner: Arc::new(PeerConnectionInner {
+        let mut async_udp_sockets = vec![];
+        for addr in udp_addrs {
+            let socket = std::net::UdpSocket::bind(addr)?;
+            socket.set_nonblocking(true)?;
+            let async_udp_socket = runtime.wrap_udp_socket(socket)?;
+            async_udp_sockets.push(async_udp_socket);
+        }
+
+        let peer_connection = Self {
+            inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
-                runtime,
+                runtime: runtime.clone(),
                 handler,
                 ice_gatherer,
                 local_addr: Mutex::new(None),
@@ -165,42 +226,52 @@ impl PeerConnection {
                 msg_tx: outgoing_tx,
                 msg_rx: Mutex::new(Some(outgoing_rx)),
             }),
-        })
+        };
+
+        let mut driver =
+            PeerConnectionDriver::new(peer_connection.inner.clone(), async_udp_sockets).await?;
+        runtime.spawn(Box::pin(async move {
+            if let Err(e) = driver.run().await {
+                error!("I/O error: {}", e);
+            }
+        }));
+
+        Ok(peer_connection)
     }
 
-    /// Create a new peer connection with the default runtime
-    #[cfg(any(feature = "runtime-tokio", feature = "runtime-smol"))]
-    pub fn new(
-        config: RTCConfiguration,
-        handler: Arc<dyn PeerConnectionEventHandler>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let runtime = crate::runtime::default_runtime().ok_or("No default runtime available")?;
-        Self::new_with_runtime(runtime, config, handler)
+    /// Close the peer connection
+    pub async fn close(&self) -> Result<()> {
+        {
+            let mut core = self.inner.core.lock().await;
+            core.close()?;
+        }
+        self.inner
+            .msg_tx
+            .try_send(MessageInner::Close)
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+        Ok(())
     }
 
     /// Create an SDP offer
     pub async fn create_offer(
         &self,
         options: Option<RTCOfferOptions>,
-    ) -> Result<RTCSessionDescription, Box<dyn std::error::Error>> {
+    ) -> Result<RTCSessionDescription> {
         let mut core = self.inner.core.lock().await;
-        Ok(core.create_offer(options)?)
+        core.create_offer(options)
     }
 
     /// Create an SDP answer
     pub async fn create_answer(
         &self,
         options: Option<RTCAnswerOptions>,
-    ) -> Result<RTCSessionDescription, Box<dyn std::error::Error>> {
+    ) -> Result<RTCSessionDescription> {
         let mut core = self.inner.core.lock().await;
-        Ok(core.create_answer(options)?)
+        core.create_answer(options)
     }
 
     /// Set the local description
-    pub async fn set_local_description(
-        &self,
-        desc: RTCSessionDescription,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.set_local_description(desc)?;
@@ -218,10 +289,7 @@ impl PeerConnection {
     }
 
     /// Set the remote description
-    pub async fn set_remote_description(
-        &self,
-        desc: RTCSessionDescription,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
         let mut core = self.inner.core.lock().await;
         core.set_remote_description(desc)?;
         Ok(())
@@ -253,7 +321,7 @@ impl PeerConnection {
     /// # struct Handler;
     /// # #[async_trait::async_trait]
     /// # impl PeerConnectionEventHandler for Handler {}
-    /// # async fn example(pc: PeerConnection) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example(pc: PeerConnection) -> Result<()> {
     /// // Receive candidate from signaling channel
     /// let candidate_init = RTCIceCandidateInit {
     ///     candidate: "candidate:1 1 UDP 2130706431 192.168.1.100 54321 typ host".to_string(),
@@ -267,10 +335,7 @@ impl PeerConnection {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn add_ice_candidate(
-        &self,
-        candidate: RTCIceCandidateInit,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()> {
         let mut core = self.inner.core.lock().await;
         core.add_remote_candidate(candidate)?;
         Ok(())
@@ -288,7 +353,7 @@ impl PeerConnection {
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::PeerConnection;
-    /// # async fn example(pc: PeerConnection) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example(pc: PeerConnection) -> Result<()> {
     /// // Trigger ICE restart on connection failure
     /// pc.restart_ice().await?;
     ///
@@ -299,7 +364,7 @@ impl PeerConnection {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn restart_ice(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn restart_ice(&self) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.restart_ice();
@@ -313,13 +378,6 @@ impl PeerConnection {
                 .await;
         }
 
-        Ok(())
-    }
-
-    /// Close the peer connection
-    pub async fn close(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut core = self.inner.core.lock().await;
-        core.close()?;
         Ok(())
     }
 
@@ -340,7 +398,7 @@ impl PeerConnection {
     /// # struct MyHandler;
     /// # #[async_trait::async_trait]
     /// # impl PeerConnectionEventHandler for MyHandler {}
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example() -> Result<()> {
     /// let config = RTCConfigurationBuilder::new().build();
     /// let handler = Arc::new(MyHandler);
     /// let pc = PeerConnection::new(config, handler)?;
@@ -357,7 +415,7 @@ impl PeerConnection {
         &self,
         label: impl Into<String>,
         options: Option<RTCDataChannelInit>,
-    ) -> Result<Arc<DataChannel>, Box<dyn std::error::Error>> {
+    ) -> Result<Arc<DataChannel>> {
         let label = label.into();
 
         // Create the data channel via the core
@@ -411,7 +469,7 @@ impl PeerConnection {
     /// # struct MyHandler;
     /// # #[async_trait::async_trait]
     /// # impl PeerConnectionEventHandler for MyHandler {}
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example() -> Result<()> {
     /// use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
     ///
     /// let config = RTCConfigurationBuilder::new().build();
@@ -435,7 +493,7 @@ impl PeerConnection {
     pub async fn add_track(
         &self,
         track: rtc::media_stream::MediaStreamTrack,
-    ) -> Result<Arc<TrackLocal>, Box<dyn std::error::Error>> {
+    ) -> Result<Arc<TrackLocal>> {
         // Add track via the core
         let sender_id = {
             let mut core = self.inner.core.lock().await;
@@ -446,52 +504,5 @@ impl PeerConnection {
         let local_track = Arc::new(TrackLocal::new(sender_id, self.inner.msg_tx.clone()));
 
         Ok(local_track)
-    }
-
-    /// Bind a UDP socket and create a driver for this peer connection
-    ///
-    /// The driver must be spawned or awaited to handle I/O and events.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use webrtc::peer_connection::*;
-    /// # use webrtc::RTCConfigurationBuilder;
-    /// # use std::sync::Arc;
-    /// # use std::net::SocketAddr;
-    /// # #[derive(Clone)]
-    /// # struct MyHandler;
-    /// # #[async_trait::async_trait]
-    /// # impl PeerConnectionEventHandler for MyHandler {}
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = RTCConfigurationBuilder::new().build();
-    /// let handler = Arc::new(MyHandler);
-    /// let pc = PeerConnection::new(config, handler)?;
-    ///
-    /// // Bind to any available port
-    /// let addr: SocketAddr = "0.0.0.0:0".parse()?;
-    /// let driver = pc.bind(addr).await?;
-    ///
-    /// // Spawn the driver in the background
-    /// tokio::spawn(async move {
-    ///     if let Err(e) = driver.run().await {
-    ///         eprintln!("Driver error: {}", e);
-    ///     }
-    /// });
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn bind(
-        &self,
-        addr: impl Into<SocketAddr>,
-    ) -> Result<PeerConnectionDriver, Box<dyn std::error::Error>> {
-        let addr = addr.into();
-        let socket = std::net::UdpSocket::bind(addr)?;
-        socket.set_nonblocking(true)?;
-
-        let async_socket = self.inner.runtime.wrap_udp_socket(socket)?;
-        let driver = PeerConnectionDriver::new(self.inner.clone(), async_socket).await?;
-
-        Ok(driver)
     }
 }

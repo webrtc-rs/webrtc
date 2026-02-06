@@ -3,6 +3,7 @@
 //! This module provides async-friendly wrappers around RTP media tracks.
 
 use crate::runtime::{Mutex, Receiver, Sender};
+use crate::{Error, Result};
 use rtc::media_stream::MediaStreamTrackId;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 
@@ -15,7 +16,7 @@ use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 ///
 /// ```no_run
 /// # use webrtc::media_track::TrackLocal;
-/// # async fn example(track: std::sync::Arc<TrackLocal>) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn example(track: std::sync::Arc<TrackLocal>) -> Result<()> {
 /// # use bytes::Bytes;
 /// // Create an RTP packet
 /// let packet = rtc::rtp::packet::Packet {
@@ -39,14 +40,14 @@ pub struct TrackLocal {
     /// Sender ID in the peer connection (crate-internal)
     pub(crate) sender_id: RTCRtpSenderId,
     /// Channel for sending outgoing messages to the driver
-    tx: Sender<crate::peer_connection::InnerMessage>,
+    tx: Sender<crate::peer_connection::MessageInner>,
 }
 
 impl TrackLocal {
     /// Create a new local track
     pub(crate) fn new(
         sender_id: RTCRtpSenderId,
-        tx: Sender<crate::peer_connection::InnerMessage>,
+        tx: Sender<crate::peer_connection::MessageInner>,
     ) -> Self {
         Self { sender_id, tx }
     }
@@ -55,32 +56,26 @@ impl TrackLocal {
     ///
     /// This queues the packet for transmission. The actual sending happens
     /// in the driver's event loop via RTCRtpSender::write_rtp().
-    pub async fn write_rtp(
-        &self,
-        packet: rtc::rtp::Packet,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn write_rtp(&self, packet: rtc::rtp::Packet) -> Result<()> {
         self.tx
-            .try_send(crate::peer_connection::InnerMessage::SenderRtp(
+            .try_send(crate::peer_connection::MessageInner::SenderRtp(
                 self.sender_id,
                 packet,
             ))
-            .map_err(|e| format!("Failed to send RTP packet: {:?}", e))?;
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
         Ok(())
     }
 
     /// Send RTCP packets
     ///
     /// This queues RTCP packets (sender reports, etc.) for transmission.
-    pub async fn write_rtcp(
-        &self,
-        packets: Vec<Box<dyn rtc::rtcp::Packet>>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn write_rtcp(&self, packets: Vec<Box<dyn rtc::rtcp::Packet>>) -> Result<()> {
         self.tx
-            .try_send(crate::peer_connection::InnerMessage::SenderRtcp(
+            .try_send(crate::peer_connection::MessageInner::SenderRtcp(
                 self.sender_id,
                 packets,
             ))
-            .map_err(|e| format!("Failed to send RTCP packets: {:?}", e))?;
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
         Ok(())
     }
 }
@@ -115,7 +110,7 @@ pub struct TrackRemote {
     /// Channel for receiving RTP packets
     rtp_rx: Mutex<Receiver<rtc::rtp::Packet>>,
     /// Channel for sending outgoing messages
-    tx: Sender<crate::peer_connection::InnerMessage>,
+    tx: Sender<crate::peer_connection::MessageInner>,
 }
 
 impl TrackRemote {
@@ -126,7 +121,7 @@ impl TrackRemote {
         stream_ids: Vec<rtc::media_stream::MediaStreamId>,
         rid: Option<String>,
         rtp_rx: Receiver<rtc::rtp::Packet>,
-        tx: Sender<crate::peer_connection::InnerMessage>,
+        tx: Sender<crate::peer_connection::MessageInner>,
     ) -> Self {
         Self {
             receiver_id,
@@ -150,16 +145,13 @@ impl TrackRemote {
     ///
     /// Use this to send receiver feedback like NACK (retransmission requests),
     /// PLI (picture loss indication), or receiver reports.
-    pub async fn write_rtcp(
-        &self,
-        packets: Vec<Box<dyn rtc::rtcp::Packet>>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn write_rtcp(&self, packets: Vec<Box<dyn rtc::rtcp::Packet>>) -> Result<()> {
         self.tx
-            .try_send(crate::peer_connection::InnerMessage::ReceiverRtcp(
+            .try_send(crate::peer_connection::MessageInner::ReceiverRtcp(
                 self.receiver_id,
                 packets,
             ))
-            .map_err(|e| format!("Failed to send RTCP packets: {:?}", e))?;
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
         Ok(())
     }
 }
