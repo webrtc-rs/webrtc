@@ -1,6 +1,5 @@
 //! Integration tests for PeerConnection
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use webrtc::peer_connection::*;
@@ -37,7 +36,12 @@ async fn test_create_peer_connection() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TestHandler);
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let mut pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Verify we can close it
     pc.close().await.expect("Failed to close peer connection");
@@ -48,7 +52,12 @@ async fn test_create_offer() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TestHandler);
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let mut pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Create an offer
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -65,7 +74,12 @@ async fn test_set_local_description() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TestHandler);
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let mut pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Create and set local description
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -89,13 +103,12 @@ async fn test_bind_and_driver() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TestHandler);
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
-
-    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-    let driver = pc.bind(addr).await.expect("Failed to bind socket");
-
-    // Spawn the driver
-    let driver_handle = tokio::spawn(async move { driver.run().await });
+    let mut pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Create an offer to trigger some activity
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -108,7 +121,6 @@ async fn test_bind_and_driver() {
 
     // Close and cleanup
     pc.close().await.expect("Failed to close peer connection");
-    driver_handle.abort();
 
     // Note: We expect the driver to error when we close the connection
     // That's normal behavior
@@ -119,11 +131,21 @@ async fn test_offer_answer_exchange() {
     // Create two peer connections to simulate offer/answer exchange
     let config1 = RTCConfigurationBuilder::new().build();
     let handler1 = Arc::new(TestHandler);
-    let pc1 = PeerConnection::new(config1, handler1).expect("Failed to create peer connection 1");
+    let mut pc1 = PeerConnectionBuilder::new(config1)
+        .with_handler(handler1)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     let config2 = RTCConfigurationBuilder::new().build();
     let handler2 = Arc::new(TestHandler);
-    let pc2 = PeerConnection::new(config2, handler2).expect("Failed to create peer connection 2");
+    let mut pc2 = PeerConnectionBuilder::new(config2)
+        .with_handler(handler2)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // PC1 creates an offer
     let _offer = pc1

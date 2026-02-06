@@ -16,6 +16,7 @@ use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 ///
 /// ```no_run
 /// # use webrtc::media_track::TrackLocal;
+/// # use webrtc::Result;
 /// # async fn example(track: std::sync::Arc<TrackLocal>) -> Result<()> {
 /// # use bytes::Bytes;
 /// // Create an RTP packet

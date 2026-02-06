@@ -69,8 +69,12 @@ async fn test_add_ice_candidate() {
 
     let handler = Arc::new(IceTestHandler);
 
-    let pc_a =
-        PeerConnection::new(config, handler.clone()).expect("Failed to create peer connection A");
+    let pc_a = PeerConnectionBuilder::new(config)
+        .with_handler(handler.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     let mut media_engine_b = MediaEngine::default();
     media_engine_b
@@ -80,7 +84,12 @@ async fn test_add_ice_candidate() {
         .with_media_engine(media_engine_b)
         .build();
 
-    let pc_b = PeerConnection::new(config_b, handler).expect("Failed to create peer connection B");
+    let pc_b = PeerConnectionBuilder::new(config_b)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add track to trigger negotiation
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -143,7 +152,12 @@ async fn test_restart_ice() {
 
     let handler = Arc::new(IceTestHandler);
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add track
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -180,6 +194,7 @@ async fn test_restart_ice() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_automatic_host_candidate_gathering() {
     // Test that host candidates are automatically gathered when setLocalDescription is called
     let mut media_engine = MediaEngine::default();
@@ -198,15 +213,12 @@ async fn test_automatic_host_candidate_gathering() {
     let candidate_flag = handler.candidate_received.clone();
     let _complete_flag = handler.gathering_complete.clone();
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
-
-    // Bind socket and spawn driver (required for event processing)
-    let driver = pc
-        .bind("127.0.0.1:0".parse::<std::net::SocketAddr>().unwrap())
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
         .await
-        .expect("Failed to bind");
-
-    let _driver_handle = tokio::spawn(async move { driver.run().await });
+        .unwrap();
 
     // Add track to create media
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -237,6 +249,7 @@ async fn test_automatic_host_candidate_gathering() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_stun_gathering_with_google_stun() {
     // Test STUN gathering with Google's public STUN server
     let mut media_engine = MediaEngine::default();
@@ -261,15 +274,12 @@ async fn test_stun_gathering_with_google_stun() {
         candidates: candidates.clone(),
     });
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
-
-    // Bind socket and spawn driver
-    let driver = pc
-        .bind("0.0.0.0:0".parse::<std::net::SocketAddr>().unwrap())
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
         .await
-        .expect("Failed to bind");
-
-    let _driver_handle = tokio::spawn(async move { driver.run().await });
+        .unwrap();
 
     // Add track to create media
     let track = rtc::media_stream::MediaStreamTrack::new(

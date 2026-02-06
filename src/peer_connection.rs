@@ -6,8 +6,8 @@ use crate::data_channel::DataChannel;
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_track::{TrackLocal, TrackRemote};
 use crate::peer_connection_driver::PeerConnectionDriver;
-use crate::runtime::Runtime;
 use crate::runtime::{Mutex, Receiver, Sender, channel};
+use crate::runtime::{Runtime, default_runtime};
 use log::error;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
@@ -113,13 +113,13 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         }
     }
 
-    pub fn with_runtime(mut self, runtime: Option<Arc<dyn Runtime>>) -> Self {
-        self.runtime = runtime;
+    pub fn with_runtime(mut self, runtime: Arc<dyn Runtime>) -> Self {
+        self.runtime = Some(runtime);
         self
     }
 
-    pub fn with_handler(mut self, handler: Option<Arc<dyn PeerConnectionEventHandler>>) -> Self {
-        self.handler = handler;
+    pub fn with_handler(mut self, handler: Arc<dyn PeerConnectionEventHandler>) -> Self {
+        self.handler = Some(handler);
         self
     }
 
@@ -134,10 +134,14 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
     }
 
     pub async fn build(self) -> Result<PeerConnection> {
+        let runtime = if let Some(runtime) = self.runtime {
+            runtime
+        } else {
+            default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?
+        };
         PeerConnection::new(
             self.config,
-            self.runtime
-                .ok_or_else(|| std::io::Error::other("no async runtime found"))?,
+            runtime,
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
             self.udp_addrs,
@@ -374,6 +378,7 @@ where
     /// ```no_run
     /// use webrtc::peer_connection::*;
     /// use webrtc::RTCIceCandidateInit;
+    /// # use webrtc::Result;
     /// # use std::sync::Arc;
     /// # struct Handler;
     /// # #[async_trait::async_trait]
@@ -410,6 +415,7 @@ where
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::PeerConnection;
+    /// # use webrtc::Result;
     /// # async fn example(pc: PeerConnection) -> Result<()> {
     /// // Trigger ICE restart on connection failure
     /// pc.restart_ice().await?;
@@ -457,6 +463,7 @@ where
     /// # use webrtc::peer_connection::*;
     /// # use webrtc::RTCDataChannelInit;
     /// # use webrtc::RTCConfigurationBuilder;
+    /// # use webrtc::Result;
     /// # use std::sync::Arc;
     /// # #[derive(Clone)]
     /// # struct MyHandler;
@@ -465,7 +472,7 @@ where
     /// # async fn example() -> Result<()> {
     /// let config = RTCConfigurationBuilder::new().build();
     /// let handler = Arc::new(MyHandler);
-    /// let pc = PeerConnection::new(config, handler)?;
+    /// let pc = PeerConnectionBuilder::new(config).with_handler(handler).with_udp_addrs(vec!["127.0.0.1:0"]).build().await?;
     ///
     /// // Create a data channel
     /// let dc = pc.create_data_channel("my-channel", None).await?;
@@ -529,6 +536,7 @@ where
     /// # use webrtc::MediaStreamTrack;
     /// # use webrtc::RTCConfigurationBuilder;
     /// # use std::sync::Arc;
+    /// # use webrtc::Result;
     /// # #[derive(Clone)]
     /// # struct MyHandler;
     /// # #[async_trait::async_trait]
@@ -538,7 +546,7 @@ where
     ///
     /// let config = RTCConfigurationBuilder::new().build();
     /// let handler = Arc::new(MyHandler);
-    /// let pc = PeerConnection::new(config, handler)?;
+    /// let pc = PeerConnectionBuilder::new(config).with_handler(handler).with_udp_addrs(vec!["127.0.0.1:0"]).build().await?;
     ///
     /// // Create a video track
     /// let track = MediaStreamTrack::new(

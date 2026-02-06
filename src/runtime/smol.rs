@@ -17,7 +17,7 @@ impl super::JoinHandleInner for SmolJoinHandle {
         // We could use cancel() if we had a way to cancel, but Task<()> doesn't expose this
         // For now, we'll just do nothing as smol tasks are cooperative
     }
-    
+
     fn is_finished(&self) -> bool {
         // smol::Task doesn't have is_finished, so we assume it's not finished
         false

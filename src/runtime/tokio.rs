@@ -13,7 +13,7 @@ impl super::JoinHandleInner for TokioJoinHandle {
     fn abort(&self) {
         self.0.abort();
     }
-    
+
     fn is_finished(&self) -> bool {
         self.0.is_finished()
     }

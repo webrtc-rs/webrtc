@@ -27,7 +27,12 @@ async fn test_media_engine_configuration() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add a track first (needed to create offer with media)
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -67,7 +72,12 @@ async fn test_setting_engine_ice_timeouts() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Should be able to create offer with custom settings
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -94,7 +104,12 @@ async fn test_setting_engine_replay_protection() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
     assert!(!offer.sdp.is_empty());
@@ -122,7 +137,12 @@ async fn test_combined_configuration() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Create and set local description
     let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -177,10 +197,18 @@ async fn test_peer_connection_with_full_configuration() {
     let handler_a = Arc::new(ConfigTestHandler);
     let handler_b = Arc::new(ConfigTestHandler);
 
-    let pc_a =
-        PeerConnection::new(config_a, handler_a).expect("Failed to create peer connection A");
-    let pc_b =
-        PeerConnection::new(config_b, handler_b).expect("Failed to create peer connection B");
+    let pc_a = PeerConnectionBuilder::new(config_a)
+        .with_handler(handler_a)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
+    let pc_b = PeerConnectionBuilder::new(config_b)
+        .with_handler(handler_b)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add a track to peer A
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -237,7 +265,12 @@ async fn test_media_engine_required_for_tracks() {
         .with_media_engine(media_engine)
         .build();
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add track
     let track = rtc::media_stream::MediaStreamTrack::new(
@@ -284,8 +317,12 @@ async fn test_ice_servers_configuration() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler)
-        .expect("Failed to create peer connection with ICE servers");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Should be able to create offers/answers with ICE servers configured
     let offer = pc.create_offer(None);
@@ -306,10 +343,18 @@ async fn test_ice_transport_policy() {
     let handler_all = Arc::new(ConfigTestHandler);
     let handler_relay = Arc::new(ConfigTestHandler);
 
-    let pc_all = PeerConnection::new(config_all, handler_all)
-        .expect("Failed to create PC with 'all' policy");
-    let pc_relay = PeerConnection::new(config_relay, handler_relay)
-        .expect("Failed to create PC with 'relay' policy");
+    let pc_all = PeerConnectionBuilder::new(config_all)
+        .with_handler(handler_all)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
+    let pc_relay = PeerConnectionBuilder::new(config_relay)
+        .with_handler(handler_relay)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Both should succeed
     assert!(pc_all.create_offer(None).await.is_ok());
@@ -332,12 +377,24 @@ async fn test_bundle_policy() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc_balanced =
-        PeerConnection::new(config_balanced, handler.clone()).expect("Failed with balanced policy");
-    let pc_compat = PeerConnection::new(config_max_compat, handler.clone())
-        .expect("Failed with max-compat policy");
-    let pc_bundle =
-        PeerConnection::new(config_max_bundle, handler).expect("Failed with max-bundle policy");
+    let pc_balanced = PeerConnectionBuilder::new(config_balanced)
+        .with_handler(handler.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
+    let pc_compat = PeerConnectionBuilder::new(config_max_compat)
+        .with_handler(handler.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
+    let pc_bundle = PeerConnectionBuilder::new(config_max_bundle)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // All should create offers successfully
     assert!(pc_balanced.create_offer(None).await.is_ok());
@@ -353,8 +410,12 @@ async fn test_rtcp_mux_policy() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config_require, handler)
-        .expect("Failed to create PC with RTCP mux policy");
+    let pc = PeerConnectionBuilder::new(config_require)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     let offer = pc.create_offer(None);
     assert!(offer.await.is_ok(), "Should create offer with RTCP mux");
@@ -368,7 +429,12 @@ async fn test_peer_identity() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler).expect("Failed to create PC with peer identity");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     assert!(pc.create_offer(None).await.is_ok());
 }
@@ -384,7 +450,12 @@ async fn test_certificates() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler).expect("Failed to create PC with certificates");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     assert!(pc.create_offer(None).await.is_ok());
 }
@@ -397,8 +468,12 @@ async fn test_ice_candidate_pool_size() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc =
-        PeerConnection::new(config, handler).expect("Failed to create PC with candidate pool size");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     assert!(pc.create_offer(None).await.is_ok());
 }
@@ -436,7 +511,12 @@ async fn test_all_configuration_options_combined() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnection::new(config, handler).expect("Failed to create PC with all options");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add track
     let track = rtc::media_stream::MediaStreamTrack::new(

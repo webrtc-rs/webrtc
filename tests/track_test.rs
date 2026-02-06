@@ -1,7 +1,6 @@
 //! Integration tests for track APIs
 
 use bytes::Bytes;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use webrtc::media_track::TrackRemote;
@@ -48,7 +47,12 @@ async fn test_add_track() {
     let config = RTCConfigurationBuilder::new().build();
     let handler = Arc::new(TrackTestHandler::new());
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .expect("Failed to create peer connection");
 
     // Create and add a track
     let track = create_video_track();
@@ -70,7 +74,12 @@ async fn test_send_rtp_packets() {
         .build();
     let handler = Arc::new(TrackTestHandler::new());
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add a track
     let track = create_video_track();
@@ -120,7 +129,12 @@ async fn test_send_rtcp_packets() {
         .build();
     let handler = Arc::new(TrackTestHandler::new());
 
-    let pc = PeerConnection::new(config, handler).expect("Failed to create peer connection");
+    let pc = PeerConnectionBuilder::new(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add a track
     let track = create_video_track();
@@ -168,10 +182,18 @@ async fn test_track_negotiation() {
     let handler_a = Arc::new(TrackTestHandler::new());
     let handler_b = Arc::new(TrackTestHandler::new());
 
-    let pc_a = PeerConnection::new(config_a, handler_a.clone())
-        .expect("Failed to create peer connection A");
-    let pc_b = PeerConnection::new(config_b, handler_b.clone())
-        .expect("Failed to create peer connection B");
+    let pc_a = PeerConnectionBuilder::new(config_a)
+        .with_handler(handler_a)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
+    let pc_b = PeerConnectionBuilder::new(config_b)
+        .with_handler(handler_b)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add track to peer A
     let track = create_video_track();
@@ -199,21 +221,6 @@ async fn test_track_negotiation() {
     pc_a.set_remote_description(answer)
         .await
         .expect("Failed to set remote description");
-
-    // Bind and start drivers (in background)
-    let addr_a: SocketAddr = "127.0.0.1:0".parse().unwrap();
-    let addr_b: SocketAddr = "127.0.0.1:0".parse().unwrap();
-
-    let driver_a = pc_a.bind(addr_a).await.expect("Failed to bind A");
-    let driver_b = pc_b.bind(addr_b).await.expect("Failed to bind B");
-
-    let handle_a = tokio::spawn(async move {
-        let _ = driver_a.run().await;
-    });
-
-    let handle_b = tokio::spawn(async move {
-        let _ = driver_b.run().await;
-    });
 
     // Wait for track to be negotiated on peer B
     sleep(Duration::from_millis(200)).await;
@@ -246,10 +253,6 @@ async fn test_track_negotiation() {
 
     // Give time for cleanup
     sleep(Duration::from_millis(100)).await;
-
-    // Cleanup
-    handle_a.abort();
-    handle_b.abort();
 }
 
 // Test sending RTCP feedback from TrackRemote
@@ -274,10 +277,18 @@ async fn test_send_rtcp_feedback() {
     let handler_a = Arc::new(TrackTestHandler::new());
     let handler_b = Arc::new(TrackTestHandler::new());
 
-    let pc_a = PeerConnection::new(config_a, handler_a.clone())
-        .expect("Failed to create peer connection A");
-    let pc_b = PeerConnection::new(config_b, handler_b.clone())
-        .expect("Failed to create peer connection B");
+    let pc_a = PeerConnectionBuilder::new(config_a)
+        .with_handler(handler_a.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
+    let pc_b = PeerConnectionBuilder::new(config_b)
+        .with_handler(handler_b)
+        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .build()
+        .await
+        .unwrap();
 
     // Add track to peer B (A will be the receiver)
     let track = create_video_track();
@@ -306,21 +317,6 @@ async fn test_send_rtcp_feedback() {
         .await
         .expect("Failed to set remote description");
 
-    // Bind peers
-    let addr_a: SocketAddr = "127.0.0.1:0".parse().unwrap();
-    let addr_b: SocketAddr = "127.0.0.1:0".parse().unwrap();
-
-    let driver_a = pc_a.bind(addr_a).await.expect("Failed to bind A");
-    let driver_b = pc_b.bind(addr_b).await.expect("Failed to bind B");
-
-    let handle_a = tokio::spawn(async move {
-        let _ = driver_a.run().await;
-    });
-
-    let handle_b = tokio::spawn(async move {
-        let _ = driver_b.run().await;
-    });
-
     // Wait for negotiation
     sleep(Duration::from_millis(200)).await;
 
@@ -342,6 +338,4 @@ async fn test_send_rtcp_feedback() {
 
     // Cleanup
     sleep(Duration::from_millis(100)).await;
-    handle_a.abort();
-    handle_b.abort();
 }

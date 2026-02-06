@@ -25,7 +25,7 @@ impl JoinHandle {
     pub fn abort(&self) {
         self.inner.abort();
     }
-    
+
     /// Check if the task is finished
     pub fn is_finished(&self) -> bool {
         self.inner.is_finished()
@@ -46,7 +46,7 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     ///
     /// The future must complete to `()` and will be spawned as a background task.
     /// Returns a handle that can be used to manage the task lifecycle.
-    /// 
+    ///
     /// # Safety Note
     /// The returned JoinHandle must be properly managed - if it's dropped or aborted,
     /// the spawned task will be cancelled. This allows spawning non-'static futures

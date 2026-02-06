@@ -50,6 +50,7 @@ impl DataChannel {
     ///
     /// ```no_run
     /// # use bytes::BytesMut;
+    /// # use webrtc::Result;
     /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<()> {
     /// dc.send(BytesMut::from(&b"Hello, WebRTC!"[..])).await?;
     /// # Ok(())
@@ -73,6 +74,7 @@ impl DataChannel {
     /// # Example
     ///
     /// ```no_run
+    /// # use webrtc::Result;
     /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<()> {
     /// dc.send_text("Hello, WebRTC!").await?;
     /// # Ok(())
