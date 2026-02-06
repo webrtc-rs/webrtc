@@ -8,8 +8,8 @@ use webrtc::peer_connection::{
     RTCIceCandidateInit, RTCIceCandidateType, RTCIceGatheringState, RTCIceServer,
     RTCPeerConnectionIceEvent,
 };
+use webrtc::runtime::Mutex;
 use webrtc::runtime::sleep;
-use webrtc::runtime::sync::Mutex;
 
 #[derive(Clone)]
 struct IceTestHandler;

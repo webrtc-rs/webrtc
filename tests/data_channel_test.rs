@@ -2,7 +2,7 @@ use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use std::sync::Arc;
 use webrtc::data_channel::DataChannel;
 use webrtc::peer_connection::*;
-use webrtc::runtime::sync::Mutex;
+use webrtc::runtime::Mutex;
 
 #[derive(Clone)]
 struct TestHandler {

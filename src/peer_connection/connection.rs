@@ -4,7 +4,7 @@ use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
 use crate::data_channel::DataChannel;
 use crate::runtime::Runtime;
-use crate::runtime::sync;
+use crate::runtime::{Mutex, Receiver, Sender, channel};
 use crate::track::TrackRemote;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage};
 use rtc::peer_connection::RTCPeerConnection;
@@ -41,7 +41,7 @@ pub struct PeerConnection {
 
 pub(crate) struct PeerConnectionInner {
     /// The sans-I/O peer connection core (uses default NoopInterceptor)
-    pub(crate) core: sync::Mutex<RTCPeerConnection>,
+    pub(crate) core: Mutex<RTCPeerConnection>,
     /// Runtime for async operations
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
@@ -49,20 +49,19 @@ pub(crate) struct PeerConnectionInner {
     /// ICE gatherer for managing ICE candidate gathering
     pub(crate) ice_gatherer: RTCIceGatherer,
     /// Local socket address (set after bind)
-    pub(crate) local_addr: sync::Mutex<Option<SocketAddr>>,
+    pub(crate) local_addr: Mutex<Option<SocketAddr>>,
     /// Data channels  
-    pub(crate) data_channels: sync::Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
+    pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
-    pub(crate) data_channel_rxs:
-        sync::Mutex<HashMap<RTCDataChannelId, sync::Sender<RTCDataChannelMessage>>>,
+    pub(crate) data_channel_rxs: Mutex<HashMap<RTCDataChannelId, Sender<RTCDataChannelMessage>>>,
     /// Remote tracks (incoming media)
-    pub(crate) remote_tracks: sync::Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
+    pub(crate) remote_tracks: Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
     /// RTP packet senders for remote tracks
-    pub(crate) track_rxs: sync::Mutex<HashMap<RTCRtpReceiverId, sync::Sender<rtc::rtp::Packet>>>,
+    pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, Sender<rtc::rtp::Packet>>>,
     /// Unified channel for all outgoing messages
-    pub(crate) msg_tx: sync::Sender<InnerMessage>,
+    pub(crate) msg_tx: Sender<InnerMessage>,
     /// Unified channel receiver for all outgoing messages (taken by driver)
-    pub(crate) msg_rx: sync::Mutex<Option<sync::Receiver<InnerMessage>>>,
+    pub(crate) msg_rx: Mutex<Option<Receiver<InnerMessage>>>,
 }
 
 // Safety: we protect it with Mutex to make it Send + Sync
@@ -81,7 +80,7 @@ impl PeerConnection {
         let core = RTCPeerConnection::new(config)?;
 
         // Create unified channel for all outgoing messages
-        let (outgoing_tx, outgoing_rx) = sync::channel();
+        let (outgoing_tx, outgoing_rx) = channel();
 
         // Create ICE gatherer with servers from config
         let ice_gatherer = RTCIceGatherer::new(
@@ -94,17 +93,17 @@ impl PeerConnection {
 
         Ok(Self {
             inner: Arc::new(PeerConnectionInner {
-                core: sync::Mutex::new(core),
+                core: Mutex::new(core),
                 runtime,
                 handler,
                 ice_gatherer,
-                local_addr: sync::Mutex::new(None),
-                data_channels: sync::Mutex::new(HashMap::new()),
-                data_channel_rxs: sync::Mutex::new(HashMap::new()),
-                remote_tracks: sync::Mutex::new(HashMap::new()),
-                track_rxs: sync::Mutex::new(HashMap::new()),
+                local_addr: Mutex::new(None),
+                data_channels: Mutex::new(HashMap::new()),
+                data_channel_rxs: Mutex::new(HashMap::new()),
+                remote_tracks: Mutex::new(HashMap::new()),
+                track_rxs: Mutex::new(HashMap::new()),
                 msg_tx: outgoing_tx,
-                msg_rx: sync::Mutex::new(Some(outgoing_rx)),
+                msg_rx: Mutex::new(Some(outgoing_rx)),
             }),
         })
     }
@@ -307,7 +306,7 @@ impl PeerConnection {
         };
 
         // Create a channel for receiving messages for this data channel
-        let (dc_tx, dc_rx) = sync::channel();
+        let (dc_tx, dc_rx) = channel();
 
         // Create our async wrapper
         let dc = Arc::new(DataChannel::new(

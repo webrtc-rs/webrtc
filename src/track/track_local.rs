@@ -1,6 +1,6 @@
 //! Local track for sending media
 
-use crate::runtime::sync;
+use crate::runtime::Sender;
 use rtc::rtp::packet::Packet as RtpPacket;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 
@@ -37,14 +37,14 @@ pub struct TrackLocal {
     /// Sender ID in the peer connection (crate-internal)
     pub(crate) sender_id: RTCRtpSenderId,
     /// Channel for sending outgoing messages to the driver
-    tx: sync::Sender<crate::peer_connection::InnerMessage>,
+    tx: Sender<crate::peer_connection::InnerMessage>,
 }
 
 impl TrackLocal {
     /// Create a new local track
     pub(crate) fn new(
         sender_id: RTCRtpSenderId,
-        tx: sync::Sender<crate::peer_connection::InnerMessage>,
+        tx: Sender<crate::peer_connection::InnerMessage>,
     ) -> Self {
         Self { sender_id, tx }
     }

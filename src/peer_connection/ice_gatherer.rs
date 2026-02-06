@@ -4,7 +4,7 @@
 //! Unlike the old async version, this gatherer is a configuration object that holds
 //! the ICE servers and state.
 
-use crate::runtime::{Runtime, sync};
+use crate::runtime::{Runtime, Sender};
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::transport::RTCIceCandidateInit;
 use std::net::SocketAddr;
@@ -33,7 +33,7 @@ pub enum RTCIceGathererState {
 ///
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
 pub struct RTCIceGatherer {
-    msg_tx: sync::Sender<super::InnerMessage>,
+    msg_tx: Sender<super::InnerMessage>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
     state: RTCIceGathererState,
@@ -41,10 +41,7 @@ pub struct RTCIceGatherer {
 
 impl RTCIceGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
-    pub(crate) fn new(
-        outgoing_tx: sync::Sender<super::InnerMessage>,
-        opts: RTCIceGatherOptions,
-    ) -> Self {
+    pub(crate) fn new(outgoing_tx: Sender<super::InnerMessage>, opts: RTCIceGatherOptions) -> Self {
         Self {
             msg_tx: outgoing_tx,
             ice_servers: opts.ice_servers,

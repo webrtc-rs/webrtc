@@ -74,3 +74,159 @@ pub async fn resolve_host(host: &str) -> io::Result<Vec<SocketAddr>> {
         .await
         .map(|iter| iter.collect())
 }
+
+/// Tokio-based mutex wrapper
+pub struct TokioMutex<T: ?Sized>(pub Arc<::tokio::sync::Mutex<T>>);
+
+impl<T: ?Sized> Clone for TokioMutex<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> TokioMutex<T> {
+    pub fn new(value: T) -> Self {
+        Self(Arc::new(::tokio::sync::Mutex::new(value)))
+    }
+
+    /// Lock the mutex asynchronously
+    pub async fn lock(&self) -> ::tokio::sync::MutexGuard<'_, T> {
+        self.0.lock().await
+    }
+}
+
+impl<T: ?Sized + Send> AsyncMutex<T> for TokioMutex<T> {
+    type Guard<'a>
+        = ::tokio::sync::MutexGuard<'a, T>
+    where
+        T: 'a;
+
+    fn lock(&self) -> Pin<Box<dyn Future<Output = Self::Guard<'_>> + Send + '_>> {
+        Box::pin(self.0.lock())
+    }
+}
+
+/// Tokio-based notify wrapper
+pub struct TokioNotify(pub Arc<::tokio::sync::Notify>);
+
+impl Clone for TokioNotify {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl Default for TokioNotify {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TokioNotify {
+    pub fn new() -> Self {
+        Self(Arc::new(::tokio::sync::Notify::new()))
+    }
+
+    /// Notify one waiting task
+    pub fn notify_one(&self) {
+        self.0.notify_one();
+    }
+
+    /// Notify all waiting tasks
+    pub fn notify_waiters(&self) {
+        self.0.notify_waiters();
+    }
+
+    /// Wait for a notification
+    pub async fn notified(&self) {
+        self.0.notified().await
+    }
+}
+
+impl AsyncNotify for TokioNotify {
+    fn notify_one(&self) {
+        self.0.notify_one();
+    }
+
+    fn notify_waiters(&self) {
+        self.0.notify_waiters();
+    }
+
+    fn notified(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(self.0.notified())
+    }
+}
+
+/// Tokio-based channel sender
+pub struct TokioSender<T>(pub ::tokio::sync::mpsc::UnboundedSender<T>);
+
+impl<T> Clone for TokioSender<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: Send> TokioSender<T> {
+    /// Send a value asynchronously
+    pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
+        self.0.send(value).map_err(|e| SendError(e.0))
+    }
+
+    /// Try to send a value without blocking
+    pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
+        self.0
+            .send(value)
+            .map_err(|e| TrySendError::Disconnected(e.0))
+    }
+}
+
+impl<T: Send> AsyncSender<T> for TokioSender<T> {
+    fn send(
+        &self,
+        value: T,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SendError<T>>> + Send + '_>> {
+        Box::pin(async move { self.0.send(value).map_err(|e| SendError(e.0)) })
+    }
+
+    fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
+        self.0
+            .send(value)
+            .map_err(|e| TrySendError::Disconnected(e.0))
+    }
+}
+
+/// Tokio-based channel receiver
+pub struct TokioReceiver<T>(pub ::tokio::sync::mpsc::UnboundedReceiver<T>);
+
+impl<T: Send> TokioReceiver<T> {
+    /// Receive a value asynchronously
+    pub async fn recv(&mut self) -> Option<T> {
+        self.0.recv().await
+    }
+
+    /// Try to receive a value without blocking
+    pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.0.try_recv().map_err(|e| match e {
+            ::tokio::sync::mpsc::error::TryRecvError::Empty => TryRecvError::Empty,
+            ::tokio::sync::mpsc::error::TryRecvError::Disconnected => TryRecvError::Disconnected,
+        })
+    }
+}
+
+impl<T: Send> AsyncReceiver<T> for TokioReceiver<T> {
+    fn recv(&mut self) -> Pin<Box<dyn Future<Output = Option<T>> + Send + '_>> {
+        Box::pin(self.0.recv())
+    }
+
+    fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.0.try_recv().map_err(|e| match e {
+            ::tokio::sync::mpsc::error::TryRecvError::Empty => TryRecvError::Empty,
+            ::tokio::sync::mpsc::error::TryRecvError::Disconnected => TryRecvError::Disconnected,
+        })
+    }
+}
+
+/// Create a new unbounded channel
+pub fn channel<T: Send>() -> (TokioSender<T>, TokioReceiver<T>) {
+    let (tx, rx) = ::tokio::sync::mpsc::unbounded_channel();
+    (TokioSender(tx), TokioReceiver(rx))
+}

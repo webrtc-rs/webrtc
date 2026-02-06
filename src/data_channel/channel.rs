@@ -1,7 +1,7 @@
 //! Async DataChannel implementation
 
 use crate::peer_connection::InnerMessage;
-use crate::runtime::sync;
+use crate::runtime::{Mutex, Receiver, Sender};
 use bytes::BytesMut;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage, RTCDataChannelState};
 use std::sync::Arc;
@@ -17,13 +17,13 @@ pub struct DataChannel {
     pub label: String,
 
     /// Current state
-    state: Arc<sync::Mutex<RTCDataChannelState>>,
+    state: Arc<Mutex<RTCDataChannelState>>,
 
     /// Channel for sending messages to the driver
-    tx: sync::Sender<InnerMessage>,
+    tx: Sender<InnerMessage>,
 
     /// Channel for receiving messages from the driver
-    rx: Arc<sync::Mutex<sync::Receiver<RTCDataChannelMessage>>>,
+    rx: Arc<Mutex<Receiver<RTCDataChannelMessage>>>,
 }
 
 impl DataChannel {
@@ -31,15 +31,15 @@ impl DataChannel {
     pub(crate) fn new(
         id: RTCDataChannelId,
         label: String,
-        tx: sync::Sender<InnerMessage>,
-        rx: sync::Receiver<RTCDataChannelMessage>,
+        tx: Sender<InnerMessage>,
+        rx: Receiver<RTCDataChannelMessage>,
     ) -> Self {
         Self {
             id,
             label,
-            state: Arc::new(sync::Mutex::new(RTCDataChannelState::Connecting)),
+            state: Arc::new(Mutex::new(RTCDataChannelState::Connecting)),
             tx,
-            rx: Arc::new(sync::Mutex::new(rx)),
+            rx: Arc::new(Mutex::new(rx)),
         }
     }
 

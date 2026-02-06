@@ -82,3 +82,205 @@ where
 pub async fn resolve_host(host: &str) -> io::Result<Vec<SocketAddr>> {
     ::smol::net::resolve(host).await
 }
+
+/// Smol-based mutex wrapper
+pub struct SmolMutex<T: ?Sized>(pub Arc<::smol::lock::Mutex<T>>);
+
+impl<T: ?Sized> Clone for SmolMutex<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> SmolMutex<T> {
+    pub fn new(value: T) -> Self {
+        Self(Arc::new(::smol::lock::Mutex::new(value)))
+    }
+
+    /// Lock the mutex asynchronously
+    pub async fn lock(&self) -> ::smol::lock::MutexGuard<'_, T> {
+        self.0.lock().await
+    }
+}
+
+impl<T: ?Sized + Send> AsyncMutex<T> for SmolMutex<T> {
+    type Guard<'a>
+        = ::smol::lock::MutexGuard<'a, T>
+    where
+        T: 'a;
+
+    fn lock(&self) -> Pin<Box<dyn Future<Output = Self::Guard<'_>> + Send + '_>> {
+        Box::pin(self.0.lock())
+    }
+}
+
+/// Smol-based notify wrapper using Event
+pub struct SmolNotify(pub Arc<::smol::lock::Mutex<(bool, Vec<::smol::channel::Sender<()>>)>>);
+
+impl Clone for SmolNotify {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl Default for SmolNotify {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SmolNotify {
+    pub fn new() -> Self {
+        Self(Arc::new(::smol::lock::Mutex::new((false, Vec::new()))))
+    }
+
+    /// Notify one waiting task
+    pub fn notify_one(&self) {
+        // Simple broadcast-based notification
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            if let Some(tx) = state.1.pop() {
+                let _ = tx.try_send(());
+            }
+        }
+    }
+
+    /// Notify all waiting tasks
+    pub fn notify_waiters(&self) {
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            for tx in state.1.drain(..) {
+                let _ = tx.try_send(());
+            }
+        }
+    }
+
+    /// Wait for a notification
+    pub async fn notified(&self) {
+        let notify = self.0.clone();
+        let (tx, rx) = ::smol::channel::bounded(1);
+        {
+            let mut state = notify.lock().await;
+            if state.0 {
+                state.0 = false;
+                return;
+            }
+            state.1.push(tx);
+        }
+        let _ = rx.recv().await;
+    }
+}
+
+impl AsyncNotify for SmolNotify {
+    fn notify_one(&self) {
+        // Simple broadcast-based notification
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            if let Some(tx) = state.1.pop() {
+                let _ = tx.try_send(());
+            }
+        }
+    }
+
+    fn notify_waiters(&self) {
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            for tx in state.1.drain(..) {
+                let _ = tx.try_send(());
+            }
+        }
+    }
+
+    fn notified(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        let notify = self.0.clone();
+        Box::pin(async move {
+            let (tx, rx) = ::smol::channel::bounded(1);
+            {
+                let mut state = notify.lock().await;
+                if state.0 {
+                    state.0 = false;
+                    return;
+                }
+                state.1.push(tx);
+            }
+            let _ = rx.recv().await;
+        })
+    }
+}
+
+/// Smol-based channel sender
+pub struct SmolSender<T>(pub ::smol::channel::Sender<T>);
+
+impl<T> Clone for SmolSender<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: Send> SmolSender<T> {
+    /// Send a value asynchronously
+    pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
+        self.0.send(value).await.map_err(|e| SendError(e.0))
+    }
+
+    /// Try to send a value without blocking
+    pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
+        self.0.try_send(value).map_err(|e| match e {
+            ::smol::channel::TrySendError::Full(v) => TrySendError::Full(v),
+            ::smol::channel::TrySendError::Closed(v) => TrySendError::Disconnected(v),
+        })
+    }
+}
+
+impl<T: Send> AsyncSender<T> for SmolSender<T> {
+    fn send(
+        &self,
+        value: T,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SendError<T>>> + Send + '_>> {
+        Box::pin(async move { self.0.send(value).await.map_err(|e| SendError(e.0)) })
+    }
+
+    fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
+        self.0.try_send(value).map_err(|e| match e {
+            ::smol::channel::TrySendError::Full(v) => TrySendError::Full(v),
+            ::smol::channel::TrySendError::Closed(v) => TrySendError::Disconnected(v),
+        })
+    }
+}
+
+/// Smol-based channel receiver
+pub struct SmolReceiver<T>(pub ::smol::channel::Receiver<T>);
+
+impl<T: Send> SmolReceiver<T> {
+    /// Receive a value asynchronously
+    pub async fn recv(&mut self) -> Option<T> {
+        self.0.recv().await.ok()
+    }
+
+    /// Try to receive a value without blocking
+    pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.0.try_recv().map_err(|e| match e {
+            ::smol::channel::TryRecvError::Empty => TryRecvError::Empty,
+            ::smol::channel::TryRecvError::Closed => TryRecvError::Disconnected,
+        })
+    }
+}
+
+impl<T: Send> AsyncReceiver<T> for SmolReceiver<T> {
+    fn recv(&mut self) -> Pin<Box<dyn Future<Output = Option<T>> + Send + '_>> {
+        Box::pin(async move { self.0.recv().await.ok() })
+    }
+
+    fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.0.try_recv().map_err(|e| match e {
+            ::smol::channel::TryRecvError::Empty => TryRecvError::Empty,
+            ::smol::channel::TryRecvError::Closed => TryRecvError::Disconnected,
+        })
+    }
+}
+
+/// Create a new unbounded channel
+pub fn channel<T: Send>() -> (SmolSender<T>, SmolReceiver<T>) {
+    let (tx, rx) = ::smol::channel::unbounded();
+    (SmolSender(tx), SmolReceiver(rx))
+}

@@ -5,10 +5,14 @@
 
 #![allow(clippy::type_complexity)]
 
-use std::time::Duration;
-use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, time::Instant};
-
-pub mod sync;
+use std::{
+    fmt::Debug,
+    future::Future,
+    io,
+    net::SocketAddr,
+    pin::Pin,
+    time::{Duration, Instant},
+};
 
 /// Abstracts I/O and timer operations for runtime independence
 ///
@@ -55,6 +59,75 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     fn local_addr(&self) -> io::Result<SocketAddr>;
 }
 
+/// An async mutex that works across different runtimes
+pub trait AsyncMutex<T: ?Sized>: Send + Sync {
+    /// The guard type returned by lock()
+    type Guard<'a>: std::ops::Deref<Target = T> + std::ops::DerefMut + Send + 'a
+    where
+        Self: 'a,
+        T: 'a;
+
+    /// Lock the mutex asynchronously
+    fn lock(&self) -> Pin<Box<dyn Future<Output = Self::Guard<'_>> + Send + '_>>;
+}
+
+/// An async notification primitive
+pub trait AsyncNotify: Send + Sync {
+    /// Notify one waiting task
+    fn notify_one(&self);
+
+    /// Notify all waiting tasks
+    fn notify_waiters(&self);
+
+    /// Wait for a notification
+    fn notified(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+/// Sender half of an async channel
+pub trait AsyncSender<T>: Send + Sync {
+    /// Send a value, waiting if the channel is full
+    fn send(&self, value: T)
+    -> Pin<Box<dyn Future<Output = Result<(), SendError<T>>> + Send + '_>>;
+
+    /// Try to send a value without blocking
+    fn try_send(&self, value: T) -> Result<(), TrySendError<T>>;
+}
+
+/// Receiver half of an async channel
+pub trait AsyncReceiver<T>: Send {
+    /// Receive a value, waiting if the channel is empty
+    fn recv(&mut self) -> Pin<Box<dyn Future<Output = Option<T>> + Send + '_>>;
+
+    /// Try to receive a value without blocking
+    fn try_recv(&mut self) -> Result<T, TryRecvError>;
+}
+
+/// Error returned when send fails
+#[derive(Debug)]
+pub struct SendError<T>(pub T);
+
+/// Error returned when try_send fails
+#[derive(Debug)]
+pub enum TrySendError<T> {
+    Full(T),
+    Disconnected(T),
+}
+
+/// Error returned when try_recv fails
+#[derive(Debug)]
+pub enum TryRecvError {
+    Empty,
+    Disconnected,
+}
+
+impl<T> std::fmt::Display for SendError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "channel disconnected")
+    }
+}
+
+impl<T: std::fmt::Debug> std::error::Error for SendError<T> {}
+
 /// Get the default runtime for the current build configuration
 ///
 /// Returns the runtime for whichever runtime feature is enabled.
@@ -95,15 +168,27 @@ mod tokio;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::TokioRuntime;
 #[cfg(feature = "runtime-tokio")]
-pub use tokio::resolve_host;
+pub use tokio::{channel, resolve_host, sleep, timeout};
 #[cfg(feature = "runtime-tokio")]
-pub use tokio::{sleep, timeout};
+pub type Mutex<T> = tokio::TokioMutex<T>;
+#[cfg(feature = "runtime-tokio")]
+pub type Notify = tokio::TokioNotify;
+#[cfg(feature = "runtime-tokio")]
+pub type Sender<T> = tokio::TokioSender<T>;
+#[cfg(feature = "runtime-tokio")]
+pub type Receiver<T> = tokio::TokioReceiver<T>;
 
 #[cfg(feature = "runtime-smol")]
 mod smol;
 #[cfg(feature = "runtime-smol")]
 pub use smol::SmolRuntime;
 #[cfg(feature = "runtime-smol")]
-pub use smol::resolve_host;
+pub use smol::{channel, resolve_host, sleep, timeout};
 #[cfg(feature = "runtime-smol")]
-pub use smol::{sleep, timeout};
+pub type Mutex<T> = smol::SmolMutex<T>;
+#[cfg(feature = "runtime-smol")]
+pub type Notify = smol::SmolNotify;
+#[cfg(feature = "runtime-smol")]
+pub type Sender<T> = smol::SmolSender<T>;
+#[cfg(feature = "runtime-smol")]
+pub type Receiver<T> = smol::SmolReceiver<T>;

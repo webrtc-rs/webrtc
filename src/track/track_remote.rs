@@ -1,6 +1,6 @@
 //! Remote track for receiving media
 
-use crate::runtime::sync;
+use crate::runtime::{Mutex, Receiver, Sender};
 use rtc::media_stream::MediaStreamTrackId;
 use rtc::rtp::packet::Packet as RtpPacket;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
@@ -33,9 +33,9 @@ pub struct TrackRemote {
     /// RID (RTP stream ID) for simulcast (crate-internal)
     pub(crate) rid: Option<String>,
     /// Channel for receiving RTP packets
-    rtp_rx: sync::Mutex<sync::Receiver<RtpPacket>>,
+    rtp_rx: Mutex<Receiver<RtpPacket>>,
     /// Channel for sending outgoing messages
-    tx: sync::Sender<crate::peer_connection::InnerMessage>,
+    tx: Sender<crate::peer_connection::InnerMessage>,
 }
 
 impl TrackRemote {
@@ -45,15 +45,15 @@ impl TrackRemote {
         track_id: MediaStreamTrackId,
         stream_ids: Vec<rtc::media_stream::MediaStreamId>,
         rid: Option<String>,
-        rtp_rx: sync::Receiver<RtpPacket>,
-        tx: sync::Sender<crate::peer_connection::InnerMessage>,
+        rtp_rx: Receiver<RtpPacket>,
+        tx: Sender<crate::peer_connection::InnerMessage>,
     ) -> Self {
         Self {
             receiver_id,
             track_id,
             stream_ids,
             rid,
-            rtp_rx: sync::Mutex::new(rtp_rx),
+            rtp_rx: Mutex::new(rtp_rx),
             tx,
         }
     }

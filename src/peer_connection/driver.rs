@@ -6,7 +6,7 @@
 
 use super::connection::InnerMessage;
 use super::connection::PeerConnectionInner;
-use crate::runtime::{AsyncUdpSocket, sync};
+use crate::runtime::{AsyncUdpSocket, Receiver};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
@@ -27,7 +27,7 @@ pub struct PeerConnectionDriver {
     socket: Box<dyn AsyncUdpSocket>,
     local_addr: SocketAddr,
     /// Channel for receiving outgoing messages
-    msg_rx: Option<sync::Receiver<InnerMessage>>,
+    msg_rx: Option<Receiver<InnerMessage>>,
 }
 
 impl PeerConnectionDriver {
