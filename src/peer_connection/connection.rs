@@ -3,10 +3,10 @@
 use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
 use crate::data_channel::DataChannel;
+use crate::media_track::{TrackLocal, TrackRemote};
 use crate::runtime::Runtime;
 use crate::runtime::{Mutex, Receiver, Sender, channel};
-use crate::track::TrackRemote;
-use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage};
+use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::peer_connection::transport::RTCIceCandidateInit;
@@ -294,7 +294,7 @@ impl PeerConnection {
     pub async fn create_data_channel(
         &self,
         label: impl Into<String>,
-        options: Option<crate::data_channel::RTCDataChannelInit>,
+        options: Option<RTCDataChannelInit>,
     ) -> Result<Arc<DataChannel>, Box<dyn std::error::Error>> {
         let label = label.into();
 
@@ -373,7 +373,7 @@ impl PeerConnection {
     pub async fn add_track(
         &self,
         track: rtc::media_stream::MediaStreamTrack,
-    ) -> Result<Arc<crate::track::TrackLocal>, Box<dyn std::error::Error>> {
+    ) -> Result<Arc<TrackLocal>, Box<dyn std::error::Error>> {
         // Add track via the core
         let sender_id = {
             let mut core = self.inner.core.lock().await;
@@ -381,10 +381,7 @@ impl PeerConnection {
         };
 
         // Create the local track wrapper
-        let local_track = Arc::new(crate::track::TrackLocal::new(
-            sender_id,
-            self.inner.msg_tx.clone(),
-        ));
+        let local_track = Arc::new(TrackLocal::new(sender_id, self.inner.msg_tx.clone()));
 
         Ok(local_track)
     }

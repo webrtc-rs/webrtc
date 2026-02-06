@@ -20,6 +20,15 @@
 //! ```
 
 pub mod data_channel;
+pub mod media_track;
 pub mod peer_connection;
 pub mod runtime;
-pub mod track;
+
+// Re-export common types from rtc
+pub use rtc::data_channel::{
+    RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage, RTCDataChannelState,
+};
+pub use rtc::media_stream::{MediaStreamId, MediaStreamTrack, MediaStreamTrackId};
+pub use rtc::rtp_transceiver::{
+    RTCRtpReceiverId, RTCRtpSenderId, RTCRtpTransceiverDirection, RTCRtpTransceiverInit,
+};
