@@ -22,12 +22,12 @@ async fn test_media_engine_configuration() {
         .register_default_codecs()
         .expect("Failed to register default codecs");
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -67,13 +67,13 @@ async fn test_setting_engine_ice_timeouts() {
         Some(Duration::from_secs(1)),  // keepalive interval
     );
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .with_setting_engine(setting_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_setting_engine(setting_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -99,13 +99,13 @@ async fn test_setting_engine_replay_protection() {
     setting_engine.set_srtp_replay_protection_window(128);
     setting_engine.set_srtcp_replay_protection_window(64);
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .with_setting_engine(setting_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_setting_engine(setting_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -132,13 +132,13 @@ async fn test_combined_configuration() {
     );
     setting_engine.set_srtp_replay_protection_window(256);
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .with_setting_engine(setting_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_setting_engine(setting_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -185,26 +185,26 @@ async fn test_peer_connection_with_full_configuration() {
         Some(Duration::from_secs(1)),
     );
 
-    let config_a = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine_a)
-        .with_setting_engine(setting_engine_a)
-        .build();
+    let config_a = RTCConfigurationBuilder::new().build();
 
-    let config_b = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine_b)
-        .with_setting_engine(setting_engine_b)
-        .build();
+    let config_b = RTCConfigurationBuilder::new().build();
 
     let handler_a = Arc::new(ConfigTestHandler);
     let handler_b = Arc::new(ConfigTestHandler);
 
-    let pc_a = PeerConnectionBuilder::new(config_a)
+    let pc_a = PeerConnectionBuilder::new()
+        .with_configuration(config_a)
+        .with_media_engine(media_engine_a)
+        .with_setting_engine(setting_engine_a)
         .with_handler(handler_a)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
         .await
         .unwrap();
-    let pc_b = PeerConnectionBuilder::new(config_b)
+    let pc_b = PeerConnectionBuilder::new()
+        .with_configuration(config_b)
+        .with_media_engine(media_engine_b)
+        .with_setting_engine(setting_engine_b)
         .with_handler(handler_b)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -254,11 +254,11 @@ async fn test_media_engine_required_for_tracks() {
         .register_default_codecs()
         .expect("Failed to register codecs");
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -311,7 +311,8 @@ async fn test_ice_servers_configuration() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -337,13 +338,15 @@ async fn test_ice_transport_policy() {
     let handler_all = Arc::new(ConfigTestHandler);
     let handler_relay = Arc::new(ConfigTestHandler);
 
-    let pc_all = PeerConnectionBuilder::new(config_all)
+    let pc_all = PeerConnectionBuilder::new()
+        .with_configuration(config_all)
         .with_handler(handler_all)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
         .await
         .unwrap();
-    let pc_relay = PeerConnectionBuilder::new(config_relay)
+    let pc_relay = PeerConnectionBuilder::new()
+        .with_configuration(config_relay)
         .with_handler(handler_relay)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -371,19 +374,22 @@ async fn test_bundle_policy() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc_balanced = PeerConnectionBuilder::new(config_balanced)
+    let pc_balanced = PeerConnectionBuilder::new()
+        .with_configuration(config_balanced)
         .with_handler(handler.clone())
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
         .await
         .unwrap();
-    let pc_compat = PeerConnectionBuilder::new(config_max_compat)
+    let pc_compat = PeerConnectionBuilder::new()
+        .with_configuration(config_max_compat)
         .with_handler(handler.clone())
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
         .await
         .unwrap();
-    let pc_bundle = PeerConnectionBuilder::new(config_max_bundle)
+    let pc_bundle = PeerConnectionBuilder::new()
+        .with_configuration(config_max_bundle)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -404,7 +410,8 @@ async fn test_rtcp_mux_policy() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config_require)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config_require)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -423,7 +430,8 @@ async fn test_peer_identity() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -444,7 +452,8 @@ async fn test_certificates() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -462,7 +471,8 @@ async fn test_ice_candidate_pool_size() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -494,8 +504,6 @@ async fn test_all_configuration_options_combined() {
     }];
 
     let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .with_setting_engine(setting_engine)
         .with_ice_servers(ice_servers)
         .with_ice_transport_policy(RTCIceTransportPolicy::All)
         .with_bundle_policy(RTCBundlePolicy::MaxBundle)
@@ -505,7 +513,10 @@ async fn test_all_configuration_options_combined() {
         .build();
 
     let handler = Arc::new(ConfigTestHandler);
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_setting_engine(setting_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()

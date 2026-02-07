@@ -10,10 +10,10 @@ use crate::runtime::{Mutex, Receiver, Sender, channel};
 use crate::runtime::{Runtime, default_runtime};
 use log::error;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
-use rtc::interceptor::{Interceptor, NoopInterceptor};
-use rtc::peer_connection::RTCPeerConnection;
+use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::peer_connection::transport::RTCIceCandidateInit;
+use rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder};
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
@@ -95,22 +95,67 @@ pub(crate) enum MessageInner {
     Close,
 }
 
-pub struct PeerConnectionBuilder<A: ToSocketAddrs> {
-    config: RTCConfiguration,
+pub struct PeerConnectionBuilder<A: ToSocketAddrs, I = NoopInterceptor>
+where
+    I: Interceptor,
+{
+    builder: RTCPeerConnectionBuilder<I>,
     runtime: Option<Arc<dyn Runtime>>,
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
 }
 
-impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
-    pub fn new(config: RTCConfiguration) -> Self {
+impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
+    fn default() -> Self {
         Self {
-            config,
+            builder: RTCPeerConnectionBuilder::new(),
             runtime: None,
             handler: None,
             udp_addrs: vec![],
             tcp_addrs: vec![],
+        }
+    }
+}
+
+impl<A: ToSocketAddrs> PeerConnectionBuilder<A, NoopInterceptor> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<A: ToSocketAddrs, I> PeerConnectionBuilder<A, I>
+where
+    I: Interceptor,
+{
+    pub fn with_configuration(mut self, configuration: RTCConfiguration) -> Self {
+        self.builder = self.builder.with_configuration(configuration);
+        self
+    }
+
+    pub fn with_media_engine(mut self, media_engine: MediaEngine) -> Self {
+        self.builder = self.builder.with_media_engine(media_engine);
+        self
+    }
+
+    pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
+        self.builder = self.builder.with_setting_engine(setting_engine);
+        self
+    }
+
+    pub fn with_interceptor_registry<P>(
+        self,
+        interceptor_registry: Registry<P>,
+    ) -> PeerConnectionBuilder<A, P>
+    where
+        P: Interceptor,
+    {
+        PeerConnectionBuilder {
+            builder: self.builder.with_interceptor_registry(interceptor_registry),
+            runtime: self.runtime,
+            handler: self.handler,
+            udp_addrs: self.udp_addrs,
+            tcp_addrs: self.tcp_addrs,
         }
     }
 
@@ -134,17 +179,27 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A> {
         self
     }
 
-    pub async fn build(self) -> Result<PeerConnection> {
+    pub async fn build(self) -> Result<PeerConnection<I>> {
         let runtime = if let Some(runtime) = self.runtime {
             runtime
         } else {
             default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?
         };
+
+        let core = self.builder.build()?;
+        let configuration = core.get_configuration();
+
+        let opts = RTCIceGatherOptions {
+            ice_servers: configuration.ice_servers().to_vec(),
+            ice_gather_policy: configuration.ice_transport_policy(),
+        };
+
         PeerConnection::new(
-            self.config,
+            core,
             runtime,
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
+            opts,
             self.udp_addrs,
             self.tcp_addrs,
         )
@@ -204,20 +259,17 @@ where
 
 impl<I> PeerConnection<I>
 where
-    I: Interceptor + 'static,
+    I: Interceptor,
 {
     /// Create a new peer connection with a custom runtime
     async fn new<A: ToSocketAddrs>(
-        config: RTCConfiguration<I>,
+        core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
+        opts: RTCIceGatherOptions,
         udp_addrs: Vec<A>,
         _tcp_addrs: Vec<A>,
     ) -> Result<Self> {
-        let ice_servers = config.ice_servers().to_vec();
-
-        let core = RTCPeerConnection::new(config)?;
-
         // Create unified channel for all outgoing messages
         let (msg_tx, msg_rx) = channel();
 
@@ -234,10 +286,7 @@ where
             runtime.clone(),
             msg_tx.clone(),
             async_udp_sockets.clone(),
-            RTCIceGatherOptions {
-                ice_servers,
-                ice_gather_policy: RTCIceTransportPolicy::All,
-            },
+            opts,
         );
 
         let mut peer_connection = Self {
@@ -429,7 +478,13 @@ where
     }
 
     /// set_configuration updates the configuration of this PeerConnection object.
-    pub async fn set_configuration(&self, configuration: RTCConfiguration<I>) -> Result<()> {
+    pub async fn get_configuration(&self) -> RTCConfiguration {
+        let core = self.inner.core.lock().await;
+        core.get_configuration().clone()
+    }
+
+    /// set_configuration updates the configuration of this PeerConnection object.
+    pub async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()> {
         let mut core = self.inner.core.lock().await;
         core.set_configuration(configuration)
     }
@@ -455,7 +510,7 @@ where
     /// # async fn example() -> Result<()> {
     /// let config = RTCConfigurationBuilder::new().build();
     /// let handler = Arc::new(MyHandler);
-    /// let pc = PeerConnectionBuilder::new(config).with_handler(handler).with_udp_addrs(vec!["127.0.0.1:0"]).build().await?;
+    /// let pc = PeerConnectionBuilder::new().with_configuration(config).with_handler(handler).with_udp_addrs(vec!["127.0.0.1:0"]).build().await?;
     ///
     /// // Create a data channel
     /// let dc = pc.create_data_channel("my-channel", None).await?;

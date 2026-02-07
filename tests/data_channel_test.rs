@@ -22,7 +22,8 @@ async fn test_create_data_channel() {
     let handler = Arc::new(TestHandler {
         data_channels: Arc::new(Mutex::new(Vec::new())),
     });
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -41,7 +42,8 @@ async fn test_data_channel_send() {
     let handler = Arc::new(TestHandler {
         data_channels: Arc::new(Mutex::new(Vec::new())),
     });
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -63,7 +65,8 @@ async fn test_multiple_data_channels() {
     let handler = Arc::new(TestHandler {
         data_channels: Arc::new(Mutex::new(Vec::new())),
     });
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()

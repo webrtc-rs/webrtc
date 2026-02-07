@@ -70,13 +70,13 @@ async fn test_add_ice_candidate() {
         .register_default_codecs()
         .expect("Failed to register codecs");
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
     let handler = Arc::new(IceTestHandler);
 
-    let pc_a = PeerConnectionBuilder::new(config)
+    let pc_a = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
         .with_handler(handler.clone())
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -87,11 +87,11 @@ async fn test_add_ice_candidate() {
     media_engine_b
         .register_default_codecs()
         .expect("Failed to register codecs");
-    let config_b = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine_b)
-        .build();
+    let config_b = RTCConfigurationBuilder::new().build();
 
-    let pc_b = PeerConnectionBuilder::new(config_b)
+    let pc_b = PeerConnectionBuilder::new()
+        .with_configuration(config_b)
+        .with_media_engine(media_engine_b)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -145,13 +145,13 @@ async fn test_restart_ice() {
         .register_default_codecs()
         .expect("Failed to register codecs");
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
     let handler = Arc::new(IceTestHandler);
 
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -190,9 +190,7 @@ async fn test_automatic_host_candidate_gathering() {
         .register_default_codecs()
         .expect("Failed to register codecs");
 
-    let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
-        .build();
+    let config = RTCConfigurationBuilder::new().build();
 
     let (candidate_tx, mut candidate_rx) = channel();
     let (gathering_tx, mut gathering_rx) = channel();
@@ -201,7 +199,9 @@ async fn test_automatic_host_candidate_gathering() {
         gathering_tx,
     });
 
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
@@ -248,7 +248,6 @@ async fn test_stun_gathering_with_google_stun() {
     }];
 
     let config = RTCConfigurationBuilder::new()
-        .with_media_engine(media_engine)
         .with_ice_servers(ice_servers)
         .build();
 
@@ -260,7 +259,9 @@ async fn test_stun_gathering_with_google_stun() {
         gathering_tx,
     });
 
-    let pc = PeerConnectionBuilder::new(config)
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
         .with_handler(handler)
         .with_udp_addrs(vec!["127.0.0.1:0"])
         .build()
