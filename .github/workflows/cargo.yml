@@ -15,10 +15,10 @@ env:
 
 jobs:
   build:
-    name: Build and test
+    name: Build
     strategy:
       matrix:
-        os: ['ubuntu-latest'] #, 'macos-latest', 'windows-latest']
+        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -26,6 +26,17 @@ jobs:
           submodules: recursive
       - name: Build
         run: cargo build --verbose
+
+  test:
+    name: Test
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' ] #, 'macos-latest', 'windows-latest' ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Run tests
         run: cargo test --verbose
 
