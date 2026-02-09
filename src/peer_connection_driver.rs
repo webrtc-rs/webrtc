@@ -10,7 +10,6 @@ use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{AsyncUdpSocket, Receiver};
 use crate::{Error, Result};
 use bytes::BytesMut;
-use futures::stream::{FuturesUnordered, StreamExt};
 use futures::FutureExt; // For .fuse() in futures::select!
 use log::{error, trace, warn};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
@@ -50,6 +49,10 @@ where
         ice_gatherer: RTCIceGatherer,
         sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
     ) -> Result<Self> {
+        if sockets.is_empty() {
+            return Err(Error::Other("no sockets available".to_owned()));
+        }
+
         Ok(Self {
             inner,
             ice_gatherer,
@@ -61,40 +64,7 @@ where
     ///
     /// This follows rtc Event Loop pattern exactly with select!
     pub(crate) async fn event_loop(&mut self, mut msg_rx: Receiver<MessageInner>) -> Result<()> {
-        if self.sockets.is_empty() {
-            return Err(Error::Other("no sockets available".to_owned()));
-        }
-
-        // Collect socket info into a vec for indexed access
-        let socket_list: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>)> = self
-            .sockets
-            .iter()
-            .map(|(addr, sock)| (*addr, sock.clone()))
-            .collect();
-
-        // Pre-allocate buffers once - one per socket, these will be reused forever
-        let mut socket_buffers: Vec<Vec<u8>> =
-            socket_list.iter().map(|_| vec![0u8; 2000]).collect();
-
-        // Helper function to create a recv future for a specific socket
-        let create_recv_future = |idx: usize,
-                                   local_addr: SocketAddr,
-                                   socket: Arc<dyn AsyncUdpSocket>,
-                                   mut buf: Vec<u8>| async move {
-            let (n, peer_addr) = socket.recv_from(&mut buf).await?;
-            Ok::<_, std::io::Error>((n, local_addr, peer_addr, idx, buf))
-        };
-
-        // Create initial set of futures in FuturesUnordered
-        let mut recv_futures: FuturesUnordered<_> = socket_list
-            .iter()
-            .enumerate()
-            .map(|(idx, (local_addr, socket))| {
-                let buf = std::mem::take(&mut socket_buffers[idx]);
-                create_recv_future(idx, *local_addr, socket.clone(), buf).boxed()
-            })
-            .collect();
-
+        let mut recv_buf = vec![0u8; 2000];
         loop {
             // 1.a ice_gatherer poll_write()
             {
@@ -190,11 +160,10 @@ where
                 }
 
                 // Incoming network packet from any socket
-                result = recv_futures.next().fuse() => {
-                    match result {
-                        Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
+                res = self.poll_read(&mut recv_buf).fuse() => {
+                    match res {
+                        Ok((n, local_addr, peer_addr)) => {
                             trace!("Received {} bytes from {}", n, peer_addr);
-
                             if let Err(err) = self.handle_read(TaggedBytesMut {
                                 now: Instant::now(),
                                 transport: TransportContext {
@@ -203,27 +172,13 @@ where
                                     ecn: None,
                                     transport_protocol: TransportProtocol::UDP,
                                 },
-                                message: BytesMut::from(&buf[..n]),
+                                message: BytesMut::from(&recv_buf[..n]),
                             }).await {
                                  error!("handle_read error: {}", err);
                             }
-                            
-                            // Immediately create a new future for this socket and reuse the buffer
-                            let (socket_local_addr, socket) = &socket_list[idx];
-                            recv_futures.push(
-                                create_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
-                            );
                         }
-                        Some(Err(err)) => {
+                        Err(err) => {
                             error!("Socket recv error: {}", err);
-                            // On error, we lost the buffer, create a new one and restart this socket
-                            // This should be rare (only on actual socket errors)
-                            // For now, we return the error to stop the loop
-                            return Err(err.into());
-                        }
-                        None => {
-                            // All socket futures completed (should never happen in normal operation)
-                            return Err(Error::Other("all socket futures completed".to_owned()));
                         }
                     }
                 }
@@ -256,6 +211,12 @@ where
         }
 
         Ok(())
+    }
+
+    async fn poll_read(&mut self, recv_buf: &mut [u8]) -> Result<(usize, SocketAddr, SocketAddr)> {
+        let (local_addr, socket) = self.sockets.iter_mut().last().unwrap();
+        let (n, peer_addr) = socket.recv_from(recv_buf).await?;
+        Ok((n, *local_addr, peer_addr))
     }
 
     async fn handle_gather_event(&mut self, event: RTCIceGathererEvent) {

@@ -184,6 +184,12 @@ async fn test_restart_ice() {
 
 #[tokio::test]
 async fn test_automatic_host_candidate_gathering() {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Trace)
+        //.is_test(true)
+        .try_init()
+        .ok();
+
     // Test that host candidates are automatically gathered when setLocalDescription is called
     let mut media_engine = MediaEngine::default();
     media_engine
@@ -235,6 +241,12 @@ async fn test_automatic_host_candidate_gathering() {
 
 #[tokio::test]
 async fn test_stun_gathering_with_google_stun() {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .is_test(true)
+        .try_init()
+        .ok();
+
     // Test STUN gathering with Google's public STUN server
     let mut media_engine = MediaEngine::default();
     media_engine
