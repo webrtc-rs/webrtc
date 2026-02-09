@@ -209,7 +209,7 @@ async fn test_automatic_host_candidate_gathering() {
         .with_configuration(config)
         .with_media_engine(media_engine)
         .with_handler(handler)
-        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .with_udp_addrs(vec!["0.0.0.0:0"])
         .build()
         .await
         .unwrap();
@@ -242,8 +242,8 @@ async fn test_automatic_host_candidate_gathering() {
 #[tokio::test]
 async fn test_stun_gathering_with_google_stun() {
     env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .is_test(true)
+        .filter_level(log::LevelFilter::Trace)
+        //.is_test(true)
         .try_init()
         .ok();
 
@@ -275,7 +275,7 @@ async fn test_stun_gathering_with_google_stun() {
         .with_configuration(config)
         .with_media_engine(media_engine)
         .with_handler(handler)
-        .with_udp_addrs(vec!["127.0.0.1:0"])
+        .with_udp_addrs(vec!["0.0.0.0:0"])
         .build()
         .await
         .unwrap();

@@ -191,10 +191,16 @@ where
             if msg.transport.local_addr == *local_addr {
                 match socket.send_to(&msg.message, msg.transport.peer_addr).await {
                     Ok(n) => {
-                        trace!("Sent {} bytes to {:?}", n, msg.transport.peer_addr);
+                        trace!(
+                            "Sent {} bytes to {:?} from {:?}",
+                            n, msg.transport.peer_addr, msg.transport.local_addr
+                        );
                     }
                     Err(e) => {
-                        error!("Failed to send to {:?}: {}", msg.transport.peer_addr, e);
+                        error!(
+                            "Failed to send to {:?} from {:?}: {}",
+                            msg.transport.peer_addr, msg.transport.local_addr, e
+                        );
                     }
                 }
                 return;

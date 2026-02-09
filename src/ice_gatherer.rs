@@ -11,7 +11,7 @@ use rtc::peer_connection::transport::{
     CandidateHostConfig, CandidateServerReflexiveConfig, RTCIceCandidate, RTCIceCandidateInit,
 };
 use rtc::sansio::Protocol;
-use rtc::shared::{TaggedBytesMut, TransportProtocol};
+use rtc::shared::{FourTuple, TaggedBytesMut, TransportProtocol};
 use rtc::stun::{
     client::Client as StunClient, client::ClientBuilder as StunClientBuilder,
     message::BINDING_REQUEST, message::Message as StunMessage, message::TransactionId,
@@ -23,7 +23,7 @@ use log::{debug, error};
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::stun::message::Getter;
 use rtc::stun::xoraddr::XorMappedAddress;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::time::Instant;
 
@@ -51,6 +51,7 @@ pub(crate) struct RTCIceGatherer {
     state: RTCIceGatheringState,
 
     stun_clients: Vec<StunClient>,
+    gathering_clients: HashSet<FourTuple>,
 
     wouts: VecDeque<TaggedBytesMut>,
     events: VecDeque<RTCIceGathererEvent>,
@@ -66,6 +67,7 @@ impl RTCIceGatherer {
             state: RTCIceGatheringState::New,
 
             stun_clients: Vec::new(),
+            gathering_clients: HashSet::new(),
 
             wouts: VecDeque::new(),
             events: VecDeque::new(),
@@ -92,6 +94,11 @@ impl RTCIceGatherer {
         self.state = RTCIceGatheringState::Gathering;
         self.gather_host_candidates()?;
         self.gather_srflx_candidates().await?;
+        if self.gathering_clients.is_empty() && self.state != RTCIceGatheringState::Complete {
+            self.state = RTCIceGatheringState::Complete;
+            self.events
+                .push_back(RTCIceGathererEvent::IceGatheringComplete);
+        }
         Ok(())
     }
 
@@ -135,6 +142,10 @@ impl RTCIceGatherer {
                 for local_addr in &self.local_addrs {
                     let stun_client =
                         RTCIceGatherer::gather_from_stun_server(*local_addr, url).await?;
+                    self.gathering_clients.insert(FourTuple {
+                        local_addr: stun_client.local_addr(),
+                        peer_addr: stun_client.peer_addr(),
+                    });
                     self.stun_clients.push(stun_client);
                 }
             }
@@ -238,7 +249,9 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
     fn poll_event(&mut self) -> Option<Self::Eout> {
         for stun_client in &mut self.stun_clients {
             let local_addr = stun_client.local_addr();
+            let mut peer_addr = None;
             while let Some(event) = stun_client.poll_event() {
+                peer_addr = Some(stun_client.peer_addr());
                 match event.result {
                     Ok(msg) => {
                         let mut xor_addr = XorMappedAddress::default();
@@ -279,6 +292,18 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
                     Err(e) => {
                         error!("STUN error: {}", e);
                     }
+                }
+            }
+            if let Some(peer_addr) = peer_addr {
+                self.gathering_clients.remove(&FourTuple {
+                    local_addr,
+                    peer_addr,
+                });
+                if self.gathering_clients.is_empty() && self.state != RTCIceGatheringState::Complete
+                {
+                    self.state = RTCIceGatheringState::Complete;
+                    self.events
+                        .push_back(RTCIceGathererEvent::IceGatheringComplete);
                 }
             }
         }
