@@ -6,7 +6,7 @@ use crate::data_channel::DataChannel;
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_track::TrackRemote;
 use crate::peer_connection_driver::PeerConnectionDriver;
-use crate::runtime::{Mutex, Receiver, Sender, channel};
+use crate::runtime::{AsyncUdpSocket, Mutex, Sender, channel};
 use crate::runtime::{Runtime, default_runtime};
 use log::error;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
@@ -17,7 +17,7 @@ use rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder};
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
-use std::net::ToSocketAddrs;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
 /// Trait for handling peer connection events asynchronously
@@ -90,7 +90,8 @@ pub(crate) enum MessageInner {
     /// Outgoing RTCP packets from receiver
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
     /// New local ICE candidate
-    LocalIceCandidate(RTCIceCandidateInit),
+    LocalIceCandidate(RTCIceCandidateInit, SocketAddr, Arc<dyn AsyncUdpSocket>),
+    IceGatheringGathering,
     IceGatheringComplete,
     Close,
 }
@@ -241,8 +242,6 @@ where
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
-    /// ICE gatherer for managing ICE candidate gathering
-    pub(crate) ice_gatherer: RTCIceGatherer,
     /// Data channels  
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
     /// Data channel message senders (for incoming messages from network)
@@ -253,8 +252,6 @@ where
     pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, Sender<rtc::rtp::Packet>>>,
     /// Unified channel for all outgoing messages
     pub(crate) msg_tx: Sender<MessageInner>,
-    /// Unified channel receiver for all outgoing messages (taken by driver)
-    pub(crate) msg_rx: Mutex<Option<Receiver<MessageInner>>>,
 }
 
 impl<I> PeerConnection<I>
@@ -273,42 +270,35 @@ where
         // Create unified channel for all outgoing messages
         let (msg_tx, msg_rx) = channel();
 
-        let mut async_udp_sockets = vec![];
+        let mut async_udp_sockets = HashMap::new();
         for addr in udp_addrs {
             let socket = std::net::UdpSocket::bind(addr)?;
             socket.set_nonblocking(true)?;
+            let local_addr = socket.local_addr()?;
             let async_udp_socket = runtime.wrap_udp_socket(socket)?;
-            async_udp_sockets.push(async_udp_socket);
+            async_udp_sockets.insert(local_addr, async_udp_socket);
         }
-
-        // Create ICE gatherer with servers from config
-        let ice_gatherer = RTCIceGatherer::new(
-            runtime.clone(),
-            msg_tx.clone(),
-            async_udp_sockets.clone(),
-            opts,
-        );
 
         let mut peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
                 handler,
-                ice_gatherer,
                 data_channels: Mutex::new(HashMap::new()),
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 remote_tracks: Mutex::new(HashMap::new()),
                 track_rxs: Mutex::new(HashMap::new()),
-                msg_tx,
-                msg_rx: Mutex::new(Some(msg_rx)),
+                msg_tx: msg_tx.clone(),
             }),
             driver_handle: None,
         };
 
+        // Create ICE gatherer with servers from config
+        let ice_gatherer = RTCIceGatherer::new(runtime.clone(), msg_tx, async_udp_sockets, opts);
         let mut driver =
-            PeerConnectionDriver::new(peer_connection.inner.clone(), async_udp_sockets).await?;
+            PeerConnectionDriver::new(peer_connection.inner.clone(), ice_gatherer).await?;
         peer_connection.driver_handle = Some(runtime.spawn(Box::pin(async move {
-            if let Err(e) = driver.run().await {
+            if let Err(e) = driver.run(msg_rx).await {
                 error!("I/O error: {}", e);
             }
         })));
@@ -357,7 +347,12 @@ where
             core.set_local_description(desc)?;
         }
 
-        self.inner.ice_gatherer.gather().await
+        self.inner
+            .msg_tx
+            .send(MessageInner::IceGatheringGathering)
+            .await
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+        Ok(())
     }
 
     /// Get the local description
@@ -474,7 +469,12 @@ where
             core.restart_ice();
         }
 
-        self.inner.ice_gatherer.gather().await
+        self.inner
+            .msg_tx
+            .send(MessageInner::IceGatheringGathering)
+            .await
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+        Ok(())
     }
 
     /// set_configuration updates the configuration of this PeerConnection object.

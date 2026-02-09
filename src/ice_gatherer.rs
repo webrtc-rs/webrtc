@@ -5,14 +5,24 @@
 //! the ICE servers and state.
 
 use crate::peer_connection::MessageInner;
+use crate::runtime;
 use crate::runtime::{AsyncUdpSocket, JoinHandle, Mutex, Runtime, Sender};
 use crate::{Error, Result};
+use bytes::BytesMut;
 use log::error;
 use rtc::ice::candidate::CandidateConfig;
+use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::transport::{CandidateHostConfig, RTCIceCandidateInit};
+use rtc::sansio::Protocol;
+use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
+use rtc::stun::client::ClientBuilder;
+use rtc::stun::message::*;
+use rtc::stun::xoraddr::XorMappedAddress;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
@@ -28,7 +38,7 @@ pub struct RTCIceGatherOptions {
 pub struct RTCIceGatherer {
     runtime: Arc<dyn Runtime>,
     msg_tx: Sender<MessageInner>,
-    sockets: Vec<Arc<dyn AsyncUdpSocket>>,
+    sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
     join_handle: Mutex<Option<JoinHandle>>,
@@ -39,7 +49,7 @@ impl RTCIceGatherer {
     pub(crate) fn new(
         runtime: Arc<dyn Runtime>,
         msg_tx: Sender<MessageInner>,
-        sockets: Vec<Arc<dyn AsyncUdpSocket>>,
+        sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
         opts: RTCIceGatherOptions,
     ) -> Self {
         Self {
@@ -66,20 +76,15 @@ impl RTCIceGatherer {
         }
 
         {
-            let runtime = self.runtime.clone();
             let sockets = self.sockets.clone();
             let ice_servers = self.ice_servers.clone();
             let msg_tx = self.msg_tx.clone();
 
             let handle = self.runtime.spawn(Box::pin(async move {
                 // Spawn background task for STUN gathering (server reflexive candidates)
-                if let Err(err) = RTCIceGatherer::gather_srflx_candidates(
-                    runtime,
-                    sockets,
-                    ice_servers,
-                    msg_tx.clone(),
-                )
-                .await
+                if let Err(err) =
+                    RTCIceGatherer::gather_srflx_candidates(sockets, ice_servers, msg_tx.clone())
+                        .await
                 {
                     error!("Error gathering srflx candidates: {}", err);
                 }
@@ -100,9 +105,7 @@ impl RTCIceGatherer {
     ///
     /// This is a pure function that creates host candidates without performing I/O.
     async fn gather_host_candidates(&self) -> Result<()> {
-        for socket in &self.sockets {
-            let local_addr = socket.local_addr()?;
-
+        for (local_addr, socket) in &self.sockets {
             let candidate = CandidateHostConfig {
                 base_config: CandidateConfig {
                     network: "udp".to_owned(),
@@ -119,7 +122,11 @@ impl RTCIceGatherer {
                 rtc::peer_connection::transport::RTCIceCandidate::from(&candidate).to_json()?;
 
             self.msg_tx
-                .send(MessageInner::LocalIceCandidate(candidate_init))
+                .send(MessageInner::LocalIceCandidate(
+                    candidate_init,
+                    *local_addr,
+                    Arc::clone(socket),
+                ))
                 .await
                 .map_err(|e| Error::Other(e.to_string()))?;
         }
@@ -132,8 +139,7 @@ impl RTCIceGatherer {
     /// This performs actual I/O to query STUN servers and should be called
     /// in an async context.
     async fn gather_srflx_candidates(
-        runtime: Arc<dyn Runtime>,
-        sockets: Vec<Arc<dyn AsyncUdpSocket>>,
+        sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
         ice_servers: Vec<RTCIceServer>,
         msg_tx: Sender<MessageInner>,
     ) -> Result<()> {
@@ -144,15 +150,16 @@ impl RTCIceGatherer {
                     continue;
                 }
 
-                for socket in &sockets {
-                    let local_addr = socket.local_addr()?;
-
+                for (local_addr, socket) in &sockets {
                     let candidate_init =
-                        RTCIceGatherer::gather_from_stun_server(runtime.clone(), local_addr, url)
-                            .await?;
+                        RTCIceGatherer::gather_from_stun_server(*local_addr, socket, url).await?;
 
                     msg_tx
-                        .send(MessageInner::LocalIceCandidate(candidate_init))
+                        .send(MessageInner::LocalIceCandidate(
+                            candidate_init,
+                            *local_addr,
+                            Arc::clone(socket),
+                        ))
                         .await
                         .map_err(|e| Error::Other(e.to_string()))?;
                 }
@@ -164,21 +171,10 @@ impl RTCIceGatherer {
 
     /// Gather a single srflx candidate from a STUN server
     async fn gather_from_stun_server(
-        runtime: Arc<dyn Runtime>,
         local_addr: SocketAddr,
+        socket: &Arc<dyn AsyncUdpSocket>,
         stun_url: &str,
     ) -> Result<RTCIceCandidateInit> {
-        use crate::runtime;
-        use bytes::BytesMut;
-        use rtc::ice::candidate::CandidateConfig;
-        use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
-        use rtc::sansio::Protocol;
-        use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
-        use rtc::stun::client::ClientBuilder;
-        use rtc::stun::message::*;
-        use rtc::stun::xoraddr::XorMappedAddress;
-        use std::time::{Duration, Instant};
-
         // Resolve STUN server address (add default port 3478 if not specified)
         let stun_server_addr_str = if stun_url.contains(':') {
             stun_url
@@ -209,24 +205,12 @@ impl RTCIceGatherer {
             stun_server_addr
         );
 
-        // Create a temporary UDP socket for STUN (match IP version of STUN server)
-        let addr = if stun_server_addr.is_ipv6() {
-            "[::]:0"
-        } else {
-            "0.0.0.0:0"
-        };
-        let socket = std::net::UdpSocket::bind(addr)?;
-        socket.set_nonblocking(true)?;
-
-        let stun_socket = runtime.wrap_udp_socket(socket)?;
-        let stun_local_addr = stun_socket.local_addr()?;
-
-        log::debug!("STUN client bound to {}", stun_local_addr);
+        log::debug!("STUN client bound to {}", local_addr);
 
         // Create STUN client using the sans-I/O pattern
         let transport_context = TransportContext::default();
         let mut client = ClientBuilder::new().build(
-            stun_local_addr,
+            local_addr,
             transport_context.peer_addr,
             TransportProtocol::UDP,
         )?;
@@ -239,16 +223,14 @@ impl RTCIceGatherer {
         client.handle_write(msg)?;
 
         while let Some(transmit) = client.poll_write() {
-            stun_socket
-                .send_to(&transmit.message, stun_server_addr)
-                .await?;
+            socket.send_to(&transmit.message, stun_server_addr).await?;
             log::debug!("Sent STUN binding request to {}", stun_server_addr);
         }
 
         // Wait for response with timeout
         let xor_addr = runtime::timeout(Duration::from_secs(5), async {
             let mut buf = vec![0u8; 1500];
-            let (n, peer_addr) = stun_socket.recv_from(&mut buf).await?;
+            let (n, peer_addr) = socket.recv_from(&mut buf).await?;
 
             log::debug!("Received {} bytes from {}", n, peer_addr);
 
@@ -256,7 +238,7 @@ impl RTCIceGatherer {
             client.handle_read(TaggedBytesMut {
                 now: Instant::now(),
                 transport: TransportContext {
-                    local_addr: stun_local_addr,
+                    local_addr,
                     peer_addr,
                     transport_protocol: TransportProtocol::UDP,
                     ecn: None,
