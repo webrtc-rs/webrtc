@@ -4,7 +4,6 @@
 //! Unlike the old async version, this gatherer is a configuration object that holds
 //! the ICE servers and state.
 
-use crate::runtime::AsyncUdpSocket;
 use crate::{Error, runtime};
 use rtc::ice::candidate::CandidateConfig;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
@@ -20,29 +19,36 @@ use rtc::stun::{
 /*use rtc::turn::client::{
     Client as TurnClient, ClientConfig as TurnClientConfig, Event as TurnEvent,
 };*/
-use log::error;
+use log::{debug, error};
+use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::stun::message::Getter;
 use rtc::stun::xoraddr::XorMappedAddress;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Instant;
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
-pub struct RTCIceGatherOptions {
-    pub ice_servers: Vec<RTCIceServer>,
-    pub ice_gather_policy: RTCIceTransportPolicy,
+pub(crate) struct RTCIceGatherOptions {
+    pub(crate) ice_servers: Vec<RTCIceServer>,
+    pub(crate) ice_gather_policy: RTCIceTransportPolicy,
+}
+
+#[derive(Debug)]
+pub enum RTCIceGathererEvent {
+    LocalIceCandidate(RTCIceCandidateInit),
+    IceGatheringComplete,
 }
 
 /// RTCIceGatherer gathers local host, server reflexive and relay candidates
 /// in a Sans-I/O manner.
 ///
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
-pub struct RTCIceGatherer {
-    sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
+pub(crate) struct RTCIceGatherer {
+    local_addrs: Vec<SocketAddr>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
+    state: RTCIceGatheringState,
 
     stun_clients: Vec<StunClient>,
 
@@ -52,14 +58,12 @@ pub struct RTCIceGatherer {
 
 impl RTCIceGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
-    pub(crate) fn new(
-        sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
-        opts: RTCIceGatherOptions,
-    ) -> Self {
+    pub(crate) fn new(local_addrs: Vec<SocketAddr>, opts: RTCIceGatherOptions) -> Self {
         Self {
-            sockets,
+            local_addrs,
             ice_servers: opts.ice_servers,
             gather_policy: opts.ice_gather_policy,
+            state: RTCIceGatheringState::New,
 
             stun_clients: Vec::new(),
 
@@ -68,10 +72,15 @@ impl RTCIceGatherer {
         }
     }
 
+    pub(crate) fn state(&self) -> RTCIceGatheringState {
+        self.state
+    }
+
     pub(crate) fn is_ice_message(&self, msg: &TaggedBytesMut) -> bool {
-        let peer_addr = msg.transport.peer_addr;
         for stun_client in &self.stun_clients {
-            if stun_client.peer_addr() == peer_addr {
+            if stun_client.peer_addr() == msg.transport.peer_addr
+                && stun_client.local_addr() == msg.transport.local_addr
+            {
                 return true;
             }
         }
@@ -79,11 +88,18 @@ impl RTCIceGatherer {
         false
     }
 
+    pub(crate) async fn gather(&mut self) -> Result<(), Error> {
+        self.state = RTCIceGatheringState::Gathering;
+        self.gather_host_candidates()?;
+        self.gather_srflx_candidates().await?;
+        Ok(())
+    }
+
     /// Gather host ICE candidates from a local socket address
     ///
     /// This is a pure function that creates host candidates without performing I/O.
     fn gather_host_candidates(&mut self) -> Result<(), Error> {
-        for local_addr in self.sockets.keys() {
+        for local_addr in &self.local_addrs {
             let candidate = CandidateHostConfig {
                 base_config: CandidateConfig {
                     network: "udp".to_owned(),
@@ -96,8 +112,7 @@ impl RTCIceGatherer {
             }
             .new_candidate_host()?;
 
-            let candidate_init =
-                rtc::peer_connection::transport::RTCIceCandidate::from(&candidate).to_json()?;
+            let candidate_init = RTCIceCandidate::from(&candidate).to_json()?;
 
             self.events
                 .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
@@ -117,7 +132,7 @@ impl RTCIceGatherer {
                     continue;
                 }
 
-                for local_addr in self.sockets.keys() {
+                for local_addr in &self.local_addrs {
                     let stun_client =
                         RTCIceGatherer::gather_from_stun_server(*local_addr, url).await?;
                     self.stun_clients.push(stun_client);
@@ -146,7 +161,7 @@ impl RTCIceGatherer {
             )
         };
 
-        log::debug!("Resolving STUN server: {}", stun_server_addr_str);
+        debug!("Resolving STUN server: {}", stun_server_addr_str);
 
         // Resolve hostname to IP address using runtime-agnostic helper
         let stun_server_addr: SocketAddr = runtime::resolve_host(&stun_server_addr_str)
@@ -157,13 +172,12 @@ impl RTCIceGatherer {
                 "Failed to resolve STUN server hostname".to_string(),
             ))?;
 
-        log::debug!(
+        debug!(
             "Resolved STUN server {} to {}",
-            stun_server_addr_str,
-            stun_server_addr
+            stun_server_addr_str, stun_server_addr
         );
 
-        log::debug!("STUN client bound to {}", local_addr);
+        debug!("STUN client bound to {}", local_addr);
 
         // Create STUN client using the sans-I/O pattern
         let mut stun_client =
@@ -180,12 +194,6 @@ impl RTCIceGatherer {
     }
 }
 
-#[derive(Debug)]
-pub enum RTCIceGathererEvent {
-    LocalIceCandidate(RTCIceCandidateInit),
-    IceGatheringComplete,
-}
-
 impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
     type Rout = ();
     type Wout = TaggedBytesMut;
@@ -195,7 +203,9 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
 
     fn handle_read(&mut self, msg: TaggedBytesMut) -> Result<(), Self::Error> {
         for stun_client in &mut self.stun_clients {
-            if stun_client.peer_addr() == msg.transport.peer_addr {
+            if stun_client.peer_addr() == msg.transport.peer_addr
+                && stun_client.local_addr() == msg.transport.local_addr
+            {
                 return stun_client.handle_read(msg);
             }
         }
@@ -263,7 +273,6 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
                                 continue;
                             }
                         };
-                        //candidate_init.url = Some(stun_url.to_string());
                         self.events
                             .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
                     }
@@ -273,6 +282,7 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
                 }
             }
         }
+
         self.events.pop_front()
     }
 

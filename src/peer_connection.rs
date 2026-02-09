@@ -264,18 +264,22 @@ where
         udp_addrs: Vec<A>,
         _tcp_addrs: Vec<A>,
     ) -> Result<Self> {
-        // Create unified channel for all outgoing messages
-        let (msg_tx, msg_rx) = channel();
-
+        let mut local_addrs = vec![];
         let mut async_udp_sockets = HashMap::new();
         for addr in udp_addrs {
             let socket = std::net::UdpSocket::bind(addr)?;
             socket.set_nonblocking(true)?;
             let local_addr = socket.local_addr()?;
             let async_udp_socket = runtime.wrap_udp_socket(socket)?;
-            async_udp_sockets.insert(local_addr, async_udp_socket);
+            if async_udp_sockets
+                .insert(local_addr, async_udp_socket)
+                .is_none()
+            {
+                local_addrs.push(local_addr);
+            }
         }
 
+        let (msg_tx, msg_rx) = channel();
         let mut peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
@@ -290,12 +294,15 @@ where
             driver_handle: None,
         };
 
-        // Create ICE gatherer with servers from config
-        let ice_gatherer = RTCIceGatherer::new(async_udp_sockets, opts);
-        let mut driver =
-            PeerConnectionDriver::new(peer_connection.inner.clone(), ice_gatherer).await?;
+        let ice_gatherer = RTCIceGatherer::new(local_addrs, opts);
+        let mut driver = PeerConnectionDriver::new(
+            peer_connection.inner.clone(),
+            ice_gatherer,
+            async_udp_sockets,
+        )
+        .await?;
         peer_connection.driver_handle = Some(runtime.spawn(Box::pin(async move {
-            if let Err(e) = driver.run(msg_rx).await {
+            if let Err(e) = driver.event_loop(msg_rx).await {
                 error!("I/O error: {}", e);
             }
         })));
