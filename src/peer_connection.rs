@@ -6,7 +6,7 @@ use crate::data_channel::DataChannel;
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_track::TrackRemote;
 use crate::peer_connection_driver::PeerConnectionDriver;
-use crate::runtime::{AsyncUdpSocket, Mutex, Sender, channel};
+use crate::runtime::{Mutex, Sender, channel};
 use crate::runtime::{Runtime, default_runtime};
 use log::error;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
@@ -17,7 +17,7 @@ use rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder};
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 /// Trait for handling peer connection events asynchronously
@@ -89,10 +89,7 @@ pub(crate) enum MessageInner {
     SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtc::rtcp::Packet>>),
     /// Outgoing RTCP packets from receiver
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
-    /// New local ICE candidate
-    LocalIceCandidate(RTCIceCandidateInit, SocketAddr, Arc<dyn AsyncUdpSocket>),
-    IceGatheringGathering,
-    IceGatheringComplete,
+    IceGathering,
     Close,
 }
 
@@ -288,13 +285,13 @@ where
                 data_channel_rxs: Mutex::new(HashMap::new()),
                 remote_tracks: Mutex::new(HashMap::new()),
                 track_rxs: Mutex::new(HashMap::new()),
-                msg_tx: msg_tx.clone(),
+                msg_tx,
             }),
             driver_handle: None,
         };
 
         // Create ICE gatherer with servers from config
-        let ice_gatherer = RTCIceGatherer::new(runtime.clone(), msg_tx, async_udp_sockets, opts);
+        let ice_gatherer = RTCIceGatherer::new(async_udp_sockets, opts);
         let mut driver =
             PeerConnectionDriver::new(peer_connection.inner.clone(), ice_gatherer).await?;
         peer_connection.driver_handle = Some(runtime.spawn(Box::pin(async move {
@@ -349,7 +346,7 @@ where
 
         self.inner
             .msg_tx
-            .send(MessageInner::IceGatheringGathering)
+            .send(MessageInner::IceGathering)
             .await
             .map_err(|e| Error::Other(format!("{:?}", e)))?;
         Ok(())
@@ -471,7 +468,7 @@ where
 
         self.inner
             .msg_tx
-            .send(MessageInner::IceGatheringGathering)
+            .send(MessageInner::IceGathering)
             .await
             .map_err(|e| Error::Other(format!("{:?}", e)))?;
         Ok(())

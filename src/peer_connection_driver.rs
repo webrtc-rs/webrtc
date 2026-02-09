@@ -4,7 +4,7 @@
 
 #![allow(clippy::collapsible_if)]
 
-use crate::ice_gatherer::RTCIceGatherer;
+use crate::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{AsyncUdpSocket, Receiver};
@@ -60,7 +60,14 @@ where
         let mut recv_buf = vec![0u8; 2000];
 
         loop {
-            // 1. poll_write() - Send all outgoing packets
+            // 1.a ice_gatherer poll_write()
+            {
+                while let Some(msg) = self.ice_gatherer.poll_write() {
+                    self.handle_write(msg).await;
+                }
+            }
+
+            // 1.b peer_connection poll_write() - Send all outgoing packets
             {
                 let mut core = self.inner.core.lock().await;
                 while let Some(msg) = core.poll_write() {
@@ -70,41 +77,57 @@ where
                 }
             }
 
-            // 2. poll_event() - Process all events
+            // 2.a ice_gatherer poll_event()
+            {
+                while let Some(event) = self.ice_gatherer.poll_event() {
+                    self.handle_gather_event(event).await;
+                }
+            }
+
+            // 2.b peer_connection poll_event() - Process all events
             {
                 let mut core = self.inner.core.lock().await;
                 while let Some(event) = core.poll_event() {
                     drop(core);
-                    self.handle_event(event).await;
+                    self.handle_rtc_event(event).await;
                     core = self.inner.core.lock().await;
                 }
             }
 
-            // 3. poll_read() - Process incoming messages
+            // 3.a no need for ice_gatherer poll_read()
+
+            // 3.b peer_connection poll_read() - Process incoming messages
             {
                 let mut core = self.inner.core.lock().await;
                 while let Some(message) = core.poll_read() {
                     drop(core);
-                    self.handle_read(message).await;
+                    self.handle_rtc_message(message).await;
                     core = self.inner.core.lock().await;
                 }
             }
 
-            // Get next timeout
-            let timeout = {
+            // 4.a poll next timeout
+            let mut timeout = {
                 let mut core = self.inner.core.lock().await;
                 core.poll_timeout()
                     .unwrap_or(Instant::now() + DEFAULT_TIMEOUT_DURATION)
             };
+            if let Some(ice_gatherer_timeout) = self.ice_gatherer.poll_timeout() {
+                if ice_gatherer_timeout < timeout {
+                    timeout = ice_gatherer_timeout;
+                }
+            }
 
             let delay_from_now = timeout
                 .checked_duration_since(Instant::now())
                 .unwrap_or(Duration::from_secs(0));
 
-            // Handle immediate timeout
+            // 4.b handle immediate timeout
             if delay_from_now.is_zero() {
+                let now = Instant::now();
+                self.ice_gatherer.handle_timeout(now)?;
                 let mut core = self.inner.core.lock().await;
-                core.handle_timeout(Instant::now())?;
+                core.handle_timeout(now)?;
                 continue;
             }
 
@@ -115,14 +138,16 @@ where
             futures::select! {
                 // Timer expired
                 _ = timer.fuse() => {
+                    let now = Instant::now();
+                    self.ice_gatherer.handle_timeout(now)?;
                     let mut core = self.inner.core.lock().await;
-                    core.handle_timeout(Instant::now())?;
+                    core.handle_timeout(now)?;
                 }
 
                 // Inner message (DataChannel, RTP, RTCP, or ICE candidate)
                 msg = msg_rx.recv().fuse() => {
                     if let Some(msg) = msg {
-                        if self.handle_message(msg).await {
+                        if self.handle_inner_message(msg).await {
                             return Ok(());
                         }
                     }
@@ -133,7 +158,7 @@ where
                     match res {
                         Ok((n, local_addr, peer_addr)) => {
                             log::trace!("Received {} bytes from {}", n, peer_addr);
-                            let tagged_msg = TaggedBytesMut {
+                            if let Err(err) = self.handle_read(TaggedBytesMut {
                                 now: Instant::now(),
                                 transport: TransportContext {
                                     local_addr,
@@ -142,10 +167,8 @@ where
                                     transport_protocol: TransportProtocol::UDP,
                                 },
                                 message: BytesMut::from(&recv_buf[..n]),
-                            };
-                            {
-                                let mut core = self.inner.core.lock().await;
-                                core.handle_read(tagged_msg)?;
+                            }).await {
+                                 log::error!("handle_read error: {}", err);
                             }
                         }
                         Err(err) => {
@@ -172,6 +195,17 @@ where
         }*/
     }
 
+    async fn handle_read(&mut self, msg: TaggedBytesMut) -> Result<()> {
+        if self.ice_gatherer.is_ice_message(&msg) {
+            self.ice_gatherer.handle_read(msg)?;
+        } else {
+            let mut core = self.inner.core.lock().await;
+            core.handle_read(msg)?;
+        }
+
+        Ok(())
+    }
+
     async fn poll_read(&self, _recv_buf: &mut [u8]) -> Result<(usize, SocketAddr, SocketAddr)> {
         //TODO: select correct socket
         //res = self.sockets[0].recv_from(&mut recv_buf).fuse()
@@ -179,7 +213,25 @@ where
         Err(Error::Other("not implemented".to_owned()))
     }
 
-    async fn handle_event(&mut self, event: RTCPeerConnectionEvent) {
+    async fn handle_gather_event(&mut self, event: RTCIceGathererEvent) {
+        match event {
+            RTCIceGathererEvent::LocalIceCandidate(candidate) => {
+                let mut core = self.inner.core.lock().await;
+                if let Err(err) = core.add_local_candidate(candidate) {
+                    log::error!("Failed to add local candidate: {}", err);
+                }
+            }
+            RTCIceGathererEvent::IceGatheringComplete => {
+                let end_of_candidates = RTCIceCandidateInit::default();
+                let mut core = self.inner.core.lock().await;
+                if let Err(err) = core.add_local_candidate(end_of_candidates) {
+                    log::error!("Failed to add end_of_candidates: {}", err);
+                }
+            }
+        }
+    }
+
+    async fn handle_rtc_event(&mut self, event: RTCPeerConnectionEvent) {
         match event {
             RTCPeerConnectionEvent::OnNegotiationNeededEvent => {
                 self.inner.handler.on_negotiation_needed().await;
@@ -217,7 +269,7 @@ where
         }
     }
 
-    async fn handle_read(&mut self, message: RTCMessage) {
+    async fn handle_rtc_message(&mut self, message: RTCMessage) {
         match message {
             RTCMessage::DataChannelMessage(channel_id, dc_message) => {
                 let data_channel_rxs = self.inner.data_channel_rxs.lock().await;
@@ -238,7 +290,7 @@ where
         }
     }
 
-    async fn handle_message(&mut self, msg: MessageInner) -> bool {
+    async fn handle_inner_message(&mut self, msg: MessageInner) -> bool {
         match msg {
             MessageInner::DataChannelMessage(channel_id, message) => {
                 let mut core = self.inner.core.lock().await;
@@ -274,21 +326,7 @@ where
                     }
                 }
             }
-            MessageInner::LocalIceCandidate(candidate, local_addr, socket) => {
-                self.sockets.insert(local_addr, socket);
-                let mut core = self.inner.core.lock().await;
-                if let Err(err) = core.add_local_candidate(candidate) {
-                    log::error!("Failed to add local candidate: {}", err);
-                }
-            }
-            MessageInner::IceGatheringComplete => {
-                let end_of_candidates = RTCIceCandidateInit::default();
-                let mut core = self.inner.core.lock().await;
-                if let Err(err) = core.add_local_candidate(end_of_candidates) {
-                    log::error!("Failed to add end_of_candidates: {}", err);
-                }
-            }
-            MessageInner::IceGatheringGathering => {
+            MessageInner::IceGathering => {
                 //TODO:
             }
             MessageInner::Close => return true,

@@ -4,25 +4,29 @@
 //! Unlike the old async version, this gatherer is a configuration object that holds
 //! the ICE servers and state.
 
-use crate::peer_connection::MessageInner;
-use crate::runtime;
-use crate::runtime::{AsyncUdpSocket, JoinHandle, Mutex, Runtime, Sender};
-use crate::{Error, Result};
-use bytes::BytesMut;
-use log::error;
+use crate::runtime::AsyncUdpSocket;
+use crate::{Error, runtime};
 use rtc::ice::candidate::CandidateConfig;
-use rtc::ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
-use rtc::peer_connection::transport::{CandidateHostConfig, RTCIceCandidateInit};
+use rtc::peer_connection::transport::{
+    CandidateHostConfig, CandidateServerReflexiveConfig, RTCIceCandidate, RTCIceCandidateInit,
+};
 use rtc::sansio::Protocol;
-use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
-use rtc::stun::client::ClientBuilder;
-use rtc::stun::message::*;
+use rtc::shared::{TaggedBytesMut, TransportProtocol};
+use rtc::stun::{
+    client::Client as StunClient, client::ClientBuilder as StunClientBuilder,
+    message::BINDING_REQUEST, message::Message as StunMessage, message::TransactionId,
+};
+/*use rtc::turn::client::{
+    Client as TurnClient, ClientConfig as TurnClientConfig, Event as TurnEvent,
+};*/
+use log::error;
+use rtc::stun::message::Getter;
 use rtc::stun::xoraddr::XorMappedAddress;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
 #[derive(Default, Debug, Clone)]
@@ -36,76 +40,50 @@ pub struct RTCIceGatherOptions {
 ///
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
 pub struct RTCIceGatherer {
-    runtime: Arc<dyn Runtime>,
-    msg_tx: Sender<MessageInner>,
     sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
-    join_handle: Mutex<Option<JoinHandle>>,
+
+    stun_clients: Vec<StunClient>,
+
+    wouts: VecDeque<TaggedBytesMut>,
+    events: VecDeque<RTCIceGathererEvent>,
 }
 
 impl RTCIceGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
     pub(crate) fn new(
-        runtime: Arc<dyn Runtime>,
-        msg_tx: Sender<MessageInner>,
         sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
         opts: RTCIceGatherOptions,
     ) -> Self {
         Self {
-            runtime,
-            msg_tx,
             sockets,
             ice_servers: opts.ice_servers,
             gather_policy: opts.ice_gather_policy,
-            join_handle: Mutex::new(None),
+
+            stun_clients: Vec::new(),
+
+            wouts: VecDeque::new(),
+            events: VecDeque::new(),
         }
     }
 
-    pub(crate) async fn gather(&self) -> Result<()> {
-        {
-            let mut join_handle = self.join_handle.lock().await;
-            if let Some(join_handle) = join_handle.take() {
-                join_handle.abort();
+    pub(crate) fn is_ice_message(&self, msg: &TaggedBytesMut) -> bool {
+        let peer_addr = msg.transport.peer_addr;
+        for stun_client in &self.stun_clients {
+            if stun_client.peer_addr() == peer_addr {
+                return true;
             }
         }
 
-        // Gather host candidates (synchronous)
-        if let Err(err) = self.gather_host_candidates().await {
-            error!("Error gathering host candidates: {}", err);
-        }
-
-        {
-            let sockets = self.sockets.clone();
-            let ice_servers = self.ice_servers.clone();
-            let msg_tx = self.msg_tx.clone();
-
-            let handle = self.runtime.spawn(Box::pin(async move {
-                // Spawn background task for STUN gathering (server reflexive candidates)
-                if let Err(err) =
-                    RTCIceGatherer::gather_srflx_candidates(sockets, ice_servers, msg_tx.clone())
-                        .await
-                {
-                    error!("Error gathering srflx candidates: {}", err);
-                }
-
-                if let Err(err) = msg_tx.send(MessageInner::IceGatheringComplete).await {
-                    error!("Error sending IceGatheringComplete: {}", err);
-                }
-            }));
-
-            let mut join_handle = self.join_handle.lock().await;
-            *join_handle = Some(handle);
-        }
-
-        Ok(())
+        false
     }
 
     /// Gather host ICE candidates from a local socket address
     ///
     /// This is a pure function that creates host candidates without performing I/O.
-    async fn gather_host_candidates(&self) -> Result<()> {
-        for (local_addr, socket) in &self.sockets {
+    fn gather_host_candidates(&mut self) -> Result<(), Error> {
+        for local_addr in self.sockets.keys() {
             let candidate = CandidateHostConfig {
                 base_config: CandidateConfig {
                     network: "udp".to_owned(),
@@ -121,16 +99,9 @@ impl RTCIceGatherer {
             let candidate_init =
                 rtc::peer_connection::transport::RTCIceCandidate::from(&candidate).to_json()?;
 
-            self.msg_tx
-                .send(MessageInner::LocalIceCandidate(
-                    candidate_init,
-                    *local_addr,
-                    Arc::clone(socket),
-                ))
-                .await
-                .map_err(|e| Error::Other(e.to_string()))?;
+            self.events
+                .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
         }
-
         Ok(())
     }
 
@@ -138,30 +109,18 @@ impl RTCIceGatherer {
     ///
     /// This performs actual I/O to query STUN servers and should be called
     /// in an async context.
-    async fn gather_srflx_candidates(
-        sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
-        ice_servers: Vec<RTCIceServer>,
-        msg_tx: Sender<MessageInner>,
-    ) -> Result<()> {
-        for ice_server in ice_servers {
+    async fn gather_srflx_candidates(&mut self) -> Result<(), Error> {
+        for ice_server in &self.ice_servers {
             for url in &ice_server.urls {
                 // Only handle stun: URLs for now
                 if !url.starts_with("stun:") {
                     continue;
                 }
 
-                for (local_addr, socket) in &sockets {
-                    let candidate_init =
-                        RTCIceGatherer::gather_from_stun_server(*local_addr, socket, url).await?;
-
-                    msg_tx
-                        .send(MessageInner::LocalIceCandidate(
-                            candidate_init,
-                            *local_addr,
-                            Arc::clone(socket),
-                        ))
-                        .await
-                        .map_err(|e| Error::Other(e.to_string()))?;
+                for local_addr in self.sockets.keys() {
+                    let stun_client =
+                        RTCIceGatherer::gather_from_stun_server(*local_addr, url).await?;
+                    self.stun_clients.push(stun_client);
                 }
             }
         }
@@ -172,9 +131,8 @@ impl RTCIceGatherer {
     /// Gather a single srflx candidate from a STUN server
     async fn gather_from_stun_server(
         local_addr: SocketAddr,
-        socket: &Arc<dyn AsyncUdpSocket>,
         stun_url: &str,
-    ) -> Result<RTCIceCandidateInit> {
+    ) -> Result<StunClient, Error> {
         // Resolve STUN server address (add default port 3478 if not specified)
         let stun_server_addr_str = if stun_url.contains(':') {
             stun_url
@@ -208,81 +166,137 @@ impl RTCIceGatherer {
         log::debug!("STUN client bound to {}", local_addr);
 
         // Create STUN client using the sans-I/O pattern
-        let transport_context = TransportContext::default();
-        let mut client = ClientBuilder::new().build(
-            local_addr,
-            transport_context.peer_addr,
-            TransportProtocol::UDP,
-        )?;
+        let mut stun_client =
+            StunClientBuilder::new().build(local_addr, stun_server_addr, TransportProtocol::UDP)?;
 
         // Create STUN binding request
-        let mut msg = Message::new();
+        let mut msg = StunMessage::new();
         msg.build(&[Box::<TransactionId>::default(), Box::new(BINDING_REQUEST)])?;
 
         // Send the request
-        client.handle_write(msg)?;
+        stun_client.handle_write(msg)?;
 
-        while let Some(transmit) = client.poll_write() {
-            socket.send_to(&transmit.message, stun_server_addr).await?;
-            log::debug!("Sent STUN binding request to {}", stun_server_addr);
-        }
+        Ok(stun_client)
+    }
+}
 
-        // Wait for response with timeout
-        let xor_addr = runtime::timeout(Duration::from_secs(5), async {
-            let mut buf = vec![0u8; 1500];
-            let (n, peer_addr) = socket.recv_from(&mut buf).await?;
+#[derive(Debug)]
+pub enum RTCIceGathererEvent {
+    LocalIceCandidate(RTCIceCandidateInit),
+    IceGatheringComplete,
+}
 
-            log::debug!("Received {} bytes from {}", n, peer_addr);
+impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
+    type Rout = ();
+    type Wout = TaggedBytesMut;
+    type Eout = RTCIceGathererEvent;
+    type Error = Error;
+    type Time = Instant;
 
-            // Feed response to client
-            client.handle_read(TaggedBytesMut {
-                now: Instant::now(),
-                transport: TransportContext {
-                    local_addr,
-                    peer_addr,
-                    transport_protocol: TransportProtocol::UDP,
-                    ecn: None,
-                },
-                message: BytesMut::from(&buf[..n]),
-            })?;
-
-            // Poll for event
-            if let Some(event) = client.poll_event() {
-                let response_msg = event.result?;
-                let mut xor_addr = XorMappedAddress::default();
-                xor_addr.get_from(&response_msg)?;
-                log::info!("Got STUN response: {}:{}", xor_addr.ip, xor_addr.port);
-                Ok::<XorMappedAddress, Error>(xor_addr)
-            } else {
-                Err(Error::Other("No STUN response event".to_string()))
+    fn handle_read(&mut self, msg: TaggedBytesMut) -> Result<(), Self::Error> {
+        for stun_client in &mut self.stun_clients {
+            if stun_client.peer_addr() == msg.transport.peer_addr {
+                return stun_client.handle_read(msg);
             }
-        })
-        .await
-        .map_err(|_| Error::Other("STUN request timeout".to_string()))??;
-
-        // Close the STUN client
-        client.close()?;
-
-        // Create server reflexive candidate
-        let candidate = CandidateServerReflexiveConfig {
-            base_config: CandidateConfig {
-                network: "udp".to_owned(),
-                address: xor_addr.ip.to_string(),
-                port: xor_addr.port,
-                component: 1,
-                ..Default::default()
-            },
-            rel_addr: local_addr.ip().to_string(),
-            rel_port: local_addr.port(),
-            ..Default::default()
         }
-        .new_candidate_server_reflexive()?;
 
-        let mut candidate_init =
-            rtc::peer_connection::transport::RTCIceCandidate::from(&candidate).to_json()?;
-        candidate_init.url = Some(stun_url.to_string());
+        Ok(())
+    }
 
-        log::info!("Generated srflx candidate: {}", candidate_init.candidate);
-        Ok(candidate_init)
+    fn poll_read(&mut self) -> Option<Self::Rout> {
+        None
+    }
+
+    fn handle_write(&mut self, _msg: ()) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn poll_write(&mut self) -> Option<Self::Wout> {
+        for stun_client in &mut self.stun_clients {
+            while let Some(transmit) = stun_client.poll_write() {
+                self.wouts.push_back(transmit);
+            }
+        }
+
+        self.wouts.pop_front()
+    }
+
+    fn handle_event(&mut self, _evt: ()) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn poll_event(&mut self) -> Option<Self::Eout> {
+        for stun_client in &mut self.stun_clients {
+            let local_addr = stun_client.local_addr();
+            while let Some(event) = stun_client.poll_event() {
+                match event.result {
+                    Ok(msg) => {
+                        let mut xor_addr = XorMappedAddress::default();
+                        if let Err(err) = xor_addr.get_from(&msg) {
+                            error!("Failed to get xor mapped message: {}", err);
+                            continue;
+                        }
+                        let config = CandidateServerReflexiveConfig {
+                            base_config: CandidateConfig {
+                                network: "udp".to_owned(),
+                                address: xor_addr.ip.to_string(),
+                                port: xor_addr.port,
+                                component: 1,
+                                ..Default::default()
+                            },
+                            rel_addr: local_addr.ip().to_string(),
+                            rel_port: local_addr.port(),
+                            ..Default::default()
+                        };
+                        let candidate = match config.new_candidate_server_reflexive() {
+                            Ok(candidate) => candidate,
+                            Err(err) => {
+                                error!("Failed to new_candidate_server_reflexive: {}", err);
+                                continue;
+                            }
+                        };
+
+                        let candidate_init = match RTCIceCandidate::from(&candidate).to_json() {
+                            Ok(candidate_init) => candidate_init,
+                            Err(err) => {
+                                error!("Failed to RTCIceCandidate to json: {}", err);
+                                continue;
+                            }
+                        };
+                        //candidate_init.url = Some(stun_url.to_string());
+                        self.events
+                            .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
+                    }
+                    Err(e) => {
+                        error!("STUN error: {}", e);
+                    }
+                }
+            }
+        }
+        self.events.pop_front()
+    }
+
+    fn handle_timeout(&mut self, now: Self::Time) -> Result<(), Self::Error> {
+        for stun_client in &mut self.stun_clients {
+            stun_client.handle_timeout(now)?;
+        }
+        Ok(())
+    }
+
+    fn poll_timeout(&mut self) -> Option<Self::Time> {
+        let mut eto: Option<Instant> = None;
+        for stun_client in &mut self.stun_clients {
+            if let Some(next) = stun_client.poll_timeout() {
+                eto = Some(eto.map_or(next, |curr| std::cmp::min(curr, next)));
+            }
+        }
+        eto
+    }
+
+    fn close(&mut self) -> Result<(), Self::Error> {
+        for mut stun_client in self.stun_clients.drain(..) {
+            stun_client.close()?;
+        }
+        Ok(())
     }
 }
