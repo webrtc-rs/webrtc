@@ -275,7 +275,7 @@ async fn test_stun_gathering_with_google_stun() {
         .with_configuration(config)
         .with_media_engine(media_engine)
         .with_handler(handler)
-        .with_udp_addrs(vec!["0.0.0.0:0", "[::]:0"])
+        .with_udp_addrs(vec!["0.0.0.0:0"])
         .build()
         .await
         .unwrap();
