@@ -77,21 +77,21 @@ where
             socket_list.iter().map(|_| vec![0u8; 2000]).collect();
 
         // Helper function to create a recv future for a specific socket
-        let create_recv_future = |idx: usize,
-                                  local_addr: SocketAddr,
-                                  socket: Arc<dyn AsyncUdpSocket>,
-                                  mut buf: Vec<u8>| async move {
+        let create_socket_recv_future = |idx: usize,
+                                         local_addr: SocketAddr,
+                                         socket: Arc<dyn AsyncUdpSocket>,
+                                         mut buf: Vec<u8>| async move {
             let (n, peer_addr) = socket.recv_from(&mut buf).await?;
             Ok::<_, std::io::Error>((n, local_addr, peer_addr, idx, buf))
         };
 
         // Create initial set of futures in FuturesUnordered
-        let mut recv_futures: FuturesUnordered<_> = socket_list
+        let mut socket_recv_futures: FuturesUnordered<_> = socket_list
             .iter()
             .enumerate()
             .map(|(idx, (local_addr, socket))| {
                 let buf = std::mem::take(&mut socket_buffers[idx]);
-                create_recv_future(idx, *local_addr, socket.clone(), buf).boxed()
+                create_socket_recv_future(idx, *local_addr, socket.clone(), buf).boxed()
             })
             .collect();
 
@@ -190,7 +190,7 @@ where
                 }
 
                 // Incoming network packet from any socket
-                result = recv_futures.next().fuse() => {
+                result = socket_recv_futures.next().fuse() => {
                     match result {
                         Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
                             trace!("Received {} bytes from {}", n, peer_addr);
@@ -210,8 +210,8 @@ where
 
                             // Immediately create a new future for this socket and reuse the buffer
                             let (socket_local_addr, socket) = &socket_list[idx];
-                            recv_futures.push(
-                                create_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
+                            socket_recv_futures.push(
+                                create_socket_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
                             );
                         }
                         Some(Err(err)) => {
