@@ -193,7 +193,7 @@ where
                 result = socket_recv_futures.next().fuse() => {
                     match result {
                         Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
-                            trace!("Received {} bytes from {}", n, peer_addr);
+                            trace!("Received {} bytes from {} to {}", n, peer_addr, local_addr);
 
                             if let Err(err) = self.handle_read(TaggedBytesMut {
                                 now: Instant::now(),
@@ -264,6 +264,7 @@ where
     async fn handle_gather_event(&mut self, event: RTCIceGathererEvent) {
         match event {
             RTCIceGathererEvent::LocalIceCandidate(candidate) => {
+                trace!("LocalIceCandidate {:?}", candidate);
                 let mut core = self.inner.core.lock().await;
                 if let Err(err) = core.add_local_candidate(candidate) {
                     error!("Failed to add local candidate: {}", err);

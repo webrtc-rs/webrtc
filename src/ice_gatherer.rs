@@ -21,6 +21,7 @@ use rtc::stun::{
 };*/
 use log::{debug, error};
 use rtc::peer_connection::state::RTCIceGatheringState;
+use rtc::stun::agent::StunEvent;
 use rtc::stun::message::Getter;
 use rtc::stun::xoraddr::XorMappedAddress;
 use std::collections::{HashSet, VecDeque};
@@ -263,8 +264,8 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
             let mut peer_addr = None;
             while let Some(event) = stun_client.poll_event() {
                 peer_addr = Some(stun_client.peer_addr());
-                match event.result {
-                    Ok(msg) => {
+                match event {
+                    StunEvent::Message(msg) => {
                         let mut xor_addr = XorMappedAddress::default();
                         if let Err(err) = xor_addr.get_from(&msg) {
                             error!("Failed to get xor mapped message: {}", err);
@@ -300,8 +301,8 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
                         self.events
                             .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
                     }
-                    Err(e) => {
-                        error!("STUN error: {}", e);
+                    _ => {
+                        error!("STUN error: {:?}", event);
                     }
                 }
             }
