@@ -140,13 +140,18 @@ impl RTCIceGatherer {
                 }
 
                 for local_addr in &self.local_addrs {
-                    let stun_client =
-                        RTCIceGatherer::gather_from_stun_server(*local_addr, url).await?;
-                    self.gathering_clients.insert(FourTuple {
-                        local_addr: stun_client.local_addr(),
-                        peer_addr: stun_client.peer_addr(),
-                    });
-                    self.stun_clients.push(stun_client);
+                    match RTCIceGatherer::gather_from_stun_server(*local_addr, url).await {
+                        Ok(stun_client) => {
+                            self.gathering_clients.insert(FourTuple {
+                                local_addr: stun_client.local_addr(),
+                                peer_addr: stun_client.peer_addr(),
+                            });
+                            self.stun_clients.push(stun_client);
+                        }
+                        Err(err) => {
+                            error!("Failed to gather stun client: {}", err);
+                        }
+                    }
                 }
             }
         }
@@ -175,13 +180,19 @@ impl RTCIceGatherer {
         debug!("Resolving STUN server: {}", stun_server_addr_str);
 
         // Resolve hostname to IP address using runtime-agnostic helper
-        let stun_server_addr: SocketAddr = runtime::resolve_host(&stun_server_addr_str)
-            .await?
+        let resolved_addrs = runtime::resolve_host(&stun_server_addr_str).await?;
+
+        // Filter addresses to match the local_addr IP version (IPv4 or IPv6)
+        let stun_server_addr: SocketAddr = resolved_addrs
             .into_iter()
-            .next()
-            .ok_or(Error::Other(
-                "Failed to resolve STUN server hostname".to_string(),
-            ))?;
+            .find(|addr| addr.is_ipv4() == local_addr.is_ipv4())
+            .ok_or_else(|| {
+                let ip_version = if local_addr.is_ipv4() { "IPv4" } else { "IPv6" };
+                Error::Other(format!(
+                    "Failed to resolve STUN server hostname to {} address (local_addr is {})",
+                    ip_version, local_addr
+                ))
+            })?;
 
         debug!(
             "Resolved STUN server {} to {}",
