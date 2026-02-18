@@ -66,16 +66,10 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
     async fn on_connection_state_change(&self, _state: RTCPeerConnectionState) {}
 
     /// Called when a remote peer creates a data channel
-    async fn on_data_channel_open(&self, _data_channel: Arc<DataChannel>) {}
-
-    /// Called for data channel lifecycle events
-    async fn on_data_channel(&self, _event: RTCDataChannelEvent) {}
+    async fn on_data_channel(&self, _data_channel: Arc<DataChannel>) {}
 
     /// Called when a remote track is received
-    async fn on_track_open(&self, _track: Arc<TrackRemote>) {}
-
-    /// Called for track lifecycle events
-    async fn on_track(&self, _event: RTCTrackEvent) {}
+    async fn on_track(&self, _track: Arc<TrackRemote>) {}
 }
 
 /// Unified inner message type for the peer connection driver
@@ -213,7 +207,7 @@ pub struct PeerConnection<I = NoopInterceptor>
 where
     I: Interceptor,
 {
-    pub(crate) inner: Arc<PeerConnectionRef<I>>,
+    inner: Arc<PeerConnectionRef<I>>,
     driver_handle: Option<runtime::JoinHandle>,
 }
 
@@ -239,14 +233,6 @@ where
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
-    /// Data channels  
-    pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Arc<DataChannel>>>,
-    /// Data channel message senders (for incoming messages from network)
-    pub(crate) data_channel_rxs: Mutex<HashMap<RTCDataChannelId, Sender<RTCDataChannelMessage>>>,
-    /// Remote tracks (incoming media)
-    pub(crate) remote_tracks: Mutex<HashMap<RTCRtpReceiverId, Arc<TrackRemote>>>,
-    /// RTP packet senders for remote tracks
-    pub(crate) track_rxs: Mutex<HashMap<RTCRtpReceiverId, Sender<rtc::rtp::Packet>>>,
     /// Unified channel for all outgoing messages
     pub(crate) msg_tx: Sender<MessageInner>,
 }
@@ -285,10 +271,6 @@ where
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
                 handler,
-                data_channels: Mutex::new(HashMap::new()),
-                data_channel_rxs: Mutex::new(HashMap::new()),
-                remote_tracks: Mutex::new(HashMap::new()),
-                track_rxs: Mutex::new(HashMap::new()),
                 msg_tx,
             }),
             driver_handle: None,
@@ -528,7 +510,7 @@ where
         &self,
         label: impl Into<String>,
         options: Option<RTCDataChannelInit>,
-    ) -> Result<Arc<DataChannel>> {
+    ) -> Result<Arc<DataChannel<I>>> {
         let label = label.into();
 
         // Create the data channel via the core
@@ -538,28 +520,8 @@ where
             rtc_dc.id()
         };
 
-        // Create a channel for receiving messages for this data channel
-        let (dc_tx, dc_rx) = channel();
-
         // Create our async wrapper
-        let dc = Arc::new(DataChannel::new(
-            channel_id,
-            label,
-            self.inner.msg_tx.clone(),
-            dc_rx,
-        ));
-
-        // Store in the maps
-        self.inner
-            .data_channels
-            .lock()
-            .await
-            .insert(channel_id, dc.clone());
-        self.inner
-            .data_channel_rxs
-            .lock()
-            .await
-            .insert(channel_id, dc_tx);
+        let dc = Arc::new(DataChannel::new(channel_id, self.inner.clone()));
 
         Ok(dc)
     }
