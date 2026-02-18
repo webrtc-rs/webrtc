@@ -362,19 +362,19 @@ where
     /// Get the local description
     pub async fn local_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
-        core.local_description().cloned()
+        core.local_description()
     }
 
     /// Get current local description
     pub async fn current_local_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
-        core.current_local_description().cloned()
+        core.current_local_description()
     }
 
     /// Get pending local description
     pub async fn pending_local_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
-        core.pending_local_description().cloned()
+        core.pending_local_description()
     }
 
     /// Returns whether the remote peer supports trickle ICE.

@@ -1,51 +1,89 @@
-use std::io::Write;
-use std::sync::Arc;
-
 use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
-use tokio::time::Duration;
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::MediaEngine;
-use webrtc::api::APIBuilder;
-use webrtc::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data_channel::RTCDataChannel;
-use webrtc::ice_transport::ice_server::RTCIceServer;
-use webrtc::interceptor::registry::Registry;
-use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::math_rand_alpha;
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use clap::Parser;
+use env_logger::Target;
+use rtc::peer_connection::configuration::{RTCConfigurationBuilder, RTCIceServer};
+use rtc::peer_connection::sdp::RTCSessionDescription;
+use rtc::peer_connection::state::{RTCIceGatheringState, RTCPeerConnectionState};
+use std::fs::OpenOptions;
+use std::sync::Arc;
+use std::{io::Write, str::FromStr};
+use webrtc::data_channel::DataChannel;
+use webrtc::peer_connection::*;
+use webrtc::runtime::{Mutex, Sender, channel};
+
+#[derive(Parser)]
+#[command(name = "data-channels")]
+#[command(author = "Rusty Rain <y@liu.mx>")]
+#[command(version = "0.0.0")]
+#[command(about = "An example of Data-Channels", long_about = None)]
+struct Cli {
+    #[arg(short, long)]
+    client: bool,
+    #[arg(short, long)]
+    debug: bool,
+    #[arg(short, long, default_value_t = format!("INFO"))]
+    log_level: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    input_sdp_file: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    output_log_file: String,
+    #[arg(long, default_value_t = format!("127.0.0.1"))]
+    host: String,
+    #[arg(long, default_value_t = 0)]
+    port: u16,
+}
+
+#[derive(Clone)]
+struct TestHandler {
+    data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
+    gather_complete_tx: Sender<()>,
+    done_tx: Sender<()>,
+}
+
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for TestHandler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        println!("ICE gathering state: {:?}", state);
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gather_complete_tx.try_send(());
+        }
+    }
+
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("Peer Connection State has changed: {state}");
+        if state == RTCPeerConnectionState::Failed {
+            println!("Peer Connection has gone to failed exiting");
+            let _ = self.done_tx.try_send(());
+        }
+    }
+
+    async fn on_data_channel_open(&self, data_channel: Arc<DataChannel>) {
+        self.data_channels.lock().await.push(data_channel);
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = Command::new("data-channels")
-        .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of Data-Channels.")
-        .setting(AppSettings::DeriveDisplayOrder)
-        .subcommand_negates_reqs(true)
-        .arg(
-            Arg::new("FULLHELP")
-                .help("Prints more detailed help information")
-                .long("fullhelp"),
-        )
-        .arg(
-            Arg::new("debug")
-                .long("debug")
-                .short('d')
-                .help("Prints debug log information"),
-        );
-
-    let matches = app.clone().get_matches();
-
-    if matches.is_present("FULLHELP") {
-        app.print_long_help().unwrap();
-        std::process::exit(0);
-    }
-
-    let debug = matches.is_present("debug");
-    if debug {
+    let cli = Cli::parse();
+    let _host = cli.host;
+    let _port = cli.port;
+    let _is_client = cli.client;
+    let _input_sdp_file = cli.input_sdp_file;
+    let output_log_file = cli.output_log_file;
+    let log_level = log::LevelFilter::from_str(&cli.log_level)?;
+    if cli.debug {
         env_logger::Builder::new()
+            .target(if !output_log_file.is_empty() {
+                Target::Pipe(Box::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(output_log_file)?,
+                ))
+            } else {
+                Target::Stdout
+            })
             .format(|buf, record| {
                 writeln!(
                     buf,
@@ -57,62 +95,35 @@ async fn main() -> Result<()> {
                     record.args()
                 )
             })
-            .filter(None, log::LevelFilter::Trace)
+            .filter(None, log_level)
             .init();
     }
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
-    // Create a MediaEngine object to configure the supported codec
-    let mut m = MediaEngine::default();
+    let (done_tx, mut done_rx) = channel::<()>();
+    let (gather_complete_tx, mut gather_complete_rx) = channel();
+    let handler = Arc::new(TestHandler {
+        data_channels: Arc::new(Mutex::new(Vec::new())),
+        gather_complete_tx,
+        done_tx,
+    });
 
-    // Register default codecs
-    m.register_default_codecs()?;
-
-    // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
-    // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
-    // this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
-    // for each PeerConnection.
-    let mut registry = Registry::new();
-
-    // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
-
-    // Create the API object with the MediaEngine
-    let api = APIBuilder::new()
-        .with_media_engine(m)
-        .with_interceptor_registry(registry)
+    let config = RTCConfigurationBuilder::new()
+        .with_ice_servers(vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_string()],
+            ..Default::default()
+        }])
         .build();
 
-    // Prepare the configuration
-    let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
+    let mut peer_connection = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_handler(handler)
+        .with_udp_addrs(vec!["0.0.0.0:0"])
+        .build()
+        .await?;
 
-    // Create a new RTCPeerConnection
-    let peer_connection = Arc::new(api.new_peer_connection(config).await?);
-
-    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
-
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
-
-        if s == RTCPeerConnectionState::Failed {
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting");
-            let _ = done_tx.try_send(());
-        }
-
-        Box::pin(async {})
-    }));
+    /*
 
     // Register data channel creation handling
     peer_connection
@@ -158,7 +169,7 @@ async fn main() -> Result<()> {
                     Box::pin(async {})
                 }));
             })
-        }));
+        }));*/
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;
@@ -171,16 +182,13 @@ async fn main() -> Result<()> {
     // Create an answer
     let answer = peer_connection.create_answer(None).await?;
 
-    // Create channel that is blocked until ICE Gathering is complete
-    let mut gather_complete = peer_connection.gathering_complete_promise().await;
-
     // Sets the LocalDescription, and starts our UDP listeners
     peer_connection.set_local_description(answer).await?;
 
     // Block until ICE Gathering is complete, disabling trickle ICE
     // we do this because we only can exchange one signaling message
     // in a production application you should exchange ICE Candidates via OnICECandidate
-    let _ = gather_complete.recv().await;
+    let _ = gather_complete_rx.recv().await;
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
