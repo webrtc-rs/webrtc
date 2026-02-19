@@ -115,6 +115,25 @@ We're actively designing v0.20.0+ and welcome your input:
 **For production use:** Stick with v0.17.x branch until v0.20.0+ is stable.  
 **For early adopters:** Follow master branch development and provide feedback!
 
+## Building and Testing
+
+```bash
+# Update rtc submodule first
+git submodule update --init --recursive
+
+# Build the library
+cargo build
+
+# Run tests
+cargo test
+
+# Build documentation
+cargo doc --open
+
+# Run examples
+cargo run --example data-channels
+```
+
 ## Open Source License
 
 Dual licensing under both MIT and Apache-2.0 is the currently accepted standard by the Rust language community and has
