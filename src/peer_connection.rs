@@ -206,19 +206,7 @@ where
     I: Interceptor,
 {
     inner: Arc<PeerConnectionRef<I>>,
-    driver_handle: Option<runtime::JoinHandle>,
-}
-
-impl<I> Drop for PeerConnection<I>
-where
-    I: Interceptor,
-{
-    fn drop(&mut self) {
-        // Abort the driver task when PeerConnection is dropped
-        if let Some(handle) = &self.driver_handle {
-            handle.abort();
-        }
-    }
+    driver_handle: Mutex<Option<runtime::JoinHandle>>,
 }
 
 pub(crate) struct PeerConnectionRef<I = NoopInterceptor>
@@ -273,7 +261,7 @@ where
                 handler,
                 msg_tx,
             }),
-            driver_handle: None,
+            driver_handle: Mutex::new(None),
         };
 
         let ice_gatherer = RTCIceGatherer::new(local_addrs, opts);
@@ -283,17 +271,17 @@ where
             async_udp_sockets,
         )
         .await?;
-        peer_connection.driver_handle = Some(runtime.spawn(Box::pin(async move {
+        peer_connection.driver_handle = Mutex::new(Some(runtime.spawn(Box::pin(async move {
             if let Err(e) = driver.event_loop(msg_rx).await {
                 error!("I/O error: {}", e);
             }
-        })));
+        }))));
 
         Ok(peer_connection)
     }
 
     /// Close the peer connection
-    pub async fn close(&mut self) -> Result<()> {
+    pub async fn close(&self) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.close()?;
@@ -303,7 +291,10 @@ where
             .try_send(MessageInner::Close)
             .map_err(|e| Error::Other(format!("{:?}", e)))?;
 
-        self.driver_handle.take();
+        {
+            let mut driver_handle = self.driver_handle.lock().await;
+            driver_handle.take();
+        }
 
         Ok(())
     }

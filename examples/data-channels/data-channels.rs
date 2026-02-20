@@ -179,7 +179,7 @@ async fn async_main() -> anyhow::Result<()> {
         }])
         .build();
 
-    let mut peer_connection = PeerConnectionBuilder::new()
+    let peer_connection = PeerConnectionBuilder::new()
         .with_configuration(config)
         .with_media_engine(media_engine)
         .with_interceptor_registry(registry)

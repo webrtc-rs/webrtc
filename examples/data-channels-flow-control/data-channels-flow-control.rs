@@ -183,7 +183,7 @@ async fn async_main() -> anyhow::Result<()> {
     req_media.register_default_codecs()?;
     let req_registry = register_default_interceptors(Registry::new(), &mut req_media)?;
 
-    let mut requester = PeerConnectionBuilder::new()
+    let requester = PeerConnectionBuilder::new()
         .with_configuration(RTCConfigurationBuilder::new().build())
         .with_media_engine(req_media)
         .with_interceptor_registry(req_registry)
@@ -290,7 +290,7 @@ async fn async_main() -> anyhow::Result<()> {
     resp_media.register_default_codecs()?;
     let resp_registry = register_default_interceptors(Registry::new(), &mut resp_media)?;
 
-    let mut responder = PeerConnectionBuilder::new()
+    let responder = PeerConnectionBuilder::new()
         .with_configuration(RTCConfigurationBuilder::new().build())
         .with_media_engine(resp_media)
         .with_interceptor_registry(resp_registry)

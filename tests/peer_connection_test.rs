@@ -36,7 +36,7 @@ fn test_create_peer_connection() {
         let config = RTCConfigurationBuilder::new().build();
         let handler = Arc::new(TestHandler);
 
-        let mut pc = PeerConnectionBuilder::new()
+        let pc = PeerConnectionBuilder::new()
             .with_configuration(config)
             .with_handler(handler)
             .with_udp_addrs(vec!["127.0.0.1:0"])
@@ -55,7 +55,7 @@ fn test_create_offer() {
         let config = RTCConfigurationBuilder::new().build();
         let handler = Arc::new(TestHandler);
 
-        let mut pc = PeerConnectionBuilder::new()
+        let pc = PeerConnectionBuilder::new()
             .with_configuration(config)
             .with_handler(handler)
             .with_udp_addrs(vec!["127.0.0.1:0"])
@@ -80,7 +80,7 @@ fn test_set_local_description() {
         let config = RTCConfigurationBuilder::new().build();
         let handler = Arc::new(TestHandler);
 
-        let mut pc = PeerConnectionBuilder::new()
+        let pc = PeerConnectionBuilder::new()
             .with_configuration(config)
             .with_handler(handler)
             .with_udp_addrs(vec!["127.0.0.1:0"])
@@ -112,7 +112,7 @@ fn test_offer_answer_exchange() {
         // Create two peer connections to simulate offer/answer exchange
         let config1 = RTCConfigurationBuilder::new().build();
         let handler1 = Arc::new(TestHandler);
-        let mut pc1 = PeerConnectionBuilder::new()
+        let pc1 = PeerConnectionBuilder::new()
             .with_configuration(config1)
             .with_handler(handler1)
             .with_udp_addrs(vec!["127.0.0.1:0"])
@@ -122,7 +122,7 @@ fn test_offer_answer_exchange() {
 
         let config2 = RTCConfigurationBuilder::new().build();
         let handler2 = Arc::new(TestHandler);
-        let mut pc2 = PeerConnectionBuilder::new()
+        let pc2 = PeerConnectionBuilder::new()
             .with_configuration(config2)
             .with_handler(handler2)
             .with_udp_addrs(vec!["127.0.0.1:0"])

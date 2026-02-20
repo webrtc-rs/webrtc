@@ -24,6 +24,12 @@ impl JoinHandle {
     }
 }
 
+impl Drop for JoinHandle {
+    fn drop(&mut self) {
+        self.inner.abort();
+    }
+}
+
 trait JoinHandleInner: Send + Sync {
     fn abort(&self);
     fn is_finished(&self) -> bool;
@@ -207,6 +213,7 @@ mod smol;
 pub use smol::SmolRuntime;
 #[cfg(feature = "runtime-smol")]
 pub use smol::{block_on, channel, resolve_host, sleep, timeout};
+
 #[cfg(feature = "runtime-smol")]
 pub type Mutex<T> = smol::SmolMutex<T>;
 #[cfg(feature = "runtime-smol")]
