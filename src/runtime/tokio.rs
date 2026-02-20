@@ -32,10 +32,6 @@ impl Runtime for TokioRuntime {
             io: Arc::new(::tokio::net::UdpSocket::from_std(sock)?),
         }))
     }
-
-    fn now(&self) -> Instant {
-        ::tokio::time::Instant::now().into_std()
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -244,4 +240,13 @@ impl<T: Send> AsyncReceiver<T> for TokioReceiver<T> {
 pub fn channel<T: Send>() -> (TokioSender<T>, TokioReceiver<T>) {
     let (tx, rx) = ::tokio::sync::mpsc::unbounded_channel();
     (TokioSender(tx), TokioReceiver(rx))
+}
+
+/// Block the current thread on a future, driving it to completion
+pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    ::tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime")
+        .block_on(future)
 }

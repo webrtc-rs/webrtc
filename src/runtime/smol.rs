@@ -35,10 +35,6 @@ impl Runtime for SmolRuntime {
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         Ok(Arc::new(UdpSocket::new(sock)?))
     }
-
-    fn now(&self) -> Instant {
-        Instant::now()
-    }
 }
 
 #[derive(Debug)]
@@ -301,4 +297,9 @@ impl<T: Send> AsyncReceiver<T> for SmolReceiver<T> {
 pub fn channel<T: Send>() -> (SmolSender<T>, SmolReceiver<T>) {
     let (tx, rx) = ::smol::channel::unbounded();
     (SmolSender(tx), SmolReceiver(rx))
+}
+
+/// Block the current thread on a future, driving it to completion
+pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    ::smol::block_on(future)
 }

@@ -1,5 +1,6 @@
 use clap::Parser;
 use env_logger::Target;
+use futures::FutureExt;
 use rtc::interceptor::Registry;
 use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
 use rtc::peer_connection::configuration::media_engine::MediaEngine;
@@ -12,7 +13,7 @@ use std::time::Duration;
 use std::{fs, io::Write, str::FromStr};
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::*;
-use webrtc::runtime::{Runtime, Sender, channel, default_runtime};
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
 
 #[derive(Parser)]
 #[command(name = "data-channels")]
@@ -79,11 +80,11 @@ impl PeerConnectionEventHandler for TestHandler {
                         runtime.spawn(Box::pin(async move {
                             let mut result = rtc::shared::error::Result::<()>::Ok(());
                             while result.is_ok() {
-                                let timeout = tokio::time::sleep(Duration::from_secs(5));
-                                tokio::pin!(timeout);
+                                let timeout = sleep(Duration::from_secs(5));
+                                futures::pin_mut!(timeout);
 
-                                tokio::select! {
-                                    _ = timeout.as_mut() =>{
+                                futures::select! {
+                                    _ = timeout.fuse() =>{
                                         let message = rtc::shared::util::math_rand_alpha(15);
                                         println!("Sending '{message}'");
                                         result = data_channel.send_text(message.as_str()).await;
@@ -106,8 +107,11 @@ impl PeerConnectionEventHandler for TestHandler {
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    block_on(async_main())
+}
+
+async fn async_main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
     let port = cli.port;
@@ -146,6 +150,10 @@ async fn main() -> anyhow::Result<()> {
 
     let (done_tx, mut done_rx) = channel::<()>();
     let (gather_complete_tx, mut gather_complete_rx) = channel();
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>();
+    ctrlc::set_handler(move || {
+        let _ = ctrlc_tx.try_send(());
+    })?;
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
 
@@ -213,12 +221,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::select! {
-        _ = done_rx.recv() => {
+    futures::select! {
+        _ = done_rx.recv().fuse() => {
             println!("received done signal!");
         }
-        _ = tokio::signal::ctrl_c() => {
-            println!();
+        _ = ctrlc_rx.recv().fuse() => {
+            println!("received ctrl-c signal!");
         }
     };
 

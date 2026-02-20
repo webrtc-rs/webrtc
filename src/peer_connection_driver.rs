@@ -31,7 +31,7 @@ const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day 
 
 /// The driver for a peer connection
 ///
-/// Runs the event loop following rtc's EventLoop pattern with tokio::select!
+/// Runs the event loop following rtc's EventLoop pattern with select!
 pub(crate) struct PeerConnectionDriver<I = NoopInterceptor>
 where
     I: Interceptor,
@@ -172,7 +172,7 @@ where
             let timer = crate::runtime::sleep(delay_from_now);
             futures::pin_mut!(timer);
 
-            // Runtime-agnostic select! using futures::select! (works with both tokio and smol)
+            // Runtime-agnostic select!
             futures::select! {
                 // Timer expired
                 _ = timer.fuse() => {

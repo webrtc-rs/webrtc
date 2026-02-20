@@ -5,15 +5,7 @@
 
 #![allow(clippy::type_complexity)]
 
-use std::{
-    fmt::Debug,
-    future::Future,
-    io,
-    net::SocketAddr,
-    pin::Pin,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
 
 /// Handle to a spawned task that can be used to manage its lifecycle
 pub struct JoinHandle {
@@ -67,18 +59,11 @@ pub trait Runtime: Send + Sync + Debug + 'static {
         &self,
         socket: std::net::TcpListener,
     ) -> io::Result<Box<dyn AsyncTcpListener>>;*/
-
-    /// Get the current time
-    ///
-    /// Allows simulating the flow of time for testing.
-    fn now(&self) -> Instant {
-        Instant::now()
-    }
 }
 
 /// Abstract implementation of a UDP socket for runtime independence
 ///
-/// Simple async wrapper around UDP sockets, compatible with tokio::net::UdpSocket API
+/// Simple async wrapper around UDP sockets
 pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     /// Send data to the specified address
     fn send_to<'a>(
@@ -206,7 +191,7 @@ mod tokio;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::TokioRuntime;
 #[cfg(feature = "runtime-tokio")]
-pub use tokio::{channel, resolve_host, sleep, timeout};
+pub use tokio::{block_on, channel, resolve_host, sleep, timeout};
 #[cfg(feature = "runtime-tokio")]
 pub type Mutex<T> = tokio::TokioMutex<T>;
 #[cfg(feature = "runtime-tokio")]
@@ -221,7 +206,7 @@ mod smol;
 #[cfg(feature = "runtime-smol")]
 pub use smol::SmolRuntime;
 #[cfg(feature = "runtime-smol")]
-pub use smol::{channel, resolve_host, sleep, timeout};
+pub use smol::{block_on, channel, resolve_host, sleep, timeout};
 #[cfg(feature = "runtime-smol")]
 pub type Mutex<T> = smol::SmolMutex<T>;
 #[cfg(feature = "runtime-smol")]

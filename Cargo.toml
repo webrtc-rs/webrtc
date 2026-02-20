@@ -24,17 +24,16 @@ log = "0.4.29"
 futures = "0.3.31"
 
 # Async runtimes (all optional)
-tokio = { version = "1.49.0", features = ["net", "time", "sync", "rt", "macros"], optional = true }
+tokio = { version = "1.49.0", features = ["net", "time", "sync", "rt", "rt-multi-thread"], optional = true }
 smol = { version = "2.0.2", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.8"
 chrono = "0.4.43"
 clap = { version = "4.5.59", features = ["derive"] }
-anyhow = "1.0.101"
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
-ctrlc = "3.5.1"
-serde_json = "1.0.145"
+anyhow = "1.0.102"
+ctrlc = "3.5.2"
+serde_json = "1.0.149"
 signal = { version = "0.9.0", path = "rtc/examples/examples/signal", package = "rtc-signal" }
 
 #[[example]]
