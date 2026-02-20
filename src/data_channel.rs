@@ -275,7 +275,9 @@ where
     /// ```no_run
     /// # use bytes::BytesMut;
     /// # use webrtc::Result;
-    /// # async fn example(dc: webrtc::data_channel::DataChannelInternal) -> Result<()> {
+    /// # use webrtc::data_channel::DataChannel;
+    /// # use std::sync::Arc;
+    /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {
     /// dc.send(BytesMut::from(&b"Hello, WebRTC!"[..])).await?;
     /// # Ok(())
     /// # }
@@ -300,7 +302,9 @@ where
     ///
     /// ```no_run
     /// # use webrtc::Result;
-    /// # async fn example(dc: webrtc::data_channel::DataChannelInternal) -> Result<()> {
+    /// # use webrtc::data_channel::DataChannel;
+    /// # use std::sync::Arc;
+    /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {
     /// dc.send_text("Hello, WebRTC!").await?;
     /// # Ok(())
     /// # }
