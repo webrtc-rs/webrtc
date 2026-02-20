@@ -42,13 +42,6 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   from the server side in this example.
 - ✅ [Data Channels Close](data-channels-close): Example data-channels-close is a variant of data-channels that allow
   playing with the life cycle of data channels.
-- [ ] [Data Channels Detach](data-channels-detach): The data-channels-detach example shows how you can send/recv
-  DataChannel messages using the underlying DataChannel implementation directly. This provides a more idiomatic way of
-  interacting with Data Channels.
-- [ ] [Data Channels Detach Create](data-channels-detach-create): Example data-channels-detach-create shows how you can
-  send/recv DataChannel messages using the underlying DataChannel implementation directly. This provides a more
-  idiomatic way of interacting with Data Channels. The difference with the data-channels-detach example is that the data
-  channel is initialized in this example.
 - [ ] [Data Channels Flow Control](data-channels-flow-control): Example data-channels-flow-control shows how to use flow
   control.
 - [ ] [Offer Answer](offer-answer): Example offer-answer is an example of two webrtc-rs or pion instances communicating
