@@ -2,7 +2,7 @@
 
 use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
-use crate::data_channel::DataChannel;
+use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelInternal};
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_track::TrackRemote;
 use crate::peer_connection_driver::PeerConnectionDriver;
@@ -66,7 +66,7 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
     async fn on_connection_state_change(&self, _state: RTCPeerConnectionState) {}
 
     /// Called when a remote peer creates a data channel
-    async fn on_data_channel(&self, _data_channel: Arc<DataChannel>) {}
+    async fn on_data_channel(&self, _data_channel: Arc<dyn DataChannel>) {}
 
     /// Called when a remote track is received
     async fn on_track(&self, _track: Arc<TrackRemote>) {}
@@ -83,6 +83,7 @@ pub(crate) enum MessageInner {
     SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtc::rtcp::Packet>>),
     /// Outgoing RTCP packets from receiver
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
+    WriteNotify,
     IceGathering,
     Close,
 }
@@ -233,6 +234,7 @@ where
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
+    pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Unified channel for all outgoing messages
     pub(crate) msg_tx: Sender<MessageInner>,
 }
@@ -270,6 +272,7 @@ where
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
+                data_channels: Mutex::new(HashMap::new()),
                 handler,
                 msg_tx,
             }),
@@ -510,7 +513,7 @@ where
         &self,
         label: impl Into<String>,
         options: Option<RTCDataChannelInit>,
-    ) -> Result<Arc<DataChannel<I>>> {
+    ) -> Result<Arc<dyn DataChannel>> {
         let label = label.into();
 
         // Create the data channel via the core
@@ -520,8 +523,18 @@ where
             rtc_dc.id()
         };
 
+        let (evt_tx, evt_rx) = channel();
+        {
+            let mut data_channels = self.inner.data_channels.lock().await;
+            data_channels.insert(channel_id, evt_tx);
+        }
+
         // Create our async wrapper
-        let dc = Arc::new(DataChannel::new(channel_id, self.inner.clone()));
+        let dc = Arc::new(DataChannelInternal::new(
+            channel_id,
+            self.inner.clone(),
+            evt_rx,
+        ));
 
         Ok(dc)
     }

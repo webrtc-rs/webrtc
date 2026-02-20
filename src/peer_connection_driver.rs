@@ -4,23 +4,25 @@
 
 #![allow(clippy::collapsible_if)]
 
+use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelInternal};
 use crate::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
-use crate::runtime::{AsyncUdpSocket, Receiver};
+use crate::runtime::{AsyncUdpSocket, Receiver, channel};
 use crate::{Error, Result};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{error, trace};
+use log::{error, trace, warn};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
-use rtc::peer_connection::event::RTCPeerConnectionEvent;
+use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
 use rtc::peer_connection::message::RTCMessage;
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -309,16 +311,61 @@ where
             RTCPeerConnectionEvent::OnConnectionStateChangeEvent(state) => {
                 self.inner.handler.on_connection_state_change(state).await;
             }
-            RTCPeerConnectionEvent::OnDataChannel(_evt) => {
-                /*match evt {
-                    RTCDataChannelEvent::OnOpen(id) => {}
-                    RTCDataChannelEvent::OnError(id) => {}
-                    RTCDataChannelEvent::OnClosing(id) => {}
-                    RTCDataChannelEvent::OnClose(id) => {}
-                    RTCDataChannelEvent::OnBufferedAmountLow(id) => {}
-                    RTCDataChannelEvent::OnBufferedAmountHigh(id) => {}
-                }*/
-                //TODO: self.inner.handler.on_data_channel(evt).await;
+            RTCPeerConnectionEvent::OnDataChannel(evt) => {
+                let channel_id = match evt {
+                    RTCDataChannelEvent::OnOpen(id) => id,
+                    RTCDataChannelEvent::OnError(id) => id,
+                    RTCDataChannelEvent::OnClosing(id) => id,
+                    RTCDataChannelEvent::OnClose(id) => id,
+                    RTCDataChannelEvent::OnBufferedAmountLow(id) => id,
+                    RTCDataChannelEvent::OnBufferedAmountHigh(id) => id,
+                };
+
+                let mut dc: Option<Arc<dyn DataChannel>> = None;
+                {
+                    let mut data_channels = self.inner.data_channels.lock().await;
+                    if let Entry::Vacant(e) = data_channels.entry(channel_id) {
+                        let (evt_tx, evt_rx) = channel();
+                        e.insert(evt_tx);
+
+                        // Create our async wrapper
+                        dc = Some(Arc::new(DataChannelInternal::new(
+                            channel_id,
+                            self.inner.clone(),
+                            evt_rx,
+                        )));
+                    }
+
+                    if let Some(evt_tx) = data_channels.get(&channel_id) {
+                        let result = match evt {
+                            RTCDataChannelEvent::OnOpen(_) => {
+                                evt_tx.send(DataChannelEvent::OnOpen).await
+                            }
+                            RTCDataChannelEvent::OnError(_) => {
+                                evt_tx.send(DataChannelEvent::OnError).await
+                            }
+                            RTCDataChannelEvent::OnClosing(_) => {
+                                evt_tx.send(DataChannelEvent::OnClosing).await
+                            }
+                            RTCDataChannelEvent::OnClose(_) => {
+                                evt_tx.send(DataChannelEvent::OnClose).await
+                            }
+                            RTCDataChannelEvent::OnBufferedAmountLow(_) => {
+                                evt_tx.send(DataChannelEvent::OnBufferedAmountLow).await
+                            }
+                            RTCDataChannelEvent::OnBufferedAmountHigh(_) => {
+                                evt_tx.send(DataChannelEvent::OnBufferedAmountHigh).await
+                            }
+                        };
+                        if let Err(err) = result {
+                            warn!("Failed to send to data channel {}: {:?}", channel_id, err);
+                        }
+                    }
+                }
+
+                if let Some(dc) = dc {
+                    self.inner.handler.on_data_channel(dc).await;
+                }
             }
             RTCPeerConnectionEvent::OnTrack(_evt) => {
                 //TODO: self.inner.handler.on_track(evt).await;
@@ -328,13 +375,13 @@ where
 
     async fn handle_rtc_message(&mut self, message: RTCMessage) {
         match message {
-            RTCMessage::DataChannelMessage(_channel_id, _dc_message) => {
-                /*let data_channel = self.inner.data_channels.lock().await;
-                if let Some(_dc) = data_channel.get(&channel_id) {
-                    /*TODO:if let Err(e) = dc.on_message(dc_message).await {
-                        warn!("Failed to send to data channel {}: {:?}", channel_id, e);
-                    }*/
-                }*/
+            RTCMessage::DataChannelMessage(channel_id, dc_message) => {
+                let data_channels = self.inner.data_channels.lock().await;
+                if let Some(evt_tx) = data_channels.get(&channel_id) {
+                    if let Err(err) = evt_tx.send(DataChannelEvent::OnMessage(dc_message)).await {
+                        warn!("Failed to send to data channel {}: {:?}", channel_id, err);
+                    }
+                }
             }
             RTCMessage::RtpPacket(track_id, _packet) => {
                 trace!("Received RTP packet for track: {:?}", track_id);
@@ -382,6 +429,9 @@ where
                         error!("Failed to send RTCP feedback: {}", err);
                     }
                 }
+            }
+            MessageInner::WriteNotify => {
+                //Do nothing, just want to wake up from futures::select! in order to poll_write
             }
             MessageInner::IceGathering => {
                 if self.ice_gatherer.state() != RTCIceGatheringState::Gathering {

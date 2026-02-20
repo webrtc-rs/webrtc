@@ -6,12 +6,12 @@ use webrtc::runtime::Mutex;
 
 #[derive(Clone)]
 struct TestHandler {
-    data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
+    data_channels: Arc<Mutex<Vec<Arc<dyn DataChannel>>>>,
 }
 
 #[async_trait::async_trait]
 impl PeerConnectionEventHandler for TestHandler {
-    async fn on_data_channel(&self, data_channel: Arc<DataChannel>) {
+    async fn on_data_channel(&self, data_channel: Arc<dyn DataChannel>) {
         self.data_channels.lock().await.push(data_channel);
     }
 }

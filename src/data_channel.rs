@@ -1,16 +1,92 @@
 //! Async DataChannel implementation
 
 use crate::peer_connection::{MessageInner, PeerConnectionRef};
+use crate::runtime::{Mutex, Receiver};
 use crate::{Error, Result};
 use bytes::BytesMut;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage, RTCDataChannelState};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use std::sync::Arc;
 
+/// Object-safe trait exposing all public DataChannel operations.
+///
+/// This allows `on_data_channel` in `PeerConnectionEventHandler` to receive a
+/// `Arc<dyn DataChannelExt>` without the event handler trait itself needing to
+/// be generic over the interceptor type `I`.
+#[async_trait::async_trait]
+pub trait DataChannel: Send + Sync + 'static {
+    async fn label(&self) -> Result<String>;
+    async fn ordered(&self) -> Result<bool>;
+    async fn max_packet_life_time(&self) -> Option<u16>;
+    async fn max_retransmits(&self) -> Option<u16>;
+    async fn protocol(&self) -> Result<String>;
+    async fn negotiated(&self) -> Result<bool>;
+    fn id(&self) -> RTCDataChannelId;
+    async fn ready_state(&self) -> Result<RTCDataChannelState>;
+    async fn buffered_amount_high_threshold(&self) -> Result<u32>;
+    async fn set_buffered_amount_high_threshold(&self, threshold: u32) -> Result<()>;
+    async fn buffered_amount_low_threshold(&self) -> Result<u32>;
+    async fn set_buffered_amount_low_threshold(&self, threshold: u32) -> Result<()>;
+    async fn send(&self, data: BytesMut) -> Result<()>;
+    async fn send_text(&self, text: &str) -> Result<()>;
+    async fn poll(&self) -> Option<DataChannelEvent>;
+    async fn close(&self) -> Result<()>;
+}
+
+#[derive(Debug, Clone)]
+pub enum DataChannelEvent {
+    /// Data channel has opened and is ready to send/receive data.
+    ///
+    /// This event is fired when the data channel transitions to the "open" state.
+    /// Data can now be sent through the channel.
+    OnOpen,
+
+    /// An error occurred on the data channel.
+    ///
+    /// This event is fired when an error is encountered. The channel may still
+    /// be usable depending on the error type.
+    OnError,
+
+    /// Data channel is closing.
+    ///
+    /// This event is fired when the channel begins the closing process.
+    /// The channel is transitioning to the "closing" state.
+    OnClosing,
+
+    /// Data channel has closed.
+    ///
+    /// This event is fired when the channel is fully closed and no longer usable.
+    /// No more data can be sent or received.
+    OnClose,
+
+    /// Buffered amount dropped below the low-water mark.
+    ///
+    /// This event is fired when the amount of buffered outgoing data drops
+    /// below the threshold set by `set_buffered_amount_low_threshold()`.
+    /// This indicates it's safe to send more data without causing excessive buffering.
+    ///
+    /// Use this event to implement flow control and prevent memory exhaustion.
+    OnBufferedAmountLow,
+
+    /// Buffered amount exceeded the high-water mark (implementation-specific).
+    ///
+    /// This is a non-standard event that can be used to detect when too much
+    /// data is being buffered. Applications should pause sending when this fires.
+    OnBufferedAmountHigh,
+
+    /// OnMessage with a binary message arrival over the sctp transport from a remote peer.
+    ///
+    /// OnMessage can currently receive messages up to 16384 bytes
+    /// in size. Check out the detach API if you want to use larger
+    /// message sizes. Note that browser support for larger messages
+    /// is also limited.
+    OnMessage(RTCDataChannelMessage),
+}
+
 /// Async-friendly data channel
 ///
 /// This wraps a data channel and provides async send/receive APIs.
-pub struct DataChannel<I = NoopInterceptor>
+pub(crate) struct DataChannelInternal<I = NoopInterceptor>
 where
     I: Interceptor,
 {
@@ -19,21 +95,38 @@ where
 
     /// Inner PeerConnection Reference
     inner: Arc<PeerConnectionRef<I>>,
+
+    /// event receiver
+    evt_rx: Mutex<Receiver<DataChannelEvent>>,
 }
 
-impl<I> DataChannel<I>
+impl<I> DataChannelInternal<I>
 where
     I: Interceptor,
 {
     /// Create a new data channel wrapper
-    pub(crate) fn new(id: RTCDataChannelId, inner: Arc<PeerConnectionRef<I>>) -> Self {
-        Self { id, inner }
+    pub(crate) fn new(
+        id: RTCDataChannelId,
+        inner: Arc<PeerConnectionRef<I>>,
+        evt_rx: Receiver<DataChannelEvent>,
+    ) -> Self {
+        Self {
+            id,
+            inner,
+            evt_rx: Mutex::new(evt_rx),
+        }
     }
+}
 
+#[async_trait::async_trait]
+impl<I> DataChannel for DataChannelInternal<I>
+where
+    I: Interceptor + 'static,
+{
     /// label represents a label that can be used to distinguish this
     /// DataChannel object from other DataChannel objects. Scripts are
     /// allowed to create multiple DataChannel objects with the same label.
-    pub async fn label(&self) -> Result<String> {
+    async fn label(&self) -> Result<String> {
         let mut peer_connection = self.inner.core.lock().await;
 
         Ok(peer_connection
@@ -45,7 +138,7 @@ where
 
     /// Ordered returns true if the DataChannel is ordered, and false if
     /// out-of-order delivery is allowed.
-    pub async fn ordered(&self) -> Result<bool> {
+    async fn ordered(&self) -> Result<bool> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
             .data_channel(self.id)
@@ -55,7 +148,7 @@ where
 
     /// max_packet_lifetime represents the length of the time window (msec) during
     /// which transmissions and retransmissions may occur in unreliable mode.
-    pub async fn max_packet_life_time(&self) -> Option<u16> {
+    async fn max_packet_life_time(&self) -> Option<u16> {
         let mut peer_connection = self.inner.core.lock().await;
         peer_connection
             .data_channel(self.id)?
@@ -64,14 +157,14 @@ where
 
     /// max_retransmits represents the maximum number of retransmissions that are
     /// attempted in unreliable mode.
-    pub async fn max_retransmits(&self) -> Option<u16> {
+    async fn max_retransmits(&self) -> Option<u16> {
         let mut peer_connection = self.inner.core.lock().await;
         peer_connection.data_channel(self.id)?.max_retransmits()
     }
 
     /// protocol represents the name of the sub-protocol used with this
     /// DataChannel.
-    pub async fn protocol(&self) -> Result<String> {
+    async fn protocol(&self) -> Result<String> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
             .data_channel(self.id)
@@ -82,7 +175,7 @@ where
 
     /// negotiated represents whether this DataChannel was negotiated by the
     /// application (true), or not (false).
-    pub async fn negotiated(&self) -> Result<bool> {
+    async fn negotiated(&self) -> Result<bool> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
             .data_channel(self.id)
@@ -96,12 +189,12 @@ where
     /// yet been negotiated. Otherwise, it will return the ID that was either
     /// selected by the script or generated. After the ID is set to a non-null
     /// value, it will not change.
-    pub fn id(&self) -> RTCDataChannelId {
+    fn id(&self) -> RTCDataChannelId {
         self.id
     }
 
     /// ready_state represents the state of the DataChannel object.
-    pub async fn ready_state(&self) -> Result<RTCDataChannelState> {
+    async fn ready_state(&self) -> Result<RTCDataChannelState> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
             .data_channel(self.id)
@@ -115,7 +208,7 @@ where
     /// event fires. buffered_amount_high_threshold is initially u32::MAX on each new
     /// DataChannel, but the application may change its value at any time.
     /// The threshold is set to u32::MAX by default.
-    pub async fn buffered_amount_high_threshold(&self) -> Result<u32> {
+    async fn buffered_amount_high_threshold(&self) -> Result<u32> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
             .data_channel(self.id)
@@ -125,12 +218,20 @@ where
 
     /// set_buffered_amount_high_threshold sets the threshold at which the
     /// bufferedAmount is considered to be high.
-    pub async fn set_buffered_amount_high_threshold(&mut self, threshold: u32) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
-        peer_connection
-            .data_channel(self.id)
-            .ok_or(Error::ErrDataChannelClosed)?
-            .set_buffered_amount_high_threshold(threshold);
+    async fn set_buffered_amount_high_threshold(&self, threshold: u32) -> Result<()> {
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?
+                .set_buffered_amount_high_threshold(threshold);
+        }
+
+        self.inner
+            .msg_tx
+            .try_send(MessageInner::WriteNotify)
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+
         Ok(())
     }
 
@@ -140,7 +241,7 @@ where
     /// event fires. buffered_amount_low_threshold is initially zero on each new
     /// DataChannel, but the application may change its value at any time.
     /// The threshold is set to 0 by default.
-    pub async fn buffered_amount_low_threshold(&self) -> Result<u32> {
+    async fn buffered_amount_low_threshold(&self) -> Result<u32> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
             .data_channel(self.id)
@@ -150,12 +251,20 @@ where
 
     /// set_buffered_amount_low_threshold sets the threshold at which the
     /// bufferedAmount is considered to be low.
-    pub async fn set_buffered_amount_low_threshold(&mut self, threshold: u32) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
-        peer_connection
-            .data_channel(self.id)
-            .ok_or(Error::ErrDataChannelClosed)?
-            .set_buffered_amount_low_threshold(threshold);
+    async fn set_buffered_amount_low_threshold(&self, threshold: u32) -> Result<()> {
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?
+                .set_buffered_amount_low_threshold(threshold);
+        }
+
+        self.inner
+            .msg_tx
+            .try_send(MessageInner::WriteNotify)
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+
         Ok(())
     }
 
@@ -166,12 +275,12 @@ where
     /// ```no_run
     /// # use bytes::BytesMut;
     /// # use webrtc::Result;
-    /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<()> {
+    /// # async fn example(dc: webrtc::data_channel::DataChannelInternal) -> Result<()> {
     /// dc.send(BytesMut::from(&b"Hello, WebRTC!"[..])).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn send(&self, data: BytesMut) -> Result<()> {
+    async fn send(&self, data: BytesMut) -> Result<()> {
         let message = RTCDataChannelMessage {
             is_string: false,
             data,
@@ -191,13 +300,12 @@ where
     ///
     /// ```no_run
     /// # use webrtc::Result;
-    /// # async fn example(dc: webrtc::data_channel::DataChannel) -> Result<()> {
+    /// # async fn example(dc: webrtc::data_channel::DataChannelInternal) -> Result<()> {
     /// dc.send_text("Hello, WebRTC!").await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn send_text(&self, text: impl Into<String>) -> Result<()> {
-        let text = text.into();
+    async fn send_text(&self, text: &str) -> Result<()> {
         let data = BytesMut::from(text.as_bytes());
 
         let message = RTCDataChannelMessage {
@@ -213,11 +321,24 @@ where
         Ok(())
     }
 
-    pub async fn close(&mut self) -> Result<()> {
-        let mut peer_connection = self.inner.core.lock().await;
-        peer_connection
-            .data_channel(self.id)
-            .ok_or(Error::ErrDataChannelClosed)?
-            .close()
+    async fn poll(&self) -> Option<DataChannelEvent> {
+        self.evt_rx.lock().await.recv().await
+    }
+
+    async fn close(&self) -> Result<()> {
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?
+                .close()?;
+        }
+
+        self.inner
+            .msg_tx
+            .try_send(MessageInner::WriteNotify)
+            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+
+        Ok(())
     }
 }

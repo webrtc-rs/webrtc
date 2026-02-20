@@ -1,13 +1,16 @@
-use anyhow::Result;
 use clap::Parser;
 use env_logger::Target;
+use rtc::interceptor::Registry;
+use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::media_engine::MediaEngine;
 use rtc::peer_connection::configuration::{RTCConfigurationBuilder, RTCIceServer};
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::state::{RTCIceGatheringState, RTCPeerConnectionState};
 use std::fs::OpenOptions;
 use std::sync::Arc;
-use std::{io::Write, str::FromStr};
-use webrtc::data_channel::DataChannel;
+use std::time::Duration;
+use std::{fs, io::Write, str::FromStr};
+use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::*;
 use webrtc::runtime::{Runtime, Sender, channel, default_runtime};
 
@@ -18,8 +21,6 @@ use webrtc::runtime::{Runtime, Sender, channel, default_runtime};
 #[command(about = "An example of Data-Channels", long_about = None)]
 struct Cli {
     #[arg(short, long)]
-    client: bool,
-    #[arg(short, long)]
     debug: bool,
     #[arg(short, long, default_value_t = format!("INFO"))]
     log_level: String,
@@ -27,7 +28,7 @@ struct Cli {
     input_sdp_file: String,
     #[arg(short, long, default_value_t = format!(""))]
     output_log_file: String,
-    #[arg(long, default_value_t = format!("127.0.0.1"))]
+    #[arg(long, default_value_t = format!("0.0.0.0"))]
     host: String,
     #[arg(long, default_value_t = 0)]
     port: u16,
@@ -57,59 +58,60 @@ impl PeerConnectionEventHandler for TestHandler {
         }
     }
 
-    async fn on_data_channel(&self, _data_channel: Arc<DataChannel>) {
+    async fn on_data_channel(&self, data_channel: Arc<dyn DataChannel>) {
+        let runtime = self.runtime.clone();
         self.runtime.spawn(Box::pin(async move {
-            /*let d_label = data_channel.label().to_owned();
-            let d_id = data_channel.id();
-            println!("New DataChannel {d_label} {d_id}");
+            let label = match data_channel.label().await {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("Failed to get data channel label: {e}");
+                    return;
+                }
+            };
+            let id = data_channel.id();
+            println!("New DataChannel {label} {id}");
 
-            // Register channel opening handling
+            while let Some(event) = data_channel.poll().await {
+                match event {
+                    DataChannelEvent::OnOpen => {
+                        println!("Data channel '{label}'-'{id}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
+                        let data_channel = data_channel.clone();
+                        runtime.spawn(Box::pin(async move {
+                            let mut result = rtc::shared::error::Result::<()>::Ok(());
+                            while result.is_ok() {
+                                let timeout = tokio::time::sleep(Duration::from_secs(5));
+                                tokio::pin!(timeout);
 
-                let d2 = Arc::clone(&d);
-                let d_label2 = d_label.clone();
-                let d_id2 = d_id;
-                d.on_close(Box::new(move || {
-                    println!("Data channel closed");
-                    Box::pin(async {})
-                }));
-
-                d.on_open(Box::new(move || {
-                    println!("Data channel '{d_label2}'-'{d_id2}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
-
-                    Box::pin(async move {
-                        let mut result = Result::<usize>::Ok(0);
-                        while result.is_ok() {
-                            let timeout = tokio::time::sleep(Duration::from_secs(5));
-                            tokio::pin!(timeout);
-
-                            tokio::select! {
-                                _ = timeout.as_mut() =>{
-                                    let message = math_rand_alpha(15);
-                                    println!("Sending '{message}'");
-                                    result = d2.send_text(message).await.map_err(Into::into);
+                                tokio::select! {
+                                    _ = timeout.as_mut() =>{
+                                        let message = rtc::shared::util::math_rand_alpha(15);
+                                        println!("Sending '{message}'");
+                                        result = data_channel.send_text(message.as_str()).await;
+                                    }
                                 }
-                            };
-                        }
-                    })
-                }));
-
-                // Register text message handling
-                data_channel.on_message(Box::new(move |msg: DataChannelMessage| {
-                    let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                    println!("Message from DataChannel '{d_label}': '{msg_str}'");
-                    Box::pin(async {})
-                }));*/
+                            }
+                        }));
+                    }
+                    DataChannelEvent::OnClose => {
+                        println!("Data channel {id} is closed");
+                    }
+                    DataChannelEvent::OnMessage(msg) => {
+                        let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+                        println!("Message from DataChannel '{label}': '{msg_str}'");
+                    }
+                    _ => {}
+                }
+            }
         }));
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let _host = cli.host;
-    let _port = cli.port;
-    let _is_client = cli.client;
-    let _input_sdp_file = cli.input_sdp_file;
+    let host = cli.host;
+    let port = cli.port;
+    let input_sdp_file = cli.input_sdp_file;
     let output_log_file = cli.output_log_file;
     let log_level = log::LevelFilter::from_str(&cli.log_level)?;
     if cli.debug {
@@ -153,6 +155,13 @@ async fn main() -> Result<()> {
         done_tx,
     });
 
+    let mut media_engine = MediaEngine::default();
+    media_engine.register_default_codecs()?;
+
+    let registry = Registry::new();
+    // Use the default set of Interceptors
+    let registry = register_default_interceptors(registry, &mut media_engine)?;
+
     let config = RTCConfigurationBuilder::new()
         .with_ice_servers(vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_string()],
@@ -162,14 +171,21 @@ async fn main() -> Result<()> {
 
     let mut peer_connection = PeerConnectionBuilder::new()
         .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_interceptor_registry(registry)
         .with_handler(handler)
         .with_runtime(runtime)
-        .with_udp_addrs(vec!["0.0.0.0:0"])
+        .with_udp_addrs(vec![format!("{host}:{port}")])
         .build()
         .await?;
 
     // Wait for the offer to be pasted
-    let line = signal::must_read_stdin()?;
+    println!("Please paste offer here:");
+    let line = if input_sdp_file.is_empty() {
+        signal::must_read_stdin()?
+    } else {
+        fs::read_to_string(&input_sdp_file)?
+    };
     let desc_data = signal::decode(line.as_str())?;
     let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
 
