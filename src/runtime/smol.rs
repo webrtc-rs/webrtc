@@ -9,17 +9,23 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct SmolRuntime;
 
-struct SmolJoinHandle(::smol::Task<()>);
+// Dropping a `smol::Task` cancels it, so we store it in an Option and call
+// `detach()` explicitly when the handle is dropped normally, or drop it for abort.
+struct SmolJoinHandle(std::sync::Mutex<Option<::smol::Task<()>>>);
 
 impl super::JoinHandleInner for SmolJoinHandle {
+    fn detach(&self) {
+        if let Some(task) = self.0.lock().unwrap().take() {
+            task.detach();
+        }
+    }
+
     fn abort(&self) {
-        // smol doesn't have built-in abort, but dropping detached tasks stops them
-        // We could use cancel() if we had a way to cancel, but Task<()> doesn't expose this
-        // For now, we'll just do nothing as smol tasks are cooperative
+        // Drop the Task to cooperatively cancel it at its next await point.
+        self.0.lock().unwrap().take();
     }
 
     fn is_finished(&self) -> bool {
-        // smol::Task doesn't have is_finished, so we assume it's not finished
         false
     }
 }
@@ -28,7 +34,7 @@ impl Runtime for SmolRuntime {
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
         let task = spawn(future);
         super::JoinHandle {
-            inner: Box::new(SmolJoinHandle(task)),
+            inner: Box::new(SmolJoinHandle(std::sync::Mutex::new(Some(task)))),
         }
     }
 

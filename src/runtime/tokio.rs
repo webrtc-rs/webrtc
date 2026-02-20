@@ -10,6 +10,10 @@ pub struct TokioRuntime;
 struct TokioJoinHandle(::tokio::task::JoinHandle<()>);
 
 impl super::JoinHandleInner for TokioJoinHandle {
+    fn detach(&self) {
+        // tokio JoinHandle detaches on drop; nothing needed here.
+    }
+
     fn abort(&self) {
         self.0.abort();
     }

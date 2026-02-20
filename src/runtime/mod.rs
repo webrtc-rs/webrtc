@@ -26,11 +26,14 @@ impl JoinHandle {
 
 impl Drop for JoinHandle {
     fn drop(&mut self) {
-        self.inner.abort();
+        self.inner.detach();
     }
 }
 
 trait JoinHandleInner: Send + Sync {
+    /// Detach the task so it keeps running independently after the handle is dropped.
+    fn detach(&self);
+    /// Cancel the task cooperatively.
     fn abort(&self);
     fn is_finished(&self) -> bool;
 }
@@ -43,12 +46,9 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// Drive a future to completion in the background
     ///
     /// The future must complete to `()` and will be spawned as a background task.
-    /// Returns a handle that can be used to manage the task lifecycle.
-    ///
-    /// # Safety Note
-    /// The returned JoinHandle must be properly managed - if it's dropped or aborted,
-    /// the spawned task will be cancelled. This allows spawning non-'static futures
-    /// as long as the handle outlives them.
+    /// Returns a handle that can be used to abort or inspect the task.
+    /// Dropping the handle detaches the task; the task keeps running until it
+    /// completes or the runtime is shut down. Call `.abort()` to cancel explicitly.
     #[track_caller]
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle;
 
@@ -213,7 +213,6 @@ mod smol;
 pub use smol::SmolRuntime;
 #[cfg(feature = "runtime-smol")]
 pub use smol::{block_on, channel, resolve_host, sleep, timeout};
-
 #[cfg(feature = "runtime-smol")]
 pub type Mutex<T> = smol::SmolMutex<T>;
 #[cfg(feature = "runtime-smol")]

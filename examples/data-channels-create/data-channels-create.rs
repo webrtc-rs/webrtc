@@ -230,7 +230,7 @@ async fn async_main() -> anyhow::Result<()> {
         _ = ctrlc_rx.recv().fuse() => {
             println!("received ctrl-c signal!");
         }
-    };
+    }
 
     peer_connection.close().await?;
 

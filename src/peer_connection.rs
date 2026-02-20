@@ -293,7 +293,9 @@ where
 
         {
             let mut driver_handle = self.driver_handle.lock().await;
-            driver_handle.take();
+            if let Some(driver_handle) = driver_handle.take() {
+                driver_handle.abort();
+            }
         }
 
         Ok(())
