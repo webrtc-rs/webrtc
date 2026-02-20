@@ -336,6 +336,9 @@ where
             core.set_local_description(desc)?;
         }
 
+        // Wake the driver with MessageInner::IceGathering. Without this
+        // notify the driver would sleep until its previous (possibly 1-day default)
+        // timer expired and never send STUN binding requests.
         self.inner
             .msg_tx
             .send(MessageInner::IceGathering)
@@ -370,8 +373,16 @@ where
 
     /// Set the remote description
     pub async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
-        let mut core = self.inner.core.lock().await;
-        core.set_remote_description(desc)?;
+        {
+            let mut core = self.inner.core.lock().await;
+            core.set_remote_description(desc)?;
+        }
+        // Wake the driver so it re-polls its timeout. When both local and remote
+        // descriptions are set, set_remote_description triggers start_transports
+        // internally, which arms the ICE connectivity-check timer. Without this
+        // notify the driver would sleep until its previous (possibly 1-day default)
+        // timer expired and never send the initial STUN binding requests.
+        let _ = self.inner.msg_tx.try_send(MessageInner::WriteNotify);
         Ok(())
     }
 

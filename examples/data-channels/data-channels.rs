@@ -11,8 +11,9 @@ use std::fs::OpenOptions;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io::Write, str::FromStr};
+use webrtc::Result;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
-use webrtc::peer_connection::*;
+use webrtc::peer_connection::{PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
 
 #[derive(Parser)]
@@ -78,7 +79,7 @@ impl PeerConnectionEventHandler for TestHandler {
                         println!("Data channel '{label}'-'{id}' open. Random messages will now be sent to any connected DataChannels every 5 seconds");
                         let data_channel = data_channel.clone();
                         runtime.spawn(Box::pin(async move {
-                            let mut result = rtc::shared::error::Result::<()>::Ok(());
+                            let mut result = Result::<()>::Ok(());
                             while result.is_ok() {
                                 let timeout = sleep(Duration::from_secs(5));
                                 futures::pin_mut!(timeout);
@@ -188,8 +189,8 @@ async fn async_main() -> anyhow::Result<()> {
         .await?;
 
     // Wait for the offer to be pasted
-    println!("Please paste offer here:");
     let line = if input_sdp_file.is_empty() {
+        println!("Please paste offer here:");
         signal::must_read_stdin()?
     } else {
         fs::read_to_string(&input_sdp_file)?

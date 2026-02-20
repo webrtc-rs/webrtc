@@ -50,12 +50,12 @@ bench = false
 #name = "data-channels-close"
 #path = "examples/data-channels-close/data-channels-close.rs"
 #bench = false
-#
-#[[example]]
-#name = "data-channels-create"
-#path = "examples/data-channels-create/data-channels-create.rs"
-#bench = false
-#
+
+[[example]]
+name = "data-channels-create"
+path = "examples/data-channels-create/data-channels-create.rs"
+bench = false
+
 #[[example]]
 #name = "data-channels-detach"
 #path = "examples/data-channels-detach/data-channels-detach.rs"

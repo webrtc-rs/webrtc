@@ -37,7 +37,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
 
 - ✅ [Data Channels](data-channels): The data-channels example shows how you can send/recv DataChannel messages from a
   web browser.
-- [ ] [Data Channels Create](data-channels-create): Example data-channels-create shows how you can send/recv DataChannel
+- ✅ [Data Channels Create](data-channels-create): Example data-channels-create shows how you can send/recv DataChannel
   messages from a web browser. The difference with the data-channels example is that the data channel is initialized
   from the server side in this example.
 - [ ] [Data Channels Close](data-channels-close): Example data-channels-close is a variant of data-channels that allow
