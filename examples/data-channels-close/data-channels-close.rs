@@ -113,6 +113,7 @@ impl PeerConnectionEventHandler for TestHandler {
                         println!("Data channel '{label}'-'{id}' closed.");
                         done.notify_waiters();
                         let _ = pc_done_tx.try_send(());
+                        break;
                     }
                     DataChannelEvent::OnMessage(msg) => {
                         let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();

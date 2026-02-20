@@ -9,12 +9,11 @@ use crate::peer_connection_driver::PeerConnectionDriver;
 use crate::runtime::{Mutex, Sender, channel};
 use crate::runtime::{Runtime, default_runtime};
 use log::error;
-use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage};
+use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder};
-use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use std::collections::HashMap;
 use std::net::ToSocketAddrs;
@@ -75,14 +74,12 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum MessageInner {
-    /// Outgoing data channel message
-    DataChannelMessage(RTCDataChannelId, RTCDataChannelMessage),
-    /// Outgoing RTP packet from local track
-    SenderRtp(RTCRtpSenderId, rtc::rtp::Packet),
-    /// Outgoing RTCP packets from sender
-    SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtc::rtcp::Packet>>),
-    /// Outgoing RTCP packets from receiver
-    ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
+    // Outgoing RTP packet from local track
+    //SenderRtp(RTCRtpSenderId, rtc::rtp::Packet),
+    // Outgoing RTCP packets from sender
+    //SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtc::rtcp::Packet>>),
+    // Outgoing RTCP packets from receiver
+    //ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
     WriteNotify,
     IceGathering,
     Close,

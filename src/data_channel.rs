@@ -283,15 +283,17 @@ where
     /// # }
     /// ```
     async fn send(&self, data: BytesMut) -> Result<()> {
-        let message = RTCDataChannelMessage {
-            is_string: false,
-            data,
-        };
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?
+                .send(data)?;
+        }
 
-        self.inner
-            .msg_tx
-            .try_send(MessageInner::DataChannelMessage(self.id, message))
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+        // Wake the driver so it flushes SCTP output (poll_write) and checks
+        // for newly generated events (e.g. OnBufferedAmountHigh).
+        let _ = self.inner.msg_tx.try_send(MessageInner::WriteNotify);
 
         Ok(())
     }
@@ -310,17 +312,15 @@ where
     /// # }
     /// ```
     async fn send_text(&self, text: &str) -> Result<()> {
-        let data = BytesMut::from(text.as_bytes());
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?
+                .send_text(text)?;
+        }
 
-        let message = RTCDataChannelMessage {
-            is_string: true,
-            data,
-        };
-
-        self.inner
-            .msg_tx
-            .try_send(MessageInner::DataChannelMessage(self.id, message))
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+        let _ = self.inner.msg_tx.try_send(MessageInner::WriteNotify);
 
         Ok(())
     }

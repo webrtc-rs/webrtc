@@ -42,7 +42,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   from the server side in this example.
 - ✅ [Data Channels Close](data-channels-close): Example data-channels-close is a variant of data-channels that allow
   playing with the life cycle of data channels.
-- [ ] [Data Channels Flow Control](data-channels-flow-control): Example data-channels-flow-control shows how to use flow
+- ✅ [Data Channels Flow Control](data-channels-flow-control): Example data-channels-flow-control shows how to use flow
   control.
 - [ ] [Offer Answer](offer-answer): Example offer-answer is an example of two webrtc-rs or pion instances communicating
   directly!

@@ -396,17 +396,7 @@ where
 
     async fn handle_inner_message(&mut self, msg: MessageInner) -> bool {
         match msg {
-            MessageInner::DataChannelMessage(channel_id, message) => {
-                let mut core = self.inner.core.lock().await;
-                if core.data_channel(channel_id).is_some() {
-                    if let Err(err) =
-                        core.handle_write(RTCMessage::DataChannelMessage(channel_id, message))
-                    {
-                        error!("Failed to send data channel message: {}", err);
-                    }
-                }
-            }
-            MessageInner::SenderRtp(sender_id, packet) => {
+            /*MessageInner::SenderRtp(sender_id, packet) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut sender) = core.rtp_sender(sender_id) {
                     if let Err(err) = sender.write_rtp(packet) {
@@ -429,7 +419,7 @@ where
                         error!("Failed to send RTCP feedback: {}", err);
                     }
                 }
-            }
+            }*/
             MessageInner::WriteNotify => {
                 //Do nothing, just want to wake up from futures::select! in order to poll_write
             }

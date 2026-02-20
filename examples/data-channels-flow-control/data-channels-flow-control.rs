@@ -1,250 +1,334 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+//! Data Channels Flow Control Example
+//!
+//! Demonstrates flow control via `OnBufferedAmountHigh` / `OnBufferedAmountLow` events.
+//! Two in-process peer connections are created: a requester that sends data as fast as
+//! possible and a responder that measures throughput.
+//!
+//! When the send buffer exceeds MAX_BUFFERED_AMOUNT the sender pauses; it resumes once
+//! the buffer drains below BUFFERED_AMOUNT_LOW_THRESHOLD.
+
+use bytes::BytesMut;
+use clap::Parser;
+use env_logger::Target;
+use futures::FutureExt;
+use rtc::data_channel::RTCDataChannelInit;
+use rtc::interceptor::Registry;
+use rtc::peer_connection::configuration::RTCConfigurationBuilder;
+use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::media_engine::MediaEngine;
+use rtc::peer_connection::state::{RTCIceGatheringState, RTCPeerConnectionState};
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
+use webrtc::data_channel::{DataChannel, DataChannelEvent};
+use webrtc::peer_connection::{PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
 
-use bytes::Bytes;
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::MediaEngine;
-use webrtc::api::APIBuilder;
-use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
-use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
-use webrtc::ice_transport::ice_server::RTCIceServer;
-use webrtc::interceptor::registry::Registry;
-use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer_connection::RTCPeerConnection;
+const BUFFERED_AMOUNT_LOW_THRESHOLD: u32 = 5120 * 1024; // 5120 KB
+const BUFFERED_AMOUNT_HIGH_THRESHOLD: u32 = 102400 * 1024; // 100 MB
 
-const BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 512 * 1024; // 512 KB
-const MAX_BUFFERED_AMOUNT: usize = 1024 * 1024; // 1 MB
+// ── Requester handler ────────────────────────────────────────────────────────
 
-async fn create_peer_connection() -> anyhow::Result<RTCPeerConnection> {
-    // Create unique MediaEngine,
-    // as MediaEngine must not be shared between PeerConnections
-    let mut media_engine = MediaEngine::default();
-
-    media_engine.register_default_codecs()?;
-
-    let mut interceptor_registry = Registry::new();
-
-    interceptor_registry = register_default_interceptors(interceptor_registry, &mut media_engine)?;
-
-    // Create API that bundles the global functions of the WebRTC API
-    let api = APIBuilder::new()
-        .with_media_engine(media_engine)
-        .with_interceptor_registry(interceptor_registry)
-        .build();
-
-    let ice_servers = vec![RTCIceServer {
-        ..Default::default()
-    }];
-
-    let config = RTCConfiguration {
-        ice_servers,
-        ..Default::default()
-    };
-
-    Ok(api.new_peer_connection(config).await?)
+#[derive(Clone)]
+struct RequesterHandler {
+    gather_complete_tx: Sender<()>,
+    done_tx: Sender<()>,
 }
 
-async fn create_requester() -> anyhow::Result<RTCPeerConnection> {
-    // Create a peer connection first
-    let pc = create_peer_connection().await?;
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for RequesterHandler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gather_complete_tx.try_send(());
+        }
+    }
 
-    // Data transmission requires a data channel, so prepare to create one
-    let options = Some(RTCDataChannelInit {
-        ordered: Some(false),
-        max_retransmits: Some(0u16),
-        ..Default::default()
-    });
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("[requester] Connection state: {state}");
+        if state == RTCPeerConnectionState::Failed {
+            let _ = self.done_tx.try_send(());
+        }
+    }
+}
 
-    // Create a data channel to send data over a peer connection
-    let dc = pc.create_data_channel("data", options).await?;
+// ── Responder handler ────────────────────────────────────────────────────────
 
-    // Use mpsc channel to send and receive a signal when more data can be sent
-    let (more_can_be_sent, mut maybe_more_can_be_sent) = tokio::sync::mpsc::channel(1);
+#[derive(Clone)]
+struct ResponderHandler {
+    runtime: Arc<dyn Runtime>,
+    gather_complete_tx: Sender<()>,
+    done_tx: Sender<()>,
+}
 
-    // Get a shared pointer to the data channel
-    let shared_dc = dc.clone();
-    dc.on_open(Box::new(|| {
-        Box::pin(async move {
-            // This callback shouldn't be blocked for a long time, so we spawn our handler
-            tokio::spawn(async move {
-                let buf = Bytes::from_static(&[0u8; 1024]);
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for ResponderHandler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gather_complete_tx.try_send(());
+        }
+    }
 
-                loop {
-                    if shared_dc.send(&buf).await.is_err() {
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("[responder] Connection state: {state}");
+        if state == RTCPeerConnectionState::Failed {
+            let _ = self.done_tx.try_send(());
+        }
+    }
+
+    async fn on_data_channel(&self, data_channel: Arc<dyn DataChannel>) {
+        let done_tx = self.done_tx.clone();
+        // Must spawn: returning from on_data_channel unblocks the driver;
+        // awaiting poll() here would stall it.
+        self.runtime.spawn(Box::pin(async move {
+            let mut total_bytes: usize = 0;
+            let mut last_bytes: usize = 0;
+            let mut period_start = Instant::now();
+
+            while let Some(event) = data_channel.poll().await {
+                match event {
+                    DataChannelEvent::OnOpen => {
+                        println!("[responder] Data channel open — measuring throughput...");
+                        period_start = Instant::now();
+                    }
+                    DataChannelEvent::OnMessage(msg) => {
+                        total_bytes += msg.data.len();
+                        // Print once per second, triggered by the first message after each period
+                        let now = Instant::now();
+                        if now.duration_since(period_start) >= Duration::from_secs(1) {
+                            let elapsed = now.duration_since(period_start);
+                            let bps =
+                                ((total_bytes - last_bytes) * 8) as f64 / elapsed.as_secs_f64();
+                            println!("Throughput is about {:.03} Mbps", bps / (1024.0 * 1024.0));
+                            last_bytes = total_bytes;
+                            period_start = now;
+                        }
+                    }
+                    DataChannelEvent::OnClose => {
+                        let _ = done_tx.try_send(());
                         break;
                     }
-
-                    let buffered_amount = shared_dc.buffered_amount().await;
-
-                    if buffered_amount + buf.len() > MAX_BUFFERED_AMOUNT {
-                        // Wait for the signal that more can be sent
-                        let _ = maybe_more_can_be_sent.recv().await;
-                    }
+                    _ => {}
                 }
-            });
-        })
-    }));
+            }
+        }));
+    }
+}
 
+// ── Entry point ──────────────────────────────────────────────────────────────
+
+#[derive(Parser)]
+#[command(name = "data-channels")]
+#[command(author = "Rusty Rain <y@liu.mx>")]
+#[command(version = "0.0.0")]
+#[command(about = "An example of Data-Channels", long_about = None)]
+struct Cli {
+    #[arg(short, long)]
+    debug: bool,
+    #[arg(short, long, default_value_t = format!("INFO"))]
+    log_level: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    output_log_file: String,
+}
+
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+    let output_log_file = cli.output_log_file;
+    let log_level = log::LevelFilter::from_str(&cli.log_level)?;
+    if cli.debug {
+        env_logger::Builder::new()
+            .target(if !output_log_file.is_empty() {
+                Target::Pipe(Box::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(output_log_file)?,
+                ))
+            } else {
+                Target::Stdout
+            })
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{}:{} [{}] {} - {}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    record.level(),
+                    chrono::Local::now().format("%H:%M:%S.%6f"),
+                    record.args()
+                )
+            })
+            .filter(None, log_level)
+            .init();
+    }
+
+    block_on(async_main())
+}
+
+async fn async_main() -> anyhow::Result<()> {
+    let (done_tx, mut done_rx) = channel::<()>();
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>();
+    ctrlc::set_handler(move || {
+        let _ = ctrlc_tx.try_send(());
+    })?;
+
+    let runtime =
+        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+
+    // ── Build requester peer connection ──────────────────────────────────────
+    let (req_gather_tx, mut req_gather_rx) = channel::<()>();
+    let mut req_media = MediaEngine::default();
+    req_media.register_default_codecs()?;
+    let req_registry = register_default_interceptors(Registry::new(), &mut req_media)?;
+
+    let mut requester = PeerConnectionBuilder::new()
+        .with_configuration(RTCConfigurationBuilder::new().build())
+        .with_media_engine(req_media)
+        .with_interceptor_registry(req_registry)
+        .with_handler(Arc::new(RequesterHandler {
+            gather_complete_tx: req_gather_tx,
+            done_tx: done_tx.clone(),
+        }))
+        .with_runtime(runtime.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .build()
+        .await?;
+
+    // Create data channel (unordered, no retransmits — maximises raw throughput)
+    let dc = requester
+        .create_data_channel(
+            "data",
+            Some(RTCDataChannelInit {
+                ordered: false,
+                max_retransmits: Some(0),
+                ..Default::default()
+            }),
+        )
+        .await?;
+
+    // Configure flow-control thresholds
     dc.set_buffered_amount_low_threshold(BUFFERED_AMOUNT_LOW_THRESHOLD)
-        .await;
+        .await?;
+    dc.set_buffered_amount_high_threshold(BUFFERED_AMOUNT_HIGH_THRESHOLD)
+        .await?;
 
-    dc.on_buffered_amount_low(Box::new(move || {
-        let more_can_be_sent = more_can_be_sent.clone();
+    // Single-task flow-control loop.
+    //
+    // Both event-polling and sending live in the same spawned task, so flow-control
+    // state is a plain local `bool` — no cross-task AtomicBool or Notify needed.
+    //
+    //  • not open yet  → block on poll(), waiting for OnOpen
+    //  • open, running → select! { event from poll() | send one 32 KB chunk }
+    //  • open, paused  → block on poll(), waiting for OnBufferedAmountLow
+    {
+        runtime.spawn(Box::pin(async move {
+            let buf = BytesMut::from(vec![0u8; 1024].as_slice());
+            let mut dc_open = false;
+            let mut paused = false;
 
-        Box::pin(async move {
-            // Send a signal that more can be sent
-            more_can_be_sent.send(()).await.unwrap();
-        })
-    }))
-    .await;
-
-    Ok(pc)
-}
-
-async fn create_responder() -> anyhow::Result<RTCPeerConnection> {
-    // Create a peer connection first
-    let pc = create_peer_connection().await?;
-
-    // Set a data channel handler so that we can receive data
-    pc.on_data_channel(Box::new(move |dc| {
-        Box::pin(async move {
-            let total_bytes_received = Arc::new(AtomicUsize::new(0));
-
-            let shared_total_bytes_received = total_bytes_received.clone();
-            dc.on_open(Box::new(move || {
-                Box::pin(async {
-                    // This callback shouldn't be blocked for a long time, so we spawn our handler
-                    tokio::spawn(async move {
-                        let mut start = SystemTime::now();
-                        let mut last_total_bytes_received: usize = 0;
-
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        println!();
-
-                        loop {
-                            let total_bytes_received =
-                                shared_total_bytes_received.load(Ordering::Relaxed);
-                            let epoch_bytes_received =
-                                total_bytes_received - last_total_bytes_received;
-                            last_total_bytes_received = total_bytes_received;
-
-                            let elapsed = SystemTime::now().duration_since(start);
-                            let bps =
-                                (epoch_bytes_received * 8) as f64 / elapsed.unwrap().as_secs_f64();
-
-                            println!(
-                                "Throughput is about {:.03} Mbps",
-                                bps / (1024 * 1024) as f64
-                            );
-                            start = SystemTime::now();
-                            tokio::time::sleep(Duration::from_secs(1)).await;
+            loop {
+                if dc_open && !paused {
+                    futures::select! {
+                        maybe_event = dc.poll().fuse() => {
+                            match maybe_event {
+                                Some(DataChannelEvent::OnBufferedAmountHigh) => {
+                                    println!("[requester] Data channel 1 OnBufferedAmountHigh...");
+                                    paused = true;
+                                }
+                                Some(DataChannelEvent::OnBufferedAmountLow) => {
+                                    if paused {
+                                        println!("[requester] Data channel 1 OnBufferedAmountLow...");
+                                    }
+                                    paused = false;
+                                }
+                                Some(DataChannelEvent::OnClose) | None => break,
+                                _ => {}
+                            }
                         }
-                    });
-                })
-            }));
-
-            dc.on_message(Box::new(move |msg| {
-                let total_bytes_received = total_bytes_received.clone();
-
-                Box::pin(async move {
-                    total_bytes_received.fetch_add(msg.data.len(), Ordering::Relaxed);
-                })
-            }));
-        })
-    }));
-
-    Ok(pc)
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    env_logger::init();
-
-    let requester = Arc::new(create_requester().await?);
-    let responder = Arc::new(create_responder().await?);
-
-    let maybe_requester = Arc::downgrade(&requester);
-    responder.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-        let maybe_requester = maybe_requester.clone();
-
-        Box::pin(async move {
-            if let Some(candidate) = candidate {
-                if let Ok(candidate) = candidate.to_json() {
-                    if let Some(requester) = maybe_requester.upgrade() {
-                        if let Err(err) = requester.add_ice_candidate(candidate).await {
-                            log::warn!("{err}");
+                        result = dc.send(buf.clone()).fuse() => {
+                            if result.is_err() { break; }
                         }
+                    }
+                } else {
+                    match dc.poll().await {
+                        Some(DataChannelEvent::OnOpen) => {
+                            println!("[requester] Data channel open — sending at full speed...");
+                            dc_open = true;
+                        }
+                        Some(DataChannelEvent::OnBufferedAmountHigh) => {
+                            println!("[requester] Data channel 2 OnBufferedAmountHigh...");
+                            paused = true;
+                        }
+                        Some(DataChannelEvent::OnBufferedAmountLow) => {
+                            if paused {
+                                println!("[requester] Data channel 2 OnBufferedAmountLow...");
+                            }
+                            paused = false;
+                        }
+                        Some(DataChannelEvent::OnClose) | None => break,
+                        _ => {}
                     }
                 }
             }
-        })
-    }));
+        }));
+    }
 
-    let maybe_responder = Arc::downgrade(&responder);
-    requester.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-        let maybe_responder = maybe_responder.clone();
+    // Create offer and wait for ICE gathering to complete
+    let offer = requester.create_offer(None).await?;
+    requester.set_local_description(offer).await?;
+    req_gather_rx.recv().await;
+    let offer_sdp = requester
+        .local_description()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("requester has no local description"))?;
 
-        Box::pin(async move {
-            if let Some(candidate) = candidate {
-                if let Ok(candidate) = candidate.to_json() {
-                    if let Some(responder) = maybe_responder.upgrade() {
-                        if let Err(err) = responder.add_ice_candidate(candidate).await {
-                            log::warn!("{err}");
-                        }
-                    }
-                }
-            }
-        })
-    }));
+    // ── Build responder peer connection ──────────────────────────────────────
+    let (resp_gather_tx, mut resp_gather_rx) = channel::<()>();
+    let mut resp_media = MediaEngine::default();
+    resp_media.register_default_codecs()?;
+    let resp_registry = register_default_interceptors(Registry::new(), &mut resp_media)?;
 
-    let (fault, mut reqs_fault) = tokio::sync::mpsc::channel(1);
-    requester.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        let fault = fault.clone();
+    let mut responder = PeerConnectionBuilder::new()
+        .with_configuration(RTCConfigurationBuilder::new().build())
+        .with_media_engine(resp_media)
+        .with_interceptor_registry(resp_registry)
+        .with_handler(Arc::new(ResponderHandler {
+            runtime: runtime.clone(),
+            gather_complete_tx: resp_gather_tx,
+            done_tx: done_tx.clone(),
+        }))
+        .with_runtime(runtime.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .build()
+        .await?;
 
-        Box::pin(async move {
-            if s == RTCPeerConnectionState::Failed {
-                fault.send(()).await.unwrap();
-            }
-        })
-    }));
+    // In-process signaling: set the offer, create an answer, wait for ICE
+    responder.set_remote_description(offer_sdp).await?;
+    let answer = responder.create_answer(None).await?;
+    responder.set_local_description(answer).await?;
+    resp_gather_rx.recv().await;
+    let answer_sdp = responder
+        .local_description()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("responder has no local description"))?;
 
-    let (fault, mut resp_fault) = tokio::sync::mpsc::channel(1);
-    responder.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        let fault = fault.clone();
+    // Complete the offer/answer exchange
+    requester.set_remote_description(answer_sdp).await?;
 
-        Box::pin(async move {
-            if s == RTCPeerConnectionState::Failed {
-                fault.send(()).await.unwrap();
-            }
-        })
-    }));
-
-    let reqs = requester.create_offer(None).await?;
-
-    requester.set_local_description(reqs.clone()).await?;
-    responder.set_remote_description(reqs).await?;
-
-    let resp = responder.create_answer(None).await?;
-
-    responder.set_local_description(resp.clone()).await?;
-    requester.set_remote_description(resp).await?;
-
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {}
-        _ = reqs_fault.recv() => {
-            log::error!("Requester's peer connection failed...")
+    println!("Press ctrl-c to stop");
+    futures::select! {
+        _ = done_rx.recv().fuse() => {
+            println!("Peer connection failed or data channel closed.");
         }
-        _ = resp_fault.recv() => {
-            log::error!("Responder's peer connection failed...");
+        _ = ctrlc_rx.recv().fuse() => {
+            println!();
         }
     }
 
     requester.close().await?;
     responder.close().await?;
-
-    println!();
 
     Ok(())
 }

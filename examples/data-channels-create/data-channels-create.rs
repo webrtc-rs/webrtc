@@ -177,6 +177,7 @@ async fn async_main() -> anyhow::Result<()> {
                 }
                 DataChannelEvent::OnClose => {
                     println!("Data channel {id} is closed");
+                    break;
                 }
                 DataChannelEvent::OnMessage(msg) => {
                     let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
