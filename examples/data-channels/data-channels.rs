@@ -197,6 +197,7 @@ async fn async_main() -> anyhow::Result<()> {
     };
     let desc_data = signal::decode(line.as_str())?;
     let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
+    println!("offer: {}", offer);
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
@@ -214,6 +215,7 @@ async fn async_main() -> anyhow::Result<()> {
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
+        println!("answer: {}", local_desc);
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
         println!("{b64}");

@@ -46,10 +46,10 @@ name = "data-channels"
 path = "examples/data-channels/data-channels.rs"
 bench = false
 
-#[[example]]
-#name = "data-channels-close"
-#path = "examples/data-channels-close/data-channels-close.rs"
-#bench = false
+[[example]]
+name = "data-channels-close"
+path = "examples/data-channels-close/data-channels-close.rs"
+bench = false
 
 [[example]]
 name = "data-channels-create"
