@@ -32,6 +32,7 @@ impl Runtime for TokioRuntime {
     }
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
+        sock.set_nonblocking(true)?;
         Ok(Arc::new(UdpSocket {
             io: Arc::new(::tokio::net::UdpSocket::from_std(sock)?),
         }))
