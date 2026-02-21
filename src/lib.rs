@@ -12,12 +12,6 @@
 //!
 //! - `runtime-tokio` (default) - Tokio runtime support
 //! - `runtime-smol` - smol runtime support
-//!
-//! # Example
-//!
-//! ```no_run
-//! // Coming soon: PeerConnection example
-//! ```
 
 pub mod data_channel;
 pub(crate) mod ice_gatherer;
