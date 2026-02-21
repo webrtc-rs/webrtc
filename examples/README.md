@@ -18,7 +18,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   control.
 - ✅ [Data Channels Offer Answer](offer-answer): Example offer-answer is an example of two webrtc-rs or pion instances
   communicating directly!
-- 🚧 [Data Channels Simple](data-channels-simple): Simple example of a WebRTC DataChannel using it as the signaling
+- ✅ [Data Channels Simple](data-channels-simple): Simple example of a WebRTC DataChannel using it as the signaling
   server.
 
 ### Media API
