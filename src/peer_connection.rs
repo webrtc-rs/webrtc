@@ -2,7 +2,7 @@
 
 use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
-use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelInternal};
+use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_track::TrackRemote;
 use crate::peer_connection_driver::PeerConnectionDriver;
@@ -169,7 +169,7 @@ where
         self
     }
 
-    pub async fn build(self) -> Result<PeerConnection<I>> {
+    pub async fn build(self) -> Result<impl PeerConnection> {
         let runtime = if let Some(runtime) = self.runtime {
             runtime
         } else {
@@ -184,7 +184,7 @@ where
             ice_gather_policy: configuration.ice_transport_policy(),
         };
 
-        PeerConnection::new(
+        PeerConnectionImpl::new(
             core,
             runtime,
             self.handler
@@ -197,11 +197,84 @@ where
     }
 }
 
-/// Async-friendly peer connection
+/// Object-safe trait exposing all public PeerConnection operations.
 ///
-/// This wraps the Sans-I/O `RTCPeerConnection` from the rtc crate and provides
-/// an async API.
-pub struct PeerConnection<I = NoopInterceptor>
+/// `PeerConnectionBuilder::build()` returns `Arc<dyn PeerConnection>`, hiding the
+/// generic interceptor type so callers can store and share connections easily.
+///
+/// # Example
+///
+/// ```no_run
+/// use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
+/// use webrtc::RTCConfigurationBuilder;
+/// use std::sync::Arc;
+///
+/// #[derive(Clone)]
+/// struct MyHandler;
+/// #[async_trait::async_trait]
+/// impl PeerConnectionEventHandler for MyHandler {}
+///
+/// # async fn example() -> webrtc::Result<()> {
+/// let pc = PeerConnectionBuilder::new()
+///     .with_handler(Arc::new(MyHandler))
+///     .with_udp_addrs(vec!["127.0.0.1:0"])
+///     .build()
+///     .await?;
+///
+/// let offer = pc.create_offer(None).await?;
+/// # Ok(())
+/// # }
+/// ```
+#[async_trait::async_trait]
+pub trait PeerConnection: Send + Sync + 'static {
+    /// Close the peer connection
+    async fn close(&self) -> Result<()>;
+    /// Create an SDP offer
+    async fn create_offer(&self, options: Option<RTCOfferOptions>)
+    -> Result<RTCSessionDescription>;
+    /// Create an SDP answer
+    async fn create_answer(
+        &self,
+        options: Option<RTCAnswerOptions>,
+    ) -> Result<RTCSessionDescription>;
+    /// Set the local description
+    async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()>;
+    /// Get the local description
+    async fn local_description(&self) -> Option<RTCSessionDescription>;
+    /// Get current local description
+    async fn current_local_description(&self) -> Option<RTCSessionDescription>;
+    /// Get pending local description
+    async fn pending_local_description(&self) -> Option<RTCSessionDescription>;
+    /// Returns whether the remote peer supports trickle ICE.
+    async fn can_trickle_ice_candidates(&self) -> Option<bool>;
+    /// Set the remote description
+    async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()>;
+    /// Get the remote description
+    async fn remote_description(&self) -> Option<RTCSessionDescription>;
+    /// Get current remote description
+    async fn current_remote_description(&self) -> Option<RTCSessionDescription>;
+    /// Get pending remote description
+    async fn pending_remote_description(&self) -> Option<RTCSessionDescription>;
+    /// Add a remote ICE candidate
+    async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()>;
+    /// Trigger an ICE restart
+    async fn restart_ice(&self) -> Result<()>;
+    /// Get the current configuration
+    async fn get_configuration(&self) -> RTCConfiguration;
+    /// Update the configuration
+    async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()>;
+    /// Create a data channel
+    async fn create_data_channel(
+        &self,
+        label: &str,
+        options: Option<RTCDataChannelInit>,
+    ) -> Result<Arc<dyn DataChannel>>;
+}
+
+/// Concrete async peer connection implementation (generic over interceptor type).
+///
+/// Not exposed directly — obtained as `Arc<dyn PeerConnection>` from `PeerConnectionBuilder::build()`.
+pub(crate) struct PeerConnectionImpl<I = NoopInterceptor>
 where
     I: Interceptor,
 {
@@ -224,7 +297,7 @@ where
     pub(crate) msg_tx: Sender<MessageInner>,
 }
 
-impl<I> PeerConnection<I>
+impl<I> PeerConnectionImpl<I>
 where
     I: Interceptor,
 {
@@ -253,7 +326,7 @@ where
         }
 
         let (msg_tx, msg_rx) = channel();
-        let mut peer_connection = Self {
+        let peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
@@ -271,17 +344,23 @@ where
             async_udp_sockets,
         )
         .await?;
-        peer_connection.driver_handle = Mutex::new(Some(runtime.spawn(Box::pin(async move {
+        let driver_handle = runtime.spawn(Box::pin(async move {
             if let Err(e) = driver.event_loop(msg_rx).await {
                 error!("I/O error: {}", e);
             }
-        }))));
+        }));
+        *peer_connection.driver_handle.lock().await = Some(driver_handle);
 
         Ok(peer_connection)
     }
+}
 
-    /// Close the peer connection
-    pub async fn close(&self) -> Result<()> {
+#[async_trait::async_trait]
+impl<I> PeerConnection for PeerConnectionImpl<I>
+where
+    I: Interceptor + 'static,
+{
+    async fn close(&self) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.close()?;
@@ -301,8 +380,7 @@ where
         Ok(())
     }
 
-    /// Create an SDP offer
-    pub async fn create_offer(
+    async fn create_offer(
         &self,
         options: Option<RTCOfferOptions>,
     ) -> Result<RTCSessionDescription> {
@@ -310,8 +388,7 @@ where
         core.create_offer(options)
     }
 
-    /// Create an SDP answer
-    pub async fn create_answer(
+    async fn create_answer(
         &self,
         options: Option<RTCAnswerOptions>,
     ) -> Result<RTCSessionDescription> {
@@ -319,8 +396,7 @@ where
         core.create_answer(options)
     }
 
-    /// Set the local description
-    pub async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()> {
+    async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.set_local_description(desc)?;
@@ -337,32 +413,27 @@ where
         Ok(())
     }
 
-    /// Get the local description
-    pub async fn local_description(&self) -> Option<RTCSessionDescription> {
+    async fn local_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
         core.local_description()
     }
 
-    /// Get current local description
-    pub async fn current_local_description(&self) -> Option<RTCSessionDescription> {
+    async fn current_local_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
         core.current_local_description()
     }
 
-    /// Get pending local description
-    pub async fn pending_local_description(&self) -> Option<RTCSessionDescription> {
+    async fn pending_local_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
         core.pending_local_description()
     }
 
-    /// Returns whether the remote peer supports trickle ICE.
-    pub async fn can_trickle_ice_candidates(&self) -> Option<bool> {
+    async fn can_trickle_ice_candidates(&self) -> Option<bool> {
         let core = self.inner.core.lock().await;
         core.can_trickle_ice_candidates()
     }
 
-    /// Set the remote description
-    pub async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
+    async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.set_remote_description(desc)?;
@@ -376,84 +447,28 @@ where
         Ok(())
     }
 
-    /// Get the remote description
-    pub async fn remote_description(&self) -> Option<RTCSessionDescription> {
+    async fn remote_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
         core.remote_description().cloned()
     }
 
-    /// Get current remote description
-    pub async fn current_remote_description(&self) -> Option<RTCSessionDescription> {
+    async fn current_remote_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
         core.current_remote_description().cloned()
     }
 
-    /// Get pending remote description
-    pub async fn pending_remote_description(&self) -> Option<RTCSessionDescription> {
+    async fn pending_remote_description(&self) -> Option<RTCSessionDescription> {
         let core = self.inner.core.lock().await;
         core.pending_remote_description().cloned()
     }
 
-    /// Add an ICE candidate received from the remote peer
-    ///
-    /// This method adds a remote ICE candidate received through the signaling channel.
-    /// The remote description must be set before calling this method.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use webrtc::peer_connection::*;
-    /// use webrtc::RTCIceCandidateInit;
-    /// # use webrtc::Result;
-    /// # use std::sync::Arc;
-    /// # struct Handler;
-    /// # #[async_trait::async_trait]
-    /// # impl PeerConnectionEventHandler for Handler {}
-    /// # async fn example(pc: PeerConnection) -> Result<()> {
-    /// // Receive candidate from signaling channel
-    /// let candidate_init = RTCIceCandidateInit {
-    ///     candidate: "candidate:1 1 UDP 2130706431 192.168.1.100 54321 typ host".to_string(),
-    ///     sdp_mid: Some("0".to_string()),
-    ///     sdp_mline_index: Some(0),
-    ///     username_fragment: None,
-    ///     url: None,
-    /// };
-    ///
-    /// pc.add_ice_candidate(candidate_init).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()> {
+    async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()> {
         let mut core = self.inner.core.lock().await;
         core.add_remote_candidate(candidate)?;
         Ok(())
     }
 
-    /// Restart ICE
-    ///
-    /// Triggers an ICE restart. The next call to `create_offer()` will generate
-    /// an offer with new ICE credentials, causing a full ICE restart.
-    ///
-    /// This is useful when the ICE connection has failed or when network conditions
-    /// have changed (e.g., switching networks on a mobile device).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use webrtc::peer_connection::PeerConnection;
-    /// # use webrtc::Result;
-    /// # async fn example(pc: PeerConnection) -> Result<()> {
-    /// // Trigger ICE restart on connection failure
-    /// pc.restart_ice().await?;
-    ///
-    /// // Create new offer with new ICE credentials
-    /// let offer = pc.create_offer(None).await?;
-    /// pc.set_local_description(offer.clone()).await?;
-    /// // Send offer to remote peer through signaling
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn restart_ice(&self) -> Result<()> {
+    async fn restart_ice(&self) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
             core.restart_ice();
@@ -467,60 +482,25 @@ where
         Ok(())
     }
 
-    /// set_configuration updates the configuration of this PeerConnection object.
-    pub async fn get_configuration(&self) -> RTCConfiguration {
+    async fn get_configuration(&self) -> RTCConfiguration {
         let core = self.inner.core.lock().await;
         core.get_configuration().clone()
     }
 
-    /// set_configuration updates the configuration of this PeerConnection object.
-    pub async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()> {
+    async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()> {
         let mut core = self.inner.core.lock().await;
         core.set_configuration(configuration)
     }
 
-    /// Create a data channel
-    ///
-    /// Creates a new data channel with the specified label and configuration.
-    /// The data channel will be in the "connecting" state until the peer connection
-    /// is established.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use webrtc::peer_connection::*;
-    /// # use webrtc::RTCDataChannelInit;
-    /// # use webrtc::RTCConfigurationBuilder;
-    /// # use webrtc::Result;
-    /// # use std::sync::Arc;
-    /// # #[derive(Clone)]
-    /// # struct MyHandler;
-    /// # #[async_trait::async_trait]
-    /// # impl PeerConnectionEventHandler for MyHandler {}
-    /// # async fn example() -> Result<()> {
-    /// let config = RTCConfigurationBuilder::new().build();
-    /// let handler = Arc::new(MyHandler);
-    /// let pc = PeerConnectionBuilder::new().with_configuration(config).with_handler(handler).with_udp_addrs(vec!["127.0.0.1:0"]).build().await?;
-    ///
-    /// // Create a data channel
-    /// let dc = pc.create_data_channel("my-channel", None).await?;
-    ///
-    /// // Send messages
-    /// dc.send_text("Hello!").await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn create_data_channel(
+    async fn create_data_channel(
         &self,
-        label: impl Into<String>,
+        label: &str,
         options: Option<RTCDataChannelInit>,
     ) -> Result<Arc<dyn DataChannel>> {
-        let label = label.into();
-
         // Create the data channel via the core
         let channel_id = {
             let mut core = self.inner.core.lock().await;
-            let rtc_dc = core.create_data_channel(&label, options)?;
+            let rtc_dc = core.create_data_channel(label, options)?;
             rtc_dc.id()
         };
 
@@ -530,13 +510,10 @@ where
             data_channels.insert(channel_id, evt_tx);
         }
 
-        // Create our async wrapper
-        let dc = Arc::new(DataChannelInternal::new(
+        Ok(Arc::new(DataChannelImpl::new(
             channel_id,
             self.inner.clone(),
             evt_rx,
-        ));
-
-        Ok(dc)
+        )))
     }
 }

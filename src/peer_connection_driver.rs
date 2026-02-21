@@ -4,7 +4,7 @@
 
 #![allow(clippy::collapsible_if)]
 
-use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelInternal};
+use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
@@ -329,7 +329,7 @@ where
                         e.insert(evt_tx);
 
                         // Create our async wrapper
-                        dc = Some(Arc::new(DataChannelInternal::new(
+                        dc = Some(Arc::new(DataChannelImpl::new(
                             channel_id,
                             self.inner.clone(),
                             evt_rx,

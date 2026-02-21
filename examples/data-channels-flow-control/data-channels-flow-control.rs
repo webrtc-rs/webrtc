@@ -23,7 +23,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
-use webrtc::peer_connection::{PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
 
 const BUFFERED_AMOUNT_LOW_THRESHOLD: u32 = 5120 * 1024; // 5120 KB

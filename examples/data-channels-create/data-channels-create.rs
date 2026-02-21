@@ -13,7 +13,7 @@ use std::time::Duration;
 use std::{fs, io::Write, str::FromStr};
 use webrtc::Result;
 use webrtc::data_channel::DataChannelEvent;
-use webrtc::peer_connection::{PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep};
 
 #[derive(Parser)]

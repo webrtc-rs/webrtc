@@ -83,10 +83,10 @@ pub enum DataChannelEvent {
     OnMessage(RTCDataChannelMessage),
 }
 
-/// Async-friendly data channel
+/// Concrete async data channel implementation (generic over interceptor type).
 ///
 /// This wraps a data channel and provides async send/receive APIs.
-pub(crate) struct DataChannelInternal<I = NoopInterceptor>
+pub(crate) struct DataChannelImpl<I = NoopInterceptor>
 where
     I: Interceptor,
 {
@@ -100,7 +100,7 @@ where
     evt_rx: Mutex<Receiver<DataChannelEvent>>,
 }
 
-impl<I> DataChannelInternal<I>
+impl<I> DataChannelImpl<I>
 where
     I: Interceptor,
 {
@@ -119,7 +119,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<I> DataChannel for DataChannelInternal<I>
+impl<I> DataChannel for DataChannelImpl<I>
 where
     I: Interceptor + 'static,
 {

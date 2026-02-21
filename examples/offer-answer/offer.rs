@@ -23,7 +23,7 @@ use rtc::peer_connection::state::{RTCIceGatheringState, RTCPeerConnectionState};
 use rtc::peer_connection::transport::RTCIceServer;
 use signal::get_local_ip;
 use webrtc::data_channel::DataChannelEvent;
-use webrtc::peer_connection::{PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep};
 
 #[derive(Parser)]
