@@ -1,7 +1,14 @@
-/// Integration test for data channels interop between rtc and webrtc
+/// Integration test for data channels create interop between rtc and webrtc
 ///
-/// This test verifies that the rtc library can successfully establish a peer connection
-/// and exchange data with the webrtc library, ensuring interoperability between the two.
+/// This test verifies that the rtc library can create a data channel as the offerer,
+/// establish a peer connection with webrtc as the answerer, and exchange messages bidirectionally.
+///
+/// Key difference from data_channels_interop:
+/// - RTC is the offerer (creates offer) and creates the data channel
+/// - WebRTC is the answerer
+/// - RTC sends messages proactively to WebRTC
+/// - WebRTC echoes messages back to RTC
+/// - Both sides verify they received the correct messages
 use anyhow::Result;
 use bytes::BytesMut;
 use futures::FutureExt;
@@ -21,9 +28,9 @@ use rtc::peer_connection::state::RTCPeerConnectionState;
 use rtc::peer_connection::transport::RTCDtlsRole;
 use rtc::peer_connection::transport::RTCIceServer;
 use rtc::peer_connection::transport::{CandidateConfig, CandidateHostConfig};
-use webrtc::data_channel::DataChannelEvent;
+use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 use webrtc::{RTCIceGatheringState, RTCPeerConnectionState as WebrtcPCState};
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
@@ -31,6 +38,8 @@ const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 struct WebrtcHandler {
     gather_complete_tx: Sender<()>,
     connected_tx: Sender<()>,
+    webrtc_msg_tx: Sender<String>,
+    runtime: Arc<dyn Runtime>,
 }
 
 #[async_trait::async_trait]
@@ -46,11 +55,37 @@ impl PeerConnectionEventHandler for WebrtcHandler {
             let _ = self.connected_tx.try_send(());
         }
     }
+
+    async fn on_data_channel(&self, dc: Arc<dyn DataChannel>) {
+        let label = dc.label().await.unwrap_or_default();
+        log::info!("WebRTC received data channel: {}", label);
+        let webrtc_msg_tx = self.webrtc_msg_tx.clone();
+        self.runtime.spawn(Box::pin(async move {
+            while let Some(event) = dc.poll().await {
+                match event {
+                    DataChannelEvent::OnOpen => {
+                        log::info!("WebRTC data channel opened");
+                    }
+                    DataChannelEvent::OnMessage(msg) => {
+                        let data = String::from_utf8(msg.data.to_vec()).unwrap_or_default();
+                        log::info!("WebRTC received message: '{}'", data);
+                        webrtc_msg_tx.try_send(data.clone()).ok();
+                        log::info!("WebRTC echoing message back: '{}'", data);
+                        if let Err(e) = dc.send_text(&data).await {
+                            log::error!("WebRTC failed to echo message: {}", e);
+                        }
+                    }
+                    DataChannelEvent::OnClose => break,
+                    _ => {}
+                }
+            }
+        }));
+    }
 }
 
-/// Test data channel communication between webrtc (async) implementations and rtc (sansio)
+/// Test data channels creation where RTC creates the channel, sends messages, and receives echoes
 #[test]
-fn test_data_channels_webrtc_to_rtc() {
+fn test_data_channels_create_rtc_to_webrtc() {
     block_on(run_test()).unwrap();
 }
 
@@ -61,20 +96,24 @@ async fn run_test() -> Result<()> {
         .try_init()
         .ok();
 
-    log::info!("Starting data channel interop test: rtc -> webrtc");
+    log::info!("Starting data channel create interop test: rtc (offerer) -> webrtc (answerer)");
 
     let (gather_complete_tx, mut gather_complete_rx) = channel::<()>();
     let (connected_tx, mut connected_rx) = channel::<()>();
     let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>();
-    let (rtc_msg_tx, mut rtc_msg_rx) = channel::<String>();
+    let (rtc_echo_tx, mut rtc_echo_rx) = channel::<String>();
 
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
 
-    let handler = Arc::new(WebrtcHandler {
-        gather_complete_tx,
-        connected_tx,
-    });
+    // Create rtc peer (offerer)
+    let std_socket = std::net::UdpSocket::bind("127.0.0.1:0")?;
+    let local_addr = std_socket.local_addr()?;
+    let socket = runtime.wrap_udp_socket(std_socket)?;
+    log::info!("RTC peer bound to {}", local_addr);
+
+    let mut setting_engine = SettingEngine::default();
+    setting_engine.set_answering_dtls_role(RTCDtlsRole::Server)?;
 
     let config = RTCConfigurationBuilder::new()
         .with_ice_servers(vec![RTCIceServer {
@@ -83,80 +122,18 @@ async fn run_test() -> Result<()> {
         }])
         .build();
 
-    let local_addr_str = format!("{}:0", signal::get_local_ip());
-
-    // Create webrtc peer (offerer) using new API
-    let webrtc_pc = PeerConnectionBuilder::new()
-        .with_configuration(config.clone())
-        .with_handler(handler)
-        .with_runtime(runtime.clone())
-        .with_udp_addrs(vec![local_addr_str.clone()])
-        .build()
-        .await?;
-    log::info!(
-        "Created webrtc peer connection with binding to {}",
-        local_addr_str
-    );
-
-    // Create data channel on webrtc side
-    let dc_label = "test-channel";
-    let webrtc_dc = webrtc_pc.create_data_channel(dc_label, None).await?;
-    let webrtc_dc_poll = webrtc_dc.clone();
-    runtime.spawn(Box::pin(async move {
-        while let Some(event) = webrtc_dc_poll.poll().await {
-            match event {
-                DataChannelEvent::OnOpen => {
-                    log::info!("WebRTC data channel opened");
-                }
-                DataChannelEvent::OnMessage(msg) => {
-                    let data = String::from_utf8(msg.data.to_vec()).unwrap_or_default();
-                    log::info!("WebRTC received echoed message: '{}'", data);
-                    let _ = webrtc_msg_tx.try_send(data);
-                }
-                DataChannelEvent::OnClose => break,
-                _ => {}
-            }
-        }
-    }));
-    log::info!("Created webrtc data channel: {}", dc_label);
-
-    // Create offer from webrtc side
-    let offer = webrtc_pc.create_offer(None).await?;
-    log::info!("WebRTC created offer");
-    webrtc_pc.set_local_description(offer).await?;
-    log::info!("WebRTC set local description");
-
-    // Wait for ICE gathering to complete
-    let _ = timeout(Duration::from_secs(5), gather_complete_rx.recv()).await;
-
-    let offer_with_candidates = webrtc_pc
-        .local_description()
-        .await
-        .expect("local description should be set");
-    log::info!("WebRTC offer with candidates ready");
-
-    // Convert webrtc SDP to rtc SDP (same underlying type, reconstruct from SDP string)
-    let rtc_offer =
-        rtc::peer_connection::sdp::RTCSessionDescription::offer(offer_with_candidates.sdp.clone())?;
-
-    // Create rtc peer (answerer)
-    let std_socket = std::net::UdpSocket::bind(local_addr_str)?;
-    let local_addr = std_socket.local_addr()?;
-    let socket = runtime.wrap_udp_socket(std_socket)?;
-    log::info!("RTC peer bound to {}", local_addr);
-
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(RTCDtlsRole::Client)?;
-
     let mut rtc_pc = RTCPeerConnectionBuilder::new()
-        .with_configuration(config)
+        .with_configuration(config.clone())
         .with_setting_engine(setting_engine)
         .build()?;
     log::info!("Created RTC peer connection");
 
-    log::info!("RTC set remote description {}", rtc_offer);
-    rtc_pc.set_remote_description(rtc_offer)?;
+    // Create data channel from RTC side
+    let dc_label = "test-channel";
+    let _rtc_dc = rtc_pc.create_data_channel(dc_label, None)?;
+    log::info!("RTC created data channel: {}", dc_label);
 
+    // Add local candidate for rtc peer
     let candidate = CandidateHostConfig {
         base_config: CandidateConfig {
             network: "udp".to_owned(),
@@ -172,25 +149,66 @@ async fn run_test() -> Result<()> {
         rtc::peer_connection::transport::RTCIceCandidate::from(&candidate).to_json()?;
     rtc_pc.add_local_candidate(local_candidate_init)?;
 
-    let answer = rtc_pc.create_answer(None)?;
-    log::info!("RTC created answer");
-    rtc_pc.set_local_description(answer.clone())?;
-    log::info!("RTC set local description {}", answer);
+    // Create offer from rtc peer
+    let offer = rtc_pc.create_offer(None)?;
+    log::info!("RTC created offer");
+    rtc_pc.set_local_description(offer.clone())?;
+    log::info!("RTC set local description");
 
-    // Set remote description on webrtc (same RTCSessionDescription type, no conversion needed)
-    webrtc_pc.set_remote_description(answer).await?;
+    // Create webrtc peer (answerer)
+    let handler = Arc::new(WebrtcHandler {
+        gather_complete_tx,
+        connected_tx,
+        webrtc_msg_tx,
+        runtime: runtime.clone(),
+    });
+
+    let webrtc_pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_handler(handler)
+        .with_runtime(runtime.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .build()
+        .await?;
+    log::info!("Created webrtc peer connection");
+
+    // Set remote description on webrtc (offer from rtc — same RTCSessionDescription type)
+    webrtc_pc.set_remote_description(offer).await?;
     log::info!("WebRTC set remote description");
+
+    // Create answer from webrtc
+    let answer = webrtc_pc.create_answer(None).await?;
+    log::info!("WebRTC created answer");
+    webrtc_pc.set_local_description(answer.clone()).await?;
+    log::info!("WebRTC set local description");
+
+    // Wait for ICE gathering to complete on webrtc
+    let _ = timeout(Duration::from_secs(5), gather_complete_rx.recv()).await;
+
+    let answer_with_candidates = webrtc_pc
+        .local_description()
+        .await
+        .expect("local description should be set");
+    log::info!("WebRTC answer with candidates ready");
+
+    // Set remote description on rtc (answer from webrtc — same type, reconstruct from SDP string)
+    let rtc_answer = rtc::peer_connection::sdp::RTCSessionDescription::answer(
+        answer_with_candidates.sdp.clone(),
+    )?;
+    rtc_pc.set_remote_description(rtc_answer)?;
+    log::info!("RTC set remote description");
 
     // Run event loop
     let mut buf = vec![0u8; 2000];
     let mut rtc_connected = false;
     let mut webrtc_connected = false;
     let mut message_sent = false;
-    let mut data_channel_opened = false;
-    let mut rtc_received = false;
-    let mut webrtc_received_echo = false;
+    let mut rtc_data_channel_opened = false;
+    let mut rtc_dc_id: Option<u16> = None;
+    let mut webrtc_received = false;
+    let mut rtc_received_echo = false;
 
-    let test_message = "Hello from WebRTC!";
+    let test_message = "Hello from RTC!";
     let start_time = Instant::now();
     let test_timeout = Duration::from_secs(30);
 
@@ -232,28 +250,20 @@ async fn run_test() -> Result<()> {
                             dc.label(),
                             channel_id
                         );
-                        data_channel_opened = true;
+                        rtc_data_channel_opened = true;
+                        rtc_dc_id = Some(channel_id);
                     }
                 }
                 _ => {}
             }
         }
 
-        // Process rtc incoming messages and echo back
+        // Process rtc incoming messages (echoes from webrtc)
         while let Some(message) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(channel_id, data_channel_message) = message {
-                let mut dc = rtc_pc
-                    .data_channel(channel_id)
-                    .expect("data channel should exist");
                 let msg_str = String::from_utf8(data_channel_message.data.to_vec())?;
-                log::info!(
-                    "RTC received message on channel {}: '{}'",
-                    channel_id,
-                    msg_str
-                );
-                rtc_msg_tx.try_send(msg_str.clone()).ok();
-                log::info!("RTC echoing message back: '{}'", msg_str);
-                dc.send_text(msg_str)?;
+                log::info!("RTC received echo on channel {}: '{}'", channel_id, msg_str);
+                rtc_echo_tx.try_send(msg_str).ok();
             }
         }
 
@@ -264,33 +274,41 @@ async fn run_test() -> Result<()> {
         }
 
         // Drain received message channels
-        while let Ok(msg) = rtc_msg_rx.try_recv() {
-            if msg == test_message {
-                rtc_received = true;
-            }
-        }
         while let Ok(msg) = webrtc_msg_rx.try_recv() {
             if msg == test_message {
-                webrtc_received_echo = true;
+                webrtc_received = true;
+            }
+        }
+        while let Ok(msg) = rtc_echo_rx.try_recv() {
+            if msg == test_message {
+                rtc_received_echo = true;
             }
         }
 
         // Send message once both peers are connected and data channel is open
-        if rtc_connected && webrtc_connected && data_channel_opened && !message_sent {
-            log::info!("Both peers connected and data channel open, sending test message");
+        if rtc_connected && webrtc_connected && rtc_data_channel_opened && !message_sent {
+            log::info!("Both peers connected and data channel open, sending test message from RTC");
             sleep(Duration::from_millis(500)).await;
-            log::info!("Sending message from WebRTC: '{}'", test_message);
-            webrtc_dc.send_text(test_message).await?;
-            message_sent = true;
+            if let Some(dc_id) = rtc_dc_id {
+                let mut rtc_dc = rtc_pc
+                    .data_channel(dc_id)
+                    .expect("data channel should exist");
+                log::info!("Sending message from RTC: '{}'", test_message);
+                rtc_dc.send_text(test_message.to_string())?;
+                message_sent = true;
+            }
         }
 
         // Check if test is complete
-        if message_sent && rtc_received && webrtc_received_echo {
+        if message_sent && webrtc_received && rtc_received_echo {
             log::info!("✅ Test completed successfully!");
-            assert!(rtc_received, "RTC should have received the test message");
             assert!(
-                webrtc_received_echo,
-                "WebRTC should have received the echoed message"
+                webrtc_received,
+                "WebRTC should have received the test message"
+            );
+            assert!(
+                rtc_received_echo,
+                "RTC should have received the echoed message"
             );
             webrtc_pc.close().await?;
             rtc_pc.close()?;
@@ -342,6 +360,6 @@ async fn run_test() -> Result<()> {
     }
 
     Err(anyhow::anyhow!(
-        "Test timeout - message was not echoed back in time"
+        "Test timeout - bidirectional message exchange did not complete in time"
     ))
 }
