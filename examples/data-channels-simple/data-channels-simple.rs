@@ -11,16 +11,16 @@ use futures::FutureExt;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use log::{error, info};
-use rtc::peer_connection::configuration::RTCConfigurationBuilder;
-use rtc::peer_connection::sdp::RTCSessionDescription;
-use rtc::peer_connection::transport::{RTCIceCandidateInit, RTCIceServer};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, timeout};
-use webrtc::{RTCIceGatheringState, RTCPeerConnectionState};
+use webrtc::{
+    RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceGatheringState, RTCIceServer,
+    RTCPeerConnectionState, RTCSessionDescription,
+};
 
 const DEMO_HTML: &str = include_str!("demo.html");
 

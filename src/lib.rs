@@ -30,6 +30,7 @@ pub mod runtime;
 pub use rtc::data_channel::{
     RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage, RTCDataChannelState,
 };
+pub use rtc::interceptor::Registry;
 pub use rtc::media_stream::{MediaStreamId, MediaStreamTrack, MediaStreamTrackId};
 pub use rtc::peer_connection::{
     RTCPeerConnection,

@@ -11,12 +11,6 @@ use bytes::BytesMut;
 use clap::Parser;
 use env_logger::Target;
 use futures::FutureExt;
-use rtc::data_channel::RTCDataChannelInit;
-use rtc::interceptor::Registry;
-use rtc::peer_connection::configuration::RTCConfigurationBuilder;
-use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
-use rtc::peer_connection::configuration::media_engine::MediaEngine;
-use rtc::peer_connection::state::{RTCIceGatheringState, RTCPeerConnectionState};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::str::FromStr;
@@ -25,6 +19,10 @@ use std::time::{Duration, Instant};
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
+use webrtc::{
+    MediaEngine, RTCConfigurationBuilder, RTCDataChannelInit, RTCIceGatheringState,
+    RTCPeerConnectionState, Registry, register_default_interceptors,
+};
 
 const BUFFERED_AMOUNT_LOW_THRESHOLD: u32 = 5120 * 1024; // 5120 KB
 const BUFFERED_AMOUNT_HIGH_THRESHOLD: u32 = 102400 * 1024; // 100 MB

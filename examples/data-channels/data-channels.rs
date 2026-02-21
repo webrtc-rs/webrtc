@@ -1,12 +1,6 @@
 use clap::Parser;
 use env_logger::Target;
 use futures::FutureExt;
-use rtc::interceptor::Registry;
-use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
-use rtc::peer_connection::configuration::media_engine::MediaEngine;
-use rtc::peer_connection::configuration::{RTCConfigurationBuilder, RTCIceServer};
-use rtc::peer_connection::sdp::RTCSessionDescription;
-use rtc::peer_connection::state::{RTCIceGatheringState, RTCPeerConnectionState};
 use std::fs::OpenOptions;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,6 +9,10 @@ use webrtc::Result;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
+use webrtc::{
+    MediaEngine, RTCConfigurationBuilder, RTCIceGatheringState, RTCIceServer,
+    RTCPeerConnectionState, RTCSessionDescription, Registry, register_default_interceptors,
+};
 
 #[derive(Parser)]
 #[command(name = "data-channels")]
