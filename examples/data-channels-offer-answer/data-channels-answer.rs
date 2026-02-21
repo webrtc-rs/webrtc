@@ -135,15 +135,15 @@ fn main() -> Result<()> {
 }
 
 async fn async_main(cli: Cli) -> Result<()> {
-    let (done_tx, mut done_rx) = channel::<()>();
-    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>();
+    let (done_tx, mut done_rx) = channel::<()>(1);
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
     ctrlc::set_handler(move || {
         let _ = ctrlc_tx.try_send(());
     })?;
 
     let runtime = default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
 
-    let (gather_tx, mut gather_rx) = channel::<()>();
+    let (gather_tx, mut gather_rx) = channel::<()>(1);
 
     let mut media = MediaEngine::default();
     media.register_default_codecs()?;

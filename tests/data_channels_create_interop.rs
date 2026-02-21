@@ -98,10 +98,10 @@ async fn run_test() -> Result<()> {
 
     log::info!("Starting data channel create interop test: rtc (offerer) -> webrtc (answerer)");
 
-    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>();
-    let (connected_tx, mut connected_rx) = channel::<()>();
-    let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>();
-    let (rtc_echo_tx, mut rtc_echo_rx) = channel::<String>();
+    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>(1);
+    let (connected_tx, mut connected_rx) = channel::<()>(8);
+    let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>(256);
+    let (rtc_echo_tx, mut rtc_echo_rx) = channel::<String>(256);
 
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;

@@ -65,8 +65,8 @@ async fn run_test() -> Result<()> {
 
     log::info!("Starting ICE restart interop test: webrtc <-> rtc");
 
-    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>();
-    let (state_tx, mut state_rx) = channel::<RTCPeerConnectionState>();
+    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>(1);
+    let (state_tx, mut state_rx) = channel::<RTCPeerConnectionState>(16);
 
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
@@ -96,7 +96,7 @@ async fn run_test() -> Result<()> {
     log::info!("Created webrtc data channel: {}", dc_label);
 
     // Spawn DC poll task for webrtc side
-    let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>();
+    let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>(64);
     {
         let dc = webrtc_dc.clone();
         let msg_tx = webrtc_msg_tx.clone();

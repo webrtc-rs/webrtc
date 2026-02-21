@@ -166,8 +166,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn async_main() -> anyhow::Result<()> {
-    let (done_tx, mut done_rx) = channel::<()>();
-    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>();
+    let (done_tx, mut done_rx) = channel::<()>(1);
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
     ctrlc::set_handler(move || {
         let _ = ctrlc_tx.try_send(());
     })?;
@@ -176,7 +176,7 @@ async fn async_main() -> anyhow::Result<()> {
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
 
     // ── Build requester peer connection ──────────────────────────────────────
-    let (req_gather_tx, mut req_gather_rx) = channel::<()>();
+    let (req_gather_tx, mut req_gather_rx) = channel::<()>(1);
     let mut req_media = MediaEngine::default();
     req_media.register_default_codecs()?;
     let req_registry = register_default_interceptors(Registry::new(), &mut req_media)?;
@@ -283,7 +283,7 @@ async fn async_main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("requester has no local description"))?;
 
     // ── Build responder peer connection ──────────────────────────────────────
-    let (resp_gather_tx, mut resp_gather_rx) = channel::<()>();
+    let (resp_gather_tx, mut resp_gather_rx) = channel::<()>(1);
     let mut resp_media = MediaEngine::default();
     resp_media.register_default_codecs()?;
     let resp_registry = register_default_interceptors(Registry::new(), &mut resp_media)?;

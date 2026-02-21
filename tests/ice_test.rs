@@ -204,8 +204,8 @@ fn test_automatic_host_candidate_gathering() {
 
         let config = RTCConfigurationBuilder::new().build();
 
-        let (candidate_tx, mut candidate_rx) = channel();
-        let (gathering_tx, mut gathering_rx) = channel();
+        let (candidate_tx, mut candidate_rx) = channel(32);
+        let (gathering_tx, mut gathering_rx) = channel(8);
         let handler = Arc::new(IceGatheringHandler {
             candidate_tx,
             gathering_tx,
@@ -273,7 +273,7 @@ fn test_stun_gathering_with_google_stun() {
 
         // Track candidate types to verify we get both host and srflx
         let candidates = Arc::new(Mutex::new(Vec::new()));
-        let (gathering_tx, mut gathering_rx) = channel();
+        let (gathering_tx, mut gathering_rx) = channel(8);
         let handler = Arc::new(CandidateTypeTracker {
             candidates: candidates.clone(),
             gathering_tx,

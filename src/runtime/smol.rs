@@ -299,9 +299,9 @@ impl<T: Send> AsyncReceiver<T> for SmolReceiver<T> {
     }
 }
 
-/// Create a new unbounded channel
-pub fn channel<T: Send>() -> (SmolSender<T>, SmolReceiver<T>) {
-    let (tx, rx) = ::smol::channel::unbounded();
+/// Create a new bounded channel with the given capacity
+pub fn channel<T: Send>(capacity: usize) -> (SmolSender<T>, SmolReceiver<T>) {
+    let (tx, rx) = ::smol::channel::bounded(capacity);
     (SmolSender(tx), SmolReceiver(rx))
 }
 

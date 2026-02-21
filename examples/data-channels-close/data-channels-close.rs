@@ -165,9 +165,9 @@ async fn async_main() -> anyhow::Result<()> {
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
-    let (done_tx, mut done_rx) = channel::<()>();
-    let (gather_complete_tx, mut gather_complete_rx) = channel();
-    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>();
+    let (done_tx, mut done_rx) = channel::<()>(1);
+    let (gather_complete_tx, mut gather_complete_rx) = channel(1);
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
     ctrlc::set_handler(move || {
         let _ = ctrlc_tx.try_send(());
     })?;

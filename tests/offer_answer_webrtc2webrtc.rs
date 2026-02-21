@@ -111,13 +111,13 @@ async fn run_test() -> Result<()> {
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
 
     // ── Channels ───────────────────────────────────────────────────────────────
-    let (offerer_gather_tx, mut offerer_gather_rx) = channel::<()>();
-    let (offerer_connected_tx, mut offerer_connected_rx) = channel::<()>();
-    let (offerer_dc_open_tx, mut offerer_dc_open_rx) = channel::<()>();
-    let (offerer_msg_tx, mut offerer_msg_rx) = channel::<String>();
-    let (answerer_gather_tx, mut answerer_gather_rx) = channel::<()>();
-    let (answerer_connected_tx, mut answerer_connected_rx) = channel::<()>();
-    let (answerer_msg_tx, mut answerer_msg_rx) = channel::<String>();
+    let (offerer_gather_tx, mut offerer_gather_rx) = channel::<()>(1);
+    let (offerer_connected_tx, mut offerer_connected_rx) = channel::<()>(1);
+    let (offerer_dc_open_tx, mut offerer_dc_open_rx) = channel::<()>(8);
+    let (offerer_msg_tx, mut offerer_msg_rx) = channel::<String>(256);
+    let (answerer_gather_tx, mut answerer_gather_rx) = channel::<()>(1);
+    let (answerer_connected_tx, mut answerer_connected_rx) = channel::<()>(1);
+    let (answerer_msg_tx, mut answerer_msg_rx) = channel::<String>(256);
 
     // ── Build offerer peer connection ──────────────────────────────────────────
     let offerer_handler = Arc::new(OffererHandler {

@@ -4,7 +4,9 @@ use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::ice_gatherer::RTCIceGatherOptions;
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_stream::{TrackLocal, TrackRemote};
-use crate::peer_connection_driver::PeerConnectionDriver;
+use crate::peer_connection_driver::{
+    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, MSG_CHANNEL_CAPACITY, PeerConnectionDriver,
+};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
@@ -97,12 +99,6 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum MessageInner {
-    // Outgoing RTP packet from local track
-    //SenderRtp(RTCRtpSenderId, rtc::rtp::Packet),
-    // Outgoing RTCP packets from sender
-    //SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtc::rtcp::Packet>>),
-    // Outgoing RTCP packets from receiver
-    //ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>),
     WriteNotify,
     IceGathering,
     Close,
@@ -371,7 +367,7 @@ where
             }
         }
 
-        let (msg_tx, msg_rx) = channel();
+        let (msg_tx, msg_rx) = channel(MSG_CHANNEL_CAPACITY);
         let peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
@@ -550,7 +546,7 @@ where
             rtc_dc.id()
         };
 
-        let (evt_tx, evt_rx) = channel();
+        let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
         {
             let mut data_channels = self.inner.data_channels.lock().await;
             data_channels.insert(channel_id, evt_tx);

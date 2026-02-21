@@ -87,9 +87,9 @@ async fn run_test() -> Result<()> {
 
     log::info!("=== Starting ICE Restart Test (initiated by RTC) ===");
 
-    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>();
-    let (state_tx, mut state_rx) = channel::<RTCPeerConnectionState>();
-    let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>();
+    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>(1);
+    let (state_tx, mut state_rx) = channel::<RTCPeerConnectionState>(8);
+    let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>(256);
 
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;

@@ -173,7 +173,7 @@ impl AsyncNotify for TokioNotify {
 }
 
 /// Tokio-based channel sender
-pub struct TokioSender<T>(pub ::tokio::sync::mpsc::UnboundedSender<T>);
+pub struct TokioSender<T>(pub ::tokio::sync::mpsc::Sender<T>);
 
 impl<T> Clone for TokioSender<T> {
     fn clone(&self) -> Self {
@@ -184,14 +184,15 @@ impl<T> Clone for TokioSender<T> {
 impl<T: Send> TokioSender<T> {
     /// Send a value asynchronously
     pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
-        self.0.send(value).map_err(|e| SendError(e.0))
+        self.0.send(value).await.map_err(|e| SendError(e.0))
     }
 
     /// Try to send a value without blocking
     pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
-        self.0
-            .send(value)
-            .map_err(|e| TrySendError::Disconnected(e.0))
+        self.0.try_send(value).map_err(|e| match e {
+            ::tokio::sync::mpsc::error::TrySendError::Full(v) => TrySendError::Full(v),
+            ::tokio::sync::mpsc::error::TrySendError::Closed(v) => TrySendError::Disconnected(v),
+        })
     }
 }
 
@@ -200,18 +201,19 @@ impl<T: Send> AsyncSender<T> for TokioSender<T> {
         &self,
         value: T,
     ) -> Pin<Box<dyn Future<Output = Result<(), SendError<T>>> + Send + '_>> {
-        Box::pin(async move { self.0.send(value).map_err(|e| SendError(e.0)) })
+        Box::pin(async move { self.0.send(value).await.map_err(|e| SendError(e.0)) })
     }
 
     fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
-        self.0
-            .send(value)
-            .map_err(|e| TrySendError::Disconnected(e.0))
+        self.0.try_send(value).map_err(|e| match e {
+            ::tokio::sync::mpsc::error::TrySendError::Full(v) => TrySendError::Full(v),
+            ::tokio::sync::mpsc::error::TrySendError::Closed(v) => TrySendError::Disconnected(v),
+        })
     }
 }
 
 /// Tokio-based channel receiver
-pub struct TokioReceiver<T>(pub ::tokio::sync::mpsc::UnboundedReceiver<T>);
+pub struct TokioReceiver<T>(pub ::tokio::sync::mpsc::Receiver<T>);
 
 impl<T: Send> TokioReceiver<T> {
     /// Receive a value asynchronously
@@ -241,9 +243,9 @@ impl<T: Send> AsyncReceiver<T> for TokioReceiver<T> {
     }
 }
 
-/// Create a new unbounded channel
-pub fn channel<T: Send>() -> (TokioSender<T>, TokioReceiver<T>) {
-    let (tx, rx) = ::tokio::sync::mpsc::unbounded_channel();
+/// Create a new bounded channel with the given capacity
+pub fn channel<T: Send>(capacity: usize) -> (TokioSender<T>, TokioReceiver<T>) {
+    let (tx, rx) = ::tokio::sync::mpsc::channel(capacity);
     (TokioSender(tx), TokioReceiver(rx))
 }
 

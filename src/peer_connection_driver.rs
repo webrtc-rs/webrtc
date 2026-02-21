@@ -27,6 +27,15 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// Capacity of the internal driver message channel (WriteNotify, IceGathering, Close, …).
+pub(crate) const MSG_CHANNEL_CAPACITY: usize = 64;
+
+/// Capacity of each data-channel event channel (OnOpen, OnMessage, OnClose, …).
+pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
+
+/// Capacity of each track-remote event channel (OnMute, OnUnmute, OnEnded, OnRtpPacket, OnRtcpPacket, …).
+pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
+
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
 
 /// The driver for a peer connection
@@ -325,7 +334,7 @@ where
                 {
                     let mut data_channels = self.inner.data_channels.lock().await;
                     if let Entry::Vacant(e) = data_channels.entry(channel_id) {
-                        let (evt_tx, evt_rx) = channel();
+                        let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
                         e.insert(evt_tx);
 
                         // Create our async wrapper

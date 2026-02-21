@@ -106,8 +106,8 @@ async fn run_test() -> Result<()> {
 
     let local_addr_str = format!("{}:0", "127.0.0.1"); //signal::get_local_ip());
 
-    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>();
-    let (connected_tx, mut connected_rx) = channel::<()>();
+    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>(1);
+    let (connected_tx, mut connected_rx) = channel::<()>(1);
 
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;

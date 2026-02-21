@@ -139,7 +139,7 @@ async fn remote_handler(
             };
 
             // Register a fresh gather channel for this signaling exchange.
-            let (gather_tx, mut gather_rx) = channel::<()>();
+            let (gather_tx, mut gather_rx) = channel::<()>(1);
             shared.lock().await.gather_tx = Some(gather_tx);
 
             if let Err(e) = pc.set_remote_description(offer).await {
@@ -223,7 +223,7 @@ fn main() -> Result<()> {
 }
 
 async fn async_main(_cli: Cli) -> Result<()> {
-    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>();
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
     ctrlc::set_handler(move || {
         let _ = ctrlc_tx.try_send(());
     })?;

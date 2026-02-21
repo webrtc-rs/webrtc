@@ -97,8 +97,8 @@ async fn async_main() -> Result<()> {
     let (offer_tx, mut offer_rx) = channel::<(
         RTCSessionDescription,
         Sender<Result<RTCSessionDescription, String>>,
-    )>();
-    let (candidate_tx, mut candidate_rx) = channel::<RTCIceCandidateInit>();
+    )>(8);
+    let (candidate_tx, mut candidate_rx) = channel::<RTCIceCandidateInit>(8);
 
     let state = Arc::new(AppState {
         offer_tx,
@@ -132,7 +132,7 @@ async fn async_main() -> Result<()> {
                 let Some((offer, response_tx)) = msg else { break };
                 info!("Received offer from browser");
 
-                let (gather_tx, mut gather_rx) = channel::<()>();
+                let (gather_tx, mut gather_rx) = channel::<()>(1);
                 let handler = Arc::new(Handler {
                     gather_complete_tx: gather_tx,
                     runtime: runtime.clone(),
@@ -233,7 +233,8 @@ async fn handle_request(
                 }
             };
 
-            let (response_tx, mut response_rx) = channel::<Result<RTCSessionDescription, String>>();
+            let (response_tx, mut response_rx) =
+                channel::<Result<RTCSessionDescription, String>>(8);
 
             if state.offer_tx.try_send((offer, response_tx)).is_err() {
                 return Ok(Response::builder()
