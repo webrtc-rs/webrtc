@@ -1,227 +1,209 @@
+//! ICE restart example.
+//!
+//! Serves a browser page at http://localhost:8080.  The page calls `/doSignaling`
+//! on load and again each time the "ICE Restart" button is pressed.  The server
+//! reuses the same PeerConnection, accepting each new offer (which may carry new
+//! ICE credentials) and returning an updated answer.  Watch the "ICE Connection
+//! States" log in the browser to see ICE restart in action.
+//!
+//! Usage:
+//!   cargo run --example ice-restart -- [-d]
+//!   Then open http://localhost:8080 in your browser.
+
 use std::io::Write;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
+use clap::Parser;
+use futures::FutureExt;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
-use tokio::sync::Mutex;
-use tokio::time::Duration;
-use tokio_util::codec::{BytesCodec, FramedRead};
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::MediaEngine;
-use webrtc::api::APIBuilder;
-use webrtc::data_channel::RTCDataChannel;
-use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
-use webrtc::interceptor::registry::Registry;
-use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
+use rtc::interceptor::Registry;
+use rtc::peer_connection::configuration::RTCConfigurationBuilder;
+use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::media_engine::MediaEngine;
+use rtc::peer_connection::state::{RTCIceGatheringState, RTCPeerConnectionState};
+use rtc::peer_connection::transport::RTCIceServer;
+use signal::get_local_ip;
+use webrtc::data_channel::{DataChannel, DataChannelEvent};
+use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::runtime::{Mutex, Runtime, Sender, block_on, channel, default_runtime, sleep};
 
-#[macro_use]
-extern crate lazy_static;
+static INDEX_HTML: &str = "examples/ice-restart/index.html";
 
-lazy_static! {
-    static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<RTCPeerConnection>>>> =
-        Arc::new(Mutex::new(None));
+#[derive(Parser)]
+#[command(name = "ice-restart", about = "ICE restart example")]
+struct Cli {
+    #[arg(short, long)]
+    debug: bool,
 }
 
-static INDEX: &str = "examples/examples/ice-restart/index.html";
-static NOTFOUND: &[u8] = b"Not Found";
-
-/// HTTP status code 404
-fn not_found() -> Response<Body> {
-    Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .body(NOTFOUND.into())
-        .unwrap()
+/// State shared between the HTTP signaling handler and the PeerConnection event handler.
+struct Shared {
+    /// Signaled when ICE gathering completes for the current signaling exchange.
+    gather_tx: Option<Sender<()>>,
 }
 
-async fn simple_file_send(filename: &str) -> Result<Response<Body>, hyper::Error> {
-    // Serve a file by asynchronously reading it by chunks using tokio-util crate.
+struct IceRestartHandler {
+    runtime: Arc<dyn Runtime>,
+    shared: Arc<Mutex<Shared>>,
+}
 
-    if let Ok(file) = tokio::fs::File::open(filename).await {
-        let stream = FramedRead::new(file, BytesCodec::new());
-        let body = Body::wrap_stream(stream);
-        return Ok(Response::new(body));
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for IceRestartHandler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            if let Some(tx) = self.shared.lock().await.gather_tx.take() {
+                let _ = tx.try_send(());
+            }
+        }
     }
 
-    Ok(not_found())
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("Peer connection state: {state}");
+    }
+
+    async fn on_data_channel(&self, dc: Arc<dyn DataChannel>) {
+        // Must spawn: blocking here would stall the driver.
+        self.runtime.spawn(Box::pin(async move {
+            // Wait for the channel to open.
+            loop {
+                match dc.poll().await {
+                    Some(DataChannelEvent::OnOpen) => break,
+                    Some(DataChannelEvent::OnClose) | None => return,
+                    _ => {}
+                }
+            }
+            // Send the current time to the browser every 3 seconds until closed.
+            let mut send_timer = Box::pin(sleep(Duration::from_secs(3)));
+            loop {
+                futures::select! {
+                    event = dc.poll().fuse() => {
+                        match event {
+                            Some(DataChannelEvent::OnClose) | None => break,
+                            _ => {}
+                        }
+                    }
+                    _ = send_timer.as_mut().fuse() => {
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default();
+                        if dc.send_text(&format!("{:.3}s", now.as_secs_f64())).await.is_err() {
+                            break;
+                        }
+                        send_timer = Box::pin(sleep(Duration::from_secs(3)));
+                    }
+                }
+            }
+        }));
+    }
 }
 
-// HTTP Listener to get ICE Credentials/Candidate from remote Peer
-async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+async fn remote_handler(
+    req: Request<Body>,
+    pc: Arc<dyn PeerConnection>,
+    shared: Arc<Mutex<Shared>>,
+) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
-        (&Method::GET, "/") | (&Method::GET, "/index.html") => simple_file_send(INDEX).await,
-
-        (&Method::POST, "/doSignaling") => do_signaling(req).await,
-
-        // Return the 404 Not Found for other routes.
-        _ => {
-            let mut not_found = Response::default();
-            *not_found.status_mut() = StatusCode::NOT_FOUND;
-            Ok(not_found)
+        (&Method::GET, "/") | (&Method::GET, "/index.html") => {
+            match std::fs::read_to_string(INDEX_HTML) {
+                Ok(content) => Ok(Response::new(Body::from(content))),
+                Err(_) => Ok(Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::from("index.html not found"))
+                    .unwrap()),
+            }
         }
-    }
-}
 
-// do_signaling exchanges all state of the local PeerConnection and is called
-// every time a video is added or removed
-async fn do_signaling(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    let pc = {
-        let mut peer_connection = PEER_CONNECTION_MUTEX.lock().await;
-        if let Some(pc) = &*peer_connection {
-            Arc::clone(pc)
-        } else {
-            // Create a MediaEngine object to configure the supported codec
-            let mut m = MediaEngine::default();
-
-            match m.register_default_codecs() {
-                Ok(_) => {}
-                Err(err) => panic!("{}", err),
+        (&Method::POST, "/doSignaling") => {
+            let body_bytes = hyper::body::to_bytes(req.into_body()).await?;
+            let offer_str = match std::str::from_utf8(&body_bytes) {
+                Ok(s) => s.to_owned(),
+                Err(_) => {
+                    return Ok(Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Body::from("invalid utf-8"))
+                        .unwrap());
+                }
+            };
+            let offer = match serde_json::from_str(&offer_str) {
+                Ok(sdp) => sdp,
+                Err(e) => {
+                    return Ok(Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Body::from(format!("bad SDP: {e}")))
+                        .unwrap());
+                }
             };
 
-            // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
-            // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
-            // this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
-            // for each PeerConnection.
-            let mut registry = Registry::new();
+            // Register a fresh gather channel for this signaling exchange.
+            let (gather_tx, mut gather_rx) = channel::<()>();
+            shared.lock().await.gather_tx = Some(gather_tx);
 
-            // Use the default set of Interceptors
-            registry = match register_default_interceptors(registry, &mut m) {
-                Ok(r) => r,
-                Err(err) => panic!("{}", err),
+            if let Err(e) = pc.set_remote_description(offer).await {
+                return Ok(Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::from(e.to_string()))
+                    .unwrap());
+            }
+
+            let answer = match pc.create_answer(None).await {
+                Ok(a) => a,
+                Err(e) => {
+                    return Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from(e.to_string()))
+                        .unwrap());
+                }
             };
 
-            // Create the API object with the MediaEngine
-            let api = APIBuilder::new()
-                .with_media_engine(m)
-                .with_interceptor_registry(registry)
-                .build();
+            if let Err(e) = pc.set_local_description(answer).await {
+                return Ok(Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::from(e.to_string()))
+                    .unwrap());
+            }
 
-            // Create a new RTCPeerConnection
-            let pc = match api.new_peer_connection(RTCConfiguration::default()).await {
-                Ok(p) => p,
-                Err(err) => panic!("{}", err),
-            };
-            let pc = Arc::new(pc);
+            // Block until ICE gathering is complete (non-trickle ICE).
+            gather_rx.recv().await;
 
-            // Set the handler for ICE connection state
-            // This will notify you when the peer has connected/disconnected
-            pc.on_ice_connection_state_change(Box::new(
-                |connection_state: RTCIceConnectionState| {
-                    println!("ICE Connection State has changed: {connection_state}");
-                    Box::pin(async {})
+            let payload = match pc.local_description().await {
+                Some(desc) => match serde_json::to_string(&desc) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return Ok(Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(Body::from(e.to_string()))
+                            .unwrap());
+                    }
                 },
-            ));
+                None => {
+                    return Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from("no local description"))
+                        .unwrap());
+                }
+            };
 
-            // Send the current time via a DataChannel to the remote peer every 3 seconds
-            pc.on_data_channel(Box::new(|d: Arc<RTCDataChannel>| {
-                Box::pin(async move {
-                    let d2 = Arc::clone(&d);
-                    d.on_open(Box::new(move || {
-                        Box::pin(async move {
-                            while d2
-                                .send_text(format!("{:?}", tokio::time::Instant::now()))
-                                .await
-                                .is_ok()
-                            {
-                                tokio::time::sleep(Duration::from_secs(3)).await;
-                            }
-                        })
-                    }));
-                })
-            }));
-
-            *peer_connection = Some(Arc::clone(&pc));
-            pc
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "application/json")
+                .body(Body::from(payload))
+                .unwrap())
         }
-    };
 
-    let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?) {
-        Ok(s) => s.to_owned(),
-        Err(err) => panic!("{}", err),
-    };
-    let offer = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
-        Ok(s) => s,
-        Err(err) => panic!("{}", err),
-    };
-
-    if let Err(err) = pc.set_remote_description(offer).await {
-        panic!("{}", err);
+        _ => Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("not found"))
+            .unwrap()),
     }
-
-    // Create channel that is blocked until ICE Gathering is complete
-    let mut gather_complete = pc.gathering_complete_promise().await;
-
-    // Create an answer
-    let answer = match pc.create_answer(None).await {
-        Ok(answer) => answer,
-        Err(err) => panic!("{}", err),
-    };
-
-    // Sets the LocalDescription, and starts our UDP listeners
-    if let Err(err) = pc.set_local_description(answer).await {
-        panic!("{}", err);
-    }
-
-    // Block until ICE Gathering is complete, disabling trickle ICE
-    // we do this because we only can exchange one signaling message
-    // in a production application you should exchange ICE Candidates via OnICECandidate
-    let _ = gather_complete.recv().await;
-
-    let payload = if let Some(local_desc) = pc.local_description().await {
-        match serde_json::to_string(&local_desc) {
-            Ok(p) => p,
-            Err(err) => panic!("{}", err),
-        }
-    } else {
-        panic!("generate local_description failed!");
-    };
-
-    let mut response = match Response::builder()
-        .header("content-type", "application/json")
-        .body(Body::from(payload))
-    {
-        Ok(res) => res,
-        Err(err) => panic!("{}", err),
-    };
-
-    *response.status_mut() = StatusCode::OK;
-    Ok(response)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut app = Command::new("ice-restart")
-        .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of ice-restart.")
-        .setting(AppSettings::DeriveDisplayOrder)
-        .subcommand_negates_reqs(true)
-        .arg(
-            Arg::new("FULLHELP")
-                .help("Prints more detailed help information")
-                .long("fullhelp"),
-        )
-        .arg(
-            Arg::new("debug")
-                .long("debug")
-                .short('d')
-                .help("Prints debug log information"),
-        );
-
-    let matches = app.clone().get_matches();
-
-    if matches.is_present("FULLHELP") {
-        app.print_long_help().unwrap();
-        std::process::exit(0);
-    }
-
-    let debug = matches.is_present("debug");
-    if debug {
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    if cli.debug {
         env_logger::Builder::new()
             .format(|buf, record| {
                 writeln!(
@@ -237,22 +219,69 @@ async fn main() -> Result<()> {
             .filter(None, log::LevelFilter::Trace)
             .init();
     }
+    block_on(async_main(cli))
+}
 
-    tokio::spawn(async move {
-        println!("Open http://localhost:8080 to access this demo");
+async fn async_main(_cli: Cli) -> Result<()> {
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>();
+    ctrlc::set_handler(move || {
+        let _ = ctrlc_tx.try_send(());
+    })?;
 
-        let addr = SocketAddr::from_str("0.0.0.0:8080").unwrap();
-        let service =
-            make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(remote_handler)) });
-        let server = Server::bind(&addr).serve(service);
-        // Run this server for... forever!
-        if let Err(e) = server.await {
-            eprintln!("server error: {e}");
+    let runtime = default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+
+    let shared = Arc::new(Mutex::new(Shared { gather_tx: None }));
+
+    let mut media = MediaEngine::default();
+    media.register_default_codecs()?;
+    let registry = register_default_interceptors(Registry::new(), &mut media)?;
+
+    let pc: Arc<dyn PeerConnection> = Arc::new(
+        PeerConnectionBuilder::new()
+            .with_configuration(
+                RTCConfigurationBuilder::new()
+                    .with_ice_servers(vec![RTCIceServer {
+                        urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+                        ..Default::default()
+                    }])
+                    .build(),
+            )
+            .with_media_engine(media)
+            .with_interceptor_registry(registry)
+            .with_handler(Arc::new(IceRestartHandler {
+                runtime: runtime.clone(),
+                shared: shared.clone(),
+            }))
+            .with_runtime(runtime.clone())
+            .with_udp_addrs(vec![format!("{}:0", get_local_ip())])
+            .build()
+            .await?,
+    );
+
+    let addr: SocketAddr = "0.0.0.0:8080".parse()?;
+    let pc_srv = pc.clone();
+    let shared_srv = shared.clone();
+
+    runtime.spawn(Box::pin(async move {
+        let make_svc = make_service_fn(move |_| {
+            let pc = pc_srv.clone();
+            let shared = shared_srv.clone();
+            async move {
+                Ok::<_, hyper::Error>(service_fn(move |req| {
+                    remote_handler(req, pc.clone(), shared.clone())
+                }))
+            }
+        });
+        if let Err(e) = Server::bind(&addr).serve(make_svc).await {
+            eprintln!("HTTP server error: {e}");
         }
-    });
+    }));
 
+    println!("Open http://localhost:8080 to access this demo");
     println!("Press ctrl-c to stop");
-    tokio::signal::ctrl_c().await.unwrap();
+    ctrlc_rx.recv().await;
+    println!();
 
+    pc.close().await?;
     Ok(())
 }

@@ -61,7 +61,17 @@ bench = false
 name = "data-channels-flow-control"
 path = "examples/data-channels-flow-control/data-channels-flow-control.rs"
 bench = false
-#
+
+[[example]]
+name = "data-channels-offer"
+path = "examples/data-channels-offer-answer/data-channels-offer.rs"
+bench = false
+
+[[example]]
+name = "data-channels-answer"
+path = "examples/data-channels-offer-answer/data-channels-answer.rs"
+bench = false
+
 #[[example]]
 #name = "insertable-streams"
 #path = "examples/insertable-streams/insertable-streams.rs"
@@ -122,17 +132,8 @@ bench = false
 #path = "examples/swap-tracks/swap-tracks.rs"
 #bench = false
 #
-[[example]]
-name = "offer"
-path = "examples/offer-answer/offer.rs"
-bench = false
 
 [[example]]
-name = "answer"
-path = "examples/offer-answer/answer.rs"
+name = "ice-restart"
+path = "examples/ice-restart/ice-restart.rs"
 bench = false
-#
-#[[example]]
-#name = "ice-restart"
-#path = "examples/ice-restart/ice-restart.rs"
-#bench = false
