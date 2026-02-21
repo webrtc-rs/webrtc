@@ -189,9 +189,12 @@ async fn run_test() -> Result<()> {
         }
 
         while let Some(msg) = rtc_pc.poll_write() {
-            rtc_socket
+            if let Err(err) = rtc_socket
                 .send_to(&msg.message, msg.transport.peer_addr)
-                .await?;
+                .await
+            {
+                log::error!("Failed to send message to peer {}", err);
+            }
         }
 
         while let Some(event) = rtc_pc.poll_event() {
@@ -296,9 +299,12 @@ async fn run_test() -> Result<()> {
             return Err(anyhow::anyhow!("Timeout waiting for TEST_MESSAGE_1 on RTC"));
         }
         while let Some(msg) = rtc_pc.poll_write() {
-            rtc_socket
+            if let Err(err) = rtc_socket
                 .send_to(&msg.message, msg.transport.peer_addr)
-                .await?;
+                .await
+            {
+                log::error!("Failed to send message to peer {}", err);
+            }
         }
         while let Some(message) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
@@ -356,9 +362,12 @@ async fn run_test() -> Result<()> {
             ));
         }
         while let Some(msg) = rtc_pc.poll_write() {
-            rtc_socket
+            if let Err(err) = rtc_socket
                 .send_to(&msg.message, msg.transport.peer_addr)
-                .await?;
+                .await
+            {
+                log::error!("Failed to send message to peer {}", err);
+            }
         }
         while let Some(message) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
@@ -457,9 +466,12 @@ async fn run_test() -> Result<()> {
         }
 
         while let Some(msg) = rtc_pc.poll_write() {
-            rtc_socket
+            if let Err(err) = rtc_socket
                 .send_to(&msg.message, msg.transport.peer_addr)
-                .await?;
+                .await
+            {
+                log::error!("Failed to send message to peer {}", err);
+            }
         }
         while let Some(event) = rtc_pc.poll_event() {
             match event {
@@ -542,9 +554,12 @@ async fn run_test() -> Result<()> {
             return Err(anyhow::anyhow!("Timeout waiting for TEST_MESSAGE_2 on RTC"));
         }
         while let Some(msg) = rtc_pc.poll_write() {
-            rtc_socket
+            if let Err(err) = rtc_socket
                 .send_to(&msg.message, msg.transport.peer_addr)
-                .await?;
+                .await
+            {
+                log::error!("Failed to send message to peer {}", err);
+            }
         }
         while let Some(message) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
@@ -601,9 +616,12 @@ async fn run_test() -> Result<()> {
             ));
         }
         while let Some(msg) = rtc_pc.poll_write() {
-            rtc_socket
+            if let Err(err) = rtc_socket
                 .send_to(&msg.message, msg.transport.peer_addr)
-                .await?;
+                .await
+            {
+                log::error!("Failed to send message to peer {}", err);
+            }
         }
         while let Some(message) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
