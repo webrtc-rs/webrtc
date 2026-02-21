@@ -4,13 +4,14 @@
 //! Unlike the old async version, this gatherer is a configuration object that holds
 //! the ICE servers and state.
 
-use crate::{Error, runtime};
+use crate::runtime;
 use rtc::ice::candidate::CandidateConfig;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::transport::{
     CandidateHostConfig, CandidateServerReflexiveConfig, RTCIceCandidate, RTCIceCandidateInit,
 };
 use rtc::sansio::Protocol;
+use rtc::shared::error::Error;
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportProtocol};
 use rtc::stun::{
     client::Client as StunClient, client::ClientBuilder as StunClientBuilder,

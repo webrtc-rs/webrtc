@@ -3,11 +3,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 use webrtc::peer_connection::*;
-use webrtc::runtime::block_on;
-use webrtc::{
+use webrtc::peer_connection::{
     MediaEngine, RTCBundlePolicy, RTCConfigurationBuilder, RTCIceServer, RTCIceTransportPolicy,
     RTCRtcpMuxPolicy, SettingEngine,
 };
+use webrtc::runtime::block_on;
 
 #[derive(Clone)]
 struct ConfigTestHandler;

@@ -1,28 +1,47 @@
 //! Async peer connection wrapper
 
-use super::ice_gatherer::RTCIceGatherOptions;
-use super::*;
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
+use crate::ice_gatherer::RTCIceGatherOptions;
 use crate::ice_gatherer::RTCIceGatherer;
-use crate::media_track::{TrackLocal, TrackRemote};
+use crate::media_stream::{TrackLocal, TrackRemote};
 use crate::peer_connection_driver::PeerConnectionDriver;
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver};
+use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
-use crate::runtime::{Runtime, default_runtime};
 use log::error;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
-use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
+use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
-use rtc::peer_connection::transport::RTCIceCandidateInit;
-use rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder};
+use rtc::rtp_transceiver::RTCRtpTransceiverInit;
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use rtc::sansio::Protocol;
+use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
 use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Instant;
+
+pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
+pub use rtc::peer_connection::{
+    RTCPeerConnection,
+    certificate::RTCCertificate,
+    configuration::{
+        RTCBundlePolicy, RTCConfiguration, RTCConfigurationBuilder, RTCIceServer,
+        RTCIceTransportPolicy, RTCRtcpMuxPolicy, interceptor_registry::*,
+        media_engine::MediaEngine, setting_engine::SettingEngine,
+    },
+    event::{
+        RTCDataChannelEvent, RTCPeerConnectionEvent, RTCPeerConnectionIceErrorEvent,
+        RTCPeerConnectionIceEvent, RTCTrackEvent,
+    },
+    sdp::{RTCSdpType, RTCSessionDescription},
+    state::{
+        RTCIceConnectionState, RTCIceGatheringState, RTCPeerConnectionState, RTCSignalingState,
+    },
+    transport::{RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceProtocol},
+};
 
 /// Trait for handling peer connection events asynchronously
 ///
@@ -32,8 +51,7 @@ use std::time::Instant;
 /// # Example
 ///
 /// ```no_run
-/// use webrtc::peer_connection::*;
-/// use webrtc::RTCPeerConnectionIceEvent;
+/// use webrtc::peer_connection::{PeerConnectionEventHandler, RTCPeerConnectionIceEvent};
 ///
 /// #[derive(Clone)]
 /// struct MyHandler;
@@ -210,8 +228,7 @@ where
 /// # Example
 ///
 /// ```no_run
-/// use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-/// use webrtc::RTCConfigurationBuilder;
+/// use webrtc::peer_connection::{RTCConfigurationBuilder, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 /// use std::sync::Arc;
 ///
 /// #[derive(Clone)]
@@ -219,7 +236,7 @@ where
 /// #[async_trait::async_trait]
 /// impl PeerConnectionEventHandler for MyHandler {}
 ///
-/// # async fn example() -> webrtc::Result<()> {
+/// # async fn example() -> webrtc::error::Result<()> {
 /// let pc = PeerConnectionBuilder::new()
 ///     .with_handler(Arc::new(MyHandler))
 ///     .with_udp_addrs(vec!["127.0.0.1:0"])
@@ -308,7 +325,7 @@ where
     I: Interceptor,
 {
     inner: Arc<PeerConnectionRef<I>>,
-    driver_handle: Mutex<Option<runtime::JoinHandle>>,
+    driver_handle: Mutex<Option<JoinHandle>>,
 }
 
 pub(crate) struct PeerConnectionRef<I = NoopInterceptor>

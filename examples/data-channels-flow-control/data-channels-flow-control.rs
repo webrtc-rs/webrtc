@@ -16,13 +16,13 @@ use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use webrtc::data_channel::{DataChannel, DataChannelEvent};
+use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
+use webrtc::peer_connection::{
+    MediaEngine, RTCConfigurationBuilder, RTCIceGatheringState, RTCPeerConnectionState, Registry,
+    register_default_interceptors,
+};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
-use webrtc::{
-    MediaEngine, RTCConfigurationBuilder, RTCDataChannelInit, RTCIceGatheringState,
-    RTCPeerConnectionState, Registry, register_default_interceptors,
-};
 
 const BUFFERED_AMOUNT_LOW_THRESHOLD: u32 = 5120 * 1024; // 5120 KB
 const BUFFERED_AMOUNT_HIGH_THRESHOLD: u32 = 102400 * 1024; // 100 MB

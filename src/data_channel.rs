@@ -1,12 +1,15 @@
-//! Async DataChannel implementation
+//! Async DataChannel API
 
 use crate::peer_connection::{MessageInner, PeerConnectionRef};
 use crate::runtime::{Mutex, Receiver};
-use crate::{Error, Result};
 use bytes::BytesMut;
-use rtc::data_channel::{RTCDataChannelId, RTCDataChannelMessage, RTCDataChannelState};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
+use rtc::shared::error::{Error, Result};
 use std::sync::Arc;
+
+pub use rtc::data_channel::{
+    RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage, RTCDataChannelState,
+};
 
 /// Object-safe trait exposing all public DataChannel operations.
 ///
@@ -274,7 +277,7 @@ where
     ///
     /// ```no_run
     /// # use bytes::BytesMut;
-    /// # use webrtc::Result;
+    /// # use webrtc::error::Result;
     /// # use webrtc::data_channel::DataChannel;
     /// # use std::sync::Arc;
     /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {
@@ -303,7 +306,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// # use webrtc::Result;
+    /// # use webrtc::error::Result;
     /// # use webrtc::data_channel::DataChannel;
     /// # use std::sync::Arc;
     /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {

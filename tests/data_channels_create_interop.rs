@@ -30,8 +30,8 @@ use rtc::peer_connection::transport::RTCIceServer;
 use rtc::peer_connection::transport::{CandidateConfig, CandidateHostConfig};
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState as WebrtcPCState};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
-use webrtc::{RTCIceGatheringState, RTCPeerConnectionState as WebrtcPCState};
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 

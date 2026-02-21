@@ -3,13 +3,13 @@
 use rtc::peer_connection::transport::RTCIceCandidate;
 use std::sync::Arc;
 use webrtc::peer_connection::*;
-use webrtc::runtime::block_on;
-use webrtc::runtime::channel;
-use webrtc::runtime::{Mutex, Sender};
-use webrtc::{
+use webrtc::peer_connection::{
     MediaEngine, RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType,
     RTCIceGatheringState, RTCIceServer, RTCPeerConnectionIceEvent,
 };
+use webrtc::runtime::block_on;
+use webrtc::runtime::channel;
+use webrtc::runtime::{Mutex, Sender};
 
 #[derive(Clone)]
 struct IceTestHandler;

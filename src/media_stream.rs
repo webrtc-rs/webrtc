@@ -2,10 +2,11 @@
 //!
 //! This module provides async-friendly wrappers around RTP media tracks.
 
-use crate::Result;
 use crate::runtime::{Mutex, Receiver, Sender};
-use rtc::media_stream::MediaStreamTrackId;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
+use rtc::shared::error::Result;
+
+pub use rtc::media_stream::{MediaStreamId, MediaStreamTrack, MediaStreamTrackId};
 
 #[async_trait::async_trait]
 pub trait TrackLocal: Send + Sync + 'static {
@@ -25,8 +26,8 @@ pub trait TrackRemote: Send + Sync + 'static {
 /// # Example
 ///
 /// ```no_run
-/// # use webrtc::media_track::TrackLocalImpl;
-/// # use webrtc::Result;
+/// # use webrtc::media_stream::TrackLocalImpl;
+/// # use webrtc::error::Result;
 /// # async fn example(track: TrackLocalImpl) -> Result<()> {
 /// # use bytes::Bytes;
 /// // Create an RTP packet
@@ -99,7 +100,7 @@ impl TrackLocalImpl {
 /// # Example
 ///
 /// ```no_run
-/// # async fn example(track: webrtc::media_track::TrackRemoteImpl) {
+/// # async fn example(track: webrtc::media_stream::TrackRemoteImpl) {
 /// // Receive RTP packets
 /// while let Some(packet) = track.read_rtp().await {
 ///     println!("Received RTP: seq={}, ts={}",

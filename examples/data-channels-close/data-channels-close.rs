@@ -5,14 +5,14 @@ use std::fs::OpenOptions;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io::Write, str::FromStr};
-use webrtc::Result;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
-use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Notify, Runtime, Sender, block_on, channel, default_runtime, sleep};
-use webrtc::{
+use webrtc::error::Result;
+use webrtc::peer_connection::{
     MediaEngine, RTCConfigurationBuilder, RTCIceGatheringState, RTCIceServer,
     RTCPeerConnectionState, RTCSessionDescription, Registry, register_default_interceptors,
 };
+use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::runtime::{Notify, Runtime, Sender, block_on, channel, default_runtime, sleep};
 
 #[derive(Parser)]
 #[command(name = "data-channels")]

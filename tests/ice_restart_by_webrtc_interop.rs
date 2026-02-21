@@ -21,8 +21,8 @@ use rtc::peer_connection::state::RTCIceConnectionState;
 use rtc::peer_connection::state::RTCPeerConnectionState;
 use rtc::peer_connection::transport::RTCDtlsRole;
 use rtc::peer_connection::transport::{CandidateConfig, CandidateHostConfig};
-use webrtc::RTCIceGatheringState;
 use webrtc::data_channel::DataChannelEvent;
+use webrtc::peer_connection::RTCIceGatheringState;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep, timeout};
 

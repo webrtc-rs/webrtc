@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 use webrtc::peer_connection::*;
-use webrtc::runtime::block_on;
-use webrtc::{
+use webrtc::peer_connection::{
     RTCConfigurationBuilder, RTCIceConnectionState, RTCPeerConnectionIceEvent,
     RTCPeerConnectionState, RTCSdpType,
 };
+use webrtc::runtime::block_on;
 
 #[derive(Clone)]
 struct TestHandler;

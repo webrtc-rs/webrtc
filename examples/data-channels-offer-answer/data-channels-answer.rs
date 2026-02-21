@@ -17,12 +17,12 @@ use futures::FutureExt;
 use hyper::{Body, Client, Method, Request};
 use signal::get_local_ip;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
-use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
-use webrtc::{
+use webrtc::peer_connection::{
     MediaEngine, RTCConfigurationBuilder, RTCIceGatheringState, RTCIceServer,
     RTCPeerConnectionState, Registry, register_default_interceptors,
 };
+use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
 
 #[derive(Parser)]
 #[command(name = "answer", about = "WebRTC answer side")]

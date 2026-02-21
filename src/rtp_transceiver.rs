@@ -1,4 +1,10 @@
-use crate::Result;
+//! Async Media API
+
+use rtc::shared::error::Result;
+
+pub use rtc::rtp_transceiver::{
+    RTCRtpReceiverId, RTCRtpSenderId, RTCRtpTransceiverDirection, RTCRtpTransceiverInit,
+};
 
 #[async_trait::async_trait]
 pub trait RtpReceiver: Send + Sync + 'static {

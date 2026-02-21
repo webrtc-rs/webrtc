@@ -9,7 +9,6 @@ use crate::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{AsyncUdpSocket, Receiver, channel};
-use crate::{Error, Result};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -20,6 +19,7 @@ use rtc::peer_connection::message::RTCMessage;
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::sansio::Protocol;
+use rtc::shared::error::{Error, Result};
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;

@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, timeout};
-use webrtc::{
+use webrtc::peer_connection::{
     RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceGatheringState, RTCIceServer,
     RTCPeerConnectionState, RTCSessionDescription,
 };
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, timeout};
 
 const DEMO_HTML: &str = include_str!("demo.html");
 
