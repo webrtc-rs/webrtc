@@ -72,6 +72,16 @@ name = "data-channels-answer"
 path = "examples/data-channels-offer-answer/data-channels-answer.rs"
 bench = false
 
+[[example]]
+name = "data-channels-simple"
+path = "examples/data-channels-simple/data-channels-simple.rs"
+bench = false
+
+[[example]]
+name = "ice-restart"
+path = "examples/ice-restart/ice-restart.rs"
+bench = false
+
 #[[example]]
 #name = "insertable-streams"
 #path = "examples/insertable-streams/insertable-streams.rs"
@@ -132,8 +142,3 @@ bench = false
 #path = "examples/swap-tracks/swap-tracks.rs"
 #bench = false
 #
-
-[[example]]
-name = "ice-restart"
-path = "examples/ice-restart/ice-restart.rs"
-bench = false
