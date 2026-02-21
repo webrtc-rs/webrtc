@@ -4,8 +4,9 @@ use super::ice_gatherer::RTCIceGatherOptions;
 use super::*;
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::ice_gatherer::RTCIceGatherer;
-use crate::media_track::TrackRemote;
+use crate::media_track::{TrackLocal, TrackRemote};
 use crate::peer_connection_driver::PeerConnectionDriver;
+use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver};
 use crate::runtime::{Mutex, Sender, channel};
 use crate::runtime::{Runtime, default_runtime};
 use log::error;
@@ -14,10 +15,14 @@ use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder};
+use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use rtc::sansio::Protocol;
+use rtc::statistics::StatsSelector;
+use rtc::statistics::report::RTCStatsReport;
 use std::collections::HashMap;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// Trait for handling peer connection events asynchronously
 ///
@@ -68,7 +73,7 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
     async fn on_data_channel(&self, _data_channel: Arc<dyn DataChannel>) {}
 
     /// Called when a remote track is received
-    async fn on_track(&self, _track: Arc<TrackRemote>) {}
+    async fn on_track(&self, _track: Arc<dyn TrackRemote>) {}
 }
 
 /// Unified inner message type for the peer connection driver
@@ -269,6 +274,30 @@ pub trait PeerConnection: Send + Sync + 'static {
         label: &str,
         options: Option<RTCDataChannelInit>,
     ) -> Result<Arc<dyn DataChannel>>;
+    /// Get the list of rtp sender
+    async fn get_senders(&self) -> Vec<Arc<dyn RtpSender>>;
+    /// Get the list of rtp receiver
+    async fn get_receivers(&self) -> Vec<Arc<dyn RtpReceiver>>;
+    /// Get the list of rtp transceiver
+    async fn get_transceivers(&self) -> Vec<Arc<dyn RtpTransceiver>>;
+    /// Add a Track to the PeerConnection
+    async fn add_track(&self, track: Arc<dyn TrackLocal>) -> Result<Arc<dyn RtpSender>>;
+    /// Remove a Track from the PeerConnection
+    async fn remove_track(&self, sender: &Arc<dyn RtpSender>) -> Result<()>;
+    /// Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers
+    async fn add_transceiver_from_track(
+        &self,
+        track: Arc<dyn TrackLocal>,
+        init: Option<RTCRtpTransceiverInit>,
+    ) -> Result<Arc<dyn RtpTransceiver>>;
+    /// Create a new RtpTransceiver and adds it to the set of transceivers
+    async fn add_transceiver_from_kind(
+        &self,
+        kind: RtpCodecKind,
+        init: Option<RTCRtpTransceiverInit>,
+    ) -> Result<Arc<dyn RtpTransceiver>>;
+    /// Get a snapshot of accumulated statistics.
+    async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport;
 }
 
 /// Concrete async peer connection implementation (generic over interceptor type).
@@ -515,5 +544,61 @@ where
             self.inner.clone(),
             evt_rx,
         )))
+    }
+
+    /// Get the list of rtp sender
+    async fn get_senders(&self) -> Vec<Arc<dyn RtpSender>> {
+        //TODO:
+        vec![]
+    }
+
+    /// Get the list of rtp receiver
+    async fn get_receivers(&self) -> Vec<Arc<dyn RtpReceiver>> {
+        //TODO:
+        vec![]
+    }
+
+    /// Get the list of rtp transceiver
+    async fn get_transceivers(&self) -> Vec<Arc<dyn RtpTransceiver>> {
+        //TODO:
+        vec![]
+    }
+
+    /// Add a Track to the PeerConnection
+    async fn add_track(&self, _track: Arc<dyn TrackLocal>) -> Result<Arc<dyn RtpSender>> {
+        //TODO:
+        Err(Error::ErrRTPSenderNotExisted)
+    }
+
+    /// Remove a Track from the PeerConnection
+    async fn remove_track(&self, _sender: &Arc<dyn RtpSender>) -> Result<()> {
+        //TODO:
+        Ok(())
+    }
+
+    /// Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers
+    async fn add_transceiver_from_track(
+        &self,
+        _track: Arc<dyn TrackLocal>,
+        _init: Option<RTCRtpTransceiverInit>,
+    ) -> Result<Arc<dyn RtpTransceiver>> {
+        //TODO:
+        Err(Error::ErrRTPSenderTrackNil)
+    }
+
+    /// Create a new RtpTransceiver and adds it to the set of transceivers
+    async fn add_transceiver_from_kind(
+        &self,
+        _kind: RtpCodecKind,
+        _init: Option<RTCRtpTransceiverInit>,
+    ) -> Result<Arc<dyn RtpTransceiver>> {
+        //TODO:
+        Err(Error::ErrRTPSenderTrackNil)
+    }
+
+    /// Get a snapshot of accumulated statistics.
+    async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport {
+        let mut core = self.inner.core.lock().await;
+        core.get_stats(now, selector)
     }
 }

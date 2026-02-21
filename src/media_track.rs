@@ -7,6 +7,16 @@ use crate::runtime::{Mutex, Receiver, Sender};
 use rtc::media_stream::MediaStreamTrackId;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 
+#[async_trait::async_trait]
+pub trait TrackLocal: Send + Sync + 'static {
+    async fn close(&self) -> Result<()>;
+}
+
+#[async_trait::async_trait]
+pub trait TrackRemote: Send + Sync + 'static {
+    async fn close(&self) -> Result<()>;
+}
+
 /// A local track that sends RTP packets
 ///
 /// This represents an outgoing media track to a remote peer.
@@ -37,14 +47,14 @@ use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 /// # Ok(())
 /// # }
 /// ```
-pub struct TrackLocal {
+pub struct TrackLocalImpl {
     /// Sender ID in the peer connection (crate-internal)
     pub(crate) sender_id: RTCRtpSenderId,
     /// Channel for sending outgoing messages to the driver
     tx: Sender<crate::peer_connection::MessageInner>,
 }
 
-impl TrackLocal {
+impl TrackLocalImpl {
     /// Create a new local track
     pub(crate) fn new(
         sender_id: RTCRtpSenderId,
@@ -99,7 +109,7 @@ impl TrackLocal {
 /// }
 /// # }
 /// ```
-pub struct TrackRemote {
+pub struct TrackRemoteImpl {
     /// Receiver ID in the peer connection (crate-internal)
     pub(crate) receiver_id: RTCRtpReceiverId,
     /// Track ID (crate-internal)
@@ -114,7 +124,7 @@ pub struct TrackRemote {
     tx: Sender<crate::peer_connection::MessageInner>,
 }
 
-impl TrackRemote {
+impl TrackRemoteImpl {
     /// Create a new remote track
     pub(crate) fn new(
         receiver_id: RTCRtpReceiverId,
