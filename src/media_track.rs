@@ -25,9 +25,9 @@ pub trait TrackRemote: Send + Sync + 'static {
 /// # Example
 ///
 /// ```no_run
-/// # use webrtc::media_track::TrackLocal;
+/// # use webrtc::media_track::TrackLocalImpl;
 /// # use webrtc::Result;
-/// # async fn example(track: std::sync::Arc<TrackLocal>) -> Result<()> {
+/// # async fn example(track: TrackLocalImpl) -> Result<()> {
 /// # use bytes::Bytes;
 /// // Create an RTP packet
 /// let packet = rtc::rtp::packet::Packet {
@@ -99,7 +99,7 @@ impl TrackLocalImpl {
 /// # Example
 ///
 /// ```no_run
-/// # async fn example(track: webrtc::media_track::TrackRemote) {
+/// # async fn example(track: webrtc::media_track::TrackRemoteImpl) {
 /// // Receive RTP packets
 /// while let Some(packet) = track.read_rtp().await {
 ///     println!("Received RTP: seq={}, ts={}",
