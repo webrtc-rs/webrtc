@@ -31,6 +31,7 @@ use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
 
+use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 pub use rtc::peer_connection::{
     RTCPeerConnection,
@@ -341,7 +342,7 @@ where
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
-    pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<dyn RtpTransceiver>>>,
+    pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<RtpTransceiverImpl<I>>>>,
     /// Unified channel for all outgoing messages
     pub(crate) msg_tx: Sender<MessageInner>,
 }
@@ -609,39 +610,120 @@ where
                 .or_insert_with(|| Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner))));
         }
 
-        rtp_transceivers.values().cloned().collect()
+        rtp_transceivers
+            .values()
+            .cloned()
+            .map(|t| t as Arc<dyn RtpTransceiver>)
+            .collect()
     }
 
     /// Add a Track to the PeerConnection
-    async fn add_track(&self, _track: Arc<dyn TrackLocal>) -> Result<Arc<dyn RtpSender>> {
-        //TODO:
-        Err(Error::ErrRTPSenderNotExisted)
+    async fn add_track(&self, track: Arc<dyn TrackLocal>) -> Result<Arc<dyn RtpSender>> {
+        let id: RTCRtpTransceiverId = {
+            let mut core = self.inner.core.lock().await;
+            core.add_track(track.track().clone())?.into()
+        };
+
+        let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
+        rtp_transceivers
+            .entry(id)
+            .or_insert_with(|| Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner))));
+
+        let rtp_transceiver = rtp_transceivers
+            .get(&id)
+            .ok_or(Error::ErrRTPTransceiverNotExisted)?;
+
+        let sender: Arc<dyn RtpSender> = Arc::new(RtpSenderImpl::new(
+            id.into(),
+            Arc::clone(&self.inner),
+            track,
+        ));
+        rtp_transceiver.set_sender(Some(Arc::clone(&sender))).await;
+
+        Ok(sender)
     }
 
     /// Remove a Track from the PeerConnection
-    async fn remove_track(&self, _sender: &Arc<dyn RtpSender>) -> Result<()> {
-        //TODO:
+    async fn remove_track(&self, sender: &Arc<dyn RtpSender>) -> Result<()> {
+        {
+            let mut core = self.inner.core.lock().await;
+            core.remove_track(sender.id())?;
+        }
+
+        let rtp_transceivers = self.inner.rtp_transceivers.lock().await;
+        let rtp_transceiver = rtp_transceivers
+            .get(&sender.id().into())
+            .ok_or(Error::ErrRTPTransceiverNotExisted)?;
+        rtp_transceiver.set_sender(None).await;
+
         Ok(())
     }
 
     /// Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers
     async fn add_transceiver_from_track(
         &self,
-        _track: Arc<dyn TrackLocal>,
-        _init: Option<RTCRtpTransceiverInit>,
+        track: Arc<dyn TrackLocal>,
+        init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<dyn RtpTransceiver>> {
-        //TODO:
-        Err(Error::ErrRTPSenderTrackNil)
+        let id: RTCRtpTransceiverId = {
+            let mut core = self.inner.core.lock().await;
+            core.add_transceiver_from_track(track.track().clone(), init)?
+        };
+
+        let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
+        rtp_transceivers
+            .entry(id)
+            .or_insert_with(|| Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner))));
+
+        let rtp_transceiver = rtp_transceivers
+            .get(&id)
+            .ok_or(Error::ErrRTPTransceiverNotExisted)?;
+
+        let sender: Arc<dyn RtpSender> = Arc::new(RtpSenderImpl::new(
+            id.into(),
+            Arc::clone(&self.inner),
+            track,
+        ));
+        rtp_transceiver.set_sender(Some(sender)).await;
+
+        Ok(rtp_transceiver.clone() as Arc<dyn RtpTransceiver>)
     }
 
     /// Create a new RtpTransceiver and adds it to the set of transceivers
     async fn add_transceiver_from_kind(
         &self,
-        _kind: RtpCodecKind,
-        _init: Option<RTCRtpTransceiverInit>,
+        kind: RtpCodecKind,
+        init: Option<RTCRtpTransceiverInit>,
     ) -> Result<Arc<dyn RtpTransceiver>> {
-        //TODO:
-        Err(Error::ErrRTPSenderTrackNil)
+        let (id, track) = {
+            let mut core = self.inner.core.lock().await;
+            let id = core.add_transceiver_from_kind(kind, init)?;
+            (
+                id,
+                core.rtp_sender(id.into())
+                    .map(|sender| sender.track().clone()),
+            )
+        };
+
+        let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
+        rtp_transceivers
+            .entry(id)
+            .or_insert_with(|| Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner))));
+
+        let rtp_transceiver = rtp_transceivers
+            .get(&id)
+            .ok_or(Error::ErrRTPTransceiverNotExisted)?;
+
+        if let Some(_track) = track {
+            /*TODO: let sender: Arc<dyn RtpSender> = Arc::new(RtpSenderImpl::new(
+                id.into(),
+                Arc::clone(&self.inner),
+                track,
+            ));
+            rtp_transceiver.set_sender(Some(sender)).await;*/
+        }
+
+        Ok(rtp_transceiver.clone() as Arc<dyn RtpTransceiver>)
     }
 
     /// Get a snapshot of accumulated statistics.

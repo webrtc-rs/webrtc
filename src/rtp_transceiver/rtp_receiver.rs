@@ -2,6 +2,7 @@ use crate::error::{Error, Result};
 use crate::media_stream::TrackRemote;
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::rtp_transceiver::RtpReceiver;
+use crate::runtime::Mutex;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
 use rtc::rtp_transceiver::rtp_receiver::{RTCRtpContributingSource, RTCRtpSynchronizationSource};
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCapabilities, RTCRtpReceiveParameters, RtpCodecKind};
@@ -22,6 +23,8 @@ where
 
     /// Inner PeerConnection Reference
     inner: Arc<PeerConnectionRef<I>>,
+
+    track: Mutex<Arc<dyn TrackRemote>>,
 }
 
 impl<I> RtpReceiverImpl<I>
@@ -29,8 +32,16 @@ where
     I: Interceptor,
 {
     /// Create a new rtp receiver wrapper
-    pub(crate) fn new(id: RTCRtpReceiverId, inner: Arc<PeerConnectionRef<I>>) -> Self {
-        Self { id, inner }
+    pub(crate) fn new(
+        id: RTCRtpReceiverId,
+        inner: Arc<PeerConnectionRef<I>>,
+        track: Arc<dyn TrackRemote>,
+    ) -> Self {
+        Self {
+            id,
+            inner,
+            track: Mutex::new(track),
+        }
     }
 }
 
@@ -39,14 +50,20 @@ impl<I> RtpReceiver for RtpReceiverImpl<I>
 where
     I: Interceptor + 'static,
 {
-    async fn track(&self) -> Result<Arc<dyn TrackRemote>> {
-        todo!()
-        /*let mut peer_connection = self.inner.core.lock().await;
+    fn id(&self) -> RTCRtpReceiverId {
+        self.id
+    }
 
-        Ok(peer_connection
-            .rtp_receiver(self.id)
-            .ok_or(Error::ErrRTPReceiverNotExisted)?
-            .track())*/
+    async fn track(&self) -> Result<Arc<dyn TrackRemote>> {
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+
+            peer_connection
+                .rtp_receiver(self.id)
+                .ok_or(Error::ErrRTPReceiverNotExisted)?;
+        }
+
+        Ok(self.track.lock().await.clone())
     }
 
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>> {
@@ -58,7 +75,7 @@ where
             .get_capabilities(kind))
     }
 
-    async fn get_parameters(&mut self) -> Result<RTCRtpReceiveParameters> {
+    async fn get_parameters(&self) -> Result<RTCRtpReceiveParameters> {
         let mut peer_connection = self.inner.core.lock().await;
 
         Ok(peer_connection
