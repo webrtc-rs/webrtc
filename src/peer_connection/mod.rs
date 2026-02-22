@@ -4,14 +4,14 @@ pub(crate) mod driver;
 pub(crate) mod ice_gatherer;
 
 use log::error;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Instant;
 
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::media_stream::{TrackLocal, TrackRemote};
-use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver};
+use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
 
@@ -569,20 +569,47 @@ where
 
     /// Get the list of rtp sender
     async fn get_senders(&self) -> Vec<Arc<dyn RtpSender>> {
-        //TODO:
-        vec![]
+        let mut rtp_senders = vec![];
+        for rtp_transceiver in self.get_transceivers().await {
+            if let Ok(sender) = rtp_transceiver.sender().await
+                && let Some(rtp_sender) = sender
+            {
+                rtp_senders.push(rtp_sender);
+            }
+        }
+        rtp_senders
     }
 
     /// Get the list of rtp receiver
     async fn get_receivers(&self) -> Vec<Arc<dyn RtpReceiver>> {
-        //TODO:
-        vec![]
+        let mut rtp_receivers = vec![];
+        for rtp_transceiver in self.get_transceivers().await {
+            if let Ok(receiver) = rtp_transceiver.receiver().await
+                && let Some(rtp_receiver) = receiver
+            {
+                rtp_receivers.push(rtp_receiver);
+            }
+        }
+        rtp_receivers
     }
 
     /// Get the list of rtp transceiver
     async fn get_transceivers(&self) -> Vec<Arc<dyn RtpTransceiver>> {
-        //TODO:
-        vec![]
+        let current_transceiver_ids: HashSet<RTCRtpTransceiverId> = {
+            let core = self.inner.core.lock().await;
+            core.get_transceivers().collect::<HashSet<_>>()
+        };
+
+        let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
+        // only keep rtp_transceiver in current_transceiver_ids
+        rtp_transceivers.retain(|id, _| current_transceiver_ids.contains(id));
+        for id in current_transceiver_ids {
+            rtp_transceivers
+                .entry(id)
+                .or_insert_with(|| Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner))));
+        }
+
+        rtp_transceivers.values().cloned().collect()
     }
 
     /// Add a Track to the PeerConnection
