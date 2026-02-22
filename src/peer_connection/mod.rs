@@ -24,8 +24,8 @@ use ice_gatherer::RTCIceGatherer;
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
-use rtc::rtp_transceiver::RTCRtpTransceiverInit;
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
+use rtc::rtp_transceiver::{RTCRtpTransceiverId, RTCRtpTransceiverInit};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
@@ -341,6 +341,7 @@ where
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
+    pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<dyn RtpTransceiver>>>,
     /// Unified channel for all outgoing messages
     pub(crate) msg_tx: Sender<MessageInner>,
 }
@@ -379,6 +380,7 @@ where
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
                 data_channels: Mutex::new(HashMap::new()),
+                rtp_transceivers: Mutex::new(HashMap::new()),
                 handler,
                 msg_tx,
             }),

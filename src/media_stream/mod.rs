@@ -2,6 +2,9 @@
 //!
 //! This module provides async-friendly wrappers around RTP media tracks.
 
+mod track_local;
+mod track_remote;
+
 use rtc::rtp_transceiver::{RtpStreamId, SSRC};
 use rtc::shared::error::Result;
 

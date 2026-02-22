@@ -20,8 +20,8 @@ pub use rtc::data_channel::{
 pub trait DataChannel: Send + Sync + 'static {
     async fn label(&self) -> Result<String>;
     async fn ordered(&self) -> Result<bool>;
-    async fn max_packet_life_time(&self) -> Option<u16>;
-    async fn max_retransmits(&self) -> Option<u16>;
+    async fn max_packet_life_time(&self) -> Result<Option<u16>>;
+    async fn max_retransmits(&self) -> Result<Option<u16>>;
     async fn protocol(&self) -> Result<String>;
     async fn negotiated(&self) -> Result<bool>;
     fn id(&self) -> RTCDataChannelId;
@@ -151,18 +151,22 @@ where
 
     /// max_packet_lifetime represents the length of the time window (msec) during
     /// which transmissions and retransmissions may occur in unreliable mode.
-    async fn max_packet_life_time(&self) -> Option<u16> {
+    async fn max_packet_life_time(&self) -> Result<Option<u16>> {
         let mut peer_connection = self.inner.core.lock().await;
-        peer_connection
-            .data_channel(self.id)?
-            .max_packet_life_time()
+        Ok(peer_connection
+            .data_channel(self.id)
+            .ok_or(Error::ErrDataChannelClosed)?
+            .max_packet_life_time())
     }
 
     /// max_retransmits represents the maximum number of retransmissions that are
     /// attempted in unreliable mode.
-    async fn max_retransmits(&self) -> Option<u16> {
+    async fn max_retransmits(&self) -> Result<Option<u16>> {
         let mut peer_connection = self.inner.core.lock().await;
-        peer_connection.data_channel(self.id)?.max_retransmits()
+        Ok(peer_connection
+            .data_channel(self.id)
+            .ok_or(Error::ErrDataChannelClosed)?
+            .max_retransmits())
     }
 
     /// protocol represents the name of the sub-protocol used with this
