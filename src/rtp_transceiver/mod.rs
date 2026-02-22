@@ -3,14 +3,17 @@
 pub mod rtp_receiver;
 pub mod rtp_sender;
 
+use crate::error::Error;
 use crate::media_stream::{TrackLocal, TrackRemote};
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
+use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
+use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 use crate::runtime::Mutex;
 use rtc::media_stream::MediaStreamId;
 use rtc::rtp_transceiver::RTCRtpTransceiverId;
 use rtc::rtp_transceiver::rtp_receiver::{RTCRtpContributingSource, RTCRtpSynchronizationSource};
 use rtc::rtp_transceiver::rtp_sender::{
-    RTCRtpCapabilities, RTCRtpCodec, RTCRtpReceiveParameters, RTCRtpSendParameters,
+    RTCRtpCapabilities, RTCRtpCodecParameters, RTCRtpReceiveParameters, RTCRtpSendParameters,
     RTCSetParameterOptions, RtpCodecKind,
 };
 pub use rtc::rtp_transceiver::{
@@ -48,13 +51,14 @@ pub trait RtpSender: Send + Sync + 'static {
 
 #[async_trait::async_trait]
 pub trait RtpTransceiver: Send + Sync + 'static {
-    async fn mid(&self) -> Option<String>;
-    async fn sender(&self) -> Option<Arc<dyn RtpSender>>;
-    async fn receiver(&self) -> Option<Arc<dyn RtpReceiver>>;
-    async fn direction(&self) -> RTCRtpTransceiverDirection;
-    async fn current_direction(&self) -> RTCRtpTransceiverDirection;
+    async fn mid(&self) -> Result<Option<String>>;
+    async fn sender(&self) -> Result<Option<Arc<dyn RtpSender>>>;
+    async fn receiver(&self) -> Result<Option<Arc<dyn RtpReceiver>>>;
+    async fn direction(&self) -> Result<RTCRtpTransceiverDirection>;
+    async fn set_direction(&self, direction: RTCRtpTransceiverDirection) -> Result<()>;
+    async fn current_direction(&self) -> Result<RTCRtpTransceiverDirection>;
     async fn stop(&self) -> Result<()>;
-    async fn set_codec_preferences(&self, codecs: Vec<RTCRtpCodec>) -> Result<()>;
+    async fn set_codec_preferences(&self, codecs: Vec<RTCRtpCodecParameters>) -> Result<()>;
 }
 
 /// Concrete async rtp transceiver implementation (generic over interceptor type).
@@ -94,31 +98,103 @@ impl<I> RtpTransceiver for RtpTransceiverImpl<I>
 where
     I: Interceptor + 'static,
 {
-    async fn mid(&self) -> Option<String> {
-        todo!()
+    async fn mid(&self) -> Result<Option<String>> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        Ok(peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?
+            .mid()
+            .clone())
     }
 
-    async fn sender(&self) -> Option<Arc<dyn RtpSender>> {
-        todo!()
+    async fn sender(&self) -> Result<Option<Arc<dyn RtpSender>>> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        let transceiver = peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?;
+
+        let mut sender = self.sender.lock().await;
+        if let Some(sender_id) = transceiver.sender() {
+            if sender.is_none() {
+                *sender = Some(Arc::new(RtpSenderImpl::new(
+                    sender_id,
+                    Arc::clone(&self.inner),
+                )));
+            }
+        } else {
+            *sender = None;
+        }
+
+        Ok(sender.clone())
     }
 
-    async fn receiver(&self) -> Option<Arc<dyn RtpReceiver>> {
-        todo!()
+    async fn receiver(&self) -> Result<Option<Arc<dyn RtpReceiver>>> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        let transceiver = peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?;
+
+        let mut receiver = self.receiver.lock().await;
+        if let Some(receiver_id) = transceiver.receiver() {
+            if receiver.is_none() {
+                *receiver = Some(Arc::new(RtpReceiverImpl::new(
+                    receiver_id,
+                    Arc::clone(&self.inner),
+                )));
+            }
+        } else {
+            *receiver = None;
+        }
+        Ok(receiver.clone())
     }
 
-    async fn direction(&self) -> RTCRtpTransceiverDirection {
-        todo!()
+    async fn direction(&self) -> Result<RTCRtpTransceiverDirection> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        Ok(peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?
+            .direction())
     }
 
-    async fn current_direction(&self) -> RTCRtpTransceiverDirection {
-        todo!()
+    async fn set_direction(&self, direction: RTCRtpTransceiverDirection) -> Result<()> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?
+            .set_direction(direction);
+
+        Ok(())
+    }
+
+    async fn current_direction(&self) -> Result<RTCRtpTransceiverDirection> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        Ok(peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?
+            .current_direction())
     }
 
     async fn stop(&self) -> Result<()> {
-        todo!()
+        let mut peer_connection = self.inner.core.lock().await;
+
+        peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?
+            .stop()
     }
 
-    async fn set_codec_preferences(&self, _codecs: Vec<RTCRtpCodec>) -> Result<()> {
-        todo!()
+    async fn set_codec_preferences(&self, codecs: Vec<RTCRtpCodecParameters>) -> Result<()> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        peer_connection
+            .rtp_transceiver(self.id)
+            .ok_or(Error::ErrTPTransceiverNotExisted)?
+            .set_codec_preferences(codecs)
     }
 }
