@@ -233,9 +233,7 @@ where
         self.inner
             .msg_tx
             .try_send(MessageInner::WriteNotify)
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
-
-        Ok(())
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
     /// buffered_amount_low_threshold represents the threshold at which the
@@ -266,9 +264,7 @@ where
         self.inner
             .msg_tx
             .try_send(MessageInner::WriteNotify)
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
-
-        Ok(())
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
     /// Send binary data
@@ -296,9 +292,10 @@ where
 
         // Wake the driver so it flushes SCTP output (poll_write) and checks
         // for newly generated events (e.g. OnBufferedAmountHigh).
-        let _ = self.inner.msg_tx.try_send(MessageInner::WriteNotify);
-
-        Ok(())
+        self.inner
+            .msg_tx
+            .try_send(MessageInner::WriteNotify)
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
     /// Send text data
@@ -323,9 +320,10 @@ where
                 .send_text(text)?;
         }
 
-        let _ = self.inner.msg_tx.try_send(MessageInner::WriteNotify);
-
-        Ok(())
+        self.inner
+            .msg_tx
+            .try_send(MessageInner::WriteNotify)
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
     async fn poll(&self) -> Option<DataChannelEvent> {
@@ -344,8 +342,6 @@ where
         self.inner
             .msg_tx
             .try_send(MessageInner::WriteNotify)
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
-
-        Ok(())
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 }

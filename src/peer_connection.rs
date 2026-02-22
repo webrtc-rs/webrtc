@@ -5,7 +5,7 @@ use crate::ice_gatherer::RTCIceGatherOptions;
 use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_stream::{TrackLocal, TrackRemote};
 use crate::peer_connection_driver::{
-    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, MSG_CHANNEL_CAPACITY, PeerConnectionDriver,
+    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, MESSAGE_INNER_CHANNEL_CAPACITY, PeerConnectionDriver,
 };
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
@@ -367,7 +367,7 @@ where
             }
         }
 
-        let (msg_tx, msg_rx) = channel(MSG_CHANNEL_CAPACITY);
+        let (msg_tx, msg_rx) = channel(MESSAGE_INNER_CHANNEL_CAPACITY);
         let peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
@@ -451,8 +451,7 @@ where
             .msg_tx
             .send(MessageInner::IceGathering)
             .await
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
-        Ok(())
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
     async fn local_description(&self) -> Option<RTCSessionDescription> {
@@ -485,8 +484,10 @@ where
         // internally, which arms the ICE connectivity-check timer. Without this
         // notify the driver would sleep until its previous (possibly 1-day default)
         // timer expired and never send the initial STUN binding requests.
-        let _ = self.inner.msg_tx.try_send(MessageInner::WriteNotify);
-        Ok(())
+        self.inner
+            .msg_tx
+            .try_send(MessageInner::WriteNotify)
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
     async fn remote_description(&self) -> Option<RTCSessionDescription> {
@@ -520,8 +521,7 @@ where
             .msg_tx
             .send(MessageInner::IceGathering)
             .await
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
-        Ok(())
+            .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
     async fn get_configuration(&self) -> RTCConfiguration {

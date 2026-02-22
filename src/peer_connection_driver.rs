@@ -8,11 +8,11 @@ use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
-use crate::runtime::{AsyncUdpSocket, Receiver, channel};
+use crate::runtime::{AsyncUdpSocket, Receiver, TrySendError, channel};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{error, trace, warn};
+use log::{error, trace};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
 use rtc::peer_connection::message::RTCMessage;
@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Capacity of the internal driver message channel (WriteNotify, IceGathering, Close, …).
-pub(crate) const MSG_CHANNEL_CAPACITY: usize = 64;
+pub(crate) const MESSAGE_INNER_CHANNEL_CAPACITY: usize = 64;
 
 /// Capacity of each data-channel event channel (OnOpen, OnMessage, OnClose, …).
 pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
@@ -348,26 +348,38 @@ where
                     if let Some(evt_tx) = data_channels.get(&channel_id) {
                         let result = match evt {
                             RTCDataChannelEvent::OnOpen(_) => {
-                                evt_tx.send(DataChannelEvent::OnOpen).await
+                                evt_tx.try_send(DataChannelEvent::OnOpen)
                             }
                             RTCDataChannelEvent::OnError(_) => {
-                                evt_tx.send(DataChannelEvent::OnError).await
+                                evt_tx.try_send(DataChannelEvent::OnError)
                             }
                             RTCDataChannelEvent::OnClosing(_) => {
-                                evt_tx.send(DataChannelEvent::OnClosing).await
+                                evt_tx.try_send(DataChannelEvent::OnClosing)
                             }
                             RTCDataChannelEvent::OnClose(_) => {
-                                evt_tx.send(DataChannelEvent::OnClose).await
+                                evt_tx.try_send(DataChannelEvent::OnClose)
                             }
                             RTCDataChannelEvent::OnBufferedAmountLow(_) => {
-                                evt_tx.send(DataChannelEvent::OnBufferedAmountLow).await
+                                evt_tx.try_send(DataChannelEvent::OnBufferedAmountLow)
                             }
                             RTCDataChannelEvent::OnBufferedAmountHigh(_) => {
-                                evt_tx.send(DataChannelEvent::OnBufferedAmountHigh).await
+                                evt_tx.try_send(DataChannelEvent::OnBufferedAmountHigh)
                             }
                         };
                         if let Err(err) = result {
-                            warn!("Failed to send to data channel {}: {:?}", channel_id, err);
+                            match err {
+                                TrySendError::Full(_) => error!(
+                                    "Failed to send to data channel {} due to channel is full, {:?} is dropped",
+                                    channel_id, evt
+                                ),
+                                TrySendError::Disconnected(_) => {
+                                    error!(
+                                        "Failed to send to data channel {} due to channel is disconnected, {:?} is dropped, data channel {} got removed",
+                                        channel_id, evt, channel_id
+                                    );
+                                    data_channels.remove(&channel_id);
+                                }
+                            }
                         }
                     }
                 }
@@ -385,10 +397,22 @@ where
     async fn handle_rtc_message(&mut self, message: RTCMessage) {
         match message {
             RTCMessage::DataChannelMessage(channel_id, dc_message) => {
-                let data_channels = self.inner.data_channels.lock().await;
+                let mut data_channels = self.inner.data_channels.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
-                    if let Err(err) = evt_tx.send(DataChannelEvent::OnMessage(dc_message)).await {
-                        warn!("Failed to send to data channel {}: {:?}", channel_id, err);
+                    if let Err(err) = evt_tx.try_send(DataChannelEvent::OnMessage(dc_message)) {
+                        match err {
+                            TrySendError::Full(_) => error!(
+                                "Failed to send to data channel {} due to channel is full, DataChannelMessage is dropped",
+                                channel_id
+                            ),
+                            TrySendError::Disconnected(_) => {
+                                error!(
+                                    "Failed to send to data channel {} due to channel is disconnected, DataChannelMessage is dropped, data channel {} got removed",
+                                    channel_id, channel_id
+                                );
+                                data_channels.remove(&channel_id);
+                            }
+                        }
                     }
                 }
             }
