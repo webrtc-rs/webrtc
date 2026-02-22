@@ -1,16 +1,26 @@
 //! Async peer connection wrapper
 
+pub(crate) mod driver;
+pub(crate) mod ice_gatherer;
+
+use log::error;
+use std::collections::HashMap;
+use std::net::ToSocketAddrs;
+use std::sync::Arc;
+use std::time::Instant;
+
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
-use crate::ice_gatherer::RTCIceGatherOptions;
-use crate::ice_gatherer::RTCIceGatherer;
 use crate::media_stream::{TrackLocal, TrackRemote};
-use crate::peer_connection_driver::{
-    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, MESSAGE_INNER_CHANNEL_CAPACITY, PeerConnectionDriver,
-};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
-use log::error;
+
+use driver::{
+    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, MESSAGE_INNER_CHANNEL_CAPACITY, PeerConnectionDriver,
+};
+use ice_gatherer::RTCIceGatherOptions;
+use ice_gatherer::RTCIceGatherer;
+
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
@@ -20,10 +30,6 @@ use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
-use std::collections::HashMap;
-use std::net::ToSocketAddrs;
-use std::sync::Arc;
-use std::time::Instant;
 
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 pub use rtc::peer_connection::{

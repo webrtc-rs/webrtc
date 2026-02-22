@@ -4,8 +4,8 @@
 
 #![allow(clippy::collapsible_if)]
 
+use super::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
-use crate::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{AsyncUdpSocket, Receiver, TrySendError, channel};

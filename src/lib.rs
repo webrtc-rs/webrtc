@@ -14,10 +14,8 @@
 //! - `runtime-smol` - smol runtime support
 
 pub mod data_channel;
-pub(crate) mod ice_gatherer;
 pub mod media_stream;
 pub mod peer_connection;
-pub(crate) mod peer_connection_driver;
 pub mod rtp_transceiver;
 pub mod runtime;
 
