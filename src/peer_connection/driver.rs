@@ -8,7 +8,7 @@ use super::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
-use crate::runtime::{AsyncUdpSocket, Receiver, TrySendError, channel};
+use crate::runtime::{AsyncUdpSocket, Receiver, channel};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -367,19 +367,7 @@ where
                             }
                         };
                         if let Err(err) = result {
-                            match err {
-                                TrySendError::Full(_) => error!(
-                                    "Failed to send to data channel {} due to channel is full, {:?} is dropped",
-                                    channel_id, evt
-                                ),
-                                TrySendError::Disconnected(_) => {
-                                    error!(
-                                        "Failed to send to data channel {} due to channel is disconnected, {:?} is dropped, data channel {} got removed",
-                                        channel_id, evt, channel_id
-                                    );
-                                    data_channels.remove(&channel_id);
-                                }
-                            }
+                            error!("Failed to send to data channel {}: {:?}", channel_id, err);
                         }
                     }
                 }
@@ -397,22 +385,10 @@ where
     async fn handle_rtc_message(&mut self, message: RTCMessage) {
         match message {
             RTCMessage::DataChannelMessage(channel_id, dc_message) => {
-                let mut data_channels = self.inner.data_channels.lock().await;
+                let data_channels = self.inner.data_channels.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
                     if let Err(err) = evt_tx.try_send(DataChannelEvent::OnMessage(dc_message)) {
-                        match err {
-                            TrySendError::Full(_) => error!(
-                                "Failed to send to data channel {} due to channel is full, DataChannelMessage is dropped",
-                                channel_id
-                            ),
-                            TrySendError::Disconnected(_) => {
-                                error!(
-                                    "Failed to send to data channel {} due to channel is disconnected, DataChannelMessage is dropped, data channel {} got removed",
-                                    channel_id, channel_id
-                                );
-                                data_channels.remove(&channel_id);
-                            }
-                        }
+                        error!("Failed to send to data channel {}: {:?}", channel_id, err);
                     }
                 }
             }
