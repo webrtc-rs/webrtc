@@ -5,16 +5,20 @@
 #![allow(clippy::collapsible_if)]
 
 use super::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
-use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
+use crate::data_channel::{DataChannelEvent, DataChannelImpl};
+use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
+use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
+use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
+use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{AsyncUdpSocket, Receiver, channel};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{error, trace};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
-use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
+use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
 use rtc::peer_connection::message::RTCMessage;
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::RTCIceCandidateInit;
@@ -330,54 +334,131 @@ where
                     RTCDataChannelEvent::OnBufferedAmountHigh(id) => id,
                 };
 
-                let mut dc: Option<Arc<dyn DataChannel>> = None;
-                {
-                    let mut data_channels = self.inner.data_channels.lock().await;
-                    if let Entry::Vacant(e) = data_channels.entry(channel_id) {
+                if let RTCDataChannelEvent::OnOpen(_) = &evt {
+                    let data_channel_exist = {
+                        let mut core = self.inner.core.lock().await;
+                        core.data_channel(channel_id).is_some()
+                    };
+
+                    if data_channel_exist {
                         let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
-                        e.insert(evt_tx);
+                        let data_channel =
+                            Arc::new(DataChannelImpl::new(channel_id, self.inner.clone(), evt_rx));
 
-                        // Create our async wrapper
-                        dc = Some(Arc::new(DataChannelImpl::new(
-                            channel_id,
-                            self.inner.clone(),
-                            evt_rx,
-                        )));
-                    }
-
-                    if let Some(evt_tx) = data_channels.get(&channel_id) {
-                        let result = match evt {
-                            RTCDataChannelEvent::OnOpen(_) => {
-                                evt_tx.try_send(DataChannelEvent::OnOpen)
+                        {
+                            let mut data_channels = self.inner.data_channels.lock().await;
+                            if let Entry::Vacant(e) = data_channels.entry(channel_id) {
+                                e.insert(evt_tx);
                             }
-                            RTCDataChannelEvent::OnError(_) => {
-                                evt_tx.try_send(DataChannelEvent::OnError)
-                            }
-                            RTCDataChannelEvent::OnClosing(_) => {
-                                evt_tx.try_send(DataChannelEvent::OnClosing)
-                            }
-                            RTCDataChannelEvent::OnClose(_) => {
-                                evt_tx.try_send(DataChannelEvent::OnClose)
-                            }
-                            RTCDataChannelEvent::OnBufferedAmountLow(_) => {
-                                evt_tx.try_send(DataChannelEvent::OnBufferedAmountLow)
-                            }
-                            RTCDataChannelEvent::OnBufferedAmountHigh(_) => {
-                                evt_tx.try_send(DataChannelEvent::OnBufferedAmountHigh)
-                            }
-                        };
-                        if let Err(err) = result {
-                            error!("Failed to send to data channel {}: {:?}", channel_id, err);
                         }
+
+                        self.inner.handler.on_data_channel(data_channel).await;
                     }
                 }
 
-                if let Some(dc) = dc {
-                    self.inner.handler.on_data_channel(dc).await;
+                let data_channels = self.inner.data_channels.lock().await;
+                if let Some(evt_tx) = data_channels.get(&channel_id) {
+                    let result = match evt {
+                        RTCDataChannelEvent::OnOpen(_) => evt_tx.try_send(DataChannelEvent::OnOpen),
+                        RTCDataChannelEvent::OnError(_) => {
+                            evt_tx.try_send(DataChannelEvent::OnError)
+                        }
+                        RTCDataChannelEvent::OnClosing(_) => {
+                            evt_tx.try_send(DataChannelEvent::OnClosing)
+                        }
+                        RTCDataChannelEvent::OnClose(_) => {
+                            evt_tx.try_send(DataChannelEvent::OnClose)
+                        }
+                        RTCDataChannelEvent::OnBufferedAmountLow(_) => {
+                            evt_tx.try_send(DataChannelEvent::OnBufferedAmountLow)
+                        }
+                        RTCDataChannelEvent::OnBufferedAmountHigh(_) => {
+                            evt_tx.try_send(DataChannelEvent::OnBufferedAmountHigh)
+                        }
+                    };
+                    if let Err(err) = result {
+                        error!(
+                            "Failed to send RTCDataChannelEvent to data channel {}: {:?}",
+                            channel_id, err
+                        );
+                    }
+                } else {
+                    error!(
+                        "Failed to get data_channel: {:?} for RTCDataChannelEvent",
+                        channel_id
+                    );
                 }
             }
-            RTCPeerConnectionEvent::OnTrack(_evt) => {
-                //TODO: self.inner.handler.on_track(evt).await;
+            RTCPeerConnectionEvent::OnTrack(evt) => {
+                let track_id = match &evt {
+                    RTCTrackEvent::OnOpen(init) => &init.track_id,
+                    RTCTrackEvent::OnError(id) => id,
+                    RTCTrackEvent::OnClosing(id) => id,
+                    RTCTrackEvent::OnClose(id) => id,
+                };
+
+                if let RTCTrackEvent::OnOpen(init) = &evt {
+                    let (id, track) = {
+                        let mut core = self.inner.core.lock().await;
+                        (
+                            init.receiver_id.into(),
+                            core.rtp_receiver(init.receiver_id)
+                                .map(|receiver| receiver.track().clone()),
+                        )
+                    };
+
+                    if let Some(track) = track {
+                        let (evt_tx, evt_rx) = channel(TRACK_REMOTE_EVENT_CHANNEL_CAPACITY);
+                        let track_remote: Arc<dyn TrackRemote> =
+                            Arc::new(TrackRemoteStaticRTP::new(track, evt_rx));
+
+                        {
+                            let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
+                            rtp_transceivers.entry(id).or_insert_with(|| {
+                                Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner)))
+                            });
+
+                            let rtp_transceiver = rtp_transceivers.get(&id).unwrap();
+
+                            let receiver: Arc<dyn RtpReceiver> = Arc::new(RtpReceiverImpl::new(
+                                id.into(),
+                                Arc::clone(&self.inner),
+                                Arc::clone(&track_remote),
+                            ));
+                            rtp_transceiver.set_receiver(Some(receiver)).await;
+                        }
+
+                        {
+                            let mut track_remotes = self.inner.track_remotes.lock().await;
+                            if !track_remotes.contains_key(track_id) {
+                                track_remotes.insert(track_id.clone(), evt_tx);
+                            }
+                        }
+
+                        self.inner.handler.on_track(track_remote).await
+                    }
+                }
+
+                let track_remotes = self.inner.track_remotes.lock().await;
+                if let Some(evt_tx) = track_remotes.get(track_id) {
+                    let result = match &evt {
+                        RTCTrackEvent::OnOpen(_) => evt_tx.try_send(TrackRemoteEvent::OnOpen),
+                        RTCTrackEvent::OnError(_) => evt_tx.try_send(TrackRemoteEvent::OnError),
+                        RTCTrackEvent::OnClosing(_) => evt_tx.try_send(TrackRemoteEvent::OnEnding),
+                        RTCTrackEvent::OnClose(_) => evt_tx.try_send(TrackRemoteEvent::OnEnded),
+                    };
+                    if let Err(err) = result {
+                        error!(
+                            "Failed to send RTCTrackEvent to track remote {}: {:?}",
+                            track_id, err
+                        );
+                    }
+                } else {
+                    error!(
+                        "Failed to get track_remote: {:?} for RTCTrackEvent",
+                        track_id
+                    );
+                }
             }
         }
     }
@@ -388,17 +469,43 @@ where
                 let data_channels = self.inner.data_channels.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
                     if let Err(err) = evt_tx.try_send(DataChannelEvent::OnMessage(dc_message)) {
-                        error!("Failed to send to data channel {}: {:?}", channel_id, err);
+                        error!(
+                            "Failed to send DataChannelMessage to data channel {}: {:?}",
+                            channel_id, err
+                        );
                     }
+                } else {
+                    error!(
+                        "Failed to get data_channel: {:?} for DataChannelMessage",
+                        channel_id
+                    );
                 }
             }
-            RTCMessage::RtpPacket(track_id, _packet) => {
-                trace!("Received RTP packet for track: {:?}", track_id);
-                //TODO:
+            RTCMessage::RtpPacket(track_id, packet) => {
+                let track_remotes = self.inner.track_remotes.lock().await;
+                if let Some(evt_tx) = track_remotes.get(&track_id) {
+                    if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtpPacket(packet)) {
+                        error!(
+                            "Failed to send RtpPacket to track remote {}: {:?}",
+                            track_id, err
+                        );
+                    }
+                } else {
+                    error!("Failed to get track_remote: {:?} for RtpPacket", track_id);
+                }
             }
-            RTCMessage::RtcpPacket(track_id, _packets) => {
-                trace!("Received RTCP packets for track: {:?}", track_id);
-                //TODO:
+            RTCMessage::RtcpPacket(track_id, packets) => {
+                let track_remotes = self.inner.track_remotes.lock().await;
+                if let Some(evt_tx) = track_remotes.get(&track_id) {
+                    if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtcpPacket(packets)) {
+                        error!(
+                            "Failed to send RtcpPacket to track remote {}: {:?}",
+                            track_id, err
+                        );
+                    }
+                } else {
+                    error!("Failed to get track_remote: {:?} for RtcpPacket", track_id);
+                }
             }
         }
     }

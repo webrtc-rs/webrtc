@@ -32,8 +32,10 @@ use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
 
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
+use rtc::media_stream::MediaStreamTrackId;
 pub use rtc::peer_connection::{
     RTCPeerConnection,
     certificate::RTCCertificate,
@@ -343,6 +345,7 @@ where
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
     pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
+    pub(crate) track_remotes: Mutex<HashMap<MediaStreamTrackId, Sender<TrackRemoteEvent>>>,
     pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<RtpTransceiverImpl<I>>>>,
     /// Unified channel for all outgoing messages
     pub(crate) msg_tx: Sender<MessageInner>,
@@ -382,6 +385,7 @@ where
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
                 data_channels: Mutex::new(HashMap::new()),
+                track_remotes: Mutex::new(HashMap::new()),
                 rtp_transceivers: Mutex::new(HashMap::new()),
                 handler,
                 msg_tx,

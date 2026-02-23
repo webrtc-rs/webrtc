@@ -1,17 +1,21 @@
 use crate::media_stream::Track;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
+use crate::runtime::{Mutex, Receiver};
 use rtc::media_stream::MediaStreamTrack;
 
 /// TrackLocalStaticRTP  is a TrackLocal that has a pre-set codec and accepts RTP Packets.
 /// If you wish to send a media.Sample use TrackLocalStaticSample
-#[derive(Debug)]
-pub struct TrackRemoteStaticRTP {
+pub(crate) struct TrackRemoteStaticRTP {
     track: MediaStreamTrack,
+    evt_rx: Mutex<Receiver<TrackRemoteEvent>>,
 }
 
 impl TrackRemoteStaticRTP {
-    pub fn new(track: MediaStreamTrack) -> Self {
-        Self { track }
+    pub fn new(track: MediaStreamTrack, evt_rx: Receiver<TrackRemoteEvent>) -> Self {
+        Self {
+            track,
+            evt_rx: Mutex::new(evt_rx),
+        }
     }
 }
 
@@ -31,6 +35,6 @@ impl TrackRemote for TrackRemoteStaticRTP {
     }
 
     async fn poll(&self) -> Option<TrackRemoteEvent> {
-        todo!()
+        self.evt_rx.lock().await.recv().await
     }
 }

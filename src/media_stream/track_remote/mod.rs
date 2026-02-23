@@ -1,13 +1,18 @@
-mod static_rtp;
+pub(crate) mod static_rtp;
 
 use crate::media_stream::Track;
 use rtc::{rtcp, rtp};
 
 #[derive(Debug, Clone)]
 pub enum TrackRemoteEvent {
+    OnOpen,
+    OnError,
+    OnEnding, // RTCTrackEvent::OnClosing
+    OnEnded,  // RTCTrackEvent::OnClose
+
     OnMute,
     OnUnmute,
-    OnEnded,
+
     OnRtpPacket(rtp::Packet),
     OnRtcpPacket(Vec<Box<dyn rtcp::Packet>>),
 }
