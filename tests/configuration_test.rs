@@ -1,7 +1,9 @@
 //! Integration tests for PeerConnection configuration options
 
+use rtc::media_stream::MediaStreamTrack;
 use std::sync::Arc;
 use std::time::Duration;
+use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use webrtc::peer_connection::*;
 use webrtc::peer_connection::{
     MediaEngine, RTCBundlePolicy, RTCConfigurationBuilder, RTCIceServer, RTCIceTransportPolicy,
@@ -36,16 +38,15 @@ fn test_media_engine_configuration() {
             .await
             .unwrap();
 
-        /*TODO:
         // Add a track first (needed to create offer with media)
-        let track = rtc::media_stream::MediaStreamTrack::new(
+        let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
             "stream".to_string(),
             "video".to_string(),
             "track".to_string(),
             rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
             vec![],
-        );
-        pc.add_track(track).await.expect("Failed to add track");*/
+        )));
+        pc.add_track(track).await.expect("Failed to add track");
 
         // Create offer should work with registered codecs
         let offer = pc.create_offer(None).await.expect("Failed to create offer");
@@ -277,22 +278,21 @@ fn test_media_engine_required_for_tracks() {
             .await
             .unwrap();
 
-        /*TODO:
         // Add track
-        let track = rtc::media_stream::MediaStreamTrack::new(
+        let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
             "stream".to_string(),
             "video".to_string(),
             "track".to_string(),
             rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
             vec![],
-        );
+        )));
 
         // Should succeed
         let result = pc.add_track(track).await;
         assert!(
             result.is_ok(),
             "Adding track with MediaEngine should succeed"
-        );*/
+        );
 
         // Creating offer should also succeed
         let offer_result = pc.create_offer(None);
@@ -551,16 +551,15 @@ fn test_all_configuration_options_combined() {
             .await
             .unwrap();
 
-        /*TODO:
         // Add track
-        let track = rtc::media_stream::MediaStreamTrack::new(
+        let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
             "stream".to_string(),
             "video".to_string(),
             "track".to_string(),
             rtc::rtp_transceiver::rtp_sender::RtpCodecKind::Video,
             vec![],
-        );
-        pc.add_track(track).await.expect("Failed to add track");*/
+        )));
+        pc.add_track(track).await.expect("Failed to add track");
 
         // Should create offer successfully with all options
         let offer = pc.create_offer(None).await.expect("Failed to create offer");

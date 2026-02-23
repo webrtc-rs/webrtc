@@ -4,7 +4,7 @@ pub mod rtp_receiver;
 pub mod rtp_sender;
 
 use crate::error::Error;
-use crate::media_stream::{TrackLocal, TrackRemote};
+use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::runtime::Mutex;
 use rtc::media_stream::MediaStreamId;

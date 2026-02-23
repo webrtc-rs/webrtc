@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
-use crate::media_stream::{TrackLocal, TrackRemote};
+use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
@@ -31,6 +31,7 @@ use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
 
+use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 pub use rtc::peer_connection::{
@@ -714,13 +715,13 @@ where
             .get(&id)
             .ok_or(Error::ErrRTPTransceiverNotExisted)?;
 
-        if let Some(_track) = track {
-            /*TODO: let sender: Arc<dyn RtpSender> = Arc::new(RtpSenderImpl::new(
+        if let Some(track) = track {
+            let sender: Arc<dyn RtpSender> = Arc::new(RtpSenderImpl::new(
                 id.into(),
                 Arc::clone(&self.inner),
-                track,
+                Arc::new(TrackLocalStaticRTP::new(track)),
             ));
-            rtp_transceiver.set_sender(Some(sender)).await;*/
+            rtp_transceiver.set_sender(Some(sender)).await;
         }
 
         Ok(rtp_transceiver.clone() as Arc<dyn RtpTransceiver>)

@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::media_stream::TrackRemote;
+use crate::media_stream::track_remote::TrackRemote;
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::rtp_transceiver::RtpReceiver;
 use crate::runtime::Mutex;
