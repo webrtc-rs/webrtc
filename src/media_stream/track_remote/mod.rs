@@ -1,5 +1,6 @@
 pub(crate) mod static_rtp;
 
+use crate::error::Result;
 use crate::media_stream::Track;
 use rtc::{rtcp, rtp};
 
@@ -19,6 +20,7 @@ pub enum TrackRemoteEvent {
 
 #[async_trait::async_trait]
 pub trait TrackRemote: Track {
-    async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> crate::error::Result<()>;
+    async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()>;
+
     async fn poll(&self) -> Option<TrackRemoteEvent>;
 }

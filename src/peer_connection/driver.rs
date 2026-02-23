@@ -32,7 +32,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Capacity of the internal driver message channel (WriteNotify, IceGathering, Close, …).
-pub(crate) const MESSAGE_INNER_CHANNEL_CAPACITY: usize = 64;
+pub(crate) const MESSAGE_INNER_CHANNEL_CAPACITY: usize = 256;
 
 /// Capacity of each data-channel event channel (OnOpen, OnMessage, OnClose, …).
 pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
@@ -410,7 +410,12 @@ where
                     if let Some(track) = track {
                         let (evt_tx, evt_rx) = channel(TRACK_REMOTE_EVENT_CHANNEL_CAPACITY);
                         let track_remote: Arc<dyn TrackRemote> =
-                            Arc::new(TrackRemoteStaticRTP::new(track, evt_rx));
+                            Arc::new(TrackRemoteStaticRTP::new(
+                                track,
+                                init.receiver_id,
+                                self.inner.msg_tx.clone(),
+                                evt_rx,
+                            ));
 
                         {
                             let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
@@ -512,12 +517,17 @@ where
 
     async fn handle_inner_message(&mut self, msg: MessageInner) -> bool {
         match msg {
-            /*MessageInner::SenderRtp(sender_id, packet) => {
+            MessageInner::SenderRtp(sender_id, packet) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut sender) = core.rtp_sender(sender_id) {
                     if let Err(err) = sender.write_rtp(packet) {
                         error!("Failed to send RTP: {}", err);
                     }
+                } else {
+                    error!(
+                        "Failed to send RTCP feedback due to unknown sender id {:?}",
+                        sender_id
+                    );
                 }
             }
             MessageInner::SenderRtcp(sender_id, rtcp_packets) => {
@@ -526,6 +536,11 @@ where
                     if let Err(err) = sender.write_rtcp(rtcp_packets) {
                         error!("Failed to send RTCP: {}", err);
                     }
+                } else {
+                    error!(
+                        "Failed to send RTCP feedback due to unknown sender id {:?}",
+                        sender_id
+                    );
                 }
             }
             MessageInner::ReceiverRtcp(receiver_id, rtcp_packets) => {
@@ -534,8 +549,13 @@ where
                     if let Err(err) = receiver.write_rtcp(rtcp_packets) {
                         error!("Failed to send RTCP feedback: {}", err);
                     }
+                } else {
+                    error!(
+                        "Failed to send RTCP feedback due to unknown receiver id {:?}",
+                        receiver_id
+                    );
                 }
-            }*/
+            }
             MessageInner::WriteNotify => {
                 //Do nothing, just want to wake up from futures::select! in order to poll_write
             }

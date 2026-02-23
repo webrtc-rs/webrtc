@@ -25,11 +25,14 @@ use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
-use rtc::rtp_transceiver::{RTCRtpTransceiverId, RTCRtpTransceiverInit};
+use rtc::rtp_transceiver::{
+    RTCRtpReceiverId, RTCRtpSenderId, RTCRtpTransceiverId, RTCRtpTransceiverInit,
+};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
+use rtc::{rtcp, rtp};
 
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
@@ -109,6 +112,9 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum MessageInner {
+    SenderRtp(RTCRtpSenderId, rtp::Packet),
+    SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtcp::Packet>>),
+    ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtcp::Packet>>),
     WriteNotify,
     IceGathering,
     Close,
