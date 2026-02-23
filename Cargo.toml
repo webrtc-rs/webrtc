@@ -93,15 +93,10 @@ name = "play-from-disk-vpx"
 path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
 bench = false
 #
-#[[example]]
-#name = "play-from-disk-h264"
-#path = "examples/play-from-disk-h264/play-from-disk-h264.rs"
-#bench = false
-#
-#[[example]]
-#name = "play-from-disk-hevc"
-#path = "examples/play-from-disk-hevc/play-from-disk-hevc.rs"
-#bench = false
+[[example]]
+name = "play-from-disk-h26x"
+path = "examples/play-from-disk-h26x/play-from-disk-h26x.rs"
+bench = false
 #
 #[[example]]
 #name = "play-from-disk-renegotiation"

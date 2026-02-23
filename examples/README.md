@@ -25,19 +25,19 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
 
 - ✅ [Reflect](reflect): The reflect example demonstrates how to have webrtc-rs send back to the user exactly what it
   receives using the same PeerConnection.
-- ✅ [Play from Disk VPx](play-from-disk-vpx): The play-from-disk-vp8 example demonstrates how to send VP8/VP9 video to
+- ✅ [Play from Disk VPx](play-from-disk-vpx): The play-from-disk-vpx example demonstrates how to send VP8/VP9 video to
   your browser from a file saved to disk.
-- 🚧 [Play from Disk H264](play-from-disk-h264): The play-from-disk-h264 example demonstrates how to send H264 video to
+- ✅ [Play from Disk H26x](play-from-disk-h26x): The play-from-disk-h26x example demonstrates how to send H26x video to
   your browser from a file saved to disk.
 - 🚧 [Play from Disk Renegotiation](play-from-disk-renegotiation): The play-from-disk-renegotiation example is an
   extension of the play-from-disk example, but demonstrates how you can add/remove video tracks from an already
   negotiated PeerConnection.
 - 🚧 [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to
   send E2E encrypted video and decrypt via insertable streams in the browser.
-- 🚧 [Save to Disk VPx](save-to-disk-vpx): The save-to-disk example shows how to record your webcam and save the
+- 🚧 [Save to Disk VPx](save-to-disk-vpx): The save-to-disk-vpx example shows how to record your webcam and save the
   footage (VP8/VP9 for video, Opus for audio) to disk on the server side.
-- 🚧 [Save to Disk H264](save-to-disk-h264): The save-to-disk example shows how to record your webcam and save the
-  footage (H264 for video, Opus for audio) to disk on the server side.
+- 🚧 [Save to Disk H26x](save-to-disk-h26x): The save-to-disk-h26x example shows how to record your webcam and save the
+  footage (H26x for video, Opus for audio) to disk on the server side.
 - 🚧 [Broadcast](broadcast): The broadcast example demonstrates how to broadcast a video to multiple peers. A
   broadcaster uploads the video once and the server forwards it to all other peers.
 - 🚧 [RTP Forwarder](rtp-forwarder): The rtp-forwarder example demonstrates how to forward your audio/video streams

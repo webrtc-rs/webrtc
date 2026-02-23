@@ -1,0 +1,471 @@
+use anyhow::Result;
+use clap::Parser;
+use env_logger::Target;
+use futures::FutureExt;
+use rtc::interceptor::Registry;
+use rtc::media::io::h26x_reader::{H26xNAL, H26xReader, H264NalUnitType, H265NalUnitType};
+use rtc::media::io::ogg_reader::OggReader;
+use rtc::media_stream::MediaStreamTrack;
+use rtc::peer_connection::configuration::RTCConfigurationBuilder;
+use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::media_engine::{
+    MIME_TYPE_H264, MIME_TYPE_HEVC, MIME_TYPE_OPUS, MediaEngine,
+};
+use rtc::peer_connection::sdp::RTCSessionDescription;
+use rtc::peer_connection::transport::RTCIceServer;
+use rtc::rtp;
+use rtc::rtp::packetizer::Packetizer;
+use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RtpCodecKind};
+use rtc::rtp_transceiver::rtp_sender::{
+    RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
+};
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
+use std::{
+    fs,
+    fs::{File, OpenOptions},
+    io::{BufReader, Write},
+    str::FromStr,
+};
+use webrtc::media_stream::track_local::TrackLocal;
+use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+use webrtc::peer_connection::{
+    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
+    RTCPeerConnectionState,
+};
+use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep};
+
+const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
+const H26X_FRAME_DURATION: Duration = Duration::from_millis(33); // ~30 fps
+const RTP_OUTBOUND_MTU: usize = 1200;
+
+// ── CLI ───────────────────────────────────────────────────────────────────────
+
+#[derive(Parser)]
+#[command(name = "play-from-disk-h26x")]
+#[command(author = "Rain Liu <yliu@webrtc.rs>")]
+#[command(version = "0.1.0")]
+#[command(about = "An example of play-from-disk-h26x.")]
+struct Cli {
+    #[arg(short, long)]
+    debug: bool,
+    #[arg(short, long, default_value_t = format!("INFO"))]
+    log_level: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    input_sdp_file: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    output_log_file: String,
+    /// Video file to stream (.h264 Annex-B or .h265/HEVC)
+    #[arg(short, long)]
+    video: Option<String>,
+    /// Audio file to stream (.ogg / Opus)
+    #[arg(short, long)]
+    audio: Option<String>,
+    /// Use HEVC/H.265 instead of H.264 (default: H.264)
+    #[arg(long)]
+    hevc: bool,
+}
+
+// ── Event handler ─────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct Handler {
+    gather_complete_tx: Sender<()>,
+    done_tx: Sender<()>,
+    connected_tx: Sender<()>,
+}
+
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for Handler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gather_complete_tx.try_send(());
+        }
+    }
+
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("Peer Connection State has changed: {state}");
+        match state {
+            RTCPeerConnectionState::Connected => {
+                let _ = self.connected_tx.try_send(());
+            }
+            RTCPeerConnectionState::Failed
+            | RTCPeerConnectionState::Disconnected
+            | RTCPeerConnectionState::Closed => {
+                let _ = self.done_tx.try_send(());
+            }
+            _ => {}
+        }
+    }
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+fn main() -> Result<()> {
+    block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
+    let cli = Cli::parse();
+    let log_level = log::LevelFilter::from_str(&cli.log_level)?;
+    let is_hevc = cli.hevc;
+    let video_file = cli.video;
+    let audio_file = cli.audio;
+
+    if cli.debug {
+        env_logger::Builder::new()
+            .target(if !cli.output_log_file.is_empty() {
+                Target::Pipe(Box::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&cli.output_log_file)?,
+                ))
+            } else {
+                Target::Stdout
+            })
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{}:{} [{}] {} - {}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    record.level(),
+                    chrono::Local::now().format("%H:%M:%S.%6f"),
+                    record.args()
+                )
+            })
+            .filter(None, log_level)
+            .init();
+    }
+
+    if let Some(video_path) = &video_file {
+        if !Path::new(video_path).exists() {
+            return Err(anyhow::anyhow!("video file: '{}' not exist", video_path));
+        }
+    }
+    if let Some(audio_path) = &audio_file {
+        if !Path::new(audio_path).exists() {
+            return Err(anyhow::anyhow!("audio file: '{}' not exist", audio_path));
+        }
+    }
+
+    // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
+
+    // Create a MediaEngine object to configure the supported codec
+    let mut media_engine = MediaEngine::default();
+
+    let audio_codec = RTCRtpCodecParameters {
+        rtp_codec: RTCRtpCodec {
+            mime_type: MIME_TYPE_OPUS.to_owned(),
+            clock_rate: 48000,
+            channels: 2,
+            sdp_fmtp_line: "".to_owned(),
+            rtcp_feedback: vec![],
+        },
+        payload_type: 120,
+        ..Default::default()
+    };
+
+    let video_codec = RTCRtpCodecParameters {
+        rtp_codec: RTCRtpCodec {
+            mime_type: if is_hevc {
+                MIME_TYPE_HEVC.to_owned()
+            } else {
+                MIME_TYPE_H264.to_owned()
+            },
+            clock_rate: 90000,
+            channels: 0,
+            sdp_fmtp_line: if is_hevc {
+                "".to_owned()
+            } else {
+                "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f".to_owned()
+            },
+            rtcp_feedback: vec![],
+        },
+        payload_type: if is_hevc { 98 } else { 102 },
+        ..Default::default()
+    };
+
+    if audio_file.is_some() {
+        media_engine.register_codec(audio_codec.clone(), RtpCodecKind::Audio)?;
+    }
+    if video_file.is_some() {
+        media_engine.register_codec(video_codec.clone(), RtpCodecKind::Video)?;
+    }
+
+    let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
+
+    // Create RTC peer connection configuration
+    let config = RTCConfigurationBuilder::new()
+        .with_ice_servers(vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_string()],
+            ..Default::default()
+        }])
+        .build();
+
+    let (done_tx, mut done_rx) = channel::<()>(1);
+    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>(1);
+    let (connected_tx, mut connected_rx) = channel::<()>(1);
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
+    ctrlc::set_handler(move || {
+        let _ = ctrlc_tx.try_send(());
+    })?;
+
+    let runtime =
+        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+
+    let handler = Arc::new(Handler {
+        gather_complete_tx,
+        done_tx: done_tx.clone(),
+        connected_tx,
+    });
+
+    let peer_connection = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_interceptor_registry(registry)
+        .with_handler(handler)
+        .with_runtime(runtime.clone())
+        .with_udp_addrs(vec![format!("{}:0", signal::get_local_ip())])
+        .build()
+        .await?;
+
+    // Add video track
+    let video_track: Option<Arc<dyn TrackLocal>> = if video_file.is_some() {
+        let ssrc = rand::random::<u32>();
+        let track: Arc<dyn TrackLocal> = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
+            format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
+            format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
+            RtpCodecKind::Video,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    ssrc: Some(ssrc),
+                    ..Default::default()
+                },
+                codec: video_codec.rtp_codec.clone(),
+                ..Default::default()
+            }],
+        )));
+        peer_connection.add_track(Arc::clone(&track)).await?;
+        Some(track)
+    } else {
+        None
+    };
+
+    // Add audio track
+    let audio_track: Option<Arc<dyn TrackLocal>> = if audio_file.is_some() {
+        let ssrc = rand::random::<u32>();
+        let track: Arc<dyn TrackLocal> = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
+            format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
+            format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
+            RtpCodecKind::Audio,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    ssrc: Some(ssrc),
+                    ..Default::default()
+                },
+                codec: audio_codec.rtp_codec.clone(),
+                ..Default::default()
+            }],
+        )));
+        peer_connection.add_track(Arc::clone(&track)).await?;
+        Some(track)
+    } else {
+        None
+    };
+
+    // Wait for the offer to be pasted
+    print!("Paste offer from browser and press Enter: ");
+
+    let line = if cli.input_sdp_file.is_empty() {
+        signal::must_read_stdin()?
+    } else {
+        fs::read_to_string(&cli.input_sdp_file)?
+    };
+    let desc_data = signal::decode(line.as_str())?;
+    let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
+    println!("Offer received: {offer}");
+
+    peer_connection.set_remote_description(offer).await?;
+    let answer = peer_connection.create_answer(None).await?;
+    peer_connection.set_local_description(answer).await?;
+
+    // Block until ICE Gathering is complete (non-trickle ICE)
+    let _ = gather_complete_rx.recv().await;
+
+    if let Some(local_desc) = peer_connection.local_description().await {
+        let json_str = serde_json::to_string(&local_desc)?;
+        let b64 = signal::encode(&json_str);
+        println!("{b64}");
+    } else {
+        println!("generate local_description failed!");
+    }
+
+    // Wait for connection, then start streaming
+    println!("Waiting for peer connection...");
+    connected_rx.recv().await;
+    println!("Connected! Starting media streams.");
+
+    let (video_done_tx, mut video_done_rx) = channel::<()>(1);
+    if let (Some(video_file_name), Some(track)) = (video_file, video_track) {
+        let codec = video_codec.clone();
+        runtime.spawn(Box::pin(async move {
+            if let Err(e) = stream_video(video_file_name, track, codec, is_hevc).await {
+                eprintln!("video streaming error: {e}");
+            }
+            let _ = video_done_tx.try_send(());
+        }));
+    } else {
+        drop(video_done_tx);
+    }
+
+    let (audio_done_tx, mut audio_done_rx) = channel::<()>(1);
+    if let (Some(audio_file_name), Some(track)) = (audio_file, audio_track) {
+        let codec = audio_codec.clone();
+        runtime.spawn(Box::pin(async move {
+            if let Err(e) = stream_audio(audio_file_name, track, codec).await {
+                eprintln!("audio streaming error: {e}");
+            }
+            let _ = audio_done_tx.try_send(());
+        }));
+    } else {
+        drop(audio_done_tx);
+    }
+
+    println!("Press ctrl-c to stop");
+    futures::select! {
+        _ = done_rx.recv().fuse() => {
+            println!("received done signal!");
+        }
+        _ = ctrlc_rx.recv().fuse() => {
+            println!("received ctrl-c signal!");
+        }
+        _ = async {
+            let _ = video_done_rx.recv().await;
+            let _ = audio_done_rx.recv().await;
+        }.fuse() => {
+            println!("All media streaming completed.");
+        }
+    }
+
+    peer_connection.close().await?;
+
+    Ok(())
+}
+
+// ── Streaming helpers ──────────────────────────────────────────────────────────
+
+fn should_skip_timing(nal: &H26xNAL) -> bool {
+    match nal {
+        H26xNAL::H264(nal) => matches!(
+            nal.unit_type,
+            H264NalUnitType::SPS
+                | H264NalUnitType::PPS
+                | H264NalUnitType::SEI
+                | H264NalUnitType::AUD
+        ),
+        H26xNAL::H265(nal) => matches!(
+            nal.unit_type,
+            H265NalUnitType::VPS
+                | H265NalUnitType::SPS
+                | H265NalUnitType::PPS
+                | H265NalUnitType::PrefixSEI
+                | H265NalUnitType::SuffixSEI
+                | H265NalUnitType::AUD
+        ),
+    }
+}
+
+async fn stream_video(
+    video_file_name: String,
+    track: Arc<dyn TrackLocal>,
+    codec: RTCRtpCodecParameters,
+    is_hevc: bool,
+) -> Result<()> {
+    println!("play video from disk file {video_file_name}");
+
+    let file = File::open(&video_file_name)?;
+    let mut video_reader = H26xReader::new(BufReader::new(file), 1_048_576, is_hevc);
+
+    let ssrc = track.track().ssrcs().next().unwrap_or(0);
+    let mut packetizer = rtp::packetizer::new_packetizer(
+        RTP_OUTBOUND_MTU,
+        codec.payload_type,
+        ssrc,
+        codec.rtp_codec.payloader()?,
+        Box::new(rtp::sequence::new_random_sequencer()),
+        codec.rtp_codec.clock_rate,
+    );
+
+    let samples = (H26X_FRAME_DURATION.as_secs_f64() * codec.rtp_codec.clock_rate as f64) as u32;
+
+    loop {
+        let nal = match video_reader.next_nal() {
+            Ok(nal) => nal,
+            Err(err) => {
+                println!("All video frames parsed and sent: {err}");
+                break;
+            }
+        };
+
+        let packets = packetizer.packetize(&nal.data().clone().freeze(), samples)?;
+        for packet in packets {
+            track.write_rtp(packet).await?;
+        }
+
+        if !should_skip_timing(&nal) {
+            sleep(H26X_FRAME_DURATION).await;
+        }
+    }
+
+    Ok(())
+}
+
+async fn stream_audio(
+    audio_file_name: String,
+    track: Arc<dyn TrackLocal>,
+    codec: RTCRtpCodecParameters,
+) -> Result<()> {
+    println!("play audio from disk file {audio_file_name}");
+
+    let file = File::open(&audio_file_name)?;
+    let (mut ogg, _) = match OggReader::new(BufReader::new(file), true) {
+        Ok(tup) => tup,
+        Err(err) => {
+            println!("error while opening audio file {audio_file_name}: {err}");
+            return Err(err.into());
+        }
+    };
+
+    let ssrc = track.track().ssrcs().next().unwrap_or(0);
+    let mut packetizer = rtp::packetizer::new_packetizer(
+        RTP_OUTBOUND_MTU,
+        codec.payload_type,
+        ssrc,
+        codec.rtp_codec.payloader()?,
+        Box::new(rtp::sequence::new_random_sequencer()),
+        codec.rtp_codec.clock_rate,
+    );
+
+    let mut last_granule: u64 = 0;
+    while let Ok((page_data, page_header)) = ogg.parse_next_page() {
+        let sample_count = page_header.granule_position - last_granule;
+        last_granule = page_header.granule_position;
+        let sample_duration = Duration::from_millis(sample_count * 1000 / 48000);
+        let samples = (sample_duration.as_secs_f64() * codec.rtp_codec.clock_rate as f64) as u32;
+
+        let packets = packetizer.packetize(&page_data.freeze(), samples)?;
+        for packet in packets {
+            track.write_rtp(packet).await?;
+        }
+
+        sleep(OGG_PAGE_DURATION).await;
+    }
+
+    Ok(())
+}
