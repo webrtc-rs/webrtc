@@ -231,21 +231,20 @@ async fn async_main() -> Result<()> {
     // Add video track
     let video_track: Option<Arc<dyn TrackLocal>> = if video_file.is_some() {
         let ssrc = rand::random::<u32>();
-        let track: Arc<dyn TrackLocal> =
-            Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
-                format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
-                format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
-                format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
-                RtpCodecKind::Video,
-                vec![RTCRtpEncodingParameters {
-                    rtp_coding_parameters: RTCRtpCodingParameters {
-                        ssrc: Some(ssrc),
-                        ..Default::default()
-                    },
-                    codec: video_codec.rtp_codec.clone(),
+        let track: Arc<dyn TrackLocal> = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
+            format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
+            format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
+            RtpCodecKind::Video,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    ssrc: Some(ssrc),
                     ..Default::default()
-                }],
-            )));
+                },
+                codec: video_codec.rtp_codec.clone(),
+                ..Default::default()
+            }],
+        )));
         peer_connection.add_track(Arc::clone(&track)).await?;
         Some(track)
     } else {
@@ -255,21 +254,20 @@ async fn async_main() -> Result<()> {
     // Add audio track
     let audio_track: Option<Arc<dyn TrackLocal>> = if audio_file.is_some() {
         let ssrc = rand::random::<u32>();
-        let track: Arc<dyn TrackLocal> =
-            Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
-                format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
-                format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
-                format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
-                RtpCodecKind::Audio,
-                vec![RTCRtpEncodingParameters {
-                    rtp_coding_parameters: RTCRtpCodingParameters {
-                        ssrc: Some(ssrc),
-                        ..Default::default()
-                    },
-                    codec: audio_codec.rtp_codec.clone(),
+        let track: Arc<dyn TrackLocal> = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
+            format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
+            format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
+            RtpCodecKind::Audio,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    ssrc: Some(ssrc),
                     ..Default::default()
-                }],
-            )));
+                },
+                codec: audio_codec.rtp_codec.clone(),
+                ..Default::default()
+            }],
+        )));
         peer_connection.add_track(Arc::clone(&track)).await?;
         Some(track)
     } else {
