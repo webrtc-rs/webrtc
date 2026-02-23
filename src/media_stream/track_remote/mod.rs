@@ -1,3 +1,5 @@
+mod static_rtp;
+
 use crate::media_stream::Track;
 use rtc::{rtcp, rtp};
 
