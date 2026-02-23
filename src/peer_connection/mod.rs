@@ -16,7 +16,8 @@ use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
 
 use driver::{
-    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, MESSAGE_INNER_CHANNEL_CAPACITY, PeerConnectionDriver,
+    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
+    PeerConnectionDriver,
 };
 use ice_gatherer::RTCIceGatherOptions;
 use ice_gatherer::RTCIceGatherer;
@@ -25,17 +26,15 @@ use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
-use rtc::rtp_transceiver::{
-    RTCRtpReceiverId, RTCRtpSenderId, RTCRtpTransceiverId, RTCRtpTransceiverInit,
-};
+use rtc::rtp_transceiver::{RTCRtpTransceiverId, RTCRtpTransceiverInit};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
-use rtc::{rtcp, rtp};
 
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
+use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::media_stream::MediaStreamTrackId;
@@ -107,17 +106,6 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
 
     /// Called when a remote track is received
     async fn on_track(&self, _track: Arc<dyn TrackRemote>) {}
-}
-
-/// Unified inner message type for the peer connection driver
-#[derive(Debug)]
-pub(crate) enum MessageInner {
-    SenderRtp(RTCRtpSenderId, rtp::Packet),
-    SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtcp::Packet>>),
-    ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtcp::Packet>>),
-    WriteNotify,
-    IceGathering,
-    Close,
 }
 
 pub struct PeerConnectionBuilder<A: ToSocketAddrs, I = NoopInterceptor>
@@ -350,11 +338,14 @@ where
     pub(crate) runtime: Arc<dyn Runtime>,
     /// Event handler
     pub(crate) handler: Arc<dyn PeerConnectionEventHandler>,
-    pub(crate) data_channels: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
-    pub(crate) track_remotes: Mutex<HashMap<MediaStreamTrackId, Sender<TrackRemoteEvent>>>,
+    /// RTP Transceivers
     pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<RtpTransceiverImpl<I>>>>,
-    /// Unified channel for all outgoing messages
-    pub(crate) msg_tx: Sender<MessageInner>,
+    /// Unified channel for all outgoing driver events
+    pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
+    /// Channels for incoming data channel events
+    pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
+    /// Channels for incoming track remote events
+    pub(crate) track_remote_events_tx: Mutex<HashMap<MediaStreamTrackId, Sender<TrackRemoteEvent>>>,
 }
 
 impl<I> PeerConnectionImpl<I>
@@ -385,16 +376,17 @@ where
             }
         }
 
-        let (msg_tx, msg_rx) = channel(MESSAGE_INNER_CHANNEL_CAPACITY);
+        let (driver_event_tx, driver_event_rx) =
+            channel(PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY);
         let peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
                 runtime: runtime.clone(),
-                data_channels: Mutex::new(HashMap::new()),
-                track_remotes: Mutex::new(HashMap::new()),
+                data_channel_events_tx: Mutex::new(HashMap::new()),
+                track_remote_events_tx: Mutex::new(HashMap::new()),
                 rtp_transceivers: Mutex::new(HashMap::new()),
                 handler,
-                msg_tx,
+                driver_event_tx,
             }),
             driver_handle: Mutex::new(None),
         };
@@ -407,7 +399,7 @@ where
         )
         .await?;
         let driver_handle = runtime.spawn(Box::pin(async move {
-            if let Err(e) = driver.event_loop(msg_rx).await {
+            if let Err(e) = driver.event_loop(driver_event_rx).await {
                 error!("I/O error: {}", e);
             }
         }));
@@ -428,8 +420,8 @@ where
             core.close()?;
         }
         self.inner
-            .msg_tx
-            .try_send(MessageInner::Close)
+            .driver_event_tx
+            .try_send(PeerConnectionDriverEvent::Close)
             .map_err(|e| Error::Other(format!("{:?}", e)))?;
 
         {
@@ -468,8 +460,8 @@ where
         // notify the driver would sleep until its previous (possibly 1-day default)
         // timer expired and never send STUN binding requests.
         self.inner
-            .msg_tx
-            .send(MessageInner::IceGathering)
+            .driver_event_tx
+            .send(PeerConnectionDriverEvent::IceGathering)
             .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
@@ -505,8 +497,8 @@ where
         // notify the driver would sleep until its previous (possibly 1-day default)
         // timer expired and never send the initial STUN binding requests.
         self.inner
-            .msg_tx
-            .try_send(MessageInner::WriteNotify)
+            .driver_event_tx
+            .try_send(PeerConnectionDriverEvent::WriteNotify)
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -538,8 +530,8 @@ where
         }
 
         self.inner
-            .msg_tx
-            .send(MessageInner::IceGathering)
+            .driver_event_tx
+            .send(PeerConnectionDriverEvent::IceGathering)
             .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
@@ -568,7 +560,7 @@ where
 
         let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
         {
-            let mut data_channels = self.inner.data_channels.lock().await;
+            let mut data_channels = self.inner.data_channel_events_tx.lock().await;
             data_channels.insert(channel_id, evt_tx);
         }
 

@@ -1,7 +1,7 @@
 use crate::error::{Error, Result};
 use crate::media_stream::Track;
 use crate::media_stream::track_local::{TrackLocal, TrackLocalContext};
-use crate::peer_connection::MessageInner;
+use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::runtime::Mutex;
 use rtc::media_stream::MediaStreamTrack;
 use rtc::{rtcp, rtp};
@@ -44,8 +44,11 @@ impl TrackLocal for TrackLocalStaticRTP {
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()> {
         let ctx_opt = self.ctx.lock().await;
         if let Some(ctx) = &*ctx_opt {
-            ctx.msg_tx
-                .try_send(MessageInner::SenderRtp(ctx.sender_id, packet))
+            ctx.driver_event_tx
+                .try_send(PeerConnectionDriverEvent::SenderRtp(
+                    ctx.rtp_sender_id,
+                    packet,
+                ))
                 .map_err(|e| Error::Other(format!("{:?}", e)))
         } else {
             Err(Error::Other("track is not binding yet".to_string()))
@@ -55,8 +58,11 @@ impl TrackLocal for TrackLocalStaticRTP {
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()> {
         let ctx_opt = self.ctx.lock().await;
         if let Some(ctx) = &*ctx_opt {
-            ctx.msg_tx
-                .try_send(MessageInner::SenderRtcp(ctx.sender_id, packets))
+            ctx.driver_event_tx
+                .try_send(PeerConnectionDriverEvent::SenderRtcp(
+                    ctx.rtp_sender_id,
+                    packets,
+                ))
                 .map_err(|e| Error::Other(format!("{:?}", e)))
         } else {
             Err(Error::Other("track is not binding yet".to_string()))

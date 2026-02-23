@@ -1,12 +1,13 @@
 //! Async DataChannel API
 
-use crate::peer_connection::{MessageInner, PeerConnectionRef};
+use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{Mutex, Receiver};
 use bytes::BytesMut;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::shared::error::{Error, Result};
 use std::sync::Arc;
 
+use crate::peer_connection::driver::PeerConnectionDriverEvent;
 pub use rtc::data_channel::{
     RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage, RTCDataChannelState,
 };
@@ -235,8 +236,8 @@ where
         }
 
         self.inner
-            .msg_tx
-            .try_send(MessageInner::WriteNotify)
+            .driver_event_tx
+            .try_send(PeerConnectionDriverEvent::WriteNotify)
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -266,8 +267,8 @@ where
         }
 
         self.inner
-            .msg_tx
-            .try_send(MessageInner::WriteNotify)
+            .driver_event_tx
+            .try_send(PeerConnectionDriverEvent::WriteNotify)
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -297,8 +298,8 @@ where
         // Wake the driver so it flushes SCTP output (poll_write) and checks
         // for newly generated events (e.g. OnBufferedAmountHigh).
         self.inner
-            .msg_tx
-            .try_send(MessageInner::WriteNotify)
+            .driver_event_tx
+            .try_send(PeerConnectionDriverEvent::WriteNotify)
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -325,8 +326,8 @@ where
         }
 
         self.inner
-            .msg_tx
-            .try_send(MessageInner::WriteNotify)
+            .driver_event_tx
+            .try_send(PeerConnectionDriverEvent::WriteNotify)
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -344,8 +345,8 @@ where
         }
 
         self.inner
-            .msg_tx
-            .try_send(MessageInner::WriteNotify)
+            .driver_event_tx
+            .try_send(PeerConnectionDriverEvent::WriteNotify)
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 }

@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::media_stream::Track;
-use crate::peer_connection::MessageInner;
+use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::runtime::Sender;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 use rtc::{rtcp, rtp};
@@ -11,8 +11,8 @@ pub mod static_rtp;
 /// in Interceptors.
 #[derive(Clone)]
 pub struct TrackLocalContext {
-    pub(crate) sender_id: RTCRtpSenderId,
-    pub(crate) msg_tx: Sender<MessageInner>,
+    pub(crate) rtp_sender_id: RTCRtpSenderId,
+    pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
 }
 
 #[async_trait::async_trait]

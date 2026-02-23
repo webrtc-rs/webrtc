@@ -8,7 +8,6 @@ use super::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
 use crate::data_channel::{DataChannelEvent, DataChannelImpl};
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
-use crate::peer_connection::MessageInner;
 use crate::peer_connection::PeerConnectionRef;
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
@@ -22,17 +21,19 @@ use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, R
 use rtc::peer_connection::message::RTCMessage;
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::RTCIceCandidateInit;
+use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
+use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Capacity of the internal driver message channel (WriteNotify, IceGathering, Close, …).
-pub(crate) const MESSAGE_INNER_CHANNEL_CAPACITY: usize = 256;
+/// Capacity of the internal driver event channel (WriteNotify, IceGathering, Close, …).
+pub(crate) const PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 /// Capacity of each data-channel event channel (OnOpen, OnMessage, OnClose, …).
 pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
@@ -41,6 +42,17 @@ pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
 pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
+
+/// Unified inner message type for the peer connection driver
+#[derive(Debug)]
+pub(crate) enum PeerConnectionDriverEvent {
+    SenderRtp(RTCRtpSenderId, rtp::Packet),
+    SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtcp::Packet>>),
+    ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtcp::Packet>>),
+    WriteNotify,
+    IceGathering,
+    Close,
+}
 
 /// The driver for a peer connection
 ///
@@ -79,7 +91,10 @@ where
     /// Run the driver event loop
     ///
     /// This follows rtc Event Loop pattern exactly with select!
-    pub(crate) async fn event_loop(&mut self, mut msg_rx: Receiver<MessageInner>) -> Result<()> {
+    pub(crate) async fn event_loop(
+        &mut self,
+        mut driver_event_rx: Receiver<PeerConnectionDriverEvent>,
+    ) -> Result<()> {
         // Collect socket info into a vec for indexed access
         let socket_list: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>)> = self
             .sockets
@@ -195,10 +210,11 @@ where
                     core.handle_timeout(now)?;
                 }
 
-                // Inner message (DataChannel, RTP, RTCP, or ICE candidate)
-                msg = msg_rx.recv().fuse() => {
-                    if let Some(msg) = msg {
-                        if self.handle_inner_message(msg).await {
+                // Driver events (RTP, RTCP, or ICE candidate)
+                evt = driver_event_rx.recv().fuse() => {
+                    if let Some(evt) = evt {
+                        let is_closed = self.handle_driver_event(evt).await;
+                        if is_closed {
                             return Ok(());
                         }
                     }
@@ -231,6 +247,7 @@ where
                         }
                         Some(Err(err)) => {
                             error!("Socket recv error: {}", err);
+                            //TODO: better handling on socket recv error #777
                             // On error, we lost the buffer, create a new one and restart this socket
                             // This should be rare (only on actual socket errors)
                             // For now, we return the error to stop the loop
@@ -346,7 +363,7 @@ where
                             Arc::new(DataChannelImpl::new(channel_id, self.inner.clone(), evt_rx));
 
                         {
-                            let mut data_channels = self.inner.data_channels.lock().await;
+                            let mut data_channels = self.inner.data_channel_events_tx.lock().await;
                             if let Entry::Vacant(e) = data_channels.entry(channel_id) {
                                 e.insert(evt_tx);
                             }
@@ -356,7 +373,7 @@ where
                     }
                 }
 
-                let data_channels = self.inner.data_channels.lock().await;
+                let data_channels = self.inner.data_channel_events_tx.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
                     let result = match evt {
                         RTCDataChannelEvent::OnOpen(_) => evt_tx.try_send(DataChannelEvent::OnOpen),
@@ -413,7 +430,7 @@ where
                             Arc::new(TrackRemoteStaticRTP::new(
                                 track,
                                 init.receiver_id,
-                                self.inner.msg_tx.clone(),
+                                self.inner.driver_event_tx.clone(),
                                 evt_rx,
                             ));
 
@@ -434,7 +451,7 @@ where
                         }
 
                         {
-                            let mut track_remotes = self.inner.track_remotes.lock().await;
+                            let mut track_remotes = self.inner.track_remote_events_tx.lock().await;
                             if !track_remotes.contains_key(track_id) {
                                 track_remotes.insert(track_id.clone(), evt_tx);
                             }
@@ -444,7 +461,7 @@ where
                     }
                 }
 
-                let track_remotes = self.inner.track_remotes.lock().await;
+                let track_remotes = self.inner.track_remote_events_tx.lock().await;
                 if let Some(evt_tx) = track_remotes.get(track_id) {
                     let result = match &evt {
                         RTCTrackEvent::OnOpen(_) => evt_tx.try_send(TrackRemoteEvent::OnOpen),
@@ -471,7 +488,7 @@ where
     async fn handle_rtc_message(&mut self, message: RTCMessage) {
         match message {
             RTCMessage::DataChannelMessage(channel_id, dc_message) => {
-                let data_channels = self.inner.data_channels.lock().await;
+                let data_channels = self.inner.data_channel_events_tx.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
                     if let Err(err) = evt_tx.try_send(DataChannelEvent::OnMessage(dc_message)) {
                         error!(
@@ -487,7 +504,7 @@ where
                 }
             }
             RTCMessage::RtpPacket(track_id, packet) => {
-                let track_remotes = self.inner.track_remotes.lock().await;
+                let track_remotes = self.inner.track_remote_events_tx.lock().await;
                 if let Some(evt_tx) = track_remotes.get(&track_id) {
                     if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtpPacket(packet)) {
                         error!(
@@ -500,7 +517,7 @@ where
                 }
             }
             RTCMessage::RtcpPacket(track_id, packets) => {
-                let track_remotes = self.inner.track_remotes.lock().await;
+                let track_remotes = self.inner.track_remote_events_tx.lock().await;
                 if let Some(evt_tx) = track_remotes.get(&track_id) {
                     if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtcpPacket(packets)) {
                         error!(
@@ -515,9 +532,9 @@ where
         }
     }
 
-    async fn handle_inner_message(&mut self, msg: MessageInner) -> bool {
-        match msg {
-            MessageInner::SenderRtp(sender_id, packet) => {
+    async fn handle_driver_event(&mut self, evt: PeerConnectionDriverEvent) -> bool {
+        match evt {
+            PeerConnectionDriverEvent::SenderRtp(sender_id, packet) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut sender) = core.rtp_sender(sender_id) {
                     if let Err(err) = sender.write_rtp(packet) {
@@ -530,7 +547,7 @@ where
                     );
                 }
             }
-            MessageInner::SenderRtcp(sender_id, rtcp_packets) => {
+            PeerConnectionDriverEvent::SenderRtcp(sender_id, rtcp_packets) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut sender) = core.rtp_sender(sender_id) {
                     if let Err(err) = sender.write_rtcp(rtcp_packets) {
@@ -543,7 +560,7 @@ where
                     );
                 }
             }
-            MessageInner::ReceiverRtcp(receiver_id, rtcp_packets) => {
+            PeerConnectionDriverEvent::ReceiverRtcp(receiver_id, rtcp_packets) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut receiver) = core.rtp_receiver(receiver_id) {
                     if let Err(err) = receiver.write_rtcp(rtcp_packets) {
@@ -556,17 +573,17 @@ where
                     );
                 }
             }
-            MessageInner::WriteNotify => {
+            PeerConnectionDriverEvent::WriteNotify => {
                 //Do nothing, just want to wake up from futures::select! in order to poll_write
             }
-            MessageInner::IceGathering => {
+            PeerConnectionDriverEvent::IceGathering => {
                 if self.ice_gatherer.state() != RTCIceGatheringState::Gathering {
                     if let Err(err) = self.ice_gatherer.gather().await {
                         error!("Failed to gather ice gathering: {}", err);
                     }
                 }
             }
-            MessageInner::Close => return true,
+            PeerConnectionDriverEvent::Close => return true,
         }
 
         false

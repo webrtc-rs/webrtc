@@ -105,8 +105,8 @@ where
             rtp_sender
                 .track()
                 .bind(TrackLocalContext {
-                    sender_id: self.id.into(),
-                    msg_tx: self.inner.msg_tx.clone(),
+                    rtp_sender_id: self.id.into(),
+                    driver_event_tx: self.inner.driver_event_tx.clone(),
                 })
                 .await;
             *sender = Some(rtp_sender);
