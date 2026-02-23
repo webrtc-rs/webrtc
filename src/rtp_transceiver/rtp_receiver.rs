@@ -2,7 +2,6 @@ use crate::error::{Error, Result};
 use crate::media_stream::track_remote::TrackRemote;
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::rtp_transceiver::RtpReceiver;
-use crate::runtime::Mutex;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
 use rtc::rtp_transceiver::rtp_receiver::{RTCRtpContributingSource, RTCRtpSynchronizationSource};
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCapabilities, RTCRtpReceiveParameters, RtpCodecKind};
@@ -24,7 +23,7 @@ where
     /// Inner PeerConnection Reference
     inner: Arc<PeerConnectionRef<I>>,
 
-    track: Mutex<Arc<dyn TrackRemote>>,
+    track: Arc<dyn TrackRemote>,
 }
 
 impl<I> RtpReceiverImpl<I>
@@ -37,11 +36,7 @@ where
         inner: Arc<PeerConnectionRef<I>>,
         track: Arc<dyn TrackRemote>,
     ) -> Self {
-        Self {
-            id,
-            inner,
-            track: Mutex::new(track),
-        }
+        Self { id, inner, track }
     }
 }
 
@@ -54,16 +49,8 @@ where
         self.id
     }
 
-    async fn track(&self) -> Result<Arc<dyn TrackRemote>> {
-        {
-            let mut peer_connection = self.inner.core.lock().await;
-
-            peer_connection
-                .rtp_receiver(self.id)
-                .ok_or(Error::ErrRTPReceiverNotExisted)?;
-        }
-
-        Ok(self.track.lock().await.clone())
+    fn track(&self) -> &Arc<dyn TrackRemote> {
+        &self.track
     }
 
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>> {

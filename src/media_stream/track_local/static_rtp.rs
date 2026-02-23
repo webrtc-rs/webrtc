@@ -31,16 +31,14 @@ impl Track for TrackLocalStaticRTP {
 
 #[async_trait::async_trait]
 impl TrackLocal for TrackLocalStaticRTP {
-    async fn bind(&self, ctx: &TrackLocalContext) -> Result<()> {
+    async fn bind(&self, ctx: TrackLocalContext) {
         let mut ctx_opt = self.ctx.lock().await;
-        *ctx_opt = Some(ctx.clone());
-        Ok(())
+        *ctx_opt = Some(ctx);
     }
 
-    async fn unbind(&self) -> Result<()> {
+    async fn unbind(&self) {
         let mut ctx_opt = self.ctx.lock().await;
         *ctx_opt = None;
-        Ok(())
     }
 
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()> {

@@ -4,6 +4,7 @@ pub mod rtp_receiver;
 pub mod rtp_sender;
 
 use crate::error::Error;
+use crate::media_stream::track_local::TrackLocalContext;
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::runtime::Mutex;
@@ -25,7 +26,7 @@ use std::time::Instant;
 #[async_trait::async_trait]
 pub trait RtpReceiver: Send + Sync + 'static {
     fn id(&self) -> RTCRtpReceiverId;
-    async fn track(&self) -> Result<Arc<dyn TrackRemote>>;
+    fn track(&self) -> &Arc<dyn TrackRemote>;
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>>;
     async fn get_parameters(&self) -> Result<RTCRtpReceiveParameters>;
     async fn get_contributing_sources(&self) -> Result<Vec<RTCRtpContributingSource>>;
@@ -36,7 +37,7 @@ pub trait RtpReceiver: Send + Sync + 'static {
 #[async_trait::async_trait]
 pub trait RtpSender: Send + Sync + 'static {
     fn id(&self) -> RTCRtpSenderId;
-    async fn track(&self) -> Result<Arc<dyn TrackLocal>>;
+    fn track(&self) -> &Arc<dyn TrackLocal>;
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>>;
     async fn set_parameters(
         &self,
@@ -95,7 +96,21 @@ where
 
     pub(crate) async fn set_sender(&self, rtp_sender: Option<Arc<dyn RtpSender>>) {
         let mut sender = self.sender.lock().await;
-        *sender = rtp_sender;
+
+        if let Some(rtp_sender) = sender.take() {
+            rtp_sender.track().unbind().await;
+        }
+
+        if let Some(rtp_sender) = rtp_sender {
+            rtp_sender
+                .track()
+                .bind(TrackLocalContext {
+                    sender_id: self.id.into(),
+                    msg_tx: self.inner.msg_tx.clone(),
+                })
+                .await;
+            *sender = Some(rtp_sender);
+        }
     }
 
     pub(crate) async fn set_receiver(&self, rtp_receiver: Option<Arc<dyn RtpReceiver>>) {

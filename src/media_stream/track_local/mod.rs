@@ -20,11 +20,11 @@ pub trait TrackLocal: Track {
     /// bind should implement the way how the media data flows from the Track to the PeerConnection
     /// This will be called internally after signaling is complete and the list of available
     /// codecs has been determined
-    async fn bind(&self, ctx: &TrackLocalContext) -> Result<()>;
+    async fn bind(&self, ctx: TrackLocalContext);
 
     /// unbind should implement the teardown logic when the track is no longer needed. This happens
     /// because a track has been stopped.
-    async fn unbind(&self) -> Result<()>;
+    async fn unbind(&self);
 
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()>;
 

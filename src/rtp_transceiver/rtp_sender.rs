@@ -2,7 +2,6 @@ use crate::error::{Error, Result};
 use crate::media_stream::track_local::TrackLocal;
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::rtp_transceiver::RtpSender;
-use crate::runtime::Mutex;
 use rtc::media_stream::MediaStreamId;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 use rtc::rtp_transceiver::rtp_sender::{
@@ -26,7 +25,7 @@ where
     /// Inner PeerConnection Reference
     inner: Arc<PeerConnectionRef<I>>,
 
-    track: Mutex<Arc<dyn TrackLocal>>,
+    track: Arc<dyn TrackLocal>,
 }
 
 impl<I> RtpSenderImpl<I>
@@ -39,11 +38,7 @@ where
         inner: Arc<PeerConnectionRef<I>>,
         track: Arc<dyn TrackLocal>,
     ) -> Self {
-        Self {
-            id,
-            inner,
-            track: Mutex::new(track),
-        }
+        Self { id, inner, track }
     }
 }
 
@@ -56,16 +51,8 @@ where
         self.id
     }
 
-    async fn track(&self) -> Result<Arc<dyn TrackLocal>> {
-        {
-            let mut peer_connection = self.inner.core.lock().await;
-
-            peer_connection
-                .rtp_sender(self.id)
-                .ok_or(Error::ErrRTPSenderNotExisted)?;
-        }
-
-        Ok(self.track.lock().await.clone())
+    fn track(&self) -> &Arc<dyn TrackLocal> {
+        &self.track
     }
 
     async fn get_capabilities(&self, kind: RtpCodecKind) -> Result<Option<RTCRtpCapabilities>> {
