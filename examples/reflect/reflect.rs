@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, fs::OpenOptions, io::Write, str::FromStr};
-use webrtc::error::Result;
+use webrtc::error::{Error, Result};
 use webrtc::media_stream::track_local::TrackLocal;
 use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use webrtc::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
@@ -94,7 +94,13 @@ impl PeerConnectionEventHandler for TestHandler {
             );
             // Read RTP packets being sent to webrtc-rs
             while let Some(evt) = track.poll().await {
-                if let TrackRemoteEvent::OnRtpPacket(packet) = evt {
+                if let TrackRemoteEvent::OnRtpPacket(mut packet) = evt {
+                    packet.header.ssrc = output_track
+                        .track()
+                        .ssrcs()
+                        .next()
+                        .ok_or(Error::ErrSenderWithNoSSRCs)
+                        .unwrap();
                     if let Err(err) = output_track.write_rtp(packet).await {
                         println!("output track write_rtp got error: {err}");
                         break;

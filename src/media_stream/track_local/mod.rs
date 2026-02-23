@@ -3,15 +3,18 @@ use crate::media_stream::Track;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::runtime::Sender;
 use rtc::rtp_transceiver::RTCRtpSenderId;
+use rtc::rtp_transceiver::rtp_sender::RTCRtpParameters;
 use rtc::{rtcp, rtp};
 
 pub mod static_rtp;
+mod static_sample;
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used
 /// in Interceptors.
 #[derive(Clone)]
 pub struct TrackLocalContext {
     pub(crate) rtp_sender_id: RTCRtpSenderId,
+    pub(crate) rtp_parameters: RTCRtpParameters,
     pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
 }
 

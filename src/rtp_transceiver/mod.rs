@@ -101,11 +101,14 @@ where
             rtp_sender.track().unbind().await;
         }
 
-        if let Some(rtp_sender) = rtp_sender {
+        if let Some(rtp_sender) = rtp_sender
+            && let Ok(params) = rtp_sender.get_parameters().await
+        {
             rtp_sender
                 .track()
                 .bind(TrackLocalContext {
                     rtp_sender_id: self.id.into(),
+                    rtp_parameters: params.rtp_parameters,
                     driver_event_tx: self.inner.driver_event_tx.clone(),
                 })
                 .await;

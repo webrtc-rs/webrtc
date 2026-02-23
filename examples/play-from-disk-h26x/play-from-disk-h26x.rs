@@ -28,6 +28,7 @@ use std::{
     io::{BufReader, Write},
     str::FromStr,
 };
+use webrtc::error::Error;
 use webrtc::media_stream::track_local::TrackLocal;
 use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use webrtc::peer_connection::{
@@ -414,7 +415,12 @@ async fn stream_video(
         };
 
         let packets = packetizer.packetize(&nal.data().clone().freeze(), samples)?;
-        for packet in packets {
+        for mut packet in packets {
+            packet.header.ssrc = track
+                .track()
+                .ssrcs()
+                .next()
+                .ok_or(Error::ErrSenderWithNoSSRCs)?;
             track.write_rtp(packet).await?;
         }
 
@@ -460,7 +466,12 @@ async fn stream_audio(
         let samples = (sample_duration.as_secs_f64() * codec.rtp_codec.clock_rate as f64) as u32;
 
         let packets = packetizer.packetize(&page_data.freeze(), samples)?;
-        for packet in packets {
+        for mut packet in packets {
+            packet.header.ssrc = track
+                .track()
+                .ssrcs()
+                .next()
+                .ok_or(Error::ErrSenderWithNoSSRCs)?;
             track.write_rtp(packet).await?;
         }
 
