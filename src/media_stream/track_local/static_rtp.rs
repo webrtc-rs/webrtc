@@ -41,7 +41,14 @@ impl TrackLocal for TrackLocalStaticRTP {
         *ctx_opt = None;
     }
 
-    async fn write_rtp(&self, packet: rtp::Packet) -> Result<()> {
+    async fn write_rtp(&self, mut packet: rtp::Packet) -> Result<()> {
+        //TODO: make it more comprehensive handling
+        packet.header.ssrc = self
+            .track
+            .ssrcs()
+            .next()
+            .ok_or(Error::ErrSenderWithNoSSRCs)?;
+
         let ctx_opt = self.ctx.lock().await;
         if let Some(ctx) = &*ctx_opt {
             ctx.driver_event_tx
