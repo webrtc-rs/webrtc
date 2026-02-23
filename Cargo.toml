@@ -88,10 +88,10 @@ bench = false
 #path = "examples/insertable-streams/insertable-streams.rs"
 #bench = false
 #
-#[[example]]
-#name = "play-from-disk-vpx"
-#path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
-#bench = false
+[[example]]
+name = "play-from-disk-vpx"
+path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
+bench = false
 #
 #[[example]]
 #name = "play-from-disk-h264"
