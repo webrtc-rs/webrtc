@@ -66,9 +66,30 @@ impl AsyncUdpSocket for UdpSocket {
 }
 
 /// Runtime-agnostic sleep function
-#[cfg(feature = "runtime-tokio")]
 pub async fn sleep(duration: Duration) {
     ::tokio::time::sleep(duration).await
+}
+
+/// A repeating interval timer backed by the Tokio runtime.
+///
+/// Created by [`interval`]. Each call to [`tick`](TokioInterval::tick) waits
+/// until the next scheduled tick, maintaining consistent cadence even if
+/// individual ticks are delayed.
+pub struct TokioInterval(::tokio::time::Interval);
+
+impl TokioInterval {
+    /// Wait until the next tick fires.
+    pub async fn tick(&mut self) {
+        self.0.tick().await;
+    }
+}
+
+/// Create a repeating interval that fires every `period`.
+///
+/// The first tick fires immediately (at time zero), matching `tokio::time::interval`
+/// behaviour.
+pub fn interval(period: Duration) -> TokioInterval {
+    TokioInterval(::tokio::time::interval(period))
 }
 
 /// Runtime-agnostic timeout helper

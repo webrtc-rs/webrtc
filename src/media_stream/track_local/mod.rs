@@ -7,7 +7,7 @@ use rtc::rtp_transceiver::rtp_sender::RTCRtpParameters;
 use rtc::{rtcp, rtp};
 
 pub mod static_rtp;
-mod static_sample;
+pub mod static_sample;
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used
 /// in Interceptors.

@@ -197,7 +197,9 @@ mod tokio;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::TokioRuntime;
 #[cfg(feature = "runtime-tokio")]
-pub use tokio::{block_on, channel, resolve_host, sleep, timeout};
+pub use tokio::{TokioInterval, block_on, channel, interval, resolve_host, sleep, timeout};
+#[cfg(feature = "runtime-tokio")]
+pub type Interval = TokioInterval;
 #[cfg(feature = "runtime-tokio")]
 pub type Mutex<T> = tokio::TokioMutex<T>;
 #[cfg(feature = "runtime-tokio")]
@@ -212,7 +214,9 @@ mod smol;
 #[cfg(feature = "runtime-smol")]
 pub use smol::SmolRuntime;
 #[cfg(feature = "runtime-smol")]
-pub use smol::{block_on, channel, resolve_host, sleep, timeout};
+pub use smol::{SmolInterval, block_on, channel, interval, resolve_host, sleep, timeout};
+#[cfg(feature = "runtime-smol")]
+pub type Interval = SmolInterval;
 #[cfg(feature = "runtime-smol")]
 pub type Mutex<T> = smol::SmolMutex<T>;
 #[cfg(feature = "runtime-smol")]

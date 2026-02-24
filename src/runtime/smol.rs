@@ -83,6 +83,42 @@ pub async fn sleep(duration: Duration) {
     ::smol::Timer::after(duration).await;
 }
 
+/// A repeating interval timer backed by the smol runtime.
+///
+/// Created by [`interval`]. Each call to [`tick`](SmolInterval::tick) waits
+/// until the next scheduled deadline, compensating for any drift so the
+/// long-term cadence stays accurate.
+pub struct SmolInterval {
+    period: Duration,
+    deadline: std::time::Instant,
+    first: bool,
+}
+
+impl SmolInterval {
+    /// Wait until the next tick fires.
+    pub async fn tick(&mut self) {
+        if self.first {
+            // First tick fires immediately, matching tokio::time::interval behaviour.
+            self.first = false;
+        } else {
+            ::smol::Timer::at(self.deadline).await;
+        }
+        self.deadline += self.period;
+    }
+}
+
+/// Create a repeating interval that fires every `period`.
+///
+/// The first tick fires immediately (at time zero), matching `tokio::time::interval`
+/// behaviour.
+pub fn interval(period: Duration) -> SmolInterval {
+    SmolInterval {
+        period,
+        deadline: std::time::Instant::now() + period,
+        first: true,
+    }
+}
+
 /// Runtime-agnostic timeout helper
 ///
 /// Returns Ok(result) if the future completes within the duration,
