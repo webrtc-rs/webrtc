@@ -27,6 +27,7 @@ use std::{
     io::{BufReader, Write},
     str::FromStr,
 };
+use webrtc::error::Error;
 use webrtc::media_stream::Track;
 use webrtc::media_stream::track_local::TrackLocal;
 use webrtc::media_stream::track_local::static_sample::TrackLocalStaticSample;
@@ -88,9 +89,7 @@ impl PeerConnectionEventHandler for Handler {
             RTCPeerConnectionState::Connected => {
                 let _ = self.connected_tx.try_send(());
             }
-            RTCPeerConnectionState::Failed
-            | RTCPeerConnectionState::Disconnected
-            | RTCPeerConnectionState::Closed => {
+            RTCPeerConnectionState::Failed => {
                 let _ = self.done_tx.try_send(());
             }
             _ => {}
@@ -368,7 +367,11 @@ async fn stream_video(
     let (mut ivf, header) = IVFReader::new(reader)?;
 
     println!("play video from disk file {video_file_name}");
-    let ssrc = video_track.track().ssrcs().next().unwrap_or(0);
+    let ssrc = video_track
+        .track()
+        .ssrcs()
+        .next()
+        .ok_or(Error::ErrSenderWithNoSSRCs)?;
 
     // It is important to use a time.Ticker instead of time.Sleep because
     // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
@@ -418,7 +421,11 @@ async fn stream_audio(
     };
 
     println!("play audio from disk file {audio_file_name}");
-    let ssrc = audio_track.track().ssrcs().next().unwrap_or(0);
+    let ssrc = audio_track
+        .track()
+        .ssrcs()
+        .next()
+        .ok_or(Error::ErrSenderWithNoSSRCs)?;
 
     // It is important to use a time.Ticker instead of time.Sleep because
     // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data

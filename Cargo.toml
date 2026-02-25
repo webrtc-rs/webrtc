@@ -87,21 +87,21 @@ bench = false
 #name = "insertable-streams"
 #path = "examples/insertable-streams/insertable-streams.rs"
 #bench = false
-#
+
 [[example]]
 name = "play-from-disk-vpx"
 path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
 bench = false
-#
+
 [[example]]
 name = "play-from-disk-h26x"
 path = "examples/play-from-disk-h26x/play-from-disk-h26x.rs"
 bench = false
-#
-#[[example]]
-#name = "play-from-disk-renegotiation"
-#path = "examples/play-from-disk-renegotiation/play-from-disk-renegotiation.rs"
-#bench = false
+
+[[example]]
+name = "play-from-disk-renegotiation"
+path = "examples/play-from-disk-renegotiation/play-from-disk-renegotiation.rs"
+bench = false
 
 [[example]]
 name = "reflect"
