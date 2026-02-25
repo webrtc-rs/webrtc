@@ -29,7 +29,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   your browser from a file saved to disk.
 - ✅ [Play from Disk H26x](play-from-disk-h26x): The play-from-disk-h26x example demonstrates how to send H26x video to
   your browser from a file saved to disk.
-- 🚧 [Play from Disk Renegotiation](play-from-disk-renegotiation): The play-from-disk-renegotiation example is an
+- ✅ [Play from Disk Renegotiation](play-from-disk-renegotiation): The play-from-disk-renegotiation example is an
   extension of the play-from-disk example, but demonstrates how you can add/remove video tracks from an already
   negotiated PeerConnection.
 - 🚧 [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to

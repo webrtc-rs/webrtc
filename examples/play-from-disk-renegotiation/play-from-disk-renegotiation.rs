@@ -13,7 +13,6 @@ use rtc::peer_connection::configuration::interceptor_registry::register_default_
 use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_VP8, MediaEngine};
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::state::RTCSignalingState;
-use rtc::peer_connection::transport::RTCIceServer;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RtpCodecKind};
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodingParameters, RTCRtpEncodingParameters};
@@ -21,6 +20,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::{
     fs::{File, OpenOptions},
@@ -106,6 +106,7 @@ async fn do_signaling(
         Err(err) => panic!("{}", err),
     };
 
+    println!("offer: {}", offer);
     if let Err(err) = state.peer_connection.set_remote_description(offer).await {
         panic!("{}", err);
     }
@@ -132,6 +133,7 @@ async fn do_signaling(
     }
 
     let payload = if let Some(local_desc) = state.peer_connection.local_description().await {
+        println!("answer: {}", local_desc);
         match serde_json::to_string(&local_desc) {
             Ok(p) => p,
             Err(err) => panic!("{}", err),
@@ -165,9 +167,9 @@ async fn create_peer_connection(
 async fn add_video(r: Request<Body>, state: Arc<AppState>) -> Result<Response<Body>, hyper::Error> {
     let video_track: Arc<TrackLocalStaticSample> = Arc::new(
         TrackLocalStaticSample::new(MediaStreamTrack::new(
-            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
-            format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
-            format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
+            format!("webrtc-rs-stream-id-{}", rand::random::<u32>()),
+            format!("webrtc-rs-track-id-{}", rand::random::<u32>()),
+            format!("webrtc-rs-track-label-{}", rand::random::<u32>()),
             RtpCodecKind::Video,
             vec![RTCRtpEncodingParameters {
                 rtp_coding_parameters: RTCRtpCodingParameters {
@@ -282,6 +284,7 @@ struct Cli {
 struct TestHandler {
     gather_complete_tx: Sender<()>,
     done_tx: Sender<()>,
+    connected: Arc<AtomicBool>,
     connection_notify: Notify,
 }
 
@@ -298,8 +301,10 @@ impl PeerConnectionEventHandler for TestHandler {
         match state {
             RTCPeerConnectionState::Connected => {
                 println!("Peer Connection State has gone to connected!");
+                self.connected.store(true, Ordering::SeqCst);
             }
             RTCPeerConnectionState::Failed => {
+                self.connected.store(false, Ordering::SeqCst);
                 let _ = self.done_tx.try_send(());
             }
             _ => {}
@@ -308,7 +313,7 @@ impl PeerConnectionEventHandler for TestHandler {
 
     async fn on_signaling_state_change(&self, state: RTCSignalingState) {
         println!("Signaling State has changed: {state}");
-        if state == RTCSignalingState::Stable {
+        if state == RTCSignalingState::Stable && self.connected.load(Ordering::SeqCst) {
             self.connection_notify.notify_waiters();
         }
     }
@@ -376,11 +381,14 @@ async fn async_main() -> Result<()> {
     let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
     // Create RTC peer connection configuration
+
     let config = RTCConfigurationBuilder::new()
+        /*TODO: Fix localhost ip 127.0.0.1 takes too long to recv RTCIceGatheringState::Complete,
+           when stun:stun.l.google.com:19302 is set #778
         .with_ice_servers(vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_string()],
             ..Default::default()
-        }])
+        }])*/
         .build();
 
     // Create the API object with the MediaEngine
@@ -398,6 +406,7 @@ async fn async_main() -> Result<()> {
     let handler = Arc::new(TestHandler {
         gather_complete_tx,
         done_tx: done_tx.clone(),
+        connected: Arc::new(AtomicBool::new(false)),
         connection_notify: connection_notify.clone(),
     });
 
@@ -408,7 +417,7 @@ async fn async_main() -> Result<()> {
             .with_interceptor_registry(registry)
             .with_handler(handler)
             .with_runtime(runtime.clone())
-            .with_udp_addrs(vec![format!("{}:0", signal::get_local_ip())])
+            .with_udp_addrs(vec![format!("127.0.0.1:0")])
             .build()
             .await?,
     );
