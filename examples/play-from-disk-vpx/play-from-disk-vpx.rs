@@ -368,7 +368,6 @@ async fn stream_video(
     let (mut ivf, header) = IVFReader::new(reader)?;
 
     println!("play video from disk file {video_file_name}");
-
     let ssrc = video_track.track().ssrcs().next().unwrap_or(0);
 
     // It is important to use a time.Ticker instead of time.Sleep because

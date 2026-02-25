@@ -3,6 +3,7 @@ use clap::Parser;
 use env_logger::Target;
 use futures::FutureExt;
 use rtc::interceptor::Registry;
+use rtc::media::Sample;
 use rtc::media::io::h26x_reader::{H26xNAL, H26xReader, H264NalUnitType, H265NalUnitType};
 use rtc::media::io::ogg_reader::OggReader;
 use rtc::media_stream::MediaStreamTrack;
@@ -13,8 +14,6 @@ use rtc::peer_connection::configuration::media_engine::{
 };
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::transport::RTCIceServer;
-use rtc::rtp;
-use rtc::rtp::packetizer::Packetizer;
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RtpCodecKind};
 use rtc::rtp_transceiver::rtp_sender::{
     RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
@@ -28,18 +27,17 @@ use std::{
     io::{BufReader, Write},
     str::FromStr,
 };
-use webrtc::error::Error;
+use webrtc::media_stream::Track;
 use webrtc::media_stream::track_local::TrackLocal;
-use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+use webrtc::media_stream::track_local::static_sample::TrackLocalStaticSample;
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{Sender, block_on, channel, default_runtime, interval};
 
 const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
 const H26X_FRAME_DURATION: Duration = Duration::from_millis(33); // ~30 fps
-const RTP_OUTBOUND_MTU: usize = 1200;
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -235,46 +233,52 @@ async fn async_main() -> Result<()> {
         .await?;
 
     // Add video track
-    let video_track: Option<Arc<dyn TrackLocal>> = if video_file.is_some() {
+    let video_track: Option<Arc<TrackLocalStaticSample>> = if video_file.is_some() {
         let ssrc = rand::random::<u32>();
-        let track: Arc<dyn TrackLocal> = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
-            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
-            format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
-            format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
-            RtpCodecKind::Video,
-            vec![RTCRtpEncodingParameters {
-                rtp_coding_parameters: RTCRtpCodingParameters {
-                    ssrc: Some(ssrc),
+        let track: Arc<TrackLocalStaticSample> =
+            Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
+                format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
+                format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
+                format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
+                RtpCodecKind::Video,
+                vec![RTCRtpEncodingParameters {
+                    rtp_coding_parameters: RTCRtpCodingParameters {
+                        ssrc: Some(ssrc),
+                        ..Default::default()
+                    },
+                    codec: video_codec.rtp_codec.clone(),
                     ..Default::default()
-                },
-                codec: video_codec.rtp_codec.clone(),
-                ..Default::default()
-            }],
-        )));
-        peer_connection.add_track(Arc::clone(&track)).await?;
+                }],
+            ))?);
+        peer_connection
+            .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
+            .await?;
         Some(track)
     } else {
         None
     };
 
     // Add audio track
-    let audio_track: Option<Arc<dyn TrackLocal>> = if audio_file.is_some() {
+    let audio_track: Option<Arc<TrackLocalStaticSample>> = if audio_file.is_some() {
         let ssrc = rand::random::<u32>();
-        let track: Arc<dyn TrackLocal> = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
-            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
-            format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
-            format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
-            RtpCodecKind::Audio,
-            vec![RTCRtpEncodingParameters {
-                rtp_coding_parameters: RTCRtpCodingParameters {
-                    ssrc: Some(ssrc),
+        let track: Arc<TrackLocalStaticSample> =
+            Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
+                format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
+                format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
+                format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
+                RtpCodecKind::Audio,
+                vec![RTCRtpEncodingParameters {
+                    rtp_coding_parameters: RTCRtpCodingParameters {
+                        ssrc: Some(ssrc),
+                        ..Default::default()
+                    },
+                    codec: audio_codec.rtp_codec.clone(),
                     ..Default::default()
-                },
-                codec: audio_codec.rtp_codec.clone(),
-                ..Default::default()
-            }],
-        )));
-        peer_connection.add_track(Arc::clone(&track)).await?;
+                }],
+            ))?);
+        peer_connection
+            .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
+            .await?;
         Some(track)
     } else {
         None
@@ -314,9 +318,8 @@ async fn async_main() -> Result<()> {
 
     let (video_done_tx, mut video_done_rx) = channel::<()>(1);
     if let (Some(video_file_name), Some(track)) = (video_file, video_track) {
-        let codec = video_codec.clone();
         runtime.spawn(Box::pin(async move {
-            if let Err(e) = stream_video(video_file_name, track, codec, is_hevc).await {
+            if let Err(e) = stream_video(video_file_name, track, is_hevc).await {
                 eprintln!("video streaming error: {e}");
             }
             let _ = video_done_tx.try_send(());
@@ -327,9 +330,8 @@ async fn async_main() -> Result<()> {
 
     let (audio_done_tx, mut audio_done_rx) = channel::<()>(1);
     if let (Some(audio_file_name), Some(track)) = (audio_file, audio_track) {
-        let codec = audio_codec.clone();
         runtime.spawn(Box::pin(async move {
-            if let Err(e) = stream_audio(audio_file_name, track, codec).await {
+            if let Err(e) = stream_audio(audio_file_name, track).await {
                 eprintln!("audio streaming error: {e}");
             }
             let _ = audio_done_tx.try_send(());
@@ -384,27 +386,20 @@ fn should_skip_timing(nal: &H26xNAL) -> bool {
 
 async fn stream_video(
     video_file_name: String,
-    track: Arc<dyn TrackLocal>,
-    codec: RTCRtpCodecParameters,
+    video_track: Arc<TrackLocalStaticSample>,
     is_hevc: bool,
 ) -> Result<()> {
-    println!("play video from disk file {video_file_name}");
-
     let file = File::open(&video_file_name)?;
-    let mut video_reader = H26xReader::new(BufReader::new(file), 1_048_576, is_hevc);
+    let reader = BufReader::new(file);
+    let mut video_reader = H26xReader::new(reader, 1_048_576, is_hevc);
 
-    let ssrc = track.track().ssrcs().next().unwrap_or(0);
-    let mut packetizer = rtp::packetizer::new_packetizer(
-        RTP_OUTBOUND_MTU,
-        codec.payload_type,
-        ssrc,
-        codec.rtp_codec.payloader()?,
-        Box::new(rtp::sequence::new_random_sequencer()),
-        codec.rtp_codec.clock_rate,
-    );
+    println!("play video from disk file {video_file_name}");
+    let ssrc = video_track.track().ssrcs().next().unwrap_or(0);
 
-    let samples = (H26X_FRAME_DURATION.as_secs_f64() * codec.rtp_codec.clock_rate as f64) as u32;
-
+    // It is important to use a time.Ticker instead of time.Sleep because
+    // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
+    // * works around latency issues with Sleep
+    let mut ticker = interval(H26X_FRAME_DURATION);
     loop {
         let nal = match video_reader.next_nal() {
             Ok(nal) => nal,
@@ -414,18 +409,17 @@ async fn stream_video(
             }
         };
 
-        let packets = packetizer.packetize(&nal.data().clone().freeze(), samples)?;
-        for mut packet in packets {
-            packet.header.ssrc = track
-                .track()
-                .ssrcs()
-                .next()
-                .ok_or(Error::ErrSenderWithNoSSRCs)?;
-            track.write_rtp(packet).await?;
-        }
+        video_track
+            .sample_writer(ssrc)
+            .write_sample(&Sample {
+                data: nal.data().clone().freeze(),
+                duration: Duration::from_secs(1),
+                ..Default::default()
+            })
+            .await?;
 
         if !should_skip_timing(&nal) {
-            sleep(H26X_FRAME_DURATION).await;
+            let _ = ticker.tick().await;
         }
     }
 
@@ -434,13 +428,11 @@ async fn stream_video(
 
 async fn stream_audio(
     audio_file_name: String,
-    track: Arc<dyn TrackLocal>,
-    codec: RTCRtpCodecParameters,
+    audio_track: Arc<TrackLocalStaticSample>,
 ) -> Result<()> {
-    println!("play audio from disk file {audio_file_name}");
-
     let file = File::open(&audio_file_name)?;
-    let (mut ogg, _) = match OggReader::new(BufReader::new(file), true) {
+    let reader = BufReader::new(file);
+    let (mut ogg, _) = match OggReader::new(reader, true) {
         Ok(tup) => tup,
         Err(err) => {
             println!("error while opening audio file {audio_file_name}: {err}");
@@ -448,34 +440,31 @@ async fn stream_audio(
         }
     };
 
-    let ssrc = track.track().ssrcs().next().unwrap_or(0);
-    let mut packetizer = rtp::packetizer::new_packetizer(
-        RTP_OUTBOUND_MTU,
-        codec.payload_type,
-        ssrc,
-        codec.rtp_codec.payloader()?,
-        Box::new(rtp::sequence::new_random_sequencer()),
-        codec.rtp_codec.clock_rate,
-    );
+    println!("play audio from disk file {audio_file_name}");
+    let ssrc = audio_track.track().ssrcs().next().unwrap_or(0);
 
+    // It is important to use a time.Ticker instead of time.Sleep because
+    // * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
+    // * works around latency issues with Sleep
+    let mut ticker = interval(OGG_PAGE_DURATION);
+
+    // Keep track of last granule, the difference is the amount of samples in the buffer
     let mut last_granule: u64 = 0;
     while let Ok((page_data, page_header)) = ogg.parse_next_page() {
         let sample_count = page_header.granule_position - last_granule;
         last_granule = page_header.granule_position;
         let sample_duration = Duration::from_millis(sample_count * 1000 / 48000);
-        let samples = (sample_duration.as_secs_f64() * codec.rtp_codec.clock_rate as f64) as u32;
 
-        let packets = packetizer.packetize(&page_data.freeze(), samples)?;
-        for mut packet in packets {
-            packet.header.ssrc = track
-                .track()
-                .ssrcs()
-                .next()
-                .ok_or(Error::ErrSenderWithNoSSRCs)?;
-            track.write_rtp(packet).await?;
-        }
+        audio_track
+            .sample_writer(ssrc)
+            .write_sample(&Sample {
+                data: page_data.freeze(),
+                duration: sample_duration,
+                ..Default::default()
+            })
+            .await?;
 
-        sleep(OGG_PAGE_DURATION).await;
+        let _ = ticker.tick().await;
     }
 
     Ok(())
