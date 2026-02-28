@@ -108,10 +108,10 @@ name = "reflect"
 path = "examples/reflect/reflect.rs"
 bench = false
 
-#[[example]]
-#name = "rtp-forwarder"
-#path = "examples/rtp-forwarder/rtp-forwarder.rs"
-#bench = false
+[[example]]
+name = "rtp-forwarder"
+path = "examples/rtp-forwarder/rtp-forwarder.rs"
+bench = false
 #
 #[[example]]
 #name = "rtp-to-webrtc"
