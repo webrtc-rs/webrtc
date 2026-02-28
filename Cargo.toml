@@ -83,10 +83,10 @@ name = "ice-restart"
 path = "examples/ice-restart/ice-restart.rs"
 bench = false
 
-#[[example]]
-#name = "insertable-streams"
-#path = "examples/insertable-streams/insertable-streams.rs"
-#bench = false
+[[example]]
+name = "insertable-streams"
+path = "examples/insertable-streams/insertable-streams.rs"
+bench = false
 
 [[example]]
 name = "play-from-disk-vpx"

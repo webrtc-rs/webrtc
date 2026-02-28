@@ -32,7 +32,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
 - ✅ [Play from Disk Renegotiation](play-from-disk-renegotiation): The play-from-disk-renegotiation example is an
   extension of the play-from-disk example, but demonstrates how you can add/remove video tracks from an already
   negotiated PeerConnection.
-- 🚧 [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to
+- ✅ [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to
   send E2E encrypted video and decrypt via insertable streams in the browser.
 - 🚧 [Save to Disk VPx](save-to-disk-vpx): The save-to-disk-vpx example shows how to record your webcam and save the
   footage (VP8/VP9 for video, Opus for audio) to disk on the server side.
