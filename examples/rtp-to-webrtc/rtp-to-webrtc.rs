@@ -17,14 +17,13 @@ use rtc::rtp_transceiver::rtp_sender::{
 use rtc::shared::marshal::Unmarshal;
 use std::sync::Arc;
 use std::{fs, fs::OpenOptions, io::Write as IoWrite, str::FromStr};
-use tokio::net::UdpSocket;
 use webrtc::media_stream::track_local::TrackLocal;
 use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{Sender, block_on, channel, default_runtime};
+use webrtc::runtime::{AsyncUdpSocket, Sender, block_on, channel, default_runtime};
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -219,7 +218,8 @@ async fn async_main() -> Result<()> {
     }
 
     // Open UDP listener for incoming RTP packets
-    let listener = UdpSocket::bind("127.0.0.1:5004").await?;
+    let std_listener = std::net::UdpSocket::bind("127.0.0.1:5004")?;
+    let listener: Arc<dyn AsyncUdpSocket> = runtime.wrap_udp_socket(std_listener)?;
     println!("Listening for RTP on 127.0.0.1:5004");
 
     // Wait for WebRTC connection, then start forwarding

@@ -20,13 +20,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, fs::OpenOptions, io::Write as IoWrite, str::FromStr};
-use tokio::net::UdpSocket;
 use webrtc::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{AsyncUdpSocket, Runtime, Sender, block_on, channel, default_runtime, sleep};
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -111,20 +110,18 @@ impl PeerConnectionEventHandler for Handler {
             _ => return,
         };
 
-        self.runtime.spawn(Box::pin(async move {
-            // Bind a local UDP socket and connect to the forwarding destination
-            let sock = match UdpSocket::bind("127.0.0.1:0").await {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("failed to bind forward socket: {e}");
-                    return;
-                }
-            };
-            if let Err(e) = sock.connect(forward_addr).await {
-                eprintln!("failed to connect forward socket: {e}");
-                return;
-            }
+        // Bind std socket and wrap with runtime before spawning
+        let std_sock = match std::net::UdpSocket::bind("127.0.0.1:0") {
+            Ok(s) => s,
+            Err(e) => { eprintln!("failed to bind forward socket: {e}"); return; }
+        };
+        let sock: Arc<dyn AsyncUdpSocket> = match self.runtime.wrap_udp_socket(std_sock) {
+            Ok(s) => s,
+            Err(e) => { eprintln!("failed to wrap forward socket: {e}"); return; }
+        };
 
+        self.runtime.spawn(Box::pin(async move {
+            // Forward packets using the pre-built socket
             let mut buf = vec![0u8; 1500];
             while let Some(evt) = track.poll().await {
                 if let TrackRemoteEvent::OnRtpPacket(mut packet) = evt {
@@ -132,7 +129,7 @@ impl PeerConnectionEventHandler for Handler {
                     packet.header.payload_type = payload_type;
 
                     if let Ok(n) = packet.marshal_to(&mut buf) {
-                        if let Err(err) = sock.send(&buf[..n]).await {
+                        if let Err(err) = sock.send_to(&buf[..n], forward_addr).await {
                             if !err.to_string().contains("Connection refused") {
                                 eprintln!("forward {} error: {err}", kind);
                                 break;
