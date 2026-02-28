@@ -113,10 +113,10 @@ name = "rtp-forwarder"
 path = "examples/rtp-forwarder/rtp-forwarder.rs"
 bench = false
 #
-#[[example]]
-#name = "rtp-to-webrtc"
-#path = "examples/rtp-to-webrtc/rtp-to-webrtc.rs"
-#bench = false
+[[example]]
+name = "rtp-to-webrtc"
+path = "examples/rtp-to-webrtc/rtp-to-webrtc.rs"
+bench = false
 #
 [[example]]
 name = "save-to-disk-vpx"
