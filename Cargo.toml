@@ -118,10 +118,10 @@ bench = false
 #path = "examples/rtp-to-webrtc/rtp-to-webrtc.rs"
 #bench = false
 #
-#[[example]]
-#name = "save-to-disk-vpx"
-#path = "examples/save-to-disk-vpx/save-to-disk-vpx.rs"
-#bench = false
+[[example]]
+name = "save-to-disk-vpx"
+path = "examples/save-to-disk-vpx/save-to-disk-vpx.rs"
+bench = false
 #
 #[[example]]
 #name = "save-to-disk-h264"

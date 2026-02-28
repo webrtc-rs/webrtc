@@ -34,7 +34,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   negotiated PeerConnection.
 - ✅ [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to
   send E2E encrypted video and decrypt via insertable streams in the browser.
-- 🚧 [Save to Disk VPx](save-to-disk-vpx): The save-to-disk-vpx example shows how to record your webcam and save the
+- ✅ [Save to Disk VPx](save-to-disk-vpx): The save-to-disk-vpx example shows how to record your webcam and save the
   footage (VP8/VP9 for video, Opus for audio) to disk on the server side.
 - 🚧 [Save to Disk H26x](save-to-disk-h26x): The save-to-disk-h26x example shows how to record your webcam and save the
   footage (H26x for video, Opus for audio) to disk on the server side.
