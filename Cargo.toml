@@ -123,10 +123,10 @@ name = "save-to-disk-vpx"
 path = "examples/save-to-disk-vpx/save-to-disk-vpx.rs"
 bench = false
 #
-#[[example]]
-#name = "save-to-disk-h264"
-#path = "examples/save-to-disk-h264/save-to-disk-h264.rs"
-#bench = false
+[[example]]
+name = "save-to-disk-h26x"
+path = "examples/save-to-disk-h26x/save-to-disk-h26x.rs"
+bench = false
 #
 #[[example]]
 #name = "simulcast"

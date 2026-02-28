@@ -36,7 +36,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   send E2E encrypted video and decrypt via insertable streams in the browser.
 - ✅ [Save to Disk VPx](save-to-disk-vpx): The save-to-disk-vpx example shows how to record your webcam and save the
   footage (VP8/VP9 for video, Opus for audio) to disk on the server side.
-- 🚧 [Save to Disk H26x](save-to-disk-h26x): The save-to-disk-h26x example shows how to record your webcam and save the
+- ✅ [Save to Disk H26x](save-to-disk-h26x): The save-to-disk-h26x example shows how to record your webcam and save the
   footage (H26x for video, Opus for audio) to disk on the server side.
 - 🚧 [Broadcast](broadcast): The broadcast example demonstrates how to broadcast a video to multiple peers. A
   broadcaster uploads the video once and the server forwards it to all other peers.
