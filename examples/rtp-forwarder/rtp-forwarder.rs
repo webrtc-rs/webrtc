@@ -113,11 +113,17 @@ impl PeerConnectionEventHandler for Handler {
         // Bind std socket and wrap with runtime before spawning
         let std_sock = match std::net::UdpSocket::bind("127.0.0.1:0") {
             Ok(s) => s,
-            Err(e) => { eprintln!("failed to bind forward socket: {e}"); return; }
+            Err(e) => {
+                eprintln!("failed to bind forward socket: {e}");
+                return;
+            }
         };
         let sock: Arc<dyn AsyncUdpSocket> = match self.runtime.wrap_udp_socket(std_sock) {
             Ok(s) => s,
-            Err(e) => { eprintln!("failed to wrap forward socket: {e}"); return; }
+            Err(e) => {
+                eprintln!("failed to wrap forward socket: {e}");
+                return;
+            }
         };
 
         self.runtime.spawn(Box::pin(async move {
