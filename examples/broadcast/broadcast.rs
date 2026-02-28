@@ -1,60 +1,164 @@
-use std::io::Write;
-use std::sync::Arc;
-
 use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
-use tokio::time::Duration;
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::MediaEngine;
-use webrtc::api::APIBuilder;
-use webrtc::ice_transport::ice_server::RTCIceServer;
-use webrtc::interceptor::registry::Registry;
-use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
-use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
-use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::Error;
+use clap::Parser;
+use env_logger::Target;
+use futures::FutureExt;
+use rtc::interceptor::Registry;
+use rtc::media_stream::MediaStreamTrack;
+use rtc::peer_connection::configuration::RTCConfigurationBuilder;
+use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::media_engine::MediaEngine;
+use rtc::peer_connection::sdp::RTCSessionDescription;
+use rtc::peer_connection::transport::RTCIceServer;
+use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use rtc::rtp;
+use rtc::rtp_transceiver::rtp_sender::{
+    RTCRtpCodec, RTCRtpCodingParameters, RTCRtpEncodingParameters, RtpCodecKind,
+};
+use rtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
+use std::sync::Arc;
+use std::{fs::OpenOptions, io::Write, str::FromStr};
+use webrtc::error::Result as WebRtcResult;
+use webrtc::media_stream::track_local::TrackLocal;
+use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+use webrtc::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
+use webrtc::peer_connection::{
+    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
+    RTCPeerConnectionState,
+};
+use webrtc::runtime::{
+    BroadcastSender, Runtime, Sender, block_on, broadcast_channel, channel, default_runtime, sleep,
+};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut app = Command::new("broadcast")
-        .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of broadcast.")
-        .setting(AppSettings::DeriveDisplayOrder)
-        .subcommand_negates_reqs(true)
-        .arg(
-            Arg::new("FULLHELP")
-                .help("Prints more detailed help information")
-                .long("fullhelp"),
-        )
-        .arg(
-            Arg::new("debug")
-                .long("debug")
-                .short('d')
-                .help("Prints debug log information"),
-        )
-        .arg(
-            Arg::new("port")
-                .takes_value(true)
-                .default_value("8080")
-                .long("port")
-                .help("http server port."),
-        );
+// ── Broadcaster handler ───────────────────────────────────────────────────────
 
-    let matches = app.clone().get_matches();
+#[derive(Clone)]
+struct BroadcastHandler {
+    runtime: Arc<dyn Runtime>,
+    gather_complete_tx: Sender<()>,
+    done_tx: Sender<()>,
+    // Sends the broadcaster's codec once when on_track fires
+    codec_tx: Sender<RTCRtpCodec>,
+    // Broadcast sender: each viewer subscribes to get its own receiver
+    broadcast_tx: BroadcastSender<rtp::Packet>,
+}
 
-    if matches.is_present("FULLHELP") {
-        app.print_long_help().unwrap();
-        std::process::exit(0);
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for BroadcastHandler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gather_complete_tx.try_send(());
+        }
     }
 
-    let debug = matches.is_present("debug");
-    if debug {
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("Broadcaster Peer Connection State: {state}");
+        if state == RTCPeerConnectionState::Failed || state == RTCPeerConnectionState::Closed {
+            let _ = self.done_tx.try_send(());
+        }
+    }
+
+    async fn on_track(&self, track: Arc<dyn TrackRemote>) {
+        let media_ssrc = track.track().ssrcs().next().unwrap();
+        let codec = track.track().codec(media_ssrc).unwrap().clone();
+        println!(
+            "Broadcaster received track: {} ssrc={}",
+            codec.mime_type, media_ssrc
+        );
+
+        // Publish codec so main loop can create matching viewer tracks
+        let _ = self.codec_tx.try_send(codec);
+
+        // Send PLI periodically so the broadcaster keeps pushing keyframes
+        let pli_track = track.clone();
+        self.runtime.spawn(Box::pin(async move {
+            let mut result = WebRtcResult::<()>::Ok(());
+            while result.is_ok() {
+                let timeout = sleep(std::time::Duration::from_secs(3));
+                futures::pin_mut!(timeout);
+                futures::select! {
+                    _ = timeout.fuse() => {
+                        result = pli_track.write_rtcp(vec![Box::new(PictureLossIndication {
+                            sender_ssrc: 0,
+                            media_ssrc,
+                        })]).await;
+                    }
+                };
+            }
+        }));
+
+        // Forward RTP packets to all subscribers via broadcast channel
+        let broadcast_tx = self.broadcast_tx.clone();
+        self.runtime.spawn(Box::pin(async move {
+            while let Some(evt) = track.poll().await {
+                if let TrackRemoteEvent::OnRtpPacket(packet) = evt {
+                    let _ = broadcast_tx.send(packet);
+                }
+            }
+        }));
+    }
+}
+
+// ── Viewer handler ────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct ViewerHandler {
+    gather_complete_tx: Sender<()>,
+}
+
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for ViewerHandler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gather_complete_tx.try_send(());
+        }
+    }
+
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("Viewer Peer Connection State: {state}");
+    }
+}
+
+// ── CLI ───────────────────────────────────────────────────────────────────────
+
+#[derive(Parser)]
+#[command(name = "broadcast")]
+#[command(author = "Rain Liu <yliu@webrtc.rs>")]
+#[command(version = "0.1.0")]
+#[command(about = "An example of broadcast: one sender, multiple viewers.")]
+struct Cli {
+    #[arg(short, long)]
+    debug: bool,
+    #[arg(short, long, default_value_t = format!("INFO"))]
+    log_level: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    output_log_file: String,
+    #[arg(long, default_value_t = 8080)]
+    port: u16,
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+fn main() -> Result<()> {
+    block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
+    let cli = Cli::parse();
+    let log_level = log::LevelFilter::from_str(&cli.log_level)?;
+
+    if cli.debug {
         env_logger::Builder::new()
+            .target(if !cli.output_log_file.is_empty() {
+                Target::Pipe(Box::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&cli.output_log_file)?,
+                ))
+            } else {
+                Target::Stdout
+            })
             .format(|buf, record| {
                 writeln!(
                     buf,
@@ -66,241 +170,219 @@ async fn main() -> Result<()> {
                     record.args()
                 )
             })
-            .filter(None, log::LevelFilter::Trace)
+            .filter(None, log_level)
             .init();
     }
 
-    let port = matches.value_of("port").unwrap().parse::<u16>()?;
-    let mut sdp_chan_rx = signal::http_sdp_server(port).await;
+    let runtime =
+        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
 
-    // Wait for the offer
-    println!("wait for the offer from http_sdp_server\n");
-    let line = sdp_chan_rx.recv().await.unwrap();
+    let mut sdp_chan_rx = signal::http_sdp_server(cli.port).await;
+    println!("Waiting for broadcaster offer on port {}", cli.port);
+
+    // First SDP = broadcaster offer
+    let line = sdp_chan_rx
+        .recv()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("SDP channel closed"))?;
     let desc_data = signal::decode(line.as_str())?;
     let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
-    //println!("Receive offer from http_sdp_server:\n{:?}", offer);
 
-    // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
+    // ── Broadcaster peer connection ──────────────────────────────────────────
 
-    // Create a MediaEngine object to configure the supported codec
-    let mut m = MediaEngine::default();
+    let (done_tx, mut done_rx) = channel::<()>(1);
+    let (broadcast_gather_tx, mut broadcast_gather_rx) = channel::<()>(1);
+    let (codec_tx, mut codec_rx) = channel::<RTCRtpCodec>(1);
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
+    ctrlc::set_handler(move || {
+        let _ = ctrlc_tx.try_send(());
+    })?;
 
-    m.register_default_codecs()?;
+    // Broadcast sender: each viewer will subscribe to get its own receiver
+    let broadcast_tx = broadcast_channel::<rtp::Packet>(256);
 
-    // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
-    // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
-    // this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
-    // for each PeerConnection.
-    let mut registry = Registry::new();
+    let broadcast_handler = Arc::new(BroadcastHandler {
+        runtime: runtime.clone(),
+        gather_complete_tx: broadcast_gather_tx,
+        done_tx: done_tx.clone(),
+        codec_tx,
+        broadcast_tx: broadcast_tx.clone(),
+    });
 
-    // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
-
-    // Create the API object with the MediaEngine
-    let api = APIBuilder::new()
-        .with_media_engine(m)
-        .with_interceptor_registry(registry)
+    let mut broadcaster_media_engine = MediaEngine::default();
+    broadcaster_media_engine.register_default_codecs()?;
+    let broadcaster_registry =
+        register_default_interceptors(Registry::new(), &mut broadcaster_media_engine)?;
+    let broadcaster_config = RTCConfigurationBuilder::new()
+        .with_ice_servers(vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_string()],
+            ..Default::default()
+        }])
         .build();
 
-    // Prepare the configuration
-    let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
+    let broadcaster_pc: Arc<dyn PeerConnection> = Arc::new(
+        PeerConnectionBuilder::new()
+            .with_configuration(broadcaster_config)
+            .with_media_engine(broadcaster_media_engine)
+            .with_interceptor_registry(broadcaster_registry)
+            .with_handler(broadcast_handler as Arc<dyn PeerConnectionEventHandler>)
+            .with_runtime(runtime.clone())
+            .with_udp_addrs(vec![format!("{}:0", signal::get_local_ip())])
+            .build()
+            .await?,
+    );
 
-    // Create a new RTCPeerConnection
-    let peer_connection = Arc::new(api.new_peer_connection(config).await?);
-
-    // Allow us to receive 1 video track
-    peer_connection
-        .add_transceiver_from_kind(RTPCodecType::Video, None)
+    broadcaster_pc
+        .add_transceiver_from_kind(
+            RtpCodecKind::Video,
+            Some(RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
+                ..Default::default()
+            }),
+        )
         .await?;
 
-    let (local_track_chan_tx, mut local_track_chan_rx) =
-        tokio::sync::mpsc::channel::<Arc<TrackLocalStaticRTP>>(1);
+    broadcaster_pc.set_remote_description(offer).await?;
+    let answer = broadcaster_pc.create_answer(None).await?;
+    broadcaster_pc.set_local_description(answer).await?;
 
-    let local_track_chan_tx = Arc::new(local_track_chan_tx);
-    // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
-    // replaces the SSRC and sends them back
-    let pc = Arc::downgrade(&peer_connection);
-    peer_connection.on_track(Box::new(move |track, _, _| {
-        // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-        // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
-        let media_ssrc = track.ssrc();
-        let pc2 = pc.clone();
-        tokio::spawn(async move {
-            let mut result = Result::<usize>::Ok(0);
-            while result.is_ok() {
-                let timeout = tokio::time::sleep(Duration::from_secs(3));
-                tokio::pin!(timeout);
+    let _ = broadcast_gather_rx.recv().await;
 
-                tokio::select! {
-                    _ = timeout.as_mut() =>{
-                        if let Some(pc) = pc2.upgrade(){
-                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                sender_ssrc: 0,
-                                media_ssrc,
-                            })]).await.map_err(Into::into);
-                        }else{
-                            break;
-                        }
-                    }
-                };
-            }
-        });
-
-        let local_track_chan_tx2 = Arc::clone(&local_track_chan_tx);
-        tokio::spawn(async move {
-            // Create Track that we send video back to browser on
-            let local_track = Arc::new(TrackLocalStaticRTP::new(
-                track.codec().capability,
-                "video".to_owned(),
-                "webrtc-rs".to_owned(),
-            ));
-            let _ = local_track_chan_tx2.send(Arc::clone(&local_track)).await;
-
-            // Read RTP packets being sent to webrtc-rs
-            while let Ok((rtp, _)) = track.read_rtp().await {
-                if let Err(err) = local_track.write_rtp(&rtp).await {
-                    if Error::ErrClosedPipe != err {
-                        print!("output track write_rtp got error: {err} and break");
-                        break;
-                    } else {
-                        print!("output track write_rtp got error: {err}");
-                    }
-                }
-            }
-        });
-
-        Box::pin(async {})
-    }));
-
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
-        Box::pin(async {})
-    }));
-
-    // Set the remote SessionDescription
-    peer_connection.set_remote_description(offer).await?;
-
-    // Create an answer
-    let answer = peer_connection.create_answer(None).await?;
-
-    // Create channel that is blocked until ICE Gathering is complete
-    let mut gather_complete = peer_connection.gathering_complete_promise().await;
-
-    // Sets the LocalDescription, and starts our UDP listeners
-    peer_connection.set_local_description(answer).await?;
-
-    // Block until ICE Gathering is complete, disabling trickle ICE
-    // we do this because we only can exchange one signaling message
-    // in a production application you should exchange ICE Candidates via OnICECandidate
-    let _ = gather_complete.recv().await;
-
-    // Output the answer in base64 so we can paste it in browser
-    if let Some(local_desc) = peer_connection.local_description().await {
+    if let Some(local_desc) = broadcaster_pc.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
-        println!("{b64}");
+        println!("Broadcaster answer:\n{b64}");
     } else {
-        println!("generate local_description failed!");
+        anyhow::bail!("generate local_description failed!");
     }
 
-    if let Some(local_track) = local_track_chan_rx.recv().await {
-        loop {
-            println!("\nCurl an base64 SDP to start sendonly peer connection");
+    println!("Waiting for broadcaster track...");
+    let broadcaster_codec = codec_rx
+        .recv()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("codec channel closed"))?;
+    println!(
+        "Broadcaster codec: {}, ready for viewers.",
+        broadcaster_codec.mime_type
+    );
 
-            let line = sdp_chan_rx.recv().await.unwrap();
-            let desc_data = signal::decode(line.as_str())?;
-            let recv_only_offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
+    // ── Viewer loop ──────────────────────────────────────────────────────────
 
-            // Create a MediaEngine object to configure the supported codec
-            let mut m = MediaEngine::default();
+    let mut viewer_pcs: Vec<Arc<dyn PeerConnection>> = Vec::new();
 
-            m.register_default_codecs()?;
+    loop {
+        println!("\nCurl a base64 SDP to start a viewer peer connection");
 
-            // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
-            // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
-            // this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
-            // for each PeerConnection.
-            let mut registry = Registry::new();
+        futures::select! {
+            line_opt = sdp_chan_rx.recv().fuse() => {
+                let line = match line_opt {
+                    Some(l) => l,
+                    None => { println!("SDP channel closed"); break; }
+                };
 
-            // Use the default set of Interceptors
-            registry = register_default_interceptors(registry, &mut m)?;
+                let desc_data = signal::decode(line.as_str())?;
+                let viewer_offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
 
-            // Create the API object with the MediaEngine
-            let api = APIBuilder::new()
-                .with_media_engine(m)
-                .with_interceptor_registry(registry)
-                .build();
+                let (viewer_gather_tx, mut viewer_gather_rx) = channel::<()>(1);
+                let viewer_handler = Arc::new(ViewerHandler {
+                    gather_complete_tx: viewer_gather_tx,
+                });
 
-            // Prepare the configuration
-            let config = RTCConfiguration {
-                ice_servers: vec![RTCIceServer {
-                    urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-                    ..Default::default()
-                }],
-                ..Default::default()
-            };
+                let mut viewer_media_engine = MediaEngine::default();
+                viewer_media_engine.register_default_codecs()?;
+                let viewer_registry =
+                    register_default_interceptors(Registry::new(), &mut viewer_media_engine)?;
+                let viewer_config = RTCConfigurationBuilder::new()
+                    .with_ice_servers(vec![RTCIceServer {
+                        urls: vec!["stun:stun.l.google.com:19302".to_string()],
+                        ..Default::default()
+                    }])
+                    .build();
 
-            // Create a new RTCPeerConnection
-            let peer_connection = Arc::new(api.new_peer_connection(config).await?);
+                let viewer_pc: Arc<dyn PeerConnection> = Arc::new(
+                    PeerConnectionBuilder::new()
+                        .with_configuration(viewer_config)
+                        .with_media_engine(viewer_media_engine)
+                        .with_interceptor_registry(viewer_registry)
+                        .with_handler(viewer_handler as Arc<dyn PeerConnectionEventHandler>)
+                        .with_runtime(runtime.clone())
+                        .with_udp_addrs(vec![format!("{}:0", signal::get_local_ip())])
+                        .build()
+                        .await?,
+                );
 
-            let rtp_sender = peer_connection
-                .add_track(Arc::clone(&local_track) as Arc<dyn TrackLocal + Send + Sync>)
-                .await?;
+                // Each viewer gets its own track with a unique SSRC
+                let viewer_ssrc = rand::random::<u32>();
+                let viewer_track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+                    format!("webrtc-rs-broadcast-{}", viewer_ssrc),
+                    format!("webrtc-rs-broadcast-track-{}", viewer_ssrc),
+                    format!("webrtc-rs-broadcast-{}", viewer_ssrc),
+                    RtpCodecKind::Video,
+                    vec![RTCRtpEncodingParameters {
+                        rtp_coding_parameters: RTCRtpCodingParameters {
+                            ssrc: Some(viewer_ssrc),
+                            ..Default::default()
+                        },
+                        codec: broadcaster_codec.clone(),
+                        ..Default::default()
+                    }],
+                )));
 
-            // Read incoming RTCP packets
-            // Before these packets are returned they are processed by interceptors. For things
-            // like NACK this needs to be called.
-            tokio::spawn(async move {
-                let mut rtcp_buf = vec![0u8; 1500];
-                while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-                Result::<()>::Ok(())
-            });
+                viewer_pc
+                    .add_track(Arc::clone(&viewer_track) as Arc<dyn TrackLocal>)
+                    .await?;
 
-            // Set the handler for Peer connection state
-            // This will notify you when the peer has connected/disconnected
-            peer_connection.on_peer_connection_state_change(Box::new(
-                move |s: RTCPeerConnectionState| {
-                    println!("Peer Connection State has changed: {s}");
-                    Box::pin(async {})
-                },
-            ));
+                viewer_pc.set_remote_description(viewer_offer).await?;
+                let viewer_answer = viewer_pc.create_answer(None).await?;
+                viewer_pc.set_local_description(viewer_answer).await?;
 
-            // Set the remote SessionDescription
-            peer_connection
-                .set_remote_description(recv_only_offer)
-                .await?;
+                let _ = viewer_gather_rx.recv().await;
 
-            // Create an answer
-            let answer = peer_connection.create_answer(None).await?;
+                if let Some(local_desc) = viewer_pc.local_description().await {
+                    let json_str = serde_json::to_string(&local_desc)?;
+                    let b64 = signal::encode(&json_str);
+                    println!("Viewer answer:\n{b64}");
+                } else {
+                    println!("generate viewer local_description failed!");
+                }
 
-            // Create channel that is blocked until ICE Gathering is complete
-            let mut gather_complete = peer_connection.gathering_complete_promise().await;
+                // Each viewer subscribes to the broadcast channel and gets its own receiver
+                let mut viewer_rx = broadcast_tx.subscribe();
 
-            // Sets the LocalDescription, and starts our UDP listeners
-            peer_connection.set_local_description(answer).await?;
+                // Spawn a per-viewer task: reads packets and writes to this viewer's track
+                runtime.spawn(Box::pin(async move {
+                    loop {
+                        match viewer_rx.recv().await {
+                            Ok(mut packet) => {
+                                packet.header.ssrc = viewer_ssrc;
+                                if let Err(err) = viewer_track.write_rtp(packet).await {
+                                    println!("viewer write_rtp error: {err}");
+                                    break;
+                                }
+                            }
+                            Err(_) => break, // closed or lagged
+                        }
+                    }
+                }));
 
-            // Block until ICE Gathering is complete, disabling trickle ICE
-            // we do this because we only can exchange one signaling message
-            // in a production application you should exchange ICE Candidates via OnICECandidate
-            let _ = gather_complete.recv().await;
-
-            if let Some(local_desc) = peer_connection.local_description().await {
-                let json_str = serde_json::to_string(&local_desc)?;
-                let b64 = signal::encode(&json_str);
-                println!("{b64}");
-            } else {
-                println!("generate local_description failed!");
+                viewer_pcs.push(viewer_pc);
+                println!("Total active viewer connections: {}", viewer_pcs.len());
+            }
+            _ = done_rx.recv().fuse() => {
+                println!("Broadcaster disconnected, shutting down.");
+                break;
+            }
+            _ = ctrlc_rx.recv().fuse() => {
+                println!("Received ctrl-c, shutting down.");
+                break;
             }
         }
     }
+
+    for pc in &viewer_pcs {
+        let _ = pc.close().await;
+    }
+    let _ = broadcaster_pc.close().await;
 
     Ok(())
 }

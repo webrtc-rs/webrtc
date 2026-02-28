@@ -157,6 +157,38 @@ impl<T> std::fmt::Display for SendError<T> {
 
 impl<T: std::fmt::Debug> std::error::Error for SendError<T> {}
 
+/// Error returned when a broadcast send fails (no receivers)
+#[derive(Debug)]
+pub struct BroadcastSendError<T>(pub T);
+
+/// Error returned when a broadcast receive fails
+#[derive(Debug)]
+pub enum BroadcastRecvError {
+    /// Channel closed, no more senders
+    Closed,
+    /// Receiver lagged behind; this many messages were skipped
+    Lagged(u64),
+}
+
+impl<T> std::fmt::Display for BroadcastSendError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "broadcast send failed: no receivers")
+    }
+}
+
+impl<T: std::fmt::Debug> std::error::Error for BroadcastSendError<T> {}
+
+impl std::fmt::Display for BroadcastRecvError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BroadcastRecvError::Closed => write!(f, "broadcast channel closed"),
+            BroadcastRecvError::Lagged(n) => write!(f, "broadcast receiver lagged by {n}"),
+        }
+    }
+}
+
+impl std::error::Error for BroadcastRecvError {}
+
 /// Get the default runtime for the current build configuration
 ///
 /// Returns the runtime for whichever runtime feature is enabled.
@@ -197,7 +229,9 @@ mod tokio;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::TokioRuntime;
 #[cfg(feature = "runtime-tokio")]
-pub use tokio::{TokioInterval, block_on, channel, interval, resolve_host, sleep, timeout};
+pub use tokio::{
+    TokioInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
+};
 #[cfg(feature = "runtime-tokio")]
 pub type Interval = TokioInterval;
 #[cfg(feature = "runtime-tokio")]
@@ -208,13 +242,19 @@ pub type Notify = tokio::TokioNotify;
 pub type Sender<T> = tokio::TokioSender<T>;
 #[cfg(feature = "runtime-tokio")]
 pub type Receiver<T> = tokio::TokioReceiver<T>;
+#[cfg(feature = "runtime-tokio")]
+pub type BroadcastSender<T> = tokio::TokioBroadcastSender<T>;
+#[cfg(feature = "runtime-tokio")]
+pub type BroadcastReceiver<T> = tokio::TokioBroadcastReceiver<T>;
 
 #[cfg(feature = "runtime-smol")]
 mod smol;
 #[cfg(feature = "runtime-smol")]
 pub use smol::SmolRuntime;
 #[cfg(feature = "runtime-smol")]
-pub use smol::{SmolInterval, block_on, channel, interval, resolve_host, sleep, timeout};
+pub use smol::{
+    SmolInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
+};
 #[cfg(feature = "runtime-smol")]
 pub type Interval = SmolInterval;
 #[cfg(feature = "runtime-smol")]
@@ -225,3 +265,7 @@ pub type Notify = smol::SmolNotify;
 pub type Sender<T> = smol::SmolSender<T>;
 #[cfg(feature = "runtime-smol")]
 pub type Receiver<T> = smol::SmolReceiver<T>;
+#[cfg(feature = "runtime-smol")]
+pub type BroadcastSender<T> = smol::SmolBroadcastSender<T>;
+#[cfg(feature = "runtime-smol")]
+pub type BroadcastReceiver<T> = smol::SmolBroadcastReceiver<T>;

@@ -14,7 +14,7 @@ description = "A pure Rust implementation of WebRTC API"
 [features]
 default = ["runtime-tokio"]
 runtime-tokio = ["dep:tokio"]
-runtime-smol = ["dep:smol"]
+runtime-smol = ["dep:smol", "dep:async-broadcast"]
 
 [dependencies]
 rtc = { version = "0.9.0", path = "rtc/rtc" }
@@ -26,6 +26,7 @@ futures = "0.3.31"
 # Async runtimes (all optional)
 tokio = { version = "1.49.0", features = ["net", "time", "sync", "rt", "rt-multi-thread"], optional = true }
 smol = { version = "2.0.2", optional = true }
+async-broadcast = { version = "0.7", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.8"
@@ -38,10 +39,10 @@ signal = { version = "0.9.0", path = "rtc/examples/examples/signal", package = "
 hyper = { version = "0.14.32", features = ["full"] }
 rand = "0.10.0"
 
-#[[example]]
-#name = "broadcast"
-#path = "examples/broadcast/broadcast.rs"
-#bench = false
+[[example]]
+name = "broadcast"
+path = "examples/broadcast/broadcast.rs"
+bench = false
 
 [[example]]
 name = "data-channels"

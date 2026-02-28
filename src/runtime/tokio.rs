@@ -270,6 +270,54 @@ pub fn channel<T: Send>(capacity: usize) -> (TokioSender<T>, TokioReceiver<T>) {
     (TokioSender(tx), TokioReceiver(rx))
 }
 
+// ── Broadcast channel ─────────────────────────────────────────────────────────
+
+/// Sender half of a broadcast channel (tokio backend)
+#[derive(Clone)]
+pub struct TokioBroadcastSender<T>(pub ::tokio::sync::broadcast::Sender<T>);
+
+impl<T: Send + Clone + 'static> TokioBroadcastSender<T> {
+    /// Send a value to all active receivers.
+    /// Returns the number of receivers the message was sent to.
+    pub fn send(&self, value: T) -> Result<usize, super::BroadcastSendError<T>> {
+        self.0
+            .send(value)
+            .map_err(|e| super::BroadcastSendError(e.0))
+    }
+
+    /// Subscribe to receive future values from this sender.
+    pub fn subscribe(&self) -> TokioBroadcastReceiver<T> {
+        TokioBroadcastReceiver(self.0.subscribe())
+    }
+
+    /// Returns the number of active receivers.
+    pub fn receiver_count(&self) -> usize {
+        self.0.receiver_count()
+    }
+}
+
+/// Receiver half of a broadcast channel (tokio backend)
+pub struct TokioBroadcastReceiver<T>(pub ::tokio::sync::broadcast::Receiver<T>);
+
+impl<T: Send + Clone + 'static> TokioBroadcastReceiver<T> {
+    /// Receive the next value, waiting if none is available.
+    pub async fn recv(&mut self) -> Result<T, super::BroadcastRecvError> {
+        self.0.recv().await.map_err(|e| match e {
+            ::tokio::sync::broadcast::error::RecvError::Closed => super::BroadcastRecvError::Closed,
+            ::tokio::sync::broadcast::error::RecvError::Lagged(n) => {
+                super::BroadcastRecvError::Lagged(n)
+            }
+        })
+    }
+}
+
+/// Create a new broadcast channel with the given capacity.
+/// All active receivers will receive every sent value.
+pub fn broadcast_channel<T: Send + Clone + 'static>(capacity: usize) -> TokioBroadcastSender<T> {
+    let (tx, _) = ::tokio::sync::broadcast::channel(capacity);
+    TokioBroadcastSender(tx)
+}
+
 /// Block the current thread on a future, driving it to completion
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     ::tokio::runtime::Builder::new_multi_thread()

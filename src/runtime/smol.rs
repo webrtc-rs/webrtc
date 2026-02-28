@@ -341,6 +341,56 @@ pub fn channel<T: Send>(capacity: usize) -> (SmolSender<T>, SmolReceiver<T>) {
     (SmolSender(tx), SmolReceiver(rx))
 }
 
+// ── Broadcast channel ─────────────────────────────────────────────────────────
+
+/// Sender half of a broadcast channel (smol backend, backed by `async-broadcast`)
+#[derive(Clone)]
+pub struct SmolBroadcastSender<T>(pub ::async_broadcast::Sender<T>);
+
+impl<T: Send + Clone + 'static> SmolBroadcastSender<T> {
+    /// Send a value to all active receivers.
+    /// Returns the number of receivers the message was sent to.
+    pub fn send(&self, value: T) -> Result<usize, super::BroadcastSendError<T>> {
+        match self.0.try_broadcast(value) {
+            Ok(_) => Ok(self.0.receiver_count()),
+            Err(::async_broadcast::TrySendError::Inactive(v)) => Err(super::BroadcastSendError(v)),
+            Err(::async_broadcast::TrySendError::Closed(v)) => Err(super::BroadcastSendError(v)),
+            Err(::async_broadcast::TrySendError::Full(v)) => Err(super::BroadcastSendError(v)),
+        }
+    }
+
+    /// Subscribe to receive future values from this sender.
+    pub fn subscribe(&self) -> SmolBroadcastReceiver<T> {
+        SmolBroadcastReceiver(self.0.new_receiver())
+    }
+
+    /// Returns the number of active receivers.
+    pub fn receiver_count(&self) -> usize {
+        self.0.receiver_count()
+    }
+}
+
+/// Receiver half of a broadcast channel (smol backend)
+pub struct SmolBroadcastReceiver<T>(pub ::async_broadcast::Receiver<T>);
+
+impl<T: Send + Clone + 'static> SmolBroadcastReceiver<T> {
+    /// Receive the next value, waiting if none is available.
+    pub async fn recv(&mut self) -> Result<T, super::BroadcastRecvError> {
+        self.0.recv().await.map_err(|e| match e {
+            ::async_broadcast::RecvError::Overflowed(n) => super::BroadcastRecvError::Lagged(n),
+            ::async_broadcast::RecvError::Closed => super::BroadcastRecvError::Closed,
+        })
+    }
+}
+
+/// Create a new broadcast channel with the given capacity.
+/// All active receivers will receive every sent value.
+pub fn broadcast_channel<T: Send + Clone + 'static>(capacity: usize) -> SmolBroadcastSender<T> {
+    let (mut tx, _rx) = ::async_broadcast::broadcast(capacity);
+    tx.set_overflow(true);
+    SmolBroadcastSender(tx)
+}
+
 /// Block the current thread on a future, driving it to completion
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     ::smol::block_on(future)
