@@ -65,13 +65,18 @@ alt="Recall.ai">
 ## Overview
 
 WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion
-stack. The project is currently evolving into a clean, ergonomic, runtime-agnostic implementation that works with any async runtime (Tokio, async-std, smol, embassy).
+stack. The project is currently evolving into a clean, ergonomic, runtime-agnostic implementation that works with any
+async runtime (Tokio, async-std, smol, embassy).
 
 **Architecture:**
-- **[rtc](https://github.com/webrtc-rs/rtc)**: Sans-I/O protocol core with complete WebRTC stack (95%+ W3C API compliance)
+
+- **[rtc](https://github.com/webrtc-rs/rtc)**: Sans-I/O protocol core with complete WebRTC stack (95%+ W3C API
+  compliance)
 - **webrtc** (this crate): Async-friendly API with runtime abstraction layer
 
-**📖 Learn more:** Read our [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html) for design details and roadmap.
+**📖 Learn more:** Read
+our [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html) for design
+details and roadmap.
 
 ### 🚨 Important Notice: v0.17.x Feature Freeze & v0.20.0+ Development
 
@@ -85,6 +90,7 @@ stack. The project is currently evolving into a clean, ergonomic, runtime-agnost
 #### **What's Changing in upcoming v0.20.0+?**
 
 The new architecture will address critical issues in v0.17.x:
+
 - ❌ Callback hell and Arc explosion
 - ❌ Resources leak in callback
 - ❌ Tight Tokio coupling (cannot use async-std, smol, embassy)
@@ -92,15 +98,18 @@ The new architecture will address critical issues in v0.17.x:
 **v0.20.0+ will provide:**
 
 ✅ **Runtime Independence**
+
 - Support for Tokio, async-std, smol, embassy via Quinn-style runtime abstraction
 - Feature flags: `runtime-tokio` (default), `runtime-async-std`, `runtime-smol`, `runtime-embassy`
 
 ✅ **Clean Event Handling**
+
 - Trait-based event handlers with native `async fn in trait`
 - No more callback Arc cloning or `Box::new(move |...| Box::pin(async move { ... }))`
 - Centralized state management with `&mut self`
 
 ✅ **Sans-I/O Foundation**
+
 - Protocol logic completely separate from I/O (via [rtc](https://github.com/webrtc-rs/rtc) crate)
 - Deterministic testing without real network I/O
 - Zero-cost abstractions
@@ -108,6 +117,7 @@ The new architecture will address critical issues in v0.17.x:
 #### **How to Provide Feedback**
 
 We're actively designing v0.20.0+ and welcome your input:
+
 - Review the [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html)
 - Join discussions on [GitHub Issues](https://github.com/webrtc-rs/webrtc/issues)
 - Chat with us on [Discord](https://discord.gg/4Ju8UHdXMs)
@@ -133,6 +143,25 @@ cargo doc --open
 # Run examples
 cargo run --example data-channels
 ```
+
+## Semantic Versioning
+
+This project follows [Semantic Versioning](https://semver.org/):
+
+- **Patch** (`0.x.Y`): Bug fixes and internal improvements with no public API changes.
+- **Minor** (`0.X.0`): Backwards-compatible additions or deprecations to the public API.
+- **Major** (`X.0.0`): Breaking changes to the public API.
+
+While the version is `0.x`, the minor version acts as the major — i.e., a minor bump may include breaking changes. Once
+`1.0.0` is released, full semver stability guarantees apply.
+
+Pre-release versions are published with the following suffixes, in order of increasing stability:
+
+- **`-alpha.N`**: Early preview. API is unstable and may change significantly.
+- **`-beta.N`**: Feature-complete for the release. API may still have minor changes.
+- **`-rc.N`**: Release candidate. No further API changes are expected unless critical issues are found.
+
+For example: `1.0.0-alpha.1` → `1.0.0-beta.1` → `1.0.0-rc.1` → `1.0.0`.
 
 ## Open Source License
 
