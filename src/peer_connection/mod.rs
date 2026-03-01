@@ -345,7 +345,9 @@ where
     /// Channels for incoming data channel events
     pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Channels for incoming track remote events
-    pub(crate) track_remote_events_tx: Mutex<HashMap<MediaStreamTrackId, Sender<TrackRemoteEvent>>>,
+    #[allow(clippy::type_complexity)]
+    pub(crate) track_remote_events_tx:
+        Mutex<HashMap<MediaStreamTrackId, (Sender<TrackRemoteEvent>, Arc<dyn TrackRemote>)>>,
 }
 
 impl<I> PeerConnectionImpl<I>
@@ -624,7 +626,7 @@ where
     async fn add_track(&self, track: Arc<dyn TrackLocal>) -> Result<Arc<dyn RtpSender>> {
         let id: RTCRtpTransceiverId = {
             let mut core = self.inner.core.lock().await;
-            core.add_track(track.track().clone())?.into()
+            core.add_track(track.track().await)?.into()
         };
 
         let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
@@ -670,7 +672,7 @@ where
     ) -> Result<Arc<dyn RtpTransceiver>> {
         let id: RTCRtpTransceiverId = {
             let mut core = self.inner.core.lock().await;
-            core.add_transceiver_from_track(track.track().clone(), init)?
+            core.add_transceiver_from_track(track.track().await, init)?
         };
 
         let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;

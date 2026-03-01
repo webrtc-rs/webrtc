@@ -91,11 +91,11 @@ impl PeerConnectionEventHandler for Handler {
     }
 
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
-        let media_ssrc = track.track().ssrcs().next().unwrap();
-        let kind = track.track().kind();
+        let media_ssrc = *track.ssrcs().await.first().unwrap();
+        let kind = track.kind().await;
         let mime_type = track
-            .track()
             .codec(media_ssrc)
+            .await
             .map(|c| c.mime_type.to_lowercase())
             .unwrap_or_default();
 

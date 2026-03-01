@@ -58,8 +58,8 @@ impl PeerConnectionEventHandler for BroadcastHandler {
     }
 
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
-        let media_ssrc = track.track().ssrcs().next().unwrap();
-        let codec = track.track().codec(media_ssrc).unwrap().clone();
+        let media_ssrc = *track.ssrcs().await.first().unwrap();
+        let codec = track.codec(media_ssrc).await.unwrap().clone();
         println!(
             "Broadcaster received track: {} ssrc={}",
             codec.mime_type, media_ssrc

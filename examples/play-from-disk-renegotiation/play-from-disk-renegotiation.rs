@@ -483,10 +483,10 @@ async fn write_video_to_track(
     let reader = BufReader::new(file);
     let (mut ivf, header) = IVFReader::new(reader)?;
 
-    let ssrc = video_track
-        .track()
+    let ssrc = *video_track
         .ssrcs()
-        .next()
+        .await
+        .first()
         .ok_or(Error::ErrSenderWithNoSSRCs)?;
 
     // It is important to use a time.Ticker instead of time.Sleep because

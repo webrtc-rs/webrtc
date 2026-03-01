@@ -1,12 +1,15 @@
 use crate::error::{Error, Result};
-use crate::media_stream::Track;
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_local::{TrackLocal, TrackLocalContext};
 use rtc::media::Sample;
-use rtc::media_stream::MediaStreamTrack;
+use rtc::media_stream::{
+    MediaStreamId, MediaStreamTrack, MediaStreamTrackId, MediaStreamTrackState,
+    MediaTrackCapabilities, MediaTrackConstraints, MediaTrackSettings,
+};
 use rtc::rtp::packetizer::Packetizer;
 use rtc::rtp::sequence::Sequencer;
-use rtc::rtp_transceiver::SSRC;
+use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RTCRtpEncodingParameters, RtpCodecKind};
+use rtc::rtp_transceiver::{RtpStreamId, SSRC};
 use rtc::shared::error::flatten_errs;
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
@@ -67,7 +70,7 @@ impl TrackLocalStaticSample {
             }
         }
 
-        let clock_rate = if let Some(codec) = self.track().codec(ssrc) {
+        let clock_rate = if let Some(codec) = self.codec(ssrc).await {
             codec.clock_rate as f64
         } else {
             return Err(Error::CodecNotFound);
@@ -99,14 +102,91 @@ impl TrackLocalStaticSample {
     }
 }
 
+#[async_trait::async_trait]
 impl Track for TrackLocalStaticSample {
-    fn track(&self) -> &MediaStreamTrack {
-        &self.rtp_track.track
+    async fn stream_id(&self) -> MediaStreamId {
+        self.rtp_track.stream_id().await
+    }
+
+    async fn track_id(&self) -> MediaStreamTrackId {
+        self.rtp_track.track_id().await
+    }
+
+    async fn label(&self) -> String {
+        self.rtp_track.label().await
+    }
+
+    async fn kind(&self) -> RtpCodecKind {
+        self.rtp_track.kind().await
+    }
+
+    async fn rid(&self, ssrc: SSRC) -> Option<RtpStreamId> {
+        self.rtp_track.rid(ssrc).await
+    }
+
+    async fn codec(&self, ssrc: SSRC) -> Option<RTCRtpCodec> {
+        self.rtp_track.codec(ssrc).await
+    }
+
+    async fn ssrcs(&self) -> Vec<SSRC> {
+        self.rtp_track.ssrcs().await
+    }
+
+    async fn enabled(&self) -> bool {
+        self.rtp_track.enabled().await
+    }
+
+    async fn set_enabled(&self, enabled: bool) {
+        self.rtp_track.set_enabled(enabled).await;
+    }
+
+    async fn muted(&self) -> bool {
+        self.rtp_track.muted().await
+    }
+
+    async fn set_muted(&self, muted: bool) {
+        self.rtp_track.set_muted(muted).await;
+    }
+
+    async fn ready_state(&self) -> MediaStreamTrackState {
+        self.rtp_track.ready_state().await
+    }
+
+    async fn stop(&self) {
+        self.rtp_track.stop().await;
+    }
+
+    async fn get_capabilities(&self) -> MediaTrackCapabilities {
+        self.rtp_track.get_capabilities().await
+    }
+
+    async fn get_constraints(&self) -> MediaTrackConstraints {
+        self.rtp_track.get_constraints().await
+    }
+
+    async fn get_settings(&self) -> MediaTrackSettings {
+        self.rtp_track.get_settings().await
+    }
+
+    async fn apply_constraints(&self, constraints: Option<MediaTrackConstraints>) {
+        self.rtp_track.apply_constraints(constraints).await;
+    }
+
+    async fn codings(&self) -> Vec<RTCRtpEncodingParameters> {
+        self.rtp_track.codings().await
+    }
+
+    async fn add_coding(&self, coding: RTCRtpEncodingParameters) {
+        self.rtp_track.add_coding(coding).await;
     }
 }
 
 #[async_trait::async_trait]
 impl TrackLocal for TrackLocalStaticSample {
+    async fn track(&self) -> MediaStreamTrack {
+        self.rtp_track.track().await
+    }
+
     async fn bind(&self, ctx: TrackLocalContext) {
         self.rtp_track.bind(ctx).await;
     }
@@ -186,5 +266,6 @@ mod sample_writer {
     }
 }
 
+use crate::media_stream::Track;
 use crate::runtime::Mutex;
 pub use sample_writer::SampleWriter;

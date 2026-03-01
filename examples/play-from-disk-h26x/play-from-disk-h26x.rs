@@ -395,10 +395,10 @@ async fn stream_video(
     let mut video_reader = H26xReader::new(reader, 1_048_576, is_hevc);
 
     println!("play video from disk file {video_file_name}");
-    let ssrc = video_track
-        .track()
+    let ssrc = *video_track
         .ssrcs()
-        .next()
+        .await
+        .first()
         .ok_or(Error::ErrSenderWithNoSSRCs)?;
 
     // It is important to use a time.Ticker instead of time.Sleep because
@@ -446,10 +446,10 @@ async fn stream_audio(
     };
 
     println!("play audio from disk file {audio_file_name}");
-    let ssrc = audio_track
-        .track()
+    let ssrc = *audio_track
         .ssrcs()
-        .next()
+        .await
+        .first()
         .ok_or(Error::ErrSenderWithNoSSRCs)?;
 
     // It is important to use a time.Ticker instead of time.Sleep because

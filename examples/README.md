@@ -44,7 +44,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   process into your browser.
 - ✅ [Broadcast](broadcast): The broadcast example demonstrates how to broadcast a video to multiple peers. A
   broadcaster uploads the video once and the server forwards it to all other peers.
-- 🚧 [Simulcast](simulcast): The simulcast example demonstrates how to accept and demux 1 Track that contains 3
+- ✅ [Simulcast](simulcast): The simulcast example demonstrates how to accept and demux 1 Track that contains 3
   Simulcast streams. It then returns the media as 3 independent Tracks back to the sender.
 - 🚧 [Swap Tracks](swap-tracks): The swap-tracks demonstrates how to swap multiple incoming tracks on a single outgoing
   track.

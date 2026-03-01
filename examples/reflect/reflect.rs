@@ -57,9 +57,9 @@ impl PeerConnectionEventHandler for TestHandler {
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
         // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
         // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
-        let media_ssrc = track.track().ssrcs().next().unwrap();
+        let media_ssrc = *track.ssrcs().await.first().unwrap();
 
-        if track.track().kind() == RtpCodecKind::Video {
+        if track.kind().await == RtpCodecKind::Video {
             let trace_remote = track.clone();
             self.runtime.spawn(Box::pin(async move {
                 let mut result = Result::<()>::Ok(());
@@ -79,7 +79,7 @@ impl PeerConnectionEventHandler for TestHandler {
             }));
         }
 
-        let kind = track.track().kind();
+        let kind = track.kind().await;
         let tracks = self.tracks.lock().await;
         let output_track = if let Some(output_track) = tracks.get(&kind) {
             Arc::clone(output_track)
@@ -90,15 +90,15 @@ impl PeerConnectionEventHandler for TestHandler {
         self.runtime.spawn(Box::pin(async move {
             println!(
                 "Track has started, of mime_type {}",
-                track.track().codec(media_ssrc).unwrap().mime_type
+                track.codec(media_ssrc).await.unwrap().mime_type
             );
             // Read RTP packets being sent to webrtc-rs
             while let Some(evt) = track.poll().await {
                 if let TrackRemoteEvent::OnRtpPacket(mut packet) = evt {
-                    packet.header.ssrc = output_track
-                        .track()
+                    packet.header.ssrc = *output_track
                         .ssrcs()
-                        .next()
+                        .await
+                        .first()
                         .ok_or(Error::ErrSenderWithNoSSRCs)
                         .unwrap();
                     if let Err(err) = output_track.write_rtp(packet).await {
@@ -110,7 +110,7 @@ impl PeerConnectionEventHandler for TestHandler {
 
             println!(
                 "on_track finished, of mime_type {}",
-                track.track().codec(media_ssrc).unwrap().mime_type
+                track.codec(media_ssrc).await.unwrap().mime_type
             );
         }));
     }

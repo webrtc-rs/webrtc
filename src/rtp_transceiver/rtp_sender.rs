@@ -93,7 +93,7 @@ where
         peer_connection
             .rtp_sender(self.id)
             .ok_or(Error::ErrRTPSenderNotExisted)?
-            .replace_track(track.track().clone())
+            .replace_track(track.track().await)
     }
 
     async fn set_streams(&self, streams: Vec<MediaStreamId>) -> Result<()> {

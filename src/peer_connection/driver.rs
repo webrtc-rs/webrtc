@@ -475,7 +475,7 @@ where
                                 .track_remote_events_tx
                                 .lock()
                                 .await
-                                .insert(track_id.clone(), evt_tx);
+                                .insert(track_id.clone(), (evt_tx, Arc::clone(&track_remote)));
 
                             self.inner.handler.on_track(track_remote).await
                         }
@@ -483,12 +483,32 @@ where
                 }
 
                 let track_remotes = self.inner.track_remote_events_tx.lock().await;
-                if let Some(evt_tx) = track_remotes.get(track_id) {
+                if let Some((evt_tx, track_remote)) = track_remotes.get(track_id) {
                     let (track_id, result) = match evt {
-                        RTCTrackEvent::OnOpen(init) => (
-                            init.track_id.clone(),
-                            evt_tx.try_send(TrackRemoteEvent::OnOpen(init)),
-                        ),
+                        RTCTrackEvent::OnOpen(init) => {
+                            {
+                                let mut core = self.inner.core.lock().await;
+                                if let Some(receiver) = core.rtp_receiver(init.receiver_id) {
+                                    for coding in
+                                        receiver.track().codings().iter().filter(|coding| {
+                                            if let Some(ssrc) = coding.rtp_coding_parameters.ssrc
+                                                && ssrc == init.ssrc
+                                            {
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        })
+                                    {
+                                        track_remote.add_coding(coding.clone()).await;
+                                    }
+                                }
+                            }
+                            (
+                                init.track_id.clone(),
+                                evt_tx.try_send(TrackRemoteEvent::OnOpen(init)),
+                            )
+                        }
                         RTCTrackEvent::OnError(track_id) => {
                             (track_id, evt_tx.try_send(TrackRemoteEvent::OnError))
                         }
@@ -536,7 +556,7 @@ where
             RTCMessage::RtpPacket(track_id, packet) => {
                 let track_remotes = self.inner.track_remote_events_tx.lock().await;
                 if let Some(evt_tx) = track_remotes.get(&track_id) {
-                    if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtpPacket(packet)) {
+                    if let Err(err) = evt_tx.0.try_send(TrackRemoteEvent::OnRtpPacket(packet)) {
                         error!(
                             "Failed to send RtpPacket to track remote {}: {:?}",
                             track_id, err
@@ -549,7 +569,7 @@ where
             RTCMessage::RtcpPacket(track_id, packets) => {
                 let track_remotes = self.inner.track_remote_events_tx.lock().await;
                 if let Some(evt_tx) = track_remotes.get(&track_id) {
-                    if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtcpPacket(packets)) {
+                    if let Err(err) = evt_tx.0.try_send(TrackRemoteEvent::OnRtcpPacket(packets)) {
                         error!(
                             "Failed to send RtcpPacket to track remote {}: {:?}",
                             track_id, err

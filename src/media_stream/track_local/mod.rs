@@ -2,6 +2,7 @@ use crate::error::Result;
 use crate::media_stream::Track;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::runtime::Sender;
+use rtc::media_stream::MediaStreamTrack;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 use rtc::rtp_transceiver::rtp_sender::RTCRtpParameters;
 use rtc::{rtcp, rtp};
@@ -20,6 +21,8 @@ pub struct TrackLocalContext {
 
 #[async_trait::async_trait]
 pub trait TrackLocal: Track {
+    async fn track(&self) -> MediaStreamTrack;
+
     /// bind should implement the way how the media data flows from the Track to the PeerConnection
     /// This will be called internally after signaling is complete and the list of available
     /// codecs has been determined
