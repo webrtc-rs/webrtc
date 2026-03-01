@@ -134,8 +134,8 @@ name = "simulcast"
 path = "examples/simulcast/simulcast.rs"
 bench = false
 #
-#[[example]]
-#name = "swap-tracks"
-#path = "examples/swap-tracks/swap-tracks.rs"
-#bench = false
+[[example]]
+name = "swap-tracks"
+path = "examples/swap-tracks/swap-tracks.rs"
+bench = false
 #
