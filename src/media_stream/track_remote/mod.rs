@@ -2,11 +2,12 @@ pub(crate) mod static_rtp;
 
 use crate::error::Result;
 use crate::media_stream::Track;
+use rtc::peer_connection::event::RTCTrackEventInit;
 use rtc::{rtcp, rtp};
 
 #[derive(Debug, Clone)]
 pub enum TrackRemoteEvent {
-    OnOpen,
+    OnOpen(RTCTrackEventInit),
     OnError,
     OnEnding, // RTCTrackEvent::OnClosing
     OnEnded,  // RTCTrackEvent::OnClose

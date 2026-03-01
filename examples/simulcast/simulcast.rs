@@ -1,56 +1,176 @@
-use std::collections::HashMap;
-use std::io::Write;
-use std::sync::Arc;
-
 use anyhow::Result;
-use clap::{AppSettings, Arg, Command};
-use tokio::time::Duration;
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
-use webrtc::api::APIBuilder;
-use webrtc::ice_transport::ice_server::RTCIceServer;
-use webrtc::interceptor::registry::Registry;
-use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
-use webrtc::rtp_transceiver::rtp_codec::{
-    RTCRtpCodecCapability, RTCRtpHeaderExtensionCapability, RTPCodecType,
+use clap::Parser;
+use env_logger::Target;
+use futures::FutureExt;
+use log::trace;
+use rtc::interceptor::Registry;
+use rtc::media_stream::MediaStreamTrack;
+use rtc::peer_connection::configuration::RTCConfigurationBuilder;
+use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
+use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_VP8, MediaEngine};
+use rtc::peer_connection::sdp::RTCSessionDescription;
+use rtc::peer_connection::transport::RTCIceServer;
+use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use rtc::rtp_transceiver::rtp_sender::{
+    RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
+    RTCRtpHeaderExtensionCapability, RtpCodecKind,
 };
-use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
-use webrtc::Error;
+use rtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::{fs, fs::OpenOptions, io::Write as IoWrite, str::FromStr};
+use webrtc::error::Result as WebRtcResult;
+use webrtc::media_stream::track_local::TrackLocal;
+use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+use webrtc::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
+use webrtc::peer_connection::{
+    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
+    RTCPeerConnectionState,
+};
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut app = Command::new("simulcast")
-        .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of simulcast.")
-        .setting(AppSettings::DeriveDisplayOrder)
-        .subcommand_negates_reqs(true)
-        .arg(
-            Arg::new("FULLHELP")
-                .help("Prints more detailed help information")
-                .long("fullhelp"),
-        )
-        .arg(
-            Arg::new("debug")
-                .long("debug")
-                .short('d')
-                .help("Prints debug log information"),
-        );
+// ── CLI ───────────────────────────────────────────────────────────────────────
 
-    let matches = app.clone().get_matches();
+#[derive(Parser)]
+#[command(name = "simulcast")]
+#[command(author = "Rain Liu <yliu@webrtc.rs>")]
+#[command(version = "0.1.0")]
+#[command(about = "An example of simulcast: receive 3 simulcast layers and echo them back.")]
+struct Cli {
+    #[arg(short, long)]
+    debug: bool,
+    #[arg(short, long, default_value_t = format!("INFO"))]
+    log_level: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    input_sdp_file: String,
+    #[arg(short, long, default_value_t = format!(""))]
+    output_log_file: String,
+}
 
-    if matches.is_present("FULLHELP") {
-        app.print_long_help().unwrap();
-        std::process::exit(0);
+// ── Event handler ─────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct Handler {
+    runtime: Arc<dyn Runtime>,
+    gather_complete_tx: Sender<()>,
+    done_tx: Sender<()>,
+    // rid -> (output_track, output_ssrc)
+    output_tracks: Arc<HashMap<String, (Arc<TrackLocalStaticRTP>, u32)>>,
+}
+
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for Handler {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.gather_complete_tx.try_send(());
+        }
     }
 
-    let debug = matches.is_present("debug");
-    if debug {
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        println!("Peer Connection State has changed: {state}");
+        if state == RTCPeerConnectionState::Failed || state == RTCPeerConnectionState::Closed {
+            let _ = self.done_tx.try_send(());
+        }
+    }
+
+    async fn on_track(&self, track: Arc<dyn TrackRemote>) {
+        println!("Track has started");
+
+        // Forward RTP to the output track matching each packet's rid.
+        // All simulcast layers come through the same TrackRemote.
+        // OnOpen fires once per simulcast RID (carrying the correct SSRC), so we
+        // eagerly build the ssrc→output_track cache and spawn PLI tasks there.
+        let output_tracks = self.output_tracks.clone();
+        let runtime = self.runtime.clone();
+        self.runtime.spawn(Box::pin(async move {
+            // ssrc → (output_track, output_ssrc), populated at OnOpen time per RID
+            let mut ssrc_map: HashMap<u32, (Arc<TrackLocalStaticRTP>, u32)> = HashMap::new();
+
+            while let Some(evt) = track.poll().await {
+                match evt {
+                    TrackRemoteEvent::OnOpen(init) => {
+                        let ssrc = init.ssrc;
+                        let rid = init.rid.as_deref().unwrap_or("");
+                        println!("Simulcast track opened with rid={rid}, ssrc={ssrc}");
+
+                        if let Some(entry) = output_tracks.get(rid).cloned() {
+                            ssrc_map.insert(ssrc, entry.clone());
+
+                            // Spawn a PLI task for this RID using the correct SSRC
+                            let pli_track = track.clone();
+                            runtime.spawn(Box::pin(async move {
+                                let mut result = WebRtcResult::<()>::Ok(());
+                                while result.is_ok() {
+                                    let timeout = sleep(std::time::Duration::from_secs(3));
+                                    futures::pin_mut!(timeout);
+                                    futures::select! {
+                                        _ = timeout.fuse() => {
+                                            result = pli_track
+                                                .write_rtcp(vec![Box::new(
+                                                    PictureLossIndication {
+                                                        sender_ssrc: 0,
+                                                        media_ssrc: ssrc,
+                                                    },
+                                                )])
+                                                .await;
+                                        }
+                                    }
+                                }
+                            }));
+                        } else {
+                            println!("No output track for rid={rid}");
+                        }
+                    }
+                    TrackRemoteEvent::OnRtpPacket(mut packet) => {
+                        let ssrc = packet.header.ssrc;
+                        if let Some((output_track, out_ssrc)) = ssrc_map.get(&ssrc) {
+                            trace!(
+                                "forwarding rtp ssrc={ssrc} seq={} -> out_ssrc={out_ssrc}",
+                                packet.header.sequence_number
+                            );
+                            packet.header.ssrc = *out_ssrc;
+                            if let Err(err) = output_track.write_rtp(packet).await {
+                                println!("output track write_rtp got error: {err}");
+                                break;
+                            }
+                        } else {
+                            trace!(
+                                "OnRtpPacket ssrc={ssrc} not in ssrc_map (keys: {:?})",
+                                ssrc_map.keys().collect::<Vec<_>>()
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            println!("Track forwarding ended.");
+        }));
+    }
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+fn main() -> Result<()> {
+    block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
+    let cli = Cli::parse();
+    let log_level = log::LevelFilter::from_str(&cli.log_level)?;
+
+    if cli.debug {
         env_logger::Builder::new()
+            .target(if !cli.output_log_file.is_empty() {
+                Target::Pipe(Box::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&cli.output_log_file)?,
+                ))
+            } else {
+                Target::Stdout
+            })
             .format(|buf, record| {
                 writeln!(
                     buf,
@@ -62,187 +182,150 @@ async fn main() -> Result<()> {
                     record.args()
                 )
             })
-            .filter(None, log::LevelFilter::Trace)
+            .filter(None, log_level)
             .init();
     }
 
-    // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
+    // ── Media engine setup ───────────────────────────────────────────────────
 
-    // Create a MediaEngine object to configure the supported codec
-    let mut m = MediaEngine::default();
+    let mut media_engine = MediaEngine::default();
 
-    m.register_default_codecs()?;
+    // Enable VP8 codec for video (matching the sansio RTC simulcast example)
+    let video_codec = RTCRtpCodecParameters {
+        rtp_codec: RTCRtpCodec {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            clock_rate: 90000,
+            channels: 0,
+            sdp_fmtp_line: "".to_owned(),
+            rtcp_feedback: vec![],
+        },
+        payload_type: 96,
+        ..Default::default()
+    };
 
-    // Enable Extension Headers needed for Simulcast
-    for extension in [
+    media_engine.register_codec(video_codec.clone(), RtpCodecKind::Video)?;
+
+    // Enable extension headers needed for simulcast
+    for uri in [
         "urn:ietf:params:rtp-hdrext:sdes:mid",
         "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id",
         "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
     ] {
-        m.register_header_extension(
+        media_engine.register_header_extension(
             RTCRtpHeaderExtensionCapability {
-                uri: extension.to_owned(),
+                uri: uri.to_owned(),
             },
-            RTPCodecType::Video,
+            RtpCodecKind::Video,
             None,
         )?;
     }
-    // Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
-    // This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
-    // this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
-    // for each PeerConnection.
-    let mut registry = Registry::new();
 
-    // Use the default set of Interceptors
-    registry = register_default_interceptors(registry, &mut m)?;
+    let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
-    // Create the API object with the MediaEngine
-    let api = APIBuilder::new()
-        .with_media_engine(m)
-        .with_interceptor_registry(registry)
+    let config = RTCConfigurationBuilder::new()
+        .with_ice_servers(vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_string()],
+            ..Default::default()
+        }])
         .build();
 
-    // Prepare the configuration
-    let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
+    // ── Output tracks (one per simulcast layer) ──────────────────────────────
 
-    // Create a new RTCPeerConnection
-    let peer_connection = Arc::new(api.new_peer_connection(config).await?);
+    // Build the output tracks map before building the peer connection
 
-    // Create Track that we send video back to browser on
-    let mut output_tracks = HashMap::new();
-    for s in ["q", "h", "f"] {
-        let output_track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_VP8.to_owned(),
+    let mut output_track_map: HashMap<String, (Arc<TrackLocalStaticRTP>, u32)> = HashMap::new();
+    let mut tracks_to_add: Vec<Arc<TrackLocalStaticRTP>> = Vec::new();
+
+    for rid in ["q", "h", "f"] {
+        let ssrc: u32 = rand::random();
+        let track = Arc::new(TrackLocalStaticRTP::new(MediaStreamTrack::new(
+            format!("webrtc-rs_{rid}"),
+            format!("video_{rid}"),
+            format!("video_{rid}"),
+            RtpCodecKind::Video,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    rid: rid.to_string(),
+                    ssrc: Some(ssrc),
+                    ..Default::default()
+                },
+                codec: video_codec.rtp_codec.clone(),
                 ..Default::default()
-            },
-            format!("video_{s}"),
-            format!("webrtc-rs_{s}"),
-        ));
-
-        // Add this newly created track to the PeerConnection
-        let rtp_sender = peer_connection
-            .add_track(Arc::clone(&output_track) as Arc<dyn TrackLocal + Send + Sync>)
-            .await?;
-
-        // Read incoming RTCP packets
-        // Before these packets are returned they are processed by interceptors. For things
-        // like NACK this needs to be called.
-        tokio::spawn(async move {
-            let mut rtcp_buf = vec![0u8; 1500];
-            while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-            Result::<()>::Ok(())
-        });
-
-        output_tracks.insert(s.to_owned(), output_track);
+            }],
+        )));
+        output_track_map.insert(rid.to_owned(), (Arc::clone(&track), ssrc));
+        tracks_to_add.push(track);
     }
 
-    // Wait for the offer to be pasted
-    let line = signal::must_read_stdin()?;
+    let output_tracks = Arc::new(output_track_map);
+
+    // ── Peer connection ──────────────────────────────────────────────────────
+
+    let runtime =
+        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+
+    let (done_tx, mut done_rx) = channel::<()>(1);
+    let (gather_complete_tx, mut gather_complete_rx) = channel::<()>(1);
+    let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
+    ctrlc::set_handler(move || {
+        let _ = ctrlc_tx.try_send(());
+    })?;
+
+    let handler = Arc::new(Handler {
+        runtime: runtime.clone(),
+        gather_complete_tx,
+        done_tx: done_tx.clone(),
+        output_tracks,
+    });
+
+    let peer_connection = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_media_engine(media_engine)
+        .with_interceptor_registry(registry)
+        .with_handler(Arc::clone(&handler) as Arc<dyn PeerConnectionEventHandler>)
+        .with_runtime(runtime.clone())
+        .with_udp_addrs(vec![format!("{}:0", signal::get_local_ip())])
+        .build()
+        .await?;
+
+    // Add a recvonly transceiver for the incoming simulcast video
+    peer_connection
+        .add_transceiver_from_kind(
+            RtpCodecKind::Video,
+            Some(RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
+                ..Default::default()
+            }),
+        )
+        .await?;
+
+    // Add output tracks (one sendonly transceiver per simulcast layer)
+    for track in tracks_to_add {
+        peer_connection
+            .add_track(track as Arc<dyn TrackLocal>)
+            .await?;
+    }
+
+    // ── Signalling ───────────────────────────────────────────────────────────
+
+    print!("Paste offer from browser and press Enter: ");
+    let line = if cli.input_sdp_file.is_empty() {
+        signal::must_read_stdin()?
+    } else {
+        fs::read_to_string(&cli.input_sdp_file)?
+    };
     let desc_data = signal::decode(line.as_str())?;
     let offer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
-
-    // Set the remote SessionDescription
+    print!("offer: {}", offer);
     peer_connection.set_remote_description(offer).await?;
-
-    // Set a handler for when a new remote track starts
-    let pc = Arc::downgrade(&peer_connection);
-    peer_connection.on_track(Box::new(move |track, _, _| {
-        println!("Track has started");
-
-        let rid = track.rid().to_owned();
-        let output_track = if let Some(output_track) = output_tracks.get(&rid) {
-            Arc::clone(output_track)
-        } else {
-            println!("output_track not found for rid = {rid}");
-            return Box::pin(async {});
-        };
-
-        // Start reading from all the streams and sending them to the related output track
-        let media_ssrc = track.ssrc();
-        let pc2 = pc.clone();
-        tokio::spawn(async move {
-            let mut result = Result::<usize>::Ok(0);
-            while result.is_ok() {
-                println!("Sending pli for stream with rid: {rid}, ssrc: {media_ssrc}");
-
-                let timeout = tokio::time::sleep(Duration::from_secs(3));
-                tokio::pin!(timeout);
-
-                tokio::select! {
-                    _ = timeout.as_mut() =>{
-                        if let Some(pc) = pc2.upgrade(){
-                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                sender_ssrc: 0,
-                                media_ssrc,
-                            })]).await.map_err(Into::into);
-                        }else{
-                            break;
-                        }
-                    }
-                };
-            }
-        });
-
-        tokio::spawn(async move {
-            // Read RTP packets being sent to webrtc-rs
-            println!("enter track loop {}", track.rid());
-            while let Ok((rtp, _)) = track.read_rtp().await {
-                if let Err(err) = output_track.write_rtp(&rtp).await {
-                    if Error::ErrClosedPipe != err {
-                        println!("output track write_rtp got error: {err} and break");
-                        break;
-                    } else {
-                        println!("output track write_rtp got error: {err}");
-                    }
-                }
-            }
-            println!("exit track loop {}", track.rid());
-        });
-
-        Box::pin(async {})
-    }));
-
-    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
-
-    // Set the handler for Peer connection state
-    // This will notify you when the peer has connected/disconnected
-    peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        println!("Peer Connection State has changed: {s}");
-
-        if s == RTCPeerConnectionState::Failed {
-            // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-            // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-            // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-            println!("Peer Connection has gone to failed exiting");
-            let _ = done_tx.try_send(());
-        }
-
-        Box::pin(async {})
-    }));
-
-    // Create an answer
     let answer = peer_connection.create_answer(None).await?;
-
-    // Create channel that is blocked until ICE Gathering is complete
-    let mut gather_complete = peer_connection.gathering_complete_promise().await;
-
-    // Sets the LocalDescription, and starts our UDP listeners
     peer_connection.set_local_description(answer).await?;
 
-    // Block until ICE Gathering is complete, disabling trickle ICE
-    // we do this because we only can exchange one signaling message
-    // in a production application you should exchange ICE Candidates via OnICECandidate
-    let _ = gather_complete.recv().await;
+    // Block until ICE gathering is complete (non-trickle ICE)
+    let _ = gather_complete_rx.recv().await;
 
-    // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
+        print!("answer: {}", local_desc);
         let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
         println!("{b64}");
@@ -251,14 +334,14 @@ async fn main() -> Result<()> {
     }
 
     println!("Press ctrl-c to stop");
-    tokio::select! {
-        _ = done_rx.recv() => {
+    futures::select! {
+        _ = done_rx.recv().fuse() => {
             println!("received done signal!");
         }
-        _ = tokio::signal::ctrl_c() => {
-            println!();
+        _ = ctrlc_rx.recv().fuse() => {
+            println!("received ctrl-c signal!");
         }
-    };
+    }
 
     peer_connection.close().await?;
 

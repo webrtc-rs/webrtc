@@ -129,10 +129,10 @@ name = "save-to-disk-h26x"
 path = "examples/save-to-disk-h26x/save-to-disk-h26x.rs"
 bench = false
 #
-#[[example]]
-#name = "simulcast"
-#path = "examples/simulcast/simulcast.rs"
-#bench = false
+[[example]]
+name = "simulcast"
+path = "examples/simulcast/simulcast.rs"
+bench = false
 #
 #[[example]]
 #name = "swap-tracks"

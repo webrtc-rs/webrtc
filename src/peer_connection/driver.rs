@@ -17,6 +17,7 @@ use futures::FutureExt; // For .fuse() in futures::select!
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{error, trace};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
+use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
 use rtc::peer_connection::message::RTCMessage;
 use rtc::peer_connection::state::RTCIceGatheringState;
@@ -419,55 +420,84 @@ where
                         let mut core = self.inner.core.lock().await;
                         (
                             init.receiver_id.into(),
-                            core.rtp_receiver(init.receiver_id)
-                                .map(|receiver| receiver.track().clone()),
+                            core.rtp_receiver(init.receiver_id).map(|receiver| {
+                                let track = receiver.track();
+                                MediaStreamTrack::new(
+                                    track.stream_id().clone(),
+                                    track.track_id().clone(),
+                                    track.label().clone(),
+                                    track.kind(),
+                                    vec![],
+                                )
+                            }),
                         )
                     };
 
                     if let Some(track) = track {
-                        let (evt_tx, evt_rx) = channel(TRACK_REMOTE_EVENT_CHANNEL_CAPACITY);
-                        let track_remote: Arc<dyn TrackRemote> =
-                            Arc::new(TrackRemoteStaticRTP::new(
-                                track,
-                                init.receiver_id,
-                                self.inner.driver_event_tx.clone(),
-                                evt_rx,
-                            ));
+                        // For simulcast, multiple RTCTrackEvent::OnOpen fire for the same
+                        // track_id (one per RID as each layer's first RTP packet arrives).
+                        // Only create the TrackRemote and call on_track the first time.
+                        let already_open = self
+                            .inner
+                            .track_remote_events_tx
+                            .lock()
+                            .await
+                            .contains_key(track_id);
 
-                        {
-                            let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
-                            rtp_transceivers.entry(id).or_insert_with(|| {
-                                Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner)))
-                            });
+                        if !already_open {
+                            let (evt_tx, evt_rx) = channel(TRACK_REMOTE_EVENT_CHANNEL_CAPACITY);
+                            let track_remote: Arc<dyn TrackRemote> =
+                                Arc::new(TrackRemoteStaticRTP::new(
+                                    track,
+                                    init.receiver_id,
+                                    self.inner.driver_event_tx.clone(),
+                                    evt_rx,
+                                ));
 
-                            let rtp_transceiver = rtp_transceivers.get(&id).unwrap();
+                            {
+                                let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
+                                rtp_transceivers.entry(id).or_insert_with(|| {
+                                    Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner)))
+                                });
 
-                            let receiver: Arc<dyn RtpReceiver> = Arc::new(RtpReceiverImpl::new(
-                                id.into(),
-                                Arc::clone(&self.inner),
-                                Arc::clone(&track_remote),
-                            ));
-                            rtp_transceiver.set_receiver(Some(receiver)).await;
-                        }
+                                let rtp_transceiver = rtp_transceivers.get(&id).unwrap();
 
-                        {
-                            let mut track_remotes = self.inner.track_remote_events_tx.lock().await;
-                            if !track_remotes.contains_key(track_id) {
-                                track_remotes.insert(track_id.clone(), evt_tx);
+                                let receiver: Arc<dyn RtpReceiver> =
+                                    Arc::new(RtpReceiverImpl::new(
+                                        id.into(),
+                                        Arc::clone(&self.inner),
+                                        Arc::clone(&track_remote),
+                                    ));
+                                rtp_transceiver.set_receiver(Some(receiver)).await;
                             }
-                        }
 
-                        self.inner.handler.on_track(track_remote).await
+                            self.inner
+                                .track_remote_events_tx
+                                .lock()
+                                .await
+                                .insert(track_id.clone(), evt_tx);
+
+                            self.inner.handler.on_track(track_remote).await
+                        }
                     }
                 }
 
                 let track_remotes = self.inner.track_remote_events_tx.lock().await;
                 if let Some(evt_tx) = track_remotes.get(track_id) {
-                    let result = match &evt {
-                        RTCTrackEvent::OnOpen(_) => evt_tx.try_send(TrackRemoteEvent::OnOpen),
-                        RTCTrackEvent::OnError(_) => evt_tx.try_send(TrackRemoteEvent::OnError),
-                        RTCTrackEvent::OnClosing(_) => evt_tx.try_send(TrackRemoteEvent::OnEnding),
-                        RTCTrackEvent::OnClose(_) => evt_tx.try_send(TrackRemoteEvent::OnEnded),
+                    let (track_id, result) = match evt {
+                        RTCTrackEvent::OnOpen(init) => (
+                            init.track_id.clone(),
+                            evt_tx.try_send(TrackRemoteEvent::OnOpen(init)),
+                        ),
+                        RTCTrackEvent::OnError(track_id) => {
+                            (track_id, evt_tx.try_send(TrackRemoteEvent::OnError))
+                        }
+                        RTCTrackEvent::OnClosing(track_id) => {
+                            (track_id, evt_tx.try_send(TrackRemoteEvent::OnEnding))
+                        }
+                        RTCTrackEvent::OnClose(track_id) => {
+                            (track_id, evt_tx.try_send(TrackRemoteEvent::OnEnded))
+                        }
                     };
                     if let Err(err) = result {
                         error!(
@@ -542,7 +572,7 @@ where
                     }
                 } else {
                     error!(
-                        "Failed to send RTCP feedback due to unknown sender id {:?}",
+                        "Failed to send RTP due to unknown sender id {:?}",
                         sender_id
                     );
                 }
