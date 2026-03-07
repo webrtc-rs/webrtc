@@ -4,7 +4,7 @@ use env_logger::Target;
 use futures::FutureExt;
 use rtc::interceptor::Registry;
 use rtc::media::Sample;
-use rtc::media::io::h26x_reader::{H26xNAL, H26xReader, H264NalUnitType, H265NalUnitType};
+use rtc::media::io::h26x_reader::H26xSampleReader;
 use rtc::media::io::ogg_reader::OggReader;
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
@@ -56,7 +56,7 @@ struct Cli {
     input_sdp_file: String,
     #[arg(short, long, default_value_t = format!(""))]
     output_log_file: String,
-    /// Video file to stream (.h264 Annex-B or .h265/HEVC)
+    /// Video file to stream (.264 H264 or .265 HEVC)
     #[arg(short, long)]
     video: Option<String>,
     /// Audio file to stream (.ogg / Opus)
@@ -364,27 +364,6 @@ async fn async_main() -> Result<()> {
 
 // ── Streaming helpers ──────────────────────────────────────────────────────────
 
-fn should_skip_timing(nal: &H26xNAL) -> bool {
-    match nal {
-        H26xNAL::H264(nal) => matches!(
-            nal.unit_type,
-            H264NalUnitType::SPS
-                | H264NalUnitType::PPS
-                | H264NalUnitType::SEI
-                | H264NalUnitType::AUD
-        ),
-        H26xNAL::H265(nal) => matches!(
-            nal.unit_type,
-            H265NalUnitType::VPS
-                | H265NalUnitType::SPS
-                | H265NalUnitType::PPS
-                | H265NalUnitType::PrefixSEI
-                | H265NalUnitType::SuffixSEI
-                | H265NalUnitType::AUD
-        ),
-    }
-}
-
 async fn stream_video(
     video_file_name: String,
     video_track: Arc<TrackLocalStaticSample>,
@@ -392,7 +371,7 @@ async fn stream_video(
 ) -> Result<()> {
     let file = File::open(&video_file_name)?;
     let reader = BufReader::new(file);
-    let mut video_reader = H26xReader::new(reader, 1_048_576, is_hevc);
+    let mut video_reader = H26xSampleReader::new(reader, 1_048_576, is_hevc);
 
     println!("play video from disk file {video_file_name}");
     let ssrc = *video_track
@@ -406,8 +385,8 @@ async fn stream_video(
     // * works around latency issues with Sleep
     let mut ticker = interval(H26X_FRAME_DURATION);
     loop {
-        let nal = match video_reader.next_nal() {
-            Ok(nal) => nal,
+        let sample = match video_reader.next_sample() {
+            Ok(sample) => sample,
             Err(err) => {
                 println!("All video frames parsed and sent: {err}");
                 break;
@@ -417,13 +396,17 @@ async fn stream_video(
         video_track
             .sample_writer(ssrc)
             .write_sample(&Sample {
-                data: nal.data().clone().freeze(),
-                duration: Duration::from_secs(1),
+                data: sample.data,
+                duration: if sample.timed {
+                    H26X_FRAME_DURATION
+                } else {
+                    Duration::ZERO
+                },
                 ..Default::default()
             })
             .await?;
 
-        if !should_skip_timing(&nal) {
+        if sample.timed {
             let _ = ticker.tick().await;
         }
     }
