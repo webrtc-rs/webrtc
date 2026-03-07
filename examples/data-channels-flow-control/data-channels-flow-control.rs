@@ -246,7 +246,9 @@ async fn async_main() -> anyhow::Result<()> {
                             }
                         }
                         result = dc.send(buf.clone()).fuse() => {
-                            if result.is_err() { break; }
+                            if result.is_err() {
+                                // skip error Err(Other("Full(WriteNotify)"))
+                            }
                         }
                     }
                 } else {
