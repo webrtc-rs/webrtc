@@ -90,13 +90,21 @@ impl PeerConnectionEventHandler for Handler {
     }
 
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
-        let media_ssrc = *track.ssrcs().await.first().unwrap();
         let kind = track.kind().await;
+        let media_ssrc = *track
+            .ssrcs()
+            .await
+            .first()
+            .expect("track should expose SSRCs before on_track");
         let mime_type = track
             .codec(media_ssrc)
             .await
             .map(|c| c.mime_type.to_lowercase())
-            .unwrap_or_default();
+            .unwrap_or_else(|| match kind {
+                RtpCodecKind::Audio => MIME_TYPE_OPUS.to_lowercase(),
+                RtpCodecKind::Video if self.is_hevc => MIME_TYPE_HEVC.to_lowercase(),
+                RtpCodecKind::Video | RtpCodecKind::Unspecified => MIME_TYPE_H264.to_lowercase(),
+            });
 
         // Send PLI every 3 seconds for video tracks to request keyframes
         if kind == RtpCodecKind::Video {
@@ -120,7 +128,6 @@ impl PeerConnectionEventHandler for Handler {
             }));
         }
 
-        let is_hevc = self.is_hevc;
         if mime_type == MIME_TYPE_OPUS.to_lowercase() {
             println!("Got Opus track, saving to disk (48 kHz, 2 channels)");
             let audio_writer = Arc::clone(&self.audio_writer);
@@ -147,6 +154,7 @@ impl PeerConnectionEventHandler for Handler {
         } else if mime_type == MIME_TYPE_H264.to_lowercase()
             || mime_type == MIME_TYPE_HEVC.to_lowercase()
         {
+            let is_hevc = mime_type == MIME_TYPE_HEVC.to_lowercase();
             println!(
                 "Got {} track, saving to disk",
                 if is_hevc { "H265" } else { "H264" }

@@ -415,6 +415,8 @@ where
                     RTCTrackEvent::OnClose(id) => id,
                 };
 
+                let mut pending_on_track = None;
+
                 if let RTCTrackEvent::OnOpen(init) = &evt {
                     let (id, track) = {
                         let mut core = self.inner.core.lock().await;
@@ -477,33 +479,28 @@ where
                                 .await
                                 .insert(track_id.clone(), (evt_tx, Arc::clone(&track_remote)));
 
-                            self.inner.handler.on_track(track_remote).await
+                            pending_on_track = Some(track_remote);
                         }
                     }
                 }
 
-                let track_remotes = self.inner.track_remote_events_tx.lock().await;
-                if let Some((evt_tx, track_remote)) = track_remotes.get(track_id) {
+                let track_remote_entry = self
+                    .inner
+                    .track_remote_events_tx
+                    .lock()
+                    .await
+                    .get(track_id)
+                    .map(|(evt_tx, track_remote)| (evt_tx.clone(), Arc::clone(track_remote)));
+
+                if let Some((evt_tx, track_remote)) = track_remote_entry {
                     let (track_id, result) = match evt {
                         RTCTrackEvent::OnOpen(init) => {
-                            {
-                                let mut core = self.inner.core.lock().await;
-                                if let Some(receiver) = core.rtp_receiver(init.receiver_id) {
-                                    for coding in
-                                        receiver.track().codings().iter().filter(|coding| {
-                                            if let Some(ssrc) = coding.rtp_coding_parameters.ssrc
-                                                && ssrc == init.ssrc
-                                            {
-                                                true
-                                            } else {
-                                                false
-                                            }
-                                        })
-                                    {
-                                        track_remote.add_coding(coding.clone()).await;
-                                    }
-                                }
-                            }
+                            self.populate_track_remote_codings(
+                                init.receiver_id,
+                                init.ssrc,
+                                &track_remote,
+                            )
+                            .await;
                             (
                                 init.track_id.clone(),
                                 evt_tx.try_send(TrackRemoteEvent::OnOpen(init)),
@@ -530,6 +527,10 @@ where
                         "Failed to get track_remote: {:?} for RTCTrackEvent",
                         track_id
                     );
+                }
+
+                if let Some(track_remote) = pending_on_track {
+                    self.inner.handler.on_track(track_remote).await;
                 }
             }
         }
@@ -637,5 +638,42 @@ where
         }
 
         false
+    }
+
+    async fn populate_track_remote_codings(
+        &self,
+        receiver_id: RTCRtpReceiverId,
+        ssrc: u32,
+        track_remote: &Arc<dyn TrackRemote>,
+    ) {
+        let codings = {
+            let mut core = self.inner.core.lock().await;
+            core.rtp_receiver(receiver_id).map(|receiver| {
+                receiver
+                    .track()
+                    .codings()
+                    .iter()
+                    .filter(|coding| {
+                        coding
+                            .rtp_coding_parameters
+                            .ssrc
+                            .is_some_and(|coding_ssrc| coding_ssrc == ssrc)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+        };
+
+        if let Some(codings) = codings {
+            let mut existing_ssrcs = track_remote.ssrcs().await;
+            for coding in codings {
+                if let Some(coding_ssrc) = coding.rtp_coding_parameters.ssrc
+                    && !existing_ssrcs.contains(&coding_ssrc)
+                {
+                    track_remote.add_coding(coding).await;
+                    existing_ssrcs.push(coding_ssrc);
+                }
+            }
+        }
     }
 }
