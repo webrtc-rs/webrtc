@@ -7,7 +7,9 @@ use rtc::interceptor::Registry;
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
-use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_HEVC, MediaEngine};
+use rtc::peer_connection::configuration::media_engine::{
+    MIME_TYPE_HEVC, MIME_TYPE_VP8, MediaEngine,
+};
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::transport::RTCIceServer;
 use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
@@ -231,7 +233,7 @@ async fn async_main() -> Result<()> {
             format!("video_{rid}"),
             RtpCodecKind::Video,
             vec![
-                /*RTCRtpEncodingParameters {
+                RTCRtpEncodingParameters {
                     rtp_coding_parameters: RTCRtpCodingParameters {
                         ssrc: Some(ssrc),
                         ..Default::default()
@@ -244,7 +246,7 @@ async fn async_main() -> Result<()> {
                         rtcp_feedback: vec![],
                     },
                     ..Default::default()
-                },*/
+                },
                 RTCRtpEncodingParameters {
                     rtp_coding_parameters: RTCRtpCodingParameters {
                         ssrc: Some(ssrc),
