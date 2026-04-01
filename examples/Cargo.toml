@@ -151,3 +151,8 @@ bench = false
 name = "ice-restart"
 path = "examples/ice-restart/ice-restart.rs"
 bench = false
+
+[[example]]
+name = "regression-checks"
+path = "examples/regression-checks/regression-checks.rs"
+bench = false

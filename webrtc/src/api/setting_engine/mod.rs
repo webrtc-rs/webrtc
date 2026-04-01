@@ -30,6 +30,11 @@ pub struct Timeout {
     pub ice_srflx_acceptance_min_wait: Option<Duration>,
     pub ice_prflx_acceptance_min_wait: Option<Duration>,
     pub ice_relay_acceptance_min_wait: Option<Duration>,
+    /// Maximum duration to wait for all ICE candidate gathering tasks to complete.
+    /// When None, defaults to 10 seconds inside the ICE agent. Setting a shorter
+    /// value (e.g. 3-5 s) is useful when STUN servers may be unreachable or when
+    /// only local candidates are needed. Relates to issues #774 and #778.
+    pub ice_candidate_gather_timeout: Option<Duration>,
 }
 
 #[derive(Default, Clone)]
@@ -163,6 +168,14 @@ impl SettingEngine {
     /// set_relay_acceptance_min_wait sets the icerelay_acceptance_min_wait
     pub fn set_relay_acceptance_min_wait(&mut self, t: Option<Duration>) {
         self.timeout.ice_relay_acceptance_min_wait = t;
+    }
+
+    /// set_candidate_gather_timeout sets the maximum time allowed for all ICE
+    /// candidate gathering tasks (host, STUN, TURN) to complete before
+    /// GatheringState::Complete is declared. A value of None uses the ICE
+    /// agent default of 10 seconds.
+    pub fn set_candidate_gather_timeout(&mut self, t: Option<Duration>) {
+        self.timeout.ice_candidate_gather_timeout = t;
     }
 
     /// set_udp_network allows ICE traffic to come through Ephemeral or UDPMux.

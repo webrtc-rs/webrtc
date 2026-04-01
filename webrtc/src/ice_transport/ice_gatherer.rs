@@ -123,6 +123,7 @@ impl RTCIceGatherer {
             nat_1to1_ips: self.setting_engine.candidates.nat_1to1_ips.clone(),
             nat_1to1_ip_candidate_type: nat_1to1_cand_type,
             include_loopback: self.setting_engine.candidates.include_loopback_candidate,
+            candidate_gather_timeout: self.setting_engine.timeout.ice_candidate_gather_timeout,
             net: self.setting_engine.vnet.clone(),
             multicast_dns_mode: mdns_mode,
             multicast_dns_host_name: self
