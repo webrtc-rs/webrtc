@@ -150,3 +150,8 @@ bench = false
 name = "data-channel-with-video"
 path = "examples/data-channel-with-video/data-channel-with-video.rs"
 bench = false
+
+[[example]]
+name = "mdns-local-peers"
+path = "examples/mdns-local-peers/mdns-local-peers.rs"
+bench = false
