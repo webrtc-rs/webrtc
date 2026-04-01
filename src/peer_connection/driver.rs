@@ -29,7 +29,7 @@ use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -265,7 +265,21 @@ where
     }
 
     async fn handle_write(&self, msg: TaggedBytesMut) {
-        if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
+        let socket = self.sockets.get(&msg.transport.local_addr).or_else(|| {
+            // mDNS answer packets use local_addr = local_ip:5353 (the IP carried in the
+            // DNS A record), but the mDNS socket is keyed as 0.0.0.0:5353.  Fall back
+            // to that key so responses are routed through the multicast socket.
+            if msg.transport.local_addr.port() == rtc::mdns::MDNS_PORT {
+                let fallback = SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                    rtc::mdns::MDNS_PORT,
+                );
+                self.sockets.get(&fallback)
+            } else {
+                None
+            }
+        });
+        if let Some(socket) = socket {
             match socket.send_to(&msg.message, msg.transport.peer_addr).await {
                 Ok(n) => {
                     trace!(
