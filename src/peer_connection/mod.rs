@@ -12,7 +12,7 @@ use std::time::Instant;
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
-use crate::runtime::{JoinHandle, Runtime, default_runtime};
+use crate::runtime::{AsyncTcpListener, JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
 
 use driver::{
@@ -404,7 +404,7 @@ where
         mdns_mode: MulticastDnsMode,
         opts: RTCIceGatherOptions,
         udp_addrs: Vec<A>,
-        _tcp_addrs: Vec<A>,
+        tcp_addrs: Vec<A>,
     ) -> Result<Self> {
         let mut local_addrs = vec![];
         let mut async_udp_sockets = HashMap::new();
@@ -471,6 +471,17 @@ where
             }
         }
 
+        // Bind TCP passive listeners
+        let mut tcp_local_addrs = vec![];
+        let mut tcp_listeners: Vec<Arc<dyn AsyncTcpListener>> = vec![];
+        for addr in tcp_addrs {
+            let socket = std::net::TcpListener::bind(addr)?;
+            let listener = runtime.wrap_tcp_listener(socket)?;
+            let local_addr = listener.local_addr()?;
+            tcp_local_addrs.push(local_addr);
+            tcp_listeners.push(listener);
+        }
+
         let (driver_event_tx, driver_event_rx) =
             channel(PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY);
         let peer_connection = Self {
@@ -486,11 +497,13 @@ where
             driver_handle: Mutex::new(None),
         };
 
-        let ice_gatherer = RTCIceGatherer::new(local_addrs, opts);
+        let ice_gatherer = RTCIceGatherer::new(local_addrs, tcp_local_addrs, opts);
         let mut driver = PeerConnectionDriver::new(
             peer_connection.inner.clone(),
             ice_gatherer,
             async_udp_sockets,
+            tcp_listeners,
+            runtime.clone(),
         )
         .await?;
         let driver_handle = runtime.spawn(Box::pin(async move {

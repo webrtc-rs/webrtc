@@ -6,6 +6,7 @@
 
 use crate::runtime;
 use rtc::ice::candidate::CandidateConfig;
+use rtc::ice::tcp_type::TcpType;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::transport::{
     CandidateHostConfig, CandidateServerReflexiveConfig, RTCIceCandidate, RTCIceCandidateInit,
@@ -48,6 +49,8 @@ pub enum RTCIceGathererEvent {
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
 pub(crate) struct RTCIceGatherer {
     local_addrs: Vec<SocketAddr>,
+    /// Addresses of bound TCP passive listeners (emitted as host TCP passive candidates)
+    tcp_local_addrs: Vec<SocketAddr>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
     state: RTCIceGatheringState,
@@ -61,9 +64,14 @@ pub(crate) struct RTCIceGatherer {
 
 impl RTCIceGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
-    pub(crate) fn new(local_addrs: Vec<SocketAddr>, opts: RTCIceGatherOptions) -> Self {
+    pub(crate) fn new(
+        local_addrs: Vec<SocketAddr>,
+        tcp_local_addrs: Vec<SocketAddr>,
+        opts: RTCIceGatherOptions,
+    ) -> Self {
         Self {
             local_addrs,
+            tcp_local_addrs,
             ice_servers: opts.ice_servers,
             gather_policy: opts.ice_gather_policy,
             state: RTCIceGatheringState::New,
@@ -108,6 +116,7 @@ impl RTCIceGatherer {
     ///
     /// This is a pure function that creates host candidates without performing I/O.
     fn gather_host_candidates(&mut self) -> Result<(), Error> {
+        // UDP host candidates
         for local_addr in &self.local_addrs {
             let candidate = CandidateHostConfig {
                 base_config: CandidateConfig {
@@ -122,10 +131,29 @@ impl RTCIceGatherer {
             .new_candidate_host()?;
 
             let candidate_init = RTCIceCandidate::from(&candidate).to_json()?;
-
             self.events
                 .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
         }
+
+        // TCP passive host candidates
+        for tcp_addr in &self.tcp_local_addrs {
+            let candidate = CandidateHostConfig {
+                base_config: CandidateConfig {
+                    network: "tcp".to_owned(),
+                    address: tcp_addr.ip().to_string(),
+                    port: tcp_addr.port(),
+                    component: 1,
+                    ..Default::default()
+                },
+                tcp_type: TcpType::Passive,
+            }
+            .new_candidate_host()?;
+
+            let candidate_init = RTCIceCandidate::from(&candidate).to_json()?;
+            self.events
+                .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
+        }
+
         Ok(())
     }
 
