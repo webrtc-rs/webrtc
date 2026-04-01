@@ -11,7 +11,7 @@ use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
-use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Runtime, Sender, channel};
+use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, JoinHandle, Receiver, Runtime, Sender, channel};
 use bytes::BytesMut;
 use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -80,6 +80,9 @@ where
     tcp_new_conn_rx: Receiver<Arc<dyn AsyncTcpStream>>,
     /// Async runtime — needed to spawn per-connection tasks
     runtime: Arc<dyn Runtime>,
+    /// Handles for all background TCP tasks (accept loops + per-connection read/write).
+    /// Stored so they can be aborted on clean shutdown rather than leaking.
+    tcp_task_handles: Vec<JoinHandle>,
 }
 
 impl<I> PeerConnectionDriver<I>
@@ -101,10 +104,11 @@ where
         let (tcp_inbound_tx, tcp_inbound_rx) = channel::<TcpInbound>(256);
         let (tcp_new_conn_tx, tcp_new_conn_rx) = channel::<Arc<dyn AsyncTcpStream>>(32);
 
-        // Spawn an accept loop for each passive TCP listener
+        // Spawn an accept loop for each passive TCP listener; store handles for clean shutdown.
+        let mut tcp_task_handles = Vec::new();
         for listener in tcp_listeners {
             let new_conn_tx = tcp_new_conn_tx.clone();
-            runtime.spawn(Box::pin(async move {
+            let handle = runtime.spawn(Box::pin(async move {
                 loop {
                     match listener.accept().await {
                         Ok(stream) => {
@@ -119,6 +123,7 @@ where
                     }
                 }
             }));
+            tcp_task_handles.push(handle);
         }
 
         Ok(Self {
@@ -131,6 +136,7 @@ where
             tcp_new_conn_tx,
             tcp_new_conn_rx,
             runtime,
+            tcp_task_handles,
         })
     }
 
@@ -156,7 +162,7 @@ where
         // Read task: decode RFC 4571 frames and forward to driver
         let read_stream = stream.clone();
         let inbound_tx = self.tcp_inbound_tx.clone();
-        self.runtime.spawn(Box::pin(async move {
+        let read_handle = self.runtime.spawn(Box::pin(async move {
             let mut decoder = TcpFrameDecoder::new();
             let mut buf = vec![0u8; 4096];
             loop {
@@ -177,9 +183,10 @@ where
                 }
             }
         }));
+        self.tcp_task_handles.push(read_handle);
 
         // Write task: receive framed bytes and write to stream
-        self.runtime.spawn(Box::pin(async move {
+        let write_handle = self.runtime.spawn(Box::pin(async move {
             while let Some(data) = write_rx.recv().await {
                 if let Err(e) = stream.write_all(&data).await {
                     trace!("TCP write error: {}", e);
@@ -187,6 +194,14 @@ where
                 }
             }
         }));
+        self.tcp_task_handles.push(write_handle);
+    }
+
+    /// Abort all background TCP tasks spawned by this driver.
+    fn abort_tcp_tasks(&mut self) {
+        for handle in self.tcp_task_handles.drain(..) {
+            handle.abort();
+        }
     }
 
     /// Run the driver event loop
@@ -196,6 +211,8 @@ where
         &mut self,
         mut driver_event_rx: Receiver<PeerConnectionDriverEvent>,
     ) -> Result<()> {
+        log::debug!("PeerConnectionDriver: event loop started");
+
         // Collect socket info into a vec for indexed access
         let socket_list: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>)> = self
             .sockets
@@ -316,6 +333,8 @@ where
                     if let Some(evt) = evt {
                         let is_closed = self.handle_driver_event(evt).await;
                         if is_closed {
+                            log::debug!("PeerConnectionDriver: clean shutdown");
+                            self.abort_tcp_tasks();
                             return Ok(());
                         }
                     }
@@ -349,12 +368,14 @@ where
                         Some(Err(err)) => {
                             error!("Socket recv error: {}", err);
                             //TODO: better handling on socket recv error #777
+                            self.abort_tcp_tasks();
                             return Err(err.into());
                         }
                         None => {
                             if socket_list.is_empty() {
                                 // TCP-only mode — this arm never fires, just keep looping
                             } else {
+                                self.abort_tcp_tasks();
                                 return Err(Error::Other("all socket futures completed".to_owned()));
                             }
                         }
@@ -426,6 +447,7 @@ where
                 if let Some(tx) = self.tcp_write_txs.get(&key) {
                     let framed = frame_packet(&msg.message);
                     if tx.try_send(framed).is_err() {
+                        warn!("TCP write channel full or closed for {}→{}; dropping connection", key.0, key.1);
                         self.tcp_write_txs.remove(&key);
                     }
                 }

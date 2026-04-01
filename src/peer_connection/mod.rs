@@ -122,6 +122,10 @@ where
     /// mDNS mode extracted from the SettingEngine so the async layer can
     /// create the multicast socket before the driver starts.
     mdns_mode: MulticastDnsMode,
+    /// When true, an mDNS socket-creation failure is returned as an error instead of
+    /// being silently demoted to a warning.  Useful for production deployments that
+    /// depend on mDNS and want to detect misconfiguration at startup.
+    mdns_fail_on_socket_error: bool,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -133,6 +137,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             udp_addrs: vec![],
             tcp_addrs: vec![],
             mdns_mode: MulticastDnsMode::Disabled,
+            mdns_fail_on_socket_error: false,
         }
     }
 }
@@ -181,6 +186,16 @@ where
         self
     }
 
+    /// When set to `true`, a failure to create the mDNS multicast socket is returned as an
+    /// error from [`build`](Self::build) instead of being silently demoted to a warning.
+    ///
+    /// Defaults to `false`.  Set to `true` in production environments where mDNS is required
+    /// so that misconfiguration (e.g. missing multicast capability) is surfaced at startup.
+    pub fn with_mdns_fail_on_socket_error(mut self, fail: bool) -> Self {
+        self.mdns_fail_on_socket_error = fail;
+        self
+    }
+
     pub fn with_interceptor_registry<P>(
         self,
         interceptor_registry: Registry<P>,
@@ -195,6 +210,7 @@ where
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
             mdns_mode: self.mdns_mode,
+            mdns_fail_on_socket_error: self.mdns_fail_on_socket_error,
         }
     }
 
@@ -239,6 +255,7 @@ where
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
             self.mdns_mode,
+            self.mdns_fail_on_socket_error,
             opts,
             self.udp_addrs,
             self.tcp_addrs,
@@ -387,6 +404,7 @@ where
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
         mdns_mode: MulticastDnsMode,
+        mdns_fail_on_socket_error: bool,
         opts: RTCIceGatherOptions,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
@@ -419,6 +437,11 @@ where
                     log::debug!("mDNS multicast socket bound to {}", local_addr);
                 }
                 Err(e) => {
+                    if mdns_fail_on_socket_error {
+                        return Err(Error::Other(format!(
+                            "Failed to create mDNS multicast socket: {e}"
+                        )));
+                    }
                     log::warn!("Failed to create mDNS multicast socket: {} — mDNS disabled", e);
                 }
             }
