@@ -181,8 +181,19 @@ impl RTCIceGatherer {
 
         debug!("Resolving STUN server: {}", stun_server_addr_str);
 
-        // Resolve hostname to IP address using runtime-agnostic helper
-        let resolved_addrs = runtime::resolve_host(&stun_server_addr_str).await?;
+        // Resolve hostname to IP address with a 3-second timeout (#774)
+        let resolved_addrs = runtime::timeout(
+            std::time::Duration::from_secs(3),
+            runtime::resolve_host(&stun_server_addr_str),
+        )
+        .await
+        .map_err(|_| {
+            Error::Other(format!(
+                "DNS timeout resolving STUN server: {}",
+                stun_server_addr_str
+            ))
+        })?
+        .map_err(|e| Error::Other(e.to_string()))?;
 
         // Filter addresses to match the local_addr IP version (IPv4 or IPv6)
         let stun_server_addr: SocketAddr = resolved_addrs
