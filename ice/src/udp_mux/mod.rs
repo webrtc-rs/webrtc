@@ -200,8 +200,20 @@ impl UDPMuxDefault {
                                 }
                             }
                             Err(Error::Io(err)) if err.0.kind() == ErrorKind::TimedOut => continue,
+                            Err(Error::Io(err))
+                                if matches!(
+                                    err.0.kind(),
+                                    ErrorKind::ConnectionReset
+                                        | ErrorKind::ConnectionAborted
+                                        | ErrorKind::NetworkUnreachable
+                                        | ErrorKind::WouldBlock
+                                ) =>
+                            {
+                                log::warn!("Transient recv error on udp mux, continuing: {err}");
+                                continue;
+                            }
                             Err(err) => {
-                                log::error!("Could not read udp packet: {err}");
+                                log::error!("Fatal error on udp mux recv, stopping worker: {err}");
                                 break;
                             }
                         }

@@ -348,6 +348,13 @@ impl RTCDataChannel {
                             break;
                         }
                         Ok((n, is_string)) => (n, is_string),
+                        Err(data::Error::Sctp(sctp::Error::ErrShortBuffer { .. })) => {
+                            // The message was larger than the receive buffer.  This is a
+                            // non-fatal condition; the channel stays open and we wait for
+                            // the next message.
+                            log::warn!("data channel recv buffer too small for message, dropping");
+                            continue;
+                        }
                         Err(err) => {
                             ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
 

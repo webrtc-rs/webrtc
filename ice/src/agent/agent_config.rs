@@ -155,6 +155,12 @@ pub struct AgentConfig {
 
     /// Include loopback addresses in the candidate list.
     pub include_loopback: bool,
+
+    /// Maximum time to wait for all candidate gathering tasks to complete before
+    /// declaring GatheringState::Complete. When not set, defaults to 10 seconds.
+    /// Reducing this value (e.g., to 3-5 seconds) can significantly speed up
+    /// ICE gathering on networks where STUN servers are slow or unreachable.
+    pub candidate_gather_timeout: Option<Duration>,
 }
 
 impl AgentConfig {

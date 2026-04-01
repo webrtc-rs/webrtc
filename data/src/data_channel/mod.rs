@@ -174,8 +174,14 @@ impl DataChannel {
                     return Ok((0, false));
                 }
                 Ok((n, ppi)) => (n, ppi),
+                Err(err @ sctp::Error::ErrShortBuffer { .. }) => {
+                    // Non-fatal: the caller's buffer was too small for this message.
+                    // Return the error without resetting the stream so the channel
+                    // stays open for future messages.
+                    return Err(err.into());
+                }
                 Err(err) => {
-                    // Shutdown the stream and send the reset request to the remote.
+                    // Fatal stream error – shut down and send a reset request.
                     self.close().await?;
                     return Err(err.into());
                 }

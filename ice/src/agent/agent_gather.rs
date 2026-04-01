@@ -1,6 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use util::vnet::net::*;
 use util::Conn;
@@ -19,6 +20,10 @@ use crate::url::{ProtoType, SchemeType, Url};
 use crate::util::*;
 
 const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
+/// Maximum time to wait for DNS resolution of a STUN/TURN server address.
+/// A short timeout here prevents slow or hanging IPv6 DNS lookups from
+/// delaying the overall ICE gathering completion (issue #774).
+const STUN_DNS_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) udp_network: UDPNetwork,
@@ -35,6 +40,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) gathering_state: Arc<AtomicU8>,
     pub(crate) chan_candidate_tx: ChanCandidateTx,
     pub(crate) include_loopback: bool,
+    pub(crate) candidate_gather_timeout: Option<Duration>,
 }
 
 struct GatherCandidatesLocalParams {
@@ -168,8 +174,13 @@ impl Agent {
             }
         }
 
-        // Block until all STUN and TURN URLs have been gathered (or timed out)
-        wg.wait().await;
+        // Block until all candidate gathering tasks complete or the overall
+        // timeout expires. This prevents a slow/unreachable STUN server from
+        // delaying GatheringState::Complete indefinitely.
+        let gather_timeout = params
+            .candidate_gather_timeout
+            .unwrap_or(Duration::from_secs(10));
+        let _ = tokio::time::timeout(gather_timeout, wg.wait()).await;
 
         Self::set_gathering_state(
             &params.chan_candidate_tx,
@@ -626,18 +637,32 @@ impl Agent {
                     let _d = w;
 
                     let host_port = format!("{}:{}", url.host, url.port);
-                    let server_addr = match net2.resolve_addr(is_ipv4, &host_port).await {
-                        Ok(addr) => addr,
-                        Err(err) => {
-                            log::warn!(
-                                "[{}]: failed to resolve stun host: {}: {}",
-                                agent_internal2.get_name(),
-                                host_port,
-                                err
-                            );
-                            return Ok(());
-                        }
-                    };
+                    let server_addr =
+                        match tokio::time::timeout(
+                            STUN_DNS_TIMEOUT,
+                            net2.resolve_addr(is_ipv4, &host_port),
+                        )
+                        .await
+                        {
+                            Ok(Ok(addr)) => addr,
+                            Ok(Err(err)) => {
+                                log::warn!(
+                                    "[{}]: failed to resolve stun host: {}: {}",
+                                    agent_internal2.get_name(),
+                                    host_port,
+                                    err
+                                );
+                                return Ok(());
+                            }
+                            Err(_) => {
+                                log::warn!(
+                                    "[{}]: timed out resolving stun host: {}",
+                                    agent_internal2.get_name(),
+                                    host_port,
+                                );
+                                return Ok(());
+                            }
+                        };
 
                     let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
                         &net2,
