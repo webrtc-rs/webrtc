@@ -647,11 +647,15 @@ where
 
                             {
                                 let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
-                                rtp_transceivers.entry(id).or_insert_with(|| {
-                                    Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner)))
-                                });
-
-                                let rtp_transceiver = rtp_transceivers.get(&id).unwrap();
+                                let rtp_transceiver = rtp_transceivers
+                                    .entry(id)
+                                    .or_insert_with(|| {
+                                        Arc::new(RtpTransceiverImpl::new(
+                                            id,
+                                            Arc::clone(&self.inner),
+                                        ))
+                                    })
+                                    .clone();
 
                                 let receiver: Arc<dyn RtpReceiver> =
                                     Arc::new(RtpReceiverImpl::new(
