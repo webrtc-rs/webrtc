@@ -11,11 +11,11 @@ use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
-use crate::runtime::{AsyncUdpSocket, Receiver, channel};
+use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Runtime, Sender, channel};
 use bytes::BytesMut;
-use futures::FutureExt; // For .fuse() in futures::select!
+use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{error, trace};
+use log::{error, trace, warn};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
@@ -27,6 +27,7 @@ use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
+use rtc_shared::tcp_framing::{TcpFrameDecoder, frame_packet};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
@@ -55,6 +56,9 @@ pub(crate) enum PeerConnectionDriverEvent {
     Close,
 }
 
+/// Inbound TCP packet + connection info — sent from per-connection read tasks into the driver loop
+type TcpInbound = (SocketAddr, SocketAddr, BytesMut); // (local, peer, payload)
+
 /// The driver for a peer connection
 ///
 /// Runs the event loop following rtc's EventLoop pattern with select!
@@ -66,6 +70,16 @@ where
     /// ICE gatherer for managing ICE candidate gathering
     ice_gatherer: RTCIceGatherer,
     sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
+    /// TCP: per-connection write channels keyed by (local_addr, peer_addr)
+    tcp_write_txs: HashMap<(SocketAddr, SocketAddr), Sender<Vec<u8>>>,
+    /// TCP: inbound packet channel — all TCP read tasks send here
+    tcp_inbound_tx: Sender<TcpInbound>,
+    tcp_inbound_rx: Receiver<TcpInbound>,
+    /// TCP: new accepted connection channel — accept tasks send here
+    tcp_new_conn_tx: Sender<Arc<dyn AsyncTcpStream>>,
+    tcp_new_conn_rx: Receiver<Arc<dyn AsyncTcpStream>>,
+    /// Async runtime — needed to spawn per-connection tasks
+    runtime: Arc<dyn Runtime>,
 }
 
 impl<I> PeerConnectionDriver<I>
@@ -77,16 +91,102 @@ where
         inner: Arc<PeerConnectionRef<I>>,
         ice_gatherer: RTCIceGatherer,
         sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
+        tcp_listeners: Vec<Arc<dyn AsyncTcpListener>>,
+        runtime: Arc<dyn Runtime>,
     ) -> Result<Self> {
-        if sockets.is_empty() {
+        if sockets.is_empty() && tcp_listeners.is_empty() {
             return Err(Error::Other("no sockets available".to_owned()));
+        }
+
+        let (tcp_inbound_tx, tcp_inbound_rx) = channel::<TcpInbound>(256);
+        let (tcp_new_conn_tx, tcp_new_conn_rx) = channel::<Arc<dyn AsyncTcpStream>>(32);
+
+        // Spawn an accept loop for each passive TCP listener
+        for listener in tcp_listeners {
+            let new_conn_tx = tcp_new_conn_tx.clone();
+            runtime.spawn(Box::pin(async move {
+                loop {
+                    match listener.accept().await {
+                        Ok(stream) => {
+                            if new_conn_tx.try_send(stream).is_err() {
+                                break; // driver shut down
+                            }
+                        }
+                        Err(e) => {
+                            warn!("TCP accept error: {}", e);
+                            break;
+                        }
+                    }
+                }
+            }));
         }
 
         Ok(Self {
             inner,
             ice_gatherer,
             sockets,
+            tcp_write_txs: HashMap::new(),
+            tcp_inbound_tx,
+            tcp_inbound_rx,
+            tcp_new_conn_tx,
+            tcp_new_conn_rx,
+            runtime,
         })
+    }
+
+    /// Register a new TCP connection (accepted or dialed) and spawn its read task
+    fn register_tcp_connection(&mut self, stream: Arc<dyn AsyncTcpStream>) {
+        let local_addr = match stream.local_addr() {
+            Ok(a) => a,
+            Err(e) => { error!("TCP stream local_addr: {}", e); return; }
+        };
+        let peer_addr = match stream.peer_addr() {
+            Ok(a) => a,
+            Err(e) => { error!("TCP stream peer_addr: {}", e); return; }
+        };
+
+        let key = (local_addr, peer_addr);
+        if self.tcp_write_txs.contains_key(&key) {
+            return; // already registered
+        }
+
+        let (write_tx, mut write_rx) = channel::<Vec<u8>>(64);
+        self.tcp_write_txs.insert(key, write_tx);
+
+        // Read task: decode RFC 4571 frames and forward to driver
+        let read_stream = stream.clone();
+        let inbound_tx = self.tcp_inbound_tx.clone();
+        self.runtime.spawn(Box::pin(async move {
+            let mut decoder = TcpFrameDecoder::new();
+            let mut buf = vec![0u8; 4096];
+            loop {
+                match read_stream.read(&mut buf).await {
+                    Ok(0) => break, // EOF
+                    Ok(n) => {
+                        decoder.extend_from_slice(&buf[..n]);
+                        while let Some(packet) = decoder.next_packet() {
+                            if inbound_tx.try_send((local_addr, peer_addr, BytesMut::from(packet.as_slice()))).is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        trace!("TCP read error ({}→{}): {}", local_addr, peer_addr, e);
+                        break;
+                    }
+                }
+            }
+        }));
+
+        // Write task: receive framed bytes and write to stream
+        self.runtime.spawn(Box::pin(async move {
+            while let Some(data) = write_rx.recv().await {
+                if let Err(e) = stream.write_all(&data).await {
+                    trace!("TCP write error: {}", e);
+                    break;
+                }
+            }
+        }));
     }
 
     /// Run the driver event loop
@@ -221,7 +321,7 @@ where
                     }
                 }
 
-                // Incoming network packet from any socket
+                // Incoming network packet from any UDP socket
                 result = socket_recv_futures.next().fuse() => {
                     match result {
                         Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
@@ -249,14 +349,40 @@ where
                         Some(Err(err)) => {
                             error!("Socket recv error: {}", err);
                             //TODO: better handling on socket recv error #777
-                            // On error, we lost the buffer, create a new one and restart this socket
-                            // This should be rare (only on actual socket errors)
-                            // For now, we return the error to stop the loop
                             return Err(err.into());
                         }
                         None => {
-                            // All socket futures completed (should never happen in normal operation)
-                            return Err(Error::Other("all socket futures completed".to_owned()));
+                            if socket_list.is_empty() {
+                                // TCP-only mode — this arm never fires, just keep looping
+                            } else {
+                                return Err(Error::Other("all socket futures completed".to_owned()));
+                            }
+                        }
+                    }
+                }
+
+                // New accepted TCP connection
+                stream = self.tcp_new_conn_rx.recv().fuse() => {
+                    if let Some(stream) = stream {
+                        self.register_tcp_connection(stream);
+                    }
+                }
+
+                // Decoded TCP frame from a read task
+                pkt = self.tcp_inbound_rx.recv().fuse() => {
+                    if let Some((local_addr, peer_addr, payload)) = pkt {
+                        trace!("TCP received {} bytes from {} to {}", payload.len(), peer_addr, local_addr);
+                        if let Err(err) = self.handle_read(TaggedBytesMut {
+                            now: Instant::now(),
+                            transport: TransportContext {
+                                local_addr,
+                                peer_addr,
+                                ecn: None,
+                                transport_protocol: TransportProtocol::TCP,
+                            },
+                            message: payload,
+                        }).await {
+                            error!("TCP handle_read error: {}", err);
                         }
                     }
                 }
@@ -264,20 +390,44 @@ where
         }
     }
 
-    async fn handle_write(&self, msg: TaggedBytesMut) {
-        if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
-            match socket.send_to(&msg.message, msg.transport.peer_addr).await {
-                Ok(n) => {
-                    trace!(
-                        "Sent {} bytes to {:?} from {:?}",
-                        n, msg.transport.peer_addr, msg.transport.local_addr
-                    );
+    async fn handle_write(&mut self, msg: TaggedBytesMut) {
+        match msg.transport.transport_protocol {
+            TransportProtocol::UDP => {
+                if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
+                    match socket.send_to(&msg.message, msg.transport.peer_addr).await {
+                        Ok(n) => {
+                            trace!(
+                                "Sent {} bytes to {:?} from {:?}",
+                                n, msg.transport.peer_addr, msg.transport.local_addr
+                            );
+                        }
+                        Err(e) => {
+                            error!(
+                                "Failed to send to {:?} from {:?}: {}",
+                                msg.transport.peer_addr, msg.transport.local_addr, e
+                            );
+                        }
+                    }
                 }
-                Err(e) => {
-                    error!(
-                        "Failed to send to {:?} from {:?}: {}",
-                        msg.transport.peer_addr, msg.transport.local_addr, e
-                    );
+            }
+            TransportProtocol::TCP => {
+                let key = (msg.transport.local_addr, msg.transport.peer_addr);
+                if !self.tcp_write_txs.contains_key(&key) {
+                    // Active TCP: dial out on first outbound packet
+                    let peer_addr = msg.transport.peer_addr;
+                    match self.runtime.connect_tcp(peer_addr).await {
+                        Ok(stream) => self.register_tcp_connection(stream),
+                        Err(e) => {
+                            error!("TCP connect to {} failed: {}", peer_addr, e);
+                            return;
+                        }
+                    }
+                }
+                if let Some(tx) = self.tcp_write_txs.get(&key) {
+                    let framed = frame_packet(&msg.message);
+                    if tx.try_send(framed).is_err() {
+                        self.tcp_write_txs.remove(&key);
+                    }
                 }
             }
         }
