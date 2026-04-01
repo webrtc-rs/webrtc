@@ -224,13 +224,15 @@ where
         let mut socket_buffers: Vec<Vec<u8>> =
             socket_list.iter().map(|_| vec![0u8; 2000]).collect();
 
-        // Helper function to create a recv future for a specific socket
+        // Helper function to create a recv future for a specific socket.
+        // Always returns (result, local_addr, idx, buf) so the caller can
+        // re-queue the future even after a transient error.
         let create_socket_recv_future = |idx: usize,
                                          local_addr: SocketAddr,
                                          socket: Arc<dyn AsyncUdpSocket>,
                                          mut buf: Vec<u8>| async move {
-            let (n, peer_addr) = socket.recv_from(&mut buf).await?;
-            Ok::<_, std::io::Error>((n, local_addr, peer_addr, idx, buf))
+            let result = socket.recv_from(&mut buf).await;
+            (result, local_addr, idx, buf)
         };
 
         // Create initial set of futures in FuturesUnordered
@@ -343,7 +345,7 @@ where
                 // Incoming network packet from any UDP socket
                 result = socket_recv_futures.next().fuse() => {
                     match result {
-                        Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
+                        Some((Ok((n, peer_addr)), local_addr, idx, buf)) => {
                             trace!("Received {} bytes from {} to {}", n, peer_addr, local_addr);
 
                             if let Err(err) = self.handle_read(TaggedBytesMut {
@@ -365,11 +367,26 @@ where
                                 create_socket_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
                             );
                         }
-                        Some(Err(err)) => {
-                            error!("Socket recv error: {}", err);
-                            //TODO: better handling on socket recv error #777
-                            self.abort_tcp_tasks();
-                            return Err(err.into());
+                        Some((Err(err), local_addr, idx, buf)) => {
+                            // Transient OS errors (EAGAIN / EWOULDBLOCK / EINTR) occur
+                            // spuriously on non-blocking sockets — re-queue the future
+                            // and let the async runtime reschedule it.
+                            // Fatal errors terminate the driver.
+                            match err.kind() {
+                                std::io::ErrorKind::WouldBlock
+                                | std::io::ErrorKind::Interrupted => {
+                                    trace!("Transient socket recv error (retrying): {}", err);
+                                    let (_, socket) = &socket_list[idx];
+                                    socket_recv_futures.push(
+                                        create_socket_recv_future(idx, local_addr, socket.clone(), buf).boxed()
+                                    );
+                                }
+                                _ => {
+                                    error!("Fatal socket recv error: {}", err);
+                                    self.abort_tcp_tasks();
+                                    return Err(err.into());
+                                }
+                            }
                         }
                         None => {
                             if socket_list.is_empty() {
