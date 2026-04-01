@@ -57,14 +57,17 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// The socket should be bound and configured before being wrapped.
     fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>>;
 
-    /*
-    /// Create an async TCP socket from a standard socket
-    ///
-    /// The socket should be bound and configured before being wrapped.
+    /// Wrap a bound std TcpListener into an async listener
     fn wrap_tcp_listener(
         &self,
         socket: std::net::TcpListener,
-    ) -> io::Result<Box<dyn AsyncTcpListener>>;*/
+    ) -> io::Result<Arc<dyn AsyncTcpListener>>;
+
+    /// Open an outbound TCP connection to `addr`
+    fn connect_tcp(
+        &self,
+        addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send>>;
 }
 
 /// Abstract implementation of a UDP socket for runtime independence
@@ -86,6 +89,41 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
 
     /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
+}
+
+/// An async TCP listener — accepts incoming TCP connections
+pub trait AsyncTcpListener: Send + Sync + Debug + 'static {
+    /// Accept the next incoming connection
+    fn accept<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>>;
+
+    /// Local address the listener is bound to
+    fn local_addr(&self) -> io::Result<SocketAddr>;
+}
+
+/// An async TCP stream — supports concurrent reads and writes
+///
+/// Implementations must allow `read` and `write_all` to be called
+/// concurrently from different tasks (e.g. by using split halves internally).
+pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
+    /// Read bytes into `buf`, returning the number of bytes read (0 = EOF)
+    fn read<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>>;
+
+    /// Write all bytes in `buf` to the stream
+    fn write_all<'a>(
+        &'a self,
+        buf: &'a [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>>;
+
+    /// Local address of this connection
+    fn local_addr(&self) -> io::Result<SocketAddr>;
+
+    /// Remote address of this connection
+    fn peer_addr(&self) -> io::Result<SocketAddr>;
 }
 
 /// An async mutex that works across different runtimes
