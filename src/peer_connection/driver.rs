@@ -270,10 +270,8 @@ where
             // DNS A record), but the mDNS socket is keyed as 0.0.0.0:5353.  Fall back
             // to that key so responses are routed through the multicast socket.
             if msg.transport.local_addr.port() == rtc::mdns::MDNS_PORT {
-                let fallback = SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                    rtc::mdns::MDNS_PORT,
-                );
+                let fallback =
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), rtc::mdns::MDNS_PORT);
                 self.sockets.get(&fallback)
             } else {
                 None

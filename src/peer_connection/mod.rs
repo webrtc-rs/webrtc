@@ -172,7 +172,7 @@ where
     /// let mut se = SettingEngine::default();
     /// se.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
     ///
-    /// let builder = PeerConnectionBuilder::new()
+    /// let builder: PeerConnectionBuilder<String> = PeerConnectionBuilder::new()
     ///     .with_setting_engine(se)
     ///     .with_mdns_mode(MulticastDnsMode::QueryAndGather);
     /// ```
@@ -420,15 +420,36 @@ where
                     // bind 0.0.0.0). The mDNS proto emits query packets with
                     // local_addr = 0.0.0.0:5353; handle_write falls back to this key
                     // for response packets that carry a specific local_ip.
-                    let mdns_key = SocketAddr::new(
-                        IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                        rtc::mdns::MDNS_PORT,
-                    );
-                    async_udp_sockets.insert(mdns_key, async_sock);
-                    log::debug!("mDNS multicast socket bound to {} (keyed as {})", bound_addr, mdns_key);
+                    let mdns_key =
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), rtc::mdns::MDNS_PORT);
+                    match async_udp_sockets.entry(mdns_key) {
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(async_sock);
+                            log::debug!(
+                                "mDNS multicast socket bound to {} (keyed as {})",
+                                bound_addr,
+                                mdns_key
+                            );
+                        }
+                        std::collections::hash_map::Entry::Occupied(_) => {
+                            log::warn!(
+                                "mDNS multicast socket bound to {} was not inserted because \
+                                 socket key {} is already occupied; keeping existing socket",
+                                bound_addr,
+                                mdns_key
+                            );
+                        }
+                    }
                 }
                 Err(e) => {
-                    log::warn!("Failed to create mDNS multicast socket: {} — mDNS disabled", e);
+                    // Gracefully degrade: mDNS socket creation can fail in
+                    // restricted environments (containers, missing multicast
+                    // routing, etc.).  The sans-IO core will still function
+                    // but .local candidates won't be advertised or resolved.
+                    log::warn!(
+                        "Failed to create mDNS multicast socket: {} — mDNS disabled",
+                        e
+                    );
                 }
             }
         }

@@ -1,12 +1,14 @@
-//! mDNS peer discovery example
+//! mDNS-enabled ICE candidate resolution example
 //!
-//! Demonstrates two in-process WebRTC peers communicating with mDNS enabled.
+//! The peers still exchange SDP offers/answers through the example's normal
+//! in-process signaling flow; mDNS here is only used for privacy-preserving
+//! host candidates and for resolving remote `.local` ICE candidates.
 //! Both peers use `MulticastDnsMode::QueryAndGather` so that:
 //!
 //! - **QueryAndGather**: Local candidates advertise a `.local` mDNS hostname
 //!   instead of exposing the raw IP address (privacy-preserving).
 //! - Remote `.local` candidates are resolved via multicast DNS on the local
-//!   network — no STUN server is needed.
+//!   network -- no STUN server is needed for that local hostname resolution.
 //!
 //! ## How to run
 //!
@@ -139,7 +141,7 @@ async fn run() -> anyhow::Result<()> {
             connected_tx: offerer_connected_tx,
         }))
         .with_runtime(runtime.clone())
-        .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_udp_addrs(vec!["0.0.0.0:0".to_string()])
         .build()
         .await?;
 
@@ -181,7 +183,7 @@ async fn run() -> anyhow::Result<()> {
             runtime: runtime.clone(),
         }))
         .with_runtime(runtime.clone())
-        .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_udp_addrs(vec!["0.0.0.0:0".to_string()])
         .build()
         .await?;
 
