@@ -115,12 +115,17 @@ where
     I: Interceptor,
 {
     builder: RTCPeerConnectionBuilder<I>,
+    /// Held separately so [`with_mdns_mode`] can configure both the async
+    /// layer and the sans-IO core in one call.  Applied to the inner builder
+    /// in [`build()`].
+    setting_engine: SettingEngine,
     runtime: Option<Arc<dyn Runtime>>,
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
-    /// mDNS mode extracted from the SettingEngine so the async layer can
-    /// create the multicast socket before the driver starts.
+    /// mDNS mode for the async layer (multicast socket creation).
+    /// Kept in sync with `setting_engine.multicast_dns.mode` by
+    /// [`with_mdns_mode`].
     mdns_mode: MulticastDnsMode,
 }
 
@@ -128,6 +133,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
     fn default() -> Self {
         Self {
             builder: RTCPeerConnectionBuilder::new(),
+            setting_engine: SettingEngine::default(),
             runtime: None,
             handler: None,
             udp_addrs: vec![],
@@ -158,19 +164,23 @@ where
     }
 
     pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
-        self.builder = self.builder.with_setting_engine(setting_engine);
+        self.setting_engine = setting_engine;
         self
     }
 
-    /// Set the mDNS mode for this peer connection.
+    /// Set the mDNS mode for both the async wrapper and the sans-IO core.
     ///
-    /// When using [`SettingEngine::set_multicast_dns_mode`], also call this method
-    /// so the async wrapper knows to create the multicast socket:
+    /// This creates the multicast socket in the async layer *and* configures
+    /// the sans-IO core's ICE agent to advertise/resolve `.local` candidates.
+    ///
+    /// **Note:** if you also need to set a custom local name, IP, or timeout,
+    /// call [`with_setting_engine`] *before* this method so the mode set here
+    /// takes precedence.
     ///
     /// ```no_run
     /// # use webrtc::peer_connection::{PeerConnectionBuilder, MulticastDnsMode, SettingEngine};
     /// let mut se = SettingEngine::default();
-    /// se.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
+    /// se.set_multicast_dns_local_name("my-peer.local".to_string());
     ///
     /// let builder: PeerConnectionBuilder<String> = PeerConnectionBuilder::new()
     ///     .with_setting_engine(se)
@@ -178,6 +188,7 @@ where
     /// ```
     pub fn with_mdns_mode(mut self, mode: MulticastDnsMode) -> Self {
         self.mdns_mode = mode;
+        self.setting_engine.set_multicast_dns_mode(mode);
         self
     }
 
@@ -190,6 +201,7 @@ where
     {
         PeerConnectionBuilder {
             builder: self.builder.with_interceptor_registry(interceptor_registry),
+            setting_engine: self.setting_engine,
             runtime: self.runtime,
             handler: self.handler,
             udp_addrs: self.udp_addrs,
@@ -225,7 +237,10 @@ where
             default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?
         };
 
-        let core = self.builder.build()?;
+        let core = self
+            .builder
+            .with_setting_engine(self.setting_engine)
+            .build()?;
         let configuration = core.get_configuration();
 
         let opts = RTCIceGatherOptions {
@@ -411,10 +426,12 @@ where
         // peer connection core; outgoing mDNS packets from poll_write (port 5353) will be
         // sent via this socket by the driver's handle_write lookup.
         if mdns_mode != MulticastDnsMode::Disabled {
-            match MulticastSocket::new().into_std() {
-                Ok(std_sock) => {
-                    let bound_addr = std_sock.local_addr()?;
-                    let async_sock = runtime.wrap_udp_socket(std_sock)?;
+            match MulticastSocket::new().into_std().and_then(|std_sock| {
+                let bound_addr = std_sock.local_addr()?;
+                let async_sock = runtime.wrap_udp_socket(std_sock)?;
+                Ok((bound_addr, async_sock))
+            }) {
+                Ok((bound_addr, async_sock)) => {
                     // Always key the mDNS socket as 0.0.0.0:MDNS_PORT regardless of
                     // the OS-assigned bound address (Linux binds 224.0.0.251, others
                     // bind 0.0.0.0). The mDNS proto emits query packets with

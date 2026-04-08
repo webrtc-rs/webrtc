@@ -23,8 +23,10 @@
 //!
 //! - mDNS requires access to the `224.0.0.251:5353` multicast group.  Some
 //!   environments (CI, containers without multicast routing) may prevent the
-//!   socket from joining the group; the example logs a warning and falls back
-//!   gracefully.
+//!   socket from joining the group.  When that happens the peer connection
+//!   builder logs a warning and continues without mDNS -- `.local` candidates
+//!   will not be advertised or resolved, but the connection can still succeed
+//!   via other candidate types (host, srflx, relay).
 //! - For true cross-host mDNS peer discovery you would run one peer on each
 //!   host and exchange their SDP offers/answers via a signaling channel.
 
@@ -128,13 +130,13 @@ async fn run() -> anyhow::Result<()> {
 
     // Configure mDNS: QueryAndGather means local candidates use .local
     // hostnames AND remote .local candidates are resolved via multicast DNS.
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
-    setting_engine.set_multicast_dns_local_name("offerer-webrtc.local".to_string());
+    // with_mdns_mode() sets the mode on both the async wrapper and the sans-IO core.
+    let mut offerer_se = SettingEngine::default();
+    offerer_se.set_multicast_dns_local_name("offerer-webrtc.local".to_string());
 
     // ── Offerer ────────────────────────────────────────────────────────────────
     let offerer_pc = PeerConnectionBuilder::new()
-        .with_setting_engine(setting_engine.clone())
+        .with_setting_engine(offerer_se)
         .with_mdns_mode(MulticastDnsMode::QueryAndGather)
         .with_handler(Arc::new(OffererHandler {
             gather_tx: offerer_gather_tx,
@@ -170,7 +172,6 @@ async fn run() -> anyhow::Result<()> {
 
     // ── Answerer ───────────────────────────────────────────────────────────────
     let mut answerer_se = SettingEngine::default();
-    answerer_se.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
     answerer_se.set_multicast_dns_local_name("answerer-webrtc.local".to_string());
 
     let answerer_pc = PeerConnectionBuilder::new()
