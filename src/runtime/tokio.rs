@@ -45,7 +45,10 @@ impl Runtime for TokioRuntime {
         socket.set_nonblocking(true)?;
         let listener = ::tokio::net::TcpListener::from_std(socket)?;
         let local_addr = listener.local_addr()?;
-        Ok(Arc::new(TokioTcpListener { io: Arc::new(listener), local_addr }))
+        Ok(Arc::new(TokioTcpListener {
+            io: Arc::new(listener),
+            local_addr,
+        }))
     }
 
     fn connect_tcp(
@@ -58,8 +61,8 @@ impl Runtime for TokioRuntime {
             let peer_addr = stream.peer_addr()?;
             let (read_half, write_half) = stream.into_split();
             Ok(Arc::new(TokioTcpStream {
-                read: ::tokio::sync::Mutex::new(read_half).into(),
-                write: ::tokio::sync::Mutex::new(write_half).into(),
+                read: Arc::new(::tokio::sync::Mutex::new(read_half)),
+                write: Arc::new(::tokio::sync::Mutex::new(write_half)),
                 local_addr,
                 peer_addr,
             }) as Arc<dyn super::AsyncTcpStream>)
@@ -78,8 +81,7 @@ struct TokioTcpListener {
 impl super::AsyncTcpListener for TokioTcpListener {
     fn accept<'a>(
         &'a self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn super::AsyncTcpStream>>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn super::AsyncTcpStream>>> + Send + 'a>> {
         let io = self.io.clone();
         Box::pin(async move {
             let (stream, _peer) = io.accept().await?;
@@ -87,8 +89,8 @@ impl super::AsyncTcpListener for TokioTcpListener {
             let peer_addr = stream.peer_addr()?;
             let (read_half, write_half) = stream.into_split();
             Ok(Arc::new(TokioTcpStream {
-                read: ::tokio::sync::Mutex::new(read_half).into(),
-                write: ::tokio::sync::Mutex::new(write_half).into(),
+                read: Arc::new(::tokio::sync::Mutex::new(read_half)),
+                write: Arc::new(::tokio::sync::Mutex::new(write_half)),
                 local_addr,
                 peer_addr,
             }) as Arc<dyn super::AsyncTcpStream>)
@@ -117,13 +119,9 @@ impl super::AsyncTcpStream for TokioTcpStream {
     ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
         use ::tokio::io::AsyncReadExt;
         let read = self.read.clone();
-        let len = buf.len();
         Box::pin(async move {
-            let mut tmp = vec![0u8; len];
-            let n = read.lock().await.read(&mut tmp).await?;
-            // Safety: n <= len
-            buf[..n].copy_from_slice(&tmp[..n]);
-            Ok(n)
+            let mut read = read.lock().await;
+            read.read(buf).await
         })
     }
 
@@ -134,9 +132,7 @@ impl super::AsyncTcpStream for TokioTcpStream {
         use ::tokio::io::AsyncWriteExt;
         let write = self.write.clone();
         let buf = buf.to_vec();
-        Box::pin(async move {
-            write.lock().await.write_all(&buf).await
-        })
+        Box::pin(async move { write.lock().await.write_all(&buf).await })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {

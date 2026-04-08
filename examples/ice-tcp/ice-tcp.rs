@@ -1,14 +1,12 @@
 //! ICE over TCP (RFC 6544) example
 //!
 //! Demonstrates two in-process peers connected exclusively over TCP using the
-//! active/passive ICE-TCP mechanism defined in RFC 6544.
+//! passive ICE-TCP mechanism defined in RFC 6544.
 //!
-//! - **Answerer** — binds a TCP passive listener (`with_tcp_addrs`); emits a
-//!   `tcptype passive` host candidate.
-//! - **Offerer** — no TCP listener; the ICE agent emits a `tcptype active`
-//!   candidate with port 9 as placeholder.  When the ICE engine selects the
-//!   pair, the async wrapper dials out to the answerer's TCP address on the
-//!   first outbound packet.
+//! Both peers bind TCP passive listeners via `with_tcp_addrs` and emit
+//! `tcptype passive` host candidates.  When ICE connectivity checks begin, the
+//! driver dials out (active TCP) to the remote peer's passive listener on the
+//! first outbound packet.
 //!
 //! All STUN / DTLS / SCTP traffic is framed with the 2-byte RFC 4571 length
 //! prefix by the driver automatically.
@@ -24,8 +22,8 @@ use std::time::Duration;
 
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
-    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
-    RTCIceGatheringState, RTCPeerConnectionState,
+    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
+    RTCPeerConnectionState,
 };
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
@@ -133,9 +131,9 @@ async fn run() -> anyhow::Result<()> {
         .await?;
     eprintln!("Answerer: TCP passive listener bound");
 
-    // ── Offerer: no sockets configured — pure active TCP ──────────────────────
-    // The driver emits a `tcptype active` candidate with port 9 (placeholder).
-    // When ICE selects the pair, the wrapper dials out to the answerer's TCP addr.
+    // ── Offerer: TCP passive listener ───────────────────────────────────────────
+    // Like the answerer, the offerer also binds a TCP passive listener.
+    // When ICE selects the pair, the driver dials out to the answerer's TCP addr.
     let offerer_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(OffererHandler {
             gather_tx: offerer_gather_tx,

@@ -11,7 +11,9 @@ use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
-use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Runtime, Sender, channel};
+use crate::runtime::{
+    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Runtime, Sender, channel,
+};
 use bytes::BytesMut;
 use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -108,13 +110,18 @@ where
                 loop {
                     match listener.accept().await {
                         Ok(stream) => {
-                            if new_conn_tx.try_send(stream).is_err() {
-                                break; // driver shut down
+                            // Use async send so transient backpressure (Full) doesn't
+                            // kill the accept loop. We only break when the channel is
+                            // actually closed (receiver dropped = driver shut down).
+                            if new_conn_tx.send(stream).await.is_err() {
+                                break;
                             }
                         }
                         Err(e) => {
                             warn!("TCP accept error: {}", e);
-                            break;
+                            // Transient errors (e.g. EMFILE) should not kill the
+                            // listener permanently; only break on fatal errors.
+                            continue;
                         }
                     }
                 }
@@ -138,11 +145,17 @@ where
     fn register_tcp_connection(&mut self, stream: Arc<dyn AsyncTcpStream>) {
         let local_addr = match stream.local_addr() {
             Ok(a) => a,
-            Err(e) => { error!("TCP stream local_addr: {}", e); return; }
+            Err(e) => {
+                error!("TCP stream local_addr: {}", e);
+                return;
+            }
         };
         let peer_addr = match stream.peer_addr() {
             Ok(a) => a,
-            Err(e) => { error!("TCP stream peer_addr: {}", e); return; }
+            Err(e) => {
+                error!("TCP stream peer_addr: {}", e);
+                return;
+            }
         };
 
         let key = (local_addr, peer_addr);
@@ -165,7 +178,14 @@ where
                     Ok(n) => {
                         decoder.extend_from_slice(&buf[..n]);
                         while let Some(packet) = decoder.next_packet() {
-                            if inbound_tx.try_send((local_addr, peer_addr, BytesMut::from(packet.as_slice()))).is_err() {
+                            if inbound_tx
+                                .try_send((
+                                    local_addr,
+                                    peer_addr,
+                                    BytesMut::from(packet.as_slice()),
+                                ))
+                                .is_err()
+                            {
                                 return;
                             }
                         }
@@ -322,7 +342,13 @@ where
                 }
 
                 // Incoming network packet from any UDP socket
-                result = socket_recv_futures.next().fuse() => {
+                // In TCP-only mode (no UDP sockets), this future never resolves,
+                // preventing a tight spin loop.
+                result = (if socket_list.is_empty() {
+                    futures::future::pending().boxed()
+                } else {
+                    socket_recv_futures.next().boxed()
+                }).fuse() => {
                     match result {
                         Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
                             trace!("Received {} bytes from {} to {}", n, peer_addr, local_addr);
@@ -352,11 +378,7 @@ where
                             return Err(err.into());
                         }
                         None => {
-                            if socket_list.is_empty() {
-                                // TCP-only mode — this arm never fires, just keep looping
-                            } else {
-                                return Err(Error::Other("all socket futures completed".to_owned()));
-                            }
+                            return Err(Error::Other("all socket futures completed".to_owned()));
                         }
                     }
                 }
@@ -423,18 +445,34 @@ where
                 }
             }
             TransportProtocol::TCP => {
-                let key = (msg.transport.local_addr, msg.transport.peer_addr);
-                if !self.tcp_write_txs.contains_key(&key) {
+                let peer_addr = msg.transport.peer_addr;
+
+                // Find an existing connection to this peer.  The local addr in
+                // msg.transport may not match the OS-assigned local addr of an
+                // active (dialled) connection, so we look up by peer_addr only.
+                let existing_key = self
+                    .tcp_write_txs
+                    .keys()
+                    .find(|(_l, p)| *p == peer_addr)
+                    .copied();
+
+                let key = if let Some(k) = existing_key {
+                    k
+                } else {
                     // Active TCP: dial out on first outbound packet
-                    let peer_addr = msg.transport.peer_addr;
                     match self.runtime.connect_tcp(peer_addr).await {
-                        Ok(stream) => self.register_tcp_connection(stream),
+                        Ok(stream) => {
+                            self.register_tcp_connection(stream.clone());
+                            let local = stream.local_addr().unwrap_or(msg.transport.local_addr);
+                            (local, peer_addr)
+                        }
                         Err(e) => {
                             error!("TCP connect to {} failed: {}", peer_addr, e);
                             return;
                         }
                     }
-                }
+                };
+
                 if let Some(tx) = self.tcp_write_txs.get(&key) {
                     let framed = frame_packet(&msg.message);
                     if tx.try_send(framed).is_err() {
