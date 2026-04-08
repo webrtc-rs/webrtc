@@ -1,17 +1,18 @@
-/// Integration test: DataChannel + Video transceiver on the same RTCPeerConnection (#784)
+/// Integration test: DataChannel + Video transceiver SDP coexistence (#784)
 ///
-/// Verifies that a PeerConnection can simultaneously host:
-///   - An RTP video transceiver (m=video in SDP)
-///   - A data channel          (m=application / SCTP in SDP)
+/// Validates that a PeerConnection can negotiate SDP containing both a video
+/// m-line and a DataChannel (SCTP) m-line, and that the DataChannel works.
 ///
 /// The test confirms:
 ///   1. `create_offer()` succeeds and produces SDP containing both m-lines
-///   2. The answerer can parse the offer and generate a valid answer with both m-lines
+///   2. The answerer can parse the offer and generate a valid answer with both
+///      m-lines (video is accepted, not rejected with port 0)
 ///   3. ICE + DTLS + SCTP establish successfully (data channel opens)
 ///   4. A message can be sent/received over the data channel
 ///
 /// Default codecs are registered so video m-lines have real codec payloads.
-/// No actual video RTP is sent — the transceivers are inactive (Recvonly on both sides).
+/// No actual video RTP/frames are sent -- the test only validates SDP
+/// coexistence and DataChannel behavior.
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,9 +22,7 @@ use rtc::rtp_transceiver::RTCRtpTransceiverInit;
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::*;
-use webrtc::peer_connection::{
-    MediaEngine, RTCIceGatheringState, RTCPeerConnectionState,
-};
+use webrtc::peer_connection::{MediaEngine, RTCIceGatheringState, RTCPeerConnectionState};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
 const TEST_MESSAGE: &str = "DC over video+DC peer connection";
@@ -121,16 +120,18 @@ async fn run_test() -> Result<()> {
     let (offerer_gather_tx, mut offerer_gather_rx) = channel::<()>(1);
     let (offerer_connected_tx, mut offerer_connected_rx) = channel::<()>(1);
     let (offerer_dc_open_tx, mut offerer_dc_open_rx) = channel::<()>(1);
-    let (offerer_msg_tx, mut offerer_msg_rx) = channel::<String>(8);
+    let (offerer_msg_tx, offerer_msg_rx) = channel::<String>(8);
     let (answerer_gather_tx, mut answerer_gather_rx) = channel::<()>(1);
     let (answerer_connected_tx, mut answerer_connected_rx) = channel::<()>(1);
     let (answerer_msg_tx, mut answerer_msg_rx) = channel::<String>(8);
 
-    let recvonly_init = || Some(RTCRtpTransceiverInit {
-        direction: RTCRtpTransceiverDirection::Recvonly,
-        send_encodings: vec![],
-        streams: vec![],
-    });
+    let recvonly_init = || {
+        Some(RTCRtpTransceiverInit {
+            direction: RTCRtpTransceiverDirection::Recvonly,
+            send_encodings: vec![],
+            streams: vec![],
+        })
+    };
 
     // ── Build offerer ──────────────────────────────────────────────────────────
     let offerer_pc = PeerConnectionBuilder::new()
@@ -192,7 +193,10 @@ async fn run_test() -> Result<()> {
     log::info!("✅ Offer SDP contains both m=video (active) and m=application");
 
     offerer_pc.set_local_description(offer).await?;
-    let _ = timeout(Duration::from_secs(5), offerer_gather_rx.recv()).await;
+    timeout(Duration::from_secs(5), offerer_gather_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout: offerer ICE gathering did not complete"))?
+        .ok_or_else(|| anyhow::anyhow!("Offerer ICE gathering channel closed before completion"))?;
     let offer_sdp = offerer_pc
         .local_description()
         .await
@@ -216,9 +220,20 @@ async fn run_test() -> Result<()> {
     let answer = answerer_pc.create_answer(None).await?;
     log::info!("Answerer created answer:\n{}", answer.sdp);
 
+    let has_video_mline = answer.sdp.lines().any(|line| line.starts_with("m=video "));
+    let video_mline_rejected = answer
+        .sdp
+        .lines()
+        .any(|line| line.starts_with("m=video 0 "));
+
     assert!(
-        answer.sdp.contains("m=video"),
+        has_video_mline,
         "Answer must contain m=video, got:\n{}",
+        answer.sdp
+    );
+    assert!(
+        !video_mline_rejected,
+        "Answer must not reject the video m-line (found `m=video 0 ...`), got:\n{}",
         answer.sdp
     );
     assert!(
@@ -226,10 +241,15 @@ async fn run_test() -> Result<()> {
         "Answer must contain m=application, got:\n{}",
         answer.sdp
     );
-    log::info!("✅ Answer SDP contains both m=video and m=application");
+    log::info!("✅ Answer SDP contains both m=video and m=application, and video is accepted");
 
     answerer_pc.set_local_description(answer).await?;
-    let _ = timeout(Duration::from_secs(5), answerer_gather_rx.recv()).await;
+    timeout(Duration::from_secs(5), answerer_gather_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout: answerer ICE gathering did not complete"))?
+        .ok_or_else(|| {
+            anyhow::anyhow!("Answerer ICE gathering channel closed before completion")
+        })?;
     let answer_sdp = answerer_pc
         .local_description()
         .await
@@ -261,7 +281,10 @@ async fn run_test() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("Timeout: answerer did not receive message"))?
         .ok_or_else(|| anyhow::anyhow!("Answerer message channel closed"))?;
 
-    assert_eq!(received, TEST_MESSAGE, "Answerer must receive the test message");
+    assert_eq!(
+        received, TEST_MESSAGE,
+        "Answerer must receive the test message"
+    );
     log::info!("✅ Data channel message received over video+DC peer connection");
 
     // Offerer_msg_rx is intentionally unused — we only test one-way delivery here

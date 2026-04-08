@@ -19,10 +19,11 @@
 //! cargo run --example data-channel-with-video
 //! ```
 //!
-//! Both peers run in the same process.  The offerer adds a `Recvonly` video
-//! transceiver and a data channel; the answerer mirrors this.  After ICE+DTLS
-//! negotiate, the offerer sends a text message over the data channel and the
-//! answerer prints it.  No actual video RTP is sent.
+//! Both peers run in the same process. The offerer adds a `Recvonly` video
+//! transceiver and a data channel; the answerer applies the remote description
+//! and creates an answer for that offer. After ICE+DTLS negotiate, the offerer
+//! sends a text message over the data channel and the answerer prints it. No
+//! actual video RTP is sent.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,8 +33,8 @@ use rtc::rtp_transceiver::RTCRtpTransceiverInit;
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
-    MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
-    RTCIceGatheringState, RTCPeerConnectionState,
+    MediaEngine, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
+    RTCPeerConnectionState,
 };
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
@@ -181,8 +182,14 @@ async fn run() -> anyhow::Result<()> {
     }
 
     let offer = offerer_pc.create_offer(None).await?;
-    eprintln!("Offerer: SDP offer contains m=video: {}", offer.sdp.contains("m=video"));
-    eprintln!("Offerer: SDP offer contains m=application: {}", offer.sdp.contains("m=application"));
+    eprintln!(
+        "Offerer: SDP offer contains m=video: {}",
+        offer.sdp.contains("m=video")
+    );
+    eprintln!(
+        "Offerer: SDP offer contains m=application: {}",
+        offer.sdp.contains("m=application")
+    );
 
     offerer_pc.set_local_description(offer).await?;
     let _ = timeout(Duration::from_secs(5), offerer_gather_rx.recv()).await;
@@ -205,8 +212,14 @@ async fn run() -> anyhow::Result<()> {
 
     answerer_pc.set_remote_description(offer_sdp).await?;
     let answer = answerer_pc.create_answer(None).await?;
-    eprintln!("Answerer: SDP answer contains m=video: {}", answer.sdp.contains("m=video"));
-    eprintln!("Answerer: SDP answer contains m=application: {}", answer.sdp.contains("m=application"));
+    eprintln!(
+        "Answerer: SDP answer contains m=video: {}",
+        answer.sdp.contains("m=video")
+    );
+    eprintln!(
+        "Answerer: SDP answer contains m=application: {}",
+        answer.sdp.contains("m=application")
+    );
 
     answerer_pc.set_local_description(answer).await?;
     let _ = timeout(Duration::from_secs(5), answerer_gather_rx.recv()).await;
