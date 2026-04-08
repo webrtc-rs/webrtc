@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'
+      - 'v*.*.*'
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,6 +35,8 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: changelog
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
