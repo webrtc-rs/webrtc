@@ -37,7 +37,9 @@ commit_parsers = [
   { message = "^refactor", group = "Refactoring" },
   { message = "^doc", group = "Documentation" },
   { message = "^test", group = "Testing" },
-  { message = "^chore|^ci|^build", group = "Miscellaneous" },
+  { message = "^ci", group = "CI" },
+  { message = "^build", group = "Build" },
+  { message = "^chore", group = "Miscellaneous" },
   { message = "^revert", group = "Reverted Commits" },
 ]
 protect_breaking_commits = false
