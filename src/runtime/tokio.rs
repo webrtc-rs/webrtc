@@ -131,8 +131,7 @@ impl super::AsyncTcpStream for TokioTcpStream {
     ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>> {
         use ::tokio::io::AsyncWriteExt;
         let write = self.write.clone();
-        let buf = buf.to_vec();
-        Box::pin(async move { write.lock().await.write_all(&buf).await })
+        Box::pin(async move { write.lock().await.write_all(buf).await })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {

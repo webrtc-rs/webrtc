@@ -140,10 +140,9 @@ impl super::AsyncTcpStream for SmolTcpStream {
         buf: &'a [u8],
     ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>> {
         let write = self.write.clone();
-        let buf = buf.to_vec();
         Box::pin(async move {
             use ::futures::io::AsyncWriteExt;
-            write.lock().await.write_all(&buf).await
+            write.lock().await.write_all(buf).await
         })
     }
 

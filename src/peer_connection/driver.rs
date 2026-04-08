@@ -11,6 +11,7 @@ use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
+use crate::runtime::JoinHandle;
 use crate::runtime::{
     AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Runtime, Sender, channel,
 };
@@ -80,6 +81,8 @@ where
     /// TCP: new accepted connection channel — accept tasks send here
     tcp_new_conn_tx: Sender<Arc<dyn AsyncTcpStream>>,
     tcp_new_conn_rx: Receiver<Arc<dyn AsyncTcpStream>>,
+    /// Accept loop task handles — aborted on drop to prevent resource leaks
+    accept_loop_handles: Vec<JoinHandle>,
     /// Async runtime — needed to spawn per-connection tasks
     runtime: Arc<dyn Runtime>,
 }
@@ -103,10 +106,12 @@ where
         let (tcp_inbound_tx, tcp_inbound_rx) = channel::<TcpInbound>(256);
         let (tcp_new_conn_tx, tcp_new_conn_rx) = channel::<Arc<dyn AsyncTcpStream>>(32);
 
-        // Spawn an accept loop for each passive TCP listener
+        // Spawn an accept loop for each passive TCP listener, storing handles
+        // so we can abort them when the driver shuts down.
+        let mut accept_loop_handles = Vec::with_capacity(tcp_listeners.len());
         for listener in tcp_listeners {
             let new_conn_tx = tcp_new_conn_tx.clone();
-            runtime.spawn(Box::pin(async move {
+            let handle = runtime.spawn(Box::pin(async move {
                 loop {
                     match listener.accept().await {
                         Ok(stream) => {
@@ -119,13 +124,15 @@ where
                         }
                         Err(e) => {
                             warn!("TCP accept error: {}", e);
-                            // Transient errors (e.g. EMFILE) should not kill the
-                            // listener permanently; only break on fatal errors.
+                            // Backoff on transient errors (e.g. EMFILE/ENFILE) to
+                            // avoid a hot loop and log flooding.
+                            crate::runtime::sleep(Duration::from_millis(50)).await;
                             continue;
                         }
                     }
                 }
             }));
+            accept_loop_handles.push(handle);
         }
 
         Ok(Self {
@@ -137,6 +144,7 @@ where
             tcp_inbound_rx,
             tcp_new_conn_tx,
             tcp_new_conn_rx,
+            accept_loop_handles,
             runtime,
         })
     }
@@ -178,12 +186,12 @@ where
                     Ok(n) => {
                         decoder.extend_from_slice(&buf[..n]);
                         while let Some(packet) = decoder.next_packet() {
+                            // Use async send for backpressure — only exit when the
+                            // channel is closed (driver shut down), not on transient
+                            // Full conditions.
                             if inbound_tx
-                                .try_send((
-                                    local_addr,
-                                    peer_addr,
-                                    BytesMut::from(packet.as_slice()),
-                                ))
+                                .send((local_addr, peer_addr, BytesMut::from(packet.as_slice())))
+                                .await
                                 .is_err()
                             {
                                 return;
@@ -475,8 +483,18 @@ where
 
                 if let Some(tx) = self.tcp_write_txs.get(&key) {
                     let framed = frame_packet(&msg.message);
-                    if tx.try_send(framed).is_err() {
-                        self.tcp_write_txs.remove(&key);
+                    match tx.try_send(framed) {
+                        Ok(()) => {}
+                        Err(crate::runtime::TrySendError::Full(_)) => {
+                            // Transient backpressure — drop this packet but keep the
+                            // connection alive. The upper layers (ICE/DTLS) will
+                            // retransmit if needed.
+                            warn!("TCP write channel full for {:?}, dropping packet", key);
+                        }
+                        Err(crate::runtime::TrySendError::Disconnected(_)) => {
+                            // Write task is gone — connection is dead, clean up.
+                            self.tcp_write_txs.remove(&key);
+                        }
                     }
                 }
             }
@@ -874,6 +892,16 @@ where
                     existing_ssrcs.push(coding_ssrc);
                 }
             }
+        }
+    }
+}
+
+impl<I: Interceptor> Drop for PeerConnectionDriver<I> {
+    fn drop(&mut self) {
+        // Abort all TCP accept loops so they don't keep TcpListeners alive
+        // after the driver shuts down.
+        for handle in &self.accept_loop_handles {
+            handle.abort();
         }
     }
 }

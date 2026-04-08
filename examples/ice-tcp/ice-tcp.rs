@@ -132,8 +132,10 @@ async fn run() -> anyhow::Result<()> {
     eprintln!("Answerer: TCP passive listener bound");
 
     // ── Offerer: TCP passive listener ───────────────────────────────────────────
-    // Like the answerer, the offerer also binds a TCP passive listener.
-    // When ICE selects the pair, the driver dials out to the answerer's TCP addr.
+    // The offerer also binds a TCP passive listener so it can emit `tcptype
+    // passive` host candidates.  When ICE selects the pair, the driver dials
+    // out (active TCP) to the answerer's passive listener on the first
+    // outbound packet.
     let offerer_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(OffererHandler {
             gather_tx: offerer_gather_tx,
