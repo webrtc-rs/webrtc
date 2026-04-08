@@ -20,10 +20,10 @@
 //! ```
 //!
 //! Both peers run in the same process. The offerer adds a `Recvonly` video
-//! transceiver and a data channel; the answerer applies the remote description
-//! and creates an answer for that offer. After ICE+DTLS negotiate, the offerer
-//! sends a text message over the data channel and the answerer prints it. No
-//! actual video RTP is sent.
+//! transceiver and a data channel; the answerer sets the remote description
+//! (which implicitly creates matching transceivers) and creates an answer. After
+//! ICE+DTLS negotiate, the offerer sends a text message over the data channel
+//! and the answerer prints it. No actual video RTP is sent.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,8 +33,8 @@ use rtc::rtp_transceiver::RTCRtpTransceiverInit;
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
-    MediaEngine, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
-    RTCPeerConnectionState,
+    MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
+    RTCIceGatheringState, RTCPeerConnectionState,
 };
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
@@ -192,9 +192,16 @@ async fn run() -> anyhow::Result<()> {
     );
 
     offerer_pc.set_local_description(offer).await?;
-    let _ = timeout(Duration::from_secs(5), offerer_gather_rx.recv()).await;
+    match timeout(Duration::from_secs(5), offerer_gather_rx.recv()).await {
+        Ok(Some(_)) => eprintln!("Offerer: ICE gathering complete"),
+        Ok(None) => return Err(anyhow::anyhow!("Offerer ICE gathering channel closed")),
+        Err(_) => {
+            return Err(anyhow::anyhow!(
+                "Timeout: offerer ICE gathering did not complete within 5s"
+            ));
+        }
+    }
     let offer_sdp = offerer_pc.local_description().await.expect("offerer SDP");
-    eprintln!("Offerer: ICE gathering complete");
 
     // ── Answerer: mirror the offerer's configuration ───────────────────────────
     let answerer_pc = PeerConnectionBuilder::new()
@@ -222,9 +229,16 @@ async fn run() -> anyhow::Result<()> {
     );
 
     answerer_pc.set_local_description(answer).await?;
-    let _ = timeout(Duration::from_secs(5), answerer_gather_rx.recv()).await;
+    match timeout(Duration::from_secs(5), answerer_gather_rx.recv()).await {
+        Ok(Some(_)) => eprintln!("Answerer: ICE gathering complete"),
+        Ok(None) => return Err(anyhow::anyhow!("Answerer ICE gathering channel closed")),
+        Err(_) => {
+            return Err(anyhow::anyhow!(
+                "Timeout: answerer ICE gathering did not complete within 5s"
+            ));
+        }
+    }
     let answer_sdp = answerer_pc.local_description().await.expect("answerer SDP");
-    eprintln!("Answerer: ICE gathering complete");
 
     offerer_pc.set_remote_description(answer_sdp).await?;
 

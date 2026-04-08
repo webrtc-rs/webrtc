@@ -177,7 +177,7 @@ async fn run_test() -> Result<()> {
     }
 
     let offer = offerer_pc.create_offer(None).await?;
-    log::info!("Offerer created offer:\n{}", offer.sdp);
+    log::debug!("Offerer created offer:\n{}", offer.sdp);
 
     // Both m-lines must be present in the offer with valid ports
     assert!(
@@ -218,7 +218,7 @@ async fn run_test() -> Result<()> {
 
     answerer_pc.set_remote_description(offer_sdp).await?;
     let answer = answerer_pc.create_answer(None).await?;
-    log::info!("Answerer created answer:\n{}", answer.sdp);
+    log::debug!("Answerer created answer:\n{}", answer.sdp);
 
     let has_video_mline = answer.sdp.lines().any(|line| line.starts_with("m=video "));
     let video_mline_rejected = answer
