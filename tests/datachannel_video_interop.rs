@@ -120,7 +120,8 @@ async fn run_test() -> Result<()> {
     let (offerer_gather_tx, mut offerer_gather_rx) = channel::<()>(1);
     let (offerer_connected_tx, mut offerer_connected_rx) = channel::<()>(1);
     let (offerer_dc_open_tx, mut offerer_dc_open_rx) = channel::<()>(1);
-    let (offerer_msg_tx, offerer_msg_rx) = channel::<String>(8);
+    // Receiver kept alive so offerer_msg_tx.send() doesn't fail; one-way test only.
+    let (offerer_msg_tx, _offerer_msg_rx) = channel::<String>(8);
     let (answerer_gather_tx, mut answerer_gather_rx) = channel::<()>(1);
     let (answerer_connected_tx, mut answerer_connected_rx) = channel::<()>(1);
     let (answerer_msg_tx, mut answerer_msg_rx) = channel::<String>(8);
@@ -288,7 +289,7 @@ async fn run_test() -> Result<()> {
     log::info!("✅ Data channel message received over video+DC peer connection");
 
     // Offerer_msg_rx is intentionally unused — we only test one-way delivery here
-    drop(offerer_msg_rx);
+    drop(_offerer_msg_rx);
 
     sleep(Duration::from_millis(100)).await;
     offerer_pc.close().await?;
