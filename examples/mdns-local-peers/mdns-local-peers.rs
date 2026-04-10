@@ -1,14 +1,12 @@
-//! mDNS-enabled ICE candidate resolution example
+//! mDNS peer discovery example
 //!
-//! The peers still exchange SDP offers/answers through the example's normal
-//! in-process signaling flow; mDNS here is only used for privacy-preserving
-//! host candidates and for resolving remote `.local` ICE candidates.
+//! Demonstrates two in-process WebRTC peers communicating with mDNS enabled.
 //! Both peers use `MulticastDnsMode::QueryAndGather` so that:
 //!
 //! - **QueryAndGather**: Local candidates advertise a `.local` mDNS hostname
 //!   instead of exposing the raw IP address (privacy-preserving).
 //! - Remote `.local` candidates are resolved via multicast DNS on the local
-//!   network -- no STUN server is needed for that local hostname resolution.
+//!   network — no STUN server is needed.
 //!
 //! ## How to run
 //!
@@ -23,10 +21,8 @@
 //!
 //! - mDNS requires access to the `224.0.0.251:5353` multicast group.  Some
 //!   environments (CI, containers without multicast routing) may prevent the
-//!   socket from joining the group.  When that happens the peer connection
-//!   builder logs a warning and continues without mDNS -- `.local` candidates
-//!   will not be advertised or resolved, but the connection can still succeed
-//!   via other candidate types (host, srflx, relay).
+//!   socket from joining the group; the example logs a warning and falls back
+//!   gracefully.
 //! - For true cross-host mDNS peer discovery you would run one peer on each
 //!   host and exchange their SDP offers/answers via a signaling channel.
 
@@ -130,14 +126,13 @@ async fn run() -> anyhow::Result<()> {
 
     // Configure mDNS: QueryAndGather means local candidates use .local
     // hostnames AND remote .local candidates are resolved via multicast DNS.
-    // with_mdns_mode() sets the mode on both the async wrapper and the sans-IO core.
-    let mut offerer_se = SettingEngine::default();
-    offerer_se.set_multicast_dns_local_name("offerer-webrtc.local".to_string());
+    let mut setting_engine = SettingEngine::default();
+    setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
+    setting_engine.set_multicast_dns_local_name("offerer-webrtc.local".to_string());
 
     // ── Offerer ────────────────────────────────────────────────────────────────
     let offerer_pc = PeerConnectionBuilder::new()
-        .with_setting_engine(offerer_se)
-        .with_mdns_mode(MulticastDnsMode::QueryAndGather)
+        .with_setting_engine(setting_engine.clone())
         .with_handler(Arc::new(OffererHandler {
             gather_tx: offerer_gather_tx,
             connected_tx: offerer_connected_tx,
@@ -166,17 +161,26 @@ async fn run() -> anyhow::Result<()> {
 
     let offer = offerer_pc.create_offer(None).await?;
     offerer_pc.set_local_description(offer).await?;
-    let _ = timeout(Duration::from_secs(5), offerer_gather_rx.recv()).await;
+    match timeout(Duration::from_secs(5), offerer_gather_rx.recv()).await {
+        Ok(Some(())) => eprintln!("Offerer: ICE gathering complete"),
+        Ok(None) => {
+            return Err(anyhow::anyhow!(
+                "Offerer: ICE gathering channel closed before completion"
+            ));
+        }
+        Err(_) => eprintln!(
+            "Offerer: ICE gathering did not complete within 5s; continuing with possibly incomplete SDP"
+        ),
+    }
     let offer_sdp = offerer_pc.local_description().await.expect("offerer SDP");
-    eprintln!("Offerer: ICE gathering complete");
 
     // ── Answerer ───────────────────────────────────────────────────────────────
     let mut answerer_se = SettingEngine::default();
+    answerer_se.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
     answerer_se.set_multicast_dns_local_name("answerer-webrtc.local".to_string());
 
     let answerer_pc = PeerConnectionBuilder::new()
         .with_setting_engine(answerer_se)
-        .with_mdns_mode(MulticastDnsMode::QueryAndGather)
         .with_handler(Arc::new(AnswererHandler {
             gather_tx: answerer_gather_tx,
             connected_tx: answerer_connected_tx,
@@ -191,27 +195,39 @@ async fn run() -> anyhow::Result<()> {
     answerer_pc.set_remote_description(offer_sdp).await?;
     let answer = answerer_pc.create_answer(None).await?;
     answerer_pc.set_local_description(answer).await?;
-    let _ = timeout(Duration::from_secs(5), answerer_gather_rx.recv()).await;
+    match timeout(Duration::from_secs(5), answerer_gather_rx.recv()).await {
+        Ok(Some(())) => eprintln!("Answerer: ICE gathering complete"),
+        Ok(None) => {
+            return Err(anyhow::anyhow!(
+                "Answerer: ICE gathering channel closed before completion"
+            ));
+        }
+        Err(_) => eprintln!(
+            "Answerer: ICE gathering did not complete within 5s; continuing with possibly incomplete SDP"
+        ),
+    }
     let answer_sdp = answerer_pc.local_description().await.expect("answerer SDP");
-    eprintln!("Answerer: ICE gathering complete");
 
     offerer_pc.set_remote_description(answer_sdp).await?;
 
     // ── Wait for connection ────────────────────────────────────────────────────
     timeout(Duration::from_secs(15), offerer_connected_rx.recv())
         .await
-        .map_err(|_| anyhow::anyhow!("Timeout waiting for offerer to connect"))?;
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for offerer to connect"))?
+        .ok_or_else(|| anyhow::anyhow!("Offerer connection channel closed"))?;
     eprintln!("Offerer: connected!");
 
     timeout(Duration::from_secs(5), answerer_connected_rx.recv())
         .await
-        .map_err(|_| anyhow::anyhow!("Timeout waiting for answerer to connect"))?;
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for answerer to connect"))?
+        .ok_or_else(|| anyhow::anyhow!("Answerer connection channel closed"))?;
     eprintln!("Answerer: connected!");
 
     // ── Send message ───────────────────────────────────────────────────────────
     timeout(Duration::from_secs(10), offerer_dc_open_rx.recv())
         .await
-        .map_err(|_| anyhow::anyhow!("Timeout waiting for data channel to open"))?;
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for data channel to open"))?
+        .ok_or_else(|| anyhow::anyhow!("Data channel open notification channel closed"))?;
 
     eprintln!("Offerer: sending '{}'", TEST_MESSAGE);
     offerer_dc.send_text(TEST_MESSAGE).await?;
@@ -219,7 +235,7 @@ async fn run() -> anyhow::Result<()> {
     let received = timeout(Duration::from_secs(10), answerer_msg_rx.recv())
         .await
         .map_err(|_| anyhow::anyhow!("Timeout waiting for message"))?
-        .ok_or_else(|| anyhow::anyhow!("Channel closed"))?;
+        .ok_or_else(|| anyhow::anyhow!("Message channel closed"))?;
 
     assert_eq!(received, TEST_MESSAGE);
     eprintln!("✅ Message received: '{}'", received);

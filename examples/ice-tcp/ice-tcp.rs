@@ -1,15 +1,15 @@
 //! ICE over TCP (RFC 6544) example
 //!
-//! Demonstrates two in-process peers connected exclusively over TCP using the
-//! passive ICE-TCP mechanism defined in RFC 6544.
+//! Demonstrates two in-process WebRTC peers that pass TCP addresses via
+//! `PeerConnectionBuilder::with_tcp_addrs()`.
 //!
-//! Both peers bind TCP passive listeners via `with_tcp_addrs` and emit
-//! `tcptype passive` host candidates.  When ICE connectivity checks begin, the
-//! driver dials out (active TCP) to the remote peer's passive listener on the
-//! first outbound packet.
+//! **Current limitation:** The async driver layer does not yet bind or drive TCP
+//! sockets (the `_tcp_addrs` parameter in `PeerConnectionImpl::new` is a
+//! placeholder).  Until TCP transport is wired through the driver, both peers
+//! also bind a UDP socket so that ICE connectivity checks can succeed.
 //!
-//! All STUN / DTLS / SCTP traffic is framed with the 2-byte RFC 4571 length
-//! prefix by the driver automatically.
+//! Once the driver gains TCP support, the UDP fallback can be removed and this
+//! example will demonstrate pure TCP ICE (RFC 6544).
 //!
 //! ## How to run
 //!
@@ -115,9 +115,10 @@ async fn run() -> anyhow::Result<()> {
     let (answerer_connected_tx, mut answerer_connected_rx) = channel::<()>(1);
     let (answerer_msg_tx, mut answerer_msg_rx) = channel::<String>(8);
 
-    // ── Answerer: TCP passive listener ─────────────────────────────────────────
-    // Bind a TCP listener on a random port — the driver emits this as a
-    // `tcptype passive` host candidate.
+    // ── Answerer ────────────────────────────────────────────────────────────────
+    // Pass TCP addresses via with_tcp_addrs() — these will be used once the
+    // driver gains TCP transport support.  A UDP socket is also bound as a
+    // fallback so the example can run today.
     let answerer_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(AnswererHandler {
             gather_tx: answerer_gather_tx,
@@ -126,22 +127,21 @@ async fn run() -> anyhow::Result<()> {
             runtime: runtime.clone(),
         }))
         .with_runtime(runtime.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
         .with_tcp_addrs(vec!["127.0.0.1:0".to_string()])
         .build()
         .await?;
-    eprintln!("Answerer: TCP passive listener bound");
+    eprintln!("Answerer: peer connection created (UDP + TCP addrs configured)");
 
-    // ── Offerer: TCP passive listener ───────────────────────────────────────────
-    // The offerer also binds a TCP passive listener so it can emit `tcptype
-    // passive` host candidates.  When ICE selects the pair, the driver dials
-    // out (active TCP) to the answerer's passive listener on the first
-    // outbound packet.
+    // ── Offerer ────────────────────────────────────────────────────────────────
+    // Same as the answerer: TCP addrs are passed but only UDP is active today.
     let offerer_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(OffererHandler {
             gather_tx: offerer_gather_tx,
             connected_tx: offerer_connected_tx,
         }))
         .with_runtime(runtime.clone())
+        .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
         .with_tcp_addrs(vec!["127.0.0.1:0".to_string()])
         .build()
         .await?;
@@ -165,14 +165,20 @@ async fn run() -> anyhow::Result<()> {
     // ── Signaling (in-process) ─────────────────────────────────────────────────
     let offer = offerer_pc.create_offer(None).await?;
     offerer_pc.set_local_description(offer).await?;
-    let _ = timeout(Duration::from_secs(5), offerer_gather_rx.recv()).await;
+    timeout(Duration::from_secs(5), offerer_gather_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for offerer ICE gathering"))?
+        .ok_or_else(|| anyhow::anyhow!("Offerer ICE gathering channel closed"))?;
     let offer_sdp = offerer_pc.local_description().await.expect("offerer SDP");
     eprintln!("Offerer: ICE gathering complete");
 
     answerer_pc.set_remote_description(offer_sdp).await?;
     let answer = answerer_pc.create_answer(None).await?;
     answerer_pc.set_local_description(answer).await?;
-    let _ = timeout(Duration::from_secs(5), answerer_gather_rx.recv()).await;
+    timeout(Duration::from_secs(5), answerer_gather_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for answerer ICE gathering"))?
+        .ok_or_else(|| anyhow::anyhow!("Answerer ICE gathering channel closed"))?;
     let answer_sdp = answerer_pc.local_description().await.expect("answerer SDP");
     eprintln!("Answerer: ICE gathering complete");
 
@@ -181,18 +187,21 @@ async fn run() -> anyhow::Result<()> {
     // ── Wait for connection ────────────────────────────────────────────────────
     timeout(Duration::from_secs(15), offerer_connected_rx.recv())
         .await
-        .map_err(|_| anyhow::anyhow!("Timeout waiting for offerer to connect"))?;
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for offerer to connect"))?
+        .ok_or_else(|| anyhow::anyhow!("Offerer connection channel closed"))?;
     eprintln!("Offerer: connected!");
 
     timeout(Duration::from_secs(5), answerer_connected_rx.recv())
         .await
-        .map_err(|_| anyhow::anyhow!("Timeout waiting for answerer to connect"))?;
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for answerer to connect"))?
+        .ok_or_else(|| anyhow::anyhow!("Answerer connection channel closed"))?;
     eprintln!("Answerer: connected!");
 
     // ── Send message ───────────────────────────────────────────────────────────
     timeout(Duration::from_secs(10), offerer_dc_open_rx.recv())
         .await
-        .map_err(|_| anyhow::anyhow!("Timeout waiting for data channel to open"))?;
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for data channel to open"))?
+        .ok_or_else(|| anyhow::anyhow!("Data channel open notification channel closed"))?;
 
     eprintln!("Offerer: sending '{}'", TEST_MESSAGE);
     offerer_dc.send_text(TEST_MESSAGE).await?;
@@ -200,7 +209,7 @@ async fn run() -> anyhow::Result<()> {
     let received = timeout(Duration::from_secs(10), answerer_msg_rx.recv())
         .await
         .map_err(|_| anyhow::anyhow!("Timeout waiting for message"))?
-        .ok_or_else(|| anyhow::anyhow!("Channel closed"))?;
+        .ok_or_else(|| anyhow::anyhow!("Message channel closed"))?;
 
     assert_eq!(received, TEST_MESSAGE);
     eprintln!("✅ Message received: '{}'", received);
