@@ -129,10 +129,14 @@ impl RTCIceGatherer {
         Ok(())
     }
 
+    /// Timeout for DNS resolution of STUN/TURN server hostnames (#774).
+    const DNS_RESOLVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
     /// Gather server reflexive (srflx) ICE candidates via STUN
     ///
-    /// This performs actual I/O to query STUN servers and should be called
-    /// in an async context.
+    /// DNS resolution is performed once per STUN URL (not per local address)
+    /// so that an unresolvable hostname incurs at most one timeout rather
+    /// than N x timeout for N local addresses.
     async fn gather_srflx_candidates(&mut self) -> Result<(), Error> {
         for ice_server in &self.ice_servers {
             for url in &ice_server.urls {
@@ -141,8 +145,33 @@ impl RTCIceGatherer {
                     continue;
                 }
 
+                // Resolve STUN hostname once per URL
+                let resolved_addrs = match Self::resolve_stun_url(url).await {
+                    Ok(addrs) => addrs,
+                    Err(err) => {
+                        error!("Failed to resolve STUN server {}: {}", url, err);
+                        continue;
+                    }
+                };
+
                 for local_addr in &self.local_addrs {
-                    match RTCIceGatherer::gather_from_stun_server(*local_addr, url).await {
+                    // Pick the address matching the local IP version
+                    let stun_server_addr = match resolved_addrs
+                        .iter()
+                        .find(|addr| addr.is_ipv4() == local_addr.is_ipv4())
+                    {
+                        Some(addr) => *addr,
+                        None => {
+                            let ip_ver = if local_addr.is_ipv4() { "IPv4" } else { "IPv6" };
+                            debug!(
+                                "No {} address for STUN server {} (local_addr {}), skipping",
+                                ip_ver, url, local_addr
+                            );
+                            continue;
+                        }
+                    };
+
+                    match Self::create_stun_client(*local_addr, stun_server_addr) {
                         Ok(stun_client) => {
                             self.gathering_clients.insert(FourTuple {
                                 local_addr: stun_client.local_addr(),
@@ -151,7 +180,7 @@ impl RTCIceGatherer {
                             self.stun_clients.push(stun_client);
                         }
                         Err(err) => {
-                            error!("Failed to gather stun client: {}", err);
+                            error!("Failed to create STUN client: {}", err);
                         }
                     }
                 }
@@ -161,49 +190,49 @@ impl RTCIceGatherer {
         Ok(())
     }
 
-    /// Gather a single srflx candidate from a STUN server
-    async fn gather_from_stun_server(
-        local_addr: SocketAddr,
-        stun_url: &str,
-    ) -> Result<StunClient, Error> {
-        // Resolve STUN server address (add default port 3478 if not specified)
-        let stun_server_addr_str = if stun_url.contains(':') {
-            stun_url
-                .strip_prefix("stun:")
-                .unwrap_or(stun_url)
-                .to_string()
+    /// Resolve a `stun:` URL to a list of socket addresses with a timeout.
+    ///
+    /// Returns all resolved addresses so the caller can pick the right IP
+    /// version per local address without re-resolving.
+    async fn resolve_stun_url(stun_url: &str) -> Result<Vec<SocketAddr>, Error> {
+        let host_part = stun_url.strip_prefix("stun:").unwrap_or(stun_url);
+
+        // Add default STUN port 3478 when no port is present.
+        // `stun:host:port` after stripping the prefix becomes `host:port` which
+        // already contains a colon. A bare `stun:hostname` becomes `hostname`
+        // with no colon, so we append `:3478`.
+        let addr_str = if host_part.contains(':') {
+            host_part.to_string()
         } else {
-            format!(
-                "{}:3478",
-                stun_url.strip_prefix("stun:").unwrap_or(stun_url)
-            )
+            format!("{}:3478", host_part)
         };
 
-        debug!("Resolving STUN server: {}", stun_server_addr_str);
+        debug!("Resolving STUN server: {}", addr_str);
 
-        // Resolve hostname to IP address using runtime-agnostic helper
-        let resolved_addrs = runtime::resolve_host(&stun_server_addr_str).await?;
+        let resolved_addrs =
+            runtime::timeout(Self::DNS_RESOLVE_TIMEOUT, runtime::resolve_host(&addr_str))
+                .await
+                .map_err(|_| {
+                    Error::Other(format!(
+                        "DNS timed out after {:?} resolving STUN server: {}",
+                        Self::DNS_RESOLVE_TIMEOUT,
+                        addr_str
+                    ))
+                })??;
 
-        // Filter addresses to match the local_addr IP version (IPv4 or IPv6)
-        let stun_server_addr: SocketAddr = resolved_addrs
-            .into_iter()
-            .find(|addr| addr.is_ipv4() == local_addr.is_ipv4())
-            .ok_or_else(|| {
-                let ip_version = if local_addr.is_ipv4() { "IPv4" } else { "IPv6" };
-                Error::Other(format!(
-                    "Failed to resolve STUN server hostname to {} address (local_addr is {})",
-                    ip_version, local_addr
-                ))
-            })?;
+        debug!("Resolved STUN server {} to {:?}", addr_str, resolved_addrs);
 
-        debug!(
-            "Resolved STUN server {} to {}",
-            stun_server_addr_str, stun_server_addr
-        );
+        Ok(resolved_addrs)
+    }
 
+    /// Create a STUN client for a single (local_addr, stun_server_addr) pair
+    /// and enqueue an initial binding request.
+    fn create_stun_client(
+        local_addr: SocketAddr,
+        stun_server_addr: SocketAddr,
+    ) -> Result<StunClient, Error> {
         debug!("STUN client bound to {}", local_addr);
 
-        // Create STUN client using the sans-I/O pattern
         let mut stun_client =
             StunClientBuilder::new().build(local_addr, stun_server_addr, TransportProtocol::UDP)?;
 
@@ -346,5 +375,72 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
             stun_client.close()?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// resolve_stun_url with a known-good IP literal should succeed instantly.
+    #[test]
+    fn test_resolve_stun_url_ip_literal() {
+        crate::runtime::block_on(async {
+            let addrs = RTCIceGatherer::resolve_stun_url("stun:127.0.0.1:3478")
+                .await
+                .expect("IP literal should resolve");
+            assert!(!addrs.is_empty());
+            assert_eq!(addrs[0].ip().to_string(), "127.0.0.1");
+            assert_eq!(addrs[0].port(), 3478);
+        });
+    }
+
+    /// resolve_stun_url with a bare hostname (no port) should append :3478.
+    #[test]
+    fn test_resolve_stun_url_default_port() {
+        crate::runtime::block_on(async {
+            let addrs = RTCIceGatherer::resolve_stun_url("stun:127.0.0.1")
+                .await
+                .expect("bare IP should resolve with default port");
+            assert_eq!(addrs[0].port(), 3478);
+        });
+    }
+
+    /// resolve_stun_url with an unresolvable hostname should return an error
+    /// (timeout or DNS failure) rather than hanging.
+    #[test]
+    fn test_resolve_stun_url_unresolvable() {
+        crate::runtime::block_on(async {
+            let start = std::time::Instant::now();
+            let result =
+                RTCIceGatherer::resolve_stun_url("stun:this.will.never.resolve.invalid:3478").await;
+            let elapsed = start.elapsed();
+            assert!(result.is_err(), "unresolvable hostname should error");
+            // Must not hang longer than 2 x DNS_RESOLVE_TIMEOUT
+            assert!(
+                elapsed.as_secs() < 7,
+                "DNS resolution took {:?}, expected < 7s",
+                elapsed
+            );
+        });
+    }
+
+    /// create_stun_client should succeed with valid addresses.
+    #[test]
+    fn test_create_stun_client_valid() {
+        let local: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let remote: SocketAddr = "127.0.0.1:3478".parse().unwrap();
+        let client = RTCIceGatherer::create_stun_client(local, remote)
+            .expect("should create client with valid addrs");
+        assert_eq!(client.peer_addr(), remote);
+    }
+
+    /// DNS_RESOLVE_TIMEOUT should be 3 seconds.
+    #[test]
+    fn test_dns_resolve_timeout_value() {
+        assert_eq!(
+            RTCIceGatherer::DNS_RESOLVE_TIMEOUT,
+            std::time::Duration::from_secs(3)
+        );
     }
 }
