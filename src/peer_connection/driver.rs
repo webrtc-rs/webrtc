@@ -11,9 +11,9 @@ use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
-use crate::runtime::JoinHandle;
 use crate::runtime::{
-    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Runtime, Sender, channel,
+    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, JoinHandle, Receiver, Runtime, Sender,
+    channel,
 };
 use bytes::BytesMut;
 use futures::FutureExt;
@@ -33,7 +33,7 @@ use rtc::{rtcp, rtp};
 use rtc_shared::tcp_framing::{TcpFrameDecoder, frame_packet};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -81,10 +81,20 @@ where
     /// TCP: new accepted connection channel — accept tasks send here
     tcp_new_conn_tx: Sender<Arc<dyn AsyncTcpStream>>,
     tcp_new_conn_rx: Receiver<Arc<dyn AsyncTcpStream>>,
-    /// Accept loop task handles — aborted on drop to prevent resource leaks
-    accept_loop_handles: Vec<JoinHandle>,
     /// Async runtime — needed to spawn per-connection tasks
     runtime: Arc<dyn Runtime>,
+    /// Handles for all background TCP tasks (accept loops + per-connection read/write).
+    /// Stored so they can be aborted on clean shutdown rather than leaking.
+    tcp_task_handles: Vec<JoinHandle>,
+}
+
+impl<I> Drop for PeerConnectionDriver<I>
+where
+    I: Interceptor,
+{
+    fn drop(&mut self) {
+        self.abort_tcp_tasks();
+    }
 }
 
 impl<I> PeerConnectionDriver<I>
@@ -106,33 +116,38 @@ where
         let (tcp_inbound_tx, tcp_inbound_rx) = channel::<TcpInbound>(256);
         let (tcp_new_conn_tx, tcp_new_conn_rx) = channel::<Arc<dyn AsyncTcpStream>>(32);
 
-        // Spawn an accept loop for each passive TCP listener, storing handles
-        // so we can abort them when the driver shuts down.
-        let mut accept_loop_handles = Vec::with_capacity(tcp_listeners.len());
+        // Spawn an accept loop for each passive TCP listener; store handles for clean shutdown.
+        let mut tcp_task_handles = Vec::new();
         for listener in tcp_listeners {
             let new_conn_tx = tcp_new_conn_tx.clone();
             let handle = runtime.spawn(Box::pin(async move {
                 loop {
                     match listener.accept().await {
                         Ok(stream) => {
-                            // Use async send so transient backpressure (Full) doesn't
-                            // kill the accept loop. We only break when the channel is
-                            // actually closed (receiver dropped = driver shut down).
-                            if new_conn_tx.send(stream).await.is_err() {
-                                break;
+                            match new_conn_tx.try_send(stream) {
+                                Ok(()) => {}
+                                Err(crate::runtime::TrySendError::Full(_)) => {
+                                    // Channel is full (backpressure) — drop
+                                    // the accepted stream but keep accepting.
+                                    warn!(
+                                        "TCP new-connection channel full; dropping accepted stream"
+                                    );
+                                }
+                                Err(crate::runtime::TrySendError::Disconnected(_)) => {
+                                    // Receiver dropped — driver shut down.
+                                    break;
+                                }
                             }
                         }
                         Err(e) => {
-                            warn!("TCP accept error: {}", e);
-                            // Backoff on transient errors (e.g. EMFILE/ENFILE) to
-                            // avoid a hot loop and log flooding.
-                            crate::runtime::sleep(Duration::from_millis(50)).await;
-                            continue;
+                            // Transient accept errors (e.g. EMFILE, ECONNABORTED)
+                            // should not kill the listener permanently.
+                            warn!("TCP accept error (continuing): {}", e);
                         }
                     }
                 }
             }));
-            accept_loop_handles.push(handle);
+            tcp_task_handles.push(handle);
         }
 
         Ok(Self {
@@ -144,8 +159,8 @@ where
             tcp_inbound_rx,
             tcp_new_conn_tx,
             tcp_new_conn_rx,
-            accept_loop_handles,
             runtime,
+            tcp_task_handles,
         })
     }
 
@@ -177,7 +192,7 @@ where
         // Read task: decode RFC 4571 frames and forward to driver
         let read_stream = stream.clone();
         let inbound_tx = self.tcp_inbound_tx.clone();
-        self.runtime.spawn(Box::pin(async move {
+        let read_handle = self.runtime.spawn(Box::pin(async move {
             let mut decoder = TcpFrameDecoder::new();
             let mut buf = vec![0u8; 4096];
             loop {
@@ -186,15 +201,23 @@ where
                     Ok(n) => {
                         decoder.extend_from_slice(&buf[..n]);
                         while let Some(packet) = decoder.next_packet() {
-                            // Use async send for backpressure — only exit when the
-                            // channel is closed (driver shut down), not on transient
-                            // Full conditions.
-                            if inbound_tx
-                                .send((local_addr, peer_addr, BytesMut::from(packet.as_slice())))
-                                .await
-                                .is_err()
-                            {
-                                return;
+                            match inbound_tx.try_send((
+                                local_addr,
+                                peer_addr,
+                                BytesMut::from(packet.as_slice()),
+                            )) {
+                                Ok(()) => {}
+                                Err(crate::runtime::TrySendError::Full(_)) => {
+                                    // Backpressure — drop the packet but keep reading.
+                                    warn!(
+                                        "TCP inbound channel full ({}->{}); dropping packet",
+                                        local_addr, peer_addr
+                                    );
+                                }
+                                Err(crate::runtime::TrySendError::Disconnected(_)) => {
+                                    // Receiver dropped — driver shut down; stop.
+                                    return;
+                                }
                             }
                         }
                     }
@@ -205,9 +228,10 @@ where
                 }
             }
         }));
+        self.tcp_task_handles.push(read_handle);
 
         // Write task: receive framed bytes and write to stream
-        self.runtime.spawn(Box::pin(async move {
+        let write_handle = self.runtime.spawn(Box::pin(async move {
             while let Some(data) = write_rx.recv().await {
                 if let Err(e) = stream.write_all(&data).await {
                     trace!("TCP write error: {}", e);
@@ -215,6 +239,14 @@ where
                 }
             }
         }));
+        self.tcp_task_handles.push(write_handle);
+    }
+
+    /// Abort all background TCP tasks spawned by this driver.
+    fn abort_tcp_tasks(&mut self) {
+        for handle in self.tcp_task_handles.drain(..) {
+            handle.abort();
+        }
     }
 
     /// Run the driver event loop
@@ -224,6 +256,8 @@ where
         &mut self,
         mut driver_event_rx: Receiver<PeerConnectionDriverEvent>,
     ) -> Result<()> {
+        log::debug!("PeerConnectionDriver: event loop started");
+
         // Collect socket info into a vec for indexed access
         let socket_list: Vec<(SocketAddr, Arc<dyn AsyncUdpSocket>)> = self
             .sockets
@@ -235,13 +269,15 @@ where
         let mut socket_buffers: Vec<Vec<u8>> =
             socket_list.iter().map(|_| vec![0u8; 2000]).collect();
 
-        // Helper function to create a recv future for a specific socket
+        // Helper function to create a recv future for a specific socket.
+        // Always returns (result, local_addr, idx, buf) so the caller can
+        // re-queue the future even after a transient error.
         let create_socket_recv_future = |idx: usize,
                                          local_addr: SocketAddr,
                                          socket: Arc<dyn AsyncUdpSocket>,
                                          mut buf: Vec<u8>| async move {
-            let (n, peer_addr) = socket.recv_from(&mut buf).await?;
-            Ok::<_, std::io::Error>((n, local_addr, peer_addr, idx, buf))
+            let result = socket.recv_from(&mut buf).await;
+            (result, local_addr, idx, buf)
         };
 
         // Create initial set of futures in FuturesUnordered
@@ -253,6 +289,14 @@ where
                 create_socket_recv_future(idx, *local_addr, socket.clone(), buf).boxed()
             })
             .collect();
+
+        // In TCP-only mode (no UDP sockets), FuturesUnordered is empty and
+        // `.next()` would resolve to None immediately, causing a busy-loop
+        // that starves the TCP branches. Insert a future that never resolves
+        // so select! blocks on the TCP channels instead.
+        if socket_list.is_empty() {
+            socket_recv_futures.push(futures::future::pending().boxed());
+        }
 
         loop {
             // 1.a ice_gatherer poll_write()
@@ -344,21 +388,17 @@ where
                     if let Some(evt) = evt {
                         let is_closed = self.handle_driver_event(evt).await;
                         if is_closed {
+                            log::debug!("PeerConnectionDriver: clean shutdown");
+                            self.abort_tcp_tasks();
                             return Ok(());
                         }
                     }
                 }
 
                 // Incoming network packet from any UDP socket
-                // In TCP-only mode (no UDP sockets), this future never resolves,
-                // preventing a tight spin loop.
-                result = (if socket_list.is_empty() {
-                    futures::future::pending().boxed()
-                } else {
-                    socket_recv_futures.next().boxed()
-                }).fuse() => {
+                result = socket_recv_futures.next().fuse() => {
                     match result {
-                        Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
+                        Some((Ok((n, peer_addr)), local_addr, idx, buf)) => {
                             trace!("Received {} bytes from {} to {}", n, peer_addr, local_addr);
 
                             if let Err(err) = self.handle_read(TaggedBytesMut {
@@ -380,12 +420,32 @@ where
                                 create_socket_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
                             );
                         }
-                        Some(Err(err)) => {
-                            error!("Socket recv error: {}", err);
-                            //TODO: better handling on socket recv error #777
-                            return Err(err.into());
+                        Some((Err(err), local_addr, idx, buf)) => {
+                            // Transient OS errors (EAGAIN / EWOULDBLOCK / EINTR) occur
+                            // spuriously on non-blocking sockets — re-queue the future
+                            // and let the async runtime reschedule it.
+                            // Fatal errors terminate the driver.
+                            match err.kind() {
+                                std::io::ErrorKind::WouldBlock
+                                | std::io::ErrorKind::Interrupted => {
+                                    trace!("Transient socket recv error (retrying): {}", err);
+                                    let (_, socket) = &socket_list[idx];
+                                    socket_recv_futures.push(
+                                        create_socket_recv_future(idx, local_addr, socket.clone(), buf).boxed()
+                                    );
+                                }
+                                _ => {
+                                    error!("Fatal socket recv error: {}", err);
+                                    self.abort_tcp_tasks();
+                                    return Err(err.into());
+                                }
+                            }
                         }
                         None => {
+                            // All UDP recv futures completed unexpectedly.
+                            // TCP-only mode uses a pending() future so this
+                            // branch is only reachable when UDP sockets exist.
+                            self.abort_tcp_tasks();
                             return Err(Error::Other("all socket futures completed".to_owned()));
                         }
                     }
@@ -423,19 +483,7 @@ where
     async fn handle_write(&mut self, msg: TaggedBytesMut) {
         match msg.transport.transport_protocol {
             TransportProtocol::UDP => {
-                let socket = self.sockets.get(&msg.transport.local_addr).or_else(|| {
-                    // mDNS answer packets use local_addr = local_ip:5353 (the IP carried in the
-                    // DNS A record), but the mDNS socket is keyed as 0.0.0.0:5353.  Fall back
-                    // to that key so responses are routed through the multicast socket.
-                    if msg.transport.local_addr.port() == rtc::mdns::MDNS_PORT {
-                        let fallback =
-                            SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), rtc::mdns::MDNS_PORT);
-                        self.sockets.get(&fallback)
-                    } else {
-                        None
-                    }
-                });
-                if let Some(socket) = socket {
+                if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
                     match socket.send_to(&msg.message, msg.transport.peer_addr).await {
                         Ok(n) => {
                             trace!(
@@ -453,47 +501,45 @@ where
                 }
             }
             TransportProtocol::TCP => {
-                let peer_addr = msg.transport.peer_addr;
-
-                // Find an existing connection to this peer.  The local addr in
-                // msg.transport may not match the OS-assigned local addr of an
-                // active (dialled) connection, so we look up by peer_addr only.
-                let existing_key = self
-                    .tcp_write_txs
-                    .keys()
-                    .find(|(_l, p)| *p == peer_addr)
-                    .copied();
-
-                let key = if let Some(k) = existing_key {
-                    k
-                } else {
-                    // Active TCP: dial out on first outbound packet
+                let mut key = (msg.transport.local_addr, msg.transport.peer_addr);
+                if !self.tcp_write_txs.contains_key(&key) {
+                    // Active TCP: dial out on first outbound packet.
+                    // The OS assigns the actual local address, so update `key`
+                    // to match what register_tcp_connection() stored.
+                    let peer_addr = msg.transport.peer_addr;
                     match self.runtime.connect_tcp(peer_addr).await {
                         Ok(stream) => {
-                            self.register_tcp_connection(stream.clone());
-                            let local = stream.local_addr().unwrap_or(msg.transport.local_addr);
-                            (local, peer_addr)
+                            // Update key to the actual (local, peer) pair so the
+                            // lookup below finds the sender we just registered.
+                            if let (Ok(local), Ok(peer)) = (stream.local_addr(), stream.peer_addr())
+                            {
+                                key = (local, peer);
+                            }
+                            self.register_tcp_connection(stream);
                         }
                         Err(e) => {
                             error!("TCP connect to {} failed: {}", peer_addr, e);
                             return;
                         }
                     }
-                };
-
+                }
                 if let Some(tx) = self.tcp_write_txs.get(&key) {
                     let framed = frame_packet(&msg.message);
-                    match tx.try_send(framed) {
-                        Ok(()) => {}
-                        Err(crate::runtime::TrySendError::Full(_)) => {
-                            // Transient backpressure — drop this packet but keep the
-                            // connection alive. The upper layers (ICE/DTLS) will
-                            // retransmit if needed.
-                            warn!("TCP write channel full for {:?}, dropping packet", key);
-                        }
-                        Err(crate::runtime::TrySendError::Disconnected(_)) => {
-                            // Write task is gone — connection is dead, clean up.
-                            self.tcp_write_txs.remove(&key);
+                    if let Err(err) = tx.try_send(framed) {
+                        match err {
+                            crate::runtime::TrySendError::Full(_) => {
+                                warn!(
+                                    "TCP write channel full for {}->{}; keeping connection open",
+                                    key.0, key.1
+                                );
+                            }
+                            crate::runtime::TrySendError::Disconnected(_) => {
+                                warn!(
+                                    "TCP write channel closed for {}->{}; removing connection",
+                                    key.0, key.1
+                                );
+                                self.tcp_write_txs.remove(&key);
+                            }
                         }
                     }
                 }
@@ -676,11 +722,15 @@ where
 
                             {
                                 let mut rtp_transceivers = self.inner.rtp_transceivers.lock().await;
-                                rtp_transceivers.entry(id).or_insert_with(|| {
-                                    Arc::new(RtpTransceiverImpl::new(id, Arc::clone(&self.inner)))
-                                });
-
-                                let rtp_transceiver = rtp_transceivers.get(&id).unwrap();
+                                let rtp_transceiver = rtp_transceivers
+                                    .entry(id)
+                                    .or_insert_with(|| {
+                                        Arc::new(RtpTransceiverImpl::new(
+                                            id,
+                                            Arc::clone(&self.inner),
+                                        ))
+                                    })
+                                    .clone();
 
                                 let receiver: Arc<dyn RtpReceiver> =
                                     Arc::new(RtpReceiverImpl::new(
@@ -893,102 +943,5 @@ where
                 }
             }
         }
-    }
-}
-
-impl<I: Interceptor> Drop for PeerConnectionDriver<I> {
-    fn drop(&mut self) {
-        // Abort all TCP accept loops so they don't keep TcpListeners alive
-        // after the driver shuts down.
-        for handle in &self.accept_loop_handles {
-            handle.abort();
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
-    /// Mirrors the socket-lookup logic from `handle_write`: first try an exact
-    /// match, then fall back to `0.0.0.0:5353` for any port-5353 address.
-    fn lookup_socket_key(keys: &[SocketAddr], local_addr: SocketAddr) -> Option<SocketAddr> {
-        let map: HashMap<SocketAddr, ()> = keys.iter().map(|k| (*k, ())).collect();
-        if map.contains_key(&local_addr) {
-            return Some(local_addr);
-        }
-        if local_addr.port() == rtc::mdns::MDNS_PORT {
-            let fallback = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), rtc::mdns::MDNS_PORT);
-            if map.contains_key(&fallback) {
-                return Some(fallback);
-            }
-        }
-        None
-    }
-
-    #[test]
-    fn test_mdns_port_5353_fallback_to_unspecified_key() {
-        let mdns_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 5353);
-        let keys = vec![mdns_key];
-
-        // 1. Direct lookup for 0.0.0.0:5353 should succeed
-        assert_eq!(
-            lookup_socket_key(&keys, mdns_key),
-            Some(mdns_key),
-            "direct lookup for 0.0.0.0:5353 should find the key"
-        );
-
-        // 2. Fallback: local_addr = 192.168.1.100:5353 should fall back to 0.0.0.0:5353
-        let specific_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 5353);
-        assert_eq!(
-            lookup_socket_key(&keys, specific_addr),
-            Some(mdns_key),
-            "port-5353 fallback should route 192.168.1.100:5353 to the 0.0.0.0:5353 key"
-        );
-
-        // 3. Non-5353 traffic should NOT fall back
-        let other_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 12345);
-        assert_eq!(
-            lookup_socket_key(&keys, other_addr),
-            None,
-            "non-5353 traffic should not match any key"
-        );
-
-        // 4. Port 5353 with no 0.0.0.0:5353 entry should return None
-        let empty_keys: Vec<SocketAddr> = vec![];
-        assert_eq!(
-            lookup_socket_key(&empty_keys, specific_addr),
-            None,
-            "port-5353 fallback with no 0.0.0.0:5353 entry should return None"
-        );
-    }
-
-    #[test]
-    fn test_mdns_direct_key_takes_precedence_over_fallback() {
-        let mdns_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 5353);
-        let specific_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 5353);
-        let keys = vec![mdns_key, specific_key];
-
-        // The direct key should be returned (not the fallback)
-        assert_eq!(
-            lookup_socket_key(&keys, specific_key),
-            Some(specific_key),
-            "direct key should take precedence over fallback"
-        );
-    }
-
-    #[test]
-    fn test_mdns_fallback_only_for_ipv4_unspecified() {
-        // Ensure the fallback only checks 0.0.0.0:5353, not [::]:5353
-        let ipv6_key = SocketAddr::new(IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED), 5353);
-        let keys = vec![ipv6_key];
-
-        let v4_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 5353);
-        assert_eq!(
-            lookup_socket_key(&keys, v4_addr),
-            None,
-            "fallback should only look for 0.0.0.0:5353, not [::]:5353"
-        );
     }
 }
