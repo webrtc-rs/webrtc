@@ -29,7 +29,7 @@ use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -265,7 +265,19 @@ where
     }
 
     async fn handle_write(&self, msg: TaggedBytesMut) {
-        if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
+        let socket = self.sockets.get(&msg.transport.local_addr).or_else(|| {
+            // mDNS answer packets use local_addr = local_ip:5353 (the IP carried in the
+            // DNS A record), but the mDNS socket is keyed as 0.0.0.0:5353.  Fall back
+            // to that key so responses are routed through the multicast socket.
+            if msg.transport.local_addr.port() == rtc::mdns::MDNS_PORT {
+                let fallback =
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), rtc::mdns::MDNS_PORT);
+                self.sockets.get(&fallback)
+            } else {
+                None
+            }
+        });
+        if let Some(socket) = socket {
             match socket.send_to(&msg.message, msg.transport.peer_addr).await {
                 Ok(n) => {
                     trace!(
@@ -675,5 +687,92 @@ where
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    /// Mirrors the socket-lookup logic from `handle_write`: first try an exact
+    /// match, then fall back to `0.0.0.0:5353` for any port-5353 address.
+    fn lookup_socket_key(keys: &[SocketAddr], local_addr: SocketAddr) -> Option<SocketAddr> {
+        let map: HashMap<SocketAddr, ()> = keys.iter().map(|k| (*k, ())).collect();
+        if map.contains_key(&local_addr) {
+            return Some(local_addr);
+        }
+        if local_addr.port() == rtc::mdns::MDNS_PORT {
+            let fallback = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), rtc::mdns::MDNS_PORT);
+            if map.contains_key(&fallback) {
+                return Some(fallback);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn test_mdns_port_5353_fallback_to_unspecified_key() {
+        let mdns_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 5353);
+        let keys = vec![mdns_key];
+
+        // 1. Direct lookup for 0.0.0.0:5353 should succeed
+        assert_eq!(
+            lookup_socket_key(&keys, mdns_key),
+            Some(mdns_key),
+            "direct lookup for 0.0.0.0:5353 should find the key"
+        );
+
+        // 2. Fallback: local_addr = 192.168.1.100:5353 should fall back to 0.0.0.0:5353
+        let specific_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 5353);
+        assert_eq!(
+            lookup_socket_key(&keys, specific_addr),
+            Some(mdns_key),
+            "port-5353 fallback should route 192.168.1.100:5353 to the 0.0.0.0:5353 key"
+        );
+
+        // 3. Non-5353 traffic should NOT fall back
+        let other_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 12345);
+        assert_eq!(
+            lookup_socket_key(&keys, other_addr),
+            None,
+            "non-5353 traffic should not match any key"
+        );
+
+        // 4. Port 5353 with no 0.0.0.0:5353 entry should return None
+        let empty_keys: Vec<SocketAddr> = vec![];
+        assert_eq!(
+            lookup_socket_key(&empty_keys, specific_addr),
+            None,
+            "port-5353 fallback with no 0.0.0.0:5353 entry should return None"
+        );
+    }
+
+    #[test]
+    fn test_mdns_direct_key_takes_precedence_over_fallback() {
+        let mdns_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 5353);
+        let specific_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)), 5353);
+        let keys = vec![mdns_key, specific_key];
+
+        // The direct key should be returned (not the fallback)
+        assert_eq!(
+            lookup_socket_key(&keys, specific_key),
+            Some(specific_key),
+            "direct key should take precedence over fallback"
+        );
+    }
+
+    #[test]
+    fn test_mdns_fallback_only_for_ipv4_unspecified() {
+        // Ensure the fallback only checks 0.0.0.0:5353, not [::]:5353
+        let ipv6_key = SocketAddr::new(IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED), 5353);
+        let keys = vec![ipv6_key];
+
+        let v4_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 5353);
+        assert_eq!(
+            lookup_socket_key(&keys, v4_addr),
+            None,
+            "fallback should only look for 0.0.0.0:5353, not [::]:5353"
+        );
     }
 }

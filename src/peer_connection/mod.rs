@@ -5,7 +5,7 @@ pub(crate) mod ice_gatherer;
 
 use log::error;
 use std::collections::{HashMap, HashSet};
-use std::net::ToSocketAddrs;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -23,6 +23,7 @@ use ice_gatherer::RTCIceGatherOptions;
 use ice_gatherer::RTCIceGatherer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
+use rtc::mdns::MulticastSocket;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
@@ -36,6 +37,7 @@ use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
+pub use rtc::ice::mdns::MulticastDnsMode;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::media_stream::MediaStreamTrackId;
 pub use rtc::peer_connection::{
@@ -113,20 +115,30 @@ where
     I: Interceptor,
 {
     builder: RTCPeerConnectionBuilder<I>,
+    /// Held separately so [`with_mdns_mode`] can configure both the async
+    /// layer and the sans-IO core in one call.  Applied to the inner builder
+    /// in [`build()`].
+    setting_engine: SettingEngine,
     runtime: Option<Arc<dyn Runtime>>,
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
+    /// mDNS mode for the async layer (multicast socket creation).
+    /// Kept in sync with `setting_engine.multicast_dns.mode` by
+    /// [`with_mdns_mode`].
+    mdns_mode: MulticastDnsMode,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
     fn default() -> Self {
         Self {
             builder: RTCPeerConnectionBuilder::new(),
+            setting_engine: SettingEngine::default(),
             runtime: None,
             handler: None,
             udp_addrs: vec![],
             tcp_addrs: vec![],
+            mdns_mode: MulticastDnsMode::Disabled,
         }
     }
 }
@@ -152,7 +164,31 @@ where
     }
 
     pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
-        self.builder = self.builder.with_setting_engine(setting_engine);
+        self.setting_engine = setting_engine;
+        self
+    }
+
+    /// Set the mDNS mode for both the async wrapper and the sans-IO core.
+    ///
+    /// This creates the multicast socket in the async layer *and* configures
+    /// the sans-IO core's ICE agent to advertise/resolve `.local` candidates.
+    ///
+    /// **Note:** if you also need to set a custom local name, IP, or timeout,
+    /// call [`with_setting_engine`] *before* this method so the mode set here
+    /// takes precedence.
+    ///
+    /// ```no_run
+    /// # use webrtc::peer_connection::{PeerConnectionBuilder, MulticastDnsMode, SettingEngine};
+    /// let mut se = SettingEngine::default();
+    /// se.set_multicast_dns_local_name("my-peer.local".to_string());
+    ///
+    /// let builder: PeerConnectionBuilder<String> = PeerConnectionBuilder::new()
+    ///     .with_setting_engine(se)
+    ///     .with_mdns_mode(MulticastDnsMode::QueryAndGather);
+    /// ```
+    pub fn with_mdns_mode(mut self, mode: MulticastDnsMode) -> Self {
+        self.mdns_mode = mode;
+        self.setting_engine.set_multicast_dns_mode(mode);
         self
     }
 
@@ -165,10 +201,12 @@ where
     {
         PeerConnectionBuilder {
             builder: self.builder.with_interceptor_registry(interceptor_registry),
+            setting_engine: self.setting_engine,
             runtime: self.runtime,
             handler: self.handler,
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
+            mdns_mode: self.mdns_mode,
         }
     }
 
@@ -199,7 +237,10 @@ where
             default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?
         };
 
-        let core = self.builder.build()?;
+        let core = self
+            .builder
+            .with_setting_engine(self.setting_engine)
+            .build()?;
         let configuration = core.get_configuration();
 
         let opts = RTCIceGatherOptions {
@@ -212,6 +253,7 @@ where
             runtime,
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
+            self.mdns_mode,
             opts,
             self.udp_addrs,
             self.tcp_addrs,
@@ -359,6 +401,7 @@ where
         core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
+        mdns_mode: MulticastDnsMode,
         opts: RTCIceGatherOptions,
         udp_addrs: Vec<A>,
         _tcp_addrs: Vec<A>,
@@ -375,6 +418,56 @@ where
                 .is_none()
             {
                 local_addrs.push(local_addr);
+            }
+        }
+
+        // If mDNS is enabled, create the multicast socket and add it to the socket map.
+        // Incoming mDNS packets will be routed through the normal handle_read path to the
+        // peer connection core; outgoing mDNS packets from poll_write (port 5353) will be
+        // sent via this socket by the driver's handle_write lookup.
+        if mdns_mode != MulticastDnsMode::Disabled {
+            match MulticastSocket::new().into_std().and_then(|std_sock| {
+                let bound_addr = std_sock.local_addr()?;
+                let async_sock = runtime.wrap_udp_socket(std_sock)?;
+                Ok((bound_addr, async_sock))
+            }) {
+                Ok((bound_addr, async_sock)) => {
+                    // Always key the mDNS socket as 0.0.0.0:MDNS_PORT regardless of
+                    // the OS-assigned bound address (Linux binds 224.0.0.251, others
+                    // bind 0.0.0.0). The mDNS proto emits query packets with
+                    // local_addr = 0.0.0.0:5353; handle_write falls back to this key
+                    // for response packets that carry a specific local_ip.
+                    let mdns_key =
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), rtc::mdns::MDNS_PORT);
+                    match async_udp_sockets.entry(mdns_key) {
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(async_sock);
+                            log::debug!(
+                                "mDNS multicast socket bound to {} (keyed as {})",
+                                bound_addr,
+                                mdns_key
+                            );
+                        }
+                        std::collections::hash_map::Entry::Occupied(_) => {
+                            log::warn!(
+                                "mDNS multicast socket bound to {} was not inserted because \
+                                 socket key {} is already occupied; keeping existing socket",
+                                bound_addr,
+                                mdns_key
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Gracefully degrade: mDNS socket creation can fail in
+                    // restricted environments (containers, missing multicast
+                    // routing, etc.).  The sans-IO core will still function
+                    // but .local candidates won't be advertised or resolved.
+                    log::warn!(
+                        "Failed to create mDNS multicast socket: {} — mDNS disabled",
+                        e
+                    );
+                }
             }
         }
 
