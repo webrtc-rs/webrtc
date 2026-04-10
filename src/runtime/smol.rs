@@ -15,15 +15,14 @@ struct SmolJoinHandle(std::sync::Mutex<Option<::smol::Task<()>>>);
 
 impl super::JoinHandleInner for SmolJoinHandle {
     fn detach(&self) {
-        // Use unwrap_or_else to recover from a poisoned mutex rather than double-panicking.
-        if let Some(task) = self.0.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(task) = self.0.lock().unwrap().take() {
             task.detach();
         }
     }
 
     fn abort(&self) {
         // Drop the Task to cooperatively cancel it at its next await point.
-        self.0.lock().unwrap_or_else(|e| e.into_inner()).take();
+        self.0.lock().unwrap().take();
     }
 
     fn is_finished(&self) -> bool {
@@ -41,104 +40,6 @@ impl Runtime for SmolRuntime {
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         Ok(Arc::new(UdpSocket::new(sock)?))
-    }
-
-    fn wrap_tcp_listener(
-        &self,
-        socket: std::net::TcpListener,
-    ) -> io::Result<Arc<dyn super::AsyncTcpListener>> {
-        let listener = ::smol::net::TcpListener::try_from(socket)?;
-        let local_addr = listener.local_addr()?;
-        Ok(Arc::new(SmolTcpListener {
-            io: Arc::new(listener),
-            local_addr,
-        }))
-    }
-
-    fn connect_tcp(
-        &self,
-        addr: SocketAddr,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn super::AsyncTcpStream>>> + Send>> {
-        Box::pin(async move {
-            let stream = ::smol::net::TcpStream::connect(addr).await?;
-            let local_addr = stream.local_addr()?;
-            let peer_addr = stream.peer_addr()?;
-            Ok(Arc::new(SmolTcpStream {
-                io: Arc::new(::futures::lock::Mutex::new(stream)),
-                local_addr,
-                peer_addr,
-            }) as Arc<dyn super::AsyncTcpStream>)
-        })
-    }
-}
-
-// ── TCP listener ──────────────────────────────────────────────────────────────
-
-#[derive(Debug)]
-struct SmolTcpListener {
-    io: Arc<::smol::net::TcpListener>,
-    local_addr: SocketAddr,
-}
-
-impl super::AsyncTcpListener for SmolTcpListener {
-    fn accept<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn super::AsyncTcpStream>>> + Send + 'a>> {
-        let io = self.io.clone();
-        Box::pin(async move {
-            let (stream, _peer) = io.accept().await?;
-            let local_addr = stream.local_addr()?;
-            let peer_addr = stream.peer_addr()?;
-            Ok(Arc::new(SmolTcpStream {
-                io: Arc::new(::futures::lock::Mutex::new(stream)),
-                local_addr,
-                peer_addr,
-            }) as Arc<dyn super::AsyncTcpStream>)
-        })
-    }
-
-    fn local_addr(&self) -> io::Result<SocketAddr> {
-        Ok(self.local_addr)
-    }
-}
-
-// ── TCP stream ────────────────────────────────────────────────────────────────
-
-#[derive(Debug)]
-struct SmolTcpStream {
-    io: Arc<::futures::lock::Mutex<::smol::net::TcpStream>>,
-    local_addr: SocketAddr,
-    peer_addr: SocketAddr,
-}
-
-impl super::AsyncTcpStream for SmolTcpStream {
-    fn read<'a>(
-        &'a self,
-        buf: &'a mut [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
-        let io = self.io.clone();
-        Box::pin(async move {
-            use ::futures::io::AsyncReadExt;
-            io.lock().await.read(buf).await
-        })
-    }
-
-    fn write_all<'a>(
-        &'a self,
-        buf: &'a [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>> {
-        Box::pin(async move {
-            use ::futures::io::AsyncWriteExt;
-            self.io.lock().await.write_all(buf).await
-        })
-    }
-
-    fn local_addr(&self) -> io::Result<SocketAddr> {
-        Ok(self.local_addr)
-    }
-
-    fn peer_addr(&self) -> io::Result<SocketAddr> {
-        Ok(self.peer_addr)
     }
 }
 
@@ -269,26 +170,8 @@ impl<T: ?Sized + Send> AsyncMutex<T> for SmolMutex<T> {
     }
 }
 
-/// Smol-based notify wrapper.
-///
-/// Uses an `AtomicBool` "pending" flag combined with a `std::sync::Mutex`-guarded
-/// waiter list.  The std Mutex (not an async one) is used so that `notify_one`
-/// and `notify_waiters` (which are synchronous) can *always* acquire the lock
-/// and wake already-enqueued waiters, avoiding the lost-wakeup race that
-/// `try_lock` caused in the previous implementation.
-///
-/// **Protocol:**
-/// * `notify_*` sets the atomic flag to `true` *before* acquiring the lock and
-///   waking waiters.  Even under contention the flag ensures that any
-///   concurrent `notified()` call will observe the notification.
-/// * `notified()` checks the flag *before* and *after* acquiring the lock, so
-///   it cannot miss a notification that arrived between the two checks.
-pub struct SmolNotify(
-    pub  Arc<(
-        std::sync::atomic::AtomicBool,
-        std::sync::Mutex<Vec<::smol::channel::Sender<()>>>,
-    )>,
-);
+/// Smol-based notify wrapper using Event
+pub struct SmolNotify(pub Arc<::smol::lock::Mutex<(bool, Vec<::smol::channel::Sender<()>>)>>);
 
 impl Clone for SmolNotify {
     fn clone(&self) -> Self {
@@ -304,54 +187,41 @@ impl Default for SmolNotify {
 
 impl SmolNotify {
     pub fn new() -> Self {
-        Self(Arc::new((
-            std::sync::atomic::AtomicBool::new(false),
-            std::sync::Mutex::new(Vec::new()),
-        )))
+        Self(Arc::new(::smol::lock::Mutex::new((false, Vec::new()))))
     }
 
-    /// Notify one waiting task.
+    /// Notify one waiting task
     pub fn notify_one(&self) {
-        // Use blocking lock to guarantee we wake an already-enqueued waiter.
-        let mut waiters = self.0.1.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(tx) = waiters.pop() {
-            // A waiter was woken — no need to set the pending flag.
-            let _ = tx.try_send(());
-        } else {
-            // No waiters enqueued — store a permit so the next notified() returns immediately.
-            self.0.0.store(true, std::sync::atomic::Ordering::Release);
-        }
-    }
-
-    /// Notify all waiting tasks.
-    pub fn notify_waiters(&self) {
-        let mut waiters = self.0.1.lock().unwrap_or_else(|e| e.into_inner());
-        if waiters.is_empty() {
-            // No waiters enqueued — store a permit so the next notified() returns immediately.
-            self.0.0.store(true, std::sync::atomic::Ordering::Release);
-        } else {
-            // Wake all enqueued waiters — no pending permit stored.
-            for tx in waiters.drain(..) {
+        // Simple broadcast-based notification
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            if let Some(tx) = state.1.pop() {
                 let _ = tx.try_send(());
             }
         }
     }
 
-    /// Wait for a notification.
-    pub async fn notified(&self) {
-        // Fast path: flag already set.
-        if self.0.0.swap(false, std::sync::atomic::Ordering::AcqRel) {
-            return;
+    /// Notify all waiting tasks
+    pub fn notify_waiters(&self) {
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            for tx in state.1.drain(..) {
+                let _ = tx.try_send(());
+            }
         }
+    }
+
+    /// Wait for a notification
+    pub async fn notified(&self) {
+        let notify = self.0.clone();
         let (tx, rx) = ::smol::channel::bounded(1);
         {
-            let mut waiters = self.0.1.lock().unwrap_or_else(|e| e.into_inner());
-            // Re-check after acquiring the lock: a notification may have arrived
-            // between the swap above and acquiring the lock.
-            if self.0.0.swap(false, std::sync::atomic::Ordering::AcqRel) {
+            let mut state = notify.lock().await;
+            if state.0 {
+                state.0 = false;
                 return;
             }
-            waiters.push(tx);
+            state.1.push(tx);
         }
         let _ = rx.recv().await;
     }
@@ -359,15 +229,38 @@ impl SmolNotify {
 
 impl AsyncNotify for SmolNotify {
     fn notify_one(&self) {
-        SmolNotify::notify_one(self);
+        // Simple broadcast-based notification
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            if let Some(tx) = state.1.pop() {
+                let _ = tx.try_send(());
+            }
+        }
     }
 
     fn notify_waiters(&self) {
-        SmolNotify::notify_waiters(self);
+        if let Some(mut state) = self.0.try_lock() {
+            state.0 = true;
+            for tx in state.1.drain(..) {
+                let _ = tx.try_send(());
+            }
+        }
     }
 
     fn notified(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(SmolNotify::notified(self))
+        let notify = self.0.clone();
+        Box::pin(async move {
+            let (tx, rx) = ::smol::channel::bounded(1);
+            {
+                let mut state = notify.lock().await;
+                if state.0 {
+                    state.0 = false;
+                    return;
+                }
+                state.1.push(tx);
+            }
+            let _ = rx.recv().await;
+        })
     }
 }
 
@@ -501,116 +394,4 @@ pub fn broadcast_channel<T: Send + Clone + 'static>(capacity: usize) -> SmolBroa
 /// Block the current thread on a future, driving it to completion
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     ::smol::block_on(future)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ── SmolNotify tests ─────────────────────────────────────────────────────
-
-    #[test]
-    fn notify_one_without_waiter_sets_pending() {
-        let notify = SmolNotify::new();
-        notify.notify_one();
-        // The pending flag should be set since there were no waiters.
-        assert!(notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-    }
-
-    #[test]
-    fn notify_one_with_waiter_does_not_set_pending() {
-        block_on(async {
-            let notify = SmolNotify::new();
-            // Enqueue a waiter by pushing a sender manually.
-            let (tx, rx) = ::smol::channel::bounded(1);
-            {
-                let mut waiters = notify.0.1.lock().unwrap();
-                waiters.push(tx);
-            }
-            notify.notify_one();
-            // The waiter should have been woken.
-            assert!(rx.try_recv().is_ok());
-            // The pending flag should NOT be set since a waiter was woken.
-            assert!(!notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-        });
-    }
-
-    #[test]
-    fn notify_waiters_without_waiters_sets_pending() {
-        let notify = SmolNotify::new();
-        notify.notify_waiters();
-        assert!(notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-    }
-
-    #[test]
-    fn notify_waiters_with_waiters_does_not_set_pending() {
-        block_on(async {
-            let notify = SmolNotify::new();
-            let (tx1, rx1) = ::smol::channel::bounded(1);
-            let (tx2, rx2) = ::smol::channel::bounded(1);
-            {
-                let mut waiters = notify.0.1.lock().unwrap();
-                waiters.push(tx1);
-                waiters.push(tx2);
-            }
-            notify.notify_waiters();
-            // Both waiters should have been woken.
-            assert!(rx1.try_recv().is_ok());
-            assert!(rx2.try_recv().is_ok());
-            // The pending flag should NOT be set.
-            assert!(!notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-        });
-    }
-
-    #[test]
-    fn notified_returns_immediately_on_pending() {
-        block_on(async {
-            let notify = SmolNotify::new();
-            notify.notify_one();
-            // Should not block because the pending flag is set.
-            notify.notified().await;
-            // After consuming, the flag should be cleared.
-            assert!(!notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-        });
-    }
-
-    #[test]
-    fn notified_clears_pending_flag() {
-        block_on(async {
-            let notify = SmolNotify::new();
-            // Set pending via notify_one (no waiters).
-            notify.notify_one();
-            assert!(notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-            // Consuming the notification clears the flag.
-            notify.notified().await;
-            assert!(!notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-            // A second notify_one should set pending again.
-            notify.notify_one();
-            assert!(notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-        });
-    }
-
-    #[test]
-    fn async_notify_trait_delegates_correctly() {
-        block_on(async {
-            let notify = SmolNotify::new();
-            // Use the AsyncNotify trait methods.
-            <SmolNotify as super::super::AsyncNotify>::notify_one(&notify);
-            assert!(notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-            <SmolNotify as super::super::AsyncNotify>::notified(&notify).await;
-            assert!(!notify.0.0.load(std::sync::atomic::Ordering::Acquire));
-        });
-    }
-
-    // ── SmolTcpStream write_all (no-clone) test ──────────────────────────────
-
-    #[test]
-    fn smol_tcp_write_all_uses_caller_buffer() {
-        // Verify SmolTcpStream::write_all compiles without cloning buf.
-        // This is a compile-time check — the signature fn write_all(&'a self, buf: &'a [u8])
-        // must work without buf.to_vec(). A runtime test would need a real TCP pair
-        // which is out of scope for unit tests. The fact that this module compiles
-        // after removing to_vec() is the actual coverage.
-        assert!(true);
-    }
 }

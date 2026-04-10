@@ -12,7 +12,7 @@ use std::time::Instant;
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
-use crate::runtime::{AsyncTcpListener, JoinHandle, Runtime, default_runtime};
+use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
 
 use driver::{
@@ -23,7 +23,6 @@ use ice_gatherer::RTCIceGatherOptions;
 use ice_gatherer::RTCIceGatherer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
-use rtc::mdns::MulticastSocket;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
@@ -37,7 +36,6 @@ use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
-pub use rtc::ice::mdns::MulticastDnsMode;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::media_stream::MediaStreamTrackId;
 pub use rtc::peer_connection::{
@@ -119,14 +117,6 @@ where
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
-    /// Configured mDNS mode used by the async layer when deciding
-    /// whether to create the multicast socket before the driver starts.
-    /// Set independently via [`with_mdns_mode`](Self::with_mdns_mode).
-    mdns_mode: MulticastDnsMode,
-    /// When true, an mDNS socket-creation failure is returned as an error instead of
-    /// being silently demoted to a warning.  Useful for production deployments that
-    /// depend on mDNS and want to detect misconfiguration at startup.
-    mdns_fail_on_socket_error: bool,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -137,8 +127,6 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             handler: None,
             udp_addrs: vec![],
             tcp_addrs: vec![],
-            mdns_mode: MulticastDnsMode::Disabled,
-            mdns_fail_on_socket_error: false,
         }
     }
 }
@@ -168,35 +156,6 @@ where
         self
     }
 
-    /// Set the mDNS mode for this peer connection.
-    ///
-    /// When using [`SettingEngine::set_multicast_dns_mode`], also call this method
-    /// so the async wrapper knows to create the multicast socket:
-    ///
-    /// ```no_run
-    /// # use webrtc::peer_connection::{PeerConnectionBuilder, MulticastDnsMode, SettingEngine};
-    /// let mut se = SettingEngine::default();
-    /// se.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
-    ///
-    /// let builder = PeerConnectionBuilder::<&str>::new()
-    ///     .with_setting_engine(se)
-    ///     .with_mdns_mode(MulticastDnsMode::QueryAndGather);
-    /// ```
-    pub fn with_mdns_mode(mut self, mode: MulticastDnsMode) -> Self {
-        self.mdns_mode = mode;
-        self
-    }
-
-    /// When set to `true`, a failure to create the mDNS multicast socket is returned as an
-    /// error from [`build`](Self::build) instead of being silently demoted to a warning.
-    ///
-    /// Defaults to `false`.  Set to `true` in production environments where mDNS is required
-    /// so that misconfiguration (e.g. missing multicast capability) is surfaced at startup.
-    pub fn with_mdns_fail_on_socket_error(mut self, fail: bool) -> Self {
-        self.mdns_fail_on_socket_error = fail;
-        self
-    }
-
     pub fn with_interceptor_registry<P>(
         self,
         interceptor_registry: Registry<P>,
@@ -210,8 +169,6 @@ where
             handler: self.handler,
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
-            mdns_mode: self.mdns_mode,
-            mdns_fail_on_socket_error: self.mdns_fail_on_socket_error,
         }
     }
 
@@ -255,8 +212,6 @@ where
             runtime,
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
-            self.mdns_mode,
-            self.mdns_fail_on_socket_error,
             opts,
             self.udp_addrs,
             self.tcp_addrs,
@@ -404,11 +359,9 @@ where
         core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
-        mdns_mode: MulticastDnsMode,
-        mdns_fail_on_socket_error: bool,
         opts: RTCIceGatherOptions,
         udp_addrs: Vec<A>,
-        tcp_addrs: Vec<A>,
+        _tcp_addrs: Vec<A>,
     ) -> Result<Self> {
         let mut local_addrs = vec![];
         let mut async_udp_sockets = HashMap::new();
@@ -423,40 +376,6 @@ where
             {
                 local_addrs.push(local_addr);
             }
-        }
-
-        // If mDNS is enabled, create the multicast socket and add it to the socket map.
-        // Incoming mDNS packets will be routed through the normal handle_read path to the
-        // peer connection core; outgoing mDNS packets from poll_write (port 5353) will be
-        // sent via this socket by the driver's handle_write lookup.
-        if mdns_mode != MulticastDnsMode::Disabled {
-            match MulticastSocket::new().into_std() {
-                Ok(std_sock) => {
-                    let local_addr = std_sock.local_addr()?;
-                    let async_sock = runtime.wrap_udp_socket(std_sock)?;
-                    async_udp_sockets.insert(local_addr, async_sock);
-                    log::debug!("mDNS multicast socket bound to {}", local_addr);
-                }
-                Err(e) => {
-                    if mdns_fail_on_socket_error {
-                        return Err(Error::Other(format!(
-                            "Failed to create mDNS multicast socket: {e}"
-                        )));
-                    }
-                    log::warn!(
-                        "Failed to create mDNS multicast socket: {} — mDNS disabled",
-                        e
-                    );
-                }
-            }
-        }
-
-        // Bind TCP passive listeners
-        let mut tcp_listeners: Vec<Arc<dyn AsyncTcpListener>> = vec![];
-        for addr in tcp_addrs {
-            let socket = std::net::TcpListener::bind(addr)?;
-            let listener = runtime.wrap_tcp_listener(socket)?;
-            tcp_listeners.push(listener);
         }
 
         let (driver_event_tx, driver_event_rx) =
@@ -474,13 +393,11 @@ where
             driver_handle: Mutex::new(None),
         };
 
-        let ice_gatherer = RTCIceGatherer::new(local_addrs, opts);
+        let ice_gatherer = RTCIceGatherer::new(local_addrs, Vec::new(), opts);
         let mut driver = PeerConnectionDriver::new(
             peer_connection.inner.clone(),
             ice_gatherer,
             async_udp_sockets,
-            tcp_listeners,
-            runtime.clone(),
         )
         .await?;
         let driver_handle = runtime.spawn(Box::pin(async move {

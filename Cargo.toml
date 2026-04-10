@@ -18,7 +18,6 @@ runtime-smol = ["dep:smol", "dep:async-broadcast"]
 
 [dependencies]
 rtc = { version = "0.20.0-alpha.1", path = "rtc/rtc" }
-rtc-shared = { version = "0.20.0-alpha.1", path = "rtc/rtc-shared", package = "rtc-shared" }
 
 bytes = "1.11.1"
 async-trait = "0.1.89"
@@ -26,7 +25,7 @@ log = "0.4.29"
 futures = "0.3.31"
 
 # Async runtimes (all optional)
-tokio = { version = "1.49.0", features = ["net", "time", "sync", "rt", "rt-multi-thread", "io-util"], optional = true }
+tokio = { version = "1.49.0", features = ["net", "time", "sync", "rt", "rt-multi-thread"], optional = true }
 smol = { version = "2.0.2", optional = true }
 async-broadcast = { version = "0.7", optional = true }
 

@@ -57,19 +57,14 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// The socket should be bound and configured before being wrapped.
     fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>>;
 
-    /// Create an async TCP listener from a standard TCP listener
+    /*
+    /// Create an async TCP socket from a standard socket
     ///
-    /// The listener should be bound before being wrapped.
+    /// The socket should be bound and configured before being wrapped.
     fn wrap_tcp_listener(
         &self,
         socket: std::net::TcpListener,
-    ) -> io::Result<Arc<dyn AsyncTcpListener>>;
-
-    /// Establish an outbound TCP connection to the given address
-    fn connect_tcp(
-        &self,
-        addr: SocketAddr,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send>>;
+    ) -> io::Result<Box<dyn AsyncTcpListener>>;*/
 }
 
 /// Abstract implementation of a UDP socket for runtime independence
@@ -91,38 +86,6 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
 
     /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
-}
-
-/// Async TCP listener for accepting incoming connections
-pub trait AsyncTcpListener: Send + Sync + Debug + 'static {
-    /// Accept a new incoming TCP connection
-    fn accept<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>>;
-
-    /// Get the local address this listener is bound to
-    fn local_addr(&self) -> io::Result<SocketAddr>;
-}
-
-/// Async TCP stream for reading and writing
-pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
-    /// Read data from the stream into the provided buffer
-    fn read<'a>(
-        &'a self,
-        buf: &'a mut [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>>;
-
-    /// Write all data in the buffer to the stream
-    fn write_all<'a>(
-        &'a self,
-        buf: &'a [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>>;
-
-    /// Get the local address of this stream
-    fn local_addr(&self) -> io::Result<SocketAddr>;
-
-    /// Get the peer address of this stream
-    fn peer_addr(&self) -> io::Result<SocketAddr>;
 }
 
 /// An async mutex that works across different runtimes
