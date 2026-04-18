@@ -2,9 +2,9 @@ name: cargo
 
 on:
   push:
-    branches: [master]
+    branches: [master, v0.17.x]
   pull_request:
-    branches: [master]
+    branches: [master, v0.17.x]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
