@@ -237,23 +237,21 @@ impl Candidate for CandidateBase {
 
     /// Stops the recvLoop.
     async fn close(&self) -> Result<()> {
-        {
-            let mut closed_ch = self.closed_ch.lock().await;
-            if closed_ch.is_none() {
-                return Err(Error::ErrClosed);
-            }
-            closed_ch.take();
+        let already_closed = self.closed_ch.lock().await.take().is_none();
+
+        if let Some(conn) = &self.conn {
+            let _ = conn.close().await;
         }
 
         if let Some(relay_client) = &self.relay_client {
             let _ = relay_client.close().await;
         }
 
-        if let Some(conn) = &self.conn {
-            let _ = conn.close().await;
+        if already_closed {
+            Err(Error::ErrClosed)
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     fn seen(&self, outbound: bool) {
