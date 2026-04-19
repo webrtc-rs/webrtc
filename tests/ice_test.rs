@@ -2,6 +2,7 @@
 
 use rtc::peer_connection::transport::RTCIceCandidate;
 use std::sync::Arc;
+use std::time::Instant;
 use webrtc::peer_connection::*;
 use webrtc::peer_connection::{
     MediaEngine, RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType,
@@ -326,5 +327,163 @@ fn test_stun_gathering_with_google_stun() {
         );
 
         println!("✅ STUN candidate gathering successful! Got both host and srflx candidates.");
+    });
+}
+
+/// Verify that an unresolvable STUN hostname does not hang gathering
+/// indefinitely -- it should complete (with only host candidates) within
+/// roughly the DNS_RESOLVE_TIMEOUT (3 s) rather than blocking forever.
+#[test]
+fn test_unresolvable_stun_hostname_completes_within_timeout() {
+    block_on(async {
+        env_logger::builder()
+            .filter_level(log::LevelFilter::Trace)
+            .try_init()
+            .ok();
+
+        let mut media_engine = MediaEngine::default();
+        media_engine
+            .register_default_codecs()
+            .expect("Failed to register codecs");
+
+        // Use a hostname guaranteed not to resolve
+        let ice_servers = vec![RTCIceServer {
+            urls: vec!["stun:this.hostname.will.never.resolve.invalid:3478".to_string()],
+            username: String::new(),
+            credential: String::new(),
+        }];
+
+        let config = RTCConfigurationBuilder::new()
+            .with_ice_servers(ice_servers)
+            .build();
+
+        let candidates = Arc::new(Mutex::new(Vec::new()));
+        let (gathering_tx, mut gathering_rx) = channel(8);
+        let handler = Arc::new(CandidateTypeTracker {
+            candidates: candidates.clone(),
+            gathering_tx,
+        });
+
+        let pc = PeerConnectionBuilder::new()
+            .with_configuration(config)
+            .with_media_engine(media_engine)
+            .with_handler(handler)
+            .with_udp_addrs(vec!["0.0.0.0:0"])
+            .build()
+            .await
+            .unwrap();
+
+        let _ = pc.create_data_channel("channel1", None).await.unwrap();
+
+        let start = Instant::now();
+
+        let offer = pc.create_offer(None).await.expect("Failed to create offer");
+        pc.set_local_description(offer)
+            .await
+            .expect("Failed to set local description");
+
+        // Wait for gathering to complete
+        let _ = gathering_rx.recv().await;
+        let elapsed = start.elapsed();
+
+        // Should finish well within 6 seconds (DNS timeout is 3 s; allow margin
+        // for CI slowness but reject anything that looks like it hung).
+        assert!(
+            elapsed.as_secs() < 6,
+            "Gathering with unresolvable STUN host took {:?}, expected < 6s",
+            elapsed
+        );
+
+        // Should still have host candidates even though STUN failed
+        let gathered: Vec<RTCIceCandidateType> = candidates.lock().await.clone();
+        let has_host = gathered.iter().any(|t| *t == RTCIceCandidateType::Host);
+        assert!(
+            has_host,
+            "Should still have host candidates despite STUN failure"
+        );
+
+        // Should NOT have srflx since the STUN server was unreachable
+        let has_srflx = gathered.iter().any(|t| *t == RTCIceCandidateType::Srflx);
+        assert!(
+            !has_srflx,
+            "Should not have srflx candidates with unresolvable STUN server"
+        );
+
+        println!(
+            "Gathering with unresolvable STUN host completed in {:?} with {} host candidates",
+            elapsed,
+            gathered.len()
+        );
+    });
+}
+
+/// Verify that DNS resolution happens once per URL, not once per local
+/// address, so N local addresses with an unresolvable hostname still
+/// complete in ~3 s (one timeout) rather than N x 3 s.
+#[test]
+fn test_unresolvable_stun_multiple_local_addrs_single_timeout() {
+    block_on(async {
+        env_logger::builder()
+            .filter_level(log::LevelFilter::Trace)
+            .try_init()
+            .ok();
+
+        let mut media_engine = MediaEngine::default();
+        media_engine
+            .register_default_codecs()
+            .expect("Failed to register codecs");
+
+        let ice_servers = vec![RTCIceServer {
+            urls: vec!["stun:this.hostname.will.never.resolve.invalid:3478".to_string()],
+            username: String::new(),
+            credential: String::new(),
+        }];
+
+        let config = RTCConfigurationBuilder::new()
+            .with_ice_servers(ice_servers)
+            .build();
+
+        let candidates = Arc::new(Mutex::new(Vec::new()));
+        let (gathering_tx, mut gathering_rx) = channel(8);
+        let handler = Arc::new(CandidateTypeTracker {
+            candidates: candidates.clone(),
+            gathering_tx,
+        });
+
+        // Bind to multiple local addresses to expose the N x timeout bug
+        let pc = PeerConnectionBuilder::new()
+            .with_configuration(config)
+            .with_media_engine(media_engine)
+            .with_handler(handler)
+            .with_udp_addrs(vec!["0.0.0.0:0", "127.0.0.1:0"])
+            .build()
+            .await
+            .unwrap();
+
+        let _ = pc.create_data_channel("channel1", None).await.unwrap();
+
+        let start = Instant::now();
+
+        let offer = pc.create_offer(None).await.expect("Failed to create offer");
+        pc.set_local_description(offer)
+            .await
+            .expect("Failed to set local description");
+
+        let _ = gathering_rx.recv().await;
+        let elapsed = start.elapsed();
+
+        // With the fix, DNS is resolved once per URL, so even with 2 local
+        // addresses the timeout should be ~3 s, not ~6 s.
+        assert!(
+            elapsed.as_secs() < 6,
+            "Gathering with 2 local addrs and unresolvable STUN host took {:?}; \
+             expected < 6s (single DNS timeout, not N x timeout)",
+            elapsed
+        );
+
+        println!(
+            "Multiple local addrs + unresolvable STUN completed in {:?}",
+            elapsed
+        );
     });
 }
