@@ -247,6 +247,7 @@ fn test_automatic_host_candidate_gathering() {
 }
 
 #[test]
+#[ignore = "requires external network (Google STUN server)"]
 fn test_stun_gathering_with_google_stun() {
     block_on(async {
         env_logger::builder()

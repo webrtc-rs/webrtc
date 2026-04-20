@@ -36,6 +36,7 @@ use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
+pub use rtc::ice::mdns::MulticastDnsMode;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::media_stream::MediaStreamTrackId;
 pub use rtc::peer_connection::{
@@ -361,8 +362,16 @@ where
         handler: Arc<dyn PeerConnectionEventHandler>,
         opts: RTCIceGatherOptions,
         udp_addrs: Vec<A>,
-        _tcp_addrs: Vec<A>,
+        tcp_addrs: Vec<A>,
     ) -> Result<Self> {
+        if !tcp_addrs.is_empty() {
+            log::warn!(
+                "TCP addresses were provided but TCP transport is not yet supported by the \
+                 async driver; {} TCP address(es) will be ignored",
+                tcp_addrs.len()
+            );
+        }
+
         let mut local_addrs = vec![];
         let mut async_udp_sockets = HashMap::new();
         for addr in udp_addrs {
