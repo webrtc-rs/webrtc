@@ -393,7 +393,7 @@ where
             driver_handle: Mutex::new(None),
         };
 
-        let ice_gatherer = RTCIceGatherer::new(local_addrs, opts);
+        let ice_gatherer = RTCIceGatherer::new(local_addrs, Vec::new(), opts);
         let mut driver = PeerConnectionDriver::new(
             peer_connection.inner.clone(),
             ice_gatherer,
