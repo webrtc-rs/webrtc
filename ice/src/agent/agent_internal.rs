@@ -81,6 +81,10 @@ pub struct AgentInternal {
     pub(crate) keepalive_interval: Duration,
     // How often should we run our internal taskLoop to check for state changes when connecting
     pub(crate) check_interval: Duration,
+
+    // Tracks the last time a STUN consent binding request was sent (nanos since UNIX_EPOCH).
+    // Used to enforce RFC 7675 consent freshness independently of media traffic.
+    pub(crate) last_consent_ping: AtomicU64,
 }
 
 impl AgentInternal {
@@ -157,6 +161,8 @@ impl AgentInternal {
 
             // AgentConn
             agent_conn: Arc::new(AgentConn::new()),
+
+            last_consent_ping: AtomicU64::new(0),
         };
 
         let chan_receivers = ChanReceivers {
@@ -473,9 +479,9 @@ impl AgentInternal {
         valid
     }
 
-    /// Sends STUN Binding Indications to the selected pair.
-    /// if no packet has been sent on that pair in the last keepaliveInterval.
-    /// Note: the caller should hold the agent lock.
+    /// Sends STUN Binding Requests to the selected pair on a fixed interval to maintain
+    /// ICE consent freshness per RFC 7675. Unlike the previous implementation, this fires
+    /// regardless of media traffic — SRTP/SRTCP packets do NOT satisfy consent.
     pub(crate) async fn check_keepalive(&self) {
         let (local, remote) = {
             let selected_pair = self.agent_conn.selected_pair.load();
@@ -490,21 +496,21 @@ impl AgentInternal {
         };
 
         if let (Some(local), Some(remote)) = (local, remote) {
-            let last_sent = SystemTime::now()
-                .duration_since(local.last_sent())
-                .unwrap_or_else(|_| Duration::from_secs(0));
+            if self.keepalive_interval != Duration::from_secs(0) {
+                let now_nanos = SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos() as u64;
+                let last_ping_nanos = self.last_consent_ping.load(Ordering::SeqCst);
+                let since_last_ping =
+                    Duration::from_nanos(now_nanos.saturating_sub(last_ping_nanos));
 
-            let last_received = SystemTime::now()
-                .duration_since(remote.last_received())
-                .unwrap_or_else(|_| Duration::from_secs(0));
-
-            if (self.keepalive_interval != Duration::from_secs(0))
-                && ((last_sent > self.keepalive_interval)
-                    || (last_received > self.keepalive_interval))
-            {
-                // we use binding request instead of indication to support refresh consent schemas
-                // see https://tools.ietf.org/html/rfc7675
-                self.ping_candidate(&local, &remote).await;
+                if since_last_ping >= self.keepalive_interval {
+                    self.last_consent_ping.store(now_nanos, Ordering::SeqCst);
+                    // Use binding request (not indication) to maintain consent freshness.
+                    // See https://tools.ietf.org/html/rfc7675
+                    self.ping_candidate(&local, &remote).await;
+                }
             }
         }
     }
