@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* Lower `INITIAL_MTU` from 1228 to 1191, matching libwebrtc's `kMaxSafeMTUSize`, so the worst-case wire packet fits 1280 byte paths (the IPv6 minimum MTU and the tunnel MTU of WireGuard-family VPNs). With no PMTUD, the old value made delivery of full-size DATA chunks depend on IP fragmentation surviving the path, stalling the association forever where it does not [#806](https://github.com/webrtc-rs/webrtc/issues/806)
 * Use the new algorithm in crc crate for better throughput [#569](https://github.com/webrtc-rs/webrtc/pull/569)
 
 ## v0.8.0
