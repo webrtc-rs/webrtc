@@ -66,6 +66,7 @@ async fn main() -> Result<(), Error> {
         net_conn: conn,
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,

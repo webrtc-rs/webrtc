@@ -53,7 +53,14 @@ use crate::util::*;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 /// MTU for inbound packet (from DTLS)
-pub(crate) const INITIAL_MTU: u32 = 1228;
+// The largest safe SCTP packet: starting from the IPv6 minimum MTU of
+// 1280 (where on-path fragmentation is unavailable), subtract
+// 40 (IPv6 header) + 8 (UDP) + 4 (TURN ChannelData) + 13 (DTLS record
+// header) + 24 (GCM cipher) = 1191, the same derivation and value as
+// libwebrtc's kMaxSafeMTUSize. There is no PMTUD, so this initial
+// value never adapts; anything larger makes delivery depend on IP
+// fragmentation surviving the path (#806).
+pub(crate) const INITIAL_MTU: u32 = 1191;
 /// initial MTU for outgoing packets (to DTLS)
 pub(crate) const INITIAL_RECV_BUF_SIZE: u32 = 1024 * 1024;
 pub(crate) const COMMON_HEADER_SIZE: u32 = 12;
@@ -177,6 +184,12 @@ pub struct Config {
     pub net_conn: Arc<dyn Conn + Send + Sync>,
     pub max_receive_buffer_size: u32,
     pub max_message_size: u32,
+    /// SCTP packet size budget for outgoing packets, i.e. the wire
+    /// size before DTLS/UDP/IP overhead. 0 means the default
+    /// (`INITIAL_MTU`, 1191: safe for 1280 byte paths). There is no
+    /// PMTUD, so the value never adapts; values above the real path
+    /// budget make delivery depend on IP fragmentation (#806).
+    pub mtu: u32,
     pub name: String,
     pub remote_port: u16,
     pub local_port: u16,
