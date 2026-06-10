@@ -184,6 +184,12 @@ pub struct Config {
     pub net_conn: Arc<dyn Conn + Send + Sync>,
     pub max_receive_buffer_size: u32,
     pub max_message_size: u32,
+    /// SCTP packet size budget for outgoing packets, i.e. the wire
+    /// size before DTLS/UDP/IP overhead. 0 means the default
+    /// (`INITIAL_MTU`, 1191: safe for 1280 byte paths). There is no
+    /// PMTUD, so the value never adapts; values above the real path
+    /// budget make delivery depend on IP fragmentation (#806).
+    pub mtu: u32,
     pub name: String,
     pub remote_port: u16,
     pub local_port: u16,

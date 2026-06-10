@@ -67,11 +67,43 @@ fn create_association_internal(config: Config) -> AssociationInternal {
 }
 
 #[test]
+fn test_config_mtu() -> Result<()> {
+    // 0 means the default; a nonzero value is used as given and
+    // bounds the DATA chunk payload size.
+    let a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        mtu: 0,
+        name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
+    });
+    assert_eq!(a.mtu, INITIAL_MTU);
+    assert_eq!(a.max_payload_size, INITIAL_MTU - (COMMON_HEADER_SIZE + DATA_CHUNK_HEADER_SIZE));
+
+    let a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        mtu: 8192,
+        name: "client".to_owned(),
+        local_port: 5000,
+        remote_port: 5000,
+    });
+    assert_eq!(a.mtu, 8192);
+    assert_eq!(a.max_payload_size, 8192 - (COMMON_HEADER_SIZE + DATA_CHUNK_HEADER_SIZE));
+
+    Ok(())
+}
+
+#[test]
 fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
     let mut a = create_association_internal(Config {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
@@ -107,6 +139,7 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
@@ -180,6 +213,7 @@ async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
@@ -221,6 +255,7 @@ async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
@@ -276,6 +311,7 @@ async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
@@ -329,6 +365,7 @@ async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() ->
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
@@ -365,6 +402,7 @@ async fn test_assoc_create_new_stream() -> Result<()> {
             net_conn: Arc::new(DumbConn {}),
             max_receive_buffer_size: 0,
             max_message_size: 0,
+            mtu: 0,
             name: "client".to_owned(),
             local_port: 5000,
             remote_port: 5000,
@@ -411,6 +449,7 @@ async fn handle_init_test(name: &str, initial_state: AssociationState, expect_er
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5002,
         remote_port: 5001,
@@ -503,6 +542,7 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 0,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
@@ -550,6 +590,7 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
         max_message_size: 30000,
+        mtu: 0,
         name: "client".to_owned(),
         local_port: 5000,
         remote_port: 5000,
