@@ -25,7 +25,7 @@ use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::stun::agent::StunEvent;
 use rtc::stun::message::Getter;
 use rtc::stun::xoraddr::XorMappedAddress;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::time::Instant;
 
@@ -37,7 +37,12 @@ pub(crate) struct RTCIceGatherOptions {
 }
 
 #[derive(Debug)]
-pub enum RTCIceGathererEvent {
+pub enum RTCIceGathererEventIn {
+    WriteFailure(FourTuple),
+}
+
+#[derive(Debug)]
+pub enum RTCIceGathererEventOut {
     LocalIceCandidate(RTCIceCandidateInit),
     IceGatheringComplete,
 }
@@ -52,11 +57,10 @@ pub(crate) struct RTCIceGatherer {
     gather_policy: RTCIceTransportPolicy,
     state: RTCIceGatheringState,
 
-    stun_clients: Vec<StunClient>,
-    gathering_clients: HashSet<FourTuple>,
+    stun_clients: HashMap<FourTuple, StunClient>,
 
     wouts: VecDeque<TaggedBytesMut>,
-    events: VecDeque<RTCIceGathererEvent>,
+    events: VecDeque<RTCIceGathererEventOut>,
 }
 
 impl RTCIceGatherer {
@@ -68,8 +72,7 @@ impl RTCIceGatherer {
             gather_policy: opts.ice_gather_policy,
             state: RTCIceGatheringState::New,
 
-            stun_clients: Vec::new(),
-            gathering_clients: HashSet::new(),
+            stun_clients: HashMap::new(),
 
             wouts: VecDeque::new(),
             events: VecDeque::new(),
@@ -81,9 +84,9 @@ impl RTCIceGatherer {
     }
 
     pub(crate) fn is_ice_message(&self, msg: &TaggedBytesMut) -> bool {
-        for stun_client in &self.stun_clients {
-            if stun_client.peer_addr() == msg.transport.peer_addr
-                && stun_client.local_addr() == msg.transport.local_addr
+        for four_tuple in self.stun_clients.keys() {
+            if four_tuple.peer_addr == msg.transport.peer_addr
+                && four_tuple.local_addr == msg.transport.local_addr
             {
                 return true;
             }
@@ -96,10 +99,10 @@ impl RTCIceGatherer {
         self.state = RTCIceGatheringState::Gathering;
         self.gather_host_candidates()?;
         self.gather_srflx_candidates().await?;
-        if self.gathering_clients.is_empty() && self.state != RTCIceGatheringState::Complete {
+        if self.stun_clients.is_empty() && self.state != RTCIceGatheringState::Complete {
             self.state = RTCIceGatheringState::Complete;
             self.events
-                .push_back(RTCIceGathererEvent::IceGatheringComplete);
+                .push_back(RTCIceGathererEventOut::IceGatheringComplete);
         }
         Ok(())
     }
@@ -124,7 +127,7 @@ impl RTCIceGatherer {
             let candidate_init = RTCIceCandidate::from(&candidate).to_json()?;
 
             self.events
-                .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
+                .push_back(RTCIceGathererEventOut::LocalIceCandidate(candidate_init));
         }
         Ok(())
     }
@@ -144,11 +147,13 @@ impl RTCIceGatherer {
                 for local_addr in &self.local_addrs {
                     match RTCIceGatherer::gather_from_stun_server(*local_addr, url).await {
                         Ok(stun_client) => {
-                            self.gathering_clients.insert(FourTuple {
-                                local_addr: stun_client.local_addr(),
-                                peer_addr: stun_client.peer_addr(),
-                            });
-                            self.stun_clients.push(stun_client);
+                            self.stun_clients.insert(
+                                FourTuple {
+                                    local_addr: stun_client.local_addr(),
+                                    peer_addr: stun_client.peer_addr(),
+                                },
+                                stun_client,
+                            );
                         }
                         Err(err) => {
                             error!("Failed to gather stun client: {}", err);
@@ -218,17 +223,17 @@ impl RTCIceGatherer {
     }
 }
 
-impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
+impl Protocol<TaggedBytesMut, (), RTCIceGathererEventIn> for RTCIceGatherer {
     type Rout = ();
     type Wout = TaggedBytesMut;
-    type Eout = RTCIceGathererEvent;
+    type Eout = RTCIceGathererEventOut;
     type Error = Error;
     type Time = Instant;
 
     fn handle_read(&mut self, msg: TaggedBytesMut) -> Result<(), Self::Error> {
-        for stun_client in &mut self.stun_clients {
-            if stun_client.peer_addr() == msg.transport.peer_addr
-                && stun_client.local_addr() == msg.transport.local_addr
+        for (four_tuple, stun_client) in &mut self.stun_clients {
+            if four_tuple.peer_addr == msg.transport.peer_addr
+                && four_tuple.local_addr == msg.transport.local_addr
             {
                 return stun_client.handle_read(msg);
             }
@@ -246,7 +251,7 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
     }
 
     fn poll_write(&mut self) -> Option<Self::Wout> {
-        for stun_client in &mut self.stun_clients {
+        for stun_client in self.stun_clients.values_mut() {
             while let Some(transmit) = stun_client.poll_write() {
                 self.wouts.push_back(transmit);
             }
@@ -255,16 +260,28 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
         self.wouts.pop_front()
     }
 
-    fn handle_event(&mut self, _evt: ()) -> Result<(), Self::Error> {
+    fn handle_event(&mut self, evt: RTCIceGathererEventIn) -> Result<(), Self::Error> {
+        match evt {
+            RTCIceGathererEventIn::WriteFailure(four_tuple) => {
+                if let Some(mut stun_client) = self.stun_clients.remove(&four_tuple) {
+                    let _ = stun_client.close();
+
+                    if self.stun_clients.is_empty() && self.state != RTCIceGatheringState::Complete
+                    {
+                        self.state = RTCIceGatheringState::Complete;
+                        self.events
+                            .push_back(RTCIceGathererEventOut::IceGatheringComplete);
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
     fn poll_event(&mut self) -> Option<Self::Eout> {
-        for stun_client in &mut self.stun_clients {
-            let local_addr = stun_client.local_addr();
-            let mut peer_addr = None;
+        let mut four_tuples = HashSet::new();
+        for stun_client in self.stun_clients.values_mut() {
             while let Some(event) = stun_client.poll_event() {
-                peer_addr = Some(stun_client.peer_addr());
                 match event {
                     StunEvent::Message(msg) => {
                         let mut xor_addr = XorMappedAddress::default();
@@ -280,8 +297,8 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
                                 component: 1,
                                 ..Default::default()
                             },
-                            rel_addr: local_addr.ip().to_string(),
-                            rel_port: local_addr.port(),
+                            rel_addr: stun_client.local_addr().ip().to_string(),
+                            rel_port: stun_client.local_addr().port(),
                             ..Default::default()
                         };
                         let candidate = match config.new_candidate_server_reflexive() {
@@ -299,24 +316,29 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
                                 continue;
                             }
                         };
+
+                        four_tuples.insert(FourTuple {
+                            local_addr: stun_client.local_addr(),
+                            peer_addr: stun_client.peer_addr(),
+                        });
                         self.events
-                            .push_back(RTCIceGathererEvent::LocalIceCandidate(candidate_init));
+                            .push_back(RTCIceGathererEventOut::LocalIceCandidate(candidate_init));
                     }
                     _ => {
                         error!("STUN error: {:?}", event);
                     }
                 }
             }
-            if let Some(peer_addr) = peer_addr {
-                self.gathering_clients.remove(&FourTuple {
-                    local_addr,
-                    peer_addr,
-                });
-                if self.gathering_clients.is_empty() && self.state != RTCIceGatheringState::Complete
-                {
+        }
+
+        for four_tuple in four_tuples {
+            if let Some(mut stun_client) = self.stun_clients.remove(&four_tuple) {
+                let _ = stun_client.close();
+
+                if self.stun_clients.is_empty() && self.state != RTCIceGatheringState::Complete {
                     self.state = RTCIceGatheringState::Complete;
                     self.events
-                        .push_back(RTCIceGathererEvent::IceGatheringComplete);
+                        .push_back(RTCIceGathererEventOut::IceGatheringComplete);
                 }
             }
         }
@@ -325,7 +347,7 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
     }
 
     fn handle_timeout(&mut self, now: Self::Time) -> Result<(), Self::Error> {
-        for stun_client in &mut self.stun_clients {
+        for stun_client in self.stun_clients.values_mut() {
             stun_client.handle_timeout(now)?;
         }
         Ok(())
@@ -333,7 +355,7 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
 
     fn poll_timeout(&mut self) -> Option<Self::Time> {
         let mut eto: Option<Instant> = None;
-        for stun_client in &mut self.stun_clients {
+        for stun_client in self.stun_clients.values_mut() {
             if let Some(next) = stun_client.poll_timeout() {
                 eto = Some(eto.map_or(next, |curr| std::cmp::min(curr, next)));
             }
@@ -342,8 +364,8 @@ impl Protocol<TaggedBytesMut, (), ()> for RTCIceGatherer {
     }
 
     fn close(&mut self) -> Result<(), Self::Error> {
-        for mut stun_client in self.stun_clients.drain(..) {
-            stun_client.close()?;
+        for (_, mut stun_client) in self.stun_clients.drain() {
+            let _ = stun_client.close();
         }
         Ok(())
     }

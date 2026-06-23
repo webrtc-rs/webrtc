@@ -4,7 +4,7 @@
 
 #![allow(clippy::collapsible_if)]
 
-use super::ice_gatherer::{RTCIceGatherer, RTCIceGathererEvent};
+use super::ice_gatherer::{RTCIceGatherer, RTCIceGathererEventIn, RTCIceGathererEventOut};
 use crate::data_channel::{DataChannelEvent, DataChannelImpl};
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
@@ -25,7 +25,7 @@ use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
-use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
+use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -130,7 +130,18 @@ where
             // 1.a ice_gatherer poll_write()
             {
                 while let Some(msg) = self.ice_gatherer.poll_write() {
-                    self.handle_write(msg).await;
+                    let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+                    if self.handle_write(msg).await.is_err() {
+                        if let Err(err) = self
+                            .ice_gatherer
+                            .handle_event(RTCIceGathererEventIn::WriteFailure(four_tuple))
+                        {
+                            error!(
+                                "Failed to handle event in ice_gatherer to {:?} from {:?}: {}",
+                                four_tuple.peer_addr, four_tuple.local_addr, err
+                            );
+                        }
+                    }
                 }
             }
 
@@ -139,7 +150,8 @@ where
                 let mut core = self.inner.core.lock().await;
                 while let Some(msg) = core.poll_write() {
                     drop(core);
-                    self.handle_write(msg).await;
+                    //TODO: handle socket write error event?
+                    let _ = self.handle_write(msg).await;
                     core = self.inner.core.lock().await;
                 }
             }
@@ -264,7 +276,7 @@ where
         }
     }
 
-    async fn handle_write(&self, msg: TaggedBytesMut) {
+    async fn handle_write(&self, msg: TaggedBytesMut) -> Result<()> {
         if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
             match socket.send_to(&msg.message, msg.transport.peer_addr).await {
                 Ok(n) => {
@@ -272,14 +284,22 @@ where
                         "Sent {} bytes to {:?} from {:?}",
                         n, msg.transport.peer_addr, msg.transport.local_addr
                     );
+                    Ok(())
                 }
-                Err(e) => {
+                Err(err) => {
                     error!(
                         "Failed to send to {:?} from {:?}: {}",
-                        msg.transport.peer_addr, msg.transport.local_addr, e
+                        msg.transport.peer_addr, msg.transport.local_addr, err
                     );
+                    Err(err.into())
                 }
             }
+        } else {
+            trace!(
+                "Invalid local addr {:?}, drop the packet",
+                msg.transport.local_addr
+            );
+            Ok(())
         }
     }
 
@@ -294,16 +314,16 @@ where
         Ok(())
     }
 
-    async fn handle_gather_event(&mut self, event: RTCIceGathererEvent) {
+    async fn handle_gather_event(&mut self, event: RTCIceGathererEventOut) {
         match event {
-            RTCIceGathererEvent::LocalIceCandidate(candidate) => {
+            RTCIceGathererEventOut::LocalIceCandidate(candidate) => {
                 trace!("LocalIceCandidate {:?}", candidate);
                 let mut core = self.inner.core.lock().await;
                 if let Err(err) = core.add_local_candidate(candidate) {
                     error!("Failed to add local candidate: {}", err);
                 }
             }
-            RTCIceGathererEvent::IceGatheringComplete => {
+            RTCIceGathererEventOut::IceGatheringComplete => {
                 let end_of_candidates = RTCIceCandidateInit::default();
                 let mut core = self.inner.core.lock().await;
                 if let Err(err) = core.add_local_candidate(end_of_candidates) {
