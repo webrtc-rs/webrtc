@@ -237,7 +237,8 @@ where
 
         self.inner
             .driver_event_tx
-            .try_send(PeerConnectionDriverEvent::WriteNotify)
+            .send(PeerConnectionDriverEvent::WriteNotify)
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -268,7 +269,8 @@ where
 
         self.inner
             .driver_event_tx
-            .try_send(PeerConnectionDriverEvent::WriteNotify)
+            .send(PeerConnectionDriverEvent::WriteNotify)
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -299,7 +301,8 @@ where
         // for newly generated events (e.g. OnBufferedAmountHigh).
         self.inner
             .driver_event_tx
-            .try_send(PeerConnectionDriverEvent::WriteNotify)
+            .send(PeerConnectionDriverEvent::WriteNotify)
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -327,7 +330,8 @@ where
 
         self.inner
             .driver_event_tx
-            .try_send(PeerConnectionDriverEvent::WriteNotify)
+            .send(PeerConnectionDriverEvent::WriteNotify)
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
@@ -346,7 +350,8 @@ where
 
         self.inner
             .driver_event_tx
-            .try_send(PeerConnectionDriverEvent::WriteNotify)
+            .send(PeerConnectionDriverEvent::WriteNotify)
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 }
