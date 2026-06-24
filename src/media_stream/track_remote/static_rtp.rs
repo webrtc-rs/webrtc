@@ -138,10 +138,11 @@ impl Track for TrackRemoteStaticRTP {
 impl TrackRemote for TrackRemoteStaticRTP {
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtc::rtcp::Packet>>) -> Result<()> {
         self.msg_tx
-            .try_send(PeerConnectionDriverEvent::ReceiverRtcp(
+            .send(PeerConnectionDriverEvent::ReceiverRtcp(
                 self.receiver_id,
                 packets,
             ))
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 

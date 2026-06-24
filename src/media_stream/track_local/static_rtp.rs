@@ -204,11 +204,11 @@ impl TrackLocal for TrackLocalStaticRTP {
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()> {
         let ctx_opt = self.ctx.lock().await;
         if let Some(ctx) = &*ctx_opt {
-            ctx.driver_event_tx
-                .try_send(PeerConnectionDriverEvent::SenderRtp(
-                    ctx.rtp_sender_id,
-                    packet,
-                ))
+            let tx = ctx.driver_event_tx.clone();
+            let rtp_sender_id = ctx.rtp_sender_id;
+            drop(ctx_opt);
+            tx.send(PeerConnectionDriverEvent::SenderRtp(rtp_sender_id, packet))
+                .await
                 .map_err(|e| Error::Other(format!("{:?}", e)))
         } else {
             Err(Error::Other("track is not binding yet".to_string()))
@@ -218,12 +218,15 @@ impl TrackLocal for TrackLocalStaticRTP {
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()> {
         let ctx_opt = self.ctx.lock().await;
         if let Some(ctx) = &*ctx_opt {
-            ctx.driver_event_tx
-                .try_send(PeerConnectionDriverEvent::SenderRtcp(
-                    ctx.rtp_sender_id,
-                    packets,
-                ))
-                .map_err(|e| Error::Other(format!("{:?}", e)))
+            let tx = ctx.driver_event_tx.clone();
+            let rtp_sender_id = ctx.rtp_sender_id;
+            drop(ctx_opt);
+            tx.send(PeerConnectionDriverEvent::SenderRtcp(
+                rtp_sender_id,
+                packets,
+            ))
+            .await
+            .map_err(|e| Error::Other(format!("{:?}", e)))
         } else {
             Err(Error::Other("track is not binding yet".to_string()))
         }

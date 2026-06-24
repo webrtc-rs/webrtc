@@ -83,20 +83,14 @@ async fn run_test() -> Result<()> {
         }])
         .build();
 
-    let local_addr_str = format!("{}:0", signal::get_local_ip());
-
     // Create webrtc peer (offerer) using new API
     let webrtc_pc = PeerConnectionBuilder::new()
         .with_configuration(config.clone())
         .with_handler(handler)
         .with_runtime(runtime.clone())
-        .with_udp_addrs(vec![local_addr_str.clone()])
+        .with_udp_addrs(vec!["0.0.0.0:0", "[::]:0"])
         .build()
         .await?;
-    log::info!(
-        "Created webrtc peer connection with binding to {}",
-        local_addr_str
-    );
 
     // Create data channel on webrtc side
     let dc_label = "test-channel";
@@ -140,6 +134,7 @@ async fn run_test() -> Result<()> {
         rtc::peer_connection::sdp::RTCSessionDescription::offer(offer_with_candidates.sdp.clone())?;
 
     // Create rtc peer (answerer)
+    let local_addr_str = format!("{}:0", signal::get_local_ip());
     let std_socket = std::net::UdpSocket::bind(local_addr_str)?;
     let local_addr = std_socket.local_addr()?;
     let socket = runtime.wrap_udp_socket(std_socket)?;
