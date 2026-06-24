@@ -423,7 +423,8 @@ where
         }
         self.inner
             .driver_event_tx
-            .try_send(PeerConnectionDriverEvent::Close)
+            .send(PeerConnectionDriverEvent::Close)
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))?;
 
         {
@@ -500,7 +501,8 @@ where
         // timer expired and never send the initial STUN binding requests.
         self.inner
             .driver_event_tx
-            .try_send(PeerConnectionDriverEvent::WriteNotify)
+            .send(PeerConnectionDriverEvent::WriteNotify)
+            .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
 
