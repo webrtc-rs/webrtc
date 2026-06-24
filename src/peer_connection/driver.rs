@@ -29,6 +29,7 @@ use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -43,6 +44,33 @@ pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
 pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
+
+enum SocketRecvResult {
+    Packet {
+        n: usize,
+        local_addr: SocketAddr,
+        peer_addr: SocketAddr,
+        idx: usize,
+        buf: Vec<u8>,
+    },
+    Error {
+        err: io::Error,
+        local_addr: SocketAddr,
+        idx: usize,
+        buf: Vec<u8>,
+    },
+}
+
+fn is_retryable_socket_recv_error(err: &io::Error) -> bool {
+    matches!(
+        err.kind(),
+        io::ErrorKind::Interrupted
+            | io::ErrorKind::WouldBlock
+            | io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::TimedOut
+    )
+}
 
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
@@ -112,8 +140,21 @@ where
                                          local_addr: SocketAddr,
                                          socket: Arc<dyn AsyncUdpSocket>,
                                          mut buf: Vec<u8>| async move {
-            let (n, peer_addr) = socket.recv_from(&mut buf).await?;
-            Ok::<_, std::io::Error>((n, local_addr, peer_addr, idx, buf))
+            match socket.recv_from(&mut buf).await {
+                Ok((n, peer_addr)) => SocketRecvResult::Packet {
+                    n,
+                    local_addr,
+                    peer_addr,
+                    idx,
+                    buf,
+                },
+                Err(err) => SocketRecvResult::Error {
+                    err,
+                    local_addr,
+                    idx,
+                    buf,
+                },
+            }
         };
 
         // Create initial set of futures in FuturesUnordered
@@ -125,6 +166,7 @@ where
                 create_socket_recv_future(idx, *local_addr, socket.clone(), buf).boxed()
             })
             .collect();
+        let mut active_socket_count = socket_list.len();
 
         loop {
             // 1.a ice_gatherer poll_write()
@@ -236,7 +278,7 @@ where
                 // Incoming network packet from any socket
                 result = socket_recv_futures.next().fuse() => {
                     match result {
-                        Some(Ok((n, local_addr, peer_addr, idx, buf))) => {
+                        Some(SocketRecvResult::Packet { n, local_addr, peer_addr, idx, buf }) => {
                             trace!("Received {} bytes from {} to {}", n, peer_addr, local_addr);
 
                             if let Err(err) = self.handle_read(TaggedBytesMut {
@@ -258,13 +300,24 @@ where
                                 create_socket_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
                             );
                         }
-                        Some(Err(err)) => {
-                            error!("Socket recv error: {}", err);
-                            //TODO: better handling on socket recv error #777
-                            // On error, we lost the buffer, create a new one and restart this socket
-                            // This should be rare (only on actual socket errors)
-                            // For now, we return the error to stop the loop
-                            return Err(err.into());
+                        Some(SocketRecvResult::Error { err, local_addr, idx, buf }) => {
+                            if is_retryable_socket_recv_error(&err) {
+                                trace!("Transient socket recv error on {}: {}", local_addr, err);
+
+                                let (socket_local_addr, socket) = &socket_list[idx];
+                                socket_recv_futures.push(
+                                    create_socket_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
+                                );
+                                continue;
+                            }
+
+                            error!("Socket recv error on {}: {}", local_addr, err);
+                            self.sockets.remove(&local_addr);
+                            active_socket_count -= 1;
+
+                            if active_socket_count == 0 {
+                                return Err(err.into());
+                            }
                         }
                         None => {
                             // All socket futures completed (should never happen in normal operation)
