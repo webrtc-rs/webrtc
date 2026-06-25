@@ -107,6 +107,11 @@ path = "examples/play-from-disk-renegotiation/play-from-disk-renegotiation.rs"
 bench = false
 
 [[example]]
+name = "play-from-disk-playlist-control"
+path = "examples/play-from-disk-playlist-control/play-from-disk-playlist-control.rs"
+bench = false
+
+[[example]]
 name = "reflect"
 path = "examples/reflect/reflect.rs"
 bench = false
