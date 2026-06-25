@@ -58,4 +58,6 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
 
 ### Miscellaneous
 
+- ✅ [mDNS Query and Gather](mdns-query-and-gather) Example mdns-query-and-gather demonstrates webrtc-rs hides local ip
+  with mDNS.
 - ✅ [ICE Restart](ice-restart): The ice-restart demonstrates webrtc-rs ICE Restart abilities.

@@ -92,6 +92,11 @@ path = "examples/insertable-streams/insertable-streams.rs"
 bench = false
 
 [[example]]
+name = "mdns-query-and-gather"
+path = "examples/mdns-query-and-gather/mdns-query-and-gather.rs"
+bench = false
+
+[[example]]
 name = "play-from-disk-vpx"
 path = "examples/play-from-disk-vpx/play-from-disk-vpx.rs"
 bench = false
