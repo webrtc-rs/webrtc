@@ -38,7 +38,7 @@ pub(crate) struct RTCIceGatherOptions {
 
 #[derive(Debug)]
 pub enum RTCIceGathererEventIn {
-    WriteFailure(FourTuple),
+    SocketWriteFailure(FourTuple),
 }
 
 #[derive(Debug)]
@@ -262,7 +262,7 @@ impl Protocol<TaggedBytesMut, (), RTCIceGathererEventIn> for RTCIceGatherer {
 
     fn handle_event(&mut self, evt: RTCIceGathererEventIn) -> Result<(), Self::Error> {
         match evt {
-            RTCIceGathererEventIn::WriteFailure(four_tuple) => {
+            RTCIceGathererEventIn::SocketWriteFailure(four_tuple) => {
                 if let Some(mut stun_client) = self.stun_clients.remove(&four_tuple) {
                     let _ = stun_client.close();
 

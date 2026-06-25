@@ -186,7 +186,7 @@ where
                     if self.handle_write(msg).await.is_err() {
                         if let Err(err) = self
                             .ice_gatherer
-                            .handle_event(RTCIceGathererEventIn::WriteFailure(four_tuple))
+                            .handle_event(RTCIceGathererEventIn::SocketWriteFailure(four_tuple))
                         {
                             error!(
                                 "Failed to handle event in ice_gatherer to {:?} from {:?}: {}",
@@ -350,44 +350,48 @@ where
                             msg.transport.peer_addr,
                             socket.local_addr().ok()
                         );
-                        return Ok(());
+                        Ok(())
                     }
                     Err(err) => {
                         error!(
                             "Failed to send mDNS packet to {:?}: {}",
                             msg.transport.peer_addr, err
                         );
-                        return Err(err.into());
+                        Err(err.into())
                     }
                 }
-            }
-
-            return Err(Error::Other("mDNS socket unavailable".to_owned()));
-        }
-
-        if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
-            match socket.send_to(&msg.message, msg.transport.peer_addr).await {
-                Ok(n) => {
-                    trace!(
-                        "Sent {} bytes to {:?} from {:?}",
-                        n, msg.transport.peer_addr, msg.transport.local_addr
-                    );
-                    Ok(())
-                }
-                Err(err) => {
-                    error!(
-                        "Failed to send to {:?} from {:?}: {}",
-                        msg.transport.peer_addr, msg.transport.local_addr, err
-                    );
-                    Err(err.into())
-                }
+            } else {
+                trace!(
+                    "None mDNS socket, drop the packet to {:?} from {:?}",
+                    msg.transport.peer_addr, msg.transport.local_addr
+                );
+                Ok(())
             }
         } else {
-            trace!(
-                "Invalid local addr {:?}, drop the packet",
-                msg.transport.local_addr
-            );
-            Ok(())
+            if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
+                match socket.send_to(&msg.message, msg.transport.peer_addr).await {
+                    Ok(n) => {
+                        trace!(
+                            "Sent {} bytes to {:?} from {:?}",
+                            n, msg.transport.peer_addr, msg.transport.local_addr
+                        );
+                        Ok(())
+                    }
+                    Err(err) => {
+                        error!(
+                            "Failed to send to {:?} from {:?}: {}",
+                            msg.transport.peer_addr, msg.transport.local_addr, err
+                        );
+                        Err(err.into())
+                    }
+                }
+            } else {
+                trace!(
+                    "None udp socket, drop the packet to {:?} from {:?}",
+                    msg.transport.peer_addr, msg.transport.local_addr
+                );
+                Ok(())
+            }
         }
     }
 
