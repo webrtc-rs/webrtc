@@ -23,6 +23,8 @@ use ice_gatherer::RTCIceGatherOptions;
 use ice_gatherer::RTCIceGatherer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
+use rtc::ice::mdns::MulticastDnsMode;
+use rtc::mdns::MulticastSocket;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
 use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
@@ -38,6 +40,7 @@ use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 use rtc::media_stream::MediaStreamTrackId;
+use rtc::peer_connection::configuration::setting_engine::MulticastDNS;
 pub use rtc::peer_connection::{
     RTCPeerConnection,
     certificate::RTCCertificate,
@@ -117,6 +120,7 @@ where
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
+    multicast_dns: MulticastDNS,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -127,6 +131,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             handler: None,
             udp_addrs: vec![],
             tcp_addrs: vec![],
+            multicast_dns: MulticastDNS::default(),
         }
     }
 }
@@ -152,6 +157,7 @@ where
     }
 
     pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
+        self.multicast_dns = setting_engine.multicast_dns().clone();
         self.builder = self.builder.with_setting_engine(setting_engine);
         self
     }
@@ -169,6 +175,7 @@ where
             handler: self.handler,
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
+            multicast_dns: self.multicast_dns,
         }
     }
 
@@ -213,6 +220,7 @@ where
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
             opts,
+            self.multicast_dns.mode,
             self.udp_addrs,
             self.tcp_addrs,
         )
@@ -360,6 +368,7 @@ where
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
         opts: RTCIceGatherOptions,
+        multicast_dns_mode: MulticastDnsMode,
         udp_addrs: Vec<A>,
         _tcp_addrs: Vec<A>,
     ) -> Result<Self> {
@@ -377,6 +386,13 @@ where
                 local_addrs.push(local_addr);
             }
         }
+
+        let async_mdns_socket = if multicast_dns_mode != MulticastDnsMode::Disabled {
+            let socket = MulticastSocket::new().into_std()?;
+            Some(runtime.wrap_udp_socket(socket)?)
+        } else {
+            None
+        };
 
         let (driver_event_tx, driver_event_rx) =
             channel(PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY);
@@ -398,6 +414,7 @@ where
             peer_connection.inner.clone(),
             ice_gatherer,
             async_udp_sockets,
+            async_mdns_socket,
         )
         .await?;
         let driver_handle = runtime.spawn(Box::pin(async move {

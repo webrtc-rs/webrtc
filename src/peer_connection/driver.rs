@@ -17,6 +17,7 @@ use futures::FutureExt; // For .fuse() in futures::select!
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{error, trace};
 use rtc::interceptor::{Interceptor, NoopInterceptor};
+use rtc::mdns::MDNS_PORT;
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
 use rtc::peer_connection::message::RTCMessage;
@@ -94,6 +95,7 @@ where
     /// ICE gatherer for managing ICE candidate gathering
     ice_gatherer: RTCIceGatherer,
     sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
+    mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
 }
 
 impl<I> PeerConnectionDriver<I>
@@ -105,6 +107,7 @@ where
         inner: Arc<PeerConnectionRef<I>>,
         ice_gatherer: RTCIceGatherer,
         sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
+        mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
     ) -> Result<Self> {
         if sockets.is_empty() {
             return Err(Error::Other("no sockets available".to_owned()));
@@ -114,6 +117,7 @@ where
             inner,
             ice_gatherer,
             sockets,
+            mdns_socket,
         })
     }
 
@@ -129,6 +133,12 @@ where
             .sockets
             .iter()
             .map(|(addr, sock)| (*addr, sock.clone()))
+            .chain(self.mdns_socket.iter().filter_map(|socket| {
+                socket
+                    .local_addr()
+                    .ok()
+                    .map(|local_addr| (local_addr, socket.clone()))
+            }))
             .collect();
 
         // Pre-allocate buffers once - one per socket, these will be reused forever
@@ -330,6 +340,31 @@ where
     }
 
     async fn handle_write(&self, msg: TaggedBytesMut) -> Result<()> {
+        if msg.transport.peer_addr.port() == MDNS_PORT {
+            if let Some(socket) = &self.mdns_socket {
+                match socket.send_to(&msg.message, msg.transport.peer_addr).await {
+                    Ok(n) => {
+                        trace!(
+                            "Sent {} bytes to {:?} via mDNS socket {:?}",
+                            n,
+                            msg.transport.peer_addr,
+                            socket.local_addr().ok()
+                        );
+                        return Ok(());
+                    }
+                    Err(err) => {
+                        error!(
+                            "Failed to send mDNS packet to {:?}: {}",
+                            msg.transport.peer_addr, err
+                        );
+                        return Err(err.into());
+                    }
+                }
+            }
+
+            return Err(Error::Other("mDNS socket unavailable".to_owned()));
+        }
+
         if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
             match socket.send_to(&msg.message, msg.transport.peer_addr).await {
                 Ok(n) => {

@@ -1,5 +1,6 @@
 //! Integration tests for ICE functionality
 
+use rtc::ice::mdns::MulticastDnsMode;
 use rtc::peer_connection::transport::RTCIceCandidate;
 use std::sync::Arc;
 use webrtc::peer_connection::*;
@@ -326,5 +327,67 @@ fn test_stun_gathering_with_google_stun() {
         );
 
         println!("✅ STUN candidate gathering successful! Got both host and srflx candidates.");
+    });
+}
+
+#[test]
+fn test_mdns_query_and_gather_rewrites_host_candidate() {
+    block_on(async {
+        let mut media_engine = MediaEngine::default();
+        media_engine
+            .register_default_codecs()
+            .expect("Failed to register codecs");
+
+        let config = RTCConfigurationBuilder::new().build();
+
+        let (candidate_tx, mut candidate_rx) = channel(32);
+        let (gathering_tx, mut gathering_rx) = channel(8);
+        let handler = Arc::new(IceGatheringHandler {
+            candidate_tx,
+            gathering_tx,
+        });
+
+        let mut setting_engine = SettingEngine::default();
+        setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
+        setting_engine.set_multicast_dns_timeout(Some(std::time::Duration::from_secs(5)));
+        setting_engine.set_multicast_dns_local_name("async-mdns-host.local".to_owned());
+        setting_engine.set_multicast_dns_local_ip(Some(std::net::Ipv4Addr::LOCALHOST.into()));
+
+        let pc = PeerConnectionBuilder::new()
+            .with_configuration(config)
+            .with_media_engine(media_engine)
+            .with_setting_engine(setting_engine)
+            .with_handler(handler)
+            .with_udp_addrs(vec!["127.0.0.1:0"])
+            .build()
+            .await
+            .unwrap();
+
+        let _ = pc.create_data_channel("channel1", None).await.unwrap();
+
+        let offer = pc.create_offer(None).await.expect("Failed to create offer");
+        pc.set_local_description(offer)
+            .await
+            .expect("Failed to set local description");
+
+        let _ = gathering_rx.recv().await;
+
+        let mut found_mdns_host_candidate = false;
+        while let Some(candidate) = candidate_rx.recv().await {
+            if candidate.typ == RTCIceCandidateType::Host {
+                assert!(
+                    candidate.address.ends_with(".local"),
+                    "expected mDNS-obfuscated host candidate, got {}",
+                    candidate.address
+                );
+                found_mdns_host_candidate = true;
+                break;
+            }
+        }
+
+        assert!(
+            found_mdns_host_candidate,
+            "Should have received at least one mDNS host candidate"
+        );
     });
 }
