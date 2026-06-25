@@ -40,6 +40,7 @@ ctrlc = "3.5.2"
 serde_json = "1.0.149"
 hyper = { version = "0.14.32", features = ["full"] }
 rand = "0.10.0"
+tokio-tungstenite = "0.28.0"
 
 [[example]]
 name = "broadcast"
@@ -164,4 +165,14 @@ bench = false
 [[example]]
 name = "swap-tracks"
 path = "examples/swap-tracks/swap-tracks.rs"
+bench = false
+
+[[example]]
+name = "trickle-ice-host"
+path = "examples/trickle-ice-host/trickle-ice-host.rs"
+bench = false
+
+[[example]]
+name = "trickle-ice-srflx"
+path = "examples/trickle-ice-srflx/trickle-ice-srflx.rs"
 bench = false

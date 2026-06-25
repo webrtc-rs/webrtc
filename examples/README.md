@@ -61,3 +61,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
 - ✅ [mDNS Query and Gather](mdns-query-and-gather) Example mdns-query-and-gather demonstrates webrtc-rs hides local ip
   with mDNS.
 - ✅ [ICE Restart](ice-restart): The ice-restart demonstrates webrtc-rs ICE Restart abilities.
+- ✅ [Trickle ICE Host](trickle-ice-host) Example demonstrates WebRTC's Trickle ICE APIs to add Host type local
+  candidate.
+- ✅ [Trickle ICE ServerReflexive](trickle-ice-srflx): Example demonstrates how to add ServerReflexive (STUN)
+  type local candidate.
