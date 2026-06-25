@@ -137,6 +137,11 @@ path = "examples/save-to-disk-h26x/save-to-disk-h26x.rs"
 bench = false
 
 [[example]]
+name = "save-to-disk-av1"
+path = "examples/save-to-disk-av1/save-to-disk-av1.rs"
+bench = false
+
+[[example]]
 name = "simulcast"
 path = "examples/simulcast/simulcast.rs"
 bench = false
