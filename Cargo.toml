@@ -112,6 +112,11 @@ path = "examples/reflect/reflect.rs"
 bench = false
 
 [[example]]
+name = "rtcp-processing"
+path = "examples/rtcp-processing/rtcp-processing.rs"
+bench = false
+
+[[example]]
 name = "rtp-forwarder"
 path = "examples/rtp-forwarder/rtp-forwarder.rs"
 bench = false
