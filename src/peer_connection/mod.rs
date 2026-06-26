@@ -361,29 +361,32 @@ where
         handler: Arc<dyn PeerConnectionEventHandler>,
         mdns_mode: MulticastDnsMode,
         udp_addrs: Vec<A>,
-        _tcp_addrs: Vec<A>,
+        tcp_addrs: Vec<A>,
     ) -> Result<Self> {
-        let mut local_addrs = vec![];
-        let mut async_udp_sockets = HashMap::new();
-        for addr in udp_addrs {
-            let socket = std::net::UdpSocket::bind(addr)?;
-            socket.set_nonblocking(true)?;
-            let local_addr = socket.local_addr()?;
-            let async_udp_socket = runtime.wrap_udp_socket(socket)?;
-            if async_udp_sockets
-                .insert(local_addr, async_udp_socket)
-                .is_none()
-            {
-                local_addrs.push(local_addr);
-            }
-        }
-
         let async_mdns_socket = if mdns_mode != MulticastDnsMode::Disabled {
             let socket = MulticastSocket::new().into_std()?;
             Some(runtime.wrap_udp_socket(socket)?)
         } else {
             None
         };
+
+        let mut async_udp_sockets = HashMap::new();
+        for addr in udp_addrs {
+            let socket = std::net::UdpSocket::bind(addr)?;
+            socket.set_nonblocking(true)?;
+            let local_addr = socket.local_addr()?;
+            let async_udp_socket = runtime.wrap_udp_socket(socket)?;
+            async_udp_sockets.insert(local_addr, async_udp_socket);
+        }
+
+        let mut async_tcp_listeners = HashMap::new();
+        for addr in tcp_addrs {
+            let listener = std::net::TcpListener::bind(addr)?;
+            listener.set_nonblocking(true)?;
+            let local_addr = listener.local_addr()?;
+            let async_tcp_listener = runtime.wrap_tcp_listener(listener)?;
+            async_tcp_listeners.insert(local_addr, async_tcp_listener);
+        }
 
         let configuration = core.get_configuration();
         let ice_servers = configuration.ice_servers().to_vec();
@@ -404,15 +407,18 @@ where
             driver_handle: Mutex::new(None),
         };
 
+        let local_addrs = async_udp_sockets.keys().cloned().collect::<Vec<_>>();
         let stun_gatherer =
             RTCStunGatherer::new(local_addrs.clone(), ice_servers.clone(), ice_gather_policy);
         let turn_relayer = RTCTurnRelayer::new(local_addrs, ice_servers, ice_gather_policy);
+
         let mut driver = PeerConnectionDriver::new(
             peer_connection.inner.clone(),
             stun_gatherer,
             turn_relayer,
-            async_udp_sockets,
             async_mdns_socket,
+            async_udp_sockets,
+            async_tcp_listeners,
         )
         .await?;
         let driver_handle = runtime.spawn(Box::pin(async move {
@@ -538,7 +544,13 @@ where
 
     async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()> {
         let mut core = self.inner.core.lock().await;
-        core.add_remote_candidate(candidate)?;
+        core.add_remote_candidate(candidate.clone())?;
+        drop(core);
+        let _ = self
+            .inner
+            .driver_event_tx
+            .send(PeerConnectionDriverEvent::RemoteIceCandidate(candidate))
+            .await;
         Ok(())
     }
 

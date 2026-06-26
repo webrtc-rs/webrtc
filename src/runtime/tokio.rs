@@ -42,9 +42,9 @@ impl Runtime for TokioRuntime {
     fn wrap_tcp_listener(
         &self,
         listener: std::net::TcpListener,
-    ) -> io::Result<Box<dyn AsyncTcpListener>> {
+    ) -> io::Result<Arc<dyn AsyncTcpListener>> {
         listener.set_nonblocking(true)?;
-        Ok(Box::new(TcpListener {
+        Ok(Arc::new(TcpListener {
             io: ::tokio::net::TcpListener::from_std(listener)?,
         }))
     }
@@ -52,10 +52,18 @@ impl Runtime for TokioRuntime {
     fn connect_tcp<'a>(
         &'a self,
         remote_addr: SocketAddr,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Box<dyn AsyncTcpStream>>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>> {
         Box::pin(async move {
             let stream = ::tokio::net::TcpStream::connect(remote_addr).await?;
-            Ok(Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>)
+            let local_addr = stream.local_addr()?;
+            let peer_addr = stream.peer_addr()?;
+            let (read_half, write_half) = stream.into_split();
+            Ok(Arc::new(TcpStream {
+                read_half: ::tokio::sync::Mutex::new(read_half),
+                write_half: ::tokio::sync::Mutex::new(write_half),
+                local_addr,
+                peer_addr,
+            }) as Arc<dyn AsyncTcpStream>)
         })
     }
 }
@@ -94,12 +102,20 @@ struct TcpListener {
 impl AsyncTcpListener for TcpListener {
     fn accept<'a>(
         &'a self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<(Box<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Arc<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>
     {
         Box::pin(async move {
             let (stream, addr) = self.io.accept().await?;
+            let local_addr = stream.local_addr()?;
+            let peer_addr = stream.peer_addr()?;
+            let (read_half, write_half) = stream.into_split();
             Ok((
-                Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>,
+                Arc::new(TcpStream {
+                    read_half: ::tokio::sync::Mutex::new(read_half),
+                    write_half: ::tokio::sync::Mutex::new(write_half),
+                    local_addr,
+                    peer_addr,
+                }) as Arc<dyn AsyncTcpStream>,
                 addr,
             ))
         })
@@ -112,30 +128,45 @@ impl AsyncTcpListener for TcpListener {
 
 #[derive(Debug)]
 struct TcpStream {
-    io: ::tokio::net::TcpStream,
+    read_half: ::tokio::sync::Mutex<::tokio::net::tcp::OwnedReadHalf>,
+    write_half: ::tokio::sync::Mutex<::tokio::net::tcp::OwnedWriteHalf>,
+    local_addr: SocketAddr,
+    peer_addr: SocketAddr,
 }
 
 impl AsyncTcpStream for TcpStream {
-    fn read<'a>(
-        &'a mut self,
-        buf: &'a mut [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
-        Box::pin(async move { self.io.read(buf).await })
+    fn read<'a, 'b>(
+        &'a self,
+        buf: &'b mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'b>>
+    where
+        'a: 'b,
+    {
+        Box::pin(async move {
+            let mut read_half = self.read_half.lock().await;
+            read_half.read(buf).await
+        })
     }
 
-    fn write_all<'a>(
-        &'a mut self,
-        buf: &'a [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>> {
-        Box::pin(async move { self.io.write_all(buf).await })
+    fn write_all<'a, 'b>(
+        &'a self,
+        buf: &'b [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'b>>
+    where
+        'a: 'b,
+    {
+        Box::pin(async move {
+            let mut write_half = self.write_half.lock().await;
+            write_half.write_all(buf).await
+        })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.io.local_addr()
+        Ok(self.local_addr)
     }
 
     fn peer_addr(&self) -> io::Result<SocketAddr> {
-        self.io.peer_addr()
+        Ok(self.peer_addr)
     }
 }
 

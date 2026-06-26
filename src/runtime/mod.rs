@@ -63,13 +63,13 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     fn wrap_tcp_listener(
         &self,
         listener: std::net::TcpListener,
-    ) -> io::Result<Box<dyn AsyncTcpListener>>;
+    ) -> io::Result<Arc<dyn AsyncTcpListener>>;
 
     /// Connect to a remote TCP address.
     fn connect_tcp<'a>(
         &'a self,
         remote_addr: SocketAddr,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Box<dyn AsyncTcpStream>>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>>;
 }
 
 /// Abstract implementation of a UDP socket for runtime independence
@@ -98,7 +98,7 @@ pub trait AsyncTcpListener: Send + Sync + Debug + 'static {
     /// Accept a new TCP stream.
     fn accept<'a>(
         &'a self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<(Box<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Arc<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>;
 
     /// Get the local address this listener is bound to.
     fn local_addr(&self) -> io::Result<SocketAddr>;
@@ -107,16 +107,20 @@ pub trait AsyncTcpListener: Send + Sync + Debug + 'static {
 /// Abstract implementation of a TCP stream for runtime independence.
 pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
     /// Read bytes from the stream.
-    fn read<'a>(
-        &'a mut self,
-        buf: &'a mut [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>>;
+    fn read<'a, 'b>(
+        &'a self,
+        buf: &'b mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'b>>
+    where
+        'a: 'b;
 
     /// Write all bytes to the stream.
-    fn write_all<'a>(
-        &'a mut self,
-        buf: &'a [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>>;
+    fn write_all<'a, 'b>(
+        &'a self,
+        buf: &'b [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'b>>
+    where
+        'a: 'b;
 
     /// Get the local address of the stream.
     fn local_addr(&self) -> io::Result<SocketAddr>;

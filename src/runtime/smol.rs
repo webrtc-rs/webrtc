@@ -47,17 +47,26 @@ impl Runtime for SmolRuntime {
     fn wrap_tcp_listener(
         &self,
         listener: std::net::TcpListener,
-    ) -> io::Result<Box<dyn AsyncTcpListener>> {
-        Ok(Box::new(TcpListener::new(listener)?))
+    ) -> io::Result<Arc<dyn AsyncTcpListener>> {
+        Ok(Arc::new(TcpListener::new(listener)?))
     }
 
     fn connect_tcp<'a>(
         &'a self,
         remote_addr: SocketAddr,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Box<dyn AsyncTcpStream>>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>> {
         Box::pin(async move {
             let stream = SmolTcpStream::connect(remote_addr).await?;
-            Ok(Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>)
+            let local_addr = stream.local_addr()?;
+            let peer_addr = stream.peer_addr()?;
+            let read_io = ::smol::lock::Mutex::new(stream.clone());
+            let write_io = ::smol::lock::Mutex::new(stream);
+            Ok(Arc::new(TcpStream {
+                read_io,
+                write_io,
+                local_addr,
+                peer_addr,
+            }) as Arc<dyn AsyncTcpStream>)
         })
     }
 }
@@ -115,12 +124,21 @@ impl TcpListener {
 impl AsyncTcpListener for TcpListener {
     fn accept<'a>(
         &'a self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<(Box<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Arc<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>
     {
         Box::pin(async move {
             let (stream, addr) = self.io.accept().await?;
+            let local_addr = stream.local_addr()?;
+            let peer_addr = stream.peer_addr()?;
+            let read_io = ::smol::lock::Mutex::new(stream.clone());
+            let write_io = ::smol::lock::Mutex::new(stream);
             Ok((
-                Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>,
+                Arc::new(TcpStream {
+                    read_io,
+                    write_io,
+                    local_addr,
+                    peer_addr,
+                }) as Arc<dyn AsyncTcpStream>,
                 addr,
             ))
         })
@@ -131,32 +149,47 @@ impl AsyncTcpListener for TcpListener {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct TcpStream {
-    io: SmolTcpStream,
+    read_io: ::smol::lock::Mutex<SmolTcpStream>,
+    write_io: ::smol::lock::Mutex<SmolTcpStream>,
+    local_addr: SocketAddr,
+    peer_addr: SocketAddr,
 }
 
 impl AsyncTcpStream for TcpStream {
-    fn read<'a>(
-        &'a mut self,
-        buf: &'a mut [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
-        Box::pin(async move { self.io.read(buf).await })
+    fn read<'a, 'b>(
+        &'a self,
+        buf: &'b mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'b>>
+    where
+        'a: 'b,
+    {
+        Box::pin(async move {
+            let mut read_io = self.read_io.lock().await;
+            read_io.read(buf).await
+        })
     }
 
-    fn write_all<'a>(
-        &'a mut self,
-        buf: &'a [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>> {
-        Box::pin(async move { self.io.write_all(buf).await })
+    fn write_all<'a, 'b>(
+        &'a self,
+        buf: &'b [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'b>>
+    where
+        'a: 'b,
+    {
+        Box::pin(async move {
+            let mut write_io = self.write_io.lock().await;
+            write_io.write_all(buf).await
+        })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.io.local_addr()
+        Ok(self.local_addr)
     }
 
     fn peer_addr(&self) -> io::Result<SocketAddr> {
-        self.io.peer_addr()
+        Ok(self.peer_addr)
     }
 }
 
@@ -252,7 +285,7 @@ impl<T: ?Sized + Send> AsyncMutex<T> for SmolMutex<T> {
 }
 
 /// Smol-based notify wrapper using Event
-pub struct SmolNotify(pub Arc<::smol::lock::Mutex<(bool, Vec<::smol::channel::Sender<()>>)>>);
+pub struct SmolNotify(pub Arc<std::sync::Mutex<(bool, Vec<::smol::channel::Sender<()>>)>>);
 
 impl Clone for SmolNotify {
     fn clone(&self) -> Self {
@@ -268,36 +301,32 @@ impl Default for SmolNotify {
 
 impl SmolNotify {
     pub fn new() -> Self {
-        Self(Arc::new(::smol::lock::Mutex::new((false, Vec::new()))))
+        Self(Arc::new(std::sync::Mutex::new((false, Vec::new()))))
     }
 
     /// Notify one waiting task
     pub fn notify_one(&self) {
-        // Simple broadcast-based notification
-        if let Some(mut state) = self.0.try_lock() {
-            state.0 = true;
-            if let Some(tx) = state.1.pop() {
-                let _ = tx.try_send(());
-            }
+        let mut state = self.0.lock().unwrap();
+        state.0 = true;
+        if let Some(tx) = state.1.pop() {
+            let _ = tx.try_send(());
         }
     }
 
     /// Notify all waiting tasks
     pub fn notify_waiters(&self) {
-        if let Some(mut state) = self.0.try_lock() {
-            state.0 = true;
-            for tx in state.1.drain(..) {
-                let _ = tx.try_send(());
-            }
+        let mut state = self.0.lock().unwrap();
+        state.0 = true;
+        for tx in state.1.drain(..) {
+            let _ = tx.try_send(());
         }
     }
 
     /// Wait for a notification
     pub async fn notified(&self) {
-        let notify = self.0.clone();
         let (tx, rx) = ::smol::channel::bounded(1);
         {
-            let mut state = notify.lock().await;
+            let mut state = self.0.lock().unwrap();
             if state.0 {
                 state.0 = false;
                 return;
@@ -310,22 +339,11 @@ impl SmolNotify {
 
 impl AsyncNotify for SmolNotify {
     fn notify_one(&self) {
-        // Simple broadcast-based notification
-        if let Some(mut state) = self.0.try_lock() {
-            state.0 = true;
-            if let Some(tx) = state.1.pop() {
-                let _ = tx.try_send(());
-            }
-        }
+        self.notify_one();
     }
 
     fn notify_waiters(&self) {
-        if let Some(mut state) = self.0.try_lock() {
-            state.0 = true;
-            for tx in state.1.drain(..) {
-                let _ = tx.try_send(());
-            }
-        }
+        self.notify_waiters();
     }
 
     fn notified(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
@@ -333,7 +351,7 @@ impl AsyncNotify for SmolNotify {
         Box::pin(async move {
             let (tx, rx) = ::smol::channel::bounded(1);
             {
-                let mut state = notify.lock().await;
+                let mut state = notify.lock().unwrap();
                 if state.0 {
                     state.0 = false;
                     return;

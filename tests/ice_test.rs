@@ -18,6 +18,7 @@ use webrtc::peer_connection::*;
 use webrtc::peer_connection::{
     MediaEngine, RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType,
     RTCIceGatheringState, RTCIceServer, RTCIceTransportPolicy, RTCPeerConnectionIceEvent,
+    RTCPeerConnectionState,
 };
 use webrtc::runtime::{AsyncUdpSocket, default_runtime, timeout};
 use webrtc::runtime::{Mutex, Sender};
@@ -553,5 +554,114 @@ fn test_turn_relay_gathering_with_mock_turn_server() {
         );
 
         turn_task.abort();
+    });
+}
+
+#[test]
+fn test_ice_tcp_only_connection() {
+    block_on(async {
+        env_logger::builder()
+            .filter_level(log::LevelFilter::Trace)
+            .is_test(true)
+            .try_init()
+            .ok();
+
+        let runtime = default_runtime().expect("no async runtime found");
+
+        let (a_candidate_tx, mut a_candidate_rx) = channel::<RTCIceCandidateInit>(32);
+        let (b_candidate_tx, mut b_candidate_rx) = channel::<RTCIceCandidateInit>(32);
+
+        let (a_connected_tx, mut a_connected_rx) = channel::<()>(1);
+        let (b_connected_tx, mut b_connected_rx) = channel::<()>(1);
+
+        struct TestHandler {
+            candidate_tx: Sender<RTCIceCandidateInit>,
+            connected_tx: Sender<()>,
+        }
+
+        #[async_trait::async_trait]
+        impl PeerConnectionEventHandler for TestHandler {
+            async fn on_ice_candidate(&self, event: RTCPeerConnectionIceEvent) {
+                if let Ok(cand_init) = event.candidate.to_json() {
+                    if !cand_init.candidate.is_empty() {
+                        let _ = self.candidate_tx.try_send(cand_init);
+                    }
+                }
+            }
+
+            async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+                if state == RTCPeerConnectionState::Connected {
+                    let _ = self.connected_tx.try_send(());
+                }
+            }
+        }
+
+        let mut media_engine_a = MediaEngine::default();
+        media_engine_a.register_default_codecs().unwrap();
+        let pc_a = PeerConnectionBuilder::new()
+            .with_media_engine(media_engine_a)
+            .with_handler(Arc::new(TestHandler {
+                candidate_tx: a_candidate_tx,
+                connected_tx: a_connected_tx,
+            }))
+            .with_tcp_addrs(vec!["127.0.0.1:0"])
+            .with_udp_addrs(Vec::<&str>::new()) // Force TCP only
+            .build()
+            .await
+            .unwrap();
+        let pc_a = Arc::new(pc_a);
+
+        let mut media_engine_b = MediaEngine::default();
+        media_engine_b.register_default_codecs().unwrap();
+        let pc_b = PeerConnectionBuilder::new()
+            .with_media_engine(media_engine_b)
+            .with_handler(Arc::new(TestHandler {
+                candidate_tx: b_candidate_tx,
+                connected_tx: b_connected_tx,
+            }))
+            .with_tcp_addrs(vec!["127.0.0.1:0"])
+            .with_udp_addrs(Vec::<&str>::new()) // Force TCP only
+            .build()
+            .await
+            .unwrap();
+        let pc_b = Arc::new(pc_b);
+
+        // Create data channel to ensure DTLS/SCTP handshakes happen
+        let _dc_a = pc_a.create_data_channel("test-tcp", None).await.unwrap();
+
+        let offer = pc_a.create_offer(None).await.unwrap();
+        pc_a.set_local_description(offer.clone()).await.unwrap();
+        pc_b.set_remote_description(offer).await.unwrap();
+
+        let answer = pc_b.create_answer(None).await.unwrap();
+        pc_b.set_local_description(answer.clone()).await.unwrap();
+        pc_a.set_remote_description(answer).await.unwrap();
+
+        // Relay candidates in background tasks
+        let pc_a_clone = pc_a.clone();
+        let pc_b_clone = pc_b.clone();
+
+        let task_a = runtime.spawn(Box::pin(async move {
+            while let Some(cand) = a_candidate_rx.recv().await {
+                let _ = pc_b_clone.add_ice_candidate(cand).await;
+            }
+        }));
+
+        let task_b = runtime.spawn(Box::pin(async move {
+            while let Some(cand) = b_candidate_rx.recv().await {
+                let _ = pc_a_clone.add_ice_candidate(cand).await;
+            }
+        }));
+
+        // Wait for connection
+        timeout(Duration::from_secs(10), async {
+            let _ = a_connected_rx.recv().await;
+            let _ = b_connected_rx.recv().await;
+        })
+        .await
+        .expect("Timed out waiting for TCP PeerConnection connection to establish");
+
+        task_a.abort();
+        task_b.abort();
     });
 }

@@ -263,7 +263,7 @@ pub async fn run_example(_cli: TrickleCli, config: TrickleExampleConfig) -> Resu
     let ws_listener = runtime.wrap_tcp_listener(ws_std_listener)?;
     println!("WebSocket server listening on ws://localhost:8081");
 
-    let (mut tcp_stream, _) = ws_listener.accept().await?;
+    let (tcp_stream, _) = ws_listener.accept().await?;
 
     // WS Handshake
     let mut req_buf = [0u8; 2048];
@@ -280,32 +280,28 @@ pub async fn run_example(_cli: TrickleCli, config: TrickleExampleConfig) -> Resu
 
     let mut peer_connection: Option<Box<dyn PeerConnection>> = None;
 
+    let stream_read = tcp_stream.clone();
     runtime.spawn(Box::pin(async move {
-        let mut stream = tcp_stream;
         loop {
-            futures::select! {
-                maybe_out = ws_out_rx.recv().fuse() => {
-                    if let Some(msg) = maybe_out {
-                        if let Err(_) = write_ws_frame(&mut *stream, &msg).await {
+            match read_ws_frame(&stream_read).await {
+                Ok(Some(text)) => {
+                    if let Ok(signal) = parse_signal_message(&text) {
+                        if incoming_tx.send(signal).await.is_err() {
                             break;
                         }
-                    } else {
-                        break;
                     }
                 }
-                maybe_in = read_ws_frame(&mut *stream).fuse() => {
-                    match maybe_in {
-                        Ok(Some(text)) => {
-                            if let Ok(signal) = parse_signal_message(&text) {
-                                if incoming_tx.send(signal).await.is_err() {
-                                    break;
-                                }
-                            }
-                        }
-                        Ok(None) => break,
-                        Err(_) => break,
-                    }
-                }
+                Ok(None) => break,
+                Err(_) => break,
+            }
+        }
+    }));
+
+    let stream_write = tcp_stream.clone();
+    runtime.spawn(Box::pin(async move {
+        while let Some(msg) = ws_out_rx.recv().await {
+            if let Err(_) = write_ws_frame(&stream_write, &msg).await {
+                break;
             }
         }
     }));
@@ -422,7 +418,7 @@ async fn run_http_server(runtime: Arc<dyn Runtime>) {
     let std_listener = std::net::TcpListener::bind(addr);
     if let Ok(std_listener) = std_listener {
         if let Ok(listener) = runtime.wrap_tcp_listener(std_listener) {
-            while let Ok((mut stream, _)) = listener.accept().await {
+            while let Ok((stream, _)) = listener.accept().await {
                 runtime.spawn(Box::pin(async move {
                     let mut buf = [0u8; 1024];
                     if let Ok(n) = stream.read(&mut buf).await {
@@ -558,10 +554,28 @@ fn ws_handshake_response(req: &str) -> Option<String> {
     ))
 }
 
-async fn read_ws_frame(stream: &mut dyn AsyncTcpStream) -> io::Result<Option<String>> {
+async fn read_exact(stream: &Arc<dyn AsyncTcpStream>, buf: &mut [u8]) -> io::Result<()> {
+    let mut read_bytes = 0;
+    while read_bytes < buf.len() {
+        let n = stream.read(&mut buf[read_bytes..]).await?;
+        if n == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "failed to fill whole buffer",
+            ));
+        }
+        read_bytes += n;
+    }
+    Ok(())
+}
+
+async fn read_ws_frame(stream: &Arc<dyn AsyncTcpStream>) -> io::Result<Option<String>> {
     let mut header = [0u8; 2];
-    if stream.read(&mut header).await? < 2 {
-        return Ok(None);
+    if let Err(e) = read_exact(stream, &mut header).await {
+        if e.kind() == io::ErrorKind::UnexpectedEof {
+            return Ok(None);
+        }
+        return Err(e);
     }
     let opcode = header[0] & 0x0F;
     let masked = (header[1] & 0x80) != 0;
@@ -573,33 +587,40 @@ async fn read_ws_frame(stream: &mut dyn AsyncTcpStream) -> io::Result<Option<Str
 
     if payload_len == 126 {
         let mut len_bytes = [0u8; 2];
-        if stream.read(&mut len_bytes).await? < 2 {
-            return Ok(None);
+        if let Err(e) = read_exact(stream, &mut len_bytes).await {
+            if e.kind() == io::ErrorKind::UnexpectedEof {
+                return Ok(None);
+            }
+            return Err(e);
         }
         payload_len = u16::from_be_bytes(len_bytes) as usize;
     } else if payload_len == 127 {
         let mut len_bytes = [0u8; 8];
-        if stream.read(&mut len_bytes).await? < 8 {
-            return Ok(None);
+        if let Err(e) = read_exact(stream, &mut len_bytes).await {
+            if e.kind() == io::ErrorKind::UnexpectedEof {
+                return Ok(None);
+            }
+            return Err(e);
         }
         payload_len = u64::from_be_bytes(len_bytes) as usize;
     }
 
     let mut mask = [0u8; 4];
     if masked {
-        if stream.read(&mut mask).await? < 4 {
-            return Ok(None);
+        if let Err(e) = read_exact(stream, &mut mask).await {
+            if e.kind() == io::ErrorKind::UnexpectedEof {
+                return Ok(None);
+            }
+            return Err(e);
         }
     }
 
     let mut payload = vec![0u8; payload_len];
-    let mut read_bytes = 0;
-    while read_bytes < payload_len {
-        let n = stream.read(&mut payload[read_bytes..]).await?;
-        if n == 0 {
+    if let Err(e) = read_exact(stream, &mut payload).await {
+        if e.kind() == io::ErrorKind::UnexpectedEof {
             return Ok(None);
         }
-        read_bytes += n;
+        return Err(e);
     }
 
     if masked {
@@ -615,7 +636,7 @@ async fn read_ws_frame(stream: &mut dyn AsyncTcpStream) -> io::Result<Option<Str
     }
 }
 
-async fn write_ws_frame(stream: &mut dyn AsyncTcpStream, text: &str) -> io::Result<()> {
+async fn write_ws_frame(stream: &Arc<dyn AsyncTcpStream>, text: &str) -> io::Result<()> {
     let payload = text.as_bytes();
     let mut header = vec![];
     header.push(0x81);
