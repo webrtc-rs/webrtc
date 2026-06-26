@@ -27,8 +27,11 @@ struct Cli {
     turn_user: String,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    webrtc::runtime::block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     let cli = Cli::parse();
     let (turn_username, turn_password) = cli.turn_user.split_once('=').ok_or_else(|| {
         anyhow::anyhow!("Invalid TURN credentials format. Use: username=password")

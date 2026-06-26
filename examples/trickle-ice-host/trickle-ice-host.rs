@@ -21,8 +21,11 @@ struct Cli {
     output_log_file: String,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    webrtc::runtime::block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     let cli = Cli::parse();
     let shared = TrickleCli {
         debug: cli.debug,

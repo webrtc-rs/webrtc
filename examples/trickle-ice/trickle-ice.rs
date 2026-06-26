@@ -43,8 +43,11 @@ struct Cli {
     enable_relay: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    webrtc::runtime::block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     let mut cli = Cli::parse();
     if !cli.enable_host && !cli.enable_srflx && !cli.enable_relay {
         println!("All candidate types are disabled! Let's fallback to use Host type");

@@ -239,7 +239,7 @@ pub fn default_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
 
     #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
     {
-        Some(std::sync::Arc::new(SmolRuntime))
+        Some(std::sync::Arc::new(smol::SmolRuntime))
     }
 }
 
@@ -253,7 +253,7 @@ pub fn default_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
 pub fn smol_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
     #[cfg(feature = "runtime-smol")]
     {
-        Some(std::sync::Arc::new(SmolRuntime))
+        Some(std::sync::Arc::new(smol::SmolRuntime))
     }
 
     #[cfg(not(feature = "runtime-smol"))]
@@ -286,23 +286,24 @@ pub type BroadcastReceiver<T> = tokio::TokioBroadcastReceiver<T>;
 
 #[cfg(feature = "runtime-smol")]
 mod smol;
-#[cfg(feature = "runtime-smol")]
+
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub use smol::SmolRuntime;
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub use smol::{
     SmolInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
 };
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Interval = SmolInterval;
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Mutex<T> = smol::SmolMutex<T>;
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Notify = smol::SmolNotify;
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Sender<T> = smol::SmolSender<T>;
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Receiver<T> = smol::SmolReceiver<T>;
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type BroadcastSender<T> = smol::SmolBroadcastSender<T>;
-#[cfg(feature = "runtime-smol")]
+#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type BroadcastReceiver<T> = smol::SmolBroadcastReceiver<T>;

@@ -29,6 +29,7 @@ tokio = { version = "1.49.0", features = ["net", "io-util", "time", "sync", "rt"
 smol = { version = "2.0.2", optional = true }
 async-broadcast = { version = "0.7", optional = true }
 futures-lite = { version = "2.6.1", optional = true }
+base64 = "0.22"
 
 [dev-dependencies]
 signal = { version = "0.20.0-beta.1", path = "rtc/examples/examples/signal", package = "rtc-signal" }
@@ -172,22 +173,18 @@ bench = false
 name = "trickle-ice"
 path = "examples/trickle-ice/trickle-ice.rs"
 bench = false
-required-features = ["runtime-tokio"]
 
 [[example]]
 name = "trickle-ice-host"
 path = "examples/trickle-ice-host/trickle-ice-host.rs"
 bench = false
-required-features = ["runtime-tokio"]
 
 [[example]]
 name = "trickle-ice-srflx"
 path = "examples/trickle-ice-srflx/trickle-ice-srflx.rs"
 bench = false
-required-features = ["runtime-tokio"]
 
 [[example]]
 name = "trickle-ice-relay"
 path = "examples/trickle-ice-relay/trickle-ice-relay.rs"
 bench = false
-required-features = ["runtime-tokio"]
