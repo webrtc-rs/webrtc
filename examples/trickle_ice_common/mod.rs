@@ -9,6 +9,8 @@ use futures::FutureExt;
 use futures::{SinkExt, StreamExt};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Response, Server, StatusCode};
+use rtc::ice::mdns::MulticastDnsMode;
+use rtc::peer_connection::transport::RTCDtlsRole;
 use signal::get_local_ip;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -18,7 +20,8 @@ use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceGatheringState, RTCIceServer,
-    RTCPeerConnectionIceEvent, RTCPeerConnectionState, Registry, register_default_interceptors,
+    RTCIceTransportPolicy, RTCPeerConnectionIceEvent, RTCPeerConnectionState, Registry,
+    SettingEngine, register_default_interceptors,
 };
 use webrtc::runtime::{Runtime, Sender, channel, default_runtime, sleep};
 
@@ -150,6 +153,7 @@ pub struct TrickleCli {
 pub struct TrickleExampleConfig {
     pub name: &'static str,
     pub ice_servers: Vec<RTCIceServer>,
+    pub ice_transport_policy: RTCIceTransportPolicy,
 }
 
 #[derive(Debug)]
@@ -311,15 +315,21 @@ pub async fn run_example(_cli: TrickleCli, config: TrickleExampleConfig) -> Resu
                         let mut media = MediaEngine::default();
                         media.register_default_codecs()?;
                         let registry = register_default_interceptors(Registry::new(), &mut media)?;
+                        let mut setting_engine = SettingEngine::default();
+                        setting_engine.set_answering_dtls_role(RTCDtlsRole::Server)?;
+                        setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryOnly);
+                        setting_engine.set_multicast_dns_timeout(Some(Duration::from_secs(10)));
 
                         let pc = PeerConnectionBuilder::new()
                             .with_configuration(
                                 RTCConfigurationBuilder::new()
                                     .with_ice_servers(config.ice_servers.clone())
+                                    .with_ice_transport_policy(config.ice_transport_policy)
                                     .build(),
                             )
                             .with_media_engine(media)
                             .with_interceptor_registry(registry)
+                            .with_setting_engine(setting_engine)
                             .with_handler(Arc::new(TrickleHandler {
                                 runtime: runtime.clone(),
                                 ws_out_tx: ws_out_tx.clone(),

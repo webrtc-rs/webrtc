@@ -176,3 +176,8 @@ bench = false
 name = "trickle-ice-srflx"
 path = "examples/trickle-ice-srflx/trickle-ice-srflx.rs"
 bench = false
+
+[[example]]
+name = "trickle-ice-relay"
+path = "examples/trickle-ice-relay/trickle-ice-relay.rs"
+bench = false

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use webrtc::peer_connection::RTCIceTransportPolicy;
 
 #[path = "../trickle_ice_common/mod.rs"]
 mod trickle_ice_common;
@@ -34,6 +35,7 @@ async fn main() -> Result<()> {
         TrickleExampleConfig {
             name: "trickle-ice-host",
             ice_servers: vec![],
+            ice_transport_policy: RTCIceTransportPolicy::All,
         },
     )
     .await

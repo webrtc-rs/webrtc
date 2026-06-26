@@ -84,21 +84,7 @@ impl RTCTurnRelayer {
     }
 
     pub(crate) fn is_turn_message(&self, msg: &TaggedBytesMut) -> bool {
-        if !self.clients.contains_key(&FourTuple::from(&msg.transport)) {
-            return false;
-        }
-
-        if ChannelData::is_channel_data(&msg.message) || !is_stun_message(&msg.message) {
-            return true;
-        }
-
-        let mut stun_message = StunMessage::new();
-        stun_message.raw = msg.message.to_vec();
-        if stun_message.decode().is_err() {
-            return true;
-        }
-
-        stun_message.typ.method != METHOD_BINDING
+        self.matching_client_key(msg).is_some()
     }
 
     pub(crate) fn contains_local_addr(&self, local_addr: SocketAddr) -> bool {
@@ -259,6 +245,71 @@ impl RTCTurnRelayer {
         }
     }
 
+    fn matching_client_key(&self, msg: &TaggedBytesMut) -> Option<FourTuple> {
+        let exact = FourTuple::from(&msg.transport);
+        if self.clients.contains_key(&exact) {
+            return Some(exact);
+        }
+
+        let same_local: Vec<FourTuple> = self
+            .clients
+            .keys()
+            .copied()
+            .filter(|four_tuple| four_tuple.local_addr == msg.transport.local_addr)
+            .collect();
+        if same_local.is_empty() {
+            return None;
+        }
+
+        if ChannelData::is_channel_data(&msg.message) {
+            return Self::match_same_local_client(&same_local, msg.transport.peer_addr);
+        }
+
+        if !is_stun_message(&msg.message) {
+            return None;
+        }
+
+        let mut stun_message = StunMessage::new();
+        stun_message.raw = msg.message.to_vec();
+        if stun_message.decode().is_err() {
+            return None;
+        }
+
+        if stun_message.typ.method == METHOD_BINDING {
+            return None;
+        }
+
+        Self::match_same_local_client(&same_local, msg.transport.peer_addr)
+    }
+
+    fn match_same_local_client(
+        candidates: &[FourTuple],
+        peer_addr: SocketAddr,
+    ) -> Option<FourTuple> {
+        if candidates.len() == 1 {
+            return Some(candidates[0]);
+        }
+
+        if let Some(exact) = candidates
+            .iter()
+            .copied()
+            .find(|four_tuple| four_tuple.peer_addr == peer_addr)
+        {
+            return Some(exact);
+        }
+
+        let mut matching_port = candidates
+            .iter()
+            .copied()
+            .filter(|four_tuple| four_tuple.peer_addr.port() == peer_addr.port());
+        let first = matching_port.next()?;
+        if matching_port.next().is_none() {
+            Some(first)
+        } else {
+            None
+        }
+    }
+
     fn remove_client(&mut self, four_tuple: FourTuple) {
         if let Some(mut managed_client) = self.clients.remove(&four_tuple) {
             if let Some(relay_addr) = managed_client.relay_addr.take() {
@@ -334,7 +385,9 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     type Time = Instant;
 
     fn handle_read(&mut self, msg: TaggedBytesMut) -> Result<()> {
-        if let Some(managed_client) = self.clients.get_mut(&FourTuple::from(&msg.transport)) {
+        if let Some(client_key) = self.matching_client_key(&msg)
+            && let Some(managed_client) = self.clients.get_mut(&client_key)
+        {
             managed_client.client.handle_read(msg)?;
         }
         Ok(())
@@ -545,5 +598,89 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
             self.remove_client(key);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+    use rtc::peer_connection::configuration::RTCIceServer;
+    use rtc::stun::attributes::{ATTR_NONCE, ATTR_REALM};
+    use rtc::stun::error_code::CODE_UNAUTHORIZED;
+    use rtc::stun::message::{CLASS_ERROR_RESPONSE, MessageType, TransactionId};
+    use rtc::stun::textattrs::{Nonce, Realm};
+    use std::net::{IpAddr, Ipv4Addr};
+
+    fn build_turn_allocate_unauthorized(transaction_id: TransactionId) -> StunMessage {
+        let mut msg = StunMessage::new();
+        msg.build(&[
+            Box::new(transaction_id),
+            Box::new(MessageType::new(
+                rtc::stun::message::METHOD_ALLOCATE,
+                CLASS_ERROR_RESPONSE,
+            )),
+            Box::new(CODE_UNAUTHORIZED),
+            Box::new(Realm::new(ATTR_REALM, "webrtc.rs".to_owned())),
+            Box::new(Nonce::new(ATTR_NONCE, "nonce".to_owned())),
+        ])
+        .expect("failed to build TURN unauthorized response");
+        msg
+    }
+
+    #[test]
+    fn routes_turn_allocate_response_by_local_addr_and_port() {
+        crate::runtime::block_on(async {
+            let local_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+            let turn_peer_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3478);
+            let mut relayer = RTCTurnRelayer::new(
+                vec![local_addr],
+                vec![RTCIceServer {
+                    urls: vec![format!("turn:{}?transport=udp", turn_peer_addr)],
+                    username: "user".to_owned(),
+                    credential: "pass".to_owned(),
+                }],
+            );
+
+            relayer.gather().await.expect("TURN gather should start");
+            let initial_request = relayer.poll_write().expect("initial Allocate request");
+            assert_eq!(initial_request.transport.peer_addr, turn_peer_addr);
+
+            let mut initial_request_msg = StunMessage::new();
+            initial_request_msg.raw = initial_request.message.to_vec();
+            initial_request_msg
+                .decode()
+                .expect("decode initial Allocate request");
+
+            let response = build_turn_allocate_unauthorized(initial_request_msg.transaction_id);
+            let msg = TaggedBytesMut {
+                now: Instant::now(),
+                transport: TransportContext {
+                    local_addr,
+                    peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)), 3478),
+                    ecn: None,
+                    transport_protocol: TransportProtocol::UDP,
+                },
+                message: BytesMut::from(&response.raw[..]),
+            };
+
+            assert!(
+                relayer.is_turn_message(&msg),
+                "TURN error response on the same local socket and TURN port should route to the relayer"
+            );
+
+            relayer
+                .handle_read(msg)
+                .expect("relayer should accept TURN unauthorized response");
+
+            let retry_request = relayer
+                .poll_write()
+                .expect("authenticated Allocate retry after unauthorized response");
+            assert_eq!(retry_request.transport.peer_addr.port(), 3478);
+            assert!(
+                retry_request.message.len() > initial_request.message.len(),
+                "authenticated retry should be larger than the unauthenticated Allocate request"
+            );
+        });
     }
 }

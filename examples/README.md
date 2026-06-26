@@ -65,3 +65,5 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   candidate.
 - ✅ [Trickle ICE ServerReflexive](trickle-ice-srflx): Example demonstrates how to add ServerReflexive (STUN)
   type local candidate.
+- ✅ [Trickle ICE Relay](trickle-ice-relay): Example demonstrates how to add Relay (TURN)
+  type local candidate.
