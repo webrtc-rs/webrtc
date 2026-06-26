@@ -1,7 +1,8 @@
 //! Async peer connection wrapper
 
 pub(crate) mod driver;
-pub(crate) mod ice_gatherer;
+pub(crate) mod stun_gatherer;
+pub(crate) mod turn_relayer;
 
 use log::error;
 use std::collections::{HashMap, HashSet};
@@ -19,8 +20,9 @@ use driver::{
     DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
     PeerConnectionDriver,
 };
-use ice_gatherer::RTCIceGatherOptions;
-use ice_gatherer::RTCIceGatherer;
+use stun_gatherer::RTCStunGatherOptions;
+use stun_gatherer::RTCStunGatherer;
+use turn_relayer::RTCTurnRelayer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::ice::mdns::MulticastDnsMode;
@@ -208,7 +210,7 @@ where
         let core = self.builder.build()?;
         let configuration = core.get_configuration();
 
-        let opts = RTCIceGatherOptions {
+        let opts = RTCStunGatherOptions {
             ice_servers: configuration.ice_servers().to_vec(),
             ice_gather_policy: configuration.ice_transport_policy(),
         };
@@ -366,7 +368,7 @@ where
         core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
-        opts: RTCIceGatherOptions,
+        opts: RTCStunGatherOptions,
         mdns_mode: MulticastDnsMode,
         udp_addrs: Vec<A>,
         _tcp_addrs: Vec<A>,
@@ -408,10 +410,12 @@ where
             driver_handle: Mutex::new(None),
         };
 
-        let ice_gatherer = RTCIceGatherer::new(local_addrs, opts);
+        let stun_gatherer = RTCStunGatherer::new(local_addrs.clone(), opts.clone());
+        let turn_relayer = RTCTurnRelayer::new(local_addrs, opts.ice_servers.clone());
         let mut driver = PeerConnectionDriver::new(
             peer_connection.inner.clone(),
-            ice_gatherer,
+            stun_gatherer,
+            turn_relayer,
             async_udp_sockets,
             async_mdns_socket,
         )

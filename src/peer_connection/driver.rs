@@ -4,7 +4,8 @@
 
 #![allow(clippy::collapsible_if)]
 
-use super::ice_gatherer::{RTCIceGatherer, RTCIceGathererEventIn, RTCIceGathererEventOut};
+use super::stun_gatherer::{RTCStunGatherEventIn, RTCStunGatherEventOut, RTCStunGatherer};
+use super::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
 use crate::data_channel::{DataChannelEvent, DataChannelImpl};
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
@@ -92,10 +93,13 @@ where
     I: Interceptor,
 {
     inner: Arc<PeerConnectionRef<I>>,
-    /// ICE gatherer for managing ICE candidate gathering
-    ice_gatherer: RTCIceGatherer,
+    stun_gatherer: RTCStunGatherer,
+    turn_relayer: RTCTurnRelayer,
     sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
     mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
+    ice_gathering_active: bool,
+    stun_gathering_complete: bool,
+    turn_gathering_complete: bool,
 }
 
 impl<I> PeerConnectionDriver<I>
@@ -105,7 +109,8 @@ where
     /// Create a new driver for the given peer connection
     pub(crate) async fn new(
         inner: Arc<PeerConnectionRef<I>>,
-        ice_gatherer: RTCIceGatherer,
+        stun_gatherer: RTCStunGatherer,
+        turn_relayer: RTCTurnRelayer,
         sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
         mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
     ) -> Result<Self> {
@@ -115,9 +120,13 @@ where
 
         Ok(Self {
             inner,
-            ice_gatherer,
+            stun_gatherer,
+            turn_relayer,
             sockets,
             mdns_socket,
+            ice_gathering_active: false,
+            stun_gathering_complete: false,
+            turn_gathering_complete: false,
         })
     }
 
@@ -179,17 +188,21 @@ where
         let mut active_socket_count = socket_list.len();
 
         loop {
-            // 1.a ice_gatherer poll_write()
+            // 1.a stun_gatherer poll_write()
             {
-                while let Some(msg) = self.ice_gatherer.poll_write() {
+                while let Some(msg) = self.stun_gatherer.poll_write() {
                     let four_tuple: FourTuple = FourTuple::from(&msg.transport);
-                    if self.handle_write(msg).await.is_err() {
+                    if let Err(err) = self.handle_write(msg).await {
+                        error!(
+                            "Failed to write packet to {:?} from {:?}: {}",
+                            four_tuple.peer_addr, four_tuple.local_addr, err
+                        );
                         if let Err(err) = self
-                            .ice_gatherer
-                            .handle_event(RTCIceGathererEventIn::SocketWriteFailure(four_tuple))
+                            .stun_gatherer
+                            .handle_event(RTCStunGatherEventIn::SocketWriteFailure(four_tuple))
                         {
                             error!(
-                                "Failed to handle event in ice_gatherer to {:?} from {:?}: {}",
+                                "Failed to handle event in stun_gatherer to {:?} from {:?}: {}",
                                 four_tuple.peer_addr, four_tuple.local_addr, err
                             );
                         }
@@ -197,25 +210,59 @@ where
                 }
             }
 
-            // 1.b peer_connection poll_write() - Send all outgoing packets
+            // 1.b turn_relayer poll_write()
+            {
+                while let Some(msg) = self.turn_relayer.poll_write() {
+                    let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+                    if let Err(err) = self.handle_write(msg).await {
+                        error!(
+                            "Failed to write packet to {:?} from {:?}: {}",
+                            four_tuple.peer_addr, four_tuple.local_addr, err
+                        );
+                        if let Err(err) = self
+                            .turn_relayer
+                            .handle_event(RTCTurnRelayEventIn::SocketWriteFailure(four_tuple))
+                        {
+                            error!(
+                                "Failed to handle event in turn_relayer to {:?} from {:?}: {}",
+                                four_tuple.peer_addr, four_tuple.local_addr, err
+                            );
+                        }
+                    }
+                }
+            }
+
+            // 1.c peer_connection poll_write() - Send all outgoing packets
             {
                 let mut core = self.inner.core.lock().await;
                 while let Some(msg) = core.poll_write() {
                     drop(core);
-                    //TODO: handle socket write error event?
-                    let _ = self.handle_write(msg).await;
+                    let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+                    if let Err(err) = self.handle_write(msg).await {
+                        error!(
+                            "Failed to write packet to {:?} from {:?}: {}",
+                            four_tuple.peer_addr, four_tuple.local_addr, err
+                        );
+                    }
                     core = self.inner.core.lock().await;
                 }
             }
 
-            // 2.a ice_gatherer poll_event()
+            // 2.a stun_gatherer poll_event()
             {
-                while let Some(event) = self.ice_gatherer.poll_event() {
-                    self.handle_gather_event(event).await;
+                while let Some(event) = self.stun_gatherer.poll_event() {
+                    self.handle_stun_gather_event(event).await;
                 }
             }
 
-            // 2.b peer_connection poll_event() - Process all events
+            // 2.b turn_relayer poll_event()
+            {
+                while let Some(event) = self.turn_relayer.poll_event() {
+                    self.handle_turn_relay_event(event).await;
+                }
+            }
+
+            // 2.c peer_connection poll_event() - Process all events
             {
                 let mut core = self.inner.core.lock().await;
                 while let Some(event) = core.poll_event() {
@@ -225,7 +272,14 @@ where
                 }
             }
 
-            // 3.a no need for ice_gatherer poll_read()
+            // 3.a turn_relayer poll_read() - deliver decapsulated relay data,
+            // but no need for stun_gatherer poll_read()
+            {
+                while let Some(message) = self.turn_relayer.poll_read() {
+                    let mut core = self.inner.core.lock().await;
+                    core.handle_read(message)?;
+                }
+            }
 
             // 3.b peer_connection poll_read() - Process incoming messages
             {
@@ -243,9 +297,14 @@ where
                 core.poll_timeout()
                     .unwrap_or(Instant::now() + DEFAULT_TIMEOUT_DURATION)
             };
-            if let Some(ice_gatherer_timeout) = self.ice_gatherer.poll_timeout() {
-                if ice_gatherer_timeout < timeout {
-                    timeout = ice_gatherer_timeout;
+            if let Some(stun_gatherer_timeout) = self.stun_gatherer.poll_timeout() {
+                if stun_gatherer_timeout < timeout {
+                    timeout = stun_gatherer_timeout;
+                }
+            }
+            if let Some(turn_relay_timeout) = self.turn_relayer.poll_timeout() {
+                if turn_relay_timeout < timeout {
+                    timeout = turn_relay_timeout;
                 }
             }
 
@@ -256,7 +315,8 @@ where
             // 4.b handle immediate timeout
             if delay_from_now.is_zero() {
                 let now = Instant::now();
-                self.ice_gatherer.handle_timeout(now)?;
+                self.stun_gatherer.handle_timeout(now)?;
+                self.turn_relayer.handle_timeout(now)?;
                 let mut core = self.inner.core.lock().await;
                 core.handle_timeout(now)?;
                 continue;
@@ -270,7 +330,8 @@ where
                 // Timer expired
                 _ = timer.fuse() => {
                     let now = Instant::now();
-                    self.ice_gatherer.handle_timeout(now)?;
+                    self.stun_gatherer.handle_timeout(now)?;
+                    self.turn_relayer.handle_timeout(now)?;
                     let mut core = self.inner.core.lock().await;
                     core.handle_timeout(now)?;
                 }
@@ -339,65 +400,44 @@ where
         }
     }
 
-    async fn handle_write(&self, msg: TaggedBytesMut) -> Result<()> {
+    async fn handle_write(&mut self, msg: TaggedBytesMut) -> Result<usize> {
         if msg.transport.peer_addr.port() == MDNS_PORT {
             if let Some(socket) = &self.mdns_socket {
-                match socket.send_to(&msg.message, msg.transport.peer_addr).await {
-                    Ok(n) => {
-                        trace!(
-                            "Sent {} bytes to {:?} via mDNS socket {:?}",
-                            n,
-                            msg.transport.peer_addr,
-                            socket.local_addr().ok()
-                        );
-                        Ok(())
-                    }
-                    Err(err) => {
-                        error!(
-                            "Failed to send mDNS packet to {:?}: {}",
-                            msg.transport.peer_addr, err
-                        );
-                        Err(err.into())
-                    }
-                }
+                Ok(socket
+                    .send_to(&msg.message, msg.transport.peer_addr)
+                    .await?)
             } else {
                 trace!(
                     "None mDNS socket, drop the packet to {:?} from {:?}",
                     msg.transport.peer_addr, msg.transport.local_addr
                 );
-                Ok(())
+                Ok(0)
             }
+        } else if self
+            .turn_relayer
+            .contains_local_addr(msg.transport.local_addr)
+        {
+            let n = msg.message.len();
+            self.turn_relayer.handle_write(msg)?;
+            Ok(n)
+        } else if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
+            Ok(socket
+                .send_to(&msg.message, msg.transport.peer_addr)
+                .await?)
         } else {
-            if let Some(socket) = self.sockets.get(&msg.transport.local_addr) {
-                match socket.send_to(&msg.message, msg.transport.peer_addr).await {
-                    Ok(n) => {
-                        trace!(
-                            "Sent {} bytes to {:?} from {:?}",
-                            n, msg.transport.peer_addr, msg.transport.local_addr
-                        );
-                        Ok(())
-                    }
-                    Err(err) => {
-                        error!(
-                            "Failed to send to {:?} from {:?}: {}",
-                            msg.transport.peer_addr, msg.transport.local_addr, err
-                        );
-                        Err(err.into())
-                    }
-                }
-            } else {
-                trace!(
-                    "None udp socket, drop the packet to {:?} from {:?}",
-                    msg.transport.peer_addr, msg.transport.local_addr
-                );
-                Ok(())
-            }
+            trace!(
+                "None udp socket, drop the packet to {:?} from {:?}",
+                msg.transport.peer_addr, msg.transport.local_addr
+            );
+            Ok(0)
         }
     }
 
     async fn handle_read(&mut self, msg: TaggedBytesMut) -> Result<()> {
-        if self.ice_gatherer.is_ice_message(&msg) {
-            self.ice_gatherer.handle_read(msg)?;
+        if self.turn_relayer.is_turn_message(&msg) {
+            self.turn_relayer.handle_read(msg)?;
+        } else if self.stun_gatherer.is_stun_message(&msg) {
+            self.stun_gatherer.handle_read(msg)?;
         } else {
             let mut core = self.inner.core.lock().await;
             core.handle_read(msg)?;
@@ -406,21 +446,46 @@ where
         Ok(())
     }
 
-    async fn handle_gather_event(&mut self, event: RTCIceGathererEventOut) {
+    async fn handle_stun_gather_event(&mut self, event: RTCStunGatherEventOut) {
         match event {
-            RTCIceGathererEventOut::LocalIceCandidate(candidate) => {
+            RTCStunGatherEventOut::LocalIceCandidate(candidate) => {
                 trace!("LocalIceCandidate {:?}", candidate);
                 let mut core = self.inner.core.lock().await;
                 if let Err(err) = core.add_local_candidate(candidate) {
                     error!("Failed to add local candidate: {}", err);
                 }
             }
-            RTCIceGathererEventOut::IceGatheringComplete => {
-                let end_of_candidates = RTCIceCandidateInit::default();
+            RTCStunGatherEventOut::StunGatheringComplete => {
+                self.stun_gathering_complete = true;
+                self.finish_gathering_if_ready().await;
+            }
+        }
+    }
+
+    async fn handle_turn_relay_event(&mut self, event: RTCTurnRelayEventOut) {
+        match event {
+            RTCTurnRelayEventOut::LocalIceCandidate(candidate) => {
+                trace!("LocalRelayCandidate {:?}", candidate);
                 let mut core = self.inner.core.lock().await;
-                if let Err(err) = core.add_local_candidate(end_of_candidates) {
-                    error!("Failed to add end_of_candidates: {}", err);
+                if let Err(err) = core.add_local_candidate(candidate) {
+                    error!("Failed to add relay local candidate: {}", err);
                 }
+            }
+            RTCTurnRelayEventOut::TurnGatheringComplete => {
+                self.turn_gathering_complete = true;
+                self.finish_gathering_if_ready().await;
+            }
+        }
+    }
+
+    async fn finish_gathering_if_ready(&mut self) {
+        if self.ice_gathering_active && self.stun_gathering_complete && self.turn_gathering_complete
+        {
+            self.ice_gathering_active = false;
+            let end_of_candidates = RTCIceCandidateInit::default();
+            let mut core = self.inner.core.lock().await;
+            if let Err(err) = core.add_local_candidate(end_of_candidates) {
+                error!("Failed to add end_of_candidates: {}", err);
             }
         }
     }
@@ -740,13 +805,26 @@ where
                 //Do nothing, just want to wake up from futures::select! in order to poll_write
             }
             PeerConnectionDriverEvent::IceGathering => {
-                if self.ice_gatherer.state() != RTCIceGatheringState::Gathering {
-                    if let Err(err) = self.ice_gatherer.gather().await {
+                self.ice_gathering_active = true;
+                self.stun_gathering_complete = false;
+                self.turn_gathering_complete = false;
+                if self.stun_gatherer.state() != RTCIceGatheringState::Gathering {
+                    if let Err(err) = self.stun_gatherer.gather().await {
                         error!("Failed to gather ice gathering: {}", err);
                     }
                 }
+                if self.turn_relayer.state() != RTCIceGatheringState::Gathering {
+                    if let Err(err) = self.turn_relayer.gather().await {
+                        error!("Failed to gather relay candidates: {}", err);
+                    }
+                }
             }
-            PeerConnectionDriverEvent::Close => return true,
+            PeerConnectionDriverEvent::Close => {
+                if let Err(err) = self.turn_relayer.close() {
+                    error!("Failed to close turn_relayer: {}", err);
+                }
+                return true;
+            }
         }
 
         false

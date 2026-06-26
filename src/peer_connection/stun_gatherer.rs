@@ -1,6 +1,6 @@
 //! ICE Candidate Gathering (Sans-I/O)
 //!
-//! This module provides RTCIceGatherer for gathering ICE candidates in a Sans-I/O manner.
+//! This module provides RTCStunGatherer for gathering ICE candidates in a Sans-I/O manner.
 //! Unlike the old async version, this gatherer is a configuration object that holds
 //! the ICE servers and state.
 
@@ -29,29 +29,29 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::time::Instant;
 
-/// ICEGatherOptions provides options relating to the gathering of ICE candidates.
+/// RTCStunGatherOptions provides options relating to the gathering of ICE Stun candidates.
 #[derive(Default, Debug, Clone)]
-pub(crate) struct RTCIceGatherOptions {
+pub(crate) struct RTCStunGatherOptions {
     pub(crate) ice_servers: Vec<RTCIceServer>,
     pub(crate) ice_gather_policy: RTCIceTransportPolicy,
 }
 
 #[derive(Debug)]
-pub enum RTCIceGathererEventIn {
+pub(crate) enum RTCStunGatherEventIn {
     SocketWriteFailure(FourTuple),
 }
 
 #[derive(Debug)]
-pub enum RTCIceGathererEventOut {
+pub(crate) enum RTCStunGatherEventOut {
     LocalIceCandidate(RTCIceCandidateInit),
-    IceGatheringComplete,
+    StunGatheringComplete,
 }
 
-/// RTCIceGatherer gathers local host, server reflexive and relay candidates
+/// RTCStunGatherer gathers local host, server reflexive and relay candidates
 /// in a Sans-I/O manner.
 ///
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
-pub(crate) struct RTCIceGatherer {
+pub(crate) struct RTCStunGatherer {
     local_addrs: Vec<SocketAddr>,
     ice_servers: Vec<RTCIceServer>,
     gather_policy: RTCIceTransportPolicy,
@@ -60,12 +60,12 @@ pub(crate) struct RTCIceGatherer {
     stun_clients: HashMap<FourTuple, StunClient>,
 
     wouts: VecDeque<TaggedBytesMut>,
-    events: VecDeque<RTCIceGathererEventOut>,
+    events: VecDeque<RTCStunGatherEventOut>,
 }
 
-impl RTCIceGatherer {
+impl RTCStunGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
-    pub(crate) fn new(local_addrs: Vec<SocketAddr>, opts: RTCIceGatherOptions) -> Self {
+    pub(crate) fn new(local_addrs: Vec<SocketAddr>, opts: RTCStunGatherOptions) -> Self {
         Self {
             local_addrs,
             ice_servers: opts.ice_servers,
@@ -83,7 +83,7 @@ impl RTCIceGatherer {
         self.state
     }
 
-    pub(crate) fn is_ice_message(&self, msg: &TaggedBytesMut) -> bool {
+    pub(crate) fn is_stun_message(&self, msg: &TaggedBytesMut) -> bool {
         for four_tuple in self.stun_clients.keys() {
             if four_tuple.peer_addr == msg.transport.peer_addr
                 && four_tuple.local_addr == msg.transport.local_addr
@@ -102,7 +102,7 @@ impl RTCIceGatherer {
         if self.stun_clients.is_empty() && self.state != RTCIceGatheringState::Complete {
             self.state = RTCIceGatheringState::Complete;
             self.events
-                .push_back(RTCIceGathererEventOut::IceGatheringComplete);
+                .push_back(RTCStunGatherEventOut::StunGatheringComplete);
         }
         Ok(())
     }
@@ -127,7 +127,7 @@ impl RTCIceGatherer {
             let candidate_init = RTCIceCandidate::from(&candidate).to_json()?;
 
             self.events
-                .push_back(RTCIceGathererEventOut::LocalIceCandidate(candidate_init));
+                .push_back(RTCStunGatherEventOut::LocalIceCandidate(candidate_init));
         }
         Ok(())
     }
@@ -145,7 +145,7 @@ impl RTCIceGatherer {
                 }
 
                 for local_addr in &self.local_addrs {
-                    match RTCIceGatherer::gather_from_stun_server(*local_addr, url).await {
+                    match RTCStunGatherer::gather_from_stun_server(*local_addr, url).await {
                         Ok(stun_client) => {
                             self.stun_clients.insert(
                                 FourTuple {
@@ -223,10 +223,10 @@ impl RTCIceGatherer {
     }
 }
 
-impl Protocol<TaggedBytesMut, (), RTCIceGathererEventIn> for RTCIceGatherer {
+impl Protocol<TaggedBytesMut, (), RTCStunGatherEventIn> for RTCStunGatherer {
     type Rout = ();
     type Wout = TaggedBytesMut;
-    type Eout = RTCIceGathererEventOut;
+    type Eout = RTCStunGatherEventOut;
     type Error = Error;
     type Time = Instant;
 
@@ -260,9 +260,9 @@ impl Protocol<TaggedBytesMut, (), RTCIceGathererEventIn> for RTCIceGatherer {
         self.wouts.pop_front()
     }
 
-    fn handle_event(&mut self, evt: RTCIceGathererEventIn) -> Result<(), Self::Error> {
+    fn handle_event(&mut self, evt: RTCStunGatherEventIn) -> Result<(), Self::Error> {
         match evt {
-            RTCIceGathererEventIn::SocketWriteFailure(four_tuple) => {
+            RTCStunGatherEventIn::SocketWriteFailure(four_tuple) => {
                 if let Some(mut stun_client) = self.stun_clients.remove(&four_tuple) {
                     let _ = stun_client.close();
 
@@ -270,7 +270,7 @@ impl Protocol<TaggedBytesMut, (), RTCIceGathererEventIn> for RTCIceGatherer {
                     {
                         self.state = RTCIceGatheringState::Complete;
                         self.events
-                            .push_back(RTCIceGathererEventOut::IceGatheringComplete);
+                            .push_back(RTCStunGatherEventOut::StunGatheringComplete);
                     }
                 }
             }
@@ -322,7 +322,7 @@ impl Protocol<TaggedBytesMut, (), RTCIceGathererEventIn> for RTCIceGatherer {
                             peer_addr: stun_client.peer_addr(),
                         });
                         self.events
-                            .push_back(RTCIceGathererEventOut::LocalIceCandidate(candidate_init));
+                            .push_back(RTCStunGatherEventOut::LocalIceCandidate(candidate_init));
                     }
                     _ => {
                         error!("STUN error: {:?}", event);
@@ -338,7 +338,7 @@ impl Protocol<TaggedBytesMut, (), RTCIceGathererEventIn> for RTCIceGatherer {
                 if self.stun_clients.is_empty() && self.state != RTCIceGatheringState::Complete {
                     self.state = RTCIceGatheringState::Complete;
                     self.events
-                        .push_back(RTCIceGathererEventOut::IceGatheringComplete);
+                        .push_back(RTCStunGatherEventOut::StunGatheringComplete);
                 }
             }
         }

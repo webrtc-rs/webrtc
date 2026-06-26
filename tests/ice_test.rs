@@ -2,11 +2,23 @@
 
 use rtc::ice::mdns::MulticastDnsMode;
 use rtc::peer_connection::transport::RTCIceCandidate;
+use rtc::stun::attributes::{ATTR_NONCE, ATTR_REALM};
+use rtc::stun::error_code::CODE_UNAUTHORIZED;
+use rtc::stun::message::{
+    CLASS_ERROR_RESPONSE, CLASS_SUCCESS_RESPONSE, METHOD_ALLOCATE, METHOD_CREATE_PERMISSION,
+    Message as StunMessage, MessageType,
+};
+use rtc::stun::textattrs::{Nonce, Realm};
+use rtc::turn::proto::lifetime::Lifetime;
+use rtc::turn::proto::relayaddr::RelayedAddress;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::net::UdpSocket;
 use webrtc::peer_connection::*;
 use webrtc::peer_connection::{
     MediaEngine, RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType,
-    RTCIceGatheringState, RTCIceServer, RTCPeerConnectionIceEvent,
+    RTCIceGatheringState, RTCIceServer, RTCIceTransportPolicy, RTCPeerConnectionIceEvent,
 };
 use webrtc::runtime::block_on;
 use webrtc::runtime::channel;
@@ -62,6 +74,85 @@ impl PeerConnectionEventHandler for CandidateTypeTracker {
             let _ = self.gathering_tx.try_send(());
         }
     }
+}
+
+async fn run_mock_turn_server(turn_socket: UdpSocket, relay_addr: SocketAddr) {
+    let mut buf = vec![0u8; 2048];
+    loop {
+        let Ok((n, peer_addr)) = turn_socket.recv_from(&mut buf).await else {
+            break;
+        };
+
+        let mut msg = StunMessage::new();
+        msg.raw = buf[..n].to_vec();
+        if msg.decode().is_err() {
+            continue;
+        }
+
+        let response = match msg.typ.method {
+            METHOD_ALLOCATE => {
+                if msg.get(ATTR_NONCE).is_ok() {
+                    build_turn_allocate_success(msg.transaction_id, relay_addr)
+                } else {
+                    build_turn_allocate_unauthorized(msg.transaction_id)
+                }
+            }
+            METHOD_CREATE_PERMISSION => build_turn_create_permission_success(msg.transaction_id),
+            _ => continue,
+        };
+
+        if turn_socket.send_to(&response.raw, peer_addr).await.is_err() {
+            break;
+        }
+    }
+}
+
+fn build_turn_allocate_unauthorized(
+    transaction_id: rtc::stun::message::TransactionId,
+) -> StunMessage {
+    let mut msg = StunMessage::new();
+    msg.build(&[
+        Box::new(transaction_id),
+        Box::new(MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE)),
+        Box::new(CODE_UNAUTHORIZED),
+        Box::new(Realm::new(ATTR_REALM, "webrtc.rs".to_owned())),
+        Box::new(Nonce::new(ATTR_NONCE, "nonce".to_owned())),
+    ])
+    .expect("failed to build TURN unauthorized response");
+    msg
+}
+
+fn build_turn_allocate_success(
+    transaction_id: rtc::stun::message::TransactionId,
+    relay_addr: SocketAddr,
+) -> StunMessage {
+    let mut msg = StunMessage::new();
+    msg.build(&[
+        Box::new(transaction_id),
+        Box::new(MessageType::new(METHOD_ALLOCATE, CLASS_SUCCESS_RESPONSE)),
+        Box::new(RelayedAddress {
+            ip: relay_addr.ip(),
+            port: relay_addr.port(),
+        }),
+        Box::new(Lifetime(Duration::from_secs(600))),
+    ])
+    .expect("failed to build TURN allocate success response");
+    msg
+}
+
+fn build_turn_create_permission_success(
+    transaction_id: rtc::stun::message::TransactionId,
+) -> StunMessage {
+    let mut msg = StunMessage::new();
+    msg.build(&[
+        Box::new(transaction_id),
+        Box::new(MessageType::new(
+            METHOD_CREATE_PERMISSION,
+            CLASS_SUCCESS_RESPONSE,
+        )),
+    ])
+    .expect("failed to build TURN create-permission success response");
+    msg
 }
 
 #[test]
@@ -389,5 +480,76 @@ fn test_mdns_query_and_gather_rewrites_host_candidate() {
             found_mdns_host_candidate,
             "Should have received at least one mDNS host candidate"
         );
+    });
+}
+
+#[test]
+fn test_turn_relay_gathering_with_mock_turn_server() {
+    block_on(async {
+        let turn_socket = UdpSocket::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind mock TURN server");
+        let turn_addr = turn_socket
+            .local_addr()
+            .expect("failed to get mock TURN address");
+        let relay_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+        let turn_task = tokio::spawn(run_mock_turn_server(turn_socket, relay_addr));
+
+        let mut media_engine = MediaEngine::default();
+        media_engine
+            .register_default_codecs()
+            .expect("Failed to register codecs");
+
+        let ice_servers = vec![RTCIceServer {
+            urls: vec![format!("turn:{}?transport=udp", turn_addr)],
+            username: "user".to_owned(),
+            credential: "pass".to_owned(),
+        }];
+
+        let config = RTCConfigurationBuilder::new()
+            .with_ice_servers(ice_servers)
+            .with_ice_transport_policy(RTCIceTransportPolicy::Relay)
+            .build();
+
+        let candidates = Arc::new(Mutex::new(Vec::new()));
+        let (gathering_tx, mut gathering_rx) = channel(8);
+        let handler = Arc::new(CandidateTypeTracker {
+            candidates: candidates.clone(),
+            gathering_tx,
+        });
+
+        let pc = PeerConnectionBuilder::new()
+            .with_configuration(config)
+            .with_media_engine(media_engine)
+            .with_handler(handler)
+            .with_udp_addrs(vec!["127.0.0.1:0"])
+            .build()
+            .await
+            .unwrap();
+
+        let _ = pc.create_data_channel("channel1", None).await.unwrap();
+
+        let offer = pc.create_offer(None).await.expect("Failed to create offer");
+        pc.set_local_description(offer)
+            .await
+            .expect("Failed to set local description");
+
+        tokio::time::timeout(Duration::from_secs(5), gathering_rx.recv())
+            .await
+            .expect("Timed out waiting for relay gathering to complete");
+
+        let gathered: Vec<RTCIceCandidateType> = candidates.lock().await.clone();
+        assert!(
+            gathered.contains(&RTCIceCandidateType::Relay),
+            "Expected a relay candidate, got {:?}",
+            gathered
+        );
+        assert!(
+            !gathered.contains(&RTCIceCandidateType::Host),
+            "Relay-only policy should not publish host candidates: {:?}",
+            gathered
+        );
+
+        turn_task.abort();
     });
 }
