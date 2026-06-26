@@ -20,7 +20,6 @@ use driver::{
     DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
     PeerConnectionDriver,
 };
-use stun_gatherer::RTCStunGatherOptions;
 use stun_gatherer::RTCStunGatherer;
 use turn_relayer::RTCTurnRelayer;
 
@@ -208,19 +207,12 @@ where
         };
 
         let core = self.builder.build()?;
-        let configuration = core.get_configuration();
-
-        let opts = RTCStunGatherOptions {
-            ice_servers: configuration.ice_servers().to_vec(),
-            ice_gather_policy: configuration.ice_transport_policy(),
-        };
 
         PeerConnectionImpl::new(
             core,
             runtime,
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
-            opts,
             self.mdns_mode,
             self.udp_addrs,
             self.tcp_addrs,
@@ -368,7 +360,6 @@ where
         core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
         handler: Arc<dyn PeerConnectionEventHandler>,
-        opts: RTCStunGatherOptions,
         mdns_mode: MulticastDnsMode,
         udp_addrs: Vec<A>,
         _tcp_addrs: Vec<A>,
@@ -395,6 +386,10 @@ where
             None
         };
 
+        let configuration = core.get_configuration();
+        let ice_servers = configuration.ice_servers().to_vec();
+        let ice_gather_policy = configuration.ice_transport_policy();
+
         let (driver_event_tx, driver_event_rx) =
             channel(PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY);
         let peer_connection = Self {
@@ -410,8 +405,9 @@ where
             driver_handle: Mutex::new(None),
         };
 
-        let stun_gatherer = RTCStunGatherer::new(local_addrs.clone(), opts.clone());
-        let turn_relayer = RTCTurnRelayer::new(local_addrs, opts.ice_servers.clone());
+        let stun_gatherer =
+            RTCStunGatherer::new(local_addrs.clone(), ice_servers.clone(), ice_gather_policy);
+        let turn_relayer = RTCTurnRelayer::new(local_addrs, ice_servers, ice_gather_policy);
         let mut driver = PeerConnectionDriver::new(
             peer_connection.inner.clone(),
             stun_gatherer,

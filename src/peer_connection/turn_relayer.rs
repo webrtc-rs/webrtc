@@ -3,7 +3,7 @@
 use crate::runtime;
 use log::{debug, error, trace, warn};
 use rtc::ice::url::SchemeType;
-use rtc::peer_connection::configuration::RTCIceServer;
+use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::{
     CandidateConfig, CandidateRelayConfig, RTCIceCandidate, RTCIceCandidateInit,
@@ -51,6 +51,7 @@ struct ManagedTurnClient {
 pub(crate) struct RTCTurnRelayer {
     local_addrs: Vec<SocketAddr>,
     ice_servers: Vec<RTCIceServer>,
+    ice_gather_policy: RTCIceTransportPolicy,
     state: RTCIceGatheringState,
     clients: HashMap<FourTuple, ManagedTurnClient>,
     relay_addrs: HashMap<SocketAddr, FourTuple>,
@@ -63,10 +64,15 @@ pub(crate) struct RTCTurnRelayer {
 }
 
 impl RTCTurnRelayer {
-    pub(crate) fn new(local_addrs: Vec<SocketAddr>, ice_servers: Vec<RTCIceServer>) -> Self {
+    pub(crate) fn new(
+        local_addrs: Vec<SocketAddr>,
+        ice_servers: Vec<RTCIceServer>,
+        ice_gather_policy: RTCIceTransportPolicy,
+    ) -> Self {
         Self {
             local_addrs,
             ice_servers,
+            ice_gather_policy,
             state: RTCIceGatheringState::New,
             clients: HashMap::new(),
             relay_addrs: HashMap::new(),
@@ -640,6 +646,7 @@ mod tests {
                     username: "user".to_owned(),
                     credential: "pass".to_owned(),
                 }],
+                RTCIceTransportPolicy::Relay,
             );
 
             relayer.gather().await.expect("TURN gather should start");

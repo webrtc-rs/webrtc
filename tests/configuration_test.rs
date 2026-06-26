@@ -349,6 +349,11 @@ fn test_ice_transport_policy() {
 
         let config_relay = RTCConfigurationBuilder::new()
             .with_ice_transport_policy(RTCIceTransportPolicy::Relay)
+            .with_ice_servers(vec![RTCIceServer {
+                urls: vec!["turn:turn.example.com:3478".to_string()],
+                username: "user".to_string(),
+                credential: "pass".to_string(),
+            }])
             .build();
 
         let handler_all = Arc::new(ConfigTestHandler);

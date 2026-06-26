@@ -29,13 +29,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::time::Instant;
 
-/// RTCStunGatherOptions provides options relating to the gathering of ICE Stun candidates.
-#[derive(Default, Debug, Clone)]
-pub(crate) struct RTCStunGatherOptions {
-    pub(crate) ice_servers: Vec<RTCIceServer>,
-    pub(crate) ice_gather_policy: RTCIceTransportPolicy,
-}
-
 #[derive(Debug)]
 pub(crate) enum RTCStunGatherEventIn {
     SocketWriteFailure(FourTuple),
@@ -54,7 +47,7 @@ pub(crate) enum RTCStunGatherEventOut {
 pub(crate) struct RTCStunGatherer {
     local_addrs: Vec<SocketAddr>,
     ice_servers: Vec<RTCIceServer>,
-    gather_policy: RTCIceTransportPolicy,
+    ice_gather_policy: RTCIceTransportPolicy,
     state: RTCIceGatheringState,
 
     stun_clients: HashMap<FourTuple, StunClient>,
@@ -65,11 +58,15 @@ pub(crate) struct RTCStunGatherer {
 
 impl RTCStunGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
-    pub(crate) fn new(local_addrs: Vec<SocketAddr>, opts: RTCStunGatherOptions) -> Self {
+    pub(crate) fn new(
+        local_addrs: Vec<SocketAddr>,
+        ice_servers: Vec<RTCIceServer>,
+        ice_gather_policy: RTCIceTransportPolicy,
+    ) -> Self {
         Self {
             local_addrs,
-            ice_servers: opts.ice_servers,
-            gather_policy: opts.ice_gather_policy,
+            ice_servers,
+            ice_gather_policy,
             state: RTCIceGatheringState::New,
 
             stun_clients: HashMap::new(),
@@ -97,8 +94,10 @@ impl RTCStunGatherer {
 
     pub(crate) async fn gather(&mut self) -> Result<(), Error> {
         self.state = RTCIceGatheringState::Gathering;
-        self.gather_host_candidates()?;
-        self.gather_srflx_candidates().await?;
+        if self.ice_gather_policy != RTCIceTransportPolicy::Relay {
+            self.gather_host_candidates()?;
+            self.gather_srflx_candidates().await?;
+        }
         if self.stun_clients.is_empty() && self.state != RTCIceGatheringState::Complete {
             self.state = RTCIceGatheringState::Complete;
             self.events
