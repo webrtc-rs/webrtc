@@ -57,14 +57,19 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// The socket should be bound and configured before being wrapped.
     fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>>;
 
-    /*
-    /// Create an async TCP socket from a standard socket
+    /// Create an async TCP listener from a standard listener
     ///
-    /// The socket should be bound and configured before being wrapped.
+    /// The listener should be bound and configured before being wrapped.
     fn wrap_tcp_listener(
         &self,
-        socket: std::net::TcpListener,
-    ) -> io::Result<Box<dyn AsyncTcpListener>>;*/
+        listener: std::net::TcpListener,
+    ) -> io::Result<Box<dyn AsyncTcpListener>>;
+
+    /// Connect to a remote TCP address.
+    fn connect_tcp<'a>(
+        &'a self,
+        remote_addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Box<dyn AsyncTcpStream>>> + Send + 'a>>;
 }
 
 /// Abstract implementation of a UDP socket for runtime independence
@@ -86,6 +91,38 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
 
     /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
+}
+
+/// Abstract implementation of a TCP listener for runtime independence.
+pub trait AsyncTcpListener: Send + Sync + Debug + 'static {
+    /// Accept a new TCP stream.
+    fn accept<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Box<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>;
+
+    /// Get the local address this listener is bound to.
+    fn local_addr(&self) -> io::Result<SocketAddr>;
+}
+
+/// Abstract implementation of a TCP stream for runtime independence.
+pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
+    /// Read bytes from the stream.
+    fn read<'a>(
+        &'a mut self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>>;
+
+    /// Write all bytes to the stream.
+    fn write_all<'a>(
+        &'a mut self,
+        buf: &'a [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>>;
+
+    /// Get the local address of the stream.
+    fn local_addr(&self) -> io::Result<SocketAddr>;
+
+    /// Get the peer address of the stream.
+    fn peer_addr(&self) -> io::Result<SocketAddr>;
 }
 
 /// An async mutex that works across different runtimes

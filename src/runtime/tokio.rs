@@ -1,6 +1,7 @@
 //! Tokio runtime implementation
 
 use super::*;
+use ::tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::sync::Arc;
 
 /// A WebRTC runtime for Tokio
@@ -37,6 +38,26 @@ impl Runtime for TokioRuntime {
             io: Arc::new(::tokio::net::UdpSocket::from_std(sock)?),
         }))
     }
+
+    fn wrap_tcp_listener(
+        &self,
+        listener: std::net::TcpListener,
+    ) -> io::Result<Box<dyn AsyncTcpListener>> {
+        listener.set_nonblocking(true)?;
+        Ok(Box::new(TcpListener {
+            io: ::tokio::net::TcpListener::from_std(listener)?,
+        }))
+    }
+
+    fn connect_tcp<'a>(
+        &'a self,
+        remote_addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Box<dyn AsyncTcpStream>>> + Send + 'a>> {
+        Box::pin(async move {
+            let stream = ::tokio::net::TcpStream::connect(remote_addr).await?;
+            Ok(Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>)
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +83,59 @@ impl AsyncUdpSocket for UdpSocket {
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
         self.io.local_addr()
+    }
+}
+
+#[derive(Debug)]
+struct TcpListener {
+    io: ::tokio::net::TcpListener,
+}
+
+impl AsyncTcpListener for TcpListener {
+    fn accept<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Box<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            let (stream, addr) = self.io.accept().await?;
+            Ok((
+                Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>,
+                addr,
+            ))
+        })
+    }
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.io.local_addr()
+    }
+}
+
+#[derive(Debug)]
+struct TcpStream {
+    io: ::tokio::net::TcpStream,
+}
+
+impl AsyncTcpStream for TcpStream {
+    fn read<'a>(
+        &'a mut self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        Box::pin(async move { self.io.read(buf).await })
+    }
+
+    fn write_all<'a>(
+        &'a mut self,
+        buf: &'a [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>> {
+        Box::pin(async move { self.io.write_all(buf).await })
+    }
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.io.local_addr()
+    }
+
+    fn peer_addr(&self) -> io::Result<SocketAddr> {
+        self.io.peer_addr()
     }
 }
 

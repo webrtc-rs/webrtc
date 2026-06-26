@@ -14,7 +14,7 @@ description = "A pure Rust implementation of WebRTC API"
 [features]
 default = ["runtime-tokio"]
 runtime-tokio = ["dep:tokio"]
-runtime-smol = ["dep:smol", "dep:async-broadcast"]
+runtime-smol = ["dep:smol", "dep:async-broadcast", "dep:futures-lite"]
 
 [dependencies]
 rtc = { version = "0.20.0-beta.1", path = "rtc/rtc" }
@@ -25,9 +25,10 @@ log = "0.4.29"
 futures = "0.3.31"
 
 # Async runtimes (all optional)
-tokio = { version = "1.49.0", features = ["net", "time", "sync", "rt", "rt-multi-thread"], optional = true }
+tokio = { version = "1.49.0", features = ["net", "io-util", "time", "sync", "rt", "rt-multi-thread"], optional = true }
 smol = { version = "2.0.2", optional = true }
 async-broadcast = { version = "0.7", optional = true }
+futures-lite = { version = "2.6.1", optional = true }
 
 [dev-dependencies]
 signal = { version = "0.20.0-beta.1", path = "rtc/examples/examples/signal", package = "rtc-signal" }

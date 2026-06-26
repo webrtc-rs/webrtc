@@ -2,7 +2,9 @@
 
 use super::*;
 use ::smol::net::UdpSocket as SmolUdpSocket;
+use ::smol::net::{TcpListener as SmolTcpListener, TcpStream as SmolTcpStream};
 use ::smol::spawn;
+use futures_lite::io::{AsyncReadExt, AsyncWriteExt};
 use std::sync::Arc;
 
 /// A WebRTC runtime for smol
@@ -41,6 +43,23 @@ impl Runtime for SmolRuntime {
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         Ok(Arc::new(UdpSocket::new(sock)?))
     }
+
+    fn wrap_tcp_listener(
+        &self,
+        listener: std::net::TcpListener,
+    ) -> io::Result<Box<dyn AsyncTcpListener>> {
+        Ok(Box::new(TcpListener::new(listener)?))
+    }
+
+    fn connect_tcp<'a>(
+        &'a self,
+        remote_addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Box<dyn AsyncTcpStream>>> + Send + 'a>> {
+        Box::pin(async move {
+            let stream = SmolTcpStream::connect(remote_addr).await?;
+            Ok(Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>)
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -76,6 +95,68 @@ impl AsyncUdpSocket for UdpSocket {
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
         self.io.local_addr()
+    }
+}
+
+#[derive(Debug)]
+struct TcpListener {
+    io: SmolTcpListener,
+}
+
+impl TcpListener {
+    fn new(listener: std::net::TcpListener) -> io::Result<Self> {
+        let async_listener = ::smol::Async::new(listener)?;
+        Ok(Self {
+            io: SmolTcpListener::from(async_listener),
+        })
+    }
+}
+
+impl AsyncTcpListener for TcpListener {
+    fn accept<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Box<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            let (stream, addr) = self.io.accept().await?;
+            Ok((
+                Box::new(TcpStream { io: stream }) as Box<dyn AsyncTcpStream>,
+                addr,
+            ))
+        })
+    }
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.io.local_addr()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct TcpStream {
+    io: SmolTcpStream,
+}
+
+impl AsyncTcpStream for TcpStream {
+    fn read<'a>(
+        &'a mut self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        Box::pin(async move { self.io.read(buf).await })
+    }
+
+    fn write_all<'a>(
+        &'a mut self,
+        buf: &'a [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + 'a>> {
+        Box::pin(async move { self.io.write_all(buf).await })
+    }
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.io.local_addr()
+    }
+
+    fn peer_addr(&self) -> io::Result<SocketAddr> {
+        self.io.peer_addr()
     }
 }
 
