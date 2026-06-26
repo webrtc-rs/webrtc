@@ -14,15 +14,14 @@ use rtc::turn::proto::relayaddr::RelayedAddress;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::net::UdpSocket;
 use webrtc::peer_connection::*;
 use webrtc::peer_connection::{
     MediaEngine, RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType,
     RTCIceGatheringState, RTCIceServer, RTCIceTransportPolicy, RTCPeerConnectionIceEvent,
 };
-use webrtc::runtime::block_on;
-use webrtc::runtime::channel;
+use webrtc::runtime::{AsyncUdpSocket, default_runtime, timeout};
 use webrtc::runtime::{Mutex, Sender};
+use webrtc::runtime::{block_on, channel};
 
 #[derive(Clone)]
 struct IceTestHandler;
@@ -76,7 +75,7 @@ impl PeerConnectionEventHandler for CandidateTypeTracker {
     }
 }
 
-async fn run_mock_turn_server(turn_socket: UdpSocket, relay_addr: SocketAddr) {
+async fn run_mock_turn_server(turn_socket: Arc<dyn AsyncUdpSocket>, relay_addr: SocketAddr) {
     let mut buf = vec![0u8; 2048];
     loop {
         let Ok((n, peer_addr)) = turn_socket.recv_from(&mut buf).await else {
@@ -486,14 +485,17 @@ fn test_mdns_query_and_gather_rewrites_host_candidate() {
 #[test]
 fn test_turn_relay_gathering_with_mock_turn_server() {
     block_on(async {
-        let turn_socket = UdpSocket::bind("127.0.0.1:0")
-            .await
-            .expect("failed to bind mock TURN server");
+        let runtime = default_runtime().expect("no async runtime available");
+        let turn_socket =
+            std::net::UdpSocket::bind("127.0.0.1:0").expect("failed to bind mock TURN server");
         let turn_addr = turn_socket
             .local_addr()
             .expect("failed to get mock TURN address");
+        let turn_socket = runtime
+            .wrap_udp_socket(turn_socket)
+            .expect("failed to wrap mock TURN socket");
         let relay_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
-        let turn_task = tokio::spawn(run_mock_turn_server(turn_socket, relay_addr));
+        let turn_task = runtime.spawn(Box::pin(run_mock_turn_server(turn_socket, relay_addr)));
 
         let mut media_engine = MediaEngine::default();
         media_engine
@@ -534,7 +536,7 @@ fn test_turn_relay_gathering_with_mock_turn_server() {
             .await
             .expect("Failed to set local description");
 
-        tokio::time::timeout(Duration::from_secs(5), gathering_rx.recv())
+        timeout(Duration::from_secs(5), gathering_rx.recv())
             .await
             .expect("Timed out waiting for relay gathering to complete");
 

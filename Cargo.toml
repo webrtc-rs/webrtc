@@ -171,13 +171,16 @@ bench = false
 name = "trickle-ice-host"
 path = "examples/trickle-ice-host/trickle-ice-host.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "trickle-ice-srflx"
 path = "examples/trickle-ice-srflx/trickle-ice-srflx.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "trickle-ice-relay"
 path = "examples/trickle-ice-relay/trickle-ice-relay.rs"
 bench = false
+required-features = ["runtime-tokio"]
