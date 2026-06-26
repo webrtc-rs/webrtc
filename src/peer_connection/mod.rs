@@ -1,8 +1,7 @@
 //! Async peer connection wrapper
 
 pub(crate) mod driver;
-pub(crate) mod stun_gatherer;
-pub(crate) mod turn_relayer;
+pub(crate) mod transports;
 
 use log::error;
 use std::collections::{HashMap, HashSet};
@@ -20,8 +19,8 @@ use driver::{
     DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
     PeerConnectionDriver,
 };
-use stun_gatherer::RTCStunGatherer;
-use turn_relayer::RTCTurnRelayer;
+use transports::stun_gatherer::RTCStunGatherer;
+use transports::turn_relayer::RTCTurnRelayer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::ice::mdns::MulticastDnsMode;

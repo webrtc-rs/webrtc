@@ -23,12 +23,12 @@ use std::time::Instant;
 const MAX_PENDING_PACKETS_PER_PEER: usize = 64;
 
 #[derive(Debug)]
-pub(crate) enum RTCTurnRelayEventIn {
+pub enum RTCTurnRelayEventIn {
     SocketWriteFailure(FourTuple),
 }
 
 #[derive(Debug)]
-pub(crate) enum RTCTurnRelayEventOut {
+pub enum RTCTurnRelayEventOut {
     LocalIceCandidate(RTCIceCandidateInit),
     TurnGatheringComplete,
 }
@@ -48,7 +48,7 @@ struct ManagedTurnClient {
     gather_finished: bool,
 }
 
-pub(crate) struct RTCTurnRelayer {
+pub struct RTCTurnRelayer {
     local_addrs: Vec<SocketAddr>,
     ice_servers: Vec<RTCIceServer>,
     ice_gather_policy: RTCIceTransportPolicy,
@@ -64,7 +64,7 @@ pub(crate) struct RTCTurnRelayer {
 }
 
 impl RTCTurnRelayer {
-    pub(crate) fn new(
+    pub fn new(
         local_addrs: Vec<SocketAddr>,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
@@ -85,19 +85,19 @@ impl RTCTurnRelayer {
         }
     }
 
-    pub(crate) fn state(&self) -> RTCIceGatheringState {
+    pub fn state(&self) -> RTCIceGatheringState {
         self.state
     }
 
-    pub(crate) fn is_turn_message(&self, msg: &TaggedBytesMut) -> bool {
+    pub fn is_turn_message(&self, msg: &TaggedBytesMut) -> bool {
         self.matching_client_key(msg).is_some()
     }
 
-    pub(crate) fn contains_local_addr(&self, local_addr: SocketAddr) -> bool {
+    pub fn contains_local_addr(&self, local_addr: SocketAddr) -> bool {
         self.relay_addrs.contains_key(&local_addr)
     }
 
-    pub(crate) async fn gather(&mut self) -> Result<()> {
+    pub async fn gather(&mut self) -> Result<()> {
         if self.state == RTCIceGatheringState::Gathering {
             return Ok(());
         }

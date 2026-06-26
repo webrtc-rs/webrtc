@@ -4,8 +4,10 @@
 
 #![allow(clippy::collapsible_if)]
 
-use super::stun_gatherer::{RTCStunGatherEventIn, RTCStunGatherEventOut, RTCStunGatherer};
-use super::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
+use super::transports::stun_gatherer::{
+    RTCStunGatherEventIn, RTCStunGatherEventOut, RTCStunGatherer,
+};
+use super::transports::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
 use crate::data_channel::{DataChannelEvent, DataChannelImpl};
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
