@@ -168,6 +168,12 @@ path = "examples/swap-tracks/swap-tracks.rs"
 bench = false
 
 [[example]]
+name = "trickle-ice"
+path = "examples/trickle-ice/trickle-ice.rs"
+bench = false
+required-features = ["runtime-tokio"]
+
+[[example]]
 name = "trickle-ice-host"
 path = "examples/trickle-ice-host/trickle-ice-host.rs"
 bench = false
