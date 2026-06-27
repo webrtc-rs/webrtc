@@ -12,6 +12,9 @@ use crate::data_channel::{DataChannelEvent, DataChannelImpl};
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
+use crate::peer_connection::transports::{
+    SocketRecvResult, TcpReadResult, is_retryable_socket_recv_error,
+};
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, channel};
@@ -39,7 +42,6 @@ use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -55,57 +57,17 @@ pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
 
-enum SocketRecvResult {
-    Packet {
-        n: usize,
-        local_addr: SocketAddr,
-        peer_addr: SocketAddr,
-        idx: usize,
-        buf: Vec<u8>,
-    },
-    Error {
-        err: io::Error,
-        local_addr: SocketAddr,
-        idx: usize,
-        buf: Vec<u8>,
-    },
-}
-
-fn is_retryable_socket_recv_error(err: &io::Error) -> bool {
-    matches!(
-        err.kind(),
-        io::ErrorKind::Interrupted
-            | io::ErrorKind::WouldBlock
-            | io::ErrorKind::ConnectionRefused
-            | io::ErrorKind::ConnectionReset
-            | io::ErrorKind::TimedOut
-    )
-}
-
-enum TcpReadResult {
-    Packet {
-        four_tuple: FourTuple,
-        n: usize,
-        buf: Vec<u8>,
-    },
-    Error {
-        four_tuple: FourTuple,
-        err: io::Error,
-        buf: Vec<u8>,
-    },
-}
-
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum PeerConnectionDriverEvent {
     SenderRtp(RTCRtpSenderId, rtp::Packet),
     SenderRtcp(RTCRtpSenderId, Vec<Box<dyn rtcp::Packet>>),
     ReceiverRtcp(RTCRtpReceiverId, Vec<Box<dyn rtcp::Packet>>),
+    RemoteIceTcpPassiveCandidate(Candidate),
+    IncomingTcpStream(FourTuple, Arc<dyn AsyncTcpStream>),
     WriteNotify,
     IceGathering,
     Close,
-    RemoteIceTcpPassiveCandidate(Candidate),
-    IncomingTcpStream(FourTuple, Arc<dyn AsyncTcpStream>),
 }
 
 /// The driver for a peer connection
