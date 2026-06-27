@@ -1,7 +1,6 @@
 //! Tokio runtime implementation
 
 use super::*;
-use ::tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::sync::Arc;
 
 /// A WebRTC runtime for Tokio
@@ -59,8 +58,8 @@ impl Runtime for TokioRuntime {
             let peer_addr = stream.peer_addr()?;
             let (read_half, write_half) = stream.into_split();
             Ok(Arc::new(TcpStream {
-                read_half: ::tokio::sync::Mutex::new(read_half),
-                write_half: ::tokio::sync::Mutex::new(write_half),
+                read_half,
+                write_half,
                 local_addr,
                 peer_addr,
             }) as Arc<dyn AsyncTcpStream>)
@@ -111,8 +110,8 @@ impl AsyncTcpListener for TcpListener {
             let (read_half, write_half) = stream.into_split();
             Ok((
                 Arc::new(TcpStream {
-                    read_half: ::tokio::sync::Mutex::new(read_half),
-                    write_half: ::tokio::sync::Mutex::new(write_half),
+                    read_half,
+                    write_half,
                     local_addr,
                     peer_addr,
                 }) as Arc<dyn AsyncTcpStream>,
@@ -128,8 +127,8 @@ impl AsyncTcpListener for TcpListener {
 
 #[derive(Debug)]
 struct TcpStream {
-    read_half: ::tokio::sync::Mutex<::tokio::net::tcp::OwnedReadHalf>,
-    write_half: ::tokio::sync::Mutex<::tokio::net::tcp::OwnedWriteHalf>,
+    read_half: ::tokio::net::tcp::OwnedReadHalf,
+    write_half: ::tokio::net::tcp::OwnedWriteHalf,
     local_addr: SocketAddr,
     peer_addr: SocketAddr,
 }
@@ -143,8 +142,14 @@ impl AsyncTcpStream for TcpStream {
         'a: 'b,
     {
         Box::pin(async move {
-            let mut read_half = self.read_half.lock().await;
-            read_half.read(buf).await
+            loop {
+                self.read_half.readable().await?;
+                match self.read_half.try_read(buf) {
+                    Ok(n) => return Ok(n),
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                    Err(e) => return Err(e),
+                }
+            }
         })
     }
 
@@ -156,8 +161,22 @@ impl AsyncTcpStream for TcpStream {
         'a: 'b,
     {
         Box::pin(async move {
-            let mut write_half = self.write_half.lock().await;
-            write_half.write_all(buf).await
+            let mut remaining = buf;
+            while !remaining.is_empty() {
+                self.write_half.writable().await?;
+                match self.write_half.try_write(remaining) {
+                    Ok(0) => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::WriteZero,
+                            "failed to write any bytes",
+                        ));
+                    }
+                    Ok(n) => remaining = &remaining[n..],
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            Ok(())
         })
     }
 

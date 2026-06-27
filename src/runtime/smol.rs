@@ -2,9 +2,8 @@
 
 use super::*;
 use ::smol::net::UdpSocket as SmolUdpSocket;
-use ::smol::net::{TcpListener as SmolTcpListener, TcpStream as SmolTcpStream};
 use ::smol::spawn;
-use futures_lite::io::{AsyncReadExt, AsyncWriteExt};
+use std::io::{Read, Write};
 use std::sync::Arc;
 
 /// A WebRTC runtime for smol
@@ -48,6 +47,7 @@ impl Runtime for SmolRuntime {
         &self,
         listener: std::net::TcpListener,
     ) -> io::Result<Arc<dyn AsyncTcpListener>> {
+        listener.set_nonblocking(true)?;
         Ok(Arc::new(TcpListener::new(listener)?))
     }
 
@@ -56,11 +56,13 @@ impl Runtime for SmolRuntime {
         remote_addr: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>> {
         Box::pin(async move {
-            let stream = SmolTcpStream::connect(remote_addr).await?;
-            let local_addr = stream.local_addr()?;
-            let peer_addr = stream.peer_addr()?;
-            let read_io = ::smol::lock::Mutex::new(stream.clone());
-            let write_io = ::smol::lock::Mutex::new(stream);
+            let std_stream = std::net::TcpStream::connect(remote_addr)?;
+            std_stream.set_nonblocking(true)?;
+            let std_stream2 = std_stream.try_clone()?;
+            let read_io = ::smol::Async::new(std_stream)?;
+            let write_io = ::smol::Async::new(std_stream2)?;
+            let local_addr = read_io.get_ref().local_addr()?;
+            let peer_addr = read_io.get_ref().peer_addr()?;
             Ok(Arc::new(TcpStream {
                 read_io,
                 write_io,
@@ -109,15 +111,13 @@ impl AsyncUdpSocket for UdpSocket {
 
 #[derive(Debug)]
 struct TcpListener {
-    io: SmolTcpListener,
+    io: ::smol::Async<std::net::TcpListener>,
 }
 
 impl TcpListener {
     fn new(listener: std::net::TcpListener) -> io::Result<Self> {
         let async_listener = ::smol::Async::new(listener)?;
-        Ok(Self {
-            io: SmolTcpListener::from(async_listener),
-        })
+        Ok(Self { io: async_listener })
     }
 }
 
@@ -127,11 +127,13 @@ impl AsyncTcpListener for TcpListener {
     ) -> Pin<Box<dyn Future<Output = io::Result<(Arc<dyn AsyncTcpStream>, SocketAddr)>> + Send + 'a>>
     {
         Box::pin(async move {
-            let (stream, addr) = self.io.accept().await?;
-            let local_addr = stream.local_addr()?;
-            let peer_addr = stream.peer_addr()?;
-            let read_io = ::smol::lock::Mutex::new(stream.clone());
-            let write_io = ::smol::lock::Mutex::new(stream);
+            let (std_stream, addr) = self.io.read_with(|io| io.accept()).await?;
+            std_stream.set_nonblocking(true)?;
+            let std_stream2 = std_stream.try_clone()?;
+            let read_io = ::smol::Async::new(std_stream)?;
+            let write_io = ::smol::Async::new(std_stream2)?;
+            let local_addr = read_io.get_ref().local_addr()?;
+            let peer_addr = read_io.get_ref().peer_addr()?;
             Ok((
                 Arc::new(TcpStream {
                     read_io,
@@ -145,14 +147,14 @@ impl AsyncTcpListener for TcpListener {
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.io.local_addr()
+        self.io.get_ref().local_addr()
     }
 }
 
 #[derive(Debug)]
 struct TcpStream {
-    read_io: ::smol::lock::Mutex<SmolTcpStream>,
-    write_io: ::smol::lock::Mutex<SmolTcpStream>,
+    read_io: ::smol::Async<std::net::TcpStream>,
+    write_io: ::smol::Async<std::net::TcpStream>,
     local_addr: SocketAddr,
     peer_addr: SocketAddr,
 }
@@ -165,10 +167,7 @@ impl AsyncTcpStream for TcpStream {
     where
         'a: 'b,
     {
-        Box::pin(async move {
-            let mut read_io = self.read_io.lock().await;
-            read_io.read(buf).await
-        })
+        Box::pin(async move { self.read_io.read_with(|mut io| io.read(buf)).await })
     }
 
     fn write_all<'a, 'b>(
@@ -178,10 +177,7 @@ impl AsyncTcpStream for TcpStream {
     where
         'a: 'b,
     {
-        Box::pin(async move {
-            let mut write_io = self.write_io.lock().await;
-            write_io.write_all(buf).await
-        })
+        Box::pin(async move { self.write_io.write_with(|mut io| io.write_all(buf)).await })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
