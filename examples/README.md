@@ -69,3 +69,7 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
   type local candidate.
 - ✅ [Trickle ICE](trickle-ice) Example trickle-ice demonstrates the comprehensive Trickle ICE APIs with all three types
   of ICE candidates. This is important to use since it allows ICE Gathering and Connecting to happen concurrently.
+- ✅ [ICE TCP](ice-tcp) Example ice-tcp demonstrates how a WebRTC connection can be made over TCP instead of UDP. By
+  default, webrtc-rs only does UDP. webrtc-rs can be configured to use a TCP port with passive mode.
+- ✅ [ICE TCP Active-Passive](ice-tcp-active-passive) Example ice-tcp-active-passive demonstrates RTC's ICE TCP active
+  mode abilities.

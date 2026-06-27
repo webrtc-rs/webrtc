@@ -73,21 +73,25 @@ bench = false
 name = "data-channels-offer"
 path = "examples/data-channels-offer-answer/data-channels-offer.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "data-channels-answer"
 path = "examples/data-channels-offer-answer/data-channels-answer.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "data-channels-simple"
 path = "examples/data-channels-simple/data-channels-simple.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "ice-restart"
 path = "examples/ice-restart/ice-restart.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "insertable-streams"
@@ -113,11 +117,13 @@ bench = false
 name = "play-from-disk-renegotiation"
 path = "examples/play-from-disk-renegotiation/play-from-disk-renegotiation.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "play-from-disk-playlist-control"
 path = "examples/play-from-disk-playlist-control/play-from-disk-playlist-control.rs"
 bench = false
+required-features = ["runtime-tokio"]
 
 [[example]]
 name = "reflect"
@@ -194,4 +200,17 @@ name = "ice-tcp"
 path = "examples/ice-tcp/ice-tcp.rs"
 bench = false
 required-features = ["runtime-tokio"]
+
+[[example]]
+name = "ice-tcp-active-offer"
+path = "examples/ice-tcp-active-passive/ice-tcp-active-offer.rs"
+bench = false
+required-features = ["runtime-tokio"]
+
+[[example]]
+name = "ice-tcp-passive-answer"
+path = "examples/ice-tcp-active-passive/ice-tcp-passive-answer.rs"
+bench = false
+required-features = ["runtime-tokio"]
+
 
