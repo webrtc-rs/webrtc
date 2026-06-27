@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+  <!--
+		SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
+		SPDX-License-Identifier: MIT
+	-->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebRTC ICE TCP Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg-gradient: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #0d0d15 100%);
+        --card-bg: rgba(22, 22, 37, 0.7);
+        --border-color: rgba(255, 255, 255, 0.08);
+        --text-primary: #f3f4f6;
+        --text-secondary: #9ca3af;
+        --accent-blue: #3b82f6;
+        --accent-blue-glow: rgba(59, 130, 246, 0.5);
+        --accent-green: #10b981;
+        --accent-green-glow: rgba(16, 185, 129, 0.5);
+        --accent-orange: #f59e0b;
+        --accent-orange-glow: rgba(245, 158, 11, 0.5);
+        --accent-red: #ef4444;
+        --accent-red-glow: rgba(239, 68, 68, 0.5);
+        --accent-purple: #8b5cf6;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Outfit', sans-serif;
+        background: var(--bg-gradient);
+        color: var(--text-primary);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        overflow-x: hidden;
+      }
+
+      /* Glow decoration */
+      .bg-glow {
+        position: absolute;
+        width: 600px;
+        height: 600px;
+        background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 50%, transparent 100%);
+        top: -100px;
+        left: -100px;
+        z-index: -1;
+        pointer-events: none;
+        filter: blur(80px);
+      }
+
+      .bg-glow-right {
+        position: absolute;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(59, 130, 246, 0.05) 60%, transparent 100%);
+        bottom: -100px;
+        right: -100px;
+        z-index: -1;
+        pointer-events: none;
+        filter: blur(80px);
+      }
+
+      .container {
+        width: 100%;
+        max-width: 900px;
+        z-index: 1;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 2.5rem;
+      }
+
+      h1 {
+        font-size: 3rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.03em;
+        margin-bottom: 0.5rem;
+      }
+
+      .subtitle {
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+        font-weight: 300;
+      }
+
+      .badge {
+        display: inline-block;
+        background: rgba(139, 92, 246, 0.15);
+        color: #c7d2fe;
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        margin-top: 0.75rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+      }
+
+      @media (max-width: 768px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: var(--card-bg);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--border-color);
+        border-radius: 1.25rem;
+        padding: 1.5rem;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        height: 450px;
+        transition: transform 0.3s ease, border-color 0.3s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.25rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding-bottom: 0.75rem;
+      }
+
+      .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .card-icon {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--accent-blue);
+        box-shadow: 0 0 10px var(--accent-blue-glow);
+        display: inline-block;
+      }
+
+      .card-title.states .card-icon {
+        background-color: var(--accent-purple);
+        box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+      }
+
+      .card-title.messages .card-icon {
+        background-color: var(--accent-green);
+        box-shadow: 0 0 10px var(--accent-green-glow);
+      }
+
+      .log-container {
+        flex-grow: 1;
+        overflow-y: auto;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.9rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding-right: 0.5rem;
+      }
+
+      /* Custom Scrollbar */
+      .log-container::-webkit-scrollbar {
+        width: 6px;
+      }
+      .log-container::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .log-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+      }
+      .log-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .log-entry {
+        background: rgba(255, 255, 255, 0.03);
+        border-left: 3px solid rgba(255, 255, 255, 0.2);
+        padding: 0.5rem 0.75rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        animation: fadeIn 0.3s ease-out forwards;
+      }
+
+      .log-entry.checking {
+        border-left-color: var(--accent-orange);
+        background: rgba(245, 158, 11, 0.05);
+      }
+
+      .log-entry.connected {
+        border-left-color: var(--accent-green);
+        background: rgba(16, 185, 129, 0.05);
+      }
+
+      .log-entry.failed {
+        border-left-color: var(--accent-red);
+        background: rgba(239, 68, 68, 0.05);
+      }
+
+      .log-entry.closed {
+        border-left-color: var(--text-secondary);
+        background: rgba(156, 163, 175, 0.05);
+      }
+
+      .log-entry.msg {
+        border-left-color: var(--accent-blue);
+        background: rgba(59, 130, 246, 0.05);
+      }
+
+      .timestamp {
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .status-pill {
+        font-size: 0.75rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .status-pill.checking {
+        color: var(--accent-orange);
+        background: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.2);
+      }
+
+      .status-pill.connected {
+        color: var(--accent-green);
+        background: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.2);
+      }
+
+      .status-pill.failed {
+        color: var(--accent-red);
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.2);
+      }
+
+      footer {
+        margin-top: 3rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="bg-glow"></div>
+    <div class="bg-glow-right"></div>
+
+    <div class="container">
+      <header>
+        <h1>WebRTC ICE TCP</h1>
+        <p class="subtitle">Demonstrating pure TCP candidates & framing (RFC 4571)</p>
+        <span class="badge" id="globalStatus">Initializing</span>
+      </header>
+
+      <div class="grid">
+        <!-- ICE States Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title states">
+              <span class="card-icon"></span>
+              <span>ICE Connection States</span>
+            </div>
+            <span class="status-pill" id="icePill">new</span>
+          </div>
+          <div class="log-container" id="iceConnectionStates"></div>
+        </div>
+
+        <!-- Inbound Data Channel Messages Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title messages">
+              <span class="card-icon"></span>
+              <span>Inbound DataChannel</span>
+            </div>
+            <span class="status-pill" id="dcPill">closed</span>
+          </div>
+          <div class="log-container" id="inboundDataChannelMessages"></div>
+        </div>
+      </div>
+
+      <footer>
+        <p>Built with WebRTC-rs &bull; TCP only fallback demo</p>
+      </footer>
+    </div>
+
+    <script>
+      const iceContainer = document.getElementById('iceConnectionStates');
+      const msgContainer = document.getElementById('inboundDataChannelMessages');
+      const globalStatus = document.getElementById('globalStatus');
+      const icePill = document.getElementById('icePill');
+      const dcPill = document.getElementById('dcPill');
+
+      function formatTime() {
+        const now = new Date();
+        return now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+      }
+
+      function logIce(state) {
+        const entry = document.createElement('div');
+        const stateLower = state.toLowerCase();
+        entry.className = `log-entry ${stateLower}`;
+        
+        const ts = document.createElement('div');
+        ts.className = 'timestamp';
+        ts.textContent = formatTime();
+        
+        const content = document.createElement('div');
+        content.textContent = `State changed to: ${state}`;
+        
+        entry.appendChild(ts);
+        entry.appendChild(content);
+        iceContainer.appendChild(entry);
+        iceContainer.scrollTop = iceContainer.scrollHeight;
+
+        // Update pills
+        icePill.textContent = stateLower;
+        icePill.className = `status-pill ${stateLower}`;
+
+        if (stateLower === 'connected') {
+          globalStatus.textContent = 'Connected';
+          globalStatus.style.background = 'rgba(16, 185, 129, 0.15)';
+          globalStatus.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+          globalStatus.style.color = '#a7f3d0';
+        } else if (stateLower === 'failed') {
+          globalStatus.textContent = 'Failed';
+          globalStatus.style.background = 'rgba(239, 68, 68, 0.15)';
+          globalStatus.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+          globalStatus.style.color = '#fca5a5';
+        } else if (stateLower === 'checking') {
+          globalStatus.textContent = 'Negotiating';
+          globalStatus.style.background = 'rgba(245, 158, 11, 0.15)';
+          globalStatus.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+          globalStatus.style.color = '#fde68a';
+        }
+      }
+
+      function logMessage(text) {
+        const entry = document.createElement('div');
+        entry.className = 'log-entry msg';
+        
+        const ts = document.createElement('div');
+        ts.className = 'timestamp';
+        ts.textContent = formatTime();
+        
+        const content = document.createElement('div');
+        content.textContent = text;
+        
+        entry.appendChild(ts);
+        entry.appendChild(content);
+        msgContainer.appendChild(entry);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+      }
+
+      globalStatus.textContent = 'Gathering ICE Candidates';
+
+      // 1. Create connection and data channel
+      const pc = new RTCPeerConnection({
+        iceServers: [] // Force TCP candidates only, no stun server
+      });
+
+      const dc = pc.createDataChannel('data');
+
+      dc.onopen = () => {
+        dcPill.textContent = 'open';
+        dcPill.className = 'status-pill connected';
+        logMessage('DataChannel established, awaiting server messages...');
+      };
+
+      dc.onclose = () => {
+        dcPill.textContent = 'closed';
+        dcPill.className = 'status-pill closed';
+        logMessage('DataChannel closed');
+      };
+
+      dc.onmessage = event => {
+        logMessage(`[Server]: ${event.data}`);
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        logIce(pc.iceConnectionState);
+      };
+
+      // Wait for ICE gathering to complete before sending offer (non-trickle ICE)
+      pc.onicecandidate = event => {
+        if (event.candidate === null) {
+          console.log('ICE gathering complete, sending offer:', pc.localDescription.sdp);
+          globalStatus.textContent = 'Sending Offer...';
+
+          fetch(`/doSignaling`, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json, text/plain, */*',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(pc.localDescription)
+          })
+          .then(res => {
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}`);
+            }
+            return res.json();
+          })
+          .then(res => {
+            console.log('Received answer:', res.sdp);
+            globalStatus.textContent = 'Setting Remote SDP';
+            return pc.setRemoteDescription(res);
+          })
+          .then(() => {
+            globalStatus.textContent = 'Awaiting Connection';
+          })
+          .catch(err => {
+            console.error(err);
+            globalStatus.textContent = 'Error';
+            globalStatus.style.background = 'rgba(239, 68, 68, 0.15)';
+            globalStatus.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            globalStatus.style.color = '#fca5a5';
+            alert(`Signaling failed: ${err.message}`);
+          });
+        } else {
+          console.log('ICE candidate gathered:', event.candidate.candidate);
+        }
+      };
+
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .catch(err => {
+          console.error(err);
+          alert(`Failed to create offer: ${err.message}`);
+        });
+    </script>
+  </body>
+</html>

@@ -188,3 +188,10 @@ bench = false
 name = "trickle-ice-relay"
 path = "examples/trickle-ice-relay/trickle-ice-relay.rs"
 bench = false
+
+[[example]]
+name = "ice-tcp"
+path = "examples/ice-tcp/ice-tcp.rs"
+bench = false
+required-features = ["runtime-tokio"]
+
