@@ -3,6 +3,7 @@ use std::io;
 use std::net::SocketAddr;
 
 pub(crate) mod stun_gatherer;
+pub(crate) mod tcp_transport;
 pub(crate) mod turn_relayer;
 
 pub(crate) enum SocketRecvResult {

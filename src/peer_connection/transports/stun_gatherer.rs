@@ -30,12 +30,12 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 #[derive(Debug)]
-pub enum RTCStunGatherEventIn {
+pub(crate) enum RTCStunGatherEventIn {
     SocketWriteFailure(FourTuple),
 }
 
 #[derive(Debug)]
-pub enum RTCStunGatherEventOut {
+pub(crate) enum RTCStunGatherEventOut {
     LocalIceCandidate(RTCIceCandidateInit),
     StunGatheringComplete,
 }
@@ -44,7 +44,7 @@ pub enum RTCStunGatherEventOut {
 /// in a Sans-I/O manner.
 ///
 /// This is a Sans-I/O configuration object that holds ICE servers and gathering state.
-pub struct RTCStunGatherer {
+pub(crate) struct RTCStunGatherer {
     local_addrs: Vec<SocketAddr>,
     ice_servers: Vec<RTCIceServer>,
     ice_gather_policy: RTCIceTransportPolicy,
@@ -58,7 +58,7 @@ pub struct RTCStunGatherer {
 
 impl RTCStunGatherer {
     /// Create a new ICE gatherer with ICE servers and gather policy
-    pub fn new(
+    pub(crate) fn new(
         local_addrs: Vec<SocketAddr>,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
@@ -76,11 +76,11 @@ impl RTCStunGatherer {
         }
     }
 
-    pub fn state(&self) -> RTCIceGatheringState {
+    pub(crate) fn state(&self) -> RTCIceGatheringState {
         self.state
     }
 
-    pub fn is_stun_message(&self, msg: &TaggedBytesMut) -> bool {
+    pub(crate) fn is_stun_message(&self, msg: &TaggedBytesMut) -> bool {
         for four_tuple in self.stun_clients.keys() {
             if four_tuple.peer_addr == msg.transport.peer_addr
                 && four_tuple.local_addr == msg.transport.local_addr
@@ -92,7 +92,7 @@ impl RTCStunGatherer {
         false
     }
 
-    pub async fn gather(&mut self) -> Result<(), Error> {
+    pub(crate) async fn gather(&mut self) -> Result<(), Error> {
         self.state = RTCIceGatheringState::Gathering;
         if self.ice_gather_policy != RTCIceTransportPolicy::Relay {
             self.gather_host_candidates()?;

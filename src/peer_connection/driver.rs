@@ -12,6 +12,7 @@ use crate::data_channel::{DataChannelEvent, DataChannelImpl};
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
+use crate::peer_connection::transports::tcp_transport::RTCTcpTransport;
 use crate::peer_connection::transports::{
     SocketRecvResult, TcpReadResult, is_retryable_socket_recv_error,
 };
@@ -80,11 +81,9 @@ where
     inner: Arc<PeerConnectionRef<I>>,
     stun_gatherer: RTCStunGatherer,
     turn_relayer: RTCTurnRelayer,
+    tcp_transport: RTCTcpTransport,
     mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
     udp_sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
-    tcp_listeners: HashMap<SocketAddr, Arc<dyn AsyncTcpListener>>,
-    tcp_streams: HashMap<FourTuple, Arc<dyn AsyncTcpStream>>,
-    tcp_decoders: HashMap<FourTuple, TcpFrameDecoder>,
     ice_gathering_active: bool,
     stun_gathering_complete: bool,
     turn_gathering_complete: bool,
@@ -113,9 +112,7 @@ where
             turn_relayer,
             mdns_socket,
             udp_sockets,
-            tcp_listeners,
-            tcp_streams: HashMap::new(),
-            tcp_decoders: HashMap::new(),
+            tcp_transport: RTCTcpTransport::new(tcp_listeners),
             ice_gathering_active: false,
             stun_gathering_complete: false,
             turn_gathering_complete: false,
@@ -180,7 +177,8 @@ where
         let mut active_socket_count = udp_socket_list.len();
 
         let tcp_listeners: Vec<(SocketAddr, Arc<dyn AsyncTcpListener>)> = self
-            .tcp_listeners
+            .tcp_transport
+            .listeners
             .iter()
             .map(|(addr, listener)| (*addr, listener.clone()))
             .collect();
@@ -402,8 +400,8 @@ where
                     if let Some(evt) = evt {
                         if let PeerConnectionDriverEvent::IncomingTcpStream(four_tuple, stream) = evt {
                             trace!("TCP stream connection established: {:?}", four_tuple);
-                            self.tcp_streams.insert(four_tuple, stream.clone());
-                            self.tcp_decoders.insert(four_tuple, TcpFrameDecoder::new());
+                            self.tcp_transport.streams.insert(four_tuple, stream.clone());
+                            self.tcp_transport.decoders.insert(four_tuple, TcpFrameDecoder::new());
                             tcp_read_futures.push(
                                 create_tcp_read_future(four_tuple, stream).boxed()
                             );
@@ -458,13 +456,13 @@ where
                                 self.udp_sockets.remove(&local_addr);
                                 active_socket_count -= 1;
 
-                                if active_socket_count == 0 && self.tcp_listeners.is_empty() {
+                                if active_socket_count == 0 && self.tcp_transport.listeners.is_empty() {
                                     return Err(err.into());
                                 }
                             }
                             None => {
                                 // All socket futures completed (should never happen in normal operation)
-                                if self.tcp_listeners.is_empty() {
+                                if self.tcp_transport.listeners.is_empty() {
                                     return Err(Error::Other("all socket futures completed".to_owned()));
                                 }
                             }
@@ -483,8 +481,8 @@ where
                                     peer_addr,
                                 };
                                 trace!("Accepted TCP stream on {} from {}", stream_local_addr, peer_addr);
-                                self.tcp_streams.insert(four_tuple, stream.clone());
-                                self.tcp_decoders.insert(four_tuple, TcpFrameDecoder::new());
+                                self.tcp_transport.streams.insert(four_tuple, stream.clone());
+                                self.tcp_transport.decoders.insert(four_tuple, TcpFrameDecoder::new());
                                 tcp_read_futures.push(
                                     create_tcp_read_future(four_tuple, stream).boxed()
                                 );
@@ -493,7 +491,7 @@ where
                                 error!("TCP accept error: {}", err);
                             }
                         }
-                        if let Some(listener) = self.tcp_listeners.get(&local_addr).cloned() {
+                        if let Some(listener) = self.tcp_transport.listeners.get(&local_addr).cloned() {
                             tcp_accept_futures.push(async move {
                                 match listener.accept().await {
                                     Ok((stream, peer_addr)) => (local_addr, Ok((stream, peer_addr))),
@@ -511,11 +509,11 @@ where
                             TcpReadResult::Packet { four_tuple, n, buf } => {
                                 if n == 0 {
                                     trace!("TCP connection EOF for {:?}", four_tuple);
-                                    self.tcp_streams.remove(&four_tuple);
-                                    self.tcp_decoders.remove(&four_tuple);
+                                    self.tcp_transport.streams.remove(&four_tuple);
+                                    self.tcp_transport.decoders.remove(&four_tuple);
                                 } else {
                                     let mut packets = Vec::new();
-                                    if let Some(decoder) = self.tcp_decoders.get_mut(&four_tuple) {
+                                    if let Some(decoder) = self.tcp_transport.decoders.get_mut(&four_tuple) {
                                         decoder.extend_from_slice(&buf[..n]);
                                         while let Some(packet) = decoder.next_packet() {
                                             packets.push(packet);
@@ -535,7 +533,7 @@ where
                                             error!("handle_read error on TCP: {}", err);
                                         }
                                     }
-                                    if let Some(stream) = self.tcp_streams.get(&four_tuple).cloned() {
+                                    if let Some(stream) = self.tcp_transport.streams.get(&four_tuple).cloned() {
                                         tcp_read_futures.push(
                                             create_tcp_read_future(four_tuple, stream).boxed()
                                         );
@@ -545,15 +543,15 @@ where
                             TcpReadResult::Error { four_tuple, err, buf: _ } => {
                                 if is_retryable_socket_recv_error(&err) {
                                     trace!("Transient TCP read error on {:?}: {}", four_tuple, err);
-                                    if let Some(stream) = self.tcp_streams.get(&four_tuple).cloned() {
+                                    if let Some(stream) = self.tcp_transport.streams.get(&four_tuple).cloned() {
                                         tcp_read_futures.push(
                                             create_tcp_read_future(four_tuple, stream).boxed()
                                         );
                                     }
                                 } else {
                                     error!("TCP read error on {:?}: {}", four_tuple, err);
-                                    self.tcp_streams.remove(&four_tuple);
-                                    self.tcp_decoders.remove(&four_tuple);
+                                    self.tcp_transport.streams.remove(&four_tuple);
+                                    self.tcp_transport.decoders.remove(&four_tuple);
                                 }
                             }
                         }
@@ -568,10 +566,11 @@ where
 
         let tcp_stream = if msg.transport.transport_protocol == TransportProtocol::TCP {
             // Must go over TCP
-            let mut stream = self.tcp_streams.get(&four_tuple).cloned();
+            let mut stream = self.tcp_transport.streams.get(&four_tuple).cloned();
             if stream.is_none() {
                 stream = self
-                    .tcp_streams
+                    .tcp_transport
+                    .streams
                     .values()
                     .find(|s| {
                         if let Ok(peer) = s.peer_addr() {
@@ -615,10 +614,11 @@ where
             } else {
                 // If there's no UDP socket for this local address, check if we have a TCP stream
                 // for the remote address (e.g. DTLS/SCTP traffic when the selected path is TCP)
-                let mut stream = self.tcp_streams.get(&four_tuple).cloned();
+                let mut stream = self.tcp_transport.streams.get(&four_tuple).cloned();
                 if stream.is_none() {
                     stream = self
-                        .tcp_streams
+                        .tcp_transport
+                        .streams
                         .values()
                         .find(|s| {
                             if let Ok(peer) = s.peer_addr() {
@@ -1032,7 +1032,7 @@ where
                 };
 
                 if ice_gather_policy != RTCIceTransportPolicy::Relay {
-                    for local_addr in self.tcp_listeners.keys() {
+                    for local_addr in self.tcp_transport.listeners.keys() {
                         // Gather passive TCP candidate
                         let passive_config = CandidateHostConfig {
                             base_config: CandidateConfig {
