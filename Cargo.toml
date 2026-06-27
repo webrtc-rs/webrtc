@@ -1,6 +1,6 @@
 [package]
 name = "webrtc"
-version = "0.20.0-beta.1"
+version = "0.20.0-beta.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2024"
 license = "MIT/Apache-2.0"
@@ -17,7 +17,7 @@ runtime-tokio = ["dep:tokio"]
 runtime-smol = ["dep:smol", "dep:async-broadcast", "dep:futures-lite"]
 
 [dependencies]
-rtc = { version = "0.20.0-beta.1", path = "rtc/rtc" }
+rtc = { version = "0.20.0-beta.2", path = "rtc/rtc" }
 
 bytes = "1.11.1"
 async-trait = "0.1.89"
@@ -32,7 +32,7 @@ futures-lite = { version = "2.6.1", optional = true }
 base64 = "0.22"
 
 [dev-dependencies]
-signal = { version = "0.20.0-beta.1", path = "rtc/examples/examples/signal", package = "rtc-signal" }
+signal = { version = "0.20.0-beta.2", path = "rtc/examples/examples/signal", package = "rtc-signal" }
 
 env_logger = "0.11.8"
 chrono = "0.4.43"
