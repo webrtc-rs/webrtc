@@ -213,4 +213,7 @@ path = "examples/ice-tcp-active-passive/ice-tcp-passive-answer.rs"
 bench = false
 required-features = ["runtime-tokio"]
 
-
+[[example]]
+name = "stats"
+path = "examples/stats/stats.rs"
+bench = false
