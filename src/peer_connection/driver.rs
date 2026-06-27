@@ -20,6 +20,7 @@ use futures::FutureExt; // For .fuse() in futures::select!
 use futures::future::OptionFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{error, trace};
+use rtc::ice::candidate::Candidate;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::mdns::MDNS_PORT;
 use rtc::media_stream::MediaStreamTrack;
@@ -103,7 +104,7 @@ pub(crate) enum PeerConnectionDriverEvent {
     WriteNotify,
     IceGathering,
     Close,
-    RemoteIceCandidate(RTCIceCandidateInit),
+    RemoteIceTcpPassiveCandidate(Candidate),
     IncomingTcpStream(FourTuple, Arc<dyn AsyncTcpStream>),
 }
 
@@ -1142,46 +1143,37 @@ where
                     }
                 }
             }
-            PeerConnectionDriverEvent::RemoteIceCandidate(candidate) => {
-                let candidate_str = match candidate.candidate.strip_prefix("candidate:") {
-                    Some(s) => s,
-                    None => candidate.candidate.as_str(),
-                };
-                if let Ok(c) = rtc::ice::candidate::unmarshal_candidate(candidate_str) {
-                    if c.network_type().is_tcp()
-                        && c.tcp_type() == rtc::ice::tcp_type::TcpType::Passive
-                    {
-                        if let Ok(ip) = c.address().parse::<std::net::IpAddr>() {
-                            let remote_addr = std::net::SocketAddr::new(ip, c.port());
-                            let runtime = self.inner.runtime.clone();
-                            let tx = self.inner.driver_event_tx.clone();
-                            self.inner.runtime.spawn(Box::pin(async move {
-                                trace!("Initiating TCP connect to {:?}", remote_addr);
-                                match runtime.connect_tcp(remote_addr).await {
-                                    Ok(stream) => {
-                                        let local_addr = stream
-                                            .local_addr()
-                                            .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
-                                        let peer_addr = stream.peer_addr().unwrap_or(remote_addr);
-                                        let four_tuple = FourTuple {
-                                            local_addr,
-                                            peer_addr,
-                                        };
-                                        let _ = tx
-                                            .send(PeerConnectionDriverEvent::IncomingTcpStream(
-                                                four_tuple, stream,
-                                            ))
-                                            .await;
-                                    }
-                                    Err(err) => {
-                                        error!(
-                                            "Failed to connect TCP to {:?}: {}",
-                                            remote_addr, err
-                                        );
-                                    }
+            PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(candidate) => {
+                if candidate.network_type().is_tcp()
+                    && candidate.tcp_type() == rtc::ice::tcp_type::TcpType::Passive
+                {
+                    if let Ok(ip) = candidate.address().parse::<std::net::IpAddr>() {
+                        let remote_addr = std::net::SocketAddr::new(ip, candidate.port());
+                        let runtime = self.inner.runtime.clone();
+                        let tx = self.inner.driver_event_tx.clone();
+                        self.inner.runtime.spawn(Box::pin(async move {
+                            trace!("Initiating TCP connect to {:?}", remote_addr);
+                            match runtime.connect_tcp(remote_addr).await {
+                                Ok(stream) => {
+                                    let local_addr = stream
+                                        .local_addr()
+                                        .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
+                                    let peer_addr = stream.peer_addr().unwrap_or(remote_addr);
+                                    let four_tuple = FourTuple {
+                                        local_addr,
+                                        peer_addr,
+                                    };
+                                    let _ = tx
+                                        .send(PeerConnectionDriverEvent::IncomingTcpStream(
+                                            four_tuple, stream,
+                                        ))
+                                        .await;
                                 }
-                            }));
-                        }
+                                Err(err) => {
+                                    error!("Failed to connect TCP to {:?}: {}", remote_addr, err);
+                                }
+                            }
+                        }));
                     }
                 }
             }

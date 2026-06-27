@@ -543,15 +543,27 @@ where
     }
 
     async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()> {
-        let mut core = self.inner.core.lock().await;
-        core.add_remote_candidate(candidate.clone())?;
-        drop(core);
-        let _ = self
-            .inner
-            .driver_event_tx
-            .send(PeerConnectionDriverEvent::RemoteIceCandidate(candidate))
-            .await;
-        Ok(())
+        {
+            let mut core = self.inner.core.lock().await;
+            core.add_remote_candidate(candidate.clone())?;
+        }
+
+        let candidate_str = match candidate.candidate.strip_prefix("candidate:") {
+            Some(s) => s,
+            None => candidate.candidate.as_str(),
+        };
+        if let Ok(c) = rtc::ice::candidate::unmarshal_candidate(candidate_str)
+            && c.network_type().is_tcp()
+            && c.tcp_type() == rtc::ice::tcp_type::TcpType::Passive
+        {
+            self.inner
+                .driver_event_tx
+                .send(PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(c))
+                .await
+                .map_err(|e| Error::Other(format!("{:?}", e)))
+        } else {
+            Ok(())
+        }
     }
 
     async fn restart_ice(&self) -> Result<()> {
