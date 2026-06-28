@@ -2,8 +2,6 @@
 //!
 //! Follows the rtc EventLoop pattern with async select
 
-#![allow(clippy::collapsible_if)]
-
 use super::transports::stun_gatherer::{
     RTCStunGatherEventIn, RTCStunGatherEventOut, RTCStunGatherer,
 };
@@ -14,7 +12,7 @@ use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::peer_connection::transports::tcp_transport::RTCTcpTransport;
 use crate::peer_connection::transports::{
-    SocketRecvResult, TcpReadResult, is_retryable_socket_recv_error,
+    SocketRecvResult, is_retryable_socket_recv_error,
 };
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
@@ -32,13 +30,10 @@ use rtc::peer_connection::configuration::RTCIceTransportPolicy;
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
 use rtc::peer_connection::message::RTCMessage;
 use rtc::peer_connection::state::RTCIceGatheringState;
-use rtc::peer_connection::transport::{
-    CandidateConfig, CandidateHostConfig, RTCIceCandidate, RTCIceCandidateInit,
-};
+use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
-use rtc::shared::tcp_framing::{TcpFrameDecoder, frame_packet};
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
@@ -176,173 +171,29 @@ where
             .collect();
         let mut active_socket_count = udp_socket_list.len();
 
-        let tcp_listeners: Vec<(SocketAddr, Arc<dyn AsyncTcpListener>)> = self
-            .tcp_transport
-            .listeners
-            .iter()
-            .map(|(addr, listener)| (*addr, listener.clone()))
-            .collect();
 
-        let mut tcp_accept_futures: FuturesUnordered<_> = tcp_listeners
-            .into_iter()
-            .map(|(local_addr, listener)| {
-                async move {
-                    match listener.accept().await {
-                        Ok((stream, peer_addr)) => (local_addr, Ok((stream, peer_addr))),
-                        Err(err) => (local_addr, Err(err)),
-                    }
-                }
-                .boxed()
-            })
-            .collect();
-
-        let mut tcp_read_futures = FuturesUnordered::new();
-
-        let create_tcp_read_future = |four_tuple: FourTuple, stream: Arc<dyn AsyncTcpStream>| async move {
-            let mut buf = vec![0u8; 4096];
-            match stream.read(&mut buf).await {
-                Ok(n) => TcpReadResult::Packet { four_tuple, n, buf },
-                Err(err) => TcpReadResult::Error {
-                    four_tuple,
-                    err,
-                    buf,
-                },
-            }
-        };
 
         loop {
-            // 1.a stun_gatherer poll_write()
-            {
-                while let Some(msg) = self.stun_gatherer.poll_write() {
-                    let four_tuple: FourTuple = FourTuple::from(&msg.transport);
-                    if let Err(err) = self.handle_write(msg).await {
-                        error!(
-                            "Failed to write packet to {:?} from {:?}: {}",
-                            four_tuple.peer_addr, four_tuple.local_addr, err
-                        );
-                        if let Err(err) = self
-                            .stun_gatherer
-                            .handle_event(RTCStunGatherEventIn::SocketWriteFailure(four_tuple))
-                        {
-                            error!(
-                                "Failed to handle event in stun_gatherer to {:?} from {:?}: {}",
-                                four_tuple.peer_addr, four_tuple.local_addr, err
-                            );
-                        }
-                    }
-                }
-            }
-
-            // 1.b turn_relayer poll_write()
-            {
-                while let Some(msg) = self.turn_relayer.poll_write() {
-                    let four_tuple: FourTuple = FourTuple::from(&msg.transport);
-                    if let Err(err) = self.handle_write(msg).await {
-                        error!(
-                            "Failed to write packet to {:?} from {:?}: {}",
-                            four_tuple.peer_addr, four_tuple.local_addr, err
-                        );
-                        if let Err(err) = self
-                            .turn_relayer
-                            .handle_event(RTCTurnRelayEventIn::SocketWriteFailure(four_tuple))
-                        {
-                            error!(
-                                "Failed to handle event in turn_relayer to {:?} from {:?}: {}",
-                                four_tuple.peer_addr, four_tuple.local_addr, err
-                            );
-                        }
-                    }
-                }
-            }
-
-            // 1.c peer_connection poll_write() - Send all outgoing packets
-            {
-                let mut core = self.inner.core.lock().await;
-                while let Some(msg) = core.poll_write() {
-                    drop(core);
-                    let four_tuple: FourTuple = FourTuple::from(&msg.transport);
-                    if let Err(err) = self.handle_write(msg).await {
-                        error!(
-                            "Failed to write packet to {:?} from {:?}: {}",
-                            four_tuple.peer_addr, four_tuple.local_addr, err
-                        );
-                    }
-                    core = self.inner.core.lock().await;
-                }
-            }
-
-            // 2.a stun_gatherer poll_event()
-            {
-                while let Some(event) = self.stun_gatherer.poll_event() {
-                    self.handle_stun_gather_event(event).await;
-                }
-            }
-
-            // 2.b turn_relayer poll_event()
-            {
-                while let Some(event) = self.turn_relayer.poll_event() {
-                    self.handle_turn_relay_event(event).await;
-                }
-            }
-
-            // 2.c peer_connection poll_event() - Process all events
-            {
-                let mut core = self.inner.core.lock().await;
-                while let Some(event) = core.poll_event() {
-                    drop(core);
-                    self.handle_rtc_event(event).await;
-                    core = self.inner.core.lock().await;
-                }
-            }
-
-            // 3.a turn_relayer poll_read() - deliver decapsulated relay data,
-            // but no need for stun_gatherer poll_read()
-            {
-                while let Some(message) = self.turn_relayer.poll_read() {
-                    let mut core = self.inner.core.lock().await;
-                    core.handle_read(message)?;
-                }
-            }
-
-            // 3.b peer_connection poll_read() - Process incoming messages
-            {
-                let mut core = self.inner.core.lock().await;
-                while let Some(message) = core.poll_read() {
-                    drop(core);
-                    self.handle_rtc_message(message).await;
-                    core = self.inner.core.lock().await;
-                }
-            }
+            self.poll_writes().await?;
+            self.poll_events().await;
+            self.poll_reads().await?;
 
             // 4.a poll next timeout
             let core_timeout = {
                 let mut core = self.inner.core.lock().await;
                 core.poll_timeout()
             };
-            let mut timeout = core_timeout.unwrap_or(Instant::now() + DEFAULT_TIMEOUT_DURATION);
-            let stun_timeout = self.stun_gatherer.poll_timeout();
-            if let Some(t) = stun_timeout {
-                if t < timeout {
-                    timeout = t;
-                }
-            }
-            let turn_timeout = self.turn_relayer.poll_timeout();
-            if let Some(t) = turn_timeout {
-                if t < timeout {
-                    timeout = t;
-                }
-            }
-
+            let timeout = self.compute_timeout(core_timeout);
             let now = Instant::now();
             let delay_from_now = timeout
                 .checked_duration_since(now)
-                .unwrap_or(Duration::from_secs(0));
+                .unwrap_or_default();
 
             trace!(
                 "Timeout calculation: core={:?}, stun={:?}, turn={:?}, timeout={:?}, now={:?}, delay={:?}",
                 core_timeout.map(|t| t.checked_duration_since(now)),
-                stun_timeout.map(|t| t.checked_duration_since(now)),
-                turn_timeout.map(|t| t.checked_duration_since(now)),
+                self.stun_gatherer.poll_timeout().map(|t| t.checked_duration_since(now)),
+                self.turn_relayer.poll_timeout().map(|t| t.checked_duration_since(now)),
                 timeout.checked_duration_since(now),
                 now,
                 delay_from_now
@@ -350,10 +201,7 @@ where
 
             // 4.b handle immediate timeout
             if delay_from_now.is_zero() {
-                self.stun_gatherer.handle_timeout(now)?;
-                self.turn_relayer.handle_timeout(now)?;
-                let mut core = self.inner.core.lock().await;
-                core.handle_timeout(now)?;
+                self.dispatch_timeout(now).await?;
                 continue;
             }
 
@@ -368,16 +216,16 @@ where
             .into();
             futures::pin_mut!(udp_recv_future);
 
-            let tcp_accept_future: OptionFuture<_> = if !tcp_accept_futures.is_empty() {
-                Some(tcp_accept_futures.next())
+            let tcp_accept_future: OptionFuture<_> = if !self.tcp_transport.accept_futures.is_empty() {
+                Some(self.tcp_transport.accept_futures.next())
             } else {
                 None
             }
             .into();
             futures::pin_mut!(tcp_accept_future);
 
-            let tcp_read_future: OptionFuture<_> = if !tcp_read_futures.is_empty() {
-                Some(tcp_read_futures.next())
+            let tcp_read_future: OptionFuture<_> = if !self.tcp_transport.read_futures.is_empty() {
+                Some(self.tcp_transport.read_futures.next())
             } else {
                 None
             }
@@ -388,11 +236,7 @@ where
             futures::select! {
                 // Timer expired
                 _ = timer.fuse() => {
-                    let now = Instant::now();
-                    self.stun_gatherer.handle_timeout(now)?;
-                    self.turn_relayer.handle_timeout(now)?;
-                    let mut core = self.inner.core.lock().await;
-                    core.handle_timeout(now)?;
+                    self.dispatch_timeout(Instant::now()).await?;
                 }
 
                 // Driver events (RTP, RTCP, or ICE candidate)
@@ -400,11 +244,7 @@ where
                     if let Some(evt) = evt {
                         if let PeerConnectionDriverEvent::IncomingTcpStream(four_tuple, stream) = evt {
                             trace!("TCP stream connection established: {:?}", four_tuple);
-                            self.tcp_transport.streams.insert(four_tuple, stream.clone());
-                            self.tcp_transport.decoders.insert(four_tuple, TcpFrameDecoder::new());
-                            tcp_read_futures.push(
-                                create_tcp_read_future(four_tuple, stream).boxed()
-                            );
+                            self.tcp_transport.register_stream(four_tuple, stream);
                         } else {
                             let is_closed = self.handle_driver_event(evt).await;
                             if is_closed {
@@ -456,13 +296,13 @@ where
                                 self.udp_sockets.remove(&local_addr);
                                 active_socket_count -= 1;
 
-                                if active_socket_count == 0 && self.tcp_transport.listeners.is_empty() {
+                                if active_socket_count == 0 && self.tcp_transport.listeners().is_empty() {
                                     return Err(err.into());
                                 }
                             }
                             None => {
                                 // All socket futures completed (should never happen in normal operation)
-                                if self.tcp_transport.listeners.is_empty() {
+                                if self.tcp_transport.listeners().is_empty() {
                                     return Err(Error::Other("all socket futures completed".to_owned()));
                                 }
                             }
@@ -470,89 +310,20 @@ where
                     }
                 }
 
-                // Incoming TCP connection from any tcp listener
                 tcp_accept_result = tcp_accept_future => {
                     if let Some(Some((local_addr, res))) = tcp_accept_result {
-                        match res {
-                            Ok((stream, peer_addr)) => {
-                                let stream_local_addr = stream.local_addr().unwrap_or(local_addr);
-                                let four_tuple = FourTuple {
-                                    local_addr: stream_local_addr,
-                                    peer_addr,
-                                };
-                                trace!("Accepted TCP stream on {} from {}", stream_local_addr, peer_addr);
-                                self.tcp_transport.streams.insert(four_tuple, stream.clone());
-                                self.tcp_transport.decoders.insert(four_tuple, TcpFrameDecoder::new());
-                                tcp_read_futures.push(
-                                    create_tcp_read_future(four_tuple, stream).boxed()
-                                );
-                            }
-                            Err(err) => {
-                                error!("TCP accept error: {}", err);
-                            }
-                        }
-                        if let Some(listener) = self.tcp_transport.listeners.get(&local_addr).cloned() {
-                            tcp_accept_futures.push(async move {
-                                match listener.accept().await {
-                                    Ok((stream, peer_addr)) => (local_addr, Ok((stream, peer_addr))),
-                                    Err(err) => (local_addr, Err(err)),
-                                }
-                            }.boxed());
-                        }
+                        self.tcp_transport.on_accept(local_addr, res);
+                        self.tcp_transport.arm_accept(local_addr);
                     }
                 }
 
                 // Incoming TCP frame data from any tcp stream
                 tcp_read_result = tcp_read_future => {
                     if let Some(Some(res) ) = tcp_read_result {
-                        match res {
-                            TcpReadResult::Packet { four_tuple, n, buf } => {
-                                if n == 0 {
-                                    trace!("TCP connection EOF for {:?}", four_tuple);
-                                    self.tcp_transport.streams.remove(&four_tuple);
-                                    self.tcp_transport.decoders.remove(&four_tuple);
-                                } else {
-                                    let mut packets = Vec::new();
-                                    if let Some(decoder) = self.tcp_transport.decoders.get_mut(&four_tuple) {
-                                        decoder.extend_from_slice(&buf[..n]);
-                                        while let Some(packet) = decoder.next_packet() {
-                                            packets.push(packet);
-                                        }
-                                    }
-                                    for packet in packets {
-                                        if let Err(err) = self.handle_read(TaggedBytesMut {
-                                            now: Instant::now(),
-                                            transport: TransportContext {
-                                                local_addr: four_tuple.local_addr,
-                                                peer_addr: four_tuple.peer_addr,
-                                                ecn: None,
-                                                transport_protocol: TransportProtocol::TCP,
-                                            },
-                                            message: BytesMut::from(&packet[..]),
-                                        }).await {
-                                            error!("handle_read error on TCP: {}", err);
-                                        }
-                                    }
-                                    if let Some(stream) = self.tcp_transport.streams.get(&four_tuple).cloned() {
-                                        tcp_read_futures.push(
-                                            create_tcp_read_future(four_tuple, stream).boxed()
-                                        );
-                                    }
-                                }
-                            }
-                            TcpReadResult::Error { four_tuple, err, buf: _ } => {
-                                if is_retryable_socket_recv_error(&err) {
-                                    trace!("Transient TCP read error on {:?}: {}", four_tuple, err);
-                                    if let Some(stream) = self.tcp_transport.streams.get(&four_tuple).cloned() {
-                                        tcp_read_futures.push(
-                                            create_tcp_read_future(four_tuple, stream).boxed()
-                                        );
-                                    }
-                                } else {
-                                    error!("TCP read error on {:?}: {}", four_tuple, err);
-                                    self.tcp_transport.streams.remove(&four_tuple);
-                                    self.tcp_transport.decoders.remove(&four_tuple);
-                                }
+                        let packets = self.tcp_transport.on_read(res);
+                        for packet in packets {
+                            if let Err(err) = self.handle_read(packet).await {
+                                error!("handle_read error on TCP: {}", err);
                             }
                         }
                     }
@@ -562,91 +333,48 @@ where
     }
 
     async fn handle_write(&mut self, msg: TaggedBytesMut) -> Result<usize> {
-        let four_tuple = FourTuple::from(&msg.transport);
+        if msg.transport.transport_protocol == TransportProtocol::TCP {
+            if let Some(fut) = self.tcp_transport.write(&msg) {
+                return fut.await;
+            }
+            return Ok(0);
+        }
 
-        let tcp_stream = if msg.transport.transport_protocol == TransportProtocol::TCP {
-            // Must go over TCP
-            let mut stream = self.tcp_transport.streams.get(&four_tuple).cloned();
-            if stream.is_none() {
-                stream = self
-                    .tcp_transport
-                    .streams
-                    .values()
-                    .find(|s| {
-                        if let Ok(peer) = s.peer_addr() {
-                            peer == msg.transport.peer_addr
-                        } else {
-                            false
-                        }
-                    })
-                    .cloned();
-            }
-            if stream.is_none() {
-                trace!("No TCP stream found for {:?}", four_tuple);
-                return Ok(0);
-            }
-            stream
-        } else {
-            // UDP or other protocols
-            if msg.transport.peer_addr.port() == MDNS_PORT {
-                if let Some(socket) = &self.mdns_socket {
-                    return Ok(socket
-                        .send_to(&msg.message, msg.transport.peer_addr)
-                        .await?);
-                } else {
-                    trace!(
-                        "None mDNS socket, drop the packet to {:?} from {:?}",
-                        msg.transport.peer_addr, msg.transport.local_addr
-                    );
-                    return Ok(0);
-                }
-            } else if self
-                .turn_relayer
-                .contains_local_addr(msg.transport.local_addr)
-            {
-                let n = msg.message.len();
-                self.turn_relayer.handle_write(msg)?;
-                return Ok(n);
-            } else if let Some(socket) = self.udp_sockets.get(&msg.transport.local_addr) {
+        if msg.transport.peer_addr.port() == MDNS_PORT {
+            if let Some(socket) = &self.mdns_socket {
                 return Ok(socket
                     .send_to(&msg.message, msg.transport.peer_addr)
                     .await?);
             } else {
-                // If there's no UDP socket for this local address, check if we have a TCP stream
-                // for the remote address (e.g. DTLS/SCTP traffic when the selected path is TCP)
-                let mut stream = self.tcp_transport.streams.get(&four_tuple).cloned();
-                if stream.is_none() {
-                    stream = self
-                        .tcp_transport
-                        .streams
-                        .values()
-                        .find(|s| {
-                            if let Ok(peer) = s.peer_addr() {
-                                peer == msg.transport.peer_addr
-                            } else {
-                                false
-                            }
-                        })
-                        .cloned();
-                }
-                if stream.is_none() {
-                    trace!(
-                        "None udp socket or TCP stream, drop the packet to {:?} from {:?}",
-                        msg.transport.peer_addr, msg.transport.local_addr
-                    );
-                    return Ok(0);
-                }
-                stream
+                trace!(
+                    "None mDNS socket, drop the packet to {:?} from {:?}",
+                    msg.transport.peer_addr, msg.transport.local_addr
+                );
+                return Ok(0);
             }
-        };
-
-        if let Some(stream) = tcp_stream {
-            let framed = frame_packet(&msg.message);
-            stream.write_all(&framed).await?;
-            return Ok(msg.message.len());
+        } else if self
+            .turn_relayer
+            .contains_local_addr(msg.transport.local_addr)
+        {
+            let n = msg.message.len();
+            self.turn_relayer.handle_write(msg)?;
+            return Ok(n);
+        } else if let Some(socket) = self.udp_sockets.get(&msg.transport.local_addr) {
+            return Ok(socket
+                .send_to(&msg.message, msg.transport.peer_addr)
+                .await?);
+        } else {
+            // If there's no UDP socket for this local address, check if we have a TCP stream
+            // for the remote address (e.g. DTLS/SCTP traffic when the selected path is TCP)
+            if let Some(fut) = self.tcp_transport.write(&msg) {
+                return fut.await;
+            }
+            trace!(
+                "None udp socket or TCP stream, drop the packet to {:?} from {:?}",
+                msg.transport.peer_addr, msg.transport.local_addr
+            );
+            Ok(0)
         }
-
-        Ok(0)
     }
 
     async fn handle_read(&mut self, msg: TaggedBytesMut) -> Result<()> {
@@ -888,7 +616,8 @@ where
                 if let Some((evt_tx, track_remote)) = track_remote_entry {
                     let (track_id, result) = match evt {
                         RTCTrackEvent::OnOpen(init) => {
-                            self.populate_track_remote_codings(
+                            Self::populate_track_remote_codings(
+                                self.inner.clone(),
                                 init.receiver_id,
                                 init.ssrc,
                                 &track_remote,
@@ -1032,64 +761,12 @@ where
                 };
 
                 if ice_gather_policy != RTCIceTransportPolicy::Relay {
-                    for local_addr in self.tcp_transport.listeners.keys() {
-                        // Gather passive TCP candidate
-                        let passive_config = CandidateHostConfig {
-                            base_config: CandidateConfig {
-                                network: "tcp".to_owned(),
-                                address: local_addr.ip().to_string(),
-                                port: local_addr.port(),
-                                component: 1,
-                                ..Default::default()
-                            },
-                            tcp_type: rtc::ice::tcp_type::TcpType::Passive,
-                        };
-                        match passive_config.new_candidate_host() {
-                            Ok(candidate) => {
-                                if let Ok(candidate_init) =
-                                    RTCIceCandidate::from(&candidate).to_json()
-                                {
-                                    trace!("TCP LocalIceCandidate Passive {:?}", candidate_init);
-                                    let mut core = self.inner.core.lock().await;
-                                    if let Err(err) = core.add_local_candidate(candidate_init) {
-                                        error!(
-                                            "Failed to add TCP passive local candidate: {}",
-                                            err
-                                        );
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                error!("Failed to create TCP passive candidate: {}", err);
-                            }
-                        }
-
-                        // Gather active TCP candidate
-                        let active_config = CandidateHostConfig {
-                            base_config: CandidateConfig {
-                                network: "tcp".to_owned(),
-                                address: local_addr.ip().to_string(),
-                                port: 9, // Discard port placeholder for active candidates
-                                component: 1,
-                                ..Default::default()
-                            },
-                            tcp_type: rtc::ice::tcp_type::TcpType::Active,
-                        };
-                        match active_config.new_candidate_host() {
-                            Ok(candidate) => {
-                                if let Ok(candidate_init) =
-                                    RTCIceCandidate::from(&candidate).to_json()
-                                {
-                                    trace!("TCP LocalIceCandidate Active {:?}", candidate_init);
-                                    let mut core = self.inner.core.lock().await;
-                                    if let Err(err) = core.add_local_candidate(candidate_init) {
-                                        error!("Failed to add TCP active local candidate: {}", err);
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                error!("Failed to create TCP active candidate: {}", err);
-                            }
+                    let candidates = self.tcp_transport.gather_candidates();
+                    let mut core = self.inner.core.lock().await;
+                    for candidate_init in candidates {
+                        trace!("TCP LocalIceCandidate {:?}", candidate_init);
+                        if let Err(err) = core.add_local_candidate(candidate_init) {
+                            error!("Failed to add TCP local candidate: {}", err);
                         }
                     }
                 }
@@ -1106,38 +783,11 @@ where
                 }
             }
             PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(candidate) => {
-                if candidate.network_type().is_tcp()
-                    && candidate.tcp_type() == rtc::ice::tcp_type::TcpType::Passive
-                {
-                    if let Ok(ip) = candidate.address().parse::<std::net::IpAddr>() {
-                        let remote_addr = std::net::SocketAddr::new(ip, candidate.port());
-                        let runtime = self.inner.runtime.clone();
-                        let tx = self.inner.driver_event_tx.clone();
-                        self.inner.runtime.spawn(Box::pin(async move {
-                            trace!("Initiating TCP connect to {:?}", remote_addr);
-                            match runtime.connect_tcp(remote_addr).await {
-                                Ok(stream) => {
-                                    let local_addr = stream
-                                        .local_addr()
-                                        .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
-                                    let peer_addr = stream.peer_addr().unwrap_or(remote_addr);
-                                    let four_tuple = FourTuple {
-                                        local_addr,
-                                        peer_addr,
-                                    };
-                                    let _ = tx
-                                        .send(PeerConnectionDriverEvent::IncomingTcpStream(
-                                            four_tuple, stream,
-                                        ))
-                                        .await;
-                                }
-                                Err(err) => {
-                                    error!("Failed to connect TCP to {:?}: {}", remote_addr, err);
-                                }
-                            }
-                        }));
-                    }
-                }
+                RTCTcpTransport::connect(
+                    &candidate,
+                    self.inner.runtime.clone(),
+                    self.inner.driver_event_tx.clone(),
+                );
             }
             PeerConnectionDriverEvent::IncomingTcpStream(_, _) => {
                 // Handled directly in event_loop select loop to avoid borrow mutability conflicts on tcp_read_futures
@@ -1154,13 +804,13 @@ where
     }
 
     async fn populate_track_remote_codings(
-        &self,
+        inner: Arc<PeerConnectionRef<I>>,
         receiver_id: RTCRtpReceiverId,
         ssrc: u32,
         track_remote: &Arc<dyn TrackRemote>,
     ) {
         let codings = {
-            let mut core = self.inner.core.lock().await;
+            let mut core = inner.core.lock().await;
             core.rtp_receiver(receiver_id).map(|receiver| {
                 receiver
                     .track()
@@ -1177,16 +827,131 @@ where
             })
         };
 
-        if let Some(codings) = codings {
-            let mut existing_ssrcs = track_remote.ssrcs().await;
-            for coding in codings {
-                if let Some(coding_ssrc) = coding.rtp_coding_parameters.ssrc
-                    && !existing_ssrcs.contains(&coding_ssrc)
-                {
+        let Some(codings) = codings else { return; };
+        let mut existing_ssrcs = track_remote.ssrcs().await;
+        for coding in codings {
+            if let Some(coding_ssrc) = coding.rtp_coding_parameters.ssrc {
+                if !existing_ssrcs.contains(&coding_ssrc) {
                     track_remote.add_coding(coding).await;
                     existing_ssrcs.push(coding_ssrc);
                 }
             }
         }
+    }
+
+    async fn poll_writes(&mut self) -> Result<()> {
+        // 1.a stun_gatherer poll_write()
+        while let Some(msg) = self.stun_gatherer.poll_write() {
+            let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+            if let Err(err) = self.handle_write(msg).await {
+                error!(
+                    "Failed to write packet to {:?} from {:?}: {}",
+                    four_tuple.peer_addr, four_tuple.local_addr, err
+                );
+                if let Err(err) = self
+                    .stun_gatherer
+                    .handle_event(RTCStunGatherEventIn::SocketWriteFailure(four_tuple))
+                {
+                    error!(
+                        "Failed to handle event in stun_gatherer to {:?} from {:?}: {}",
+                        four_tuple.peer_addr, four_tuple.local_addr, err
+                    );
+                }
+            }
+        }
+
+        // 1.b turn_relayer poll_write()
+        while let Some(msg) = self.turn_relayer.poll_write() {
+            let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+            if let Err(err) = self.handle_write(msg).await {
+                error!(
+                    "Failed to write packet to {:?} from {:?}: {}",
+                    four_tuple.peer_addr, four_tuple.local_addr, err
+                );
+                if let Err(err) = self
+                    .turn_relayer
+                    .handle_event(RTCTurnRelayEventIn::SocketWriteFailure(four_tuple))
+                {
+                    error!(
+                        "Failed to handle event in turn_relayer to {:?} from {:?}: {}",
+                        four_tuple.peer_addr, four_tuple.local_addr, err
+                    );
+                }
+            }
+        }
+
+        // 1.c peer_connection poll_write() - Send all outgoing packets
+        let mut core = self.inner.core.lock().await;
+        while let Some(msg) = core.poll_write() {
+            drop(core);
+            let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+            if let Err(err) = self.handle_write(msg).await {
+                error!(
+                    "Failed to write packet to {:?} from {:?}: {}",
+                    four_tuple.peer_addr, four_tuple.local_addr, err
+                );
+            }
+            core = self.inner.core.lock().await;
+        }
+
+        Ok(())
+    }
+
+    async fn poll_events(&mut self) {
+        // 2.a stun_gatherer poll_event()
+        while let Some(event) = self.stun_gatherer.poll_event() {
+            self.handle_stun_gather_event(event).await;
+        }
+
+        // 2.b turn_relayer poll_event()
+        while let Some(event) = self.turn_relayer.poll_event() {
+            self.handle_turn_relay_event(event).await;
+        }
+
+        // 2.c peer_connection poll_event() - Process all events
+        let mut core = self.inner.core.lock().await;
+        while let Some(event) = core.poll_event() {
+            drop(core);
+            self.handle_rtc_event(event).await;
+            core = self.inner.core.lock().await;
+        }
+    }
+
+    async fn poll_reads(&mut self) -> Result<()> {
+        // 3.a turn_relayer poll_read() - deliver decapsulated relay data,
+        // but no need for stun_gatherer poll_read()
+        while let Some(message) = self.turn_relayer.poll_read() {
+            let mut core = self.inner.core.lock().await;
+            core.handle_read(message)?;
+        }
+
+        // 3.b peer_connection poll_read() - Process incoming messages
+        let mut core = self.inner.core.lock().await;
+        while let Some(message) = core.poll_read() {
+            drop(core);
+            self.handle_rtc_message(message).await;
+            core = self.inner.core.lock().await;
+        }
+
+        Ok(())
+    }
+
+    fn compute_timeout(&mut self, core_timeout: Option<Instant>) -> Instant {
+        let mut timeout = core_timeout.unwrap_or_else(|| Instant::now() + DEFAULT_TIMEOUT_DURATION);
+        if let Some(t) = self.stun_gatherer.poll_timeout() {
+            timeout = std::cmp::min(timeout, t);
+        }
+        if let Some(t) = self.turn_relayer.poll_timeout() {
+            timeout = std::cmp::min(timeout, t);
+        }
+        timeout
+    }
+
+    async fn dispatch_timeout(&mut self, now: Instant) -> Result<()> {
+        self.stun_gatherer.handle_timeout(now)?;
+        self.turn_relayer.handle_timeout(now)?;
+        let mut core = self.inner.core.lock().await;
+        core.handle_timeout(now)?;
+        Ok(())
     }
 }
