@@ -11,9 +11,7 @@ use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::peer_connection::transports::tcp_transport::RTCTcpTransport;
-use crate::peer_connection::transports::{
-    SocketRecvResult, is_retryable_socket_recv_error,
-};
+use crate::peer_connection::transports::{SocketRecvResult, is_retryable_socket_recv_error};
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, channel};
@@ -52,6 +50,7 @@ pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
 pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
+const UDP_RECV_BUF_LEN: usize = 2000;
 
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
@@ -135,8 +134,10 @@ where
             .collect();
 
         // Pre-allocate buffers once - one per socket, these will be reused forever
-        let mut udp_socket_buffers: Vec<Vec<u8>> =
-            udp_socket_list.iter().map(|_| vec![0u8; 2000]).collect();
+        let mut udp_socket_buffers: Vec<Vec<u8>> = udp_socket_list
+            .iter()
+            .map(|_| vec![0u8; UDP_RECV_BUF_LEN])
+            .collect();
 
         // Helper function to create a recv future for a specific socket
         let create_udp_recv_future = |idx: usize,
@@ -171,8 +172,6 @@ where
             .collect();
         let mut active_socket_count = udp_socket_list.len();
 
-
-
         loop {
             self.poll_writes().await?;
             self.poll_events().await;
@@ -183,17 +182,17 @@ where
                 let mut core = self.inner.core.lock().await;
                 core.poll_timeout()
             };
-            let timeout = self.compute_timeout(core_timeout);
+            let stun_timeout = self.stun_gatherer.poll_timeout();
+            let turn_timeout = self.turn_relayer.poll_timeout();
+            let timeout = Self::compute_timeout(core_timeout, stun_timeout, turn_timeout);
             let now = Instant::now();
-            let delay_from_now = timeout
-                .checked_duration_since(now)
-                .unwrap_or_default();
+            let delay_from_now = timeout.checked_duration_since(now).unwrap_or_default();
 
             trace!(
                 "Timeout calculation: core={:?}, stun={:?}, turn={:?}, timeout={:?}, now={:?}, delay={:?}",
                 core_timeout.map(|t| t.checked_duration_since(now)),
-                self.stun_gatherer.poll_timeout().map(|t| t.checked_duration_since(now)),
-                self.turn_relayer.poll_timeout().map(|t| t.checked_duration_since(now)),
+                stun_timeout.map(|t| t.checked_duration_since(now)),
+                turn_timeout.map(|t| t.checked_duration_since(now)),
                 timeout.checked_duration_since(now),
                 now,
                 delay_from_now
@@ -216,12 +215,13 @@ where
             .into();
             futures::pin_mut!(udp_recv_future);
 
-            let tcp_accept_future: OptionFuture<_> = if !self.tcp_transport.accept_futures.is_empty() {
-                Some(self.tcp_transport.accept_futures.next())
-            } else {
-                None
-            }
-            .into();
+            let tcp_accept_future: OptionFuture<_> =
+                if !self.tcp_transport.accept_futures.is_empty() {
+                    Some(self.tcp_transport.accept_futures.next())
+                } else {
+                    None
+                }
+                .into();
             futures::pin_mut!(tcp_accept_future);
 
             let tcp_read_future: OptionFuture<_> = if !self.tcp_transport.read_futures.is_empty() {
@@ -242,15 +242,10 @@ where
                 // Driver events (RTP, RTCP, or ICE candidate)
                 evt = driver_event_rx.recv().fuse() => {
                     if let Some(evt) = evt {
-                        if let PeerConnectionDriverEvent::IncomingTcpStream(four_tuple, stream) = evt {
-                            trace!("TCP stream connection established: {:?}", four_tuple);
-                            self.tcp_transport.register_stream(four_tuple, stream);
-                        } else {
-                            let is_closed = self.handle_driver_event(evt).await;
-                            if is_closed {
-                                trace!("Driver event channel closed, exiting event loop");
-                                return Ok(());
-                            }
+                        let is_closed = self.handle_driver_event(evt).await;
+                        if is_closed {
+                            trace!("Driver event channel closed, exiting event loop");
+                            return Ok(());
                         }
                     }
                 }
@@ -296,13 +291,13 @@ where
                                 self.udp_sockets.remove(&local_addr);
                                 active_socket_count -= 1;
 
-                                if active_socket_count == 0 && self.tcp_transport.listeners().is_empty() {
+                                if active_socket_count == 0 && self.tcp_transport.is_empty() {
                                     return Err(err.into());
                                 }
                             }
                             None => {
                                 // All socket futures completed (should never happen in normal operation)
-                                if self.tcp_transport.listeners().is_empty() {
+                                if self.tcp_transport.is_empty() {
                                     return Err(Error::Other("all socket futures completed".to_owned()));
                                 }
                             }
@@ -313,7 +308,6 @@ where
                 tcp_accept_result = tcp_accept_future => {
                     if let Some(Some((local_addr, res))) = tcp_accept_result {
                         self.tcp_transport.on_accept(local_addr, res);
-                        self.tcp_transport.arm_accept(local_addr);
                     }
                 }
 
@@ -334,10 +328,7 @@ where
 
     async fn handle_write(&mut self, msg: TaggedBytesMut) -> Result<usize> {
         if msg.transport.transport_protocol == TransportProtocol::TCP {
-            if let Some(fut) = self.tcp_transport.write(&msg) {
-                return fut.await;
-            }
-            return Ok(0);
+            return self.tcp_transport.write(&msg).await;
         }
 
         if msg.transport.peer_addr.port() == MDNS_PORT {
@@ -366,8 +357,9 @@ where
         } else {
             // If there's no UDP socket for this local address, check if we have a TCP stream
             // for the remote address (e.g. DTLS/SCTP traffic when the selected path is TCP)
-            if let Some(fut) = self.tcp_transport.write(&msg) {
-                return fut.await;
+            let n = self.tcp_transport.write(&msg).await?;
+            if n > 0 {
+                return Ok(n);
             }
             trace!(
                 "None udp socket or TCP stream, drop the packet to {:?} from {:?}",
@@ -789,8 +781,9 @@ where
                     self.inner.driver_event_tx.clone(),
                 );
             }
-            PeerConnectionDriverEvent::IncomingTcpStream(_, _) => {
-                // Handled directly in event_loop select loop to avoid borrow mutability conflicts on tcp_read_futures
+            PeerConnectionDriverEvent::IncomingTcpStream(four_tuple, stream) => {
+                trace!("TCP stream connection established: {:?}", four_tuple);
+                self.tcp_transport.register_stream(four_tuple, stream);
             }
             PeerConnectionDriverEvent::Close => {
                 if let Err(err) = self.turn_relayer.close() {
@@ -827,7 +820,9 @@ where
             })
         };
 
-        let Some(codings) = codings else { return; };
+        let Some(codings) = codings else {
+            return;
+        };
         let mut existing_ssrcs = track_remote.ssrcs().await;
         for coding in codings {
             if let Some(coding_ssrc) = coding.rtp_coding_parameters.ssrc {
@@ -837,6 +832,33 @@ where
                 }
             }
         }
+    }
+
+    async fn drain_core_writes(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedBytesMut> {
+        let mut writes = Vec::new();
+        let mut core = inner.core.lock().await;
+        while let Some(msg) = core.poll_write() {
+            writes.push(msg);
+        }
+        writes
+    }
+
+    async fn drain_core_events(inner: Arc<PeerConnectionRef<I>>) -> Vec<RTCPeerConnectionEvent> {
+        let mut events = Vec::new();
+        let mut core = inner.core.lock().await;
+        while let Some(event) = core.poll_event() {
+            events.push(event);
+        }
+        events
+    }
+
+    async fn drain_core_reads(inner: Arc<PeerConnectionRef<I>>) -> Vec<RTCMessage> {
+        let mut messages = Vec::new();
+        let mut core = inner.core.lock().await;
+        while let Some(message) = core.poll_read() {
+            messages.push(message);
+        }
+        messages
     }
 
     async fn poll_writes(&mut self) -> Result<()> {
@@ -881,9 +903,7 @@ where
         }
 
         // 1.c peer_connection poll_write() - Send all outgoing packets
-        let mut core = self.inner.core.lock().await;
-        while let Some(msg) = core.poll_write() {
-            drop(core);
+        for msg in Self::drain_core_writes(self.inner.clone()).await {
             let four_tuple: FourTuple = FourTuple::from(&msg.transport);
             if let Err(err) = self.handle_write(msg).await {
                 error!(
@@ -891,7 +911,6 @@ where
                     four_tuple.peer_addr, four_tuple.local_addr, err
                 );
             }
-            core = self.inner.core.lock().await;
         }
 
         Ok(())
@@ -909,42 +928,43 @@ where
         }
 
         // 2.c peer_connection poll_event() - Process all events
-        let mut core = self.inner.core.lock().await;
-        while let Some(event) = core.poll_event() {
-            drop(core);
+        for event in Self::drain_core_events(self.inner.clone()).await {
             self.handle_rtc_event(event).await;
-            core = self.inner.core.lock().await;
         }
     }
 
     async fn poll_reads(&mut self) -> Result<()> {
         // 3.a turn_relayer poll_read() - deliver decapsulated relay data,
         // but no need for stun_gatherer poll_read()
+        let mut turn_messages = Vec::new();
         while let Some(message) = self.turn_relayer.poll_read() {
+            turn_messages.push(message);
+        }
+        if !turn_messages.is_empty() {
             let mut core = self.inner.core.lock().await;
-            core.handle_read(message)?;
+            for message in turn_messages {
+                core.handle_read(message)?;
+            }
         }
 
         // 3.b peer_connection poll_read() - Process incoming messages
-        let mut core = self.inner.core.lock().await;
-        while let Some(message) = core.poll_read() {
-            drop(core);
+        for message in Self::drain_core_reads(self.inner.clone()).await {
             self.handle_rtc_message(message).await;
-            core = self.inner.core.lock().await;
         }
 
         Ok(())
     }
 
-    fn compute_timeout(&mut self, core_timeout: Option<Instant>) -> Instant {
-        let mut timeout = core_timeout.unwrap_or_else(|| Instant::now() + DEFAULT_TIMEOUT_DURATION);
-        if let Some(t) = self.stun_gatherer.poll_timeout() {
-            timeout = std::cmp::min(timeout, t);
-        }
-        if let Some(t) = self.turn_relayer.poll_timeout() {
-            timeout = std::cmp::min(timeout, t);
-        }
-        timeout
+    fn compute_timeout(
+        core_timeout: Option<Instant>,
+        stun_timeout: Option<Instant>,
+        turn_timeout: Option<Instant>,
+    ) -> Instant {
+        [core_timeout, stun_timeout, turn_timeout]
+            .into_iter()
+            .flatten()
+            .min()
+            .unwrap_or_else(|| Instant::now() + DEFAULT_TIMEOUT_DURATION)
     }
 
     async fn dispatch_timeout(&mut self, now: Instant) -> Result<()> {
