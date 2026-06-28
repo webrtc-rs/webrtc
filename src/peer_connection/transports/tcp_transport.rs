@@ -167,9 +167,7 @@ impl RTCTcpTransport {
 
         self.arm_accept(local_addr);
 
-        let Some((stream, peer_addr)) = accepted else {
-            return None;
-        };
+        let (stream, peer_addr) = accepted?;
 
         let stream_local_addr = stream.local_addr().unwrap_or(local_addr);
         let four_tuple = FourTuple {
@@ -245,10 +243,10 @@ impl RTCTcpTransport {
                 },
                 tcp_type: rtc::ice::tcp_type::TcpType::Passive,
             };
-            if let Ok(candidate) = passive_config.new_candidate_host() {
-                if let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json() {
-                    candidates.push(candidate_init);
-                }
+            if let Ok(candidate) = passive_config.new_candidate_host()
+                && let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json()
+            {
+                candidates.push(candidate_init);
             }
 
             // Gather active TCP candidate
@@ -262,10 +260,10 @@ impl RTCTcpTransport {
                 },
                 tcp_type: rtc::ice::tcp_type::TcpType::Active,
             };
-            if let Ok(candidate) = active_config.new_candidate_host() {
-                if let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json() {
-                    candidates.push(candidate_init);
-                }
+            if let Ok(candidate) = active_config.new_candidate_host()
+                && let Ok(candidate_init) = RTCIceCandidate::from(&candidate).to_json()
+            {
+                candidates.push(candidate_init);
             }
         }
         candidates
@@ -278,34 +276,33 @@ impl RTCTcpTransport {
     ) {
         if candidate.network_type().is_tcp()
             && candidate.tcp_type() == rtc::ice::tcp_type::TcpType::Passive
+            && let Ok(ip) = candidate.address().parse::<IpAddr>()
         {
-            if let Ok(ip) = candidate.address().parse::<IpAddr>() {
-                let remote_addr = SocketAddr::new(ip, candidate.port());
-                let runtime_clone = runtime.clone();
-                runtime.spawn(Box::pin(async move {
-                    trace!("Initiating TCP connect to {:?}", remote_addr);
-                    match runtime_clone.connect_tcp(remote_addr).await {
-                        Ok(stream) => {
-                            let local_addr = stream
-                                .local_addr()
-                                .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
-                            let peer_addr = stream.peer_addr().unwrap_or(remote_addr);
-                            let four_tuple = FourTuple {
-                                local_addr,
-                                peer_addr,
-                            };
-                            let _ = tx
-                                .send(PeerConnectionDriverEvent::IncomingTcpStream(
-                                    four_tuple, stream,
-                                ))
-                                .await;
-                        }
-                        Err(err) => {
-                            error!("Failed to connect TCP to {:?}: {}", remote_addr, err);
-                        }
+            let remote_addr = SocketAddr::new(ip, candidate.port());
+            let runtime_clone = runtime.clone();
+            runtime.spawn(Box::pin(async move {
+                trace!("Initiating TCP connect to {:?}", remote_addr);
+                match runtime_clone.connect_tcp(remote_addr).await {
+                    Ok(stream) => {
+                        let local_addr = stream
+                            .local_addr()
+                            .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
+                        let peer_addr = stream.peer_addr().unwrap_or(remote_addr);
+                        let four_tuple = FourTuple {
+                            local_addr,
+                            peer_addr,
+                        };
+                        let _ = tx
+                            .send(PeerConnectionDriverEvent::IncomingTcpStream(
+                                four_tuple, stream,
+                            ))
+                            .await;
                     }
-                }));
-            }
+                    Err(err) => {
+                        error!("Failed to connect TCP to {:?}: {}", remote_addr, err);
+                    }
+                }
+            }));
         }
     }
 }

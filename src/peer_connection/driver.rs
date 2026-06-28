@@ -178,29 +178,13 @@ where
             self.poll_reads().await?;
 
             // 4.a poll next timeout
-            let core_timeout = {
-                let mut core = self.inner.core.lock().await;
-                core.poll_timeout()
-            };
-            let stun_timeout = self.stun_gatherer.poll_timeout();
-            let turn_timeout = self.turn_relayer.poll_timeout();
-            let timeout = Self::compute_timeout(core_timeout, stun_timeout, turn_timeout);
+            let timeout = self.poll_timeout().await;
             let now = Instant::now();
             let delay_from_now = timeout.checked_duration_since(now).unwrap_or_default();
 
-            trace!(
-                "Timeout calculation: core={:?}, stun={:?}, turn={:?}, timeout={:?}, now={:?}, delay={:?}",
-                core_timeout.map(|t| t.checked_duration_since(now)),
-                stun_timeout.map(|t| t.checked_duration_since(now)),
-                turn_timeout.map(|t| t.checked_duration_since(now)),
-                timeout.checked_duration_since(now),
-                now,
-                delay_from_now
-            );
-
             // 4.b handle immediate timeout
             if delay_from_now.is_zero() {
-                self.dispatch_timeout(now).await?;
+                self.handle_timeout(now).await?;
                 continue;
             }
 
@@ -236,7 +220,7 @@ where
             futures::select! {
                 // Timer expired
                 _ = timer.fuse() => {
-                    self.dispatch_timeout(Instant::now()).await?;
+                    self.handle_timeout(Instant::now()).await?;
                 }
 
                 // Driver events (RTP, RTCP, or ICE candidate)
@@ -328,20 +312,18 @@ where
 
     async fn handle_write(&mut self, msg: TaggedBytesMut) -> Result<usize> {
         if msg.transport.transport_protocol == TransportProtocol::TCP {
-            return self.tcp_transport.write(&msg).await;
-        }
-
-        if msg.transport.peer_addr.port() == MDNS_PORT {
+            self.tcp_transport.write(&msg).await
+        } else if msg.transport.peer_addr.port() == MDNS_PORT {
             if let Some(socket) = &self.mdns_socket {
-                return Ok(socket
+                Ok(socket
                     .send_to(&msg.message, msg.transport.peer_addr)
-                    .await?);
+                    .await?)
             } else {
                 trace!(
                     "None mDNS socket, drop the packet to {:?} from {:?}",
                     msg.transport.peer_addr, msg.transport.local_addr
                 );
-                return Ok(0);
+                Ok(0)
             }
         } else if self
             .turn_relayer
@@ -349,23 +331,22 @@ where
         {
             let n = msg.message.len();
             self.turn_relayer.handle_write(msg)?;
-            return Ok(n);
-        } else if let Some(socket) = self.udp_sockets.get(&msg.transport.local_addr) {
-            return Ok(socket
+            Ok(n)
+        } else if let Some(udp_socket) = self.udp_sockets.get(&msg.transport.local_addr) {
+            Ok(udp_socket
                 .send_to(&msg.message, msg.transport.peer_addr)
-                .await?);
+                .await?)
         } else {
             // If there's no UDP socket for this local address, check if we have a TCP stream
             // for the remote address (e.g. DTLS/SCTP traffic when the selected path is TCP)
             let n = self.tcp_transport.write(&msg).await?;
-            if n > 0 {
-                return Ok(n);
+            if n == 0 {
+                trace!(
+                    "None udp socket or TCP stream, drop the packet to {:?} from {:?}",
+                    msg.transport.peer_addr, msg.transport.local_addr
+                );
             }
-            trace!(
-                "None udp socket or TCP stream, drop the packet to {:?} from {:?}",
-                msg.transport.peer_addr, msg.transport.local_addr
-            );
-            Ok(0)
+            Ok(n)
         }
     }
 
@@ -763,15 +744,15 @@ where
                     }
                 }
 
-                if self.stun_gatherer.state() != RTCIceGatheringState::Gathering {
-                    if let Err(err) = self.stun_gatherer.gather().await {
-                        error!("Failed to gather ice gathering: {}", err);
-                    }
+                if self.stun_gatherer.state() != RTCIceGatheringState::Gathering
+                    && let Err(err) = self.stun_gatherer.gather().await
+                {
+                    error!("Failed to gather ice gathering: {}", err);
                 }
-                if self.turn_relayer.state() != RTCIceGatheringState::Gathering {
-                    if let Err(err) = self.turn_relayer.gather().await {
-                        error!("Failed to gather relay candidates: {}", err);
-                    }
+                if self.turn_relayer.state() != RTCIceGatheringState::Gathering
+                    && let Err(err) = self.turn_relayer.gather().await
+                {
+                    error!("Failed to gather relay candidates: {}", err);
                 }
             }
             PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(candidate) => {
@@ -825,11 +806,11 @@ where
         };
         let mut existing_ssrcs = track_remote.ssrcs().await;
         for coding in codings {
-            if let Some(coding_ssrc) = coding.rtp_coding_parameters.ssrc {
-                if !existing_ssrcs.contains(&coding_ssrc) {
-                    track_remote.add_coding(coding).await;
-                    existing_ssrcs.push(coding_ssrc);
-                }
+            if let Some(coding_ssrc) = coding.rtp_coding_parameters.ssrc
+                && !existing_ssrcs.contains(&coding_ssrc)
+            {
+                track_remote.add_coding(coding).await;
+                existing_ssrcs.push(coding_ssrc);
             }
         }
     }
@@ -955,11 +936,14 @@ where
         Ok(())
     }
 
-    fn compute_timeout(
-        core_timeout: Option<Instant>,
-        stun_timeout: Option<Instant>,
-        turn_timeout: Option<Instant>,
-    ) -> Instant {
+    async fn poll_timeout(&mut self) -> Instant {
+        let core_timeout = {
+            let mut core = self.inner.core.lock().await;
+            core.poll_timeout()
+        };
+        let stun_timeout = self.stun_gatherer.poll_timeout();
+        let turn_timeout = self.turn_relayer.poll_timeout();
+
         [core_timeout, stun_timeout, turn_timeout]
             .into_iter()
             .flatten()
@@ -967,7 +951,7 @@ where
             .unwrap_or_else(|| Instant::now() + DEFAULT_TIMEOUT_DURATION)
     }
 
-    async fn dispatch_timeout(&mut self, now: Instant) -> Result<()> {
+    async fn handle_timeout(&mut self, now: Instant) -> Result<()> {
         self.stun_gatherer.handle_timeout(now)?;
         self.turn_relayer.handle_timeout(now)?;
         let mut core = self.inner.core.lock().await;
