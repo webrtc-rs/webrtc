@@ -51,6 +51,7 @@
 //!     }
 //! }
 //!
+//! # #[cfg(feature = "runtime-tokio")]
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // 2. Configure the peer connection
@@ -76,6 +77,8 @@
 //!     println!("Local description set successfully!");
 //!     Ok(())
 //! }
+//! # #[cfg(not(feature = "runtime-tokio"))]
+//! # fn main() {}
 //! ```
 
 pub mod data_channel;

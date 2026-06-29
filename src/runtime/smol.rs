@@ -189,6 +189,7 @@ impl AsyncTcpStream for TcpStream {
     }
 }
 
+/// Yields execution and sleeps for the specified duration using the smol timer.
 pub async fn sleep(duration: Duration) {
     ::smol::Timer::after(duration).await;
 }
