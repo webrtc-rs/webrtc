@@ -24,6 +24,7 @@ pub struct TrackLocalStaticRTP {
 }
 
 impl TrackLocalStaticRTP {
+    /// Creates a new `TrackLocalStaticRTP` with the given [`MediaStreamTrack`].
     pub fn new(track: MediaStreamTrack) -> Self {
         Self {
             track: Mutex::new(track),
@@ -31,6 +32,7 @@ impl TrackLocalStaticRTP {
         }
     }
 
+    /// Writes an RTP packet to the track with the specified header extensions.
     pub async fn write_rtp_with_extensions(
         &self,
         mut pkt: rtp::Packet,

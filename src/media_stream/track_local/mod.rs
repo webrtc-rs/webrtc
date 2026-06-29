@@ -1,3 +1,47 @@
+//! Local Media Stream Tracks
+//!
+//! This module provides the [`TrackLocal`](crate::media_stream::track_local::TrackLocal) trait, which represents a media track generated locally.
+//! It also includes two concrete implementations:
+//! *   **[`TrackLocalStaticRTP`](crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP)**: For writing pre-packetized RTP packets.
+//! *   **[`TrackLocalStaticSample`](crate::media_stream::track_local::static_sample::TrackLocalStaticSample)**: For writing raw media samples.
+//!
+//! # Examples
+//!
+//! ## Writing Media Samples
+//!
+//! ```no_run
+//! use webrtc::media_stream::track_local::TrackLocal;
+//! use webrtc::media_stream::track_local::static_sample::TrackLocalStaticSample;
+//! use rtc::media_stream::{MediaStreamTrack, MediaStreamTrackId, MediaStreamId};
+//! use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
+//! use rtc::media::Sample;
+//! use std::time::Duration;
+//! use std::sync::Arc;
+//!
+//! # async fn example() -> webrtc::error::Result<()> {
+//! // Create a local video track
+//! let track = MediaStreamTrack::new(
+//!     MediaStreamTrackId::new(),
+//!     MediaStreamId::new(),
+//!     "video-label".to_owned(),
+//!     RtpCodecKind::Video,
+//!     vec![],
+//! );
+//! let local_track = Arc::new(TrackLocalStaticSample::new(track)?);
+//!
+//! // Write a raw VP8/H.264 frame as a sample
+//! let sample = Sample {
+//!     data: bytes::Bytes::from(vec![0x00, 0x01, 0x02]),
+//!     duration: Duration::from_millis(33), // ~30 fps
+//!     ..Default::default()
+//! };
+//!
+//! // Write the sample to SSRC 1234
+//! local_track.write_sample(1234, &sample, &[]).await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use crate::error::Result;
 use crate::media_stream::Track;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
@@ -7,7 +51,9 @@ use rtc::rtp_transceiver::RTCRtpSenderId;
 use rtc::rtp_transceiver::rtp_sender::RTCRtpParameters;
 use rtc::{rtcp, rtp};
 
+/// Local track implementation that accepts pre-packetized RTP packets.
 pub mod static_rtp;
+/// Local track implementation that accepts raw media samples and packetizes them.
 pub mod static_sample;
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used
@@ -19,20 +65,28 @@ pub struct TrackLocalContext {
     pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
 }
 
+/// A local media track that can be sent to a remote peer.
+///
+/// This trait defines the interface for local media tracks. Applications write
+/// RTP and RTCP packets to this track, which are then processed by the interceptor
+/// pipeline and sent over the peer connection.
 #[async_trait::async_trait]
 pub trait TrackLocal: Track {
+    /// Returns the underlying [`MediaStreamTrack`] for this local track.
     async fn track(&self) -> MediaStreamTrack;
 
-    /// bind should implement the way how the media data flows from the Track to the PeerConnection
+    /// Binds the track to the peer connection context.
+    ///
     /// This will be called internally after signaling is complete and the list of available
-    /// codecs has been determined
+    /// codecs has been determined.
     async fn bind(&self, ctx: TrackLocalContext);
 
-    /// unbind should implement the teardown logic when the track is no longer needed. This happens
-    /// because a track has been stopped.
+    /// Unbinds the track from the peer connection context, cleaning up any resources.
     async fn unbind(&self);
 
+    /// Writes an RTP packet to the track.
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()>;
 
+    /// Writes RTCP packets to the track.
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()>;
 }

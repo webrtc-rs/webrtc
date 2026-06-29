@@ -1,4 +1,53 @@
-//! Async peer connection wrapper
+//! PeerConnection API
+//!
+//! This module provides the core [`PeerConnection`] trait and its builder [`PeerConnectionBuilder`],
+//! which are used to establish peer-to-peer connections for media and data streaming.
+//!
+//! # Architecture
+//!
+//! A `PeerConnection` consists of two main parts:
+//! 1. **`PeerConnection`**: The user-facing API handle. All operations (e.g., `create_offer`,
+//!    `add_track`, `create_data_channel`) are asynchronous and communicate with a background driver.
+//! 2. **`PeerConnectionDriver`**: A background event loop spawned automatically when building a
+//!    connection. It drives the underlying Sans-I/O `rtc` protocol core, manages network sockets
+//!    (UDP/TCP), handles timeouts, and dispatches events.
+//!
+//! # Examples
+//!
+//! ## Creating a Peer Connection
+//!
+//! ```no_run
+//! use webrtc::peer_connection::{
+//!     PeerConnectionBuilder, PeerConnectionEventHandler,
+//!     RTCConfigurationBuilder, RTCIceServer,
+//! };
+//! use std::sync::Arc;
+//!
+//! #[derive(Clone)]
+//! struct MyHandler;
+//!
+//! #[async_trait::async_trait]
+//! impl PeerConnectionEventHandler for MyHandler {
+//!     // Implement event handlers...
+//! }
+//!
+//! # async fn example() -> webrtc::error::Result<()> {
+//! let pc = PeerConnectionBuilder::new()
+//!     .with_configuration(
+//!         RTCConfigurationBuilder::default()
+//!             .with_ice_servers(vec![RTCIceServer {
+//!                 urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+//!                 ..Default::default()
+//!             }])
+//!             .build(),
+//!     )
+//!     .with_handler(Arc::new(MyHandler))
+//!     .with_udp_addrs(vec!["0.0.0.0:0"])
+//!     .build()
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
 
 pub(crate) mod driver;
 pub(crate) mod transports;
@@ -110,6 +159,10 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
     async fn on_track(&self, _track: Arc<dyn TrackRemote>) {}
 }
 
+/// Builder for constructing a [`PeerConnection`].
+///
+/// Configures the configuration, media engine, setting engine, interceptor registry,
+/// event handler, async runtime, and local socket addresses.
 pub struct PeerConnectionBuilder<A: ToSocketAddrs, I = NoopInterceptor>
 where
     I: Interceptor,
@@ -136,6 +189,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
 }
 
 impl<A: ToSocketAddrs> PeerConnectionBuilder<A, NoopInterceptor> {
+    /// Creates a new `PeerConnectionBuilder`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -145,22 +199,26 @@ impl<A: ToSocketAddrs, I> PeerConnectionBuilder<A, I>
 where
     I: Interceptor,
 {
+    /// Configures the builder with the specified WebRTC [`RTCConfiguration`].
     pub fn with_configuration(mut self, configuration: RTCConfiguration) -> Self {
         self.builder = self.builder.with_configuration(configuration);
         self
     }
 
+    /// Configures the builder with the specified [`MediaEngine`].
     pub fn with_media_engine(mut self, media_engine: MediaEngine) -> Self {
         self.builder = self.builder.with_media_engine(media_engine);
         self
     }
 
+    /// Configures the builder with the specified [`SettingEngine`].
     pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
         self.mdns_mode = setting_engine.multicast_dns().mode;
         self.builder = self.builder.with_setting_engine(setting_engine);
         self
     }
 
+    /// Configures the builder with the specified interceptor [`Registry`].
     pub fn with_interceptor_registry<P>(
         self,
         interceptor_registry: Registry<P>,
@@ -178,26 +236,31 @@ where
         }
     }
 
+    /// Configures the builder with the specified async [`Runtime`].
     pub fn with_runtime(mut self, runtime: Arc<dyn Runtime>) -> Self {
         self.runtime = Some(runtime);
         self
     }
 
+    /// Configures the builder with the specified [`PeerConnectionEventHandler`].
     pub fn with_handler(mut self, handler: Arc<dyn PeerConnectionEventHandler>) -> Self {
         self.handler = Some(handler);
         self
     }
 
+    /// Configures the builder with the local UDP socket addresses to bind.
     pub fn with_udp_addrs(mut self, udp_addrs: Vec<A>) -> Self {
         self.udp_addrs = udp_addrs;
         self
     }
 
+    /// Configures the builder with the local TCP socket addresses to bind.
     pub fn with_tcp_addrs(mut self, tcp_addrs: Vec<A>) -> Self {
         self.tcp_addrs = tcp_addrs;
         self
     }
 
+    /// Builds the [`PeerConnection`] and starts the background event loop driver.
     pub async fn build(self) -> Result<impl PeerConnection> {
         let runtime = if let Some(runtime) = self.runtime {
             runtime

@@ -1,7 +1,18 @@
-//! Runtime abstraction for async I/O and timer operations
+//! Async Runtime Abstraction
 //!
-//! This module provides traits that abstract over different async runtimes,
-//! allowing the WebRTC implementation to work with Tokio, async-std, smol, and others.
+//! This module provides the [`Runtime`] trait, which abstracts all asynchronous operations
+//! and primitives required by the WebRTC stack. This makes the `webrtc` crate runtime-agnostic,
+//! allowing it to support multiple async runtimes through feature flags.
+//!
+//! # Active Runtime
+//!
+//! The active runtime is selected at compile time via Cargo features:
+//! *   **`runtime-tokio` (default)**: Uses the Tokio runtime.
+//! *   **`runtime-smol`**: Uses the smol runtime.
+//!
+//! This module exports concrete type aliases (e.g., [`Mutex`], [`Sender`], [`Receiver`], [`Interval`])
+//! which map to the selected runtime's primitives, ensuring zero-cost abstraction without
+//! dynamic dispatch in the hot path.
 
 #![allow(clippy::type_complexity)]
 
@@ -179,14 +190,18 @@ pub struct SendError<T>(pub T);
 /// Error returned when try_send fails
 #[derive(Debug)]
 pub enum TrySendError<T> {
+    /// The channel is full.
     Full(T),
+    /// The channel is disconnected.
     Disconnected(T),
 }
 
 /// Error returned when try_recv fails
 #[derive(Debug)]
 pub enum TryRecvError {
+    /// The channel is empty.
     Empty,
+    /// The channel is disconnected.
     Disconnected,
 }
 
@@ -273,18 +288,25 @@ pub use tokio::TokioRuntime;
 pub use tokio::{
     TokioInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
 };
+/// The concrete Interval type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
 pub type Interval = TokioInterval;
+/// The concrete Mutex type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
 pub type Mutex<T> = tokio::TokioMutex<T>;
+/// The concrete Notify type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
 pub type Notify = tokio::TokioNotify;
+/// The concrete channel Sender type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
 pub type Sender<T> = tokio::TokioSender<T>;
+/// The concrete channel Receiver type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
 pub type Receiver<T> = tokio::TokioReceiver<T>;
+/// The concrete broadcast channel Sender type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
 pub type BroadcastSender<T> = tokio::TokioBroadcastSender<T>;
+/// The concrete broadcast channel Receiver type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
 pub type BroadcastReceiver<T> = tokio::TokioBroadcastReceiver<T>;
 
@@ -297,17 +319,24 @@ pub use smol::SmolRuntime;
 pub use smol::{
     SmolInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
 };
+/// The concrete Interval type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Interval = SmolInterval;
+/// The concrete Mutex type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Mutex<T> = smol::SmolMutex<T>;
+/// The concrete Notify type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Notify = smol::SmolNotify;
+/// The concrete channel Sender type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Sender<T> = smol::SmolSender<T>;
+/// The concrete channel Receiver type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type Receiver<T> = smol::SmolReceiver<T>;
+/// The concrete broadcast channel Sender type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type BroadcastSender<T> = smol::SmolBroadcastSender<T>;
+/// The concrete broadcast channel Receiver type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type BroadcastReceiver<T> = smol::SmolBroadcastReceiver<T>;

@@ -1,4 +1,47 @@
-//! Async DataChannel API
+//! DataChannel API
+//!
+//! This module provides the [`DataChannel`] trait and the [`DataChannelEvent`] enum, which are used
+//! to establish bidirectional, low-latency, peer-to-peer data channels.
+//!
+//! # Concepts
+//!
+//! *   **[`DataChannel`]**: Represents a WebRTC data channel. It is created via
+//!     [`PeerConnection::create_data_channel`](crate::peer_connection::PeerConnection::create_data_channel) or received via the
+//!     [`PeerConnectionEventHandler::on_data_channel`](crate::peer_connection::PeerConnectionEventHandler::on_data_channel) callback.
+//! *   **Event Polling**: Unlike the callback-heavy design of older versions, events (like opening,
+//!     closing, receiving messages, or errors) are fetched by calling the asynchronous
+//!     [`DataChannel::poll`] method in a loop.
+//!
+//! # Examples
+//!
+//! ## Sending and Receiving Data
+//!
+//! ```no_run
+//! # use webrtc::data_channel::{DataChannel, DataChannelEvent};
+//! # use std::sync::Arc;
+//! # async fn handle_data_channel(dc: Arc<dyn DataChannel>) -> webrtc::error::Result<()> {
+//! // Poll for events in a loop
+//! while let Some(event) = dc.poll().await {
+//!     match event {
+//!         DataChannelEvent::OnOpen => {
+//!             println!("Data channel opened!");
+//!             dc.send_text("Hello, peer!").await?;
+//!         }
+//!         DataChannelEvent::OnMessage(msg) => {
+//!             if let Some(text) = String::from_utf8(msg.data.to_vec()).ok() {
+//!                 println!("Received text message: {}", text);
+//!             }
+//!         }
+//!         DataChannelEvent::OnClose => {
+//!             println!("Data channel closed");
+//!             break;
+//!         }
+//!         _ => {}
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{Mutex, Receiver};
@@ -15,28 +58,45 @@ pub use rtc::data_channel::{
 /// Object-safe trait exposing all public DataChannel operations.
 ///
 /// This allows `on_data_channel` in `PeerConnectionEventHandler` to receive a
-/// `Arc<dyn DataChannelExt>` without the event handler trait itself needing to
+/// `Arc<dyn DataChannel>` without the event handler trait itself needing to
 /// be generic over the interceptor type `I`.
 #[async_trait::async_trait]
 pub trait DataChannel: Send + Sync + 'static {
+    /// Returns the label of this data channel.
     async fn label(&self) -> Result<String>;
+    /// Returns whether this data channel guarantees in-order delivery.
     async fn ordered(&self) -> Result<bool>;
+    /// Returns the maximum packet lifetime in milliseconds, if configured.
     async fn max_packet_life_time(&self) -> Result<Option<u16>>;
+    /// Returns the maximum number of retransmissions, if configured.
     async fn max_retransmits(&self) -> Result<Option<u16>>;
+    /// Returns the subprotocol name configured for this data channel.
     async fn protocol(&self) -> Result<String>;
+    /// Returns whether this data channel was negotiated by the application.
     async fn negotiated(&self) -> Result<bool>;
+    /// Returns the unique identifier of this data channel.
     fn id(&self) -> RTCDataChannelId;
+    /// Returns the current state of this data channel.
     async fn ready_state(&self) -> Result<RTCDataChannelState>;
+    /// Returns the buffered amount high threshold in bytes.
     async fn buffered_amount_high_threshold(&self) -> Result<u32>;
+    /// Sets the buffered amount high threshold in bytes.
     async fn set_buffered_amount_high_threshold(&self, threshold: u32) -> Result<()>;
+    /// Returns the buffered amount low threshold in bytes.
     async fn buffered_amount_low_threshold(&self) -> Result<u32>;
+    /// Sets the buffered amount low threshold in bytes.
     async fn set_buffered_amount_low_threshold(&self, threshold: u32) -> Result<()>;
+    /// Sends raw binary data on this data channel.
     async fn send(&self, data: BytesMut) -> Result<()>;
+    /// Sends text data on this data channel.
     async fn send_text(&self, text: &str) -> Result<()>;
+    /// Polls for the next event on this data channel.
     async fn poll(&self) -> Option<DataChannelEvent>;
+    /// Closes the data channel.
     async fn close(&self) -> Result<()>;
 }
 
+/// Events that can occur on a [`DataChannel`].
 #[derive(Debug, Clone)]
 pub enum DataChannelEvent {
     /// Data channel has opened and is ready to send/receive data.

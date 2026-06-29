@@ -26,6 +26,7 @@ pub struct TrackLocalStaticSample {
 }
 
 impl TrackLocalStaticSample {
+    /// Creates a new `TrackLocalStaticSample` with the given [`MediaStreamTrack`].
     pub fn new(track: MediaStreamTrack) -> Result<Self> {
         let (mut packetizers, mut sequencers) = (HashMap::new(), HashMap::new());
         for ssrc in track.ssrcs() {
@@ -53,10 +54,12 @@ impl TrackLocalStaticSample {
         })
     }
 
+    /// Creates a new [`SampleWriter`] for writing media samples to the specified SSRC.
     pub fn sample_writer(&self, ssrc: SSRC) -> SampleWriter<'_> {
         SampleWriter::new(self, ssrc)
     }
 
+    /// Packetizes and writes a media [`Sample`] to the track with the specified SSRC and header extensions.
     pub async fn write_sample(
         &self,
         ssrc: SSRC,
