@@ -9,7 +9,7 @@ documentation = "https://docs.rs/webrtc"
 repository = "https://github.com/webrtc-rs/webrtc"
 keywords = ["sansio", "networking", "protocols"]
 categories = ["network-programming"]
-description = "A pure Rust implementation of WebRTC API"
+description = "Async-friendly WebRTC implementation in Rust"
 
 [features]
 default = ["runtime-tokio"]
