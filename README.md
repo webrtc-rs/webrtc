@@ -64,66 +64,69 @@ alt="Recall.ai">
 
 ## Overview
 
-WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion
-stack. The project is currently evolving into a clean, ergonomic, runtime-agnostic implementation that works with any
-async runtime (Tokio, async-std, smol, embassy).
+WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion stack. The `v0.20.x` line is a clean, ergonomic, runtime-agnostic rewrite on top of a Sans-I/O core; as of `v0.20.0-rc.1` it ships with Tokio and smol runtime backends, with async-std and embassy on the roadmap.
 
 **Architecture:**
 
 - **[rtc](https://github.com/webrtc-rs/rtc)**: Sans-I/O protocol core with complete WebRTC stack (95%+ W3C API
   compliance)
-- **webrtc** (this crate): Async-friendly API with runtime abstraction layer
+- **webrtc** (this crate): a thin async layer over `rtc`:
+    - **`PeerConnection`** — the user-facing async API handle; all operations (create offers/answers, add tracks,
+      create data channels) are `async`
+    - **`PeerConnectionDriver`** — an internal background event loop, spawned automatically, that owns the sockets,
+      drives the Sans-I/O `rtc` core, handles timeouts, and dispatches events
+    - **`Runtime`** — a trait abstracting timers, task spawning, and sockets, so the crate is runtime-agnostic
 
 **📖 Learn more:** Read
 our [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html) for design
 details and roadmap.
 
-### 🚨 Important Notice: v0.17.x Feature Freeze & v0.20.0+ Development
+### 🚨 v0.17.x → v0.20.0: the Sans-I/O rewrite (Release Candidate)
 
-**v0.17.x is the final feature release of the Tokio-coupled async WebRTC implementation.**
+**`v0.20.0-rc.1` is the first release candidate of the new Sans-I/O, runtime-agnostic architecture.** It supersedes the
+Tokio-coupled `v0.17.x` line, which is now in bug-fix-only maintenance.
 
-#### Current Status (February 2026)
+#### Current Status
 
-- **v0.17.x branch**: Receives **bug fixes only** (no new features). Use this for Tokio-based production applications.
-- **Master branch**: Under active development for **v0.20.0** with new Sans-I/O architecture and runtime abstraction.
+- **`v0.17.x`**: Receives **bug fixes only** (no new features). The mature choice for Tokio-based production
+  applications today.
+- **`v0.20.0-rc.1`** (master): The new architecture, published as a pre-release. As a release candidate, no further API
+  changes are expected unless critical issues are found (see [Semantic Versioning](#semantic-versioning)). Recommended
+  for early adopters and new projects that want the runtime-agnostic, Sans-I/O design.
 
-#### **What's Changing in upcoming v0.20.0+?**
+#### What v0.20.0 delivers
 
-The new architecture will address critical issues in v0.17.x:
+The rewrite resolves the core pain points of `v0.17.x` — callback hell and `Arc` explosion, resource leaks in
+callbacks, and tight Tokio coupling:
 
-- ❌ Callback hell and Arc explosion
-- ❌ Resources leak in callback
-- ❌ Tight Tokio coupling (cannot use async-std, smol, embassy)
+✅ **Runtime independence**
 
-**v0.20.0+ will provide:**
+- Runtime-agnostic via a Quinn-style `Runtime` abstraction (timers, task spawning, sockets)
+- Feature flags: **`runtime-tokio`** (default) and **`runtime-smol`**; additional runtimes (async-std, embassy) are on
+  the roadmap behind the same abstraction
 
-✅ **Runtime Independence**
+✅ **Clean event handling**
 
-- Support for Tokio, async-std, smol, embassy via Quinn-style runtime abstraction
-- Feature flags: `runtime-tokio` (default), `runtime-async-std`, `runtime-smol`, `runtime-embassy`
-
-✅ **Clean Event Handling**
-
-- Trait-based event handlers with native `async fn in trait`
-- No more callback Arc cloning or `Box::new(move |...| Box::pin(async move { ... }))`
+- Trait-based event handlers using native `async fn in trait`
+- No more callback `Arc` cloning or `Box::new(move |...| Box::pin(async move { ... }))`
 - Centralized state management with `&mut self`
 
-✅ **Sans-I/O Foundation**
+✅ **Sans-I/O foundation**
 
-- Protocol logic completely separate from I/O (via [rtc](https://github.com/webrtc-rs/rtc) crate)
+- Protocol logic completely separate from I/O (via the [rtc](https://github.com/webrtc-rs/rtc) core)
 - Deterministic testing without real network I/O
-- Zero-cost abstractions
+- A thin async driver (`PeerConnection` handle + background `PeerConnectionDriver`) over the core
 
-#### **How to Provide Feedback**
+#### How to Provide Feedback
 
-We're actively designing v0.20.0+ and welcome your input:
+We welcome your input while `v0.20.0` stabilizes:
 
 - Review the [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html)
 - Join discussions on [GitHub Issues](https://github.com/webrtc-rs/webrtc/issues)
 - Chat with us on [Discord](https://discord.gg/4Ju8UHdXMs)
 
-**For production use:** Stick with v0.17.x branch until v0.20.0+ is stable.  
-**For early adopters:** Follow master branch development and provide feedback!
+**Production today:** use the `v0.17.x` branch.  
+**Early adopters / new projects:** try `v0.20.0-rc.1` and report issues!
 
 ## Building and Testing
 
