@@ -176,6 +176,19 @@ impl ListenConfig {
                             }
                         }
                         Err(err) => {
+                            // On Windows, `recv_from` fails with `ErrorKind::ConnectionReset`
+                            // (WSAECONNRESET) when a previously *sent* datagram was answered
+                            // with an ICMP "Port Unreachable" message (e.g. because the
+                            // remote closed its socket). This does not affect the listening
+                            // socket itself, so it must not tear down the read loop -
+                            // otherwise the listener is left permanently unable to accept
+                            // packets while its socket remains bound. See e.g.
+                            // https://github.com/feschber/lan-mouse/issues/262
+                            if matches!(&err, Error::Io(io_err) if io_err.0.kind() == std::io::ErrorKind::ConnectionReset)
+                            {
+                                log::debug!("ListenConfig pconn.recv_from transient error: {err}");
+                                continue;
+                            }
                             log::warn!("ListenConfig pconn.recv_from error: {err}");
                             break;
                         }
