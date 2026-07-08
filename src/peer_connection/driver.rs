@@ -19,7 +19,7 @@ use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::future::OptionFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{error, trace};
+use log::{error, trace, warn};
 use rtc::ice::candidate::Candidate;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::mdns::MDNS_PORT;
@@ -337,16 +337,11 @@ where
                 .send_to(&msg.message, msg.transport.peer_addr)
                 .await?)
         } else {
-            // If there's no UDP socket for this local address, check if we have a TCP stream
-            // for the remote address (e.g. DTLS/SCTP traffic when the selected path is TCP)
-            let n = self.tcp_transport.write(&msg).await?;
-            if n == 0 {
-                trace!(
-                    "None udp socket or TCP stream, drop the packet to {:?} from {:?}",
-                    msg.transport.peer_addr, msg.transport.local_addr
-                );
-            }
-            Ok(n)
+            warn!(
+                "None tcp/udp socket, drop the packet to {:?} from {:?} for {:?}",
+                msg.transport.peer_addr, msg.transport.local_addr, msg.transport.transport_protocol
+            );
+            Ok(0)
         }
     }
 
