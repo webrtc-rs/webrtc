@@ -49,6 +49,40 @@ trait JoinHandleInner: Send + Sync {
     fn is_finished(&self) -> bool;
 }
 
+/// [`JoinHandleInner`] backed by a dedicated OS thread running a single-threaded
+/// reactor (see [`Runtime::spawn_reactor`]). A thread cannot be force-cancelled,
+/// so shutdown is driven by the peer connection's `Close` event; `abort` is a
+/// best-effort no-op and `detach` simply drops the join handle.
+struct ThreadReactorHandle(std::sync::Mutex<Option<std::thread::JoinHandle<()>>>);
+
+impl JoinHandleInner for ThreadReactorHandle {
+    fn detach(&self) {
+        if let Ok(mut guard) = self.0.lock() {
+            let _ = guard.take();
+        }
+    }
+
+    fn abort(&self) {
+        // Threads cannot be cancelled; the reactor exits when its event loop
+        // returns (the peer connection sends a Close driver event on shutdown).
+    }
+
+    fn is_finished(&self) -> bool {
+        self.0
+            .lock()
+            .map(|guard| guard.as_ref().is_none_or(|handle| handle.is_finished()))
+            .unwrap_or(true)
+    }
+}
+
+/// Wrap a dedicated reactor thread's join handle in a runtime-agnostic [`JoinHandle`].
+/// Used by the tokio and smol [`Runtime::spawn_reactor`] implementations.
+fn reactor_join_handle(join: std::thread::JoinHandle<()>) -> JoinHandle {
+    JoinHandle {
+        inner: Box::new(ThreadReactorHandle(std::sync::Mutex::new(Some(join)))),
+    }
+}
+
 /// Abstracts I/O and timer operations for runtime independence
 ///
 /// This trait allows the WebRTC implementation to work with different async runtimes
@@ -62,6 +96,21 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// completes or the runtime is shut down. Call `.abort()` to cancel explicitly.
     #[track_caller]
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle;
+
+    /// Drive `future` to completion on a dedicated single-threaded reactor.
+    ///
+    /// The tokio and smol implementations spawn a dedicated OS thread with its
+    /// own single-threaded runtime, pinning a peer-connection driver to one core
+    /// so the tokio scheduler never migrates it across the shared worker pool —
+    /// the dominant cost for in-process data-channel throughput (issue #101).
+    /// The socket wrapping and the whole event loop run inside `future`, on this
+    /// reactor, so I/O resources bind to the dedicated runtime's reactor.
+    ///
+    /// The default implementation falls back to [`Runtime::spawn`] on the ambient
+    /// runtime, so custom runtimes keep working (without the pinning benefit).
+    fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle {
+        self.spawn(future)
+    }
 
     /// Create an async UDP socket from a standard socket
     ///

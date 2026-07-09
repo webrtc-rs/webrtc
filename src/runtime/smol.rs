@@ -39,6 +39,19 @@ impl Runtime for SmolRuntime {
         }
     }
 
+    fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
+        let join = std::thread::Builder::new()
+            .name("webrtc-pc-reactor".into())
+            .spawn(move || {
+                // Dedicated thread driving this connection's event loop to keep it
+                // off the shared global executor. smol's reactor is process-global,
+                // so sockets wrapped inside `future` are safe to poll here.
+                ::smol::block_on(future);
+            })
+            .expect("failed to spawn dedicated reactor thread");
+        super::reactor_join_handle(join)
+    }
+
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         Ok(Arc::new(UdpSocket::new(sock)?))
     }

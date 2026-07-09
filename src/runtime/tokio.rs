@@ -31,6 +31,25 @@ impl Runtime for TokioRuntime {
         }
     }
 
+    fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
+        let join = std::thread::Builder::new()
+            .name("webrtc-pc-reactor".into())
+            .spawn(move || {
+                // A single-threaded runtime: its I/O + timer drivers live on this
+                // one thread, so the driver task is never migrated. enable_all()
+                // is required for sleep()/recv_from() to work.
+                match ::tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(rt) => rt.block_on(future),
+                    Err(err) => log::error!("failed to build dedicated reactor runtime: {err}"),
+                }
+            })
+            .expect("failed to spawn dedicated reactor thread");
+        super::reactor_join_handle(join)
+    }
+
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         sock.set_nonblocking(true)?;
         Ok(Arc::new(UdpSocket {

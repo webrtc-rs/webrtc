@@ -174,6 +174,7 @@ where
     mdns_mode: MulticastDnsMode,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
+    dedicated_reactor: bool,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -185,6 +186,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             mdns_mode: MulticastDnsMode::Disabled,
             udp_addrs: vec![],
             tcp_addrs: vec![],
+            dedicated_reactor: false,
         }
     }
 }
@@ -234,6 +236,7 @@ where
             mdns_mode: self.mdns_mode,
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
+            dedicated_reactor: self.dedicated_reactor,
         }
     }
 
@@ -261,6 +264,24 @@ where
         self
     }
 
+    /// Run this peer connection's driver on its own dedicated OS thread with a
+    /// single-threaded reactor, instead of on the shared async runtime.
+    ///
+    /// This pins the driver (and thus its SCTP/DTLS/SRTP state and I/O reactor)
+    /// to one core so the runtime never migrates it across worker threads, which
+    /// markedly improves in-process data-channel throughput on multi-threaded
+    /// runtimes (issue #101). It costs one OS thread per peer connection, so it
+    /// is **off by default**: enable it for latency/throughput-sensitive
+    /// deployments with a modest number of connections, and leave it off for
+    /// large-scale servers (e.g. SFUs) with thousands of connections.
+    ///
+    /// Note: with this enabled, event-handler callbacks run on the dedicated
+    /// reactor thread, so they must not block.
+    pub fn with_dedicated_reactor_thread(mut self, enabled: bool) -> Self {
+        self.dedicated_reactor = enabled;
+        self
+    }
+
     /// Builds the [`PeerConnection`] and starts the background event loop driver.
     pub async fn build(self) -> Result<impl PeerConnection> {
         let runtime = if let Some(runtime) = self.runtime {
@@ -279,6 +300,7 @@ where
             self.mdns_mode,
             self.udp_addrs,
             self.tcp_addrs,
+            self.dedicated_reactor,
         )
         .await
     }
@@ -390,6 +412,10 @@ where
 {
     inner: Arc<PeerConnectionRef<I>>,
     driver_handle: Mutex<Option<JoinHandle>>,
+    /// Whether the driver runs on a dedicated reactor thread. When true, a
+    /// best-effort `Close` is sent on drop so the thread does not leak if the
+    /// connection is dropped without an explicit `close()`.
+    dedicated_reactor: bool,
 }
 
 pub(crate) struct PeerConnectionRef<I = NoopInterceptor>
@@ -480,30 +506,34 @@ where
         mdns_mode: MulticastDnsMode,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
+        dedicated_reactor: bool,
     ) -> Result<Self> {
-        let async_mdns_socket = if mdns_mode != MulticastDnsMode::Disabled {
-            let socket = MulticastSocket::new().into_std()?;
-            Some(runtime.wrap_udp_socket(socket)?)
+        // Bind the std sockets up front (synchronous, and needed to compute the
+        // local addresses used for ICE gathering / SDP). Wrapping them into async
+        // I/O resources is deferred so it can happen on whichever runtime actually
+        // drives the event loop: with a dedicated reactor thread, tokio I/O
+        // resources must be created on the reactor that polls them, so wrapping is
+        // done inside the reactor future (see `run_driver`) rather than here.
+        let std_mdns_socket = if mdns_mode != MulticastDnsMode::Disabled {
+            Some(MulticastSocket::new().into_std()?)
         } else {
             None
         };
 
-        let mut async_udp_sockets = HashMap::new();
+        let mut std_udp_sockets = Vec::new();
         for addr in udp_addrs {
             let socket = std::net::UdpSocket::bind(addr)?;
             socket.set_nonblocking(true)?;
             let local_addr = socket.local_addr()?;
-            let async_udp_socket = runtime.wrap_udp_socket(socket)?;
-            async_udp_sockets.insert(local_addr, async_udp_socket);
+            std_udp_sockets.push((local_addr, socket));
         }
 
-        let mut async_tcp_listeners = HashMap::new();
+        let mut std_tcp_listeners = Vec::new();
         for addr in tcp_addrs {
             let listener = std::net::TcpListener::bind(addr)?;
             listener.set_nonblocking(true)?;
             let local_addr = listener.local_addr()?;
-            let async_tcp_listener = runtime.wrap_tcp_listener(listener)?;
-            async_tcp_listeners.insert(local_addr, async_tcp_listener);
+            std_tcp_listeners.push((local_addr, listener));
         }
 
         let configuration = core.get_configuration();
@@ -525,30 +555,81 @@ where
                 write_backpressure: std::sync::atomic::AtomicUsize::new(0),
             }),
             driver_handle: Mutex::new(None),
+            dedicated_reactor,
         };
 
-        let local_addrs = async_udp_sockets.keys().cloned().collect::<Vec<_>>();
+        let local_addrs = std_udp_sockets
+            .iter()
+            .map(|(addr, _)| *addr)
+            .collect::<Vec<_>>();
         let stun_gatherer =
             RTCStunGatherer::new(local_addrs.clone(), ice_servers.clone(), ice_gather_policy);
         let turn_relayer = RTCTurnRelayer::new(local_addrs, ice_servers, ice_gather_policy);
 
-        let mut driver = PeerConnectionDriver::new(
-            peer_connection.inner.clone(),
-            stun_gatherer,
-            turn_relayer,
-            async_mdns_socket,
-            async_udp_sockets,
-            async_tcp_listeners,
-        )
-        .await?;
-        let driver_handle = runtime.spawn(Box::pin(async move {
-            if let Err(e) = driver.event_loop(driver_event_rx).await {
+        // The reactor body: wrap the bound sockets on the runtime that runs this
+        // future, build the driver, and run the event loop to completion.
+        let inner = peer_connection.inner.clone();
+        let driver_runtime = runtime.clone();
+        let run_driver = async move {
+            let result: Result<()> = async {
+                let async_mdns_socket = match std_mdns_socket {
+                    Some(socket) => Some(driver_runtime.wrap_udp_socket(socket)?),
+                    None => None,
+                };
+                let mut async_udp_sockets = HashMap::new();
+                for (local_addr, socket) in std_udp_sockets {
+                    async_udp_sockets.insert(local_addr, driver_runtime.wrap_udp_socket(socket)?);
+                }
+                let mut async_tcp_listeners = HashMap::new();
+                for (local_addr, listener) in std_tcp_listeners {
+                    async_tcp_listeners
+                        .insert(local_addr, driver_runtime.wrap_tcp_listener(listener)?);
+                }
+
+                let mut driver = PeerConnectionDriver::new(
+                    inner,
+                    stun_gatherer,
+                    turn_relayer,
+                    async_mdns_socket,
+                    async_udp_sockets,
+                    async_tcp_listeners,
+                )
+                .await?;
+                driver.event_loop(driver_event_rx).await
+            }
+            .await;
+            if let Err(e) = result {
                 error!("I/O error: {}", e);
             }
-        }));
+        };
+
+        let driver_handle = if dedicated_reactor {
+            runtime.spawn_reactor(Box::pin(run_driver))
+        } else {
+            runtime.spawn(Box::pin(run_driver))
+        };
         *peer_connection.driver_handle.lock().await = Some(driver_handle);
 
         Ok(peer_connection)
+    }
+}
+
+impl<I> Drop for PeerConnectionImpl<I>
+where
+    I: Interceptor,
+{
+    fn drop(&mut self) {
+        // A dedicated reactor thread only exits when its event loop returns, so
+        // a connection dropped without an explicit `close()` would leak the
+        // thread. Best-effort signal it to stop. (Task-based drivers detach
+        // harmlessly, so this is limited to the dedicated-reactor case to avoid
+        // changing the default lifecycle.)
+        if self.dedicated_reactor {
+            let _ = self
+                .inner
+                .driver_event_tx
+                .try_send(PeerConnectionDriverEvent::Close);
+        }
     }
 }
 

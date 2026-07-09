@@ -229,6 +229,9 @@ async fn async_main() -> anyhow::Result<()> {
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
 
+    // Opt into the dedicated per-connection reactor thread (issue #101) via env.
+    let dedicated_reactor = std::env::var("FLOW_DEDICATED_REACTOR").is_ok();
+
     // ── Build requester peer connection ──────────────────────────────────────
     let (req_gather_tx, mut req_gather_rx) = channel::<()>(1);
     let mut req_media = MediaEngine::default();
@@ -245,6 +248,7 @@ async fn async_main() -> anyhow::Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_dedicated_reactor_thread(dedicated_reactor)
         .build()
         .await?;
 
@@ -355,6 +359,7 @@ async fn async_main() -> anyhow::Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_dedicated_reactor_thread(dedicated_reactor)
         .build()
         .await?;
 
