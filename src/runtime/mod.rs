@@ -287,6 +287,7 @@ pub use tokio::TokioRuntime;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::{
     TokioInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
+    yield_now,
 };
 /// The concrete Interval type for the active runtime.
 #[cfg(feature = "runtime-tokio")]
@@ -318,6 +319,7 @@ pub use smol::SmolRuntime;
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub use smol::{
     SmolInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
+    yield_now,
 };
 /// The concrete Interval type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]

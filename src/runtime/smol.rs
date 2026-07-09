@@ -194,6 +194,12 @@ pub async fn sleep(duration: Duration) {
     ::smol::Timer::after(duration).await;
 }
 
+/// Runtime-agnostic cooperative yield: reschedule the current task so other
+/// ready tasks (e.g. the peer-connection driver) get a turn.
+pub async fn yield_now() {
+    ::smol::future::yield_now().await;
+}
+
 /// A repeating interval timer backed by the smol runtime.
 ///
 /// Created by [`interval`]. Each call to [`tick`](SmolInterval::tick) waits

@@ -63,6 +63,7 @@ use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
+use std::sync::atomic::AtomicBool;
 
 use driver::{
     DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
@@ -405,12 +406,66 @@ where
     pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<RtpTransceiverImpl<I>>>>,
     /// Unified channel for all outgoing driver events
     pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
+    /// Coalescing write-flush gate (pion `awakeWriteLoop` equivalent).
+    ///
+    /// Hot-path senders (`dc.send`, etc.) set this flag and, only on the
+    /// `false -> true` transition, drop a single non-blocking `WriteNotify` onto
+    /// `driver_event_tx`. The driver clears the flag at the top of every loop
+    /// iteration before draining core writes, so a burst of N sends produces at
+    /// most one driver wake — replacing the old per-message
+    /// `driver_event_tx.send(WriteNotify).await` (one blocking send per message).
+    pub(crate) write_pending: AtomicBool,
+    /// Counts coalesced sends (driver already behind) to drive a periodic
+    /// cooperative yield — see [`PeerConnectionRef::wake_writes`].
+    pub(crate) write_backpressure: std::sync::atomic::AtomicUsize,
     /// Channels for incoming data channel events
     pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Channels for incoming track remote events
     #[allow(clippy::type_complexity)]
     pub(crate) track_remote_events_tx:
         Mutex<HashMap<MediaStreamTrackId, (Sender<TrackRemoteEvent>, Arc<dyn TrackRemote>)>>,
+}
+
+/// Number of coalesced (driver-behind) sends between cooperative yields in
+/// [`PeerConnectionRef::wake_writes`]. Roughly the batch the sender stuffs into
+/// the SCTP buffer per driver wake; sized to amortise the wake without letting
+/// the send buffer run far ahead of the ~1 MB SCTP window.
+const WRITE_YIELD_INTERVAL: usize = 128;
+
+impl<I> PeerConnectionRef<I>
+where
+    I: Interceptor,
+{
+    /// Coalescing driver wake for pending writes — the pion `awakeWriteLoop`
+    /// equivalent. Marks a flush as pending and pokes the driver only on the
+    /// `false -> true` transition, so a burst of sends yields at most one wake.
+    ///
+    /// The poke is a non-blocking `try_send`: if the channel is momentarily full
+    /// a `WriteNotify` is already queued (or the driver is already draining), so
+    /// dropping it is safe — the driver drains the core unconditionally each loop.
+    ///
+    /// When the flag is *already* set the driver has not caught up yet. We then
+    /// cooperatively yield once every [`WRITE_YIELD_INTERVAL`] such sends. This
+    /// mimics tokio's per-task poll budget (which the old per-message
+    /// `send().await` leaned on implicitly): it lets the sender stuff a full
+    /// batch into the SCTP buffer before handing the CPU to the driver, so the
+    /// driver drains many packets per wake instead of ping-ponging one at a time.
+    /// Without it a hot sender either starves the driver (no yield) or forces a
+    /// 1:1 wake per message (yield every time) on cooperatively-scheduled
+    /// runtimes such as smol — both collapse throughput.
+    #[inline]
+    pub(crate) async fn wake_writes(&self) {
+        use std::sync::atomic::Ordering;
+        if !self.write_pending.swap(true, Ordering::AcqRel) {
+            let _ = self
+                .driver_event_tx
+                .try_send(PeerConnectionDriverEvent::WriteNotify);
+        } else if self.write_backpressure.fetch_add(1, Ordering::Relaxed) % WRITE_YIELD_INTERVAL
+            == WRITE_YIELD_INTERVAL - 1
+        {
+            crate::runtime::yield_now().await;
+        }
+    }
 }
 
 impl<I> PeerConnectionImpl<I>
@@ -466,6 +521,8 @@ where
                 rtp_transceivers: Mutex::new(HashMap::new()),
                 handler,
                 driver_event_tx,
+                write_pending: AtomicBool::new(false),
+                write_backpressure: std::sync::atomic::AtomicUsize::new(0),
             }),
             driver_handle: Mutex::new(None),
         };
@@ -582,12 +639,11 @@ where
         // descriptions are set, set_remote_description triggers start_transports
         // internally, which arms the ICE connectivity-check timer. Without this
         // notify the driver would sleep until its previous (possibly 1-day default)
-        // timer expired and never send the initial STUN binding requests.
-        self.inner
-            .driver_event_tx
-            .send(PeerConnectionDriverEvent::WriteNotify)
-            .await
-            .map_err(|e| Error::Other(format!("{:?}", e)))
+        // timer expired and never send the initial STUN binding requests. The
+        // coalescing wake re-runs the whole loop (incl. poll_timeout), so this is
+        // sufficient here just as the old WriteNotify was.
+        self.inner.wake_writes().await;
+        Ok(())
     }
 
     async fn remote_description(&self) -> Option<RTCSessionDescription> {

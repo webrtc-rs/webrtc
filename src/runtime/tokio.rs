@@ -194,6 +194,12 @@ pub async fn sleep(duration: Duration) {
     ::tokio::time::sleep(duration).await
 }
 
+/// Runtime-agnostic cooperative yield: reschedule the current task so other
+/// ready tasks (e.g. the peer-connection driver) get a turn.
+pub async fn yield_now() {
+    ::tokio::task::yield_now().await
+}
+
 /// A repeating interval timer backed by the Tokio runtime.
 ///
 /// Created by [`interval`]. Each call to [`tick`](TokioInterval::tick) waits

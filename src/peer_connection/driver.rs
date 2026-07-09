@@ -173,6 +173,13 @@ where
         let mut active_socket_count = udp_socket_list.len();
 
         loop {
+            // Clear the coalescing write-flush gate BEFORE draining. `poll_writes`
+            // drains the core unconditionally, so clearing here can never strand
+            // data: a send that set the flag is either already enqueued (drained
+            // this iteration) or enqueues a fresh `WriteNotify` for the next one.
+            self.inner
+                .write_pending
+                .store(false, std::sync::atomic::Ordering::Release);
             self.poll_writes().await?;
             self.poll_events().await;
             self.poll_reads().await?;
@@ -715,7 +722,10 @@ where
                 }
             }
             PeerConnectionDriverEvent::WriteNotify => {
-                //Do nothing, just want to wake up from futures::select! in order to poll_write
+                // Coalesced write-flush poke: wake up so the next loop iteration's
+                // poll_writes drains the core. The `write_pending` gate (cleared at
+                // the top of the loop) ensures a burst of sends enqueues at most
+                // one of these.
             }
             PeerConnectionDriverEvent::IceGathering => {
                 self.ice_gathering_active = true;
