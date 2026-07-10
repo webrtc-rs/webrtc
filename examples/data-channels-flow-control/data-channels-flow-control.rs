@@ -24,8 +24,12 @@ use webrtc::peer_connection::{
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
 
-const BUFFERED_AMOUNT_LOW_THRESHOLD: u32 = 5120 * 1024; // 5120 KB
-const BUFFERED_AMOUNT_HIGH_THRESHOLD: u32 = 102400 * 1024; // 100 MB
+// Match pion's data-channels-flow-control example so throughput is comparable:
+// pause the sender once ~1 MB is buffered, resume below 512 KB. (The previous
+// 100 MB high-water mark let a fast sender flood the SCTP send buffer and starve
+// the driver on cooperatively-scheduled runtimes such as smol.)
+const BUFFERED_AMOUNT_LOW_THRESHOLD: u32 = 512 * 1024; // 512 KB
+const BUFFERED_AMOUNT_HIGH_THRESHOLD: u32 = 1024 * 1024; // 1 MB
 
 // ── Requester handler ────────────────────────────────────────────────────────
 
@@ -80,6 +84,22 @@ impl PeerConnectionEventHandler for ResponderHandler {
         // Must spawn: returning from on_data_channel unblocks the driver;
         // awaiting poll() here would stall it.
         self.runtime.spawn(Box::pin(async move {
+            // ── perf harness (env-controlled, off by default) ─────────────────
+            // FLOW_WARMUP_MB: don't start the clock until N MB have arrived (skip ramp).
+            // FLOW_STOP_MB:   after N measured MB, print a FINAL line and exit so
+            //                 `perf stat` gets a clean, deterministic, bounded run.
+            let warmup_bytes = std::env::var("FLOW_WARMUP_MB")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .map(|mb| mb * 1024 * 1024);
+            let stop_bytes = std::env::var("FLOW_STOP_MB")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .map(|mb| mb * 1024 * 1024);
+            let mut measure_start: Option<Instant> = None;
+            let mut measure_start_bytes: usize = 0;
+            // ──────────────────────────────────────────────────────────────────
+
             let mut total_bytes: usize = 0;
             let mut last_bytes: usize = 0;
             let mut period_start = Instant::now();
@@ -92,15 +112,48 @@ impl PeerConnectionEventHandler for ResponderHandler {
                     }
                     DataChannelEvent::OnMessage(msg) => {
                         total_bytes += msg.data.len();
-                        // Print once per second, triggered by the first message after each period
-                        let now = Instant::now();
-                        if now.duration_since(period_start) >= Duration::from_secs(1) {
-                            let elapsed = now.duration_since(period_start);
-                            let bps =
-                                ((total_bytes - last_bytes) * 8) as f64 / elapsed.as_secs_f64();
-                            println!("Throughput is about {:.03} Mbps", bps / (1024.0 * 1024.0));
+
+                        // Start the measurement clock once past the warmup threshold.
+                        if measure_start.is_none() && warmup_bytes.is_none_or(|w| total_bytes >= w)
+                        {
+                            let now = Instant::now();
+                            measure_start = Some(now);
+                            measure_start_bytes = total_bytes;
                             last_bytes = total_bytes;
                             period_start = now;
+                        }
+
+                        // Deterministic stop for `perf stat`: exit after N measured MB.
+                        if let (Some(start), Some(stop)) = (measure_start, stop_bytes)
+                            && total_bytes - measure_start_bytes >= stop
+                        {
+                            let secs = start.elapsed().as_secs_f64();
+                            let measured = total_bytes - measure_start_bytes;
+                            let mbps = (measured * 8) as f64 / secs / (1024.0 * 1024.0);
+                            println!(
+                                "FINAL {:.3} Mbps over {} MB in {:.3}s",
+                                mbps,
+                                measured / (1024 * 1024),
+                                secs
+                            );
+                            let _ = done_tx.try_send(());
+                            break;
+                        }
+
+                        // Print once per second (only while measuring).
+                        if measure_start.is_some() {
+                            let now = Instant::now();
+                            if now.duration_since(period_start) >= Duration::from_secs(1) {
+                                let elapsed = now.duration_since(period_start);
+                                let bps =
+                                    ((total_bytes - last_bytes) * 8) as f64 / elapsed.as_secs_f64();
+                                println!(
+                                    "Throughput is about {:.03} Mbps",
+                                    bps / (1024.0 * 1024.0)
+                                );
+                                last_bytes = total_bytes;
+                                period_start = now;
+                            }
                         }
                     }
                     DataChannelEvent::OnClose => {
@@ -175,6 +228,9 @@ async fn async_main() -> anyhow::Result<()> {
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
 
+    // Opt into the dedicated per-connection reactor thread (issue #101) via env.
+    let dedicated_reactor = std::env::var("FLOW_DEDICATED_REACTOR").is_ok();
+
     // ── Build requester peer connection ──────────────────────────────────────
     let (req_gather_tx, mut req_gather_rx) = channel::<()>(1);
     let mut req_media = MediaEngine::default();
@@ -191,6 +247,7 @@ async fn async_main() -> anyhow::Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_dedicated_reactor_thread(dedicated_reactor)
         .build()
         .await?;
 
@@ -301,6 +358,7 @@ async fn async_main() -> anyhow::Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_dedicated_reactor_thread(dedicated_reactor)
         .build()
         .await?;
 

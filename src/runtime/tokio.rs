@@ -31,6 +31,29 @@ impl Runtime for TokioRuntime {
         }
     }
 
+    fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
+        let join = std::thread::Builder::new()
+            // Keep <= 15 bytes so the name survives Linux's `comm` truncation.
+            .name("webrtc-reactor".into())
+            .spawn(move || {
+                // A single-threaded runtime: its I/O + timer drivers live on this
+                // one thread, so tokio never migrates the driver task across its
+                // worker pool. enable_all() is required for sleep()/recv_from().
+                // TODO(#101): this confines the driver to one thread but does not
+                // pin that thread to a CPU core; a follow-up can set core affinity
+                // via the `core_affinity` crate for cache/NUMA locality.
+                match ::tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(rt) => rt.block_on(future),
+                    Err(err) => log::error!("failed to build dedicated reactor runtime: {err}"),
+                }
+            })
+            .expect("failed to spawn dedicated reactor thread");
+        super::reactor_join_handle(join)
+    }
+
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         sock.set_nonblocking(true)?;
         Ok(Arc::new(UdpSocket {
@@ -192,6 +215,12 @@ impl AsyncTcpStream for TcpStream {
 /// Runtime-agnostic sleep function
 pub async fn sleep(duration: Duration) {
     ::tokio::time::sleep(duration).await
+}
+
+/// Runtime-agnostic cooperative yield: reschedule the current task so other
+/// ready tasks (e.g. the peer-connection driver) get a turn.
+pub async fn yield_now() {
+    ::tokio::task::yield_now().await
 }
 
 /// A repeating interval timer backed by the Tokio runtime.

@@ -39,6 +39,23 @@ impl Runtime for SmolRuntime {
         }
     }
 
+    fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
+        let join = std::thread::Builder::new()
+            // Keep <= 15 bytes so the name survives Linux's `comm` truncation.
+            .name("webrtc-reactor".into())
+            .spawn(move || {
+                // Dedicated thread driving this connection's event loop to keep it
+                // off the shared global executor. smol's reactor is process-global,
+                // so sockets wrapped inside `future` are safe to poll here.
+                // TODO(#101): this confines the driver to one thread but does not
+                // pin that thread to a CPU core; a follow-up can set core affinity
+                // via the `core_affinity` crate for cache/NUMA locality.
+                ::smol::block_on(future);
+            })
+            .expect("failed to spawn dedicated reactor thread");
+        super::reactor_join_handle(join)
+    }
+
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         Ok(Arc::new(UdpSocket::new(sock)?))
     }
@@ -192,6 +209,12 @@ impl AsyncTcpStream for TcpStream {
 /// Yields execution and sleeps for the specified duration using the smol timer.
 pub async fn sleep(duration: Duration) {
     ::smol::Timer::after(duration).await;
+}
+
+/// Runtime-agnostic cooperative yield: reschedule the current task so other
+/// ready tasks (e.g. the peer-connection driver) get a turn.
+pub async fn yield_now() {
+    ::smol::future::yield_now().await;
 }
 
 /// A repeating interval timer backed by the smol runtime.

@@ -3,6 +3,11 @@ codecov:
   max_report_age: off
   token: 9c7a93c8-b2b2-4da3-9990-7283701dec58
 
+# Example binaries are demos, not exercised by `cargo test`, so they always
+# report 0% and only drag coverage down (and inflate patch "missing lines").
+ignore:
+  - "examples"
+
 coverage:
   precision: 2
   round: down

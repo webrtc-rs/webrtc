@@ -63,6 +63,7 @@ use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use driver::{
     DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
@@ -173,6 +174,7 @@ where
     mdns_mode: MulticastDnsMode,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
+    dedicated_reactor: bool,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -184,6 +186,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             mdns_mode: MulticastDnsMode::Disabled,
             udp_addrs: vec![],
             tcp_addrs: vec![],
+            dedicated_reactor: false,
         }
     }
 }
@@ -233,6 +236,7 @@ where
             mdns_mode: self.mdns_mode,
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
+            dedicated_reactor: self.dedicated_reactor,
         }
     }
 
@@ -260,6 +264,30 @@ where
         self
     }
 
+    /// Run this peer connection's driver on its own dedicated OS thread with a
+    /// single-threaded reactor, instead of on the shared async runtime.
+    ///
+    /// This *confines* the driver (and thus its SCTP/DTLS/SRTP state and I/O
+    /// reactor) to a single dedicated thread, so the async runtime never migrates
+    /// it across its worker pool — the dominant cost for in-process data-channel
+    /// throughput on multi-threaded runtimes (issue #101). It costs one OS thread
+    /// per peer connection, so it is **off by default**: enable it for
+    /// latency/throughput-sensitive deployments with a modest number of
+    /// connections, and leave it off for large-scale servers (e.g. SFUs) with
+    /// thousands of connections.
+    ///
+    /// Note: this is *thread confinement*, not CPU-core affinity — the OS
+    /// scheduler may still move the dedicated thread between cores.
+    /// TODO(#101): pin the reactor thread to a specific core (via `core_affinity`)
+    /// for cache/NUMA locality as a follow-up.
+    ///
+    /// Note: with this enabled, event-handler callbacks run on the dedicated
+    /// reactor thread, so they must not block.
+    pub fn with_dedicated_reactor_thread(mut self, enabled: bool) -> Self {
+        self.dedicated_reactor = enabled;
+        self
+    }
+
     /// Builds the [`PeerConnection`] and starts the background event loop driver.
     pub async fn build(self) -> Result<impl PeerConnection> {
         let runtime = if let Some(runtime) = self.runtime {
@@ -278,6 +306,7 @@ where
             self.mdns_mode,
             self.udp_addrs,
             self.tcp_addrs,
+            self.dedicated_reactor,
         )
         .await
     }
@@ -389,6 +418,11 @@ where
 {
     inner: Arc<PeerConnectionRef<I>>,
     driver_handle: Mutex<Option<JoinHandle>>,
+    /// Whether the driver runs on a dedicated reactor thread. When true, `close()`
+    /// waits for that thread to finish, and `Drop` signals it to stop (via
+    /// [`PeerConnectionRef::closing`]) so it does not leak if the connection is
+    /// dropped without an explicit `close()`.
+    dedicated_reactor: bool,
 }
 
 pub(crate) struct PeerConnectionRef<I = NoopInterceptor>
@@ -405,12 +439,72 @@ where
     pub(crate) rtp_transceivers: Mutex<HashMap<RTCRtpTransceiverId, Arc<RtpTransceiverImpl<I>>>>,
     /// Unified channel for all outgoing driver events
     pub(crate) driver_event_tx: Sender<PeerConnectionDriverEvent>,
+    /// Coalescing write-flush gate (pion `awakeWriteLoop` equivalent).
+    ///
+    /// Hot-path senders (`dc.send`, etc.) set this flag and, only on the
+    /// `false -> true` transition, drop a single non-blocking `WriteNotify` onto
+    /// `driver_event_tx`. The driver clears the flag at the top of every loop
+    /// iteration before draining core writes, so a burst of N sends produces at
+    /// most one driver wake — replacing the old per-message
+    /// `driver_event_tx.send(WriteNotify).await` (one blocking send per message).
+    pub(crate) write_pending: AtomicBool,
+    /// Counts coalesced sends (driver already behind) to drive a periodic
+    /// cooperative yield — see [`PeerConnectionRef::wake_writes`].
+    pub(crate) write_backpressure: std::sync::atomic::AtomicUsize,
+    /// Shutdown flag set by `close()`/`Drop`. The driver checks it at the top of
+    /// every loop iteration, so the event loop — and thus a dedicated reactor
+    /// thread — terminates even when the accompanying best-effort `Close` wake
+    /// could not be enqueued (a momentarily full channel). This is the guarantee
+    /// that closes the reactor-thread leak window; the `Close` event is only the
+    /// fast wake.
+    pub(crate) closing: AtomicBool,
     /// Channels for incoming data channel events
     pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Channels for incoming track remote events
     #[allow(clippy::type_complexity)]
     pub(crate) track_remote_events_tx:
         Mutex<HashMap<MediaStreamTrackId, (Sender<TrackRemoteEvent>, Arc<dyn TrackRemote>)>>,
+}
+
+/// Number of coalesced (driver-behind) sends between cooperative yields in
+/// [`PeerConnectionRef::wake_writes`]. Roughly the batch the sender stuffs into
+/// the SCTP buffer per driver wake; sized to amortise the wake without letting
+/// the send buffer run far ahead of the ~1 MB SCTP window.
+const WRITE_YIELD_INTERVAL: usize = 128;
+
+impl<I> PeerConnectionRef<I>
+where
+    I: Interceptor,
+{
+    /// Coalescing driver wake for pending writes — the pion `awakeWriteLoop`
+    /// equivalent. Marks a flush as pending and pokes the driver only on the
+    /// `false -> true` transition, so a burst of sends yields at most one wake.
+    ///
+    /// The poke is a non-blocking `try_send`: if the channel is momentarily full
+    /// a `WriteNotify` is already queued (or the driver is already draining), so
+    /// dropping it is safe — the driver drains the core unconditionally each loop.
+    ///
+    /// When the flag is *already* set the driver has not caught up yet. We then
+    /// cooperatively yield once every [`WRITE_YIELD_INTERVAL`] such sends. This
+    /// mimics tokio's per-task poll budget (which the old per-message
+    /// `send().await` leaned on implicitly): it lets the sender stuff a full
+    /// batch into the SCTP buffer before handing the CPU to the driver, so the
+    /// driver drains many packets per wake instead of ping-ponging one at a time.
+    /// Without it a hot sender either starves the driver (no yield) or forces a
+    /// 1:1 wake per message (yield every time) on cooperatively-scheduled
+    /// runtimes such as smol — both collapse throughput.
+    #[inline]
+    pub(crate) async fn wake_writes(&self) {
+        if !self.write_pending.swap(true, Ordering::AcqRel) {
+            let _ = self
+                .driver_event_tx
+                .try_send(PeerConnectionDriverEvent::WriteNotify);
+        } else if self.write_backpressure.fetch_add(1, Ordering::Relaxed) % WRITE_YIELD_INTERVAL
+            == WRITE_YIELD_INTERVAL - 1
+        {
+            crate::runtime::yield_now().await;
+        }
+    }
 }
 
 impl<I> PeerConnectionImpl<I>
@@ -425,30 +519,34 @@ where
         mdns_mode: MulticastDnsMode,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
+        dedicated_reactor: bool,
     ) -> Result<Self> {
-        let async_mdns_socket = if mdns_mode != MulticastDnsMode::Disabled {
-            let socket = MulticastSocket::new().into_std()?;
-            Some(runtime.wrap_udp_socket(socket)?)
+        // Bind the std sockets up front (synchronous, and needed to compute the
+        // local addresses used for ICE gathering / SDP). Wrapping them into async
+        // I/O resources is deferred so it can happen on whichever runtime actually
+        // drives the event loop: with a dedicated reactor thread, tokio I/O
+        // resources must be created on the reactor that polls them, so wrapping is
+        // done inside the reactor future (see `run_driver`) rather than here.
+        let std_mdns_socket = if mdns_mode != MulticastDnsMode::Disabled {
+            Some(MulticastSocket::new().into_std()?)
         } else {
             None
         };
 
-        let mut async_udp_sockets = HashMap::new();
+        let mut std_udp_sockets = Vec::new();
         for addr in udp_addrs {
             let socket = std::net::UdpSocket::bind(addr)?;
             socket.set_nonblocking(true)?;
             let local_addr = socket.local_addr()?;
-            let async_udp_socket = runtime.wrap_udp_socket(socket)?;
-            async_udp_sockets.insert(local_addr, async_udp_socket);
+            std_udp_sockets.push((local_addr, socket));
         }
 
-        let mut async_tcp_listeners = HashMap::new();
+        let mut std_tcp_listeners = Vec::new();
         for addr in tcp_addrs {
             let listener = std::net::TcpListener::bind(addr)?;
             listener.set_nonblocking(true)?;
             let local_addr = listener.local_addr()?;
-            let async_tcp_listener = runtime.wrap_tcp_listener(listener)?;
-            async_tcp_listeners.insert(local_addr, async_tcp_listener);
+            std_tcp_listeners.push((local_addr, listener));
         }
 
         let configuration = core.get_configuration();
@@ -466,32 +564,122 @@ where
                 rtp_transceivers: Mutex::new(HashMap::new()),
                 handler,
                 driver_event_tx,
+                write_pending: AtomicBool::new(false),
+                write_backpressure: std::sync::atomic::AtomicUsize::new(0),
+                closing: AtomicBool::new(false),
             }),
             driver_handle: Mutex::new(None),
+            dedicated_reactor,
         };
 
-        let local_addrs = async_udp_sockets.keys().cloned().collect::<Vec<_>>();
+        let local_addrs = std_udp_sockets
+            .iter()
+            .map(|(addr, _)| *addr)
+            .collect::<Vec<_>>();
         let stun_gatherer =
             RTCStunGatherer::new(local_addrs.clone(), ice_servers.clone(), ice_gather_policy);
         let turn_relayer = RTCTurnRelayer::new(local_addrs, ice_servers, ice_gather_policy);
 
-        let mut driver = PeerConnectionDriver::new(
-            peer_connection.inner.clone(),
-            stun_gatherer,
-            turn_relayer,
-            async_mdns_socket,
-            async_udp_sockets,
-            async_tcp_listeners,
-        )
-        .await?;
-        let driver_handle = runtime.spawn(Box::pin(async move {
+        // Init-result oneshot. `new()` awaits this so that socket wrapping and
+        // driver construction errors propagate out of `build()`, instead of being
+        // silently logged on the driver thread — which would otherwise leave a
+        // healthy-looking `PeerConnection` in front of a dead driver (e.g. a
+        // `wrap_udp_socket` failure under an exhausted fd limit). Init is fast
+        // (socket wrapping + driver construction); the event loop then runs
+        // fire-and-forget.
+        let (init_tx, mut init_rx) = channel::<Result<()>>(1);
+
+        // The reactor body: wrap the bound sockets on the runtime that runs this
+        // future, build the driver, report the init outcome, then run the event
+        // loop to completion.
+        let inner = peer_connection.inner.clone();
+        let driver_runtime = runtime.clone();
+        let run_driver = async move {
+            let init: Result<PeerConnectionDriver<I>> = async {
+                let async_mdns_socket = match std_mdns_socket {
+                    Some(socket) => Some(driver_runtime.wrap_udp_socket(socket)?),
+                    None => None,
+                };
+                let mut async_udp_sockets = HashMap::new();
+                for (local_addr, socket) in std_udp_sockets {
+                    async_udp_sockets.insert(local_addr, driver_runtime.wrap_udp_socket(socket)?);
+                }
+                let mut async_tcp_listeners = HashMap::new();
+                for (local_addr, listener) in std_tcp_listeners {
+                    async_tcp_listeners
+                        .insert(local_addr, driver_runtime.wrap_tcp_listener(listener)?);
+                }
+
+                PeerConnectionDriver::new(
+                    inner,
+                    stun_gatherer,
+                    turn_relayer,
+                    async_mdns_socket,
+                    async_udp_sockets,
+                    async_tcp_listeners,
+                )
+                .await
+            }
+            .await;
+
+            let mut driver = match init {
+                Ok(driver) => {
+                    // Capacity-1 channel, sent exactly once → `try_send` never Full.
+                    let _ = init_tx.try_send(Ok(()));
+                    driver
+                }
+                Err(e) => {
+                    let _ = init_tx.try_send(Err(e));
+                    return;
+                }
+            };
+
             if let Err(e) = driver.event_loop(driver_event_rx).await {
                 error!("I/O error: {}", e);
             }
-        }));
+        };
+
+        let driver_handle = if dedicated_reactor {
+            runtime.spawn_reactor(Box::pin(run_driver))
+        } else {
+            runtime.spawn(Box::pin(run_driver))
+        };
         *peer_connection.driver_handle.lock().await = Some(driver_handle);
 
-        Ok(peer_connection)
+        // Surface init errors here rather than swallowing them on the driver
+        // thread. The driver reports its init outcome exactly once; a closed
+        // channel means the driver future was dropped before initialising.
+        match init_rx.recv().await {
+            Some(Ok(())) => Ok(peer_connection),
+            Some(Err(e)) => Err(e),
+            None => Err(Error::Other(
+                "peer connection driver stopped before initialization".to_owned(),
+            )),
+        }
+    }
+}
+
+impl<I> Drop for PeerConnectionImpl<I>
+where
+    I: Interceptor,
+{
+    fn drop(&mut self) {
+        // A dedicated reactor thread only exits when its event loop returns, so
+        // a connection dropped without an explicit `close()` would leak the
+        // thread. Set the shutdown flag (infallible) so the driver stops at the
+        // top of its next loop iteration, then best-effort wake it so it stops
+        // promptly rather than after its next timer/socket event. Crucially the
+        // flag — not the wake — is the guarantee: a full channel drops the wake
+        // but cannot leak the thread. (Task-based drivers detach harmlessly, so
+        // this is limited to the dedicated-reactor case to avoid changing the
+        // default lifecycle.)
+        if self.dedicated_reactor {
+            self.inner.closing.store(true, Ordering::Release);
+            let _ = self
+                .inner
+                .driver_event_tx
+                .try_send(PeerConnectionDriverEvent::Close);
+        }
     }
 }
 
@@ -505,15 +693,43 @@ where
             let mut core = self.inner.core.lock().await;
             core.close()?;
         }
-        self.inner
+        // Mark closing before waking the driver, so it stops even if the wake is
+        // ever dropped (mirrors `Drop`; see `PeerConnectionRef::closing`).
+        self.inner.closing.store(true, Ordering::Release);
+        // Best-effort wake. A send failure here is benign, not an error:
+        // `closing` already guarantees the driver terminates, and it may already
+        // have observed the flag and dropped the receiver via its independent
+        // top-of-loop exit path — in which case the channel is closed. Treating
+        // that as an error would make a perfectly clean shutdown return `Err`.
+        let _ = self
+            .inner
             .driver_event_tx
             .send(PeerConnectionDriverEvent::Close)
-            .await
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+            .await;
 
-        {
-            let mut driver_handle = self.driver_handle.lock().await;
-            if let Some(driver_handle) = driver_handle.take() {
+        let driver_handle = self.driver_handle.lock().await.take();
+        if let Some(driver_handle) = driver_handle {
+            if self.dedicated_reactor {
+                // The reactor runs on its own OS thread that cannot be aborted;
+                // wait (bounded) for its event loop to actually return, so the
+                // socket and thread are released by the time `close()` resolves.
+                // It exits promptly once it observes the shutdown above; the bound
+                // only prevents `close()` from hanging on a wedged reactor, after
+                // which the handle is dropped (detached) as a last resort.
+                //
+                // Note: if `close()` is called *from within an event-handler
+                // callback* (which, for a dedicated reactor, runs on this very
+                // thread), the loop cannot make progress until the handler
+                // returns, so this wait runs out its full bound before detaching.
+                // Handlers must not block (see `with_dedicated_reactor_thread`).
+                let step = std::time::Duration::from_millis(1);
+                let max = std::time::Duration::from_secs(2);
+                let mut waited = std::time::Duration::ZERO;
+                while !driver_handle.is_finished() && waited < max {
+                    crate::runtime::sleep(step).await;
+                    waited += step;
+                }
+            } else {
                 driver_handle.abort();
             }
         }
@@ -582,12 +798,11 @@ where
         // descriptions are set, set_remote_description triggers start_transports
         // internally, which arms the ICE connectivity-check timer. Without this
         // notify the driver would sleep until its previous (possibly 1-day default)
-        // timer expired and never send the initial STUN binding requests.
-        self.inner
-            .driver_event_tx
-            .send(PeerConnectionDriverEvent::WriteNotify)
-            .await
-            .map_err(|e| Error::Other(format!("{:?}", e)))
+        // timer expired and never send the initial STUN binding requests. The
+        // coalescing wake re-runs the whole loop (incl. poll_timeout), so this is
+        // sufficient here just as the old WriteNotify was.
+        self.inner.wake_writes().await;
+        Ok(())
     }
 
     async fn remote_description(&self) -> Option<RTCSessionDescription> {
