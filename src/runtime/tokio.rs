@@ -33,11 +33,15 @@ impl Runtime for TokioRuntime {
 
     fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
         let join = std::thread::Builder::new()
-            .name("webrtc-pc-reactor".into())
+            // Keep <= 15 bytes so the name survives Linux's `comm` truncation.
+            .name("webrtc-reactor".into())
             .spawn(move || {
                 // A single-threaded runtime: its I/O + timer drivers live on this
-                // one thread, so the driver task is never migrated. enable_all()
-                // is required for sleep()/recv_from() to work.
+                // one thread, so tokio never migrates the driver task across its
+                // worker pool. enable_all() is required for sleep()/recv_from().
+                // TODO(#101): this confines the driver to one thread but does not
+                // pin that thread to a CPU core; a follow-up can set core affinity
+                // via the `core_affinity` crate for cache/NUMA locality.
                 match ::tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()

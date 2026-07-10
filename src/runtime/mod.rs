@@ -100,14 +100,18 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// Drive `future` to completion on a dedicated single-threaded reactor.
     ///
     /// The tokio and smol implementations spawn a dedicated OS thread with its
-    /// own single-threaded runtime, pinning a peer-connection driver to one core
-    /// so the tokio scheduler never migrates it across the shared worker pool —
-    /// the dominant cost for in-process data-channel throughput (issue #101).
-    /// The socket wrapping and the whole event loop run inside `future`, on this
-    /// reactor, so I/O resources bind to the dedicated runtime's reactor.
+    /// own single-threaded runtime, confining a peer-connection driver to that
+    /// one thread so the async runtime never migrates it across the shared worker
+    /// pool — the dominant cost for in-process data-channel throughput (issue
+    /// #101). The socket wrapping and the whole event loop run inside `future`,
+    /// on this reactor, so I/O resources bind to the dedicated runtime's reactor.
+    ///
+    /// This is thread confinement, not CPU-core affinity: the OS scheduler may
+    /// still move the thread between cores. Pinning it to a specific core (via
+    /// `core_affinity`) is a planned follow-up (issue #101).
     ///
     /// The default implementation falls back to [`Runtime::spawn`] on the ambient
-    /// runtime, so custom runtimes keep working (without the pinning benefit).
+    /// runtime, so custom runtimes keep working (without the confinement benefit).
     fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle {
         self.spawn(future)
     }

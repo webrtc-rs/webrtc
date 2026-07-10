@@ -63,7 +63,7 @@ use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
 use crate::runtime::{Mutex, Sender, channel};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use driver::{
     DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
@@ -267,13 +267,19 @@ where
     /// Run this peer connection's driver on its own dedicated OS thread with a
     /// single-threaded reactor, instead of on the shared async runtime.
     ///
-    /// This pins the driver (and thus its SCTP/DTLS/SRTP state and I/O reactor)
-    /// to one core so the runtime never migrates it across worker threads, which
-    /// markedly improves in-process data-channel throughput on multi-threaded
-    /// runtimes (issue #101). It costs one OS thread per peer connection, so it
-    /// is **off by default**: enable it for latency/throughput-sensitive
-    /// deployments with a modest number of connections, and leave it off for
-    /// large-scale servers (e.g. SFUs) with thousands of connections.
+    /// This *confines* the driver (and thus its SCTP/DTLS/SRTP state and I/O
+    /// reactor) to a single dedicated thread, so the async runtime never migrates
+    /// it across its worker pool — the dominant cost for in-process data-channel
+    /// throughput on multi-threaded runtimes (issue #101). It costs one OS thread
+    /// per peer connection, so it is **off by default**: enable it for
+    /// latency/throughput-sensitive deployments with a modest number of
+    /// connections, and leave it off for large-scale servers (e.g. SFUs) with
+    /// thousands of connections.
+    ///
+    /// Note: this is *thread confinement*, not CPU-core affinity — the OS
+    /// scheduler may still move the dedicated thread between cores.
+    /// TODO(#101): pin the reactor thread to a specific core (via `core_affinity`)
+    /// for cache/NUMA locality as a follow-up.
     ///
     /// Note: with this enabled, event-handler callbacks run on the dedicated
     /// reactor thread, so they must not block.
@@ -412,9 +418,10 @@ where
 {
     inner: Arc<PeerConnectionRef<I>>,
     driver_handle: Mutex<Option<JoinHandle>>,
-    /// Whether the driver runs on a dedicated reactor thread. When true, a
-    /// best-effort `Close` is sent on drop so the thread does not leak if the
-    /// connection is dropped without an explicit `close()`.
+    /// Whether the driver runs on a dedicated reactor thread. When true, `close()`
+    /// waits for that thread to finish, and `Drop` signals it to stop (via
+    /// [`PeerConnectionRef::closing`]) so it does not leak if the connection is
+    /// dropped without an explicit `close()`.
     dedicated_reactor: bool,
 }
 
@@ -444,6 +451,13 @@ where
     /// Counts coalesced sends (driver already behind) to drive a periodic
     /// cooperative yield — see [`PeerConnectionRef::wake_writes`].
     pub(crate) write_backpressure: std::sync::atomic::AtomicUsize,
+    /// Shutdown flag set by `close()`/`Drop`. The driver checks it at the top of
+    /// every loop iteration, so the event loop — and thus a dedicated reactor
+    /// thread — terminates even when the accompanying best-effort `Close` wake
+    /// could not be enqueued (a momentarily full channel). This is the guarantee
+    /// that closes the reactor-thread leak window; the `Close` event is only the
+    /// fast wake.
+    pub(crate) closing: AtomicBool,
     /// Channels for incoming data channel events
     pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Channels for incoming track remote events
@@ -481,7 +495,6 @@ where
     /// runtimes such as smol — both collapse throughput.
     #[inline]
     pub(crate) async fn wake_writes(&self) {
-        use std::sync::atomic::Ordering;
         if !self.write_pending.swap(true, Ordering::AcqRel) {
             let _ = self
                 .driver_event_tx
@@ -553,6 +566,7 @@ where
                 driver_event_tx,
                 write_pending: AtomicBool::new(false),
                 write_backpressure: std::sync::atomic::AtomicUsize::new(0),
+                closing: AtomicBool::new(false),
             }),
             driver_handle: Mutex::new(None),
             dedicated_reactor,
@@ -566,12 +580,22 @@ where
             RTCStunGatherer::new(local_addrs.clone(), ice_servers.clone(), ice_gather_policy);
         let turn_relayer = RTCTurnRelayer::new(local_addrs, ice_servers, ice_gather_policy);
 
+        // Init-result oneshot. `new()` awaits this so that socket wrapping and
+        // driver construction errors propagate out of `build()`, instead of being
+        // silently logged on the driver thread — which would otherwise leave a
+        // healthy-looking `PeerConnection` in front of a dead driver (e.g. a
+        // `wrap_udp_socket` failure under an exhausted fd limit). Init is fast
+        // (socket wrapping + driver construction); the event loop then runs
+        // fire-and-forget.
+        let (init_tx, mut init_rx) = channel::<Result<()>>(1);
+
         // The reactor body: wrap the bound sockets on the runtime that runs this
-        // future, build the driver, and run the event loop to completion.
+        // future, build the driver, report the init outcome, then run the event
+        // loop to completion.
         let inner = peer_connection.inner.clone();
         let driver_runtime = runtime.clone();
         let run_driver = async move {
-            let result: Result<()> = async {
+            let init: Result<PeerConnectionDriver<I>> = async {
                 let async_mdns_socket = match std_mdns_socket {
                     Some(socket) => Some(driver_runtime.wrap_udp_socket(socket)?),
                     None => None,
@@ -586,7 +610,7 @@ where
                         .insert(local_addr, driver_runtime.wrap_tcp_listener(listener)?);
                 }
 
-                let mut driver = PeerConnectionDriver::new(
+                PeerConnectionDriver::new(
                     inner,
                     stun_gatherer,
                     turn_relayer,
@@ -594,11 +618,23 @@ where
                     async_udp_sockets,
                     async_tcp_listeners,
                 )
-                .await?;
-                driver.event_loop(driver_event_rx).await
+                .await
             }
             .await;
-            if let Err(e) = result {
+
+            let mut driver = match init {
+                Ok(driver) => {
+                    // Capacity-1 channel, sent exactly once → `try_send` never Full.
+                    let _ = init_tx.try_send(Ok(()));
+                    driver
+                }
+                Err(e) => {
+                    let _ = init_tx.try_send(Err(e));
+                    return;
+                }
+            };
+
+            if let Err(e) = driver.event_loop(driver_event_rx).await {
                 error!("I/O error: {}", e);
             }
         };
@@ -610,7 +646,16 @@ where
         };
         *peer_connection.driver_handle.lock().await = Some(driver_handle);
 
-        Ok(peer_connection)
+        // Surface init errors here rather than swallowing them on the driver
+        // thread. The driver reports its init outcome exactly once; a closed
+        // channel means the driver future was dropped before initialising.
+        match init_rx.recv().await {
+            Some(Ok(())) => Ok(peer_connection),
+            Some(Err(e)) => Err(e),
+            None => Err(Error::Other(
+                "peer connection driver stopped before initialization".to_owned(),
+            )),
+        }
     }
 }
 
@@ -621,10 +666,15 @@ where
     fn drop(&mut self) {
         // A dedicated reactor thread only exits when its event loop returns, so
         // a connection dropped without an explicit `close()` would leak the
-        // thread. Best-effort signal it to stop. (Task-based drivers detach
-        // harmlessly, so this is limited to the dedicated-reactor case to avoid
-        // changing the default lifecycle.)
+        // thread. Set the shutdown flag (infallible) so the driver stops at the
+        // top of its next loop iteration, then best-effort wake it so it stops
+        // promptly rather than after its next timer/socket event. Crucially the
+        // flag — not the wake — is the guarantee: a full channel drops the wake
+        // but cannot leak the thread. (Task-based drivers detach harmlessly, so
+        // this is limited to the dedicated-reactor case to avoid changing the
+        // default lifecycle.)
         if self.dedicated_reactor {
+            self.inner.closing.store(true, Ordering::Release);
             let _ = self
                 .inner
                 .driver_event_tx
@@ -643,15 +693,43 @@ where
             let mut core = self.inner.core.lock().await;
             core.close()?;
         }
-        self.inner
+        // Mark closing before waking the driver, so it stops even if the wake is
+        // ever dropped (mirrors `Drop`; see `PeerConnectionRef::closing`).
+        self.inner.closing.store(true, Ordering::Release);
+        // Best-effort wake. A send failure here is benign, not an error:
+        // `closing` already guarantees the driver terminates, and it may already
+        // have observed the flag and dropped the receiver via its independent
+        // top-of-loop exit path — in which case the channel is closed. Treating
+        // that as an error would make a perfectly clean shutdown return `Err`.
+        let _ = self
+            .inner
             .driver_event_tx
             .send(PeerConnectionDriverEvent::Close)
-            .await
-            .map_err(|e| Error::Other(format!("{:?}", e)))?;
+            .await;
 
-        {
-            let mut driver_handle = self.driver_handle.lock().await;
-            if let Some(driver_handle) = driver_handle.take() {
+        let driver_handle = self.driver_handle.lock().await.take();
+        if let Some(driver_handle) = driver_handle {
+            if self.dedicated_reactor {
+                // The reactor runs on its own OS thread that cannot be aborted;
+                // wait (bounded) for its event loop to actually return, so the
+                // socket and thread are released by the time `close()` resolves.
+                // It exits promptly once it observes the shutdown above; the bound
+                // only prevents `close()` from hanging on a wedged reactor, after
+                // which the handle is dropped (detached) as a last resort.
+                //
+                // Note: if `close()` is called *from within an event-handler
+                // callback* (which, for a dedicated reactor, runs on this very
+                // thread), the loop cannot make progress until the handler
+                // returns, so this wait runs out its full bound before detaching.
+                // Handlers must not block (see `with_dedicated_reactor_thread`).
+                let step = std::time::Duration::from_millis(1);
+                let max = std::time::Duration::from_secs(2);
+                let mut waited = std::time::Duration::ZERO;
+                while !driver_handle.is_finished() && waited < max {
+                    crate::runtime::sleep(step).await;
+                    waited += step;
+                }
+            } else {
                 driver_handle.abort();
             }
         }

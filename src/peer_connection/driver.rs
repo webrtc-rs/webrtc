@@ -38,6 +38,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 /// Capacity of the internal driver event channel (WriteNotify, IceGathering, Close, …).
@@ -173,13 +174,22 @@ where
         let mut active_socket_count = udp_socket_list.len();
 
         loop {
+            // Shutdown safety-net. `close()`/`Drop` set this flag and best-effort
+            // wake the driver with a `Close` event. If that wake was dropped (a
+            // momentarily full channel), this check still guarantees the loop —
+            // and thus a dedicated reactor thread — terminates instead of leaking.
+            if self.inner.closing.load(Ordering::Acquire) {
+                if let Err(err) = self.turn_relayer.close() {
+                    error!("Failed to close turn_relayer: {}", err);
+                }
+                return Ok(());
+            }
+
             // Clear the coalescing write-flush gate BEFORE draining. `poll_writes`
             // drains the core unconditionally, so clearing here can never strand
             // data: a send that set the flag is either already enqueued (drained
             // this iteration) or enqueues a fresh `WriteNotify` for the next one.
-            self.inner
-                .write_pending
-                .store(false, std::sync::atomic::Ordering::Release);
+            self.inner.write_pending.store(false, Ordering::Release);
             self.poll_writes().await?;
             self.poll_events().await;
             self.poll_reads().await?;
