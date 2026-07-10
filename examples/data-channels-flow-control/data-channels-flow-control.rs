@@ -114,8 +114,7 @@ impl PeerConnectionEventHandler for ResponderHandler {
                         total_bytes += msg.data.len();
 
                         // Start the measurement clock once past the warmup threshold.
-                        if measure_start.is_none()
-                            && warmup_bytes.is_none_or(|w| total_bytes >= w)
+                        if measure_start.is_none() && warmup_bytes.is_none_or(|w| total_bytes >= w)
                         {
                             let now = Instant::now();
                             measure_start = Some(now);
@@ -146,8 +145,8 @@ impl PeerConnectionEventHandler for ResponderHandler {
                             let now = Instant::now();
                             if now.duration_since(period_start) >= Duration::from_secs(1) {
                                 let elapsed = now.duration_since(period_start);
-                                let bps = ((total_bytes - last_bytes) * 8) as f64
-                                    / elapsed.as_secs_f64();
+                                let bps =
+                                    ((total_bytes - last_bytes) * 8) as f64 / elapsed.as_secs_f64();
                                 println!(
                                     "Throughput is about {:.03} Mbps",
                                     bps / (1024.0 * 1024.0)

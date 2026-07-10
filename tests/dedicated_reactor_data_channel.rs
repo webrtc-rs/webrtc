@@ -202,7 +202,10 @@ async fn run_test(with_tcp: bool) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("Timeout waiting for offerer to receive echo"))?
         .ok_or_else(|| anyhow::anyhow!("Offerer message channel closed"))?;
 
-    assert_eq!(answer_msg, TEST_MESSAGE, "answerer should receive the message");
+    assert_eq!(
+        answer_msg, TEST_MESSAGE,
+        "answerer should receive the message"
+    );
     assert_eq!(offer_echo, ECHO_MESSAGE, "offerer should receive the echo");
 
     // Closing must stop the dedicated reactor threads cleanly.
