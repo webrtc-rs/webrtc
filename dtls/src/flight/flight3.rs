@@ -389,21 +389,23 @@ impl Flight for Flight3 {
             }));
         }
 
+        let mut client_hello = HandshakeMessageClientHello {
+            version: PROTOCOL_VERSION1_2,
+            random: state.local_random.clone(),
+            cookie: state.cookie.clone(),
+            cipher_suites: cfg.local_cipher_suites.clone(),
+            compression_methods: default_compression_methods(),
+            extensions,
+        };
+        if let Some(hook) = &cfg.client_hello_message_hook {
+            client_hello = hook(client_hello);
+        }
+
         Ok(vec![Packet {
             record: RecordLayer::new(
                 PROTOCOL_VERSION1_2,
                 0,
-                Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
-                    HandshakeMessageClientHello {
-                        version: PROTOCOL_VERSION1_2,
-                        random: state.local_random.clone(),
-                        cookie: state.cookie.clone(),
-
-                        cipher_suites: cfg.local_cipher_suites.clone(),
-                        compression_methods: default_compression_methods(),
-                        extensions,
-                    },
-                ))),
+                Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(client_hello))),
             ),
             should_encrypt: false,
             reset_local_sequence_number: false,

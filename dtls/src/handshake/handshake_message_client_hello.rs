@@ -74,6 +74,46 @@ impl fmt::Debug for HandshakeMessageClientHello {
 const HANDSHAKE_MESSAGE_CLIENT_HELLO_VARIABLE_WIDTH_START: usize = 34;
 
 impl HandshakeMessageClientHello {
+    pub fn random(&self) -> &HandshakeRandom {
+        &self.random
+    }
+
+    pub fn set_random(&mut self, random: HandshakeRandom) {
+        self.random = random;
+    }
+
+    pub fn cookie(&self) -> &[u8] {
+        &self.cookie
+    }
+
+    pub fn set_cookie(&mut self, cookie: Vec<u8>) {
+        self.cookie = cookie;
+    }
+
+    pub fn cipher_suites(&self) -> &[CipherSuiteId] {
+        &self.cipher_suites
+    }
+
+    pub fn set_cipher_suites(&mut self, cipher_suites: Vec<CipherSuiteId>) {
+        self.cipher_suites = cipher_suites;
+    }
+
+    pub fn compression_methods(&self) -> &CompressionMethods {
+        &self.compression_methods
+    }
+
+    pub fn set_compression_methods(&mut self, compression_methods: CompressionMethods) {
+        self.compression_methods = compression_methods;
+    }
+
+    pub fn extensions(&self) -> &[Extension] {
+        &self.extensions
+    }
+
+    pub fn set_extensions(&mut self, extensions: Vec<Extension>) {
+        self.extensions = extensions;
+    }
+
     pub fn handshake_type(&self) -> HandshakeType {
         HandshakeType::ClientHello
     }

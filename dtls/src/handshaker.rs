@@ -79,6 +79,7 @@ pub(crate) type VerifyPeerCertificateFn =
     Arc<dyn (Fn(&[Vec<u8>], &[CertificateDer<'static>]) -> Result<()>) + Send + Sync>;
 
 pub(crate) struct HandshakeConfig {
+    pub(crate) client_hello_message_hook: Option<ClientHelloMessageHook>,
     pub(crate) local_psk_callback: Option<PskCallback>,
     pub(crate) local_psk_identity_hint: Option<Vec<u8>>,
     pub(crate) local_cipher_suites: Vec<CipherSuiteId>, // Available CipherSuites
@@ -117,6 +118,7 @@ pub fn gen_self_signed_root_cert() -> rustls::RootCertStore {
 impl Default for HandshakeConfig {
     fn default() -> Self {
         HandshakeConfig {
+            client_hello_message_hook: None,
             local_psk_callback: None,
             local_psk_identity_hint: None,
             local_cipher_suites: vec![],

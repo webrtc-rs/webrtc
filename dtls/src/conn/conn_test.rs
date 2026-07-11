@@ -1,5 +1,6 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::SystemTime;
 
 use rand::Rng;
@@ -80,6 +81,40 @@ async fn pipe_conn(
     };
 
     Ok((client, sever))
+}
+
+#[tokio::test]
+async fn test_client_hello_message_hook() -> Result<()> {
+    let (ca, cb) = pipe();
+    let hook_calls = Arc::new(AtomicUsize::new(0));
+    let client_calls = hook_calls.clone();
+    let client = tokio::spawn(async move {
+        create_test_client(
+            Arc::new(ca),
+            Config {
+                client_hello_message_hook: Some(Arc::new(move |mut hello| {
+                    client_calls.fetch_add(1, Ordering::SeqCst);
+                    let mut cipher_suites = hello.cipher_suites().to_vec();
+                    cipher_suites.reverse();
+                    hello.set_cipher_suites(cipher_suites);
+                    let mut extensions = hello.extensions().to_vec();
+                    extensions.reverse();
+                    hello.set_extensions(extensions);
+                    hello
+                })),
+                ..Default::default()
+            },
+            true,
+        )
+        .await
+    });
+    let server = create_test_server(Arc::new(cb), Config::default(), true).await?;
+    let client = client.await.unwrap()?;
+
+    assert!(hook_calls.load(Ordering::SeqCst) >= 1);
+    client.close().await?;
+    server.close().await?;
+    Ok(())
 }
 
 fn psk_callback_client(hint: &[u8]) -> Pin<Box<dyn Future<Output = Result<Vec<u8>>> + Send>> {

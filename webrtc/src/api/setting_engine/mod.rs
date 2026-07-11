@@ -3,6 +3,7 @@ mod setting_engine_test;
 
 use std::sync::Arc;
 
+use dtls::config::ClientHelloMessageHook;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::{InterfaceFilterFn, IpFilterFn};
 use ice::mdns::MulticastDnsMode;
@@ -89,6 +90,7 @@ pub struct SettingEngine {
     pub(crate) replay_protection: ReplayProtection,
     pub(crate) sdp_media_level_fingerprints: bool,
     pub(crate) answering_dtls_role: DTLSRole,
+    pub(crate) dtls_client_hello_message_hook: Option<ClientHelloMessageHook>,
     pub(crate) disable_certificate_fingerprint_verification: bool,
     pub(crate) allow_insecure_verification_algorithm: bool,
     pub(crate) disable_srtp_replay_protection: bool,
@@ -109,6 +111,11 @@ pub struct SettingEngine {
 }
 
 impl SettingEngine {
+    /// Replaces each generated DTLS ClientHello before it is sent.
+    pub fn set_dtls_client_hello_message_hook(&mut self, hook: ClientHelloMessageHook) {
+        self.dtls_client_hello_message_hook = Some(hook);
+    }
+
     /// get_receive_mtu returns the configured MTU. If SettingEngine's MTU is configured to 0 it returns the default
     pub(crate) fn get_receive_mtu(&self) -> usize {
         if self.receive_mtu != 0 {

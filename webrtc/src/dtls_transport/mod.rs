@@ -348,6 +348,10 @@ impl RTCDtlsTransport {
         Ok((
             self.role().await,
             dtls::config::Config {
+                client_hello_message_hook: self
+                    .setting_engine
+                    .dtls_client_hello_message_hook
+                    .clone(),
                 certificates: vec![certificate],
                 srtp_protection_profiles: if !self
                     .setting_engine

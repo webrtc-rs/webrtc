@@ -215,6 +215,7 @@ impl DTLSConn {
         }
 
         let cfg = HandshakeConfig {
+            client_hello_message_hook: config.client_hello_message_hook.clone(),
             local_psk_callback: config.psk.take(),
             local_psk_identity_hint: config.psk_identity_hint.take(),
             local_cipher_suites,

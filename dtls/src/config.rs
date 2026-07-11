@@ -8,13 +8,20 @@ use crate::cipher_suite::*;
 use crate::crypto::*;
 use crate::error::*;
 use crate::extension::extension_use_srtp::SrtpProtectionProfile;
+use crate::handshake::handshake_message_client_hello::HandshakeMessageClientHello;
 use crate::handshaker::VerifyPeerCertificateFn;
 use crate::signature_hash_algorithm::SignatureScheme;
+
+pub type ClientHelloMessageHook =
+    Arc<dyn Fn(HandshakeMessageClientHello) -> HandshakeMessageClientHello + Send + Sync>;
 
 /// Config is used to configure a DTLS client or server.
 /// After a Config is passed to a DTLS function it must not be modified.
 #[derive(Clone)]
 pub struct Config {
+    /// Replaces each generated ClientHello before it is sent.
+    pub client_hello_message_hook: Option<ClientHelloMessageHook>,
+
     /// certificates contains certificate chain to present to the other side of the connection.
     /// Server MUST set this if psk is non-nil
     /// client SHOULD sets this so CertificateRequests can be handled if psk is non-nil
@@ -107,6 +114,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            client_hello_message_hook: None,
             certificates: vec![],
             cipher_suites: vec![],
             signature_schemes: vec![],
