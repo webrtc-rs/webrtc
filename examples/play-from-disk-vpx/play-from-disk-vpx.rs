@@ -14,6 +14,7 @@ use rtc::peer_connection::configuration::media_engine::{
 };
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::transport::RTCIceServer;
+use rtc::rtp_transceiver::PayloadType;
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RtpCodecKind};
 use rtc::rtp_transceiver::rtp_sender::{
     RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
@@ -35,6 +36,7 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
+use webrtc::rtp_transceiver::RtpSender;
 use webrtc::runtime::{Sender, block_on, channel, default_runtime, interval};
 
 const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
@@ -227,56 +229,58 @@ async fn async_main() -> Result<()> {
         .await?;
 
     // Add video track
-    let video_track: Option<Arc<TrackLocalStaticSample>> = if video_file.is_some() {
-        let ssrc = rand::random::<u32>();
-        let track: Arc<TrackLocalStaticSample> =
-            Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
-                format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
-                format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
-                format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
-                RtpCodecKind::Video,
-                vec![RTCRtpEncodingParameters {
-                    rtp_coding_parameters: RTCRtpCodingParameters {
-                        ssrc: Some(ssrc),
+    let video_track: Option<(Arc<TrackLocalStaticSample>, Arc<dyn RtpSender>)> =
+        if video_file.is_some() {
+            let ssrc = rand::random::<u32>();
+            let track: Arc<TrackLocalStaticSample> =
+                Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
+                    format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
+                    format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
+                    format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
+                    RtpCodecKind::Video,
+                    vec![RTCRtpEncodingParameters {
+                        rtp_coding_parameters: RTCRtpCodingParameters {
+                            ssrc: Some(ssrc),
+                            ..Default::default()
+                        },
+                        codec: video_codec.rtp_codec.clone(),
                         ..Default::default()
-                    },
-                    codec: video_codec.rtp_codec.clone(),
-                    ..Default::default()
-                }],
-            ))?);
-        peer_connection
-            .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
-            .await?;
-        Some(track)
-    } else {
-        None
-    };
+                    }],
+                ))?);
+            let sender = peer_connection
+                .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
+                .await?;
+            Some((track, sender))
+        } else {
+            None
+        };
 
     // Add audio track
-    let audio_track: Option<Arc<TrackLocalStaticSample>> = if audio_file.is_some() {
-        let ssrc = rand::random::<u32>();
-        let track: Arc<TrackLocalStaticSample> =
-            Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
-                format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
-                format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
-                format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
-                RtpCodecKind::Audio,
-                vec![RTCRtpEncodingParameters {
-                    rtp_coding_parameters: RTCRtpCodingParameters {
-                        ssrc: Some(ssrc),
+    let audio_track: Option<(Arc<TrackLocalStaticSample>, Arc<dyn RtpSender>)> =
+        if audio_file.is_some() {
+            let ssrc = rand::random::<u32>();
+            let track: Arc<TrackLocalStaticSample> =
+                Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
+                    format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
+                    format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
+                    format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
+                    RtpCodecKind::Audio,
+                    vec![RTCRtpEncodingParameters {
+                        rtp_coding_parameters: RTCRtpCodingParameters {
+                            ssrc: Some(ssrc),
+                            ..Default::default()
+                        },
+                        codec: audio_codec.rtp_codec.clone(),
                         ..Default::default()
-                    },
-                    codec: audio_codec.rtp_codec.clone(),
-                    ..Default::default()
-                }],
-            ))?);
-        peer_connection
-            .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
-            .await?;
-        Some(track)
-    } else {
-        None
-    };
+                    }],
+                ))?);
+            let sender = peer_connection
+                .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
+                .await?;
+            Some((track, sender))
+        } else {
+            None
+        };
 
     // Wait for the offer to be pasted
     print!("Paste offer from browser and press Enter: ");
@@ -311,9 +315,10 @@ async fn async_main() -> Result<()> {
     println!("Connected! Starting media streams.");
 
     let (video_done_tx, mut video_done_rx) = channel::<()>(1);
-    if let (Some(video_file_name), Some(track)) = (video_file, video_track) {
+    if let (Some(video_file_name), Some((track, sender))) = (video_file, video_track) {
+        let payload_type = negotiated_payload_type(&sender).await?;
         runtime.spawn(Box::pin(async move {
-            if let Err(e) = stream_video(video_file_name, track).await {
+            if let Err(e) = stream_video(video_file_name, track, payload_type).await {
                 eprintln!("video streaming error: {e}");
             }
             let _ = video_done_tx.try_send(());
@@ -323,9 +328,10 @@ async fn async_main() -> Result<()> {
     }
 
     let (audio_done_tx, mut audio_done_rx) = channel::<()>(1);
-    if let (Some(audio_file_name), Some(track)) = (audio_file, audio_track) {
+    if let (Some(audio_file_name), Some((track, sender))) = (audio_file, audio_track) {
+        let payload_type = negotiated_payload_type(&sender).await?;
         runtime.spawn(Box::pin(async move {
-            if let Err(e) = stream_audio(audio_file_name, track).await {
+            if let Err(e) = stream_audio(audio_file_name, track, payload_type).await {
                 eprintln!("audio streaming error: {e}");
             }
             let _ = audio_done_tx.try_send(());
@@ -357,9 +363,23 @@ async fn async_main() -> Result<()> {
 
 // ── Streaming helpers ──────────────────────────────────────────────────────────
 
+// Resolve the payload type negotiated for the sender's (single) codec. write_sample stamps
+// this on every packet, and rtc's write_rtp requires it to match a negotiated sender codec.
+async fn negotiated_payload_type(sender: &Arc<dyn RtpSender>) -> Result<PayloadType> {
+    sender
+        .get_parameters()
+        .await?
+        .rtp_parameters
+        .codecs
+        .first()
+        .map(|codec| codec.payload_type)
+        .ok_or_else(|| anyhow::anyhow!("sender has no negotiated codec"))
+}
+
 async fn stream_video(
     video_file_name: String,
     video_track: Arc<TrackLocalStaticSample>,
+    payload_type: PayloadType,
 ) -> Result<()> {
     // Open a IVF file and start reading using our IVFReader
     let file = File::open(&video_file_name)?;
@@ -392,7 +412,7 @@ async fn stream_video(
         };
 
         video_track
-            .sample_writer(ssrc)
+            .sample_writer(ssrc, payload_type)
             .write_sample(&Sample {
                 data: frame.freeze(),
                 duration: Duration::from_secs(1),
@@ -409,6 +429,7 @@ async fn stream_video(
 async fn stream_audio(
     audio_file_name: String,
     audio_track: Arc<TrackLocalStaticSample>,
+    payload_type: PayloadType,
 ) -> Result<()> {
     let file = File::open(&audio_file_name)?;
     let reader = BufReader::new(file);
@@ -440,7 +461,7 @@ async fn stream_audio(
         let sample_duration = Duration::from_millis(sample_count * 1000 / 48000);
 
         audio_track
-            .sample_writer(ssrc)
+            .sample_writer(ssrc, payload_type)
             .write_sample(&Sample {
                 data: page_data.freeze(),
                 duration: sample_duration,

@@ -13,6 +13,7 @@ use rtc::peer_connection::configuration::interceptor_registry::register_default_
 use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_VP8, MediaEngine};
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::state::RTCSignalingState;
+use rtc::rtp_transceiver::PayloadType;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RtpCodecKind};
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodingParameters, RTCRtpEncodingParameters};
@@ -35,6 +36,7 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
+use webrtc::rtp_transceiver::RtpSender;
 use webrtc::runtime::{
     Mutex, Notify, Receiver, Runtime, Sender, block_on, channel, default_runtime, interval,
 };
@@ -228,8 +230,7 @@ async fn add_video(r: Request<Body>, state: Arc<AppState>) -> Result<Response<Bo
         let streaming_tasks = state.streaming_tasks.clone();
         state.runtime.spawn(Box::pin(async move {
             if let Err(err) =
-                write_video_to_track(video_file, rtp_sender_id, video_track, notify, cancel_rx)
-                    .await
+                write_video_to_track(video_file, rtp_sender, video_track, notify, cancel_rx).await
             {
                 eprintln!("video streaming error: {}", err);
             }
@@ -466,15 +467,30 @@ async fn async_main() -> Result<()> {
 
 // Read a video file from disk and write it to a webrtc.Track
 // When the video has been completely read this exits without error
+// Resolve the payload type negotiated for the sender's (single) codec. write_sample stamps
+// this on every packet, and rtc's write_rtp requires it to match a negotiated sender codec.
+async fn negotiated_payload_type(sender: &Arc<dyn RtpSender>) -> Result<PayloadType> {
+    sender
+        .get_parameters()
+        .await?
+        .rtp_parameters
+        .codecs
+        .first()
+        .map(|codec| codec.payload_type)
+        .ok_or_else(|| anyhow::anyhow!("sender has no negotiated codec"))
+}
+
 async fn write_video_to_track(
     video_file: String,
-    video_sender_id: RTCRtpSenderId,
+    video_sender: Arc<dyn RtpSender>,
     video_track: Arc<TrackLocalStaticSample>,
     video_notify_rx: Notify,
     mut cancel_rx: Receiver<()>,
 ) -> Result<()> {
     // Wait for connection established
     video_notify_rx.notified().await;
+    let video_sender_id = video_sender.id();
+    let payload_type = negotiated_payload_type(&video_sender).await?;
 
     println!("play video from disk file {video_file}");
 
@@ -517,7 +533,7 @@ async fn write_video_to_track(
         };
 
         video_track
-            .sample_writer(ssrc)
+            .sample_writer(ssrc, payload_type)
             .write_sample(&Sample {
                 data: frame.freeze(),
                 duration: Duration::from_secs(1),

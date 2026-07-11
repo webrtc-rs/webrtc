@@ -36,8 +36,8 @@
 //!     ..Default::default()
 //! };
 //!
-//! // Write the sample to SSRC 1234
-//! local_track.write_sample(1234, &sample, &[]).await?;
+//! // Write the sample to SSRC 1234 and PT 96
+//! local_track.write_sample(1234, 96, &sample, &[]).await?;
 //! # Ok(())
 //! # }
 //! ```

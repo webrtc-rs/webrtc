@@ -9,7 +9,7 @@ use rtc::media_stream::{
 use rtc::rtp::packetizer::Packetizer;
 use rtc::rtp::sequence::Sequencer;
 use rtc::rtp_transceiver::rtp_sender::{RTCRtpCodec, RTCRtpEncodingParameters, RtpCodecKind};
-use rtc::rtp_transceiver::{RtpStreamId, SSRC};
+use rtc::rtp_transceiver::{PayloadType, RtpStreamId, SSRC};
 use rtc::shared::error::flatten_errs;
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
@@ -54,15 +54,16 @@ impl TrackLocalStaticSample {
         })
     }
 
-    /// Creates a new [`SampleWriter`] for writing media samples to the specified SSRC.
-    pub fn sample_writer(&self, ssrc: SSRC) -> SampleWriter<'_> {
-        SampleWriter::new(self, ssrc)
+    /// Creates a new [`SampleWriter`] for writing media samples to the specified SSRC and PayloadType.
+    pub fn sample_writer(&self, ssrc: SSRC, payload_type: PayloadType) -> SampleWriter<'_> {
+        SampleWriter::new(self, ssrc, payload_type)
     }
 
-    /// Packetizes and writes a media [`Sample`] to the track with the specified SSRC and header extensions.
+    /// Packetizes and writes a media [`Sample`] to the track with the specified SSRC, PayloadType and header extensions.
     pub async fn write_sample(
         &self,
         ssrc: SSRC,
+        payload_type: PayloadType,
         sample: &Sample,
         extensions: &[rtp::extension::HeaderExtension],
     ) -> Result<()> {
@@ -91,7 +92,8 @@ impl TrackLocalStaticSample {
         };
 
         let mut write_errs = vec![];
-        for pkt in packets {
+        for mut pkt in packets {
+            pkt.header.payload_type = payload_type;
             if let Err(err) = self
                 .rtp_track
                 .write_rtp_with_extensions(pkt, extensions)
@@ -214,21 +216,27 @@ mod sample_writer {
     use rtc::rtp::extension::HeaderExtension;
     use rtc::rtp::extension::audio_level_extension::AudioLevelExtension;
     use rtc::rtp::extension::video_orientation_extension::VideoOrientationExtension;
-    use rtc::rtp_transceiver::SSRC;
+    use rtc::rtp_transceiver::{PayloadType, SSRC};
 
     /// Helper for writing Samples via [`TrackLocalStaticSample`] that carry extra RTP data.
     ///
     /// Created via [`TrackLocalStaticSample::sample_writer`].
     pub struct SampleWriter<'track> {
         ssrc: SSRC,
+        payload_type: PayloadType,
         track: &'track TrackLocalStaticSample,
         extensions: Vec<HeaderExtension>,
     }
 
     impl<'track> SampleWriter<'track> {
-        pub(super) fn new(track: &'track TrackLocalStaticSample, ssrc: SSRC) -> Self {
+        pub(super) fn new(
+            track: &'track TrackLocalStaticSample,
+            ssrc: SSRC,
+            payload_type: PayloadType,
+        ) -> Self {
             Self {
                 ssrc,
+                payload_type,
                 track,
                 extensions: vec![],
             }
@@ -263,7 +271,7 @@ mod sample_writer {
         /// them.
         pub async fn write_sample(self, sample: &Sample) -> Result<()> {
             self.track
-                .write_sample(self.ssrc, sample, &self.extensions)
+                .write_sample(self.ssrc, self.payload_type, sample, &self.extensions)
                 .await
         }
     }

@@ -15,6 +15,7 @@ use rtc::media::io::ivf_reader::IVFReader;
 use rtc::media::io::ogg_reader::OggReader;
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
+use rtc::rtp_transceiver::PayloadType;
 use rtc::rtp_transceiver::rtp_sender::{
     RTCRtpCodec, RTCRtpCodingParameters, RTCRtpEncodingParameters, RtpCodecKind,
 };
@@ -103,6 +104,7 @@ impl PeerConnectionEventHandler for AnswererHandler {
 async fn stream_video(
     video_file_name: &str,
     video_track: Arc<TrackLocalStaticSample>,
+    payload_type: PayloadType,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(video_file_name)?;
     let reader = BufReader::new(file);
@@ -123,7 +125,7 @@ async fn stream_video(
         };
 
         video_track
-            .sample_writer(ssrc)
+            .sample_writer(ssrc, payload_type)
             .write_sample(&Sample {
                 data: frame.freeze(),
                 duration: Duration::from_secs(1),
@@ -140,6 +142,7 @@ async fn stream_video(
 async fn stream_audio(
     audio_file_name: &str,
     audio_track: Arc<TrackLocalStaticSample>,
+    payload_type: PayloadType,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(audio_file_name)?;
     let reader = BufReader::new(file);
@@ -162,7 +165,7 @@ async fn stream_audio(
         let sample_duration = Duration::from_millis(sample_count * 1000 / 48000);
 
         audio_track
-            .sample_writer(ssrc)
+            .sample_writer(ssrc, payload_type)
             .write_sample(&Sample {
                 data: page_data.freeze(),
                 duration: sample_duration,
@@ -259,11 +262,11 @@ fn test_play_from_disk_streaming() {
             .unwrap();
         let offerer = Arc::new(offerer);
 
-        offerer
+        let video_sender = offerer
             .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal>)
             .await
             .unwrap();
-        offerer
+        let audio_sender = offerer
             .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal>)
             .await
             .unwrap();
@@ -324,14 +327,33 @@ fn test_play_from_disk_streaming() {
             .await
             .unwrap();
 
-        // Spawn streaming tasks
+        // Spawn streaming tasks. write_sample stamps the payload type, and rtc's write_rtp
+        // requires it to match a negotiated sender codec, so resolve it from the sender.
+        let video_pt = video_sender
+            .get_parameters()
+            .await
+            .unwrap()
+            .rtp_parameters
+            .codecs
+            .first()
+            .unwrap()
+            .payload_type;
+        let audio_pt = audio_sender
+            .get_parameters()
+            .await
+            .unwrap()
+            .rtp_parameters
+            .codecs
+            .first()
+            .unwrap()
+            .payload_type;
         let video_track_clone = video_track.clone();
         let audio_track_clone = audio_track.clone();
         runtime.spawn(Box::pin(async move {
-            let _ = stream_video(video_file, video_track_clone).await;
+            let _ = stream_video(video_file, video_track_clone, video_pt).await;
         }));
         runtime.spawn(Box::pin(async move {
-            let _ = stream_audio(audio_file, audio_track_clone).await;
+            let _ = stream_audio(audio_file, audio_track_clone, audio_pt).await;
         }));
 
         // Wait up to 10 seconds for at least 30 packets to arrive on both streams

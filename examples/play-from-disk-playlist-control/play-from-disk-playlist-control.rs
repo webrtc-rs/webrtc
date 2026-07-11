@@ -15,6 +15,7 @@ use rtc::peer_connection::configuration::setting_engine::SettingEngine;
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::state::RTCSignalingState;
 use rtc::peer_connection::transport::RTCDtlsRole;
+use rtc::rtp_transceiver::PayloadType;
 use rtc::rtp_transceiver::rtp_sender::RTCRtpCodecParameters;
 use rtc::rtp_transceiver::rtp_sender::{
     RTCRtpCodec, RTCRtpCodingParameters, RTCRtpEncodingParameters, RtpCodecKind,
@@ -37,6 +38,7 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
+use webrtc::rtp_transceiver::RtpSender;
 use webrtc::runtime::{Notify, Runtime, Sender, block_on, channel, default_runtime, sleep};
 
 const LABEL_AUDIO: &str = "audio";
@@ -518,7 +520,7 @@ async fn handle_whep_connection(
             ..Default::default()
         }],
     ))?);
-    peer_connection
+    let audio_sender = peer_connection
         .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal>)
         .await?;
 
@@ -561,6 +563,7 @@ async fn handle_whep_connection(
     let stream_done_tx = done_tx.clone();
     let stream_connected = Arc::clone(&connected);
     let stream_signaling_stable = Arc::clone(&signaling_stable);
+    let payload_type = negotiated_payload_type(&audio_sender).await?;
     runtime.spawn(Box::pin(async move {
         while !(stream_connected.load(Ordering::SeqCst)
             && stream_signaling_stable.load(Ordering::SeqCst))
@@ -569,6 +572,7 @@ async fn handle_whep_connection(
         }
         if let Err(err) = stream_playlist_audio(
             stream_track,
+            payload_type,
             stream_tracks,
             stream_channel,
             stream_current_track,
@@ -622,8 +626,22 @@ async fn run_playlist_data_channel(
     }
 }
 
+// Resolve the payload type negotiated for the sender's (single) codec. write_sample stamps
+// this on every packet, and rtc's write_rtp requires it to match a negotiated sender codec.
+async fn negotiated_payload_type(sender: &Arc<dyn RtpSender>) -> Result<PayloadType> {
+    sender
+        .get_parameters()
+        .await?
+        .rtp_parameters
+        .codecs
+        .first()
+        .map(|codec| codec.payload_type)
+        .ok_or_else(|| anyhow::anyhow!("sender has no negotiated codec"))
+}
+
 async fn stream_playlist_audio(
     audio_track: Arc<TrackLocalStaticSample>,
+    payload_type: PayloadType,
     tracks: Arc<Vec<OggTrack>>,
     playlist_channel: Arc<dyn DataChannel>,
     current_track: Arc<AtomicI32>,
@@ -653,7 +671,7 @@ async fn stream_playlist_audio(
 
         let page = &track.pages[page_idx];
         audio_track
-            .sample_writer(ssrc)
+            .sample_writer(ssrc, payload_type)
             .write_sample(&Sample {
                 data: page.payload.clone().into(),
                 duration: page.duration,
