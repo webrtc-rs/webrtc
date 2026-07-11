@@ -45,11 +45,20 @@
 use crate::error::Result;
 use crate::media_stream::Track;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
-use crate::runtime::Sender;
+use crate::runtime::{Receiver, Sender};
 use rtc::media_stream::MediaStreamTrack;
 use rtc::rtp_transceiver::RTCRtpSenderId;
 use rtc::rtp_transceiver::rtp_sender::RTCRtpParameters;
 use rtc::{rtcp, rtp};
+
+/// Events that can occur on a [`TrackLocal`] (a track we send).
+#[derive(Debug, Clone)]
+pub enum TrackLocalEvent {
+    /// Fired when RTCP feedback about this sent track is received from the remote peer —
+    /// e.g. Receiver Reports, or PLI/FIR keyframe requests. An SFU relays such feedback
+    /// upstream to the publisher.
+    OnRtcpPacket(Vec<Box<dyn rtcp::Packet>>),
+}
 
 /// Local track implementation that accepts pre-packetized RTP packets.
 pub mod static_rtp;
@@ -78,8 +87,9 @@ pub trait TrackLocal: Track {
     /// Binds the track to the peer connection context.
     ///
     /// This will be called internally after signaling is complete and the list of available
-    /// codecs has been determined.
-    async fn bind(&self, ctx: TrackLocalContext);
+    /// codecs has been determined. `evt_rx` delivers events for this track (see
+    /// [`TrackLocal::poll`]).
+    async fn bind(&self, ctx: TrackLocalContext, evt_rx: Receiver<TrackLocalEvent>);
 
     /// Unbinds the track from the peer connection context, cleaning up any resources.
     async fn unbind(&self);
@@ -89,4 +99,8 @@ pub trait TrackLocal: Track {
 
     /// Writes RTCP packets to the track.
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()>;
+
+    /// Polls for the next event on the local track (RTCP feedback from the remote peer).
+    /// Returns `None` once the track is unbound / the peer connection closes.
+    async fn poll(&self) -> Option<TrackLocalEvent>;
 }

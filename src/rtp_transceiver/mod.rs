@@ -41,8 +41,10 @@ pub mod rtp_sender;
 use crate::error::Error;
 use crate::media_stream::track_local::TrackLocalContext;
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
+use crate::peer_connection::driver::TRACK_LOCAL_EVENT_CHANNEL_CAPACITY;
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::runtime::Mutex;
+use crate::runtime::channel;
 use rtc::media_stream::MediaStreamId;
 use rtc::rtp_transceiver::RTCRtpTransceiverId;
 use rtc::rtp_transceiver::rtp_receiver::{RTCRtpContributingSource, RTCRtpSynchronizationSource};
@@ -160,19 +162,38 @@ where
         let mut sender = self.sender.lock().await;
 
         if let Some(rtp_sender) = sender.take() {
+            let track_id = rtp_sender.track().track_id().await;
+            self.inner
+                .track_local_events_tx
+                .lock()
+                .await
+                .remove(&track_id);
             rtp_sender.track().unbind().await;
         }
 
         if let Some(rtp_sender) = rtp_sender
             && let Ok(params) = rtp_sender.get_parameters().await
         {
+            // Wire an event channel so RTCP feedback the remote sends about this track
+            // (Receiver Reports, PLI/FIR) can be read via `TrackLocal::poll`. The driver
+            // routes inbound RTCP tagged with this track id to `evt_tx`.
+            let track_id = rtp_sender.track().track_id().await;
+            let (evt_tx, evt_rx) = channel(TRACK_LOCAL_EVENT_CHANNEL_CAPACITY);
+            self.inner
+                .track_local_events_tx
+                .lock()
+                .await
+                .insert(track_id, evt_tx);
             rtp_sender
                 .track()
-                .bind(TrackLocalContext {
-                    rtp_sender_id: self.id.into(),
-                    rtp_parameters: params.rtp_parameters,
-                    driver_event_tx: self.inner.driver_event_tx.clone(),
-                })
+                .bind(
+                    TrackLocalContext {
+                        rtp_sender_id: self.id.into(),
+                        rtp_parameters: params.rtp_parameters,
+                        driver_event_tx: self.inner.driver_event_tx.clone(),
+                    },
+                    evt_rx,
+                )
                 .await;
             *sender = Some(rtp_sender);
         }

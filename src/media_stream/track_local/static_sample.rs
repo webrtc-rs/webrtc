@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
-use crate::media_stream::track_local::{TrackLocal, TrackLocalContext};
+use crate::media_stream::track_local::{TrackLocal, TrackLocalContext, TrackLocalEvent};
+use crate::runtime::Receiver;
 use rtc::media::Sample;
 use rtc::media_stream::{
     MediaStreamId, MediaStreamTrack, MediaStreamTrackId, MediaStreamTrackState,
@@ -192,8 +193,8 @@ impl TrackLocal for TrackLocalStaticSample {
         self.rtp_track.track().await
     }
 
-    async fn bind(&self, ctx: TrackLocalContext) {
-        self.rtp_track.bind(ctx).await;
+    async fn bind(&self, ctx: TrackLocalContext, evt_rx: Receiver<TrackLocalEvent>) {
+        self.rtp_track.bind(ctx, evt_rx).await;
     }
 
     async fn unbind(&self) {
@@ -206,6 +207,10 @@ impl TrackLocal for TrackLocalStaticSample {
 
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtcp::Packet>>) -> Result<()> {
         self.rtp_track.write_rtcp(packets).await
+    }
+
+    async fn poll(&self) -> Option<TrackLocalEvent> {
+        self.rtp_track.poll().await
     }
 }
 

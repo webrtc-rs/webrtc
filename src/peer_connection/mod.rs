@@ -84,6 +84,7 @@ use rtc::shared::error::{Error, Result};
 use rtc::statistics::StatsSelector;
 use rtc::statistics::report::RTCStatsReport;
 
+use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
@@ -464,6 +465,8 @@ where
     #[allow(clippy::type_complexity)]
     pub(crate) track_remote_events_tx:
         Mutex<HashMap<MediaStreamTrackId, (Sender<TrackRemoteEvent>, Arc<dyn TrackRemote>)>>,
+    /// Channels for delivering RTCP feedback to local (sent) tracks, keyed by track id.
+    pub(crate) track_local_events_tx: Mutex<HashMap<MediaStreamTrackId, Sender<TrackLocalEvent>>>,
 }
 
 /// Number of coalesced (driver-behind) sends between cooperative yields in
@@ -561,6 +564,7 @@ where
                 runtime: runtime.clone(),
                 data_channel_events_tx: Mutex::new(HashMap::new()),
                 track_remote_events_tx: Mutex::new(HashMap::new()),
+                track_local_events_tx: Mutex::new(HashMap::new()),
                 rtp_transceivers: Mutex::new(HashMap::new()),
                 handler,
                 driver_event_tx,

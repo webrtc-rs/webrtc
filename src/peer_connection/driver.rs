@@ -7,6 +7,7 @@ use super::transports::stun_gatherer::{
 };
 use super::transports::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
 use crate::data_channel::{DataChannelEvent, DataChannelImpl};
+use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
@@ -49,6 +50,7 @@ pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 /// Capacity of each track-remote event channel (OnMute, OnUnmute, OnEnded, OnRtpPacket, OnRtcpPacket, …).
 pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
+pub(crate) const TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
 const UDP_RECV_BUF_LEN: usize = 2000;
@@ -675,16 +677,42 @@ where
                 }
             }
             RTCMessage::RtcpPacket(track_id, packets) => {
-                let track_remotes = self.inner.track_remote_events_tx.lock().await;
-                if let Some(evt_tx) = track_remotes.get(&track_id) {
-                    if let Err(err) = evt_tx.0.try_send(TrackRemoteEvent::OnRtcpPacket(packets)) {
+                // RTCP about a *received* track goes to its TrackRemote; RTCP about a *sent*
+                // track (feedback from the remote — RR/PLI/FIR — tagged with the sender's
+                // track id) goes to its TrackLocal.
+                let remote_tx = self
+                    .inner
+                    .track_remote_events_tx
+                    .lock()
+                    .await
+                    .get(&track_id)
+                    .map(|(evt_tx, _)| evt_tx.clone());
+                if let Some(evt_tx) = remote_tx {
+                    if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtcpPacket(packets)) {
                         error!(
                             "Failed to send RtcpPacket to track remote {}: {:?}",
                             track_id, err
                         );
                     }
+                    return;
+                }
+
+                let local_tx = self
+                    .inner
+                    .track_local_events_tx
+                    .lock()
+                    .await
+                    .get(&track_id)
+                    .cloned();
+                if let Some(evt_tx) = local_tx {
+                    if let Err(err) = evt_tx.try_send(TrackLocalEvent::OnRtcpPacket(packets)) {
+                        error!(
+                            "Failed to send RtcpPacket to track local {}: {:?}",
+                            track_id, err
+                        );
+                    }
                 } else {
-                    error!("Failed to get track_remote: {:?} for RtcpPacket", track_id);
+                    error!("Failed to route RtcpPacket: no track for {:?}", track_id);
                 }
             }
         }

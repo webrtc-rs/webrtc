@@ -1,8 +1,8 @@
 use crate::error::{Error, Result};
 use crate::media_stream::Track;
-use crate::media_stream::track_local::{TrackLocal, TrackLocalContext};
+use crate::media_stream::track_local::{TrackLocal, TrackLocalContext, TrackLocalEvent};
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
-use crate::runtime::Mutex;
+use crate::runtime::{Mutex, Receiver};
 use bytes::BytesMut;
 use rtc::media_stream::{
     MediaStreamId, MediaStreamTrack, MediaStreamTrackId, MediaStreamTrackState,
@@ -21,6 +21,8 @@ use std::collections::HashMap;
 pub struct TrackLocalStaticRTP {
     pub(crate) track: Mutex<MediaStreamTrack>,
     pub(crate) ctx: Mutex<Option<TrackLocalContext>>,
+    /// Delivers RTCP feedback received about this sent track (set on bind).
+    pub(crate) evt_rx: Mutex<Option<Receiver<TrackLocalEvent>>>,
 }
 
 impl TrackLocalStaticRTP {
@@ -29,6 +31,7 @@ impl TrackLocalStaticRTP {
         Self {
             track: Mutex::new(track),
             ctx: Mutex::new(None),
+            evt_rx: Mutex::new(None),
         }
     }
 
@@ -193,14 +196,14 @@ impl TrackLocal for TrackLocalStaticRTP {
         track.clone()
     }
 
-    async fn bind(&self, ctx: TrackLocalContext) {
-        let mut ctx_opt = self.ctx.lock().await;
-        *ctx_opt = Some(ctx);
+    async fn bind(&self, ctx: TrackLocalContext, evt_rx: Receiver<TrackLocalEvent>) {
+        *self.ctx.lock().await = Some(ctx);
+        *self.evt_rx.lock().await = Some(evt_rx);
     }
 
     async fn unbind(&self) {
-        let mut ctx_opt = self.ctx.lock().await;
-        *ctx_opt = None;
+        *self.ctx.lock().await = None;
+        *self.evt_rx.lock().await = None;
     }
 
     async fn write_rtp(&self, packet: rtp::Packet) -> Result<()> {
@@ -231,6 +234,14 @@ impl TrackLocal for TrackLocalStaticRTP {
             .map_err(|e| Error::Other(format!("{:?}", e)))
         } else {
             Err(Error::Other("track is not binding yet".to_string()))
+        }
+    }
+
+    async fn poll(&self) -> Option<TrackLocalEvent> {
+        let mut guard = self.evt_rx.lock().await;
+        match guard.as_mut() {
+            Some(rx) => rx.recv().await,
+            None => None,
         }
     }
 }
