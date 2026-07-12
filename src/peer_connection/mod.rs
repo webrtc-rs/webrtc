@@ -459,6 +459,11 @@ where
     /// that closes the reactor-thread leak window; the `Close` event is only the
     /// fast wake.
     pub(crate) closing: AtomicBool,
+    /// Woken by the driver once per event-loop iteration after it applies SCTP
+    /// buffer releases (acknowledged/abandoned bytes) to each channel's
+    /// `outstanding_bytes`. A `send()` blocked on the send back-pressure high-water
+    /// waits on this and retries, so it unblocks as soon as the peer acknowledges data.
+    pub(crate) data_channel_backpressure: crate::runtime::Notify,
     /// Channels for incoming data channel events
     pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Channels for incoming track remote events
@@ -571,6 +576,7 @@ where
                 write_pending: AtomicBool::new(false),
                 write_backpressure: std::sync::atomic::AtomicUsize::new(0),
                 closing: AtomicBool::new(false),
+                data_channel_backpressure: crate::runtime::Notify::new(),
             }),
             driver_handle: Mutex::new(None),
             dedicated_reactor,

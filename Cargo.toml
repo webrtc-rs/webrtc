@@ -68,6 +68,11 @@ path = "examples/data-channels-flow-control/data-channels-flow-control.rs"
 bench = false
 
 [[example]]
+name = "data-channels-stress-bench"
+path = "examples/data-channels-stress-bench/data-channels-stress-bench.rs"
+bench = false
+
+[[example]]
 name = "data-channels-offer"
 path = "examples/data-channels-offer-answer/data-channels-offer.rs"
 bench = false

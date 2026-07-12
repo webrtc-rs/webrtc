@@ -204,6 +204,10 @@ where
             self.poll_writes().await?;
             self.poll_events().await;
             self.poll_reads().await?;
+            // Wake senders blocked on send back-pressure: the poll_* passes above
+            // applied any SCTP buffer releases (acks/abandonment) to the per-channel
+            // outstanding_bytes counters, so a blocked send() can re-check and proceed.
+            self.inner.data_channel_backpressure.notify_waiters();
 
             // 4.a poll next timeout
             let timeout = self.poll_timeout().await;
