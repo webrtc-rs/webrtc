@@ -175,6 +175,15 @@ where
             .collect();
         let mut active_socket_count = udp_socket_list.len();
 
+        // Batch-drain: after one datagram wakes the select, non-blockingly drain a
+        // bounded burst of additional ready datagrams from the same socket and feed
+        // them all to handle_read before the next flush. Paired with the SCTP
+        // handler's deferred flush, a burst of DATA coalesces into a single SACK and
+        // amortizes the per-iteration cost (poll_writes/events/reads core locks,
+        // timeout recompute, select setup).
+        const MAX_UDP_RECV_BURST: usize = 64;
+        let mut burst_buf = vec![0u8; UDP_RECV_BUF_LEN];
+
         loop {
             // Shutdown safety-net. `close()`/`Drop` set this flag and best-effort
             // wake the driver with a `Close` event. If that wake was dropped (a
@@ -275,9 +284,36 @@ where
 
                                 // Immediately create a new future for this socket and reuse the buffer
                                 let (socket_local_addr, socket) = &udp_socket_list[idx];
+                                let socket_local_addr = *socket_local_addr;
+                                let socket = socket.clone();
                                 udp_recv_futures.push(
-                                    create_udp_recv_future(idx, *socket_local_addr, socket.clone(), buf).boxed()
+                                    create_udp_recv_future(idx, socket_local_addr, socket.clone(), buf).boxed()
                                 );
+
+                                // Batch-drain: drain a bounded burst of additional
+                                // ready datagrams from this socket without blocking.
+                                let mut burst = 0;
+                                while burst < MAX_UDP_RECV_BURST {
+                                    match socket.recv_from(&mut burst_buf).now_or_never() {
+                                        Some(Ok((bn, bpeer))) => {
+                                            let bmsg = BytesMut::from(&burst_buf[..bn]);
+                                            if let Err(err) = self.handle_read(TaggedBytesMut {
+                                                now: Instant::now(),
+                                                transport: TransportContext {
+                                                    local_addr: socket_local_addr,
+                                                    peer_addr: bpeer,
+                                                    ecn: None,
+                                                    transport_protocol: TransportProtocol::UDP,
+                                                },
+                                                message: bmsg,
+                                            }).await {
+                                                error!("handle_read error (burst): {}", err);
+                                            }
+                                            burst += 1;
+                                        }
+                                        _ => break, // would-block (pending) or error
+                                    }
+                                }
                             }
                             Some(SocketRecvResult::Error { err, local_addr, idx, buf }) => {
                                 if is_retryable_socket_recv_error(&err) {
