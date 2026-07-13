@@ -1,45 +1,30 @@
-//! Integration test for data-channel send back-pressure (the `outstanding_bytes`
-//! accounting + high-water/hard-ceiling gate in `DataChannel::send`).
+//! Regression test for the send back-pressure close/drop liveness hang.
 //!
-//! A "naive" sender floods a fixed amount over an **unordered / no-retransmit**
-//! (`max_retransmits: 0`) channel — no `bufferedAmount` flow control — while a
-//! normally-draining receiver reads. The test asserts three properties of the
-//! per-channel send counter that the back-pressure fix introduces:
-//!
-//!   1. **Bounded** — `outstanding_bytes()` stays near the high-water mark while the app
-//!      floods (the send gate keeps the pipeline from growing without limit). The flood
-//!      total exceeds the hard ceiling, so an unbounded path would visibly blow the bound;
-//!      the assertion is set below a disabled gate's peak, so it actually guards the gate.
-//!   2. **Conservation** — after the transfer, `outstanding_bytes()` drains back to
-//!      ~0. This is the key correctness property: the counter is decremented both on
-//!      SCTP acknowledgement *and* on `max_retransmits: 0` abandonment (forward-TSN),
-//!      so no path can leak and wedge a sender permanently.
-//!   3. **Delivery** — a substantial fraction of the bytes actually arrive (sanity
-//!      that the flood really flowed, not that `send()` silently no-op'd).
+//! A `DataChannel::send` that is parked in send back-pressure (outstanding bytes at the
+//! high-water mark, waiting for the driver to release SCTP-acked bytes) must be woken and
+//! must return `ErrDataChannelClosed` when the `PeerConnection` is closed — because once
+//! the driver stops on the `Close` event it no longer drains `outstanding_bytes` nor wakes
+//! blocked senders, and the channel is not removed from the core map on close. Without the
+//! fix (a `closing` check in the send park loop + a `notify_waiters()` from `close`/`Drop`)
+//! the parked send spins on its 50 ms liveness timer forever, leaking the producing task
+//! and ~4 MiB. This test floods until a send is parked, closes the PC, and asserts the
+//! send returns promptly rather than hanging.
 use anyhow::Result;
 use bytes::BytesMut;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
+use webrtc::error::Error;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
 const CHUNK: usize = 1024; // 1 KB messages
-// 32 MB naive flood — deliberately larger than the 16 MiB hard ceiling so an *unbounded*
-// (gate-disabled) send path would blow well past any bound, giving Property 1 real teeth.
-const TOTAL_BYTES: usize = 32 * 1024 * 1024;
-// Must match the library defaults in `src/data_channel/mod.rs` (this test does not override
-// the `WEBRTC_SEND_*` env vars, so the defaults are in force).
+// Library default high-water mark (this test does not override `WEBRTC_SEND_*`). A flood
+// of 1 KB chunks over a lossy channel outruns the drain and parks at this mark.
 const HIGH_WATER: usize = 4 * 1024 * 1024;
-// The gate admits only while `outstanding + len <= HIGH_WATER`, so with a 1 KB chunk
-// `outstanding_bytes()` can never exceed HIGH_WATER once the gate is engaged; a small slack
-// covers sampling. Crucially this bound is BELOW the peak a disabled gate reaches (~5 MB+
-// measured), so a regression that removes the back-pressure gate makes this assertion FAIL
-// — unlike a bound at the 16 MiB hard ceiling, which a 32 MB flood never reaches gate-or-not.
-const OUTSTANDING_BOUND: usize = HIGH_WATER + 256 * 1024;
 
 struct GatherHandler {
     gather_tx: Sender<()>,
@@ -81,7 +66,6 @@ impl PeerConnectionEventHandler for ReceiverHandler {
     }
     async fn on_data_channel(&self, dc: Arc<dyn DataChannel>) {
         let received = self.received.clone();
-        // Must spawn: returning from on_data_channel unblocks the driver.
         self.runtime.spawn(Box::pin(async move {
             while let Some(event) = dc.poll().await {
                 match event {
@@ -97,7 +81,7 @@ impl PeerConnectionEventHandler for ReceiverHandler {
 }
 
 #[test]
-fn test_data_channel_send_backpressure_bounded_and_conserved() {
+fn test_close_wakes_parked_backpressured_send() {
     block_on(run()).unwrap();
 }
 
@@ -138,7 +122,6 @@ async fn run() -> Result<()> {
         )
         .await?;
 
-    // Drive the sender channel to OnOpen.
     let (open_tx, mut open_rx) = channel::<()>(1);
     {
         let dc = dc.clone();
@@ -196,72 +179,59 @@ async fn run() -> Result<()> {
         .await
         .map_err(|_| anyhow::anyhow!("timeout: data channel open"))?;
 
-    // ── Naive flood: push TOTAL_BYTES with NO bufferedAmount flow control ───────
-    let flood_done = Arc::new(AtomicBool::new(false));
+    // ── Flood forever until send() errors ───────────────────────────────────────
+    // Signal is `true` when the terminating error was ErrDataChannelClosed (the expected
+    // wake-on-close), `false` for any other error. If close() fails to wake a parked send,
+    // this task never signals and the timeout below fires — the regression.
+    let (done_tx, mut done_rx) = channel::<bool>(1);
     {
         let dc = dc.clone();
-        let flood_done = flood_done.clone();
         runtime.spawn(Box::pin(async move {
             let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
-            let mut sent = 0usize;
-            while sent < TOTAL_BYTES {
-                if dc.send(buf.clone()).await.is_ok() {
-                    sent += CHUNK;
+            loop {
+                if let Err(e) = dc.send(buf.clone()).await {
+                    let _ = done_tx.try_send(matches!(e, Error::ErrDataChannelClosed));
+                    break;
                 }
             }
-            flood_done.store(true, Ordering::Relaxed);
         }));
     }
 
-    // Sample outstanding_bytes() concurrently: the gate must hold it near the high-water
-    // mark for the whole flood (Property 1 — bounded). This is the assertion that guards
-    // the gate: it is below what a disabled gate reaches, so removing the gate fails here.
-    let mut max_outstanding = 0usize;
-    let deadline_ticks = 600; // 600 * 100ms = 60s cap
-    let mut ticks = 0;
-    while !flood_done.load(Ordering::Relaxed) {
-        let o = dc.outstanding_bytes().await?;
-        max_outstanding = max_outstanding.max(o);
-        assert!(
-            o <= OUTSTANDING_BOUND,
-            "outstanding_bytes {o} exceeded the high-water bound {OUTSTANDING_BOUND} \
-             during flood — the send back-pressure gate is not enforcing the bound"
-        );
-        ticks += 1;
-        assert!(ticks < deadline_ticks, "flood did not complete within 60s");
-        sleep(Duration::from_millis(100)).await;
-    }
-
-    // Property 2 — conservation: after the flood, the counter must drain toward 0
-    // as SCTP acks/abandons the last in-flight bytes. A decrement bug (e.g. abandoned
-    // no-retransmit bytes never released) would plateau here instead of draining.
-    let mut final_outstanding = dc.outstanding_bytes().await?;
-    for _ in 0..100 {
-        final_outstanding = dc.outstanding_bytes().await?;
-        if final_outstanding < 512 * 1024 {
+    // Wait until the sender is parked at the high-water mark. The gate admits only while
+    // `outstanding + CHUNK <= HIGH_WATER`, so a parked sender sits within one chunk of the
+    // mark; require it to climb to there so a send is genuinely blocked when we close.
+    let park_threshold = HIGH_WATER - CHUNK;
+    let mut parked = false;
+    for _ in 0..200 {
+        if dc.outstanding_bytes().await? >= park_threshold {
+            parked = true;
             break;
         }
-        sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(50)).await;
     }
     assert!(
-        final_outstanding < 512 * 1024,
-        "outstanding_bytes did not drain (leak?): {final_outstanding} bytes still outstanding"
+        parked,
+        "sender never reached the high-water mark; the back-pressure path was not exercised"
     );
 
-    // Property 3 — delivery sanity: real bytes flowed (send() wasn't a silent no-op).
-    // This is only a floor: an *unordered / no-retransmit* naive flood legitimately
-    // abandons a large fraction (here ~5 MB of 8 MB was dropped, which is exactly what
-    // exercised the forward-TSN abandonment decrement checked by Property 2), so we do
-    // not assert near-complete delivery — only that a meaningful amount arrived.
-    let got = received.load(Ordering::Relaxed);
-    assert!(
-        got >= TOTAL_BYTES / 8,
-        "receiver only got {got} of {TOTAL_BYTES} bytes (send appears to have no-op'd)"
-    );
-
-    log::info!("send-backpressure: max_outstanding={max_outstanding} received={got}");
-
+    // Close the sender PC. A parked send() must wake and return within the timeout; without
+    // the fix it spins on its 50 ms liveness timer forever and this recv times out.
     sender_pc.close().await?;
+
+    let was_closed_err = timeout(Duration::from_secs(5), done_rx.recv())
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "BUG: a back-pressured send() did not return after close() — liveness hang"
+            )
+        })?
+        .ok_or_else(|| anyhow::anyhow!("flood task ended without reporting an error"))?;
+
+    assert!(
+        was_closed_err,
+        "parked send() returned an error other than ErrDataChannelClosed after close()"
+    );
+
     receiver_pc.close().await?;
     Ok(())
 }

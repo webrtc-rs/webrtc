@@ -685,6 +685,9 @@ where
         // default lifecycle.)
         if self.dedicated_reactor {
             self.inner.closing.store(true, Ordering::Release);
+            // Wake a sender parked in send back-pressure so it returns promptly instead
+            // of hanging past teardown (mirrors `close`; see the park loop in `send`).
+            self.inner.data_channel_backpressure.notify_waiters();
             let _ = self
                 .inner
                 .driver_event_tx
@@ -706,6 +709,10 @@ where
         // Mark closing before waking the driver, so it stops even if the wake is
         // ever dropped (mirrors `Drop`; see `PeerConnectionRef::closing`).
         self.inner.closing.store(true, Ordering::Release);
+        // Wake any sender parked in data-channel send back-pressure so it observes
+        // `closing` and returns `ErrDataChannelClosed` at once, rather than waiting out
+        // its 50 ms liveness timer — the driver has stopped draining `outstanding_bytes`.
+        self.inner.data_channel_backpressure.notify_waiters();
         // Best-effort wake. A send failure here is benign, not an error:
         // `closing` already guarantees the driver terminates, and it may already
         // have observed the flag and dropped the receiver via its independent

@@ -50,6 +50,7 @@ use futures::FutureExt;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::shared::error::{Error, Result};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 pub use rtc::data_channel::{
@@ -90,13 +91,16 @@ fn send_limits() -> (usize, usize) {
                 None => default,
             }
         };
-        (
-            resolve("WEBRTC_SEND_HIGH_WATER_BYTES", DATA_CHANNEL_SEND_HIGH_WATER),
-            resolve(
-                "WEBRTC_SEND_HARD_CEILING_BYTES",
-                DATA_CHANNEL_SEND_HARD_CEILING,
-            ),
-        )
+        let high_water = resolve("WEBRTC_SEND_HIGH_WATER_BYTES", DATA_CHANNEL_SEND_HIGH_WATER);
+        let hard_ceiling = resolve(
+            "WEBRTC_SEND_HARD_CEILING_BYTES",
+            DATA_CHANNEL_SEND_HARD_CEILING,
+        );
+        // The hard ceiling must never sit below the high-water mark: the admit check
+        // (`outstanding + len <= high_water`) runs before the reject check, so a ceiling
+        // below the mark would admit sends it was meant to reject, silently defeating the
+        // backstop. Clamp so `hard_ceiling >= high_water` regardless of misconfiguration.
+        (high_water, hard_ceiling.max(high_water))
     })
 }
 
@@ -135,7 +139,12 @@ pub trait DataChannel: Send + Sync + 'static {
     /// that SCTP has not yet released (acknowledged or abandoned) — the true
     /// outstanding send-side memory, including bytes still queued in the send
     /// pipeline (unlike `bufferedAmount`, which counts only post-packetization).
-    async fn outstanding_bytes(&self) -> Result<usize>;
+    ///
+    /// Defaults to `0` so external implementors of this trait keep compiling; the
+    /// built-in channel overrides it with the real counter that drives send back-pressure.
+    async fn outstanding_bytes(&self) -> Result<usize> {
+        Ok(0)
+    }
     /// Sends raw binary data on this data channel.
     async fn send(&self, data: BytesMut) -> Result<()>;
     /// Sends text data on this data channel.
@@ -425,6 +434,14 @@ where
         let (high_water, hard_ceiling) = send_limits();
         let len = data.len();
         loop {
+            // Bail if the connection is closing/dropped. Once the driver stops (on the
+            // `Close` event) it no longer drains `outstanding_bytes` or wakes us, and the
+            // channel is not removed from the core map on close, so the re-check below
+            // stays `Some`. Without this a sender parked at the high-water mark would spin
+            // on the 50 ms liveness timer forever; `close()`/`Drop` wake us immediately.
+            if self.inner.closing.load(Ordering::Acquire) {
+                return Err(Error::ErrDataChannelClosed);
+            }
             {
                 let mut peer_connection = self.inner.core.lock().await;
                 let mut dc = peer_connection
@@ -470,6 +487,10 @@ where
         let (high_water, hard_ceiling) = send_limits();
         let len = text.len();
         loop {
+            // See `send`: bail if closing so a parked sender can't hang past teardown.
+            if self.inner.closing.load(Ordering::Acquire) {
+                return Err(Error::ErrDataChannelClosed);
+            }
             {
                 let mut peer_connection = self.inner.core.lock().await;
                 let mut dc = peer_connection
