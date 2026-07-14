@@ -22,9 +22,12 @@ use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
 const CHUNK: usize = 1024; // 1 KB messages
-// Library default high-water mark (this test does not override `WEBRTC_SEND_*`). A flood
-// of 1 KB chunks over a lossy channel outruns the drain and parks at this mark.
-const HIGH_WATER: usize = 4 * 1024 * 1024;
+// Small send high-water forced via `WEBRTC_SEND_HIGH_WATER_BYTES` in the test entry point
+// (must match). A low mark makes the gate engage — and a send genuinely PARK — deterministically
+// on every runtime: with the 4 MiB default the smol runtime self-limits the send pipeline to
+// ~3.4 MiB, so the sender never reaches the mark and never parks, and this test can't exercise
+// the wake-on-close path it exists to guard.
+const HIGH_WATER: usize = 256 * 1024;
 
 struct GatherHandler {
     gather_tx: Sender<()>,
@@ -82,6 +85,13 @@ impl PeerConnectionEventHandler for ReceiverHandler {
 
 #[test]
 fn test_close_wakes_parked_backpressured_send() {
+    // Force a low send high-water so the gate engages and a send deterministically PARKS on every
+    // runtime (see the HIGH_WATER note). `send_limits()` reads this once, on the first send(), so
+    // setting it before `block_on` is in force. Safe: this is the only test in this binary, so no
+    // other thread is reading the environment concurrently.
+    unsafe {
+        std::env::set_var("WEBRTC_SEND_HIGH_WATER_BYTES", HIGH_WATER.to_string());
+    }
     block_on(run()).unwrap();
 }
 
@@ -197,10 +207,10 @@ async fn run() -> Result<()> {
         }));
     }
 
-    // Wait until the sender is parked at the high-water mark. The gate admits only while
-    // `outstanding + CHUNK <= HIGH_WATER`, so a parked sender sits within one chunk of the
-    // mark; require it to climb to there so a send is genuinely blocked when we close.
-    let park_threshold = HIGH_WATER - CHUNK;
+    // Wait until the send pipeline has climbed into the gated band (within a couple of chunks of
+    // the low high-water mark), so the gate is engaged and a send is parked (or one send away from
+    // it) when we close — the state whose wake-on-close this test guards.
+    let park_threshold = HIGH_WATER - 2 * CHUNK;
     let mut parked = false;
     for _ in 0..200 {
         if dc.outstanding_bytes().await? >= park_threshold {
