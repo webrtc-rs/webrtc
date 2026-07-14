@@ -7,8 +7,9 @@
 //! blocked senders, and the channel is not removed from the core map on close. Without the
 //! fix (a `closing` check in the send park loop + a `notify_waiters()` from `close`/`Drop`)
 //! the parked send spins on its 50 ms liveness timer forever, leaking the producing task
-//! and ~4 MiB. This test floods until a send is parked, closes the PC, and asserts the
-//! send returns promptly rather than hanging.
+//! and the outstanding send bytes (~4 MiB at the default high-water mark). This test forces
+//! a small high-water so a send parks deterministically, closes the PC, and asserts the send
+//! returns promptly rather than hanging.
 use anyhow::Result;
 use bytes::BytesMut;
 use std::sync::Arc;

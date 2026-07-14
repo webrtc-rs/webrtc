@@ -203,11 +203,21 @@ async fn run() -> Result<()> {
         let flood_done = flood_done.clone();
         runtime.spawn(Box::pin(async move {
             let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
+            let text = "x".repeat(CHUNK);
             let mut sent = 0usize;
+            let mut use_text = false;
             while sent < TOTAL_BYTES {
-                if dc.send(buf.clone()).await.is_ok() {
+                // Alternate binary send() and send_text() so the back-pressure gate is
+                // exercised on both send paths (they share the same admit/park logic).
+                let ok = if use_text {
+                    dc.send_text(&text).await.is_ok()
+                } else {
+                    dc.send(buf.clone()).await.is_ok()
+                };
+                if ok {
                     sent += CHUNK;
                 }
+                use_text = !use_text;
             }
             flood_done.store(true, Ordering::Relaxed);
         }));
