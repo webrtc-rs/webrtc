@@ -161,6 +161,17 @@ pub trait PeerConnectionEventHandler: Send + Sync + 'static {
     async fn on_track(&self, _track: Arc<dyn TrackRemote>) {}
 }
 
+/// Default per-channel data-channel send-buffer limit: [`DataChannel::send`] and
+/// [`DataChannel::send_text`] reject with [`Error::ErrSendBufferFull`] once more than
+/// this many bytes are outstanding (handed to send but not yet acknowledged or
+/// abandoned by SCTP) on a single channel. `16 MiB` matches the browser
+/// `RTCDataChannel` send-queue cap (`webrtc::DataChannelInterface::MaxSendQueueSize`),
+/// well above the ~1 MiB SCTP receive window so a well-behaved sender that paces on
+/// `OnBufferedAmountLow` never hits it, yet a bound against the unbounded send-side
+/// growth a naive or throttled sender would otherwise accumulate. Override (or disable
+/// with `0`) via [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`].
+pub const DEFAULT_DATA_CHANNEL_SEND_BUFFER_LIMIT: usize = 16 * 1024 * 1024;
+
 /// Builder for constructing a [`PeerConnection`].
 ///
 /// Configures the configuration, media engine, setting engine, interceptor registry,
@@ -176,6 +187,7 @@ where
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
     dedicated_reactor: bool,
+    data_channel_send_buffer_limit: usize,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -188,6 +200,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             udp_addrs: vec![],
             tcp_addrs: vec![],
             dedicated_reactor: false,
+            data_channel_send_buffer_limit: DEFAULT_DATA_CHANNEL_SEND_BUFFER_LIMIT,
         }
     }
 }
@@ -238,6 +251,7 @@ where
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
             dedicated_reactor: self.dedicated_reactor,
+            data_channel_send_buffer_limit: self.data_channel_send_buffer_limit,
         }
     }
 
@@ -289,6 +303,27 @@ where
         self
     }
 
+    /// Sets the data-channel send-buffer limit, in bytes.
+    ///
+    /// [`DataChannel::send`] / [`DataChannel::send_text`] reject with
+    /// [`Error::ErrSendBufferFull`] once a message would push a channel's outstanding
+    /// send bytes (handed to send but not yet acknowledged or abandoned by SCTP) past
+    /// this limit — a non-blocking bound on send-side memory growth, mirroring the
+    /// browser `RTCDataChannel.send()` "throw when the send queue is full" behaviour.
+    /// It never blocks: an application that wants to *wait* for capacity paces on the
+    /// `OnBufferedAmountLow` event or polls [`DataChannel::outstanding_bytes`].
+    ///
+    /// The limit is applied to **each data channel independently**, so a connection
+    /// with `N` channels can hold up to `N × limit` outstanding across all of them —
+    /// size it for a per-channel budget, not a whole-connection cap.
+    ///
+    /// Defaults to [`DEFAULT_DATA_CHANNEL_SEND_BUFFER_LIMIT`] (16 MiB). Pass `0` to
+    /// disable the gate entirely (unbounded) for callers doing their own flow control.
+    pub fn with_data_channel_send_buffer_limit(mut self, bytes: usize) -> Self {
+        self.data_channel_send_buffer_limit = bytes;
+        self
+    }
+
     /// Builds the [`PeerConnection`] and starts the background event loop driver.
     pub async fn build(self) -> Result<impl PeerConnection> {
         let runtime = if let Some(runtime) = self.runtime {
@@ -299,6 +334,14 @@ where
 
         let core = self.builder.build()?;
 
+        // `0` = unbounded; map it to `usize::MAX` so the (never-empty) `saturating_add`
+        // capacity check in `send`/`send_text` becomes a no-op.
+        let data_channel_send_buffer_limit = if self.data_channel_send_buffer_limit == 0 {
+            usize::MAX
+        } else {
+            self.data_channel_send_buffer_limit
+        };
+
         PeerConnectionImpl::new(
             core,
             runtime,
@@ -308,6 +351,7 @@ where
             self.udp_addrs,
             self.tcp_addrs,
             self.dedicated_reactor,
+            data_channel_send_buffer_limit,
         )
         .await
     }
@@ -459,11 +503,12 @@ where
     /// that closes the reactor-thread leak window; the `Close` event is only the
     /// fast wake.
     pub(crate) closing: AtomicBool,
-    /// Woken by the driver once per event-loop iteration after it applies SCTP
-    /// buffer releases (acknowledged/abandoned bytes) to each channel's
-    /// `outstanding_bytes`. A `send()` blocked on the send back-pressure high-water
-    /// waits on this and retries, so it unblocks as soon as the peer acknowledges data.
-    pub(crate) data_channel_backpressure: crate::runtime::Notify,
+    /// Per-channel data-channel send-buffer limit in bytes (`usize::MAX` = unbounded).
+    /// [`DataChannel::send`]/[`send_text`](DataChannel::send_text) reject with
+    /// `ErrSendBufferFull` once a message would push a channel's `outstanding_bytes`
+    /// past this — a non-blocking bound on send-side memory. Set once at build time via
+    /// [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`].
+    pub(crate) data_channel_send_buffer_limit: usize,
     /// Channels for incoming data channel events
     pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Channels for incoming track remote events
@@ -520,6 +565,7 @@ where
     I: Interceptor,
 {
     /// Create a new peer connection with a custom runtime
+    #[allow(clippy::too_many_arguments)] // private constructor fanned out from the builder
     async fn new<A: ToSocketAddrs>(
         core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
@@ -528,6 +574,7 @@ where
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         dedicated_reactor: bool,
+        data_channel_send_buffer_limit: usize,
     ) -> Result<Self> {
         // Bind the std sockets up front (synchronous, and needed to compute the
         // local addresses used for ICE gathering / SDP). Wrapping them into async
@@ -576,7 +623,7 @@ where
                 write_pending: AtomicBool::new(false),
                 write_backpressure: std::sync::atomic::AtomicUsize::new(0),
                 closing: AtomicBool::new(false),
-                data_channel_backpressure: crate::runtime::Notify::new(),
+                data_channel_send_buffer_limit,
             }),
             driver_handle: Mutex::new(None),
             dedicated_reactor,
@@ -685,9 +732,6 @@ where
         // default lifecycle.)
         if self.dedicated_reactor {
             self.inner.closing.store(true, Ordering::Release);
-            // Wake a sender parked in send back-pressure so it returns promptly instead
-            // of hanging past teardown (mirrors `close`; see the park loop in `send`).
-            self.inner.data_channel_backpressure.notify_waiters();
             let _ = self
                 .inner
                 .driver_event_tx
@@ -709,10 +753,6 @@ where
         // Mark closing before waking the driver, so it stops even if the wake is
         // ever dropped (mirrors `Drop`; see `PeerConnectionRef::closing`).
         self.inner.closing.store(true, Ordering::Release);
-        // Wake any sender parked in data-channel send back-pressure so it observes
-        // `closing` and returns `ErrDataChannelClosed` at once, rather than waiting out
-        // its 50 ms liveness timer — the driver has stopped draining `outstanding_bytes`.
-        self.inner.data_channel_backpressure.notify_waiters();
         // Best-effort wake. A send failure here is benign, not an error:
         // `closing` already guarantees the driver terminates, and it may already
         // have observed the flag and dropped the receiver via its independent

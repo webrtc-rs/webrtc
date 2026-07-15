@@ -11,24 +11,28 @@
 //! * `STRESS_DEDICATED_REACTOR=1` — run each peer's driver on a dedicated reactor
 //!   thread (issue #101).
 //! * `STRESS_NAIVE_SENDER=1` — sender does NO app-level `bufferedAmount` flow
-//!   control; it floods `send()` as fast as it is accepted. This is the realistic
-//!   "app that never checks bufferedAmount" case that send back-pressure defends
-//!   against (a slow reactor/peer would otherwise let the send pipeline grow without
-//!   bound). Without it, the sender self-throttles on `bufferedAmount`.
+//!   control; it floods `send()` as fast as it is accepted, retrying (with a brief
+//!   back-off) on `ErrSendBufferFull`. This is the realistic "app that never checks
+//!   bufferedAmount" case that the send-buffer cap defends against (a slow reactor/peer
+//!   would otherwise let the send pipeline grow without bound). Without it, the sender
+//!   self-throttles on `bufferedAmount`.
 //! * `STRESS_DRAIN_CHECK=1` — after the transfer, poll each channel's
 //!   `outstanding_bytes()` and print it, verifying the send counter drains to ~0
 //!   (conservation, including `max_retransmits: 0` abandonment).
 //!
-//! ## A/B'ing the back-pressure gate
-//! The gate's limits are read once from `WEBRTC_SEND_HIGH_WATER_BYTES` /
-//! `WEBRTC_SEND_HARD_CEILING_BYTES` (`0` = unbounded), so the SAME binary serves as
-//! both arms — only the fix differs:
+//! ## A/B'ing the send-buffer cap
+//! `STRESS_SEND_BUFFER_LIMIT` sets the per-channel send-buffer cap in bytes (`0` =
+//! unbounded); unset uses the library default (16 MiB). The SAME binary serves as both
+//! arms — only the cap differs:
 //!
 //!   STRESS_NAIVE_SENDER=1 STRESS_PAIRS=30 STRESS_MB_PER_PAIR=32 poop \
-//!     'env WEBRTC_SEND_HIGH_WATER_BYTES=0 WEBRTC_SEND_HARD_CEILING_BYTES=0 ./stress' \
+//!     'env STRESS_SEND_BUFFER_LIMIT=0 ./stress' \
 //!     './stress'
 //!
-//! (unbounded → bounded: peak_rss drops ~4×, and stays flat as the transfer grows).
+//! (unbounded → bounded: at the 16 MiB default `peak_rss` drops ~2× (≈−50%); with a
+//! smaller `STRESS_SEND_BUFFER_LIMIT` — e.g. 4 MiB — ~4–5× (≈−78%). Either way the
+//! bounded arm's peak_rss stays flat as the transfer grows, whereas the unbounded arm's
+//! scales with total bytes in flight.)
 
 use bytes::BytesMut;
 use futures::FutureExt;
@@ -155,16 +159,22 @@ async fn build_pc(
     let mut media = MediaEngine::default();
     media.register_default_codecs()?;
     let registry = register_default_interceptors(Registry::new(), &mut media)?;
-    let pc = PeerConnectionBuilder::new()
+    let mut builder = PeerConnectionBuilder::new()
         .with_configuration(RTCConfigurationBuilder::new().build())
         .with_media_engine(media)
         .with_interceptor_registry(registry)
         .with_handler(handler)
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(dedicated)
-        .build()
-        .await?;
+        .with_dedicated_reactor_thread(dedicated);
+    // A/B knob for the send-buffer cap: `STRESS_SEND_BUFFER_LIMIT` (bytes; `0` = unbounded).
+    // Unset ⇒ the library default (16 MiB). This is what toggles the two arms of the bench.
+    if let Ok(v) = std::env::var("STRESS_SEND_BUFFER_LIMIT") {
+        if let Ok(limit) = v.parse::<usize>() {
+            builder = builder.with_data_channel_send_buffer_limit(limit);
+        }
+    }
+    let pc = builder.build().await?;
     Ok(Arc::new(pc) as Arc<dyn PeerConnection>)
 }
 
@@ -208,11 +218,11 @@ async fn run_pair(
     //  * default: single-task app-level flow control on `bufferedAmount`
     //    (mirrors data-channels-flow-control).
     //  * STRESS_NAIVE_SENDER: NO manual flow control — push exactly `target` bytes as
-    //    fast as `send()` accepts them. This is the realistic "app that never checks
-    //    bufferedAmount" case: with send back-pressure, `send()` blocks at the
-    //    high-water mark so peak queued memory stays bounded; without it, the whole
-    //    transfer piles into the unbounded send pipeline (peak RSS ∝ target). Both
-    //    modes send the same total work, so peak RSS isolates the queue bound.
+    //    fast as `send()` accepts them, retrying on `ErrSendBufferFull`. This is the
+    //    realistic "app that never checks bufferedAmount" case: with the send-buffer cap,
+    //    `send()` rejects past the limit so peak queued memory stays bounded; without it,
+    //    the whole transfer piles into the unbounded send pipeline (peak RSS ∝ target).
+    //    Both modes send the same total work, so peak RSS isolates the queue bound.
     let naive = std::env::var("STRESS_NAIVE_SENDER").is_ok();
     {
         let stop = stop.clone();
@@ -229,7 +239,7 @@ async fn run_pair(
                     // until the responder has received `target` and sets `stop`. Keeping
                     // the send loop running (rather than stopping at exactly `target`
                     // bytes) guarantees termination even if the unreliable channel drops
-                    // a chunk. With back-pressure, `send()` blocks at the high-water mark
+                    // a chunk. With the send-buffer cap, `send()` rejects past the limit
                     // so peak queued memory stays bounded; without it, the sender races
                     // far ahead of the receiver and the pipeline balloons.
                     if !dc_open {
@@ -241,7 +251,7 @@ async fn run_pair(
                         continue;
                     }
                     if dc.send(buf.clone()).await.is_err() {
-                        // Hard-ceiling rejection — brief back-off before retrying.
+                        // ErrSendBufferFull — brief back-off before retrying.
                         webrtc::runtime::sleep(std::time::Duration::from_millis(1)).await;
                     }
                     continue;

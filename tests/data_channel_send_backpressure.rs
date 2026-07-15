@@ -1,21 +1,34 @@
 //! Integration test for data-channel send back-pressure (the `outstanding_bytes`
-//! accounting + high-water/hard-ceiling gate in `DataChannel::send`).
+//! accounting + the **non-blocking** send-buffer cap in `DataChannel::send`).
 //!
 //! A "naive" sender floods a fixed amount over an **unordered / no-retransmit**
 //! (`max_retransmits: 0`) channel — no `bufferedAmount` flow control — while a
-//! normally-draining receiver reads. The test asserts three properties of the
-//! per-channel send counter that the back-pressure fix introduces:
+//! normally-draining receiver reads. The connection is built with a small explicit
+//! send-buffer limit (`with_data_channel_send_buffer_limit`) so the gate engages quickly
+//! and deterministically. The test asserts three properties:
 //!
-//!   1. **Bounded** — `outstanding_bytes()` stays near the high-water mark while the app
-//!      floods (the send gate keeps the pipeline from growing without limit). The flood
-//!      total exceeds the hard ceiling, so an unbounded path would visibly blow the bound;
-//!      the assertion is set below a disabled gate's peak, so it actually guards the gate.
-//!   2. **Conservation** — after the transfer, `outstanding_bytes()` drains back to
-//!      ~0. This is the key correctness property: the counter is decremented both on
-//!      SCTP acknowledgement *and* on `max_retransmits: 0` abandonment (forward-TSN),
-//!      so no path can leak and wedge a sender permanently.
-//!   3. **Delivery** — a substantial fraction of the bytes actually arrive (sanity
-//!      that the flood really flowed, not that `send()` silently no-op'd).
+//!   1. **Bounded** — `outstanding_bytes()` never exceeds the configured limit (plus a
+//!      small slack) while the app floods: the gate rejects with `ErrSendBufferFull`
+//!      rather than letting the send pipeline grow without limit. This is an *upper*
+//!      bound, so it can never fail spuriously when the gate works (the counter is
+//!      hard-capped by construction); it only fails if the gate is removed and the
+//!      pipeline grows past the bound — which is exactly the regression it guards.
+//!   2. **Reject engaged** — at least one `send()` returned `ErrSendBufferFull`. With a
+//!      tiny limit vs a large flood this is deterministic, and it is the strongest teeth:
+//!      deleting the cap makes `send()` never reject, so this fails regardless of how fast
+//!      the peer drains (whereas Property 1 only bites once outstanding actually climbs).
+//!   3. **Conservation** — after the transfer, `outstanding_bytes()` drains well below the
+//!      limit. The counter is decremented both on SCTP acknowledgement *and* on
+//!      `max_retransmits: 0` abandonment (forward-TSN), so no path can leak it.
+//!
+//! App-level receipt is logged but NOT asserted (the unordered/lossy receive path drops
+//! under a starved consumer — end-to-end delivery is proven by the reliable/ordered sibling
+//! `data_channel_send_unbounded.rs`).
+//!
+//! Unlike the old blocking design, `send()`/`send_text()` never park here: a full buffer
+//! is a synchronous `ErrSendBufferFull`, which the naive flood handles by yielding and
+//! retrying (the application's job now). See `examples/data-channels-flow-control` for
+//! the idiomatic `OnBufferedAmountLow`-paced sender that never trips the cap.
 use anyhow::Result;
 use bytes::BytesMut;
 use std::sync::Arc;
@@ -23,23 +36,27 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
+use webrtc::error::Error;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{
+    Runtime, Sender, block_on, channel, default_runtime, sleep, timeout, yield_now,
+};
 
 const CHUNK: usize = 1024; // 1 KB messages
-// 32 MB naive flood — deliberately larger than the 16 MiB hard ceiling so an *unbounded*
-// (gate-disabled) send path would blow well past any bound, giving Property 1 real teeth.
-const TOTAL_BYTES: usize = 32 * 1024 * 1024;
-// Must match the library defaults in `src/data_channel/mod.rs` (this test does not override
-// the `WEBRTC_SEND_*` env vars, so the defaults are in force).
-const HIGH_WATER: usize = 4 * 1024 * 1024;
-// The gate admits only while `outstanding + len <= HIGH_WATER`, so with a 1 KB chunk
-// `outstanding_bytes()` can never exceed HIGH_WATER once the gate is engaged; a small slack
-// covers sampling. Crucially this bound is BELOW the peak a disabled gate reaches (~5 MB+
-// measured), so a regression that removes the back-pressure gate makes this assertion FAIL
-// — unlike a bound at the 16 MiB hard ceiling, which a 32 MB flood never reaches gate-or-not.
-const OUTSTANDING_BOUND: usize = HIGH_WATER + 256 * 1024;
+// 16 MB naive flood — far larger than the limit below, so an *unbounded* (gate-disabled)
+// send path would grow the pipeline well past the bound, giving Property 1 real teeth.
+const TOTAL_BYTES: usize = 16 * 1024 * 1024;
+// Small explicit per-channel send-buffer limit, forced via the builder. Deliberately tiny
+// (64 KiB) so a 1 KB-chunk flood fills it within a single pre-yield send burst — the gate
+// engages, and therefore `send()` returns `ErrSendBufferFull` at least once, on every
+// runtime regardless of scheduling. That makes the reject assertion below deterministic.
+const SEND_LIMIT: usize = 64 * 1024;
+// The gate admits only while `outstanding + len <= SEND_LIMIT` (or onto an empty buffer),
+// so with 1 KB chunks `outstanding_bytes()` can never exceed SEND_LIMIT once engaged; the
+// 64 KiB slack only covers sampling. This bound is BELOW the peak a disabled gate reaches,
+// so a regression that removes the cap makes this assertion FAIL.
+const OUTSTANDING_BOUND: usize = SEND_LIMIT + 64 * 1024;
 
 struct GatherHandler {
     gather_tx: Sender<()>,
@@ -116,7 +133,7 @@ async fn run() -> Result<()> {
     let (rcv_conn_tx, mut rcv_conn_rx) = channel::<()>(1);
     let received = Arc::new(AtomicUsize::new(0));
 
-    // ── Sender ────────────────────────────────────────────────────────────────
+    // ── Sender (with an explicit small send-buffer limit) ───────────────────────
     let sender_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(GatherHandler {
             gather_tx: snd_gather_tx,
@@ -124,6 +141,7 @@ async fn run() -> Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_data_channel_send_buffer_limit(SEND_LIMIT)
         .build()
         .await?;
 
@@ -197,35 +215,54 @@ async fn run() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("timeout: data channel open"))?;
 
     // ── Naive flood: push TOTAL_BYTES with NO bufferedAmount flow control ───────
+    // A full buffer returns `ErrSendBufferFull` (non-blocking) instead of parking, so the
+    // naive sender yields and retries — never advancing `sent` on a rejection. Any other
+    // error is fatal.
     let flood_done = Arc::new(AtomicBool::new(false));
+    let flood_fatal = Arc::new(AtomicBool::new(false));
+    let rejections = Arc::new(AtomicUsize::new(0));
     {
         let dc = dc.clone();
         let flood_done = flood_done.clone();
+        let flood_fatal = flood_fatal.clone();
+        let rejections = rejections.clone();
         runtime.spawn(Box::pin(async move {
             let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
             let text = "x".repeat(CHUNK);
             let mut sent = 0usize;
             let mut use_text = false;
             while sent < TOTAL_BYTES {
-                // Alternate binary send() and send_text() so the back-pressure gate is
-                // exercised on both send paths (they share the same admit/park logic).
-                let ok = if use_text {
-                    dc.send_text(&text).await.is_ok()
+                // Alternate binary send() and send_text() so the cap is exercised on both
+                // send paths (they share the same admit/reject logic).
+                let res = if use_text {
+                    dc.send_text(&text).await
                 } else {
-                    dc.send(buf.clone()).await.is_ok()
+                    dc.send(buf.clone()).await
                 };
-                if ok {
-                    sent += CHUNK;
+                match res {
+                    Ok(()) => {
+                        sent += CHUNK;
+                        use_text = !use_text;
+                    }
+                    Err(Error::ErrSendBufferFull) => {
+                        rejections.fetch_add(1, Ordering::Relaxed);
+                        // Non-blocking gate: back off and let the driver drain acked bytes.
+                        yield_now().await;
+                    }
+                    Err(e) => {
+                        log::error!("flood: unexpected send error: {e:?}");
+                        flood_fatal.store(true, Ordering::Relaxed);
+                        break;
+                    }
                 }
-                use_text = !use_text;
             }
             flood_done.store(true, Ordering::Relaxed);
         }));
     }
 
-    // Sample outstanding_bytes() concurrently: the gate must hold it near the high-water
-    // mark for the whole flood (Property 1 — bounded). This is the assertion that guards
-    // the gate: it is below what a disabled gate reaches, so removing the gate fails here.
+    // Sample outstanding_bytes() concurrently: the cap must hold it at/under the limit for
+    // the whole flood (Property 1 — bounded). This upper bound cannot fail spuriously when
+    // the gate works (the counter is hard-capped), and fails if the gate is removed.
     let mut max_outstanding = 0usize;
     let deadline_ticks = 600; // 600 * 100ms = 60s cap
     let mut ticks = 0;
@@ -234,42 +271,56 @@ async fn run() -> Result<()> {
         max_outstanding = max_outstanding.max(o);
         assert!(
             o <= OUTSTANDING_BOUND,
-            "outstanding_bytes {o} exceeded the high-water bound {OUTSTANDING_BOUND} \
-             during flood — the send back-pressure gate is not enforcing the bound"
+            "outstanding_bytes {o} exceeded the send-buffer bound {OUTSTANDING_BOUND} \
+             during flood — the non-blocking send cap is not enforcing the bound"
         );
         ticks += 1;
         assert!(ticks < deadline_ticks, "flood did not complete within 60s");
         sleep(Duration::from_millis(100)).await;
     }
+    assert!(
+        !flood_fatal.load(Ordering::Relaxed),
+        "flood hit a non-ErrSendBufferFull send error (see log)"
+    );
 
-    // Property 2 — conservation: after the flood, the counter must drain toward 0
-    // as SCTP acks/abandons the last in-flight bytes. A decrement bug (e.g. abandoned
-    // no-retransmit bytes never released) would plateau here instead of draining.
+    // Property 2 — the reject path actually engaged. A tiny 64 KiB limit against a 16 MB
+    // flood guarantees at least one `ErrSendBufferFull`, so this is deterministic — and it
+    // is the strongest teeth: deleting the cap makes `send()` never reject, so `rejections`
+    // is 0 and this FAILS regardless of how fast the peer drains (unlike the upper bound
+    // above, which only bites once outstanding actually climbs). It also proves `send()`
+    // wasn't a silent no-op (a no-op never fills the buffer, so it never rejects either).
+    let n_rejections = rejections.load(Ordering::Relaxed);
+    assert!(
+        n_rejections > 0,
+        "send() never returned ErrSendBufferFull over a {TOTAL_BYTES}-byte flood at a \
+         {SEND_LIMIT}-byte limit — the non-blocking send cap did not engage"
+    );
+
+    // Property 3 — conservation: after the flood, the counter must drain well below the
+    // limit as SCTP acks/abandons the last in-flight bytes. A decrement bug (e.g. abandoned
+    // no-retransmit bytes never released) would plateau at the ~limit steady state instead.
     let mut final_outstanding = dc.outstanding_bytes().await?;
     for _ in 0..100 {
         final_outstanding = dc.outstanding_bytes().await?;
-        if final_outstanding < 512 * 1024 {
+        if final_outstanding < SEND_LIMIT / 4 {
             break;
         }
         sleep(Duration::from_millis(100)).await;
     }
     assert!(
-        final_outstanding < 512 * 1024,
+        final_outstanding < SEND_LIMIT / 4,
         "outstanding_bytes did not drain (leak?): {final_outstanding} bytes still outstanding"
     );
 
-    // Property 3 — delivery sanity: real bytes flowed (send() wasn't a silent no-op).
-    // This is only a floor: an *unordered / no-retransmit* naive flood legitimately
-    // abandons a large fraction (here ~5 MB of 8 MB was dropped, which is exactly what
-    // exercised the forward-TSN abandonment decrement checked by Property 2), so we do
-    // not assert near-complete delivery — only that a meaningful amount arrived.
+    // App-level receipt is informational only, NOT asserted: this is an unordered /
+    // no-retransmit channel whose built-in receive path hands messages to the app over a
+    // bounded, lossy channel, so a starved consumer (e.g. CI under coverage instrumentation)
+    // legitimately drops app-level messages. End-to-end delivery is proven by the reliable/
+    // ordered sibling test (data_channel_send_unbounded.rs) instead.
     let got = received.load(Ordering::Relaxed);
-    assert!(
-        got >= TOTAL_BYTES / 8,
-        "receiver only got {got} of {TOTAL_BYTES} bytes (send appears to have no-op'd)"
+    log::info!(
+        "send-backpressure: max_outstanding={max_outstanding} rejections={n_rejections} received={got}"
     );
-
-    log::info!("send-backpressure: max_outstanding={max_outstanding} received={got}");
 
     sender_pc.close().await?;
     receiver_pc.close().await?;

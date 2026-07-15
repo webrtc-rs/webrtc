@@ -1,18 +1,17 @@
-//! Integration test for the send back-pressure **escape hatch**: setting
-//! `WEBRTC_SEND_HIGH_WATER_BYTES=0` / `WEBRTC_SEND_HARD_CEILING_BYTES=0` maps the limits to
-//! `usize::MAX` (see `send_limits`, the `Some(0) => usize::MAX` arm), disabling the gate so a
-//! caller that does its own flow control — or the send-backpressure A/B benchmark — runs with
-//! no library-imposed bound.
+//! Integration test for the send back-pressure **escape hatch**: building a connection with
+//! `with_data_channel_send_buffer_limit(0)` maps the limit to `usize::MAX`, disabling the gate
+//! so a caller that does its own flow control — or the send-backpressure A/B benchmark — runs
+//! with no library-imposed bound.
 //!
 //! Complement to `data_channel_send_backpressure.rs`: that test asserts the gate BOUNDS the
 //! pipeline; this one asserts the escape hatch DISABLES it. With the gate off, a naive 32 MB flood
 //! must have EVERY send admitted (return Ok) no matter how far `outstanding_bytes` climbs — the
-//! natural regression of the `Some(0) => usize::MAX` arm (deleting it, so "0" parses as `0` and
-//! clamps `high_water = hard_ceiling = 0`) makes the second send return `ErrSendBufferFull`, which
-//! this flood catches. Conservation still holds — the counter drains back to ~0, and because a
-//! reliable/ordered channel has no abandonment path the counter decrements ONLY on SCTP
-//! acknowledgement, so draining to ~0 proves the peer actually SACKed every byte (real end-to-end
-//! delivery, independent of the built-in receive path's lossy app-delivery channel).
+//! natural regression (mapping `0` to a literal `0` limit instead of `usize::MAX`) would make the
+//! second send return `ErrSendBufferFull`, which this flood catches on iteration 2. Conservation
+//! still holds — the counter drains back to ~0, and because a reliable/ordered channel has no
+//! abandonment path the counter decrements ONLY on SCTP acknowledgement, so draining to ~0 proves
+//! the peer actually SACKed every byte (real end-to-end delivery, independent of the built-in
+//! receive path's lossy app-delivery channel).
 //!
 //! It deliberately does NOT assert a lower bound on the peak `outstanding_bytes`: messages are
 //! capped at the 256 KiB SCTP max and this stack restores SCTP rwnd at reassembly (not app-consume),
@@ -88,13 +87,8 @@ impl PeerConnectionEventHandler for ReceiverHandler {
 
 #[test]
 fn test_data_channel_send_unbounded_escape_hatch() {
-    // Disable BOTH gates via the documented `0 = unbounded` escape hatch. `send_limits()` reads
-    // this once, on the first send(), so setting it before `block_on` is in force. Safe: this is
-    // the only test in this binary, so no other thread reads the environment concurrently.
-    unsafe {
-        std::env::set_var("WEBRTC_SEND_HIGH_WATER_BYTES", "0");
-        std::env::set_var("WEBRTC_SEND_HARD_CEILING_BYTES", "0");
-    }
+    // The gate is disabled via the builder's documented `0 = unbounded` escape hatch
+    // (`with_data_channel_send_buffer_limit(0)` inside `run`).
     block_on(run()).unwrap();
 }
 
@@ -121,6 +115,8 @@ async fn run() -> Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        // Disable the send-buffer gate: `0` = unbounded (maps the limit to usize::MAX).
+        .with_data_channel_send_buffer_limit(0)
         .build()
         .await?;
 
@@ -188,12 +184,12 @@ async fn run() -> Result<()> {
         .await
         .map_err(|_| anyhow::anyhow!("timeout: data channel open"))?;
 
-    // ── Naive flood with the gate DISABLED (env=0 ⇒ limits are usize::MAX) ──────
+    // ── Naive flood with the gate DISABLED (limit=0 ⇒ usize::MAX) ───────────────
     // The escape-hatch teeth: with the gate off EVERY send is admitted and returns Ok, no matter
-    // how far `outstanding_bytes` has climbed. The natural regression of the `Some(0) => usize::MAX`
-    // arm — deleting it, so "0" parses as `Some(0) => 0` and clamps `high_water = hard_ceiling = 0`
-    // — makes the SECOND send (once outstanding > 0) return `ErrSendBufferFull`, failing here on the
-    // 2nd of 32768 iterations. Run in the main task so that failure fails the test synchronously.
+    // how far `outstanding_bytes` has climbed. The natural regression (mapping the `0` limit to a
+    // literal `0` instead of `usize::MAX`) makes the SECOND send (once outstanding > 0) return
+    // `ErrSendBufferFull`, failing here on the 2nd of 32768 iterations. Run in the main task so
+    // that failure fails the test synchronously.
     //
     // NB this cannot instead assert "outstanding exceeds the gated cap": messages are capped at the
     // 256 KiB SCTP max, and this stack restores SCTP rwnd at reassembly (not app-consume), so the
@@ -205,7 +201,7 @@ async fn run() -> Result<()> {
         dc.send(chunk.clone()).await.map_err(|e| {
             anyhow::anyhow!(
                 "send #{} unexpectedly failed with the gate disabled ({e:?}) — the \
-                 WEBRTC_SEND_*=0 escape hatch did not map the limits to usize::MAX",
+                 limit=0 escape hatch did not map the send-buffer limit to usize::MAX",
                 sent / CHUNK + 1
             )
         })?;

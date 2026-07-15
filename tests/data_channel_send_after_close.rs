@@ -1,15 +1,20 @@
-//! Regression test for the send back-pressure close/drop liveness hang.
+//! Regression test for the non-blocking send-cap **terminal-error-on-close** property.
 //!
-//! A `DataChannel::send` that is parked in send back-pressure (outstanding bytes at the
-//! high-water mark, waiting for the driver to release SCTP-acked bytes) must be woken and
-//! must return `ErrDataChannelClosed` when the `PeerConnection` is closed — because once
-//! the driver stops on the `Close` event it no longer drains `outstanding_bytes` nor wakes
-//! blocked senders, and the channel is not removed from the core map on close. Without the
-//! fix (a `closing` check in the send park loop + a `notify_waiters()` from `close`/`Drop`)
-//! the parked send spins on its 50 ms liveness timer forever, leaking the producing task
-//! and the outstanding send bytes (~4 MiB at the default high-water mark). This test forces
-//! a small high-water so a send parks deterministically, closes the PC, and asserts the send
-//! returns promptly rather than hanging.
+//! After `PeerConnection::close()` the driver stops draining each channel's
+//! `outstanding_bytes`, and the core does not remove the channel from its map — so if a
+//! channel's outstanding bytes are pinned at the send-buffer limit (the steady state of a
+//! naive flood), a `send()` that only checked the capacity gate would return the *retryable*
+//! `ErrSendBufferFull` forever, and an application retrying on it (the documented pattern)
+//! would livelock as a leaked task. `send()`/`send_text()` therefore check the `closing`
+//! flag first and fail *terminally* with `ErrDataChannelClosed`.
+//!
+//! This is the non-blocking analog of the old (deleted) close-wakes park-hang test.
+//!
+//! The test floods until the cap engages (`ErrSendBufferFull` observed ⇒ outstanding pinned
+//! at the limit), closes the connection, then asserts a subsequent `send()` and `send_text()`
+//! return `ErrDataChannelClosed` — NOT `ErrSendBufferFull` (which a retry loop would spin on)
+//! and NOT `Ok`. Deleting the `closing` guard makes this FAIL (it returns `ErrSendBufferFull`
+//! with outstanding pinned, or `Ok` if the buffer happened to drain).
 use anyhow::Result;
 use bytes::BytesMut;
 use std::sync::Arc;
@@ -20,15 +25,12 @@ use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
 use webrtc::error::Error;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, timeout};
 
-const CHUNK: usize = 1024; // 1 KB messages
-// Small send high-water forced via `WEBRTC_SEND_HIGH_WATER_BYTES` in the test entry point
-// (must match). A low mark makes the gate engage — and a send genuinely PARK — deterministically
-// on every runtime: with the 4 MiB default the smol runtime self-limits the send pipeline to
-// ~3.4 MiB, so the sender never reaches the mark and never parks, and this test can't exercise
-// the wake-on-close path it exists to guard.
-const HIGH_WATER: usize = 256 * 1024;
+const CHUNK: usize = 1024;
+// Tiny send-buffer limit so a short naive flood deterministically fills it and the cap
+// engages (a send returns ErrSendBufferFull), pinning outstanding at the limit.
+const SEND_LIMIT: usize = 64 * 1024;
 
 struct GatherHandler {
     gather_tx: Sender<()>,
@@ -85,14 +87,7 @@ impl PeerConnectionEventHandler for ReceiverHandler {
 }
 
 #[test]
-fn test_close_wakes_parked_backpressured_send() {
-    // Force a low send high-water so the gate engages and a send deterministically PARKS on every
-    // runtime (see the HIGH_WATER note). `send_limits()` reads this once, on the first send(), so
-    // setting it before `block_on` is in force. Safe: this is the only test in this binary, so no
-    // other thread is reading the environment concurrently.
-    unsafe {
-        std::env::set_var("WEBRTC_SEND_HIGH_WATER_BYTES", HIGH_WATER.to_string());
-    }
+fn test_data_channel_send_after_close_is_terminal() {
     block_on(run()).unwrap();
 }
 
@@ -111,7 +106,6 @@ async fn run() -> Result<()> {
     let (rcv_conn_tx, mut rcv_conn_rx) = channel::<()>(1);
     let received = Arc::new(AtomicUsize::new(0));
 
-    // ── Sender ────────────────────────────────────────────────────────────────
     let sender_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(GatherHandler {
             gather_tx: snd_gather_tx,
@@ -119,12 +113,13 @@ async fn run() -> Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+        .with_data_channel_send_buffer_limit(SEND_LIMIT)
         .build()
         .await?;
 
     let dc = sender_pc
         .create_data_channel(
-            "backpressure",
+            "after-close",
             Some(RTCDataChannelInit {
                 ordered: false,
                 max_retransmits: Some(0),
@@ -157,7 +152,6 @@ async fn run() -> Result<()> {
         .await
         .expect("sender local description");
 
-    // ── Receiver ──────────────────────────────────────────────────────────────
     let receiver_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(ReceiverHandler {
             gather_tx: rcv_gather_tx,
@@ -190,58 +184,48 @@ async fn run() -> Result<()> {
         .await
         .map_err(|_| anyhow::anyhow!("timeout: data channel open"))?;
 
-    // ── Flood forever until send() errors ───────────────────────────────────────
-    // Signal is `true` when the terminating error was ErrDataChannelClosed (the expected
-    // wake-on-close), `false` for any other error. If close() fails to wake a parked send,
-    // this task never signals and the timeout below fires — the regression.
-    let (done_tx, mut done_rx) = channel::<bool>(1);
-    {
-        let dc = dc.clone();
-        runtime.spawn(Box::pin(async move {
-            let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
-            loop {
-                if let Err(e) = dc.send(buf.clone()).await {
-                    let _ = done_tx.try_send(matches!(e, Error::ErrDataChannelClosed));
-                    break;
-                }
+    // Flood until the cap engages: a send returning ErrSendBufferFull proves outstanding is
+    // pinned at SEND_LIMIT — the exact state in which, post-close, a capacity-only send()
+    // would keep returning ErrSendBufferFull forever.
+    let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
+    let mut hit_full = false;
+    for _ in 0..200_000 {
+        match dc.send(buf.clone()).await {
+            Ok(()) => {}
+            Err(Error::ErrSendBufferFull) => {
+                hit_full = true;
+                break;
             }
-        }));
-    }
-
-    // Wait until the send pipeline has climbed into the gated band (within a couple of chunks of
-    // the low high-water mark), so the gate is engaged and a send is parked (or one send away from
-    // it) when we close — the state whose wake-on-close this test guards.
-    let park_threshold = HIGH_WATER - 2 * CHUNK;
-    let mut parked = false;
-    for _ in 0..200 {
-        if dc.outstanding_bytes().await? >= park_threshold {
-            parked = true;
-            break;
+            Err(e) => return Err(anyhow::anyhow!("unexpected send error before close: {e:?}")),
         }
-        sleep(Duration::from_millis(50)).await;
     }
     assert!(
-        parked,
-        "sender never reached the high-water mark; the back-pressure path was not exercised"
+        hit_full,
+        "cap never engaged during the pre-close flood — cannot exercise the pinned-buffer \
+         terminal-close path"
     );
 
-    // Close the sender PC. A parked send() must wake and return within the timeout; without
-    // the fix it spins on its 50 ms liveness timer forever and this recv times out.
+    // Close the sender. The driver stops draining outstanding_bytes; the channel stays in
+    // the core map, so a capacity-only gate would still see outstanding pinned at the limit.
     sender_pc.close().await?;
 
-    let was_closed_err = timeout(Duration::from_secs(5), done_rx.recv())
-        .await
-        .map_err(|_| {
-            anyhow::anyhow!(
-                "BUG: a back-pressured send() did not return after close() — liveness hang"
-            )
-        })?
-        .ok_or_else(|| anyhow::anyhow!("flood task ended without reporting an error"))?;
-
-    assert!(
-        was_closed_err,
-        "parked send() returned an error other than ErrDataChannelClosed after close()"
-    );
+    // A send()/send_text() after close must fail TERMINALLY with ErrDataChannelClosed — not
+    // the retryable ErrSendBufferFull (which a retry loop would spin on forever) and not Ok.
+    match dc.send(buf.clone()).await {
+        Err(Error::ErrDataChannelClosed) => {}
+        Err(Error::ErrSendBufferFull) => panic!(
+            "send() after close returned the retryable ErrSendBufferFull (outstanding is \
+             pinned and never drains post-close ⇒ a retry loop livelocks); expected the \
+             terminal ErrDataChannelClosed"
+        ),
+        other => panic!("send() after close returned {other:?}; expected ErrDataChannelClosed"),
+    }
+    match dc.send_text("x").await {
+        Err(Error::ErrDataChannelClosed) => {}
+        other => {
+            panic!("send_text() after close returned {other:?}; expected ErrDataChannelClosed")
+        }
+    }
 
     receiver_pc.close().await?;
     Ok(())

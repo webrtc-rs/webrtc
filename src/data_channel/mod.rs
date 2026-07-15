@@ -46,63 +46,14 @@
 use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{Mutex, Receiver};
 use bytes::BytesMut;
-use futures::FutureExt;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::shared::error::{Error, Result};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 pub use rtc::data_channel::{
     RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage, RTCDataChannelState,
 };
-
-/// Default high-water mark for synchronous data-channel send back-pressure:
-/// [`DataChannel::send`] blocks once this many bytes are outstanding (handed to
-/// `send`/`send_text` but not yet acknowledged or abandoned by SCTP) on the channel.
-/// Chosen well above the ~1 MiB SCTP receive window so steady-state throughput is
-/// unaffected, yet far below the tens-of-MiB/connection an unbounded send path can
-/// otherwise accumulate under a slow reactor or a slow/malicious peer advertising a
-/// tiny receive window. Override with `WEBRTC_SEND_HIGH_WATER_BYTES` (`0` = unbounded).
-const DATA_CHANNEL_SEND_HIGH_WATER: usize = 4 * 1024 * 1024;
-
-/// Default hard ceiling backstop: above this, [`DataChannel::send`] returns
-/// [`Error::ErrSendBufferFull`] instead of blocking, so a counter that ever drifts
-/// upward (a bug, or a torn-down channel) can never hang a sender indefinitely.
-/// Override with `WEBRTC_SEND_HARD_CEILING_BYTES` (`0` = unbounded).
-const DATA_CHANNEL_SEND_HARD_CEILING: usize = 16 * 1024 * 1024;
-
-/// Resolved `(high_water, hard_ceiling)` send back-pressure limits, read once from the
-/// environment (falling back to the defaults above). A value of `0` in either env var
-/// means "unbounded" and is mapped to `usize::MAX`, disabling that gate — this is the
-/// escape hatch for the send-backpressure A/B benchmark and for callers that do their
-/// own flow control. `WEBRTC_SEND_HIGH_WATER_BYTES` / `WEBRTC_SEND_HARD_CEILING_BYTES`.
-fn send_limits() -> (usize, usize) {
-    use std::sync::OnceLock;
-    static LIMITS: OnceLock<(usize, usize)> = OnceLock::new();
-    *LIMITS.get_or_init(|| {
-        let resolve = |key: &str, default: usize| -> usize {
-            match std::env::var(key)
-                .ok()
-                .and_then(|s| s.parse::<usize>().ok())
-            {
-                Some(0) => usize::MAX, // 0 = unbounded
-                Some(n) => n,
-                None => default,
-            }
-        };
-        let high_water = resolve("WEBRTC_SEND_HIGH_WATER_BYTES", DATA_CHANNEL_SEND_HIGH_WATER);
-        let hard_ceiling = resolve(
-            "WEBRTC_SEND_HARD_CEILING_BYTES",
-            DATA_CHANNEL_SEND_HARD_CEILING,
-        );
-        // The hard ceiling must never sit below the high-water mark: the admit check
-        // (`outstanding + len <= high_water`) runs before the reject check, so a ceiling
-        // below the mark would admit sends it was meant to reject, silently defeating the
-        // backstop. Clamp so `hard_ceiling >= high_water` regardless of misconfiguration.
-        (high_water, hard_ceiling.max(high_water))
-    })
-}
 
 /// Object-safe trait exposing all public DataChannel operations.
 ///
@@ -237,22 +188,6 @@ where
             id,
             inner,
             evt_rx: Mutex::new(evt_rx),
-        }
-    }
-
-    /// Park until the channel's send buffer has room under the high-water mark, called
-    /// only on the slow path when a `send` finds the buffer already over the mark.
-    ///
-    /// Holds no lock while waiting: the driver applies SCTP buffer releases
-    /// (acknowledged or abandoned bytes) to the per-channel `outstanding_bytes`
-    /// counter and then wakes `data_channel_backpressure`, so a blocked sender
-    /// re-checks and proceeds as soon as the peer acknowledges data. The 50 ms
-    /// timeout is a lost-wakeup / liveness backstop (and, for a peer that never
-    /// acks, the sender correctly stays blocked rather than buffering unboundedly).
-    async fn await_send_capacity(&self) {
-        futures::select! {
-            _ = self.inner.data_channel_backpressure.notified().fuse() => {}
-            _ = crate::runtime::sleep(Duration::from_millis(50)).fuse() => {}
         }
     }
 }
@@ -411,7 +346,27 @@ where
         Ok(())
     }
 
-    /// Send binary data
+    /// Send binary data.
+    ///
+    /// Non-blocking, like the browser `RTCDataChannel.send()`: it queues the message and
+    /// returns; it never waits for the peer to acknowledge. To bound send-side memory it
+    /// applies a **non-blocking** back-pressure gate — see *Errors*.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::ErrSendBufferFull`] if this message would push the channel's outstanding
+    ///   send bytes (handed to `send`/`send_text` but not yet acknowledged or abandoned by
+    ///   SCTP) past the configured send-buffer limit
+    ///   ([`PeerConnectionBuilder::with_data_channel_send_buffer_limit`], default 16 MiB;
+    ///   set `0` to disable). This mirrors the browser's "throw when the send queue is
+    ///   full". It is **retryable**, but only *after* the buffer drains — an application
+    ///   should pace on the [`OnBufferedAmountLow`](DataChannelEvent::OnBufferedAmountLow)
+    ///   event (see `examples/data-channels-flow-control`) or poll
+    ///   [`outstanding_bytes`](Self::outstanding_bytes) rather than spin. Note `data` is
+    ///   **consumed** on rejection, so retain a clone if you intend to retry.
+    /// - [`Error::ErrDataChannelClosed`] if the channel/connection is closed or closing.
+    ///
+    /// [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]: crate::peer_connection::PeerConnectionBuilder::with_data_channel_send_buffer_limit
     ///
     /// # Example
     ///
@@ -426,41 +381,36 @@ where
     /// # }
     /// ```
     async fn send(&self, data: BytesMut) -> Result<()> {
-        // Synchronous send back-pressure, folded into the send's own core-lock so the
-        // fast path takes the lock exactly ONCE: check the outstanding-bytes counter
-        // and enqueue atomically. A sender that outruns the drain (slow reactor or
-        // slow/malicious peer) blocks here rather than growing send-side memory without
-        // bound. Only the over-high-water slow path releases the lock and parks.
-        let (high_water, hard_ceiling) = send_limits();
-        let len = data.len();
-        loop {
-            // Bail if the connection is closing/dropped. Once the driver stops (on the
-            // `Close` event) it no longer drains `outstanding_bytes` or wakes us, and the
-            // channel is not removed from the core map on close, so the re-check below
-            // stays `Some`. Without this a sender parked at the high-water mark would spin
-            // on the 50 ms liveness timer forever; `close()`/`Drop` wake us immediately.
-            if self.inner.closing.load(Ordering::Acquire) {
-                return Err(Error::ErrDataChannelClosed);
+        // A closing/closed connection must fail TERMINALLY, not with a retryable
+        // ErrSendBufferFull: once close()/Drop stops the driver it no longer drains
+        // outstanding_bytes, and the channel is not removed from the core map, so an app
+        // retrying on ErrSendBufferFull would loop forever. Return ErrDataChannelClosed at
+        // once (mirrors send()-after-close in the browser).
+        if self.inner.closing.load(Ordering::Acquire) {
+            return Err(Error::ErrDataChannelClosed);
+        }
+        // Non-blocking send back-pressure, folded into the send's own core-lock so the fast
+        // path takes the lock exactly ONCE: check the channel's outstanding-bytes counter
+        // and enqueue atomically. A caller that outruns the drain (a slow reactor, or a
+        // slow/malicious peer advertising a tiny receive window) is rejected with
+        // ErrSendBufferFull rather than growing send-side memory without bound — never
+        // blocking. The limit is applied per-channel and configured connection-wide via
+        // PeerConnectionBuilder::with_data_channel_send_buffer_limit (usize::MAX = unbounded).
+        let limit = self.inner.data_channel_send_buffer_limit;
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            let mut dc = peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?;
+            let outstanding = dc.outstanding_bytes();
+            // Reject once the message would push outstanding bytes past the limit — but
+            // always admit onto an empty buffer, so a lone message larger than the limit
+            // can still be sent rather than being permanently rejected. saturating_add so
+            // an unbounded (`usize::MAX`) limit can't overflow.
+            if outstanding != 0 && outstanding.saturating_add(data.len()) > limit {
+                return Err(Error::ErrSendBufferFull);
             }
-            {
-                let mut peer_connection = self.inner.core.lock().await;
-                let mut dc = peer_connection
-                    .data_channel(self.id)
-                    .ok_or(Error::ErrDataChannelClosed)?;
-                let outstanding = dc.outstanding_bytes();
-                // Admit if the buffer is empty (never deadlock a lone oversized message)
-                // or the message fits under the high-water mark, and enqueue under the
-                // same lock. saturating_add so an unbounded (usize::MAX) limit can't overflow.
-                if outstanding == 0 || outstanding.saturating_add(len) <= high_water {
-                    dc.send(data)?;
-                    break;
-                }
-                // Hard ceiling: reject rather than block unboundedly.
-                if outstanding > hard_ceiling {
-                    return Err(Error::ErrSendBufferFull);
-                }
-            }
-            self.await_send_capacity().await;
+            dc.send(data)?;
         }
 
         // Wake the driver so it flushes SCTP output (poll_write) and checks
@@ -469,7 +419,12 @@ where
         Ok(())
     }
 
-    /// Send text data
+    /// Send text data.
+    ///
+    /// Non-blocking. Same back-pressure and error contract as [`send`](Self::send):
+    /// returns [`Error::ErrSendBufferFull`] (retryable, after the buffer drains) once the
+    /// message would exceed the configured send-buffer limit, and
+    /// [`Error::ErrDataChannelClosed`] on a closing/closed channel.
     ///
     /// # Example
     ///
@@ -483,29 +438,22 @@ where
     /// # }
     /// ```
     async fn send_text(&self, text: &str) -> Result<()> {
-        // Same single-lock back-pressure as `send` (see there).
-        let (high_water, hard_ceiling) = send_limits();
-        let len = text.len();
-        loop {
-            // See `send`: bail if closing so a parked sender can't hang past teardown.
-            if self.inner.closing.load(Ordering::Acquire) {
-                return Err(Error::ErrDataChannelClosed);
+        // Same single-lock, non-blocking back-pressure as `send` (see there), including the
+        // terminal-error-on-close guard so a retry loop can't livelock past teardown.
+        if self.inner.closing.load(Ordering::Acquire) {
+            return Err(Error::ErrDataChannelClosed);
+        }
+        let limit = self.inner.data_channel_send_buffer_limit;
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            let mut dc = peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?;
+            let outstanding = dc.outstanding_bytes();
+            if outstanding != 0 && outstanding.saturating_add(text.len()) > limit {
+                return Err(Error::ErrSendBufferFull);
             }
-            {
-                let mut peer_connection = self.inner.core.lock().await;
-                let mut dc = peer_connection
-                    .data_channel(self.id)
-                    .ok_or(Error::ErrDataChannelClosed)?;
-                let outstanding = dc.outstanding_bytes();
-                if outstanding == 0 || outstanding.saturating_add(len) <= high_water {
-                    dc.send_text(text)?;
-                    break;
-                }
-                if outstanding > hard_ceiling {
-                    return Err(Error::ErrSendBufferFull);
-                }
-            }
-            self.await_send_capacity().await;
+            dc.send_text(text)?;
         }
 
         self.inner.wake_writes().await;
