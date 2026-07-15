@@ -477,3 +477,83 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::block_on;
+
+    /// A minimal external `DataChannel` implementation that intentionally does **not**
+    /// override [`DataChannel::outstanding_bytes`], so it exercises the trait's default body.
+    ///
+    /// This locks in the compatibility contract the send back-pressure work relies on: adding
+    /// `outstanding_bytes()` to the public trait must not break a downstream `impl DataChannel`
+    /// that predates it, and the default must report `0` — i.e. "no back-pressure signal" — so
+    /// those channels keep compiling and behaving. Every other method is unreachable in this
+    /// test and left `unimplemented!()`.
+    struct DefaultDataChannel;
+
+    #[async_trait::async_trait]
+    impl DataChannel for DefaultDataChannel {
+        async fn label(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn ordered(&self) -> Result<bool> {
+            unimplemented!()
+        }
+        async fn max_packet_life_time(&self) -> Result<Option<u16>> {
+            unimplemented!()
+        }
+        async fn max_retransmits(&self) -> Result<Option<u16>> {
+            unimplemented!()
+        }
+        async fn protocol(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn negotiated(&self) -> Result<bool> {
+            unimplemented!()
+        }
+        fn id(&self) -> RTCDataChannelId {
+            unimplemented!()
+        }
+        async fn ready_state(&self) -> Result<RTCDataChannelState> {
+            unimplemented!()
+        }
+        async fn buffered_amount_high_threshold(&self) -> Result<u32> {
+            unimplemented!()
+        }
+        async fn set_buffered_amount_high_threshold(&self, _threshold: u32) -> Result<()> {
+            unimplemented!()
+        }
+        async fn buffered_amount_low_threshold(&self) -> Result<u32> {
+            unimplemented!()
+        }
+        async fn set_buffered_amount_low_threshold(&self, _threshold: u32) -> Result<()> {
+            unimplemented!()
+        }
+        // outstanding_bytes(): deliberately NOT overridden — this is the whole point of the test.
+        async fn send(&self, _data: BytesMut) -> Result<()> {
+            unimplemented!()
+        }
+        async fn send_text(&self, _text: &str) -> Result<()> {
+            unimplemented!()
+        }
+        async fn poll(&self) -> Option<DataChannelEvent> {
+            unimplemented!()
+        }
+        async fn close(&self) -> Result<()> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn outstanding_bytes_trait_default_is_zero() {
+        let dc = DefaultDataChannel;
+        let n =
+            block_on(dc.outstanding_bytes()).expect("default outstanding_bytes() must return Ok");
+        assert_eq!(
+            n, 0,
+            "the DataChannel::outstanding_bytes default must report 0 outstanding bytes"
+        );
+    }
+}
