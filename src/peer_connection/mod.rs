@@ -176,6 +176,7 @@ where
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
     dedicated_reactor: bool,
+    data_channel_send_buffer_limit: usize,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -188,6 +189,10 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             udp_addrs: vec![],
             tcp_addrs: vec![],
             dedicated_reactor: false,
+            // `usize::MAX` = unbounded: no send back-pressure unless the application
+            // opts in via `with_data_channel_send_buffer_limit`. This keeps `send`/
+            // `send_text` non-blocking by default (zero behaviour change).
+            data_channel_send_buffer_limit: usize::MAX,
         }
     }
 }
@@ -238,6 +243,7 @@ where
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
             dedicated_reactor: self.dedicated_reactor,
+            data_channel_send_buffer_limit: self.data_channel_send_buffer_limit,
         }
     }
 
@@ -289,6 +295,34 @@ where
         self
     }
 
+    /// Sets the per-channel data-channel send-buffer limit, in bytes, opting into send
+    /// back-pressure.
+    ///
+    /// Once set, a channel's outstanding send bytes (handed to `send`/`send_text` but
+    /// not yet acknowledged or abandoned by SCTP) are bounded by this limit:
+    ///
+    /// - [`DataChannel::send`] / [`DataChannel::send_text`] **block** until the buffer
+    ///   is below the limit, then enqueue — mirroring `tokio::mpsc::Sender::send`.
+    /// - [`DataChannel::try_send`] / [`DataChannel::try_send_text`] instead **fail fast**
+    ///   with [`Error::ErrSendBufferFull`] — mirroring `tokio::mpsc::Sender::try_send`.
+    /// - [`DataChannel::writable`] resolves once the buffer is below the limit.
+    ///
+    /// The limit is applied to **each data channel independently**, so a connection with
+    /// `N` channels can hold up to `N × limit` outstanding across all of them — size it
+    /// for a per-channel budget, not a whole-connection cap.
+    ///
+    /// **Default: `usize::MAX` (unbounded)** — no back-pressure, and `send`/`send_text`
+    /// never block, matching the historical behaviour and Safari/Firefox (which impose no
+    /// send-queue cap). Passing `0` is also treated as unbounded. As a reference point,
+    /// Chromium caps its `RTCDataChannel` send queue at 16 MiB
+    /// (`webrtc::DataChannelInterface::MaxSendQueueSize`); `16 * 1024 * 1024` is a
+    /// reasonable browser-like value, well above the ~1 MiB SCTP receive window so a
+    /// sender pacing on `OnBufferedAmountLow` never hits it.
+    pub fn with_data_channel_send_buffer_limit(mut self, bytes: usize) -> Self {
+        self.data_channel_send_buffer_limit = bytes;
+        self
+    }
+
     /// Builds the [`PeerConnection`] and starts the background event loop driver.
     pub async fn build(self) -> Result<impl PeerConnection> {
         let runtime = if let Some(runtime) = self.runtime {
@@ -299,6 +333,14 @@ where
 
         let core = self.builder.build()?;
 
+        // `0` = unbounded (same as the `usize::MAX` default); normalise it to `usize::MAX`
+        // so the send-buffer gate (and `writable()`) short-circuits to a no-op.
+        let data_channel_send_buffer_limit = if self.data_channel_send_buffer_limit == 0 {
+            usize::MAX
+        } else {
+            self.data_channel_send_buffer_limit
+        };
+
         PeerConnectionImpl::new(
             core,
             runtime,
@@ -308,6 +350,7 @@ where
             self.udp_addrs,
             self.tcp_addrs,
             self.dedicated_reactor,
+            data_channel_send_buffer_limit,
         )
         .await
     }
@@ -459,6 +502,21 @@ where
     /// that closes the reactor-thread leak window; the `Close` event is only the
     /// fast wake.
     pub(crate) closing: AtomicBool,
+    /// Per-channel data-channel send-buffer limit in bytes (`usize::MAX` = unbounded,
+    /// the default). When a limit is configured, [`DataChannel::send`]/[`send_text`](DataChannel::send_text)
+    /// block until a channel's `outstanding_bytes` drops below it, and
+    /// [`DataChannel::try_send`]/[`try_send_text`](DataChannel::try_send_text) fail fast with
+    /// `ErrSendBufferFull` — an opt-in bound on send-side memory. Set once at build time via
+    /// [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`].
+    pub(crate) data_channel_send_buffer_limit: usize,
+    /// Woken by the driver once per event-loop iteration after it applies SCTP buffer
+    /// releases (acknowledged/abandoned bytes) to each channel's `outstanding_bytes`,
+    /// and by `close()`/`Drop`. A [`DataChannel::writable`] future blocked on the
+    /// send-buffer limit waits on this and re-checks, so it unblocks as soon as the
+    /// peer acknowledges data (or the connection closes). Dormant unless a
+    /// `data_channel_send_buffer_limit` is configured — a `usize::MAX` (default) limit
+    /// never parks on it.
+    pub(crate) data_channel_backpressure: crate::runtime::Notify,
     /// Channels for incoming data channel events
     pub(crate) data_channel_events_tx: Mutex<HashMap<RTCDataChannelId, Sender<DataChannelEvent>>>,
     /// Channels for incoming track remote events
@@ -515,6 +573,7 @@ where
     I: Interceptor,
 {
     /// Create a new peer connection with a custom runtime
+    #[allow(clippy::too_many_arguments)] // private constructor fanned out from the builder
     async fn new<A: ToSocketAddrs>(
         core: RTCPeerConnection<I>,
         runtime: Arc<dyn Runtime>,
@@ -523,6 +582,7 @@ where
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         dedicated_reactor: bool,
+        data_channel_send_buffer_limit: usize,
     ) -> Result<Self> {
         // Bind the std sockets up front (synchronous, and needed to compute the
         // local addresses used for ICE gathering / SDP). Wrapping them into async
@@ -571,6 +631,8 @@ where
                 write_pending: AtomicBool::new(false),
                 write_backpressure: std::sync::atomic::AtomicUsize::new(0),
                 closing: AtomicBool::new(false),
+                data_channel_send_buffer_limit,
+                data_channel_backpressure: crate::runtime::Notify::new(),
             }),
             driver_handle: Mutex::new(None),
             dedicated_reactor,
@@ -641,6 +703,11 @@ where
             if let Err(e) = driver.event_loop(driver_event_rx).await {
                 error!("I/O error: {}", e);
             }
+            // The driver has stopped for good (clean shutdown OR an abnormal error exit).
+            // Mark closing and wake any sender parked in send back-pressure, so a blocking
+            // send() cannot hang waiting for a drain that will never come — the driver no
+            // longer drains outstanding_bytes. Idempotent when close()/Drop already set it.
+            driver.signal_stopped();
         };
 
         let driver_handle = if dedicated_reactor {
@@ -679,6 +746,9 @@ where
         // default lifecycle.)
         if self.dedicated_reactor {
             self.inner.closing.store(true, Ordering::Release);
+            // Wake a sender blocked in `DataChannel::writable()` so it returns promptly
+            // instead of waiting out its 50 ms backstop past teardown (mirrors `close`).
+            self.inner.data_channel_backpressure.notify_waiters();
             let _ = self
                 .inner
                 .driver_event_tx
@@ -700,6 +770,10 @@ where
         // Mark closing before waking the driver, so it stops even if the wake is
         // ever dropped (mirrors `Drop`; see `PeerConnectionRef::closing`).
         self.inner.closing.store(true, Ordering::Release);
+        // Wake any sender blocked in `DataChannel::writable()` so it observes `closing`
+        // and returns `ErrDataChannelClosed` at once, rather than waiting out its 50 ms
+        // liveness backstop — the driver has stopped draining `outstanding_bytes`.
+        self.inner.data_channel_backpressure.notify_waiters();
         // Best-effort wake. A send failure here is benign, not an error:
         // `closing` already guarantees the driver terminates, and it may already
         // have observed the flag and dropped the receiver via its independent
