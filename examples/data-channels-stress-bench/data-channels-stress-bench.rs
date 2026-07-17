@@ -11,28 +11,29 @@
 //! * `STRESS_DEDICATED_REACTOR=1` — run each peer's driver on a dedicated reactor
 //!   thread (issue #101).
 //! * `STRESS_NAIVE_SENDER=1` — sender does NO app-level `bufferedAmount` flow
-//!   control; it floods `send()` as fast as it is accepted, retrying (with a brief
-//!   back-off) on `ErrSendBufferFull`. This is the realistic "app that never checks
-//!   bufferedAmount" case that the send-buffer cap defends against (a slow reactor/peer
-//!   would otherwise let the send pipeline grow without bound). Without it, the sender
-//!   self-throttles on `bufferedAmount`.
+//!   control; it just floods the blocking `send()` in a loop. This is the realistic
+//!   "app that never checks bufferedAmount" case: with a send-buffer limit configured,
+//!   `send()` blocks once the channel is at the limit so peak queued memory stays
+//!   bounded; with no limit (the default) it never blocks and the whole transfer piles
+//!   into the send pipeline. Without this knob, the sender self-throttles on
+//!   `bufferedAmount`.
 //! * `STRESS_DRAIN_CHECK=1` — after the transfer, poll each channel's
 //!   `outstanding_bytes()` and print it, verifying the send counter drains to ~0
 //!   (conservation, including `max_retransmits: 0` abandonment).
 //!
-//! ## A/B'ing the send-buffer cap
-//! `STRESS_SEND_BUFFER_LIMIT` sets the per-channel send-buffer cap in bytes (`0` =
-//! unbounded); unset uses the library default (16 MiB). The SAME binary serves as both
-//! arms — only the cap differs:
+//! ## A/B'ing the send-buffer limit
+//! `STRESS_SEND_BUFFER_LIMIT` sets the per-channel send-buffer limit in bytes (`0` or
+//! unset = unbounded, the library default). The SAME binary serves as both arms — only
+//! the limit differs. Arm A is the unbounded default; arm B opts into a limit:
 //!
 //!   STRESS_NAIVE_SENDER=1 STRESS_PAIRS=30 STRESS_MB_PER_PAIR=32 poop \
-//!     'env STRESS_SEND_BUFFER_LIMIT=0 ./stress' \
-//!     './stress'
+//!     './stress' \
+//!     'env STRESS_SEND_BUFFER_LIMIT=4194304 ./stress'
 //!
-//! (unbounded → bounded: at the 16 MiB default `peak_rss` drops ~2× (≈−50%); with a
-//! smaller `STRESS_SEND_BUFFER_LIMIT` — e.g. 4 MiB — ~4–5× (≈−78%). Either way the
-//! bounded arm's peak_rss stays flat as the transfer grows, whereas the unbounded arm's
-//! scales with total bytes in flight.)
+//! (unbounded → bounded: the bounded arm's `peak_rss` stays flat as the transfer grows,
+//! whereas the unbounded arm's scales with total bytes in flight. A 16 MiB limit —
+//! Chromium's cap — roughly halves peak RSS on this workload; a smaller 4 MiB limit cuts
+//! it further. See the PR description for the measured numbers.)
 
 use bytes::BytesMut;
 use futures::FutureExt;
@@ -217,12 +218,12 @@ async fn run_pair(
     // Send loop. Two modes:
     //  * default: single-task app-level flow control on `bufferedAmount`
     //    (mirrors data-channels-flow-control).
-    //  * STRESS_NAIVE_SENDER: NO manual flow control — push exactly `target` bytes as
-    //    fast as `send()` accepts them, retrying on `ErrSendBufferFull`. This is the
-    //    realistic "app that never checks bufferedAmount" case: with the send-buffer cap,
-    //    `send()` rejects past the limit so peak queued memory stays bounded; without it,
-    //    the whole transfer piles into the unbounded send pipeline (peak RSS ∝ target).
-    //    Both modes send the same total work, so peak RSS isolates the queue bound.
+    //  * STRESS_NAIVE_SENDER: NO manual flow control — just flood the blocking `send()`.
+    //    This is the realistic "app that never checks bufferedAmount" case: with a
+    //    send-buffer limit configured, `send()` blocks once the channel is at the limit so
+    //    peak queued memory stays bounded; with no limit (the default) it never blocks and
+    //    the whole transfer piles into the send pipeline (peak RSS ∝ target). Both modes
+    //    send the same total work, so peak RSS isolates the queue bound.
     let naive = std::env::var("STRESS_NAIVE_SENDER").is_ok();
     {
         let stop = stop.clone();
@@ -235,13 +236,13 @@ async fn run_pair(
                     break;
                 }
                 if naive {
-                    // Drive to OnOpen first, then flood without consulting bufferedAmount
-                    // until the responder has received `target` and sets `stop`. Keeping
-                    // the send loop running (rather than stopping at exactly `target`
-                    // bytes) guarantees termination even if the unreliable channel drops
-                    // a chunk. With the send-buffer cap, `send()` rejects past the limit
-                    // so peak queued memory stays bounded; without it, the sender races
-                    // far ahead of the receiver and the pipeline balloons.
+                    // Drive to OnOpen first, then flood the blocking `send()` without
+                    // consulting bufferedAmount until the responder has received `target`
+                    // and sets `stop`. Keeping the send loop running (rather than stopping
+                    // at exactly `target` bytes) guarantees termination even if the
+                    // unreliable channel drops a chunk. With a send-buffer limit, `send()`
+                    // blocks at the limit so peak queued memory stays bounded; without one,
+                    // the sender races far ahead of the receiver and the pipeline balloons.
                     if !dc_open {
                         match dc.poll().await {
                             Some(DataChannelEvent::OnOpen) => dc_open = true,
@@ -250,9 +251,10 @@ async fn run_pair(
                         }
                         continue;
                     }
+                    // Blocking send: the library paces us when a limit is set. A real error
+                    // means the channel closed — stop.
                     if dc.send(buf.clone()).await.is_err() {
-                        // ErrSendBufferFull — brief back-off before retrying.
-                        webrtc::runtime::sleep(std::time::Duration::from_millis(1)).await;
+                        break;
                     }
                     continue;
                 }

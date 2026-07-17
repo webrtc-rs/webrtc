@@ -116,6 +116,21 @@ where
         })
     }
 
+    /// Mark the connection closing and wake any sender parked in send back-pressure.
+    ///
+    /// Called once the driver's [`event_loop`](Self::event_loop) has returned for ANY reason
+    /// — a clean `close()`/`Drop` (where `closing` is already set) OR an abnormal error exit
+    /// (a fatal SCTP/DTLS error on a timer tick, all UDP sockets gone, …), where nothing has
+    /// set `closing`. Once the driver stops it no longer drains `outstanding_bytes` nor wakes
+    /// `data_channel_backpressure`, so without this a blocking `send()` parked at the
+    /// send-buffer limit would re-park forever. Setting `closing` makes the parked
+    /// [`writable`](crate::data_channel::DataChannel::writable) loop return `ErrDataChannelClosed`
+    /// on its next re-check; the wake makes that immediate. Idempotent on the clean path.
+    pub(crate) fn signal_stopped(&self) {
+        self.inner.closing.store(true, Ordering::Release);
+        self.inner.data_channel_backpressure.notify_waiters();
+    }
+
     /// Run the driver event loop
     ///
     /// This follows rtc Event Loop pattern exactly with select!
@@ -204,6 +219,16 @@ where
             self.poll_writes().await?;
             self.poll_events().await;
             self.poll_reads().await?;
+
+            // Wake senders blocked in `DataChannel::writable()`: the poll_* passes above
+            // applied any SCTP buffer releases (acked/abandoned bytes) to the per-channel
+            // `outstanding_bytes` counters, so a blocked `send()` can re-check and proceed.
+            // Skipped entirely on the default unbounded path — `writable()` never parks when
+            // the limit is `usize::MAX`, so there can be no waiter, and this keeps the
+            // (throughput-sensitive) hot loop free of the per-iteration `Notify` lock.
+            if self.inner.data_channel_send_buffer_limit != usize::MAX {
+                self.inner.data_channel_backpressure.notify_waiters();
+            }
 
             // 4.a poll next timeout
             let timeout = self.poll_timeout().await;

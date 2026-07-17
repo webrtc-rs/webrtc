@@ -1,11 +1,15 @@
-//! Integration test for data-channel send back-pressure (the `outstanding_bytes`
-//! accounting + the **non-blocking** send-buffer cap in `DataChannel::send`).
+//! Integration test for data-channel send back-pressure via the **non-blocking**
+//! `DataChannel::try_send` / `try_send_text` (the `outstanding_bytes` accounting + the
+//! fail-fast send-buffer cap).
 //!
 //! A "naive" sender floods a fixed amount over an **unordered / no-retransmit**
 //! (`max_retransmits: 0`) channel — no `bufferedAmount` flow control — while a
 //! normally-draining receiver reads. The connection is built with a small explicit
 //! send-buffer limit (`with_data_channel_send_buffer_limit`) so the gate engages quickly
-//! and deterministically. The test asserts three properties:
+//! and deterministically. `try_send`/`try_send_text` are the fail-fast APIs: over the
+//! limit they return `ErrSendBufferFull` immediately rather than blocking (that is
+//! `send`/`send_text`, covered by `data_channel_send_blocking.rs`). The test asserts three
+//! properties:
 //!
 //!   1. **Bounded** — `outstanding_bytes()` never exceeds the configured limit (plus a
 //!      small slack) while the app floods: the gate rejects with `ErrSendBufferFull`
@@ -13,10 +17,10 @@
 //!      bound, so it can never fail spuriously when the gate works (the counter is
 //!      hard-capped by construction); it only fails if the gate is removed and the
 //!      pipeline grows past the bound — which is exactly the regression it guards.
-//!   2. **Reject engaged** — at least one `send()` returned `ErrSendBufferFull`. With a
+//!   2. **Reject engaged** — at least one `try_send()` returned `ErrSendBufferFull`. With a
 //!      tiny limit vs a large flood this is deterministic, and it is the strongest teeth:
-//!      deleting the cap makes `send()` never reject, so this fails regardless of how fast
-//!      the peer drains (whereas Property 1 only bites once outstanding actually climbs).
+//!      deleting the cap makes `try_send()` never reject, so this fails regardless of how
+//!      fast the peer drains (whereas Property 1 only bites once outstanding actually climbs).
 //!   3. **Conservation** — after the transfer, `outstanding_bytes()` drains well below the
 //!      limit. The counter is decremented both on SCTP acknowledgement *and* on
 //!      `max_retransmits: 0` abandonment (forward-TSN), so no path can leak it.
@@ -25,10 +29,10 @@
 //! under a starved consumer — end-to-end delivery is proven by the reliable/ordered sibling
 //! `data_channel_send_unbounded.rs`).
 //!
-//! Unlike the old blocking design, `send()`/`send_text()` never park here: a full buffer
-//! is a synchronous `ErrSendBufferFull`, which the naive flood handles by yielding and
-//! retrying (the application's job now). See `examples/data-channels-flow-control` for
-//! the idiomatic `OnBufferedAmountLow`-paced sender that never trips the cap.
+//! `try_send()`/`try_send_text()` never park: a full buffer is a synchronous
+//! `ErrSendBufferFull`, which the naive flood handles by yielding and retrying. See
+//! `examples/data-channels-flow-control` for the idiomatic `OnBufferedAmountLow`-paced
+//! sender that never trips the cap.
 use anyhow::Result;
 use bytes::BytesMut;
 use std::sync::Arc;
@@ -215,9 +219,9 @@ async fn run() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("timeout: data channel open"))?;
 
     // ── Naive flood: push TOTAL_BYTES with NO bufferedAmount flow control ───────
-    // A full buffer returns `ErrSendBufferFull` (non-blocking) instead of parking, so the
-    // naive sender yields and retries — never advancing `sent` on a rejection. Any other
-    // error is fatal.
+    // `try_send`/`try_send_text` return `ErrSendBufferFull` (non-blocking) instead of
+    // parking, so the naive sender yields and retries — never advancing `sent` on a
+    // rejection. Any other error is fatal.
     let flood_done = Arc::new(AtomicBool::new(false));
     let flood_fatal = Arc::new(AtomicBool::new(false));
     let rejections = Arc::new(AtomicUsize::new(0));
@@ -232,12 +236,12 @@ async fn run() -> Result<()> {
             let mut sent = 0usize;
             let mut use_text = false;
             while sent < TOTAL_BYTES {
-                // Alternate binary send() and send_text() so the cap is exercised on both
-                // send paths (they share the same admit/reject logic).
+                // Alternate binary try_send() and try_send_text() so the cap is exercised on
+                // both send paths (they share the same admit/reject logic).
                 let res = if use_text {
-                    dc.send_text(&text).await
+                    dc.try_send_text(&text).await
                 } else {
-                    dc.send(buf.clone()).await
+                    dc.try_send(buf.clone()).await
                 };
                 match res {
                     Ok(()) => {
@@ -272,7 +276,7 @@ async fn run() -> Result<()> {
         assert!(
             o <= OUTSTANDING_BOUND,
             "outstanding_bytes {o} exceeded the send-buffer bound {OUTSTANDING_BOUND} \
-             during flood — the non-blocking send cap is not enforcing the bound"
+             during flood — the non-blocking try_send cap is not enforcing the bound"
         );
         ticks += 1;
         assert!(ticks < deadline_ticks, "flood did not complete within 60s");
@@ -285,15 +289,15 @@ async fn run() -> Result<()> {
 
     // Property 2 — the reject path actually engaged. A tiny 64 KiB limit against a 16 MB
     // flood guarantees at least one `ErrSendBufferFull`, so this is deterministic — and it
-    // is the strongest teeth: deleting the cap makes `send()` never reject, so `rejections`
-    // is 0 and this FAILS regardless of how fast the peer drains (unlike the upper bound
-    // above, which only bites once outstanding actually climbs). It also proves `send()`
-    // wasn't a silent no-op (a no-op never fills the buffer, so it never rejects either).
+    // is the strongest teeth: deleting the cap makes `try_send()` never reject, so
+    // `rejections` is 0 and this FAILS regardless of how fast the peer drains (unlike the
+    // upper bound above, which only bites once outstanding actually climbs). It also proves
+    // `try_send()` wasn't a silent no-op (a no-op never fills the buffer, so it never rejects).
     let n_rejections = rejections.load(Ordering::Relaxed);
     assert!(
         n_rejections > 0,
-        "send() never returned ErrSendBufferFull over a {TOTAL_BYTES}-byte flood at a \
-         {SEND_LIMIT}-byte limit — the non-blocking send cap did not engage"
+        "try_send() never returned ErrSendBufferFull over a {TOTAL_BYTES}-byte flood at a \
+         {SEND_LIMIT}-byte limit — the non-blocking try_send cap did not engage"
     );
 
     // Property 3 — conservation: after the flood, the counter must drain well below the

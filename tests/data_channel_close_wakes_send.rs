@@ -1,24 +1,20 @@
-//! Regression test for the send-cap **terminal-error-on-close** property across every send
-//! method.
+//! Regression test for the blocking send back-pressure close/drop liveness hang.
 //!
-//! After `PeerConnection::close()` the driver stops draining each channel's
-//! `outstanding_bytes`, and the core does not remove the channel from its map — so if a
-//! channel's outstanding bytes are pinned at the send-buffer limit (the steady state of a
-//! naive flood), a `try_send()` that only checked the capacity gate would return the
-//! *retryable* `ErrSendBufferFull` forever, and an application retrying on it (the documented
-//! pattern) would livelock as a leaked task; likewise a blocking `send()`/`writable()` would
-//! wait for a drain that never comes. All of `send`/`send_text`/`try_send`/`try_send_text`/
-//! `writable` therefore check the `closing` flag first and fail *terminally* with
-//! `ErrDataChannelClosed`.
+//! When a send-buffer limit is configured, a `DataChannel::send` that is parked in
+//! back-pressure (outstanding bytes at the limit, waiting via `writable()` for the driver
+//! to release SCTP-acked bytes) must be woken and must return `ErrDataChannelClosed` when
+//! the `PeerConnection` is closed — because once the driver stops on the `Close` event it no
+//! longer drains `outstanding_bytes` nor wakes blocked senders, and the channel is not
+//! removed from the core map on close. Without the fix (a `closing` check in `writable()`'s
+//! park loop + a `notify_waiters()` from `close`/`Drop`) the parked send spins on its 50 ms
+//! liveness backstop forever, leaking the producing task and the outstanding send bytes.
 //!
-//! This is the fresh-call companion to `data_channel_close_wakes_send.rs`, which covers a
-//! send *already parked* in back-pressure when close runs.
-//!
-//! The test floods (via the non-blocking `try_send`) until the cap engages
-//! (`ErrSendBufferFull` observed ⇒ outstanding pinned at the limit), closes the connection,
-//! then asserts a subsequent `send`, `send_text`, `try_send`, `try_send_text` and `writable`
-//! all return `ErrDataChannelClosed` — NOT `ErrSendBufferFull` (which a retry loop would spin
-//! on) and NOT `Ok`. Deleting the `closing` guard makes this FAIL.
+//! This test builds the connection with a small `with_data_channel_send_buffer_limit` so a
+//! send parks deterministically on every runtime (a low limit — below the ~1 MiB SCTP
+//! window — makes the gate engage regardless of scheduling; with an unbounded limit `send`
+//! never parks and this path can't be exercised), floods with the blocking `send()`, waits
+//! until outstanding has climbed into the gated band, closes the PC, and asserts the send
+//! returns `ErrDataChannelClosed` promptly rather than hanging.
 use anyhow::Result;
 use bytes::BytesMut;
 use std::sync::Arc;
@@ -29,12 +25,15 @@ use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
 use webrtc::error::Error;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, timeout};
+use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
-const CHUNK: usize = 1024;
-// Tiny send-buffer limit so a short naive flood deterministically fills it and the cap
-// engages (a send returns ErrSendBufferFull), pinning outstanding at the limit.
-const SEND_LIMIT: usize = 64 * 1024;
+const CHUNK: usize = 1024; // 1 KB messages
+// Small per-channel send-buffer limit, forced via the builder. A low limit — below the
+// ~1 MiB SCTP receive window — makes the gate engage and a `send()` genuinely PARK
+// deterministically on every runtime: with an unbounded (default) limit the sender never
+// reaches the mark and never parks, so this test could not exercise the wake-on-close path
+// it exists to guard.
+const SEND_LIMIT: usize = 256 * 1024;
 
 struct GatherHandler {
     gather_tx: Sender<()>,
@@ -91,7 +90,7 @@ impl PeerConnectionEventHandler for ReceiverHandler {
 }
 
 #[test]
-fn test_data_channel_send_after_close_is_terminal() {
+fn test_close_wakes_parked_backpressured_send() {
     block_on(run()).unwrap();
 }
 
@@ -110,6 +109,7 @@ async fn run() -> Result<()> {
     let (rcv_conn_tx, mut rcv_conn_rx) = channel::<()>(1);
     let received = Arc::new(AtomicUsize::new(0));
 
+    // ── Sender (with a small send-buffer limit so send() parks deterministically) ─
     let sender_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(GatherHandler {
             gather_tx: snd_gather_tx,
@@ -123,7 +123,7 @@ async fn run() -> Result<()> {
 
     let dc = sender_pc
         .create_data_channel(
-            "after-close",
+            "backpressure",
             Some(RTCDataChannelInit {
                 ordered: false,
                 max_retransmits: Some(0),
@@ -156,6 +156,7 @@ async fn run() -> Result<()> {
         .await
         .expect("sender local description");
 
+    // ── Receiver ──────────────────────────────────────────────────────────────
     let receiver_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(ReceiverHandler {
             gather_tx: rcv_gather_tx,
@@ -188,68 +189,58 @@ async fn run() -> Result<()> {
         .await
         .map_err(|_| anyhow::anyhow!("timeout: data channel open"))?;
 
-    // Flood (non-blocking) until the cap engages: a try_send returning ErrSendBufferFull
-    // proves outstanding is pinned at SEND_LIMIT — the exact state in which, post-close, a
-    // capacity-only gate would keep returning ErrSendBufferFull forever. (Uses try_send, not
-    // the blocking send, so a full buffer rejects here rather than parking.)
-    let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
-    let mut hit_full = false;
-    for _ in 0..200_000 {
-        match dc.try_send(buf.clone()).await {
-            Ok(()) => {}
-            Err(Error::ErrSendBufferFull) => {
-                hit_full = true;
-                break;
+    // ── Flood forever with the BLOCKING send() until it errors ──────────────────
+    // Signal is `true` when the terminating error was ErrDataChannelClosed (the expected
+    // wake-on-close), `false` for any other error. If close() fails to wake a parked send,
+    // this task never signals and the timeout below fires — the regression.
+    let (done_tx, mut done_rx) = channel::<bool>(1);
+    {
+        let dc = dc.clone();
+        runtime.spawn(Box::pin(async move {
+            let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
+            loop {
+                if let Err(e) = dc.send(buf.clone()).await {
+                    let _ = done_tx.try_send(matches!(e, Error::ErrDataChannelClosed));
+                    break;
+                }
             }
-            Err(e) => return Err(anyhow::anyhow!("unexpected send error before close: {e:?}")),
+        }));
+    }
+
+    // Wait until the send pipeline has climbed into the gated band (within a couple of chunks
+    // of the limit), so the gate is engaged and a send is parked (or one send away from it)
+    // when we close — the state whose wake-on-close this test guards.
+    let park_threshold = SEND_LIMIT - 2 * CHUNK;
+    let mut parked = false;
+    for _ in 0..200 {
+        if dc.outstanding_bytes().await? >= park_threshold {
+            parked = true;
+            break;
         }
+        sleep(Duration::from_millis(50)).await;
     }
     assert!(
-        hit_full,
-        "cap never engaged during the pre-close flood — cannot exercise the pinned-buffer \
-         terminal-close path"
+        parked,
+        "sender never reached the send-buffer limit; the back-pressure path was not exercised"
     );
 
-    // Close the sender. The driver stops draining outstanding_bytes; the channel stays in
-    // the core map, so a capacity-only gate would still see outstanding pinned at the limit.
+    // Close the sender PC. A parked send() must wake and return within the timeout; without
+    // the fix it spins on its 50 ms liveness backstop forever and this recv times out.
     sender_pc.close().await?;
 
-    // Every send method after close must fail TERMINALLY with ErrDataChannelClosed — not the
-    // retryable ErrSendBufferFull (which a retry loop would spin on forever), not a park that
-    // never wakes, and not Ok.
-    match dc.send(buf.clone()).await {
-        Err(Error::ErrDataChannelClosed) => {}
-        Err(Error::ErrSendBufferFull) => panic!(
-            "send() after close returned the retryable ErrSendBufferFull (outstanding is \
-             pinned and never drains post-close ⇒ a retry loop livelocks); expected the \
-             terminal ErrDataChannelClosed"
-        ),
-        other => panic!("send() after close returned {other:?}; expected ErrDataChannelClosed"),
-    }
-    match dc.send_text("x").await {
-        Err(Error::ErrDataChannelClosed) => {}
-        other => {
-            panic!("send_text() after close returned {other:?}; expected ErrDataChannelClosed")
-        }
-    }
-    match dc.try_send(buf.clone()).await {
-        Err(Error::ErrDataChannelClosed) => {}
-        other => {
-            panic!("try_send() after close returned {other:?}; expected ErrDataChannelClosed")
-        }
-    }
-    match dc.try_send_text("x").await {
-        Err(Error::ErrDataChannelClosed) => {}
-        other => {
-            panic!("try_send_text() after close returned {other:?}; expected ErrDataChannelClosed")
-        }
-    }
-    // writable() must also fail terminally rather than block forever waiting for a drain that
-    // the stopped driver will never deliver.
-    match dc.writable().await {
-        Err(Error::ErrDataChannelClosed) => {}
-        other => panic!("writable() after close returned {other:?}; expected ErrDataChannelClosed"),
-    }
+    let was_closed_err = timeout(Duration::from_secs(5), done_rx.recv())
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "BUG: a back-pressured send() did not return after close() — liveness hang"
+            )
+        })?
+        .ok_or_else(|| anyhow::anyhow!("flood task ended without reporting an error"))?;
+
+    assert!(
+        was_closed_err,
+        "parked send() returned an error other than ErrDataChannelClosed after close()"
+    );
 
     receiver_pc.close().await?;
     Ok(())

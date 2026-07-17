@@ -46,10 +46,12 @@
 use crate::peer_connection::PeerConnectionRef;
 use crate::runtime::{Mutex, Receiver};
 use bytes::BytesMut;
+use futures::FutureExt;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::shared::error::{Error, Result};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 pub use rtc::data_channel::{
     RTCDataChannelId, RTCDataChannelInit, RTCDataChannelMessage, RTCDataChannelState,
@@ -97,9 +99,51 @@ pub trait DataChannel: Send + Sync + 'static {
         Ok(0)
     }
     /// Sends raw binary data on this data channel.
+    ///
+    /// If a send-buffer limit is configured
+    /// ([`PeerConnectionBuilder::with_data_channel_send_buffer_limit`](crate::peer_connection::PeerConnectionBuilder::with_data_channel_send_buffer_limit)),
+    /// this **blocks** until the channel's outstanding bytes are below the limit, then
+    /// enqueues — mirroring `tokio::mpsc::Sender::send`. With no limit (the default) it
+    /// never blocks. Use [`try_send`](Self::try_send) for the non-blocking variant.
     async fn send(&self, data: BytesMut) -> Result<()>;
     /// Sends text data on this data channel.
+    ///
+    /// Blocking/non-blocking behaviour matches [`send`](Self::send); see there.
     async fn send_text(&self, text: &str) -> Result<()>;
+    /// Waits until this channel can accept more data — its outstanding send bytes are
+    /// below the configured send-buffer limit.
+    ///
+    /// Resolves immediately when no limit is configured (the default) or the buffer is
+    /// already below it. Returns [`Error::ErrDataChannelClosed`] if the channel or
+    /// connection is closing. This is the await-for-capacity primitive that blocking
+    /// [`send`](Self::send) uses internally; call it directly to pace your own sends.
+    ///
+    /// Level-triggered, not a reserved permit: with multiple concurrent senders on one
+    /// channel the limit is a soft bound (each admitted sender may add one in-flight
+    /// message over it) — the same semantics as `bufferedAmount`-based flow control.
+    ///
+    /// Defaults to `Ok(())` so external implementors of this trait keep compiling.
+    async fn writable(&self) -> Result<()> {
+        Ok(())
+    }
+    /// Non-blocking [`send`](Self::send): enqueues `data` and returns at once, or fails
+    /// fast with [`Error::ErrSendBufferFull`] when a send-buffer limit is configured and
+    /// this message would push the channel's outstanding bytes past it. Never waits for
+    /// capacity. Mirrors `tokio::mpsc::Sender::try_send`.
+    ///
+    /// `data` is **consumed** on rejection, so retain a clone if you intend to retry.
+    ///
+    /// Defaults to delegating to [`send`](Self::send) — correct for implementors that do
+    /// not impose a blocking limit, since there `send` is already non-blocking.
+    async fn try_send(&self, data: BytesMut) -> Result<()> {
+        self.send(data).await
+    }
+    /// Non-blocking [`send_text`](Self::send_text); see [`try_send`](Self::try_send).
+    ///
+    /// Defaults to delegating to [`send_text`](Self::send_text).
+    async fn try_send_text(&self, text: &str) -> Result<()> {
+        self.send_text(text).await
+    }
     /// Polls for the next event on this data channel.
     async fn poll(&self) -> Option<DataChannelEvent>;
     /// Closes the data channel.
@@ -188,6 +232,23 @@ where
             id,
             inner,
             evt_rx: Mutex::new(evt_rx),
+        }
+    }
+
+    /// Park until the driver signals send-buffer progress, or a 50 ms liveness backstop
+    /// fires. Called only on the slow path, when [`writable`](DataChannel::writable) finds
+    /// the buffer at/over the limit.
+    ///
+    /// Holds no lock while waiting: the driver applies SCTP buffer releases (acknowledged
+    /// or abandoned bytes) to the per-channel `outstanding_bytes` counter and then wakes
+    /// `data_channel_backpressure`, so a blocked sender re-checks and proceeds as soon as
+    /// the peer acknowledges data. The 50 ms timeout is a lost-wakeup / liveness backstop
+    /// — and, for a peer that never acks, the sender correctly stays blocked (bounding
+    /// send-side memory) while still re-checking `closing` so `close()`/`Drop` release it.
+    async fn await_send_capacity(&self) {
+        futures::select! {
+            _ = self.inner.data_channel_backpressure.notified().fuse() => {}
+            _ = crate::runtime::sleep(Duration::from_millis(50)).fuse() => {}
         }
     }
 }
@@ -348,23 +409,18 @@ where
 
     /// Send binary data.
     ///
-    /// Non-blocking, like the browser `RTCDataChannel.send()`: it queues the message and
-    /// returns; it never waits for the peer to acknowledge. To bound send-side memory it
-    /// applies a **non-blocking** back-pressure gate — see *Errors*.
+    /// Queues the message and returns; it never waits for the peer to acknowledge. When a
+    /// send-buffer limit is configured
+    /// ([`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]) it first **blocks**
+    /// until the channel's outstanding bytes are below the limit — mirroring
+    /// `tokio::mpsc::Sender::send`. With no limit (the default) it never blocks, like the
+    /// browser `RTCDataChannel.send()`. For a non-blocking send that fails fast when the
+    /// buffer is full, use [`try_send`](Self::try_send).
     ///
     /// # Errors
     ///
-    /// - [`Error::ErrSendBufferFull`] if this message would push the channel's outstanding
-    ///   send bytes (handed to `send`/`send_text` but not yet acknowledged or abandoned by
-    ///   SCTP) past the configured send-buffer limit
-    ///   ([`PeerConnectionBuilder::with_data_channel_send_buffer_limit`], default 16 MiB;
-    ///   set `0` to disable). This mirrors the browser's "throw when the send queue is
-    ///   full". It is **retryable**, but only *after* the buffer drains — an application
-    ///   should pace on the [`OnBufferedAmountLow`](DataChannelEvent::OnBufferedAmountLow)
-    ///   event (see `examples/data-channels-flow-control`) or poll
-    ///   [`outstanding_bytes`](Self::outstanding_bytes) rather than spin. Note `data` is
-    ///   **consumed** on rejection, so retain a clone if you intend to retry.
-    /// - [`Error::ErrDataChannelClosed`] if the channel/connection is closed or closing.
+    /// - [`Error::ErrDataChannelClosed`] if the channel/connection is closed or closing —
+    ///   including a caller blocked awaiting capacity when `close()`/`Drop` runs.
     ///
     /// [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]: crate::peer_connection::PeerConnectionBuilder::with_data_channel_send_buffer_limit
     ///
@@ -381,35 +437,17 @@ where
     /// # }
     /// ```
     async fn send(&self, data: BytesMut) -> Result<()> {
-        // A closing/closed connection must fail TERMINALLY, not with a retryable
-        // ErrSendBufferFull: once close()/Drop stops the driver it no longer drains
-        // outstanding_bytes, and the channel is not removed from the core map, so an app
-        // retrying on ErrSendBufferFull would loop forever. Return ErrDataChannelClosed at
-        // once (mirrors send()-after-close in the browser).
-        if self.inner.closing.load(Ordering::Acquire) {
-            return Err(Error::ErrDataChannelClosed);
-        }
-        // Non-blocking send back-pressure, folded into the send's own core-lock so the fast
-        // path takes the lock exactly ONCE: check the channel's outstanding-bytes counter
-        // and enqueue atomically. A caller that outruns the drain (a slow reactor, or a
-        // slow/malicious peer advertising a tiny receive window) is rejected with
-        // ErrSendBufferFull rather than growing send-side memory without bound — never
-        // blocking. The limit is applied per-channel and configured connection-wide via
-        // PeerConnectionBuilder::with_data_channel_send_buffer_limit (usize::MAX = unbounded).
-        let limit = self.inner.data_channel_send_buffer_limit;
+        // Await capacity, then enqueue. `writable()` is a no-op unless a send-buffer limit
+        // is configured; when one is, it blocks until the channel's outstanding bytes fall
+        // below it. It also returns ErrDataChannelClosed terminally on a closing connection,
+        // so a caller blocked on a stalled peer is released by close()/Drop rather than
+        // buffering unboundedly. Mirrors tokio::mpsc::Sender::send.
+        self.writable().await?;
         {
             let mut peer_connection = self.inner.core.lock().await;
             let mut dc = peer_connection
                 .data_channel(self.id)
                 .ok_or(Error::ErrDataChannelClosed)?;
-            let outstanding = dc.outstanding_bytes();
-            // Reject once the message would push outstanding bytes past the limit — but
-            // always admit onto an empty buffer, so a lone message larger than the limit
-            // can still be sent rather than being permanently rejected. saturating_add so
-            // an unbounded (`usize::MAX`) limit can't overflow.
-            if outstanding != 0 && outstanding.saturating_add(data.len()) > limit {
-                return Err(Error::ErrSendBufferFull);
-            }
             dc.send(data)?;
         }
 
@@ -421,10 +459,10 @@ where
 
     /// Send text data.
     ///
-    /// Non-blocking. Same back-pressure and error contract as [`send`](Self::send):
-    /// returns [`Error::ErrSendBufferFull`] (retryable, after the buffer drains) once the
-    /// message would exceed the configured send-buffer limit, and
-    /// [`Error::ErrDataChannelClosed`] on a closing/closed channel.
+    /// Blocking/non-blocking behaviour and error contract match [`send`](Self::send): with a
+    /// configured send-buffer limit it blocks until the buffer is below the limit, and
+    /// returns [`Error::ErrDataChannelClosed`] on a closing/closed channel. Use
+    /// [`try_send_text`](Self::try_send_text) for the non-blocking variant.
     ///
     /// # Example
     ///
@@ -438,8 +476,86 @@ where
     /// # }
     /// ```
     async fn send_text(&self, text: &str) -> Result<()> {
-        // Same single-lock, non-blocking back-pressure as `send` (see there), including the
-        // terminal-error-on-close guard so a retry loop can't livelock past teardown.
+        // Await capacity, then enqueue — see `send` for the rationale.
+        self.writable().await?;
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            let mut dc = peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?;
+            dc.send_text(text)?;
+        }
+
+        self.inner.wake_writes().await;
+        Ok(())
+    }
+
+    async fn writable(&self) -> Result<()> {
+        // Terminal on a closing/closed connection: once close()/Drop stops the driver it no
+        // longer drains outstanding_bytes, so waiting could never make progress. Return
+        // ErrDataChannelClosed at once (mirrors send()-after-close in the browser).
+        if self.inner.closing.load(Ordering::Acquire) {
+            return Err(Error::ErrDataChannelClosed);
+        }
+        let limit = self.inner.data_channel_send_buffer_limit;
+        // Unbounded (the default): every send is admitted, so the channel is always
+        // writable — skip locking the core entirely. This is what keeps `send`/`send_text`
+        // non-blocking and lock-once on the default path.
+        if limit == usize::MAX {
+            return Ok(());
+        }
+        loop {
+            if self.inner.closing.load(Ordering::Acquire) {
+                return Err(Error::ErrDataChannelClosed);
+            }
+            {
+                let mut peer_connection = self.inner.core.lock().await;
+                let outstanding = peer_connection
+                    .data_channel(self.id)
+                    .ok_or(Error::ErrDataChannelClosed)?
+                    .outstanding_bytes();
+                // Below the limit ⇒ writable. An empty buffer (`0 < limit`) also passes, so
+                // a lone message larger than the limit can still be sent rather than
+                // blocking forever.
+                if outstanding < limit {
+                    return Ok(());
+                }
+            } // release the core lock before parking
+            self.await_send_capacity().await;
+        }
+    }
+
+    async fn try_send(&self, data: BytesMut) -> Result<()> {
+        // Non-blocking peer of `send`: same terminal-on-close guard, but instead of awaiting
+        // capacity it fails fast. Back-pressure is folded into the send's own core-lock so
+        // the fast path takes the lock exactly ONCE: peek outstanding_bytes and enqueue
+        // atomically.
+        if self.inner.closing.load(Ordering::Acquire) {
+            return Err(Error::ErrDataChannelClosed);
+        }
+        let limit = self.inner.data_channel_send_buffer_limit;
+        {
+            let mut peer_connection = self.inner.core.lock().await;
+            let mut dc = peer_connection
+                .data_channel(self.id)
+                .ok_or(Error::ErrDataChannelClosed)?;
+            let outstanding = dc.outstanding_bytes();
+            // Reject once the message would push outstanding bytes past the limit — but
+            // always admit onto an empty buffer, so a lone message larger than the limit can
+            // still be sent. saturating_add so an unbounded (`usize::MAX`) limit can't
+            // overflow.
+            if outstanding != 0 && outstanding.saturating_add(data.len()) > limit {
+                return Err(Error::ErrSendBufferFull);
+            }
+            dc.send(data)?;
+        }
+
+        self.inner.wake_writes().await;
+        Ok(())
+    }
+
+    async fn try_send_text(&self, text: &str) -> Result<()> {
+        // Non-blocking peer of `send_text`; see `try_send`.
         if self.inner.closing.load(Ordering::Acquire) {
             return Err(Error::ErrDataChannelClosed);
         }
@@ -482,16 +598,23 @@ where
 mod tests {
     use super::*;
     use crate::runtime::block_on;
+    use std::sync::atomic::AtomicUsize;
 
-    /// A minimal external `DataChannel` implementation that intentionally does **not**
-    /// override [`DataChannel::outstanding_bytes`], so it exercises the trait's default body.
+    /// A minimal external `DataChannel` that overrides only `send`/`send_text` (to record that
+    /// they ran) and leaves `outstanding_bytes`, `writable`, `try_send` and `try_send_text` to
+    /// the trait's **default bodies**.
     ///
-    /// This locks in the compatibility contract the send back-pressure work relies on: adding
-    /// `outstanding_bytes()` to the public trait must not break a downstream `impl DataChannel`
-    /// that predates it, and the default must report `0` — i.e. "no back-pressure signal" — so
-    /// those channels keep compiling and behaving. Every other method is unreachable in this
-    /// test and left `unimplemented!()`.
-    struct DefaultDataChannel;
+    /// This locks in the backward-compatibility contract the send back-pressure work relies on:
+    /// a downstream `impl DataChannel` that predates these methods must keep compiling and get
+    /// sensible defaults — `outstanding_bytes` reports `0` ("no back-pressure signal"),
+    /// `writable` resolves `Ok(())`, and `try_send`/`try_send_text` delegate to `send`/`send_text`
+    /// (correct where `send` is already non-blocking). Every other method is unreachable here and
+    /// left `unimplemented!()`.
+    #[derive(Default)]
+    struct DefaultDataChannel {
+        sends: AtomicUsize,
+        text_sends: AtomicUsize,
+    }
 
     #[async_trait::async_trait]
     impl DataChannel for DefaultDataChannel {
@@ -531,12 +654,15 @@ mod tests {
         async fn set_buffered_amount_low_threshold(&self, _threshold: u32) -> Result<()> {
             unimplemented!()
         }
-        // outstanding_bytes(): deliberately NOT overridden — this is the whole point of the test.
+        // outstanding_bytes(), writable(), try_send(), try_send_text(): deliberately NOT
+        // overridden — exercising the trait defaults is the whole point of this test.
         async fn send(&self, _data: BytesMut) -> Result<()> {
-            unimplemented!()
+            self.sends.fetch_add(1, Ordering::Relaxed);
+            Ok(())
         }
         async fn send_text(&self, _text: &str) -> Result<()> {
-            unimplemented!()
+            self.text_sends.fetch_add(1, Ordering::Relaxed);
+            Ok(())
         }
         async fn poll(&self) -> Option<DataChannelEvent> {
             unimplemented!()
@@ -548,12 +674,42 @@ mod tests {
 
     #[test]
     fn outstanding_bytes_trait_default_is_zero() {
-        let dc = DefaultDataChannel;
+        let dc = DefaultDataChannel::default();
         let n =
             block_on(dc.outstanding_bytes()).expect("default outstanding_bytes() must return Ok");
         assert_eq!(
             n, 0,
             "the DataChannel::outstanding_bytes default must report 0 outstanding bytes"
         );
+    }
+
+    #[test]
+    fn writable_trait_default_is_ok() {
+        let dc = DefaultDataChannel::default();
+        block_on(dc.writable()).expect("the DataChannel::writable default must resolve Ok(())");
+    }
+
+    #[test]
+    fn try_send_trait_default_delegates_to_send() {
+        let dc = DefaultDataChannel::default();
+        block_on(dc.try_send(BytesMut::new())).expect("default try_send() must return Ok");
+        assert_eq!(
+            dc.sends.load(Ordering::Relaxed),
+            1,
+            "the DataChannel::try_send default must delegate to send()"
+        );
+        assert_eq!(dc.text_sends.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn try_send_text_trait_default_delegates_to_send_text() {
+        let dc = DefaultDataChannel::default();
+        block_on(dc.try_send_text("x")).expect("default try_send_text() must return Ok");
+        assert_eq!(
+            dc.text_sends.load(Ordering::Relaxed),
+            1,
+            "the DataChannel::try_send_text default must delegate to send_text()"
+        );
+        assert_eq!(dc.sends.load(Ordering::Relaxed), 0);
     }
 }

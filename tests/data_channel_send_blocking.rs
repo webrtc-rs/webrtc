@@ -1,27 +1,29 @@
-//! Integration test for the send back-pressure **escape hatch**: building a connection with
-//! `with_data_channel_send_buffer_limit(0)` maps the limit to `usize::MAX`, disabling the gate
-//! so a caller that does its own flow control — or the send-backpressure A/B benchmark — runs
-//! with no library-imposed bound. (This is also the default when the limit is left unset, so
-//! the escape hatch and the out-of-the-box behaviour coincide: `send`/`send_text` never block
-//! and never reject.)
+//! Integration test for the **blocking** send back-pressure path: `DataChannel::send` with a
+//! configured `with_data_channel_send_buffer_limit`.
 //!
-//! Complement to `data_channel_send_backpressure.rs`: that test asserts the gate BOUNDS the
-//! pipeline; this one asserts the escape hatch DISABLES it. With the gate off, a naive 32 MB flood
-//! must have EVERY send admitted (return Ok) no matter how far `outstanding_bytes` climbs — the
-//! natural regression (mapping `0` to a literal `0` limit instead of `usize::MAX`) would make the
-//! second send return `ErrSendBufferFull`, which this flood catches on iteration 2. Conservation
-//! still holds — the counter drains back to ~0, and because a reliable/ordered channel has no
-//! abandonment path the counter decrements ONLY on SCTP acknowledgement, so draining to ~0 proves
-//! the peer actually SACKed every byte (real end-to-end delivery, independent of the built-in
-//! receive path's lossy app-delivery channel).
+//! Unlike `try_send` (which fails fast — see `data_channel_send_backpressure.rs`), a blocking
+//! `send()` over a **reliable / ordered** channel with a limit set must (a) never let the
+//! send pipeline grow past the limit, yet (b) still deliver every byte end-to-end, awaiting
+//! capacity as the peer acknowledges rather than dropping or erroring. This is the
+//! `tokio::mpsc::Sender::send`-shaped happy path.
 //!
-//! It deliberately does NOT assert a lower bound on the peak `outstanding_bytes`: messages are
-//! capped at the 256 KiB SCTP max and this stack restores SCTP rwnd at reassembly (not app-consume),
-//! so the sender drains at line rate and a contended CI runner never accumulates a large backlog.
+//! A naive sender floods `TOTAL_BYTES` with the blocking `send()` (no `bufferedAmount`
+//! pacing of its own — the library blocks it) while a normally-draining receiver reads. The
+//! test asserts:
+//!
+//!   1. **Bounded** — a concurrently sampled `outstanding_bytes()` never exceeds the limit
+//!      plus a small slack (one in-flight message) for the whole flood. A regression that
+//!      stopped blocking would let it climb toward the SCTP window and past this bound.
+//!   2. **Delivered + conserved** — after the flood, `outstanding_bytes()` drains to ~0.
+//!      On a reliable/ordered channel the counter decrements ONLY on SCTP acknowledgement
+//!      (no abandonment path), so draining to ~0 proves the blocking sender actually pushed
+//!      every byte through and the peer SACKed it — real end-to-end delivery, and no leak.
+//!
+//! `send()` never returns `ErrSendBufferFull` here (that is `try_send`); any error is fatal.
 use anyhow::Result;
 use bytes::BytesMut;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
@@ -29,9 +31,17 @@ use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnect
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
 use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
 
-const CHUNK: usize = 1024; // 1 KB messages
-// Reliable/ordered flood total; large enough to exercise the disabled-gate admit path many times.
-const TOTAL_BYTES: usize = 32 * 1024 * 1024;
+const CHUNK: usize = 4096; // 4 KB messages
+// Reliable/ordered flood total; large enough to keep the blocking gate engaged for a while.
+const TOTAL_BYTES: usize = 8 * 1024 * 1024;
+// Small per-channel send-buffer limit, below the ~1 MiB SCTP window so the blocking gate
+// engages regardless of scheduling.
+const SEND_LIMIT: usize = 256 * 1024;
+// A single sender admits at most one message beyond the limit before it must re-await
+// capacity, so `outstanding_bytes()` can never exceed SEND_LIMIT + CHUNK; the 64 KiB slack
+// only covers sampling. This bound is far below what a non-blocking pipeline would reach, so
+// a regression that stopped blocking makes the bounded assertion FAIL.
+const OUTSTANDING_BOUND: usize = SEND_LIMIT + 64 * 1024;
 
 struct GatherHandler {
     gather_tx: Sender<()>,
@@ -88,9 +98,7 @@ impl PeerConnectionEventHandler for ReceiverHandler {
 }
 
 #[test]
-fn test_data_channel_send_unbounded_escape_hatch() {
-    // The gate is disabled via the builder's documented `0 = unbounded` escape hatch
-    // (`with_data_channel_send_buffer_limit(0)` inside `run`).
+fn test_data_channel_blocking_send_bounded_and_delivered() {
     block_on(run()).unwrap();
 }
 
@@ -109,7 +117,7 @@ async fn run() -> Result<()> {
     let (rcv_conn_tx, mut rcv_conn_rx) = channel::<()>(1);
     let received = Arc::new(AtomicUsize::new(0));
 
-    // ── Sender ────────────────────────────────────────────────────────────────
+    // ── Sender (with an explicit small send-buffer limit ⇒ blocking send) ───────
     let sender_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(GatherHandler {
             gather_tx: snd_gather_tx,
@@ -117,16 +125,14 @@ async fn run() -> Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        // Disable the send-buffer gate: `0` = unbounded (maps the limit to usize::MAX).
-        .with_data_channel_send_buffer_limit(0)
+        .with_data_channel_send_buffer_limit(SEND_LIMIT)
         .build()
         .await?;
 
-    // Reliable + ordered so nothing is abandoned — conservation here is driven purely by SCTP
-    // acknowledgement (no forward-TSN path), a clean complement to the bounded test's unordered/
-    // no-retransmit channel, and the property that lets the drain double as a delivery proof.
+    // Reliable + ordered so nothing is abandoned — conservation is driven purely by SCTP
+    // acknowledgement, which lets the drain double as an end-to-end delivery proof.
     let dc = sender_pc
-        .create_data_channel("unbounded", Some(RTCDataChannelInit::default()))
+        .create_data_channel("blocking", Some(RTCDataChannelInit::default()))
         .await?;
 
     let (open_tx, mut open_rx) = channel::<()>(1);
@@ -186,53 +192,72 @@ async fn run() -> Result<()> {
         .await
         .map_err(|_| anyhow::anyhow!("timeout: data channel open"))?;
 
-    // ── Naive flood with the gate DISABLED (limit=0 ⇒ usize::MAX) ───────────────
-    // The escape-hatch teeth: with the gate off EVERY send is admitted and returns Ok, no matter
-    // how far `outstanding_bytes` has climbed. The natural regression (mapping the `0` limit to a
-    // literal `0` instead of `usize::MAX`) makes the SECOND send (once outstanding > 0) return
-    // `ErrSendBufferFull`, failing here on the 2nd of 32768 iterations. Run in the main task so
-    // that failure fails the test synchronously.
-    //
-    // NB this cannot instead assert "outstanding exceeds the gated cap": messages are capped at the
-    // 256 KiB SCTP max, and this stack restores SCTP rwnd at reassembly (not app-consume), so the
-    // sender drains at line rate and never accumulates a backlog — on a contended CI runner the
-    // counter never climbs past the small in-flight window, so a lower-bound on it is unreliable.
-    let chunk = BytesMut::from(vec![0u8; CHUNK].as_slice());
-    let mut sent = 0usize;
-    while sent < TOTAL_BYTES {
-        dc.send(chunk.clone()).await.map_err(|e| {
-            anyhow::anyhow!(
-                "send #{} unexpectedly failed with the gate disabled ({e:?}) — the \
-                 limit=0 escape hatch did not map the send-buffer limit to usize::MAX",
-                sent / CHUNK + 1
-            )
-        })?;
-        sent += CHUNK;
+    // ── Naive flood with the BLOCKING send() (library paces it, not the app) ────
+    let flood_done = Arc::new(AtomicBool::new(false));
+    let flood_fatal = Arc::new(AtomicBool::new(false));
+    {
+        let dc = dc.clone();
+        let flood_done = flood_done.clone();
+        let flood_fatal = flood_fatal.clone();
+        runtime.spawn(Box::pin(async move {
+            let chunk = BytesMut::from(vec![0u8; CHUNK].as_slice());
+            let mut sent = 0usize;
+            while sent < TOTAL_BYTES {
+                if let Err(e) = dc.send(chunk.clone()).await {
+                    log::error!("blocking flood: unexpected send error: {e:?}");
+                    flood_fatal.store(true, Ordering::Relaxed);
+                    break;
+                }
+                sent += CHUNK;
+            }
+            flood_done.store(true, Ordering::Relaxed);
+        }));
     }
 
-    // Conservation AND real end-to-end delivery: reliable/ordered ⇒ the counter decrements ONLY on
-    // SCTP acknowledgement (no abandonment path), so draining to ~0 proves the peer SACKed every
-    // byte. This is the robust delivery proof — unlike the app-level `received` counter below, it
-    // does not depend on the built-in receive path's bounded, lossy app-delivery channel.
+    // Property 1 — bounded. The blocking gate must hold outstanding at/under the limit for
+    // the whole flood; this upper bound cannot fail spuriously when the gate works.
+    let mut max_outstanding = 0usize;
+    let deadline_ticks = 600; // 600 * 100ms = 60s cap
+    let mut ticks = 0;
+    while !flood_done.load(Ordering::Relaxed) {
+        let o = dc.outstanding_bytes().await?;
+        max_outstanding = max_outstanding.max(o);
+        assert!(
+            o <= OUTSTANDING_BOUND,
+            "outstanding_bytes {o} exceeded the send-buffer bound {OUTSTANDING_BOUND} during \
+             the blocking flood — send() is not blocking on the send-buffer limit"
+        );
+        ticks += 1;
+        assert!(
+            ticks < deadline_ticks,
+            "blocking flood did not complete within 60s"
+        );
+        sleep(Duration::from_millis(100)).await;
+    }
+    assert!(
+        !flood_fatal.load(Ordering::Relaxed),
+        "blocking flood hit an unexpected send error (see log)"
+    );
+
+    // Property 2 — delivered + conserved. Reliable/ordered ⇒ the counter drains to ~0 only
+    // once the peer SACKs every byte, so this is both a leak check and an end-to-end delivery
+    // proof for the blocking path.
     let mut final_outstanding = dc.outstanding_bytes().await?;
     for _ in 0..300 {
         final_outstanding = dc.outstanding_bytes().await?;
-        if final_outstanding < 512 * 1024 {
+        if final_outstanding < 64 * 1024 {
             break;
         }
         sleep(Duration::from_millis(100)).await;
     }
     assert!(
-        final_outstanding < 512 * 1024,
-        "outstanding_bytes did not drain (leak?): {final_outstanding} bytes still outstanding"
+        final_outstanding < 64 * 1024,
+        "outstanding_bytes did not drain (leak / undelivered?): {final_outstanding} bytes \
+         still outstanding"
     );
 
-    // App-level receipt is informational only, NOT asserted: the built-in receive path hands
-    // messages to the app over a bounded, lossy channel, so a CPU-starved consumer (e.g. CI under
-    // coverage instrumentation) legitimately drops app-level messages even on a reliable/ordered
-    // channel. SCTP-level delivery is already proven by the drain above.
     let got = received.load(Ordering::Relaxed);
-    log::info!("send-unbounded: flooded {TOTAL_BYTES} bytes, gate disabled; app received={got}");
+    log::info!("blocking-send: max_outstanding={max_outstanding} app_received={got}");
 
     sender_pc.close().await?;
     receiver_pc.close().await?;
