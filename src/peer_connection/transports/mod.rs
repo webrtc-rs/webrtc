@@ -8,7 +8,12 @@ pub(crate) mod turn_relayer;
 
 pub(crate) enum SocketRecvResult {
     Packet {
+        /// Total bytes received into `buf` across all GRO-coalesced datagrams.
         n: usize,
+        /// Per-datagram size for GRO de-segmentation; `buf[..n]` is walked in
+        /// `stride`-sized steps (the last datagram may be shorter). Equals `n`
+        /// when a single datagram was received.
+        stride: usize,
         local_addr: SocketAddr,
         peer_addr: SocketAddr,
         idx: usize,

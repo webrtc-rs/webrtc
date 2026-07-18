@@ -13,8 +13,8 @@ description = "Async-friendly WebRTC implementation in Rust"
 
 [features]
 default = ["runtime-tokio"]
-runtime-tokio = ["dep:tokio"]
-runtime-smol = ["dep:smol", "dep:async-broadcast"]
+runtime-tokio = ["dep:tokio", "dep:quinn-udp"]
+runtime-smol = ["dep:smol", "dep:async-broadcast", "dep:quinn-udp"]
 
 [dependencies]
 rtc = { version = "0.20.0-rc.3", path = "rtc/rtc" }
@@ -28,6 +28,12 @@ futures = "0.3.32"
 tokio = { version = "1.52.3", features = ["net", "time", "sync", "rt", "rt-multi-thread"], optional = true }
 smol = { version = "2.0.2", optional = true }
 async-broadcast = { version = "0.7.2", optional = true }
+
+# UDP GSO (UDP_SEGMENT) send batching + GRO receive coalescing. Runtime-agnostic
+# (sync, non-blocking); driven through each runtime's readiness loop. Pulled in by
+# whichever runtime feature is enabled. `default-features = false` drops its optional
+# tracing/log integration (we use `log` directly in the wrappers).
+quinn-udp = { version = "0.6", default-features = false, optional = true }
 
 [dev-dependencies]
 signal = { version = "0.20.0-rc.3", path = "rtc/examples/examples/signal", package = "rtc-signal" }

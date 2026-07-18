@@ -55,6 +55,37 @@ pub(crate) const TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
 const UDP_RECV_BUF_LEN: usize = 2000;
 
+/// Upper bound on the number of datagrams the kernel may coalesce into one UDP GRO
+/// receive (`UDP_SEGMENT`/GRO cap is 64 per buffer).
+const MAX_GRO_SEGMENTS: usize = 64;
+
+/// Per-datagram size assumed when sizing a GRO receive buffer, at the standard
+/// Ethernet MTU. GRO coalesces up to `max_gro_segments()` datagrams into one buffer,
+/// each at most one wire MTU, so the buffer must be `max_gro_segments() *
+/// GRO_RECV_SEGMENT_LEN` — the kernel truncates (silently drops the tail datagrams)
+/// if the coalesced super-datagram overflows the buffer. WebRTC keeps its own
+/// datagrams well under this (DTLS/SCTP MTU ~1200); the 1500 headroom covers a peer
+/// sending up to standard-MTU-sized datagrams. Jumbo-frame paths (MTU > 1500) are not
+/// supported for GRO and would truncate.
+const GRO_RECV_SEGMENT_LEN: usize = 1500;
+
+/// Size a UDP receive buffer for a socket that may coalesce `max_gro` datagrams via
+/// GRO. Falls back to the plain single-datagram size when GRO is unavailable.
+///
+/// NOTE: with GRO enabled this returns ~96 KB (64 * 1500) per socket vs the ~2 KB
+/// non-GRO size — a real per-connection RSS cost that scales with socket count
+/// (relevant at SFU scale). It cannot be shrunk without risking truncation (see
+/// [`GRO_RECV_SEGMENT_LEN`]); the buffers are zero-initialized so pages stay unmapped
+/// until actually written. Measured net effect is still an RSS *reduction* under load
+/// because batching cuts per-packet allocator churn far more than the buffers cost.
+fn gro_recv_buf_len(max_gro: usize) -> usize {
+    if max_gro > 1 {
+        max_gro.min(MAX_GRO_SEGMENTS) * GRO_RECV_SEGMENT_LEN
+    } else {
+        UDP_RECV_BUF_LEN
+    }
+}
+
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
 pub(crate) enum PeerConnectionDriverEvent {
@@ -151,22 +182,27 @@ where
             }))
             .collect();
 
-        // Pre-allocate buffers once - one per socket, these will be reused forever
+        // Pre-allocate buffers once - one per socket, these will be reused forever.
+        // Sized for the socket's GRO coalescing capacity so a single `recv_gro` can
+        // hold up to `max_gro_segments()` datagrams without truncation.
         let mut udp_socket_buffers: Vec<Vec<u8>> = udp_socket_list
             .iter()
-            .map(|_| vec![0u8; UDP_RECV_BUF_LEN])
+            .map(|(_, socket)| vec![0u8; gro_recv_buf_len(socket.max_gro_segments())])
             .collect();
 
-        // Helper function to create a recv future for a specific socket
+        // Helper function to create a recv future for a specific socket. Uses GRO
+        // (`recv_gro`) so one syscall may return several coalesced datagrams; `stride`
+        // carries the per-datagram size for de-segmentation by the caller.
         let create_udp_recv_future = |idx: usize,
                                       local_addr: SocketAddr,
                                       socket: Arc<dyn AsyncUdpSocket>,
                                       mut buf: Vec<u8>| async move {
-            match socket.recv_from(&mut buf).await {
-                Ok((n, peer_addr)) => SocketRecvResult::Packet {
-                    n,
+            match socket.recv_gro(&mut buf).await {
+                Ok(gro) => SocketRecvResult::Packet {
+                    n: gro.len,
+                    stride: gro.stride,
                     local_addr,
-                    peer_addr,
+                    peer_addr: gro.peer_addr,
                     idx,
                     buf,
                 },
@@ -197,7 +233,14 @@ where
         // amortizes the per-iteration cost (poll_writes/events/reads core locks,
         // timeout recompute, select setup).
         const MAX_UDP_RECV_BURST: usize = 64;
-        let mut burst_buf = vec![0u8; UDP_RECV_BUF_LEN];
+        // The burst buffer is shared across sockets, so size it for the largest GRO
+        // capacity among them (falls back to the plain size when none support GRO).
+        let burst_buf_len = udp_socket_list
+            .iter()
+            .map(|(_, socket)| gro_recv_buf_len(socket.max_gro_segments()))
+            .max()
+            .unwrap_or(UDP_RECV_BUF_LEN);
+        let mut burst_buf = vec![0u8; burst_buf_len];
 
         loop {
             // Shutdown safety-net. `close()`/`Drop` set this flag and best-effort
@@ -291,21 +334,13 @@ where
                 udp_recv_result = udp_recv_future => {
                     if let Some(res) = udp_recv_result {
                         match res {
-                            Some(SocketRecvResult::Packet { n, local_addr, peer_addr, idx, buf }) => {
+                            Some(SocketRecvResult::Packet { n, stride, local_addr, peer_addr, idx, buf }) => {
                                 trace!("Received {} bytes from {} to {}", n, peer_addr, local_addr);
 
-                                if let Err(err) = self.handle_read(TaggedBytesMut {
-                                    now: Instant::now(),
-                                    transport: TransportContext {
-                                        local_addr,
-                                        peer_addr,
-                                        ecn: None,
-                                        transport_protocol: TransportProtocol::UDP,
-                                    },
-                                    message: BytesMut::from(&buf[..n]),
-                                }).await {
-                                     error!("handle_read error: {}", err);
-                                }
+                                // A single recv may return several GRO-coalesced
+                                // datagrams; split `buf[..n]` back into individual
+                                // datagrams by `stride` and deliver each.
+                                self.deliver_udp_batch(&buf, n, stride, local_addr, peer_addr).await;
 
                                 // Immediately create a new future for this socket and reuse the buffer
                                 let (socket_local_addr, socket) = &udp_socket_list[idx];
@@ -319,21 +354,9 @@ where
                                 // ready datagrams from this socket without blocking.
                                 let mut burst = 0;
                                 while burst < MAX_UDP_RECV_BURST {
-                                    match socket.recv_from(&mut burst_buf).now_or_never() {
-                                        Some(Ok((bn, bpeer))) => {
-                                            let bmsg = BytesMut::from(&burst_buf[..bn]);
-                                            if let Err(err) = self.handle_read(TaggedBytesMut {
-                                                now: Instant::now(),
-                                                transport: TransportContext {
-                                                    local_addr: socket_local_addr,
-                                                    peer_addr: bpeer,
-                                                    ecn: None,
-                                                    transport_protocol: TransportProtocol::UDP,
-                                                },
-                                                message: bmsg,
-                                            }).await {
-                                                error!("handle_read error (burst): {}", err);
-                                            }
+                                    match socket.recv_gro(&mut burst_buf).now_or_never() {
+                                        Some(Ok(gro)) => {
+                                            self.deliver_udp_batch(&burst_buf, gro.len, gro.stride, socket_local_addr, gro.peer_addr).await;
                                             burst += 1;
                                         }
                                         _ => break, // would-block (pending) or error
@@ -422,6 +445,45 @@ where
                 msg.transport.peer_addr, msg.transport.local_addr, msg.transport.transport_protocol
             );
             Ok(0)
+        }
+    }
+
+    /// Split a (possibly GRO-coalesced) UDP receive buffer into individual datagrams
+    /// and feed each to [`handle_read`](Self::handle_read).
+    ///
+    /// `buf[..n]` holds one or more datagrams of `stride` bytes each (the last may be
+    /// shorter). When `stride == n` (no GRO, or a lone datagram) this delivers exactly
+    /// one datagram — identical to the pre-GRO behavior. A zero-length datagram
+    /// (`n == 0`) is dropped (the loop never runs); empty UDP datagrams carry no
+    /// STUN/DTLS/SCTP payload, so this is harmless.
+    async fn deliver_udp_batch(
+        &mut self,
+        buf: &[u8],
+        n: usize,
+        stride: usize,
+        local_addr: SocketAddr,
+        peer_addr: SocketAddr,
+    ) {
+        let step = stride.max(1);
+        let mut off = 0;
+        while off < n {
+            let end = (off + step).min(n);
+            if let Err(err) = self
+                .handle_read(TaggedBytesMut {
+                    now: Instant::now(),
+                    transport: TransportContext {
+                        local_addr,
+                        peer_addr,
+                        ecn: None,
+                        transport_protocol: TransportProtocol::UDP,
+                    },
+                    message: BytesMut::from(&buf[off..end]),
+                })
+                .await
+            {
+                error!("handle_read error: {}", err);
+            }
+            off = end;
         }
     }
 
@@ -1061,5 +1123,24 @@ where
         let mut core = self.inner.core.lock().await;
         core.handle_timeout(now)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod gro_buf_tests {
+    use super::{GRO_RECV_SEGMENT_LEN, MAX_GRO_SEGMENTS, UDP_RECV_BUF_LEN, gro_recv_buf_len};
+
+    #[test]
+    fn gro_recv_buf_len_sizes_for_capacity_and_falls_back_without_gro() {
+        // GRO available: sized to hold up to `max_gro` coalesced datagrams.
+        assert_eq!(gro_recv_buf_len(64), 64 * GRO_RECV_SEGMENT_LEN);
+        assert_eq!(gro_recv_buf_len(8), 8 * GRO_RECV_SEGMENT_LEN);
+        // Capped at the kernel's max coalescing (MAX_GRO_SEGMENTS).
+        assert_eq!(
+            gro_recv_buf_len(1000),
+            MAX_GRO_SEGMENTS * GRO_RECV_SEGMENT_LEN
+        );
+        // GRO unavailable (max_gro <= 1): plain single-datagram buffer.
+        assert_eq!(gro_recv_buf_len(1), UDP_RECV_BUF_LEN);
     }
 }
