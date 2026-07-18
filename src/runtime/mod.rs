@@ -136,6 +136,25 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>>;
 }
 
+/// Outcome of a batched UDP receive ([`AsyncUdpSocket::recv_gro`]).
+///
+/// `buf[..len]` holds one or more datagrams received in a single syscall. When the
+/// kernel coalesced consecutive same-flow datagrams via UDP GRO, each is `stride`
+/// bytes except possibly the last — walk `buf[..len]` in `stride`-sized steps to
+/// recover the individual datagrams. Without GRO (or for a lone datagram)
+/// `stride == len` and there is exactly one datagram. Every datagram in the batch
+/// shares `peer_addr` (GRO only coalesces a single source flow).
+#[derive(Debug, Clone, Copy)]
+pub struct GroRecv {
+    /// Total bytes written to the buffer across all coalesced datagrams.
+    pub len: usize,
+    /// Size of each datagram in the batch; the final one may be shorter. Always
+    /// `>= 1` when `len > 0`.
+    pub stride: usize,
+    /// Source address shared by every datagram in the batch.
+    pub peer_addr: SocketAddr,
+}
+
 /// Abstract implementation of a UDP socket for runtime independence
 ///
 /// Simple async wrapper around UDP sockets
@@ -155,6 +174,73 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
 
     /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
+
+    /// Maximum number of segments a single [`send_segments`](Self::send_segments)
+    /// call can emit in one syscall via UDP GSO. Returns `1` when GSO is
+    /// unavailable (each segment then costs one syscall).
+    fn max_gso_segments(&self) -> usize {
+        1
+    }
+
+    /// Maximum number of datagrams the kernel may coalesce into one
+    /// [`recv_gro`](Self::recv_gro) via UDP GRO. Returns `1` when GRO is
+    /// unavailable. Used to size receive buffers.
+    fn max_gro_segments(&self) -> usize {
+        1
+    }
+
+    /// Send `buf` as consecutive datagrams of `segment_size` bytes to `target`
+    /// using a single UDP GSO (`UDP_SEGMENT`) syscall — the final datagram may be
+    /// shorter than `segment_size`. `ecn`, when `Some`, stamps the ECN codepoint
+    /// bits on every segment. Returns the number of payload bytes accepted.
+    ///
+    /// The default implementation falls back to a loop of [`send_to`](Self::send_to),
+    /// so implementors without GSO support (and external impls) need not override it.
+    /// Callers should only batch (`buf` spanning more than one segment) when
+    /// [`max_gso_segments`](Self::max_gso_segments) reports `> 1`.
+    fn send_segments<'a>(
+        &'a self,
+        buf: &'a [u8],
+        segment_size: usize,
+        target: SocketAddr,
+        ecn: Option<u8>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        Box::pin(async move {
+            let _ = ecn;
+            // `segment_size == 0` means "no segmentation" — send the whole buffer as a
+            // single datagram rather than shredding it into 1-byte sends.
+            let step = if segment_size == 0 {
+                buf.len().max(1)
+            } else {
+                segment_size
+            };
+            let mut sent = 0;
+            for chunk in buf.chunks(step) {
+                sent += self.send_to(chunk, target).await?;
+            }
+            Ok(sent)
+        })
+    }
+
+    /// Receive one or more datagrams into `buf` in a single syscall, using UDP GRO
+    /// to coalesce consecutive same-flow datagrams when available. See [`GroRecv`]
+    /// for how to split the buffer back into individual datagrams.
+    ///
+    /// The default implementation receives a single datagram (`stride == len`), so
+    /// implementors without GRO support (and external impls) need not override it.
+    fn recv_gro<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<GroRecv>> + Send + 'a>> {
+        Box::pin(async move {
+            let (len, peer_addr) = self.recv_from(buf).await?;
+            Ok(GroRecv {
+                len,
+                stride: if len == 0 { 1 } else { len },
+                peer_addr,
+            })
+        })
+    }
 }
 
 /// Abstract implementation of a TCP listener for runtime independence.
@@ -395,3 +481,98 @@ pub type BroadcastSender<T> = smol::SmolBroadcastSender<T>;
 /// The concrete broadcast channel Receiver type for the active runtime.
 #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
 pub type BroadcastReceiver<T> = smol::SmolBroadcastReceiver<T>;
+
+#[cfg(test)]
+mod default_impl_tests {
+    //! Cover the `AsyncUdpSocket` DEFAULT method bodies (send_segments / recv_gro /
+    //! max_gso_segments / max_gro_segments). The concrete tokio/smol impls override
+    //! them, so nothing else exercises the defaults — a minimal fake that implements
+    //! only the required methods does.
+    use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Debug, Default)]
+    struct FakeUdp {
+        sent: Mutex<Vec<Vec<u8>>>,
+        to_recv: Mutex<Vec<u8>>,
+    }
+
+    impl AsyncUdpSocket for FakeUdp {
+        fn send_to<'a>(
+            &'a self,
+            buf: &'a [u8],
+            _target: SocketAddr,
+        ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+            Box::pin(async move {
+                self.sent.lock().unwrap().push(buf.to_vec());
+                Ok(buf.len())
+            })
+        }
+        fn recv_from<'a>(
+            &'a self,
+            buf: &'a mut [u8],
+        ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>> {
+            Box::pin(async move {
+                let data = self.to_recv.lock().unwrap();
+                let n = data.len().min(buf.len());
+                buf[..n].copy_from_slice(&data[..n]);
+                Ok((n, "127.0.0.1:9".parse::<SocketAddr>().unwrap()))
+            })
+        }
+        fn local_addr(&self) -> io::Result<SocketAddr> {
+            Ok("127.0.0.1:0".parse::<SocketAddr>().unwrap())
+        }
+    }
+
+    fn addr() -> SocketAddr {
+        "127.0.0.1:5".parse::<SocketAddr>().unwrap()
+    }
+
+    #[test]
+    fn default_caps_are_one() {
+        let s = FakeUdp::default();
+        assert_eq!(s.max_gso_segments(), 1);
+        assert_eq!(s.max_gro_segments(), 1);
+    }
+
+    #[test]
+    fn default_send_segments_loops_send_to() {
+        let s = FakeUdp::default();
+        // 11 bytes, segment_size 3 -> datagrams of 3,3,3,2.
+        let buf = [1u8, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4];
+        let sent = futures::executor::block_on(s.send_segments(&buf, 3, addr(), None)).unwrap();
+        assert_eq!(sent, 11);
+        let calls = s.sent.lock().unwrap();
+        assert_eq!(calls.len(), 4);
+        assert_eq!(calls[0], vec![1, 1, 1]);
+        assert_eq!(calls[3], vec![4, 4]);
+    }
+
+    #[test]
+    fn default_send_segments_zero_size_is_one_datagram() {
+        let s = FakeUdp::default();
+        let buf = [7u8; 10];
+        futures::executor::block_on(s.send_segments(&buf, 0, addr(), Some(2))).unwrap();
+        let calls = s.sent.lock().unwrap();
+        assert_eq!(
+            calls.len(),
+            1,
+            "segment_size 0 must send one datagram, not shred"
+        );
+        assert_eq!(calls[0].len(), 10);
+    }
+
+    #[test]
+    fn default_recv_gro_is_single_datagram() {
+        let s = FakeUdp::default();
+        *s.to_recv.lock().unwrap() = vec![9, 9, 9, 9, 9];
+        let mut buf = [0u8; 32];
+        let gro = futures::executor::block_on(s.recv_gro(&mut buf)).unwrap();
+        assert_eq!(gro.len, 5);
+        assert_eq!(
+            gro.stride, 5,
+            "stride == len for a single (non-GRO) datagram"
+        );
+        assert_eq!(gro.peer_addr, "127.0.0.1:9".parse::<SocketAddr>().unwrap());
+    }
+}

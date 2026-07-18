@@ -12,7 +12,10 @@ use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
 use crate::peer_connection::transports::tcp_transport::RTCTcpTransport;
-use crate::peer_connection::transports::{SocketRecvResult, is_retryable_socket_recv_error};
+use crate::peer_connection::transports::{
+    MAX_GSO_BATCH_BYTES, MAX_GSO_SEGMENTS, MIN_GSO_RUN, SocketRecvResult, UDP_RECV_BUF_LEN,
+    gro_recv_buf_len, is_retryable_socket_recv_error,
+};
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, channel};
@@ -53,7 +56,6 @@ pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 pub(crate) const TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
-const UDP_RECV_BUF_LEN: usize = 2000;
 
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
@@ -81,6 +83,9 @@ where
     tcp_transport: RTCTcpTransport,
     mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
     udp_sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
+    /// Reused scratch buffer for concatenating a run of same-destination datagrams
+    /// into one UDP GSO send (see [`flush_writes`](Self::flush_writes)).
+    gso_scratch: Vec<u8>,
     ice_gathering_active: bool,
     stun_gathering_complete: bool,
     turn_gathering_complete: bool,
@@ -109,6 +114,7 @@ where
             turn_relayer,
             mdns_socket,
             udp_sockets,
+            gso_scratch: Vec::new(),
             tcp_transport: RTCTcpTransport::new(tcp_listeners),
             ice_gathering_active: false,
             stun_gathering_complete: false,
@@ -151,22 +157,27 @@ where
             }))
             .collect();
 
-        // Pre-allocate buffers once - one per socket, these will be reused forever
+        // Pre-allocate buffers once - one per socket, these will be reused forever.
+        // Sized for the socket's GRO coalescing capacity so a single `recv_gro` can
+        // hold up to `max_gro_segments()` datagrams without truncation.
         let mut udp_socket_buffers: Vec<Vec<u8>> = udp_socket_list
             .iter()
-            .map(|_| vec![0u8; UDP_RECV_BUF_LEN])
+            .map(|(_, socket)| vec![0u8; gro_recv_buf_len(socket.max_gro_segments())])
             .collect();
 
-        // Helper function to create a recv future for a specific socket
+        // Helper function to create a recv future for a specific socket. Uses GRO
+        // (`recv_gro`) so one syscall may return several coalesced datagrams; `stride`
+        // carries the per-datagram size for de-segmentation by the caller.
         let create_udp_recv_future = |idx: usize,
                                       local_addr: SocketAddr,
                                       socket: Arc<dyn AsyncUdpSocket>,
                                       mut buf: Vec<u8>| async move {
-            match socket.recv_from(&mut buf).await {
-                Ok((n, peer_addr)) => SocketRecvResult::Packet {
-                    n,
+            match socket.recv_gro(&mut buf).await {
+                Ok(gro) => SocketRecvResult::Packet {
+                    n: gro.len,
+                    stride: gro.stride,
                     local_addr,
-                    peer_addr,
+                    peer_addr: gro.peer_addr,
                     idx,
                     buf,
                 },
@@ -197,7 +208,14 @@ where
         // amortizes the per-iteration cost (poll_writes/events/reads core locks,
         // timeout recompute, select setup).
         const MAX_UDP_RECV_BURST: usize = 64;
-        let mut burst_buf = vec![0u8; UDP_RECV_BUF_LEN];
+        // The burst buffer is shared across sockets, so size it for the largest GRO
+        // capacity among them (falls back to the plain size when none support GRO).
+        let burst_buf_len = udp_socket_list
+            .iter()
+            .map(|(_, socket)| gro_recv_buf_len(socket.max_gro_segments()))
+            .max()
+            .unwrap_or(UDP_RECV_BUF_LEN);
+        let mut burst_buf = vec![0u8; burst_buf_len];
 
         loop {
             // Shutdown safety-net. `close()`/`Drop` set this flag and best-effort
@@ -291,21 +309,13 @@ where
                 udp_recv_result = udp_recv_future => {
                     if let Some(res) = udp_recv_result {
                         match res {
-                            Some(SocketRecvResult::Packet { n, local_addr, peer_addr, idx, buf }) => {
+                            Some(SocketRecvResult::Packet { n, stride, local_addr, peer_addr, idx, buf }) => {
                                 trace!("Received {} bytes from {} to {}", n, peer_addr, local_addr);
 
-                                if let Err(err) = self.handle_read(TaggedBytesMut {
-                                    now: Instant::now(),
-                                    transport: TransportContext {
-                                        local_addr,
-                                        peer_addr,
-                                        ecn: None,
-                                        transport_protocol: TransportProtocol::UDP,
-                                    },
-                                    message: BytesMut::from(&buf[..n]),
-                                }).await {
-                                     error!("handle_read error: {}", err);
-                                }
+                                // A single recv may return several GRO-coalesced
+                                // datagrams; split `buf[..n]` back into individual
+                                // datagrams by `stride` and deliver each.
+                                self.deliver_udp_batch(&buf, n, stride, local_addr, peer_addr).await;
 
                                 // Immediately create a new future for this socket and reuse the buffer
                                 let (socket_local_addr, socket) = &udp_socket_list[idx];
@@ -319,21 +329,9 @@ where
                                 // ready datagrams from this socket without blocking.
                                 let mut burst = 0;
                                 while burst < MAX_UDP_RECV_BURST {
-                                    match socket.recv_from(&mut burst_buf).now_or_never() {
-                                        Some(Ok((bn, bpeer))) => {
-                                            let bmsg = BytesMut::from(&burst_buf[..bn]);
-                                            if let Err(err) = self.handle_read(TaggedBytesMut {
-                                                now: Instant::now(),
-                                                transport: TransportContext {
-                                                    local_addr: socket_local_addr,
-                                                    peer_addr: bpeer,
-                                                    ecn: None,
-                                                    transport_protocol: TransportProtocol::UDP,
-                                                },
-                                                message: bmsg,
-                                            }).await {
-                                                error!("handle_read error (burst): {}", err);
-                                            }
+                                    match socket.recv_gro(&mut burst_buf).now_or_never() {
+                                        Some(Ok(gro)) => {
+                                            self.deliver_udp_batch(&burst_buf, gro.len, gro.stride, socket_local_addr, gro.peer_addr).await;
                                             burst += 1;
                                         }
                                         _ => break, // would-block (pending) or error
@@ -422,6 +420,45 @@ where
                 msg.transport.peer_addr, msg.transport.local_addr, msg.transport.transport_protocol
             );
             Ok(0)
+        }
+    }
+
+    /// Split a (possibly GRO-coalesced) UDP receive buffer into individual datagrams
+    /// and feed each to [`handle_read`](Self::handle_read).
+    ///
+    /// `buf[..n]` holds one or more datagrams of `stride` bytes each (the last may be
+    /// shorter). When `stride == n` (no GRO, or a lone datagram) this delivers exactly
+    /// one datagram — identical to the pre-GRO behavior. A zero-length datagram
+    /// (`n == 0`) is dropped (the loop never runs); empty UDP datagrams carry no
+    /// STUN/DTLS/SCTP payload, so this is harmless.
+    async fn deliver_udp_batch(
+        &mut self,
+        buf: &[u8],
+        n: usize,
+        stride: usize,
+        local_addr: SocketAddr,
+        peer_addr: SocketAddr,
+    ) {
+        let step = stride.max(1);
+        let mut off = 0;
+        while off < n {
+            let end = (off + step).min(n);
+            if let Err(err) = self
+                .handle_read(TaggedBytesMut {
+                    now: Instant::now(),
+                    transport: TransportContext {
+                        local_addr,
+                        peer_addr,
+                        ecn: None,
+                        transport_protocol: TransportProtocol::UDP,
+                    },
+                    message: BytesMut::from(&buf[off..end]),
+                })
+                .await
+            {
+                error!("handle_read error: {}", err);
+            }
+            off = end;
         }
     }
 
@@ -987,18 +1024,140 @@ where
             }
         }
 
-        // 1.c peer_connection poll_write() - Send all outgoing packets
-        for msg in Self::drain_core_writes(self.inner.clone()).await {
-            let four_tuple: FourTuple = FourTuple::from(&msg.transport);
-            if let Err(err) = self.handle_write(msg).await {
-                error!(
-                    "Failed to write packet to {:?} from {:?}: {}",
-                    four_tuple.peer_addr, four_tuple.local_addr, err
-                );
-            }
-        }
+        // 1.c peer_connection poll_write() - Send all outgoing packets, coalescing
+        // consecutive same-destination datagrams into single UDP GSO syscalls.
+        let writes = Self::drain_core_writes(self.inner.clone()).await;
+        self.flush_writes(writes).await;
 
         Ok(())
+    }
+
+    /// Send a drained batch of outgoing packets, coalescing maximal runs of
+    /// consecutive datagrams sharing the same UDP `(local_addr, peer_addr, ecn)`
+    /// into a single `UDP_SEGMENT` (GSO) syscall.
+    ///
+    /// During a bulk transfer the ICE handler stamps every non-STUN packet with the
+    /// one selected candidate pair, so these runs are long and homogeneous (each an
+    /// MTU-sized DTLS record → equal-size datagram) — the ideal GSO case. A run is
+    /// extended while the next datagram has the same 4-tuple and is exactly
+    /// `segment_size` bytes (a shorter datagram can only be the run's final segment,
+    /// a larger one starts a fresh run), capped by the socket's GSO segment limit and
+    /// [`MAX_GSO_BATCH_BYTES`]. Everything the GSO path can't own — TCP, mDNS,
+    /// TURN-relayed, or datagrams for an unknown socket — falls back to the
+    /// per-packet [`handle_write`](Self::handle_write) path unchanged.
+    async fn flush_writes(&mut self, mut writes: Vec<TaggedBytesMut>) {
+        // Borrow the reusable concat buffer out of `self` so the sends below don't
+        // hold a `&self` borrow across `.await`.
+        let mut scratch = std::mem::take(&mut self.gso_scratch);
+        let n = writes.len();
+        let mut i = 0;
+        while i < n {
+            let tp = writes[i].transport;
+            let seg = writes[i].message.len();
+
+            // Only plain UDP datagrams routed to one of our sockets are GSO-eligible.
+            let plain_udp = tp.transport_protocol == TransportProtocol::UDP
+                && tp.peer_addr.port() != MDNS_PORT
+                && !self.turn_relayer.contains_local_addr(tp.local_addr)
+                && self.udp_sockets.contains_key(&tp.local_addr);
+            if !plain_udp {
+                // TCP / mDNS / TURN-relayed / unknown-socket: owned per-packet path.
+                // Move the message out (writes[i] is never read again) rather than
+                // cloning it — this runs for every packet on a TURN-relayed connection,
+                // so a per-packet deep copy here would be a real cost.
+                let msg = TaggedBytesMut {
+                    now: writes[i].now,
+                    transport: writes[i].transport,
+                    message: std::mem::take(&mut writes[i].message),
+                };
+                let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+                if let Err(err) = self.handle_write(msg).await {
+                    error!(
+                        "Failed to write packet to {:?} from {:?}: {}",
+                        four_tuple.peer_addr, four_tuple.local_addr, err
+                    );
+                }
+                i += 1;
+                continue;
+            }
+
+            let socket = self.udp_sockets.get(&tp.local_addr).unwrap().clone();
+            let ecn = tp.ecn.map(|e| e as u8);
+
+            // Max datagrams the kernel accepts in one GSO `sendmsg` for this socket
+            // (1 = GSO unavailable / empty first datagram → no batching).
+            let max_seg = if seg > 0 {
+                socket.max_gso_segments().min(MAX_GSO_SEGMENTS)
+            } else {
+                1
+            };
+
+            // Grow the GSO run [i, end) while the 4-tuple matches and the size rule holds.
+            let mut end = i + 1;
+            if max_seg > 1 {
+                let mut total = seg;
+                while (end - i) < max_seg && end < n {
+                    let w_tp = writes[end].transport;
+                    // Same 4-tuple (local, peer) already implies non-mDNS and
+                    // non-TURN-relayed here (tp passed the plain_udp gate), so those two
+                    // checks are not repeated; protocol/ecn still must match.
+                    if w_tp.transport_protocol != TransportProtocol::UDP
+                        || w_tp.peer_addr != tp.peer_addr
+                        || w_tp.local_addr != tp.local_addr
+                        || w_tp.ecn.map(|e| e as u8) != ecn
+                    {
+                        break;
+                    }
+                    let wl = writes[end].message.len();
+                    // A larger datagram cannot be a GSO segment — it starts the next run.
+                    if wl == 0 || wl > seg || total + wl > MAX_GSO_BATCH_BYTES {
+                        break;
+                    }
+                    total += wl;
+                    end += 1;
+                    // A shorter datagram is only valid as the run's final segment.
+                    if wl < seg {
+                        break;
+                    }
+                }
+            }
+
+            // GSO only when the run is both worth it and physically batchable. Clamp the
+            // threshold to `max_seg` so a socket with a small GSO limit (< MIN_GSO_RUN)
+            // still batches rather than degrading to all-singleton sends.
+            if max_seg > 1 && end - i >= MIN_GSO_RUN.min(max_seg) {
+                // Large run: one GSO sendmsg beats end-i individual send_to syscalls.
+                scratch.clear();
+                for w in &writes[i..end] {
+                    scratch.extend_from_slice(&w.message);
+                }
+                if let Err(err) = socket.send_segments(&scratch, seg, tp.peer_addr, ecn).await {
+                    error!(
+                        "Failed to GSO-send {} datagrams to {:?} from {:?}: {}",
+                        end - i,
+                        tp.peer_addr,
+                        tp.local_addr,
+                        err
+                    );
+                }
+            } else {
+                // Small run (or singleton): individual send_to is cheaper than the GSO
+                // setup. (ECN is carried only on the GSO run path; inert today since the
+                // rtc core always emits ecn: None.)
+                for w in &writes[i..end] {
+                    if let Err(err) = socket.send_to(&w.message, tp.peer_addr).await {
+                        error!(
+                            "Failed to write packet to {:?} from {:?}: {}",
+                            tp.peer_addr, tp.local_addr, err
+                        );
+                    }
+                }
+            }
+            i = end;
+        }
+
+        scratch.clear();
+        self.gso_scratch = scratch;
     }
 
     async fn poll_events(&mut self) {

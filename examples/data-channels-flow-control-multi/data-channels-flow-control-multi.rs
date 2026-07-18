@@ -28,7 +28,7 @@ use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
 
 const BUFFERED_LOW: u32 = 512 * 1024; // 512 KB
 const BUFFERED_HIGH: u32 = 1024 * 1024; // 1 MB
-const CHUNK: usize = 1024; // 1 KB messages
+// Application message size is set at runtime via FLOW_MSG_KB (default 1 KB).
 
 fn env_usize(key: &str, default: usize) -> usize {
     std::env::var(key)
@@ -135,6 +135,8 @@ async fn run_pair(
     dedicated: bool,
     warmup_bytes: usize,
     stop_bytes: usize,
+    chunk_bytes: usize,
+    ordered: bool,
     mbps_tx: Sender<f64>,
 ) -> anyhow::Result<[Arc<dyn PeerConnection>; 2]> {
     let stop = Arc::new(AtomicBool::new(false));
@@ -150,18 +152,22 @@ async fn run_pair(
     )
     .await?;
 
-    // Unordered / no-retransmit — matches the stock data-channels-flow-control example
-    // (and pion's), so each stack's N-pair bench uses that stack's own example config.
-    let dc = requester
-        .create_data_channel(
-            "data",
-            Some(RTCDataChannelInit {
-                ordered: false,
-                max_retransmits: Some(0),
-                ..Default::default()
-            }),
-        )
-        .await?;
+    // Default: unordered / no-retransmit (matches the stock data-channels-flow-control
+    // example and pion's). FLOW_ORDERED=1 switches to ordered + reliable (no
+    // max_retransmits), matching the batch-drain issue-101 comment's harness.
+    let dc_init = if ordered {
+        RTCDataChannelInit {
+            ordered: true,
+            ..Default::default()
+        }
+    } else {
+        RTCDataChannelInit {
+            ordered: false,
+            max_retransmits: Some(0),
+            ..Default::default()
+        }
+    };
+    let dc = requester.create_data_channel("data", Some(dc_init)).await?;
     dc.set_buffered_amount_low_threshold(BUFFERED_LOW).await?;
     dc.set_buffered_amount_high_threshold(BUFFERED_HIGH).await?;
 
@@ -169,7 +175,7 @@ async fn run_pair(
     {
         let stop = stop.clone();
         runtime.spawn(Box::pin(async move {
-            let buf = BytesMut::from(vec![0u8; CHUNK].as_slice());
+            let buf = BytesMut::from(vec![0u8; chunk_bytes].as_slice());
             let mut dc_open = false;
             let mut paused = false;
             loop {
@@ -244,6 +250,15 @@ async fn async_main() -> anyhow::Result<()> {
     let pairs = env_usize("FLOW_PAIRS", 10);
     let warmup_bytes = env_usize("FLOW_WARMUP_MB", 64) * 1024 * 1024;
     let stop_bytes = env_usize("FLOW_STOP_MB", 128) * 1024 * 1024;
+    // Application message size. Large messages (e.g. 64) fragment into many MTU-sized
+    // SCTP DATA chunks -> many same-size datagrams to one peer, which the driver
+    // coalesces into single UDP GSO syscalls; 1 (the default) is one datagram/message.
+    let chunk_bytes = env_usize("FLOW_MSG_KB", 1) * 1024;
+    // FLOW_ORDERED=1 -> ordered + reliable data channel (issue-101 batch-drain harness);
+    // default is unordered / no-retransmit.
+    let ordered = std::env::var("FLOW_ORDERED")
+        .map(|v| v != "0")
+        .unwrap_or(false);
     let dedicated = std::env::var("FLOW_DEDICATED_REACTOR")
         .map(|v| v != "0")
         .unwrap_or(true);
@@ -262,6 +277,8 @@ async fn async_main() -> anyhow::Result<()> {
             dedicated,
             warmup_bytes,
             stop_bytes,
+            chunk_bytes,
+            ordered,
             mbps_tx.clone(),
         )
         .await?;

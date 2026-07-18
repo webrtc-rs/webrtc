@@ -56,8 +56,14 @@ impl Runtime for TokioRuntime {
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         sock.set_nonblocking(true)?;
+        let io = ::tokio::net::UdpSocket::from_std(sock)?;
+        // Probe + enable UDP GSO/GRO (and ECN/MTU options) on the socket. This is a
+        // one-time reconfiguration; `send_to`/`recv_from` keep working, but the recv
+        // path must now use `recv_gro` to decode GRO-coalesced buffers.
+        let state = ::quinn_udp::UdpSocketState::new(::quinn_udp::UdpSockRef::from(&io))?;
         Ok(Arc::new(UdpSocket {
-            io: Arc::new(::tokio::net::UdpSocket::from_std(sock)?),
+            io: Arc::new(io),
+            state: Arc::new(state),
         }))
     }
 
@@ -93,6 +99,8 @@ impl Runtime for TokioRuntime {
 #[derive(Debug, Clone)]
 struct UdpSocket {
     io: Arc<::tokio::net::UdpSocket>,
+    /// GSO/GRO capability + syscall helper for this socket (see `quinn-udp`).
+    state: Arc<::quinn_udp::UdpSocketState>,
 }
 
 impl AsyncUdpSocket for UdpSocket {
@@ -113,6 +121,83 @@ impl AsyncUdpSocket for UdpSocket {
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
         self.io.local_addr()
+    }
+
+    fn max_gso_segments(&self) -> usize {
+        self.state.max_gso_segments()
+    }
+
+    fn max_gro_segments(&self) -> usize {
+        self.state.gro_segments()
+    }
+
+    fn send_segments<'a>(
+        &'a self,
+        buf: &'a [u8],
+        segment_size: usize,
+        target: SocketAddr,
+        ecn: Option<u8>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        Box::pin(async move {
+            let transmit = ::quinn_udp::Transmit {
+                destination: target,
+                ecn: ecn.and_then(::quinn_udp::EcnCodepoint::from_bits),
+                contents: buf,
+                segment_size: Some(segment_size),
+                src_ip: None,
+            };
+            loop {
+                match self.io.try_io(::tokio::io::Interest::WRITABLE, || {
+                    self.state
+                        .send(::quinn_udp::UdpSockRef::from(&self.io), &transmit)
+                }) {
+                    Ok(()) => return Ok(buf.len()),
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        self.io.writable().await?;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+        })
+    }
+
+    fn recv_gro<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<GroRecv>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut meta = [::quinn_udp::RecvMeta::default()];
+            loop {
+                let mut bufs = [std::io::IoSliceMut::new(buf)];
+                let res = self.io.try_io(::tokio::io::Interest::READABLE, || {
+                    self.state.recv(
+                        ::quinn_udp::UdpSockRef::from(&self.io),
+                        &mut bufs,
+                        &mut meta,
+                    )
+                });
+                // `bufs` (which borrows `buf`) is no longer used past this point, so the
+                // borrow ends here and the `.await` below can re-borrow on the next loop.
+                match res {
+                    Ok(_) => {
+                        let m = &meta[0];
+                        return Ok(GroRecv {
+                            len: m.len,
+                            stride: if m.stride == 0 {
+                                m.len.max(1)
+                            } else {
+                                m.stride
+                            },
+                            peer_addr: m.addr,
+                        });
+                    }
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        self.io.readable().await?;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+        })
     }
 }
 

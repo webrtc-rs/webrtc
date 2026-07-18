@@ -1,7 +1,6 @@
 //! smol runtime implementation
 
 use super::*;
-use ::smol::net::UdpSocket as SmolUdpSocket;
 use ::smol::spawn;
 use std::io::{Read, Write};
 use std::sync::Arc;
@@ -57,7 +56,7 @@ impl Runtime for SmolRuntime {
     }
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
-        Ok(Arc::new(UdpSocket::new(sock)?))
+        Ok(Arc::new(UdpSocket::new(sock)?) as Arc<dyn AsyncUdpSocket>)
     }
 
     fn wrap_tcp_listener(
@@ -92,15 +91,23 @@ impl Runtime for SmolRuntime {
 
 #[derive(Debug)]
 struct UdpSocket {
-    io: Arc<SmolUdpSocket>,
+    io: Arc<::smol::Async<std::net::UdpSocket>>,
+    /// GSO/GRO capability + syscall helper for this socket (see `quinn-udp`).
+    state: Arc<::quinn_udp::UdpSocketState>,
 }
 
 impl UdpSocket {
     fn new(sock: std::net::UdpSocket) -> io::Result<Self> {
-        // Wrap std socket in smol's Async
+        // Wrap std socket in smol's Async (sets non-blocking).
         let async_sock = ::smol::Async::new(sock)?;
+        // Probe + enable UDP GSO/GRO (and ECN/MTU options) on the socket. This is a
+        // one-time reconfiguration; `send_to`/`recv_from` keep working, but the recv
+        // path must now use `recv_gro` to decode GRO-coalesced buffers.
+        let state =
+            ::quinn_udp::UdpSocketState::new(::quinn_udp::UdpSockRef::from(async_sock.get_ref()))?;
         Ok(Self {
-            io: Arc::new(SmolUdpSocket::from(async_sock)),
+            io: Arc::new(async_sock),
+            state: Arc::new(state),
         })
     }
 }
@@ -111,18 +118,74 @@ impl AsyncUdpSocket for UdpSocket {
         buf: &'a [u8],
         target: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
-        Box::pin(async move { self.io.send_to(buf, target).await })
+        Box::pin(async move { self.io.write_with(|s| s.send_to(buf, target)).await })
     }
 
     fn recv_from<'a>(
         &'a self,
         buf: &'a mut [u8],
     ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>> {
-        Box::pin(async move { self.io.recv_from(buf).await })
+        Box::pin(async move { self.io.read_with(|s| s.recv_from(buf)).await })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.io.local_addr()
+        self.io.get_ref().local_addr()
+    }
+
+    fn max_gso_segments(&self) -> usize {
+        self.state.max_gso_segments()
+    }
+
+    fn max_gro_segments(&self) -> usize {
+        self.state.gro_segments()
+    }
+
+    fn send_segments<'a>(
+        &'a self,
+        buf: &'a [u8],
+        segment_size: usize,
+        target: SocketAddr,
+        ecn: Option<u8>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        Box::pin(async move {
+            let transmit = ::quinn_udp::Transmit {
+                destination: target,
+                ecn: ecn.and_then(::quinn_udp::EcnCodepoint::from_bits),
+                contents: buf,
+                segment_size: Some(segment_size),
+                src_ip: None,
+            };
+            self.io
+                .write_with(|s| self.state.send(::quinn_udp::UdpSockRef::from(s), &transmit))
+                .await?;
+            Ok(buf.len())
+        })
+    }
+
+    fn recv_gro<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<GroRecv>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut meta = [::quinn_udp::RecvMeta::default()];
+            self.io
+                .read_with(|s| {
+                    let mut bufs = [std::io::IoSliceMut::new(buf)];
+                    self.state
+                        .recv(::quinn_udp::UdpSockRef::from(s), &mut bufs, &mut meta)
+                })
+                .await?;
+            let m = &meta[0];
+            Ok(GroRecv {
+                len: m.len,
+                stride: if m.stride == 0 {
+                    m.len.max(1)
+                } else {
+                    m.stride
+                },
+                peer_addr: m.addr,
+            })
+        })
     }
 }
 
