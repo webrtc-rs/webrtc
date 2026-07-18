@@ -59,6 +59,28 @@ const UDP_RECV_BUF_LEN: usize = 2000;
 /// receive (`UDP_SEGMENT`/GRO cap is 64 per buffer).
 const MAX_GRO_SEGMENTS: usize = 64;
 
+/// Upper bound on datagrams coalesced into one UDP GSO send. The kernel caps
+/// `UDP_SEGMENT` at 64 segments per `sendmsg`; a socket may report fewer.
+const MAX_GSO_SEGMENTS: usize = 64;
+
+/// Upper bound on the total bytes of one UDP GSO batch. Kept at the single-datagram
+/// UDP payload limit (65535) so a batch never trips the kernel's aggregate-size
+/// checks and disables GSO — at ~1.25 KB datagrams this still coalesces ~50 per call.
+const MAX_GSO_BATCH_BYTES: usize = 65535;
+
+/// Minimum datagrams in a run before it is worth a single GSO `sendmsg` instead of
+/// individual `send_to`s. GSO trades N cheap `sendto` syscalls for one heavier
+/// `sendmsg` (control-message construction + kernel GSO setup) plus one buffer
+/// concatenation, so it only pays off once the run is large. Below this the batching
+/// machinery is pure overhead — exactly the paced single-connection case, where the
+/// watermark dribbles a few datagrams per flush. A too-low threshold there GSOs the
+/// occasional large drain and thrashes the tiny working set (measured on loopback:
+/// threshold 2 → wall +58%, threshold 8 → +21%, threshold 16 → −15% i.e. back to a
+/// win). Throughput-bound bursts (bulk/flood/many-connection) run far larger (50+),
+/// so 16 keeps their full win (N=10 wall −34%, flood +77%) while erasing the
+/// single-connection regression.
+const MIN_GSO_RUN: usize = 16;
+
 /// Per-datagram size assumed when sizing a GRO receive buffer, at the standard
 /// Ethernet MTU. GRO coalesces up to `max_gro_segments()` datagrams into one buffer,
 /// each at most one wire MTU, so the buffer must be `max_gro_segments() *
@@ -112,6 +134,9 @@ where
     tcp_transport: RTCTcpTransport,
     mdns_socket: Option<Arc<dyn AsyncUdpSocket>>,
     udp_sockets: HashMap<SocketAddr, Arc<dyn AsyncUdpSocket>>,
+    /// Reused scratch buffer for concatenating a run of same-destination datagrams
+    /// into one UDP GSO send (see [`flush_writes`](Self::flush_writes)).
+    gso_scratch: Vec<u8>,
     ice_gathering_active: bool,
     stun_gathering_complete: bool,
     turn_gathering_complete: bool,
@@ -140,6 +165,7 @@ where
             turn_relayer,
             mdns_socket,
             udp_sockets,
+            gso_scratch: Vec::new(),
             tcp_transport: RTCTcpTransport::new(tcp_listeners),
             ice_gathering_active: false,
             stun_gathering_complete: false,
@@ -1049,18 +1075,140 @@ where
             }
         }
 
-        // 1.c peer_connection poll_write() - Send all outgoing packets
-        for msg in Self::drain_core_writes(self.inner.clone()).await {
-            let four_tuple: FourTuple = FourTuple::from(&msg.transport);
-            if let Err(err) = self.handle_write(msg).await {
-                error!(
-                    "Failed to write packet to {:?} from {:?}: {}",
-                    four_tuple.peer_addr, four_tuple.local_addr, err
-                );
-            }
-        }
+        // 1.c peer_connection poll_write() - Send all outgoing packets, coalescing
+        // consecutive same-destination datagrams into single UDP GSO syscalls.
+        let writes = Self::drain_core_writes(self.inner.clone()).await;
+        self.flush_writes(writes).await;
 
         Ok(())
+    }
+
+    /// Send a drained batch of outgoing packets, coalescing maximal runs of
+    /// consecutive datagrams sharing the same UDP `(local_addr, peer_addr, ecn)`
+    /// into a single `UDP_SEGMENT` (GSO) syscall.
+    ///
+    /// During a bulk transfer the ICE handler stamps every non-STUN packet with the
+    /// one selected candidate pair, so these runs are long and homogeneous (each an
+    /// MTU-sized DTLS record → equal-size datagram) — the ideal GSO case. A run is
+    /// extended while the next datagram has the same 4-tuple and is exactly
+    /// `segment_size` bytes (a shorter datagram can only be the run's final segment,
+    /// a larger one starts a fresh run), capped by the socket's GSO segment limit and
+    /// [`MAX_GSO_BATCH_BYTES`]. Everything the GSO path can't own — TCP, mDNS,
+    /// TURN-relayed, or datagrams for an unknown socket — falls back to the
+    /// per-packet [`handle_write`](Self::handle_write) path unchanged.
+    async fn flush_writes(&mut self, mut writes: Vec<TaggedBytesMut>) {
+        // Borrow the reusable concat buffer out of `self` so the sends below don't
+        // hold a `&self` borrow across `.await`.
+        let mut scratch = std::mem::take(&mut self.gso_scratch);
+        let n = writes.len();
+        let mut i = 0;
+        while i < n {
+            let tp = writes[i].transport;
+            let seg = writes[i].message.len();
+
+            // Only plain UDP datagrams routed to one of our sockets are GSO-eligible.
+            let plain_udp = tp.transport_protocol == TransportProtocol::UDP
+                && tp.peer_addr.port() != MDNS_PORT
+                && !self.turn_relayer.contains_local_addr(tp.local_addr)
+                && self.udp_sockets.contains_key(&tp.local_addr);
+            if !plain_udp {
+                // TCP / mDNS / TURN-relayed / unknown-socket: owned per-packet path.
+                // Move the message out (writes[i] is never read again) rather than
+                // cloning it — this runs for every packet on a TURN-relayed connection,
+                // so a per-packet deep copy here would be a real cost.
+                let msg = TaggedBytesMut {
+                    now: writes[i].now,
+                    transport: writes[i].transport,
+                    message: std::mem::take(&mut writes[i].message),
+                };
+                let four_tuple: FourTuple = FourTuple::from(&msg.transport);
+                if let Err(err) = self.handle_write(msg).await {
+                    error!(
+                        "Failed to write packet to {:?} from {:?}: {}",
+                        four_tuple.peer_addr, four_tuple.local_addr, err
+                    );
+                }
+                i += 1;
+                continue;
+            }
+
+            let socket = self.udp_sockets.get(&tp.local_addr).unwrap().clone();
+            let ecn = tp.ecn.map(|e| e as u8);
+
+            // Max datagrams the kernel accepts in one GSO `sendmsg` for this socket
+            // (1 = GSO unavailable / empty first datagram → no batching).
+            let max_seg = if seg > 0 {
+                socket.max_gso_segments().min(MAX_GSO_SEGMENTS)
+            } else {
+                1
+            };
+
+            // Grow the GSO run [i, end) while the 4-tuple matches and the size rule holds.
+            let mut end = i + 1;
+            if max_seg > 1 {
+                let mut total = seg;
+                while (end - i) < max_seg && end < n {
+                    let w_tp = writes[end].transport;
+                    // Same 4-tuple (local, peer) already implies non-mDNS and
+                    // non-TURN-relayed here (tp passed the plain_udp gate), so those two
+                    // checks are not repeated; protocol/ecn still must match.
+                    if w_tp.transport_protocol != TransportProtocol::UDP
+                        || w_tp.peer_addr != tp.peer_addr
+                        || w_tp.local_addr != tp.local_addr
+                        || w_tp.ecn.map(|e| e as u8) != ecn
+                    {
+                        break;
+                    }
+                    let wl = writes[end].message.len();
+                    // A larger datagram cannot be a GSO segment — it starts the next run.
+                    if wl == 0 || wl > seg || total + wl > MAX_GSO_BATCH_BYTES {
+                        break;
+                    }
+                    total += wl;
+                    end += 1;
+                    // A shorter datagram is only valid as the run's final segment.
+                    if wl < seg {
+                        break;
+                    }
+                }
+            }
+
+            // GSO only when the run is both worth it and physically batchable. Clamp the
+            // threshold to `max_seg` so a socket with a small GSO limit (< MIN_GSO_RUN)
+            // still batches rather than degrading to all-singleton sends.
+            if max_seg > 1 && end - i >= MIN_GSO_RUN.min(max_seg) {
+                // Large run: one GSO sendmsg beats end-i individual send_to syscalls.
+                scratch.clear();
+                for w in &writes[i..end] {
+                    scratch.extend_from_slice(&w.message);
+                }
+                if let Err(err) = socket.send_segments(&scratch, seg, tp.peer_addr, ecn).await {
+                    error!(
+                        "Failed to GSO-send {} datagrams to {:?} from {:?}: {}",
+                        end - i,
+                        tp.peer_addr,
+                        tp.local_addr,
+                        err
+                    );
+                }
+            } else {
+                // Small run (or singleton): individual send_to is cheaper than the GSO
+                // setup. (ECN is carried only on the GSO run path; inert today since the
+                // rtc core always emits ecn: None.)
+                for w in &writes[i..end] {
+                    if let Err(err) = socket.send_to(&w.message, tp.peer_addr).await {
+                        error!(
+                            "Failed to write packet to {:?} from {:?}: {}",
+                            tp.peer_addr, tp.local_addr, err
+                        );
+                    }
+                }
+            }
+            i = end;
+        }
+
+        scratch.clear();
+        self.gso_scratch = scratch;
     }
 
     async fn poll_events(&mut self) {
