@@ -1,11 +1,103 @@
 //! Tokio runtime implementation
 
 use super::*;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 
 /// A WebRTC runtime for Tokio
 #[derive(Debug)]
 pub struct TokioRuntime;
+
+/// Shared, bounded pool of single-threaded reactor runtimes, replacing the old
+/// one-OS-thread-per-`PeerConnection` model. Each slot is a dedicated thread
+/// hosting a `new_current_thread` runtime, created lazily on first use and kept
+/// alive for the process lifetime; driver futures are assigned to slots
+/// round-robin and pinned there, so the thread (and per-thread allocator arena)
+/// count is bounded by the pool size regardless of connection count (issue #101
+/// RSS). See [`Runtime::spawn_reactor`].
+struct ReactorPool {
+    /// One lazily-initialised pool slot. A slot's thread is created only when that
+    /// slot is first assigned work, so `M` connections use `min(M, N)` threads (an
+    /// unshared thread each below the bound, then sharing). `Some(handle)` is a live
+    /// pool runtime; `None` records that this slot's thread could not be created
+    /// (a rare resource-exhaustion failure), so its work falls back to the ambient
+    /// runtime instead — never a panic out of `build()`.
+    slots: Box<[OnceLock<Option<::tokio::runtime::Handle>>]>,
+    /// Round-robin cursor over `slots`.
+    next: AtomicUsize,
+}
+
+impl ReactorPool {
+    fn new(size: usize) -> Self {
+        let size = size.clamp(1, MAX_REACTOR_POOL_SIZE);
+        let slots = (0..size)
+            .map(|_| OnceLock::new())
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        Self {
+            slots,
+            next: AtomicUsize::new(0),
+        }
+    }
+
+    fn spawn(
+        &self,
+        future: Pin<Box<dyn Future<Output = ()> + Send>>,
+    ) -> ::tokio::task::JoinHandle<()> {
+        let idx = self.next.fetch_add(1, Ordering::Relaxed) % self.slots.len();
+        match self.slots[idx].get_or_init(|| spawn_reactor_thread(idx)) {
+            Some(handle) => handle.spawn(future),
+            // Slot thread failed to start; degrade to the ambient runtime rather
+            // than losing the driver (spawn_reactor is always called from within a
+            // tokio runtime context — the application's — so this is valid).
+            None => ::tokio::spawn(future),
+        }
+    }
+}
+
+/// Spawn one pool thread — a dedicated OS thread hosting a current-thread tokio
+/// runtime — and return a `Handle` onto it, or `None` if the thread or its runtime
+/// could not be built (a rare resource-exhaustion failure; the caller degrades to
+/// the ambient runtime). The thread parks on `block_on(pending())` forever, which
+/// keeps the runtime's I/O and timer drivers running so it can drive every future
+/// later `Handle::spawn`ed onto it while the block_on future itself never completes.
+fn spawn_reactor_thread(idx: usize) -> Option<::tokio::runtime::Handle> {
+    // Rendezvous: hand the freshly-built runtime's Handle back to this caller.
+    let (tx, rx) = std::sync::mpsc::sync_channel::<::tokio::runtime::Handle>(0);
+    let spawned = std::thread::Builder::new()
+        // Keep <= 15 bytes so the name survives Linux's `comm` truncation.
+        .name(format!("webrtc-rx{idx}"))
+        .spawn(move || {
+            match ::tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => {
+                    // Hand back a Handle, then keep the runtime (and its I/O + timer
+                    // drivers) alive so `Handle::spawn`ed driver tasks make progress
+                    // while we park here forever.
+                    let _ = tx.send(rt.handle().clone());
+                    rt.block_on(std::future::pending::<()>());
+                }
+                Err(err) => {
+                    // Dropping `tx` unblocks the rendezvous `recv` with an error.
+                    log::error!("failed to build reactor pool runtime: {err}");
+                }
+            }
+        });
+    match spawned {
+        // `recv` errs only if the thread dropped `tx` without sending, i.e. the
+        // runtime build failed above — surface that as `None`, not a panic.
+        Ok(_) => rx.recv().ok(),
+        Err(err) => {
+            log::error!("failed to spawn reactor pool thread: {err}");
+            None
+        }
+    }
+}
+
+/// Process-global reactor pool, sized once on first use from [`reactor_pool_size`].
+static REACTOR_POOL: OnceLock<ReactorPool> = OnceLock::new();
 
 struct TokioJoinHandle(::tokio::task::JoinHandle<()>);
 
@@ -32,26 +124,15 @@ impl Runtime for TokioRuntime {
     }
 
     fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> super::JoinHandle {
-        let join = std::thread::Builder::new()
-            // Keep <= 15 bytes so the name survives Linux's `comm` truncation.
-            .name("webrtc-reactor".into())
-            .spawn(move || {
-                // A single-threaded runtime: its I/O + timer drivers live on this
-                // one thread, so tokio never migrates the driver task across its
-                // worker pool. enable_all() is required for sleep()/recv_from().
-                // TODO(#101): this confines the driver to one thread but does not
-                // pin that thread to a CPU core; a follow-up can set core affinity
-                // via the `core_affinity` crate for cache/NUMA locality.
-                match ::tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    Ok(rt) => rt.block_on(future),
-                    Err(err) => log::error!("failed to build dedicated reactor runtime: {err}"),
-                }
-            })
-            .expect("failed to spawn dedicated reactor thread");
-        super::reactor_join_handle(join)
+        // Route to the process-global bounded reactor pool (built lazily, sized
+        // once from `reactor_pool_size`). The driver runs as a task pinned to one
+        // pool thread; the returned handle aborts that task, not a whole thread.
+        let handle = REACTOR_POOL
+            .get_or_init(|| ReactorPool::new(super::reactor_pool_size()))
+            .spawn(future);
+        super::JoinHandle {
+            inner: Box::new(TokioJoinHandle(handle)),
+        }
     }
 
     fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {

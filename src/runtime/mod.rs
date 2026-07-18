@@ -16,7 +16,56 @@
 
 #![allow(clippy::type_complexity)]
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
+
+/// Process-global override for the shared reactor pool's thread count, set via
+/// [`set_reactor_pool_size`]. `0` means "unset": fall back to the
+/// `WEBRTC_REACTOR_POOL_SIZE` environment variable, then to host parallelism.
+static REACTOR_POOL_SIZE: AtomicUsize = AtomicUsize::new(0);
+
+/// Upper clamp on the reactor-pool thread count, guarding against a fat-fingered
+/// `WEBRTC_REACTOR_POOL_SIZE` / [`set_reactor_pool_size`] value eagerly allocating a
+/// slot table large enough to OOM (or overflow). Far above any sane reactor count.
+pub(crate) const MAX_REACTOR_POOL_SIZE: usize = 1024;
+
+/// Set the size of the shared reactor-thread pool used by
+/// [`Runtime::spawn_reactor`] (i.e. by connections built with
+/// [`with_dedicated_reactor_thread(true)`](crate::peer_connection::PeerConnectionBuilder::with_dedicated_reactor_thread)).
+///
+/// The pool is process-global and sized **once**, lazily, on first use. Call this
+/// before building the first dedicated-reactor `PeerConnection`; later calls (or
+/// calls after the pool has been created) have no effect. `0` restores the
+/// default resolution (env var, then host parallelism).
+///
+/// Prefer this or the `WEBRTC_REACTOR_POOL_SIZE` env var for a global default;
+/// [`PeerConnectionBuilder::with_reactor_pool_size`](crate::peer_connection::PeerConnectionBuilder::with_reactor_pool_size)
+/// is a convenience that forwards here at build time.
+pub fn set_reactor_pool_size(size: usize) {
+    REACTOR_POOL_SIZE.store(size, Ordering::Relaxed);
+}
+
+/// Resolve the reactor-pool size, in precedence order: an explicit override (via
+/// [`set_reactor_pool_size`]), then the `WEBRTC_REACTOR_POOL_SIZE` env var, then
+/// host parallelism (`available_parallelism`, falling back to 4). Read once by
+/// each runtime when it lazily builds its pool.
+pub(crate) fn reactor_pool_size() -> usize {
+    let override_size = REACTOR_POOL_SIZE.load(Ordering::Relaxed);
+    let resolved = if override_size != 0 {
+        override_size
+    } else {
+        std::env::var("WEBRTC_REACTOR_POOL_SIZE")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|&n| n != 0)
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(4)
+            })
+    };
+    resolved.clamp(1, MAX_REACTOR_POOL_SIZE)
+}
 
 /// Handle to a spawned task that can be used to manage its lifecycle
 pub struct JoinHandle {
@@ -49,40 +98,6 @@ trait JoinHandleInner: Send + Sync {
     fn is_finished(&self) -> bool;
 }
 
-/// [`JoinHandleInner`] backed by a dedicated OS thread running a single-threaded
-/// reactor (see [`Runtime::spawn_reactor`]). A thread cannot be force-cancelled,
-/// so shutdown is driven by the peer connection's `Close` event; `abort` is a
-/// best-effort no-op and `detach` simply drops the join handle.
-struct ThreadReactorHandle(std::sync::Mutex<Option<std::thread::JoinHandle<()>>>);
-
-impl JoinHandleInner for ThreadReactorHandle {
-    fn detach(&self) {
-        if let Ok(mut guard) = self.0.lock() {
-            let _ = guard.take();
-        }
-    }
-
-    fn abort(&self) {
-        // Threads cannot be cancelled; the reactor exits when its event loop
-        // returns (the peer connection sends a Close driver event on shutdown).
-    }
-
-    fn is_finished(&self) -> bool {
-        self.0
-            .lock()
-            .map(|guard| guard.as_ref().is_none_or(|handle| handle.is_finished()))
-            .unwrap_or(true)
-    }
-}
-
-/// Wrap a dedicated reactor thread's join handle in a runtime-agnostic [`JoinHandle`].
-/// Used by the tokio and smol [`Runtime::spawn_reactor`] implementations.
-fn reactor_join_handle(join: std::thread::JoinHandle<()>) -> JoinHandle {
-    JoinHandle {
-        inner: Box::new(ThreadReactorHandle(std::sync::Mutex::new(Some(join)))),
-    }
-}
-
 /// Abstracts I/O and timer operations for runtime independence
 ///
 /// This trait allows the WebRTC implementation to work with different async runtimes
@@ -97,17 +112,27 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     #[track_caller]
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle;
 
-    /// Drive `future` to completion on a dedicated single-threaded reactor.
+    /// Drive `future` to completion on a **shared, bounded pool** of
+    /// single-threaded reactors, pinned to one pool thread for its lifetime.
     ///
-    /// The tokio and smol implementations spawn a dedicated OS thread with its
-    /// own single-threaded runtime, confining a peer-connection driver to that
-    /// one thread so the async runtime never migrates it across the shared worker
+    /// The tokio and smol implementations keep a process-global pool of at most
+    /// `N` dedicated OS threads (each hosting its own single-threaded runtime),
+    /// created lazily and sized by [`reactor_pool_size`]. Each `future` is
+    /// assigned to one pool thread round-robin and never migrates off it, so the
+    /// async runtime never moves a peer-connection driver across a shared worker
     /// pool — the dominant cost for in-process data-channel throughput (issue
-    /// #101). The socket wrapping and the whole event loop run inside `future`,
-    /// on this reactor, so I/O resources bind to the dedicated runtime's reactor.
+    /// #101) — while the thread (and per-thread allocator arena) count stays
+    /// bounded by `N` regardless of connection count, instead of one OS thread
+    /// per connection. The socket wrapping and the whole event loop run inside
+    /// `future`, on the pool thread's runtime, so I/O resources bind to it.
+    ///
+    /// `future` runs as an abortable *task* on its pool thread; the returned
+    /// [`JoinHandle`] aborts that task (not a whole thread). Up to a few drivers
+    /// cooperatively share a pool thread; they are I/O-bound and yield at await
+    /// points, so they interleave without blocking one another.
     ///
     /// This is thread confinement, not CPU-core affinity: the OS scheduler may
-    /// still move the thread between cores. Pinning it to a specific core (via
+    /// still move a pool thread between cores. Pinning pool threads to cores (via
     /// `core_affinity`) is a planned follow-up (issue #101).
     ///
     /// The default implementation falls back to [`Runtime::spawn`] on the ambient
