@@ -176,6 +176,7 @@ where
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
     dedicated_reactor: bool,
+    reactor_pool_size: Option<usize>,
     data_channel_send_buffer_limit: usize,
 }
 
@@ -189,6 +190,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             udp_addrs: vec![],
             tcp_addrs: vec![],
             dedicated_reactor: false,
+            reactor_pool_size: None,
             // `usize::MAX` = unbounded: no send back-pressure unless the application
             // opts in via `with_data_channel_send_buffer_limit`. This keeps `send`/
             // `send_text` non-blocking by default (zero behaviour change).
@@ -227,6 +229,31 @@ where
         self
     }
 
+    /// Sets the SCTP receive-buffer size (the a_rwnd flow-control window), in bytes.
+    ///
+    /// This bounds how much unacknowledged data a remote peer may have in flight toward
+    /// this connection — a bandwidth-delay-product ceiling. The buffer fills only under
+    /// load, so lowering it trims per-connection resident memory (useful for servers
+    /// holding many connections — it stacks with the shared reactor pool, see
+    /// [`with_dedicated_reactor_thread`](Self::with_dedicated_reactor_thread)); but a
+    /// smaller window can throttle throughput on high-latency, high-bandwidth paths,
+    /// where more data must be in flight to keep the pipe full.
+    ///
+    /// **Default: 1 MiB** (left unset), which suits typical internet paths. Lower it
+    /// (e.g. 256 KiB) for memory-bound, many-connection or low-RTT (LAN/loopback)
+    /// deployments. Applies to whichever [`SettingEngine`] is set, so call it *after*
+    /// [`with_setting_engine`](Self::with_setting_engine) when supplying a custom engine.
+    ///
+    /// **Bounds:** values below the RFC 4960 §6 floor of 1500 bytes (including `0`) are
+    /// raised to it — a smaller window would break the SCTP handshake. Keep it **≥ the
+    /// largest data-channel message you expect to receive** (default max is 64 KiB) or a
+    /// full-size inbound message stalls. `0` is *not* "unbounded" here — leave this unset
+    /// to keep the 1 MiB default.
+    pub fn with_sctp_receive_buffer_size(mut self, size: u32) -> Self {
+        self.builder = self.builder.with_sctp_receive_buffer_size(size);
+        self
+    }
+
     /// Configures the builder with the specified interceptor [`Registry`].
     pub fn with_interceptor_registry<P>(
         self,
@@ -243,6 +270,7 @@ where
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
             dedicated_reactor: self.dedicated_reactor,
+            reactor_pool_size: self.reactor_pool_size,
             data_channel_send_buffer_limit: self.data_channel_send_buffer_limit,
         }
     }
@@ -271,27 +299,62 @@ where
         self
     }
 
-    /// Run this peer connection's driver on its own dedicated OS thread with a
-    /// single-threaded reactor, instead of on the shared async runtime.
+    /// Run this peer connection's driver on the shared **bounded reactor pool**
+    /// instead of on the general-purpose async runtime.
     ///
     /// This *confines* the driver (and thus its SCTP/DTLS/SRTP state and I/O
-    /// reactor) to a single dedicated thread, so the async runtime never migrates
-    /// it across its worker pool — the dominant cost for in-process data-channel
-    /// throughput on multi-threaded runtimes (issue #101). It costs one OS thread
-    /// per peer connection, so it is **off by default**: enable it for
-    /// latency/throughput-sensitive deployments with a modest number of
-    /// connections, and leave it off for large-scale servers (e.g. SFUs) with
-    /// thousands of connections.
+    /// reactor) to a single reactor thread for its lifetime, so the async runtime
+    /// never migrates it across its worker pool — the dominant cost for in-process
+    /// data-channel throughput on multi-threaded runtimes (issue #101).
+    ///
+    /// The reactor thread comes from a process-global pool of at most `N` threads
+    /// (see [`with_reactor_pool_size`](Self::with_reactor_pool_size) /
+    /// [`set_reactor_pool_size`](crate::runtime::set_reactor_pool_size);
+    /// default: host parallelism). Drivers are assigned round-robin, so up to a
+    /// few I/O-bound drivers share a thread cooperatively and the reactor-thread
+    /// count stays **bounded by the pool size regardless of connection count** —
+    /// unlike the earlier model, which spent one OS thread per connection. This
+    /// makes it viable even for large-scale servers (e.g. SFUs); it is still
+    /// **off by default** because the general runtime is the right choice when the
+    /// application already schedules its own work across all cores.
     ///
     /// Note: this is *thread confinement*, not CPU-core affinity — the OS
-    /// scheduler may still move the dedicated thread between cores.
-    /// TODO(#101): pin the reactor thread to a specific core (via `core_affinity`)
+    /// scheduler may still move a pool thread between cores.
+    /// TODO(#101): pin pool threads to specific cores (via `core_affinity`)
     /// for cache/NUMA locality as a follow-up.
     ///
-    /// Note: with this enabled, event-handler callbacks run on the dedicated
-    /// reactor thread, so they must not block.
+    /// Note: with this enabled, event-handler callbacks run on a shared reactor
+    /// pool thread, so they must not block (blocking one stalls its co-tenant
+    /// drivers as well as itself).
+    ///
+    /// Note: the first time each pool thread is used, [`build`](Self::build) briefly
+    /// blocks the calling task's runtime thread while that thread's runtime starts
+    /// (a one-time, sub-millisecond rendezvous per pool slot, at most pool-size times
+    /// per process). Prefer building connections off a latency-critical runtime thread
+    /// if that matters.
     pub fn with_dedicated_reactor_thread(mut self, enabled: bool) -> Self {
         self.dedicated_reactor = enabled;
+        self
+    }
+
+    /// Set the size of the shared reactor pool used when
+    /// [`with_dedicated_reactor_thread(true)`](Self::with_dedicated_reactor_thread)
+    /// is enabled — the maximum number of reactor threads across the whole process,
+    /// regardless of how many connections use the pool.
+    ///
+    /// The pool is process-global and sized **once**, lazily, when the first
+    /// dedicated-reactor connection is built. This method forwards to
+    /// [`set_reactor_pool_size`](crate::runtime::set_reactor_pool_size) at
+    /// [`build`](Self::build) time, so only the first such connection's value
+    /// takes effect; prefer setting it once at startup (here or via that function,
+    /// or the `WEBRTC_REACTOR_POOL_SIZE` environment variable). Passing `0`
+    /// restores the default resolution (env var, then host parallelism).
+    ///
+    /// Smaller pools use fewer threads and less memory (fewer per-thread allocator
+    /// arenas) at the cost of more drivers sharing each thread; size it to trade
+    /// resident memory against per-connection isolation for your workload.
+    pub fn with_reactor_pool_size(mut self, size: usize) -> Self {
+        self.reactor_pool_size = Some(size);
         self
     }
 
@@ -332,6 +395,15 @@ where
         };
 
         let core = self.builder.build()?;
+
+        // Apply the reactor-pool size before the first `spawn_reactor` builds the
+        // process-global pool. Only meaningful when this connection uses the pool
+        // (dedicated reactor enabled), so don't touch the global otherwise; and the
+        // pool is sized once, lazily, so the value in effect when the first
+        // dedicated-reactor connection is built wins — see `with_reactor_pool_size`.
+        if let Some(size) = self.reactor_pool_size.filter(|_| self.dedicated_reactor) {
+            crate::runtime::set_reactor_pool_size(size);
+        }
 
         // `0` = unbounded (same as the `usize::MAX` default); normalise it to `usize::MAX`
         // so the send-buffer gate (and `writable()`) short-circuits to a no-op.
@@ -462,10 +534,12 @@ where
 {
     inner: Arc<PeerConnectionRef<I>>,
     driver_handle: Mutex<Option<JoinHandle>>,
-    /// Whether the driver runs on a dedicated reactor thread. When true, `close()`
-    /// waits for that thread to finish, and `Drop` signals it to stop (via
-    /// [`PeerConnectionRef::closing`]) so it does not leak if the connection is
-    /// dropped without an explicit `close()`.
+    /// Whether the driver runs on the shared bounded reactor pool (a task pinned to
+    /// one pool thread) rather than the general async runtime. When true, `close()`
+    /// waits for that task to finish and then aborts it, and `Drop` signals it to
+    /// stop (via [`PeerConnectionRef::closing`]) so a driver task is not left
+    /// running on a pool thread if the connection is dropped without an explicit
+    /// `close()`.
     dedicated_reactor: bool,
 }
 
@@ -735,15 +809,18 @@ where
     I: Interceptor,
 {
     fn drop(&mut self) {
-        // A dedicated reactor thread only exits when its event loop returns, so
-        // a connection dropped without an explicit `close()` would leak the
-        // thread. Set the shutdown flag (infallible) so the driver stops at the
-        // top of its next loop iteration, then best-effort wake it so it stops
-        // promptly rather than after its next timer/socket event. Crucially the
-        // flag — not the wake — is the guarantee: a full channel drops the wake
-        // but cannot leak the thread. (Task-based drivers detach harmlessly, so
-        // this is limited to the dedicated-reactor case to avoid changing the
-        // default lifecycle.)
+        // A reactor-pool driver task only exits when its event loop returns, so a
+        // connection dropped without an explicit `close()` would leave that task
+        // running on a shared pool thread — pinning a scarce reactor thread and
+        // holding the connection's buffers alive (the RSS this pool exists to
+        // bound). Dropping the join handle merely detaches the task. So set the
+        // shutdown flag (infallible) so the driver stops at the top of its next
+        // loop iteration, then best-effort wake it so it stops promptly rather
+        // than after its next timer/socket event. Crucially the flag — not the
+        // wake — is the guarantee: a full channel drops the wake but cannot leak
+        // the task. (Drivers on the general runtime detach harmlessly onto the
+        // application's own worker pool, so this is limited to the pooled-reactor
+        // case to avoid changing the default lifecycle.)
         if self.dedicated_reactor {
             self.inner.closing.store(true, Ordering::Release);
             // Wake a sender blocked in `DataChannel::writable()` so it returns promptly
@@ -788,18 +865,19 @@ where
         let driver_handle = self.driver_handle.lock().await.take();
         if let Some(driver_handle) = driver_handle {
             if self.dedicated_reactor {
-                // The reactor runs on its own OS thread that cannot be aborted;
-                // wait (bounded) for its event loop to actually return, so the
-                // socket and thread are released by the time `close()` resolves.
-                // It exits promptly once it observes the shutdown above; the bound
-                // only prevents `close()` from hanging on a wedged reactor, after
-                // which the handle is dropped (detached) as a last resort.
+                // The reactor driver is a task pinned to a shared pool thread.
+                // First wait (bounded) for its event loop to return on its own, so
+                // it flushes the SCTP shutdown and releases its socket by the time
+                // `close()` resolves — it exits promptly once it observes the
+                // shutdown signalled above. Then abort the task unconditionally to
+                // free the pool thread of it (a no-op once it has finished; the
+                // fallback that reclaims a driver still wedged at the bound).
                 //
                 // Note: if `close()` is called *from within an event-handler
                 // callback* (which, for a dedicated reactor, runs on this very
-                // thread), the loop cannot make progress until the handler
-                // returns, so this wait runs out its full bound before detaching.
-                // Handlers must not block (see `with_dedicated_reactor_thread`).
+                // task), the loop cannot make progress until the handler returns,
+                // so this wait runs out its full bound before aborting. Handlers
+                // must not block (see `with_dedicated_reactor_thread`).
                 let step = std::time::Duration::from_millis(1);
                 let max = std::time::Duration::from_secs(2);
                 let mut waited = std::time::Duration::ZERO;
@@ -807,6 +885,7 @@ where
                     crate::runtime::sleep(step).await;
                     waited += step;
                 }
+                driver_handle.abort();
             } else {
                 driver_handle.abort();
             }
