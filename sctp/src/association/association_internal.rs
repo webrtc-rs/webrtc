@@ -115,7 +115,11 @@ impl AssociationInternal {
             tsn += 1;
         }
 
-        let mtu = INITIAL_MTU;
+        let mtu = if config.mtu == 0 {
+            INITIAL_MTU
+        } else {
+            config.mtu
+        };
         // RFC 4690 Sec 7.2.1
         //  o  The initial cwnd before DATA transmission or after a sufficiently
         //     long idle period MUST be set to min(4*MTU, max (2*MTU, 4380
