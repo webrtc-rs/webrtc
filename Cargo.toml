@@ -23,7 +23,7 @@ resolver = "2"
 opt-level = 0
 
 [workspace.package]
-version = "0.17.1"
+version = "0.17.2"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2021"
 license = "MIT/Apache-2.0"
