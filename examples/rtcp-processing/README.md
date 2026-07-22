@@ -13,7 +13,7 @@
 
 By default, RTCP is consumed inside the interceptor chain for reports, NACK handling, congestion control, and similar
 logic.
-This example mirrors the sansio `rtc/examples/examples/rtcp-processing` example by adding an outer interceptor that
+This example mirrors the sansio `rtc/examples/rtcp-processing` example by adding an outer interceptor that
 queues RTCP
 for application delivery before passing it down the normal chain.
 

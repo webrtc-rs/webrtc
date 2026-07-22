@@ -186,8 +186,8 @@ fn test_play_from_disk_streaming() {
     block_on(async {
         let runtime = default_runtime().expect("no runtime");
 
-        let video_file = "rtc/examples/examples/test-data/output_vp8.ivf";
-        let audio_file = "rtc/examples/examples/test-data/output.ogg";
+        let video_file = "rtc/examples/test-data/output_vp8.ivf";
+        let audio_file = "rtc/examples/test-data/output.ogg";
 
         // Setup MediaEngines
         let mut offerer_media = MediaEngine::default();

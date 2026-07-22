@@ -26,18 +26,18 @@ the top textarea is your browser, copy that and:
 #### Linux/macOS
 
 1. Run
-   `echo $BROWSER_SDP | cargo run --example play-from-disk-h26x -- -v rtc/examples/examples/test-data/output.264 -a rtc/examples/examples/test-data/output.ogg`
+   `echo $BROWSER_SDP | cargo run --example play-from-disk-h26x -- -v rtc/examples/test-data/output.264 -a rtc/examples/test-data/output.ogg`
 
 2. Run
-   `echo $BROWSER_SDP | cargo run --example play-from-disk-h26x -- -v rtc/examples/examples/test-data/output.265 -a rtc/examples/examples/test-data/output.ogg --hevc`
+   `echo $BROWSER_SDP | cargo run --example play-from-disk-h26x -- -v rtc/examples/test-data/output.265 -a rtc/examples/test-data/output.ogg --hevc`
 
 #### Windows
 
 1. Paste the SessionDescription into a file.
 2. Run
-   `cargo run --example play-from-disk-h26x -v rtc/examples/examples/test-data/output.264 -a rtc/examples/examples/test-data/output.ogg < my_file`
+   `cargo run --example play-from-disk-h26x -v rtc/examples/test-data/output.264 -a rtc/examples/test-data/output.ogg < my_file`
 3. Run
-   `cargo run --example play-from-disk-h26x -v rtc/examples/examples/test-data/output.265 -a rtc/examples/examples/test-data/output.ogg --hevc < my_file`
+   `cargo run --example play-from-disk-h26x -v rtc/examples/test-data/output.265 -a rtc/examples/test-data/output.ogg --hevc < my_file`
 
 ### Input play-from-disk-h26x's SessionDescription into your browser
 

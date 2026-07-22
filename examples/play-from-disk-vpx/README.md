@@ -32,17 +32,17 @@ jsfiddle the top textarea is your browser, copy that and:
 #### Linux/macOS
 
 1. Run
-   `echo $BROWSER_SDP | ./target/debug/examples/play-from-disk-vpx -v rtc/examples/examples/test-data/output_vp8.ivf -a rtc/examples/examples/test-data/output.ogg`
+   `echo $BROWSER_SDP | ./target/debug/examples/play-from-disk-vpx -v rtc/examples/test-data/output_vp8.ivf -a rtc/examples/test-data/output.ogg`
 2. Run
-   `echo $BROWSER_SDP | ./target/debug/examples/play-from-disk-vpx -v rtc/examples/examples/test-data/output_vp9.ivf -a rtc/examples/examples/test-data/output.ogg --vp9`
+   `echo $BROWSER_SDP | ./target/debug/examples/play-from-disk-vpx -v rtc/examples/test-data/output_vp9.ivf -a rtc/examples/test-data/output.ogg --vp9`
 
 #### Windows
 
 1. Paste the SessionDescription into a file.
 2. Run
-   `./target/debug/examples/play-from-disk-vpx -v rtc/examples/examples/test-data/output_vp8.ivf -a rtc/examples/examples/test-data/output.ogg < my_file`
+   `./target/debug/examples/play-from-disk-vpx -v rtc/examples/test-data/output_vp8.ivf -a rtc/examples/test-data/output.ogg < my_file`
 3. Run
-   `./target/debug/examples/play-from-disk-vpx -v rtc/examples/examples/test-data/output_vp9.ivf -a rtc/examples/examples/test-data/output.ogg --vp9 < my_file`
+   `./target/debug/examples/play-from-disk-vpx -v rtc/examples/test-data/output_vp9.ivf -a rtc/examples/test-data/output.ogg --vp9 < my_file`
 
 ### Input play-from-disk-vpx's SessionDescription into your browser
 

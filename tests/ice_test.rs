@@ -283,8 +283,8 @@ fn test_restart_ice() {
 fn test_automatic_host_candidate_gathering() {
     block_on(async {
         env_logger::builder()
-            .filter_level(log::LevelFilter::Trace)
-            //.is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .is_test(true)
             .try_init()
             .ok();
 
@@ -342,8 +342,8 @@ fn test_automatic_host_candidate_gathering() {
 fn test_stun_gathering_with_google_stun() {
     block_on(async {
         env_logger::builder()
-            .filter_level(log::LevelFilter::Trace)
-            //.is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .is_test(true)
             .try_init()
             .ok();
 
@@ -561,7 +561,7 @@ fn test_turn_relay_gathering_with_mock_turn_server() {
 fn test_ice_tcp_only_connection() {
     block_on(async {
         env_logger::builder()
-            .filter_level(log::LevelFilter::Trace)
+            .filter_level(log::LevelFilter::Info)
             .is_test(true)
             .try_init()
             .ok();

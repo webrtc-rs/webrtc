@@ -87,7 +87,11 @@ fn test_mdns_query_and_gather_webrtc_to_webrtc() {
 }
 
 async fn run_test() -> Result<()> {
-    env_logger::builder().is_test(true).try_init().ok();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .is_test(true)
+        .try_init()
+        .ok();
 
     let runtime =
         default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;

@@ -98,7 +98,7 @@ fn test_data_channel_close_by_webrtc_interop() {
 async fn run_test() -> Result<()> {
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
-        //.is_test(true)
+        .is_test(true)
         .try_init()
         .ok();
 
