@@ -5,6 +5,11 @@ use util::conn::conn_bridge::*;
 use util::conn::*;
 
 use super::*;
+
+#[test]
+fn poll_data_channel_default_read_buffer_supports_16_kib_messages() {
+    assert_eq!(DEFAULT_READ_BUF_SIZE, 16 * 1024);
+}
 use crate::error::Result;
 
 async fn bridge_process_at_least_one(br: &Arc<Bridge>) {

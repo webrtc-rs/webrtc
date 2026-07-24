@@ -366,7 +366,11 @@ impl DataChannel {
 }
 
 /// Default capacity of the temporary read buffer used by [`PollStream`].
-const DEFAULT_READ_BUF_SIZE: usize = 8192;
+///
+/// A WebRTC data channel delivers complete SCTP messages. 16 KiB matches libp2p's maximum
+/// WebRTC message size, preventing a caller that relies on this default from failing with
+/// `ErrShortBuffer` for a valid message.
+const DEFAULT_READ_BUF_SIZE: usize = 16 * 1024;
 
 /// State of the read `Future` in [`PollStream`].
 enum ReadFut {
