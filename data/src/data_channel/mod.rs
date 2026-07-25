@@ -470,7 +470,7 @@ impl PollDataChannel {
         self.data_channel.buffered_amount_low_threshold()
     }
 
-    /// Set the capacity of the temporary read buffer (default: 8192).
+    /// Set the capacity of the temporary read buffer (default: 16384).
     pub fn set_read_buf_capacity(&mut self, capacity: usize) {
         self.read_buf_cap = capacity
     }
