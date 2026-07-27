@@ -44,7 +44,7 @@
 //! ```
 
 use crate::peer_connection::PeerConnectionRef;
-use crate::runtime::{Mutex, Receiver};
+use crate::runtime::{AsyncMutex as _, Mutex, Receiver};
 use bytes::BytesMut;
 use futures::FutureExt;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
@@ -249,6 +249,17 @@ where
         futures::select! {
             _ = self.inner.data_channel_backpressure.notified().fuse() => {}
             _ = crate::runtime::sleep(Duration::from_millis(50)).fuse() => {}
+        }
+    }
+}
+
+impl<I> Drop for DataChannelImpl<I>
+where
+    I: Interceptor,
+{
+    fn drop(&mut self) {
+        if let Some(mut data_channels) = self.inner.data_channel_events_tx.try_lock() {
+            data_channels.remove(&self.id);
         }
     }
 }

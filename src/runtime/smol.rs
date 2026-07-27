@@ -438,6 +438,10 @@ impl<T: ?Sized + Send> AsyncMutex<T> for SmolMutex<T> {
     fn lock(&self) -> Pin<Box<dyn Future<Output = Self::Guard<'_>> + Send + '_>> {
         Box::pin(self.0.lock())
     }
+
+    fn try_lock(&self) -> Option<Self::Guard<'_>> {
+        self.0.try_lock()
+    }
 }
 
 /// Smol-based notify wrapper using Event
@@ -556,6 +560,10 @@ impl<T: Send> AsyncSender<T> for SmolSender<T> {
             ::smol::channel::TrySendError::Full(v) => TrySendError::Full(v),
             ::smol::channel::TrySendError::Closed(v) => TrySendError::Disconnected(v),
         })
+    }
+
+    fn is_closed(&self) -> bool {
+        self.0.is_closed()
     }
 }
 

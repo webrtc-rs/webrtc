@@ -39,7 +39,6 @@ use rtc::shared::error::{Error, Result};
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -564,20 +563,19 @@ where
                         core.data_channel(channel_id).is_some()
                     };
 
-                    if data_channel_exist {
-                        let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
-                        let data_channel =
-                            Arc::new(DataChannelImpl::new(channel_id, self.inner.clone(), evt_rx));
-
+                    if data_channel_exist
+                        && let Some(evt_rx) = self
+                            .inner
+                            .insert_data_channel_event_sender(channel_id)
+                            .await
                         {
-                            let mut data_channels = self.inner.data_channel_events_tx.lock().await;
-                            if let Entry::Vacant(e) = data_channels.entry(channel_id) {
-                                e.insert(evt_tx);
-                            }
+                            let data_channel = Arc::new(DataChannelImpl::new(
+                                channel_id,
+                                self.inner.clone(),
+                                evt_rx,
+                            ));
+                            self.inner.handler.on_data_channel(data_channel).await;
                         }
-
-                        self.inner.handler.on_data_channel(data_channel).await;
-                    }
                 }
 
                 let data_channels = self.inner.data_channel_events_tx.lock().await;

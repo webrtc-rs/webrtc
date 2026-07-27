@@ -62,7 +62,7 @@ use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::rtp_transceiver::{RtpReceiver, RtpSender, RtpTransceiver, RtpTransceiverImpl};
 use crate::runtime::{JoinHandle, Runtime, default_runtime};
-use crate::runtime::{Mutex, Sender, channel};
+use crate::runtime::{AsyncSender as _, Mutex, Receiver, Sender, channel};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use driver::{
@@ -640,6 +640,27 @@ where
             crate::runtime::yield_now().await;
         }
     }
+
+    /// Insert a data-channel event sender for `channel_id` if the slot is vacant
+    /// or the existing sender is closed. Returns the receiver when insertion
+    /// happened.
+    pub(crate) async fn insert_data_channel_event_sender(
+        &self,
+        channel_id: RTCDataChannelId,
+    ) -> Option<Receiver<DataChannelEvent>> {
+        let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
+        let mut data_channels = self.data_channel_events_tx.lock().await;
+        let should_insert = match data_channels.entry(channel_id) {
+            std::collections::hash_map::Entry::Vacant(_) => true,
+            std::collections::hash_map::Entry::Occupied(e) => e.get().is_closed(),
+        };
+        if should_insert {
+            data_channels.insert(channel_id, evt_tx);
+            Some(evt_rx)
+        } else {
+            None
+        }
+    }
 }
 
 impl<I> PeerConnectionImpl<I>
@@ -1211,5 +1232,101 @@ where
     async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport {
         let mut core = self.inner.core.lock().await;
         core.get_stats(now, selector)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::block_on;
+    use crate::runtime::Notify;
+    use std::sync::atomic::AtomicUsize;
+
+    #[derive(Clone)]
+    struct DummyHandler;
+
+    #[async_trait::async_trait]
+    impl PeerConnectionEventHandler for DummyHandler {}
+
+    fn test_peer_connection_ref() -> Arc<PeerConnectionRef<NoopInterceptor>> {
+        let core = RTCPeerConnectionBuilder::new().build().unwrap();
+        let runtime = default_runtime().expect("test requires a runtime feature");
+        let handler: Arc<dyn PeerConnectionEventHandler> = Arc::new(DummyHandler);
+        let (driver_event_tx, _driver_event_rx) = channel::<PeerConnectionDriverEvent>(1);
+
+        Arc::new(PeerConnectionRef {
+            core: Mutex::new(core),
+            runtime,
+            handler,
+            rtp_transceivers: Mutex::new(HashMap::new()),
+            driver_event_tx,
+            write_pending: AtomicBool::new(false),
+            write_backpressure: AtomicUsize::new(0),
+            closing: AtomicBool::new(false),
+            data_channel_send_buffer_limit: usize::MAX,
+            data_channel_backpressure: Notify::new(),
+            data_channel_events_tx: Mutex::new(HashMap::new()),
+            track_remote_events_tx: Mutex::new(HashMap::new()),
+            track_local_events_tx: Mutex::new(HashMap::new()),
+        })
+    }
+
+    #[test]
+    fn data_channel_drop_removes_event_sender() {
+        block_on(async {
+            let inner = test_peer_connection_ref();
+            let channel_id = 0;
+
+            let (evt_tx, evt_rx) = channel::<DataChannelEvent>(1);
+            inner
+                .data_channel_events_tx
+                .lock()
+                .await
+                .insert(channel_id, evt_tx);
+            assert!(inner
+                .data_channel_events_tx
+                .lock()
+                .await
+                .contains_key(&channel_id));
+
+            let dc = DataChannelImpl::new(channel_id, inner.clone(), evt_rx);
+            drop(dc);
+
+            assert!(!inner
+                .data_channel_events_tx
+                .lock()
+                .await
+                .contains_key(&channel_id));
+        });
+    }
+
+    #[test]
+    fn insert_data_channel_event_sender_replaces_closed_sender() {
+        block_on(async {
+            let inner = test_peer_connection_ref();
+            let channel_id = 0;
+
+            let (old_tx, old_rx) = channel::<DataChannelEvent>(1);
+            drop(old_rx);
+            inner
+                .data_channel_events_tx
+                .lock()
+                .await
+                .insert(channel_id, old_tx);
+
+            let evt_rx = inner
+                .insert_data_channel_event_sender(channel_id)
+                .await;
+            assert!(evt_rx.is_some());
+
+            let sender = inner
+                .data_channel_events_tx
+                .lock()
+                .await
+                .get(&channel_id)
+                .cloned()
+                .unwrap();
+            assert!(!sender.is_closed());
+        });
     }
 }
