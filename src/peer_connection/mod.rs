@@ -81,8 +81,8 @@ use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use rtc::rtp_transceiver::{RTCRtpTransceiverId, RTCRtpTransceiverInit};
 use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
-use rtc::statistics::StatsSelector;
-use rtc::statistics::report::RTCStatsReport;
+pub use rtc::statistics::StatsSelector;
+pub use rtc::statistics::report::{RTCStatsReport, RTCStatsReportEntry};
 
 use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
