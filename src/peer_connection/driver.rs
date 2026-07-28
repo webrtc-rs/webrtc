@@ -566,17 +566,30 @@ where
 
                     if data_channel_exist {
                         let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
-                        let data_channel =
-                            Arc::new(DataChannelImpl::new(channel_id, self.inner.clone(), evt_rx));
 
-                        {
+                        // A vacant entry means the peer opened this channel: locally created
+                        // ones are registered by `create_data_channel` before their `OnOpen`
+                        // ever reaches us. Only those get announced through the handler --
+                        // `on_data_channel` is for remotely opened channels.
+                        let opened_by_peer = {
                             let mut data_channels = self.inner.data_channel_events_tx.lock().await;
-                            if let Entry::Vacant(e) = data_channels.entry(channel_id) {
-                                e.insert(evt_tx);
+                            match data_channels.entry(channel_id) {
+                                Entry::Vacant(e) => {
+                                    e.insert(evt_tx);
+                                    true
+                                }
+                                Entry::Occupied(_) => false,
                             }
-                        }
+                        };
 
-                        self.inner.handler.on_data_channel(data_channel).await;
+                        if opened_by_peer {
+                            let data_channel = Arc::new(DataChannelImpl::new(
+                                channel_id,
+                                self.inner.clone(),
+                                evt_rx,
+                            ));
+                            self.inner.handler.on_data_channel(data_channel).await;
+                        }
                     }
                 }
 
