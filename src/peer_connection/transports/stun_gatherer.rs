@@ -80,6 +80,21 @@ impl RTCStunGatherer {
         self.state
     }
 
+    pub(crate) fn update_configuration(
+        &mut self,
+        ice_servers: Vec<RTCIceServer>,
+        ice_gather_policy: RTCIceTransportPolicy,
+    ) {
+        for (_, mut stun_client) in self.stun_clients.drain() {
+            let _ = stun_client.close();
+        }
+        self.wouts.clear();
+        self.events.clear();
+        self.ice_servers = ice_servers;
+        self.ice_gather_policy = ice_gather_policy;
+        self.state = RTCIceGatheringState::New;
+    }
+
     pub(crate) fn is_stun_message(&self, msg: &TaggedBytesMut) -> bool {
         for four_tuple in self.stun_clients.keys() {
             if four_tuple.peer_addr == msg.transport.peer_addr
