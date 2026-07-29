@@ -2,13 +2,13 @@
 
 use rtc::ice::mdns::MulticastDnsMode;
 use rtc::peer_connection::transport::RTCIceCandidate;
-use rtc::stun::attributes::{ATTR_NONCE, ATTR_REALM};
+use rtc::stun::attributes::{ATTR_NONCE, ATTR_REALM, ATTR_USERNAME};
 use rtc::stun::error_code::CODE_UNAUTHORIZED;
 use rtc::stun::message::{
-    CLASS_ERROR_RESPONSE, CLASS_SUCCESS_RESPONSE, METHOD_ALLOCATE, METHOD_CREATE_PERMISSION,
-    Message as StunMessage, MessageType,
+    CLASS_ERROR_RESPONSE, CLASS_SUCCESS_RESPONSE, Getter, METHOD_ALLOCATE,
+    METHOD_CREATE_PERMISSION, Message as StunMessage, MessageType,
 };
-use rtc::stun::textattrs::{Nonce, Realm};
+use rtc::stun::textattrs::{Nonce, Realm, Username};
 use rtc::turn::proto::lifetime::Lifetime;
 use rtc::turn::proto::relayaddr::RelayedAddress;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -76,7 +76,11 @@ impl PeerConnectionEventHandler for CandidateTypeTracker {
     }
 }
 
-async fn run_mock_turn_server(turn_socket: Arc<dyn AsyncUdpSocket>, relay_addr: SocketAddr) {
+async fn run_mock_turn_server(
+    turn_socket: Arc<dyn AsyncUdpSocket>,
+    relay_addr: SocketAddr,
+    username_tx: Option<Sender<String>>,
+) {
     let mut buf = vec![0u8; 2048];
     loop {
         let Ok((n, peer_addr)) = turn_socket.recv_from(&mut buf).await else {
@@ -92,6 +96,12 @@ async fn run_mock_turn_server(turn_socket: Arc<dyn AsyncUdpSocket>, relay_addr: 
         let response = match msg.typ.method {
             METHOD_ALLOCATE => {
                 if msg.get(ATTR_NONCE).is_ok() {
+                    if let Some(username_tx) = &username_tx {
+                        let mut username = Username::new(ATTR_USERNAME, String::new());
+                        if username.get_from(&msg).is_ok() {
+                            let _ = username_tx.try_send(username.text);
+                        }
+                    }
                     build_turn_allocate_success(msg.transaction_id, relay_addr)
                 } else {
                     build_turn_allocate_unauthorized(msg.transaction_id)
@@ -496,7 +506,11 @@ fn test_turn_relay_gathering_with_mock_turn_server() {
             .wrap_udp_socket(turn_socket)
             .expect("failed to wrap mock TURN socket");
         let relay_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
-        let turn_task = runtime.spawn(Box::pin(run_mock_turn_server(turn_socket, relay_addr)));
+        let turn_task = runtime.spawn(Box::pin(run_mock_turn_server(
+            turn_socket,
+            relay_addr,
+            None,
+        )));
 
         let mut media_engine = MediaEngine::default();
         media_engine
@@ -552,6 +566,98 @@ fn test_turn_relay_gathering_with_mock_turn_server() {
             "Relay-only policy should not publish host candidates: {:?}",
             gathered
         );
+
+        turn_task.abort();
+    });
+}
+
+#[test]
+fn test_set_configuration_updates_turn_credentials_on_ice_restart() {
+    block_on(async {
+        let runtime = default_runtime().expect("no async runtime available");
+        let turn_socket =
+            std::net::UdpSocket::bind("127.0.0.1:0").expect("failed to bind mock TURN server");
+        let turn_addr = turn_socket
+            .local_addr()
+            .expect("failed to get mock TURN address");
+        let turn_socket = runtime
+            .wrap_udp_socket(turn_socket)
+            .expect("failed to wrap mock TURN socket");
+        let relay_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
+        let (username_tx, mut username_rx) = channel(8);
+        let turn_task = runtime.spawn(Box::pin(run_mock_turn_server(
+            turn_socket,
+            relay_addr,
+            Some(username_tx),
+        )));
+
+        let mut media_engine = MediaEngine::default();
+        media_engine
+            .register_default_codecs()
+            .expect("Failed to register codecs");
+
+        let turn_url = format!("turn:{}?transport=udp", turn_addr);
+        let config = RTCConfigurationBuilder::new()
+            .with_ice_servers(vec![RTCIceServer {
+                urls: vec![turn_url.clone()],
+                username: "username-a".to_owned(),
+                credential: "password-a".to_owned(),
+            }])
+            .with_ice_transport_policy(RTCIceTransportPolicy::Relay)
+            .build();
+
+        let candidates = Arc::new(Mutex::new(Vec::new()));
+        let (gathering_tx, mut gathering_rx) = channel(8);
+        let handler = Arc::new(CandidateTypeTracker {
+            candidates,
+            gathering_tx,
+        });
+
+        let pc = PeerConnectionBuilder::new()
+            .with_configuration(config)
+            .with_media_engine(media_engine)
+            .with_handler(handler)
+            .with_udp_addrs(vec!["127.0.0.1:0"])
+            .build()
+            .await
+            .unwrap();
+
+        let _ = pc.create_data_channel("channel1", None).await.unwrap();
+        let offer = pc.create_offer(None).await.expect("Failed to create offer");
+        pc.set_local_description(offer)
+            .await
+            .expect("Failed to set local description");
+
+        timeout(Duration::from_secs(5), gathering_rx.recv())
+            .await
+            .expect("Timed out waiting for initial relay gathering");
+        let initial_username = timeout(Duration::from_secs(5), username_rx.recv())
+            .await
+            .expect("Timed out waiting for initial authenticated Allocate")
+            .expect("TURN username channel closed");
+        assert_eq!(initial_username, "username-a");
+
+        let new_config = RTCConfigurationBuilder::new()
+            .with_ice_servers(vec![RTCIceServer {
+                urls: vec![turn_url],
+                username: "username-b".to_owned(),
+                credential: "password-b".to_owned(),
+            }])
+            .with_ice_transport_policy(RTCIceTransportPolicy::Relay)
+            .build();
+        pc.set_configuration(new_config)
+            .await
+            .expect("Failed to update ICE server configuration");
+        pc.restart_ice().await.expect("Failed to restart ICE");
+
+        let restarted_username = timeout(Duration::from_secs(5), username_rx.recv())
+            .await
+            .expect("Timed out waiting for restarted authenticated Allocate")
+            .expect("TURN username channel closed");
+        assert_eq!(restarted_username, "username-b");
+        timeout(Duration::from_secs(5), gathering_rx.recv())
+            .await
+            .expect("Timed out waiting for restarted relay gathering");
 
         turn_task.abort();
     });

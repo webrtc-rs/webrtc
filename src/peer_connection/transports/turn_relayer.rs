@@ -89,6 +89,27 @@ impl RTCTurnRelayer {
         self.state
     }
 
+    pub(crate) fn update_configuration(
+        &mut self,
+        ice_servers: Vec<RTCIceServer>,
+        ice_gather_policy: RTCIceTransportPolicy,
+    ) {
+        let keys: Vec<FourTuple> = self.clients.keys().copied().collect();
+        for key in keys {
+            self.remove_client(key);
+        }
+        self.relay_addrs.clear();
+        self.pending_permissions.clear();
+        self.pending_permission_pairs.clear();
+        self.pending_packets.clear();
+        self.wouts.clear();
+        self.routs.clear();
+        self.events.clear();
+        self.ice_servers = ice_servers;
+        self.ice_gather_policy = ice_gather_policy;
+        self.state = RTCIceGatheringState::New;
+    }
+
     pub(crate) fn is_turn_message(&self, msg: &TaggedBytesMut) -> bool {
         self.matching_client_key(msg).is_some()
     }

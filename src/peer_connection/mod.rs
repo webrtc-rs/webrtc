@@ -1020,8 +1020,24 @@ where
     }
 
     async fn set_configuration(&self, configuration: RTCConfiguration) -> Result<()> {
-        let mut core = self.inner.core.lock().await;
-        core.set_configuration(configuration)
+        let (ice_servers, ice_transport_policy) = {
+            let mut core = self.inner.core.lock().await;
+            core.set_configuration(configuration)?;
+            let configuration = core.get_configuration();
+            (
+                configuration.ice_servers().to_vec(),
+                configuration.ice_transport_policy(),
+            )
+        };
+
+        self.inner
+            .driver_event_tx
+            .send(PeerConnectionDriverEvent::UpdateIceConfiguration {
+                ice_servers,
+                ice_transport_policy,
+            })
+            .await
+            .map_err(|_| Error::Other("peer connection driver stopped".to_owned()))
     }
 
     async fn create_data_channel(

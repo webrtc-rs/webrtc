@@ -28,7 +28,7 @@ use rtc::ice::candidate::Candidate;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::mdns::MDNS_PORT;
 use rtc::media_stream::MediaStreamTrack;
-use rtc::peer_connection::configuration::RTCIceTransportPolicy;
+use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
 use rtc::peer_connection::message::RTCMessage;
 use rtc::peer_connection::state::RTCIceGatheringState;
@@ -66,6 +66,10 @@ pub(crate) enum PeerConnectionDriverEvent {
     RemoteIceTcpPassiveCandidate(Candidate),
     IncomingTcpStream(FourTuple, Arc<dyn AsyncTcpStream>),
     WriteNotify,
+    UpdateIceConfiguration {
+        ice_servers: Vec<RTCIceServer>,
+        ice_transport_policy: RTCIceTransportPolicy,
+    },
     IceGathering,
     Close,
 }
@@ -89,6 +93,7 @@ where
     ice_gathering_active: bool,
     stun_gathering_complete: bool,
     turn_gathering_complete: bool,
+    pending_ice_configuration: Option<(Vec<RTCIceServer>, RTCIceTransportPolicy)>,
 }
 
 impl<I> PeerConnectionDriver<I>
@@ -119,6 +124,7 @@ where
             ice_gathering_active: false,
             stun_gathering_complete: false,
             turn_gathering_complete: false,
+            pending_ice_configuration: None,
         })
     }
 
@@ -876,7 +882,24 @@ where
                 // the top of the loop) ensures a burst of sends enqueues at most
                 // one of these.
             }
+            PeerConnectionDriverEvent::UpdateIceConfiguration {
+                ice_servers,
+                ice_transport_policy,
+            } => {
+                // Keep the active gathering/allocation intact. The new configuration
+                // takes effect when the next gathering phase starts.
+                self.pending_ice_configuration = Some((ice_servers, ice_transport_policy));
+            }
             PeerConnectionDriverEvent::IceGathering => {
+                if let Some((ice_servers, ice_transport_policy)) =
+                    self.pending_ice_configuration.take()
+                {
+                    self.stun_gatherer
+                        .update_configuration(ice_servers.clone(), ice_transport_policy);
+                    self.turn_relayer
+                        .update_configuration(ice_servers, ice_transport_policy);
+                }
+
                 self.ice_gathering_active = true;
                 self.stun_gathering_complete = false;
                 self.turn_gathering_complete = false;
