@@ -98,7 +98,7 @@ where
 
 impl<I> PeerConnectionDriver<I>
 where
-    I: Interceptor,
+    I: Interceptor + 'static,
 {
     /// Create a new driver for the given peer connection
     pub(crate) async fn new(

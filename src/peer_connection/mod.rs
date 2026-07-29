@@ -208,7 +208,7 @@ impl<A: ToSocketAddrs> PeerConnectionBuilder<A, NoopInterceptor> {
 
 impl<A: ToSocketAddrs, I> PeerConnectionBuilder<A, I>
 where
-    I: Interceptor,
+    I: Interceptor + 'static,
 {
     /// Configures the builder with the specified WebRTC [`RTCConfiguration`].
     pub fn with_configuration(mut self, configuration: RTCConfiguration) -> Self {
@@ -644,7 +644,7 @@ where
 
 impl<I> PeerConnectionImpl<I>
 where
-    I: Interceptor,
+    I: Interceptor + 'static,
 {
     /// Create a new peer connection with a custom runtime
     #[allow(clippy::too_many_arguments)] // private constructor fanned out from the builder
