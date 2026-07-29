@@ -257,7 +257,7 @@ where
     /// Configures the builder with the specified interceptor [`Registry`].
     ///
     /// The chain's type parameter stays on the *builder* and never escapes [`Self::build`],
-    /// which hands back an `Arc<dyn PeerConnection>` — so callers do not need
+    /// which hands back an opaque `impl PeerConnection` — so callers do not need
     /// `rtc`'s [`Registry::boxed`](rtc::interceptor::Registry::boxed) to keep the interceptor
     /// type out of their own structs. Pass the registry as-is.
     pub fn with_interceptor_registry<P>(
@@ -435,8 +435,14 @@ where
 
 /// Object-safe trait exposing all public PeerConnection operations.
 ///
-/// `PeerConnectionBuilder::build()` returns `Arc<dyn PeerConnection>`, hiding the
-/// generic interceptor type so callers can store and share connections easily.
+/// [`PeerConnectionBuilder::build`] returns an opaque `impl PeerConnection`, hiding the
+/// generic interceptor type. Because this trait is object safe, wrap that value in
+/// `Arc<dyn PeerConnection>` when you need to store the connection in your own type or
+/// share it across tasks:
+///
+/// ```ignore
+/// let pc: Arc<dyn PeerConnection> = Arc::new(builder.build().await?);
+/// ```
 ///
 /// # Example
 ///
@@ -532,7 +538,8 @@ pub trait PeerConnection: Send + Sync + 'static {
 
 /// Concrete async peer connection implementation (generic over interceptor type).
 ///
-/// Not exposed directly — obtained as `Arc<dyn PeerConnection>` from `PeerConnectionBuilder::build()`.
+/// Not exposed directly — obtained as an opaque `impl PeerConnection` from
+/// [`PeerConnectionBuilder::build`].
 pub(crate) struct PeerConnectionImpl<I = NoopInterceptor>
 where
     I: Interceptor,

@@ -64,7 +64,7 @@ alt="Recall.ai">
 
 ## Overview
 
-WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion stack. The `v0.20.x` line is a clean, ergonomic, runtime-agnostic rewrite on top of a Sans-I/O core; as of `v0.20.0-rc.1` it ships with Tokio and smol runtime backends, with async-std and embassy on the roadmap.
+WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion stack. The async `webrtc` crate is a clean, ergonomic, runtime-agnostic rewrite on top of a Sans-I/O core; it ships with Tokio and smol runtime backends, with async-std and embassy on the roadmap.
 
 **Architecture:**
 
@@ -81,18 +81,105 @@ WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspire
 our [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html) for design
 details and roadmap.
 
-### 🚨 v0.17.x → v0.20.0: the Sans-I/O rewrite (Release Candidate)
+## Getting Started
 
-**`v0.20.0-rc.1` is the first release candidate of the new Sans-I/O, runtime-agnostic architecture.** It supersedes the
+```toml
+[dependencies]
+webrtc = "0.20"
+
+# The example below also uses these:
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+async-trait = "0.1"
+```
+
+Or with the smol runtime instead of Tokio:
+
+```toml
+[dependencies]
+webrtc = { version = "0.20", default-features = false, features = ["runtime-smol"] }
+```
+
+**Feature flags:**
+
+| Feature          | Default | Description                                    |
+|------------------|---------|------------------------------------------------|
+| `runtime-tokio`  | ✅       | Timers, task spawning and sockets via Tokio    |
+| `runtime-smol`   |         | The same, via smol                             |
+
+Build a peer connection and create an offer:
+
+```rust
+use std::sync::Arc;
+use webrtc::peer_connection::{
+    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
+    RTCConfigurationBuilder, RTCIceServer, RTCPeerConnectionIceEvent,
+};
+
+// 1. Implement the PeerConnectionEventHandler trait to handle events
+#[derive(Clone)]
+struct MyHandler;
+
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for MyHandler {
+    async fn on_ice_candidate(&self, event: RTCPeerConnectionIceEvent) {
+        println!("New local ICE candidate gathered: {}", event.candidate);
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 2. Configure the peer connection
+    let config = RTCConfigurationBuilder::default()
+        .with_ice_servers(vec![RTCIceServer {
+            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+            ..Default::default()
+        }])
+        .build();
+
+    // 3. Build the PeerConnection — the background driver starts here
+    let pc = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_handler(Arc::new(MyHandler))
+        .with_udp_addrs(vec!["0.0.0.0:0"])
+        .build()
+        .await?;
+
+    // 4. Create an SDP offer and set it as the local description
+    let offer = pc.create_offer(None).await?;
+    pc.set_local_description(offer).await?;
+
+    Ok(())
+}
+```
+
+`build()` returns an opaque `impl PeerConnection`. `PeerConnection` is an object-safe trait, so when you need to store
+the connection in a struct or share it across tasks, wrap it:
+
+```rust,ignore
+let pc: Arc<dyn PeerConnection> = Arc::new(pc);
+```
+
+Either way no runtime or interceptor type parameters leak into your own types.
+
+**Next steps:** browse the [API docs](https://docs.rs/webrtc) or the
+[35 runnable examples](https://github.com/webrtc-rs/webrtc/tree/master/examples) — data channels, media playback,
+simulcast, ICE restart, insertable streams, and more.
+
+### 🚨 v0.17.x → v0.20.0: the Sans-I/O rewrite
+
+**`v0.20.0` is the first stable release of the new Sans-I/O, runtime-agnostic architecture.** It supersedes the
 Tokio-coupled `v0.17.x` line, which is now in bug-fix-only maintenance.
 
 #### Current Status
 
-- **`v0.17.x`**: Receives **bug fixes only** (no new features). The mature choice for Tokio-based production
-  applications today.
-- **`v0.20.0-rc.1`** (master): The new architecture, published as a pre-release. As a release candidate, no further API
-  changes are expected unless critical issues are found (see [Semantic Versioning](#semantic-versioning)). Recommended
-  for early adopters and new projects that want the runtime-agnostic, Sans-I/O design.
+- **`v0.20.x`** (master): The current line, and the recommended choice for all new projects. Runtime-agnostic,
+  Sans-I/O, with the `PeerConnection` handle + background driver design described above.
+- **`v0.17.x`**: Receives **bug fixes only** (no new features). Still a valid choice if you have an existing
+  Tokio-coupled integration you are not ready to migrate.
+
+Note that `v0.20.0` is a breaking change from `v0.17.x` — the event-handler traits replace callbacks, and the API is
+async throughout. While the version is `0.x`, a minor bump may carry breaking changes
+(see [Semantic Versioning](#semantic-versioning)).
 
 #### What v0.20.0 delivers
 
@@ -119,14 +206,14 @@ callbacks, and tight Tokio coupling:
 
 #### How to Provide Feedback
 
-We welcome your input while `v0.20.0` stabilizes:
+We welcome your input as `v0.20.x` grows:
 
 - Review the [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html)
 - Join discussions on [GitHub Issues](https://github.com/webrtc-rs/webrtc/issues)
 - Chat with us on [Discord](https://discord.gg/4Ju8UHdXMs)
 
-**Production today:** use the `v0.17.x` branch.  
-**Early adopters / new projects:** try `v0.20.0-rc.1` and report issues!
+**New projects:** start on `v0.20`.  
+**Migrating from `v0.17.x`?** Open an issue if you hit a gap — migration reports directly shape what we prioritise.
 
 ## Building and Testing
 
