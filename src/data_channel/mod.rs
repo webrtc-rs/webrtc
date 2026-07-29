@@ -76,15 +76,30 @@ pub trait DataChannel: Send + Sync + 'static {
     async fn protocol(&self) -> Result<String>;
     /// Returns whether this data channel was negotiated by the application.
     async fn negotiated(&self) -> Result<bool>;
-    /// Returns the unique identifier of this data channel.
+    /// Returns the identifier for this data channel.
+    ///
+    /// The value is initially null — which is what is returned if the id was not provided
+    /// at channel creation time and the DTLS role of the SCTP transport has not yet been
+    /// negotiated. Otherwise it returns the id that was either selected by the application
+    /// or generated. Once set to a non-null value it does not change.
     fn id(&self) -> RTCDataChannelId;
     /// Returns the current state of this data channel.
     async fn ready_state(&self) -> Result<RTCDataChannelState>;
-    /// Returns the buffered amount high threshold in bytes.
+    /// Returns the threshold at which the buffered amount is considered to be *high*.
+    ///
+    /// When the buffered amount increases from below this threshold to equal or above it,
+    /// the [`OnBufferedAmountHigh`](DataChannelEvent::OnBufferedAmountHigh) event fires.
+    /// Initially `u32::MAX` on each new channel; the application may change it at any time
+    /// with [`set_buffered_amount_high_threshold`](Self::set_buffered_amount_high_threshold).
     async fn buffered_amount_high_threshold(&self) -> Result<u32>;
     /// Sets the buffered amount high threshold in bytes.
     async fn set_buffered_amount_high_threshold(&self, threshold: u32) -> Result<()>;
-    /// Returns the buffered amount low threshold in bytes.
+    /// Returns the threshold at which the buffered amount is considered to be *low*.
+    ///
+    /// When the buffered amount decreases from above this threshold to equal or below it,
+    /// the [`OnBufferedAmountLow`](DataChannelEvent::OnBufferedAmountLow) event fires.
+    /// Initially `0` on each new channel; the application may change it at any time with
+    /// [`set_buffered_amount_low_threshold`](Self::set_buffered_amount_low_threshold).
     async fn buffered_amount_low_threshold(&self) -> Result<u32>;
     /// Sets the buffered amount low threshold in bytes.
     async fn set_buffered_amount_low_threshold(&self, threshold: u32) -> Result<()>;
@@ -100,15 +115,52 @@ pub trait DataChannel: Send + Sync + 'static {
     }
     /// Sends raw binary data on this data channel.
     ///
-    /// If a send-buffer limit is configured
-    /// ([`PeerConnectionBuilder::with_data_channel_send_buffer_limit`](crate::peer_connection::PeerConnectionBuilder::with_data_channel_send_buffer_limit)),
-    /// this **blocks** until the channel's outstanding bytes are below the limit, then
-    /// enqueues — mirroring `tokio::mpsc::Sender::send`. With no limit (the default) it
-    /// never blocks. Use [`try_send`](Self::try_send) for the non-blocking variant.
+    /// Queues the message and returns; it never waits for the peer to acknowledge. When a
+    /// send-buffer limit is configured
+    /// ([`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]) it first **blocks**
+    /// until the channel's outstanding bytes are below the limit — mirroring
+    /// `tokio::mpsc::Sender::send`. With no limit (the default) it never blocks, like the
+    /// browser `RTCDataChannel.send()`. For a non-blocking send that fails fast when the
+    /// buffer is full, use [`try_send`](Self::try_send).
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::ErrDataChannelClosed`] if the channel/connection is closed or closing —
+    ///   including a caller blocked awaiting capacity when `close()`/`Drop` runs.
+    ///
+    /// [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]: crate::peer_connection::PeerConnectionBuilder::with_data_channel_send_buffer_limit
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use bytes::BytesMut;
+    /// # use webrtc::error::Result;
+    /// # use webrtc::data_channel::DataChannel;
+    /// # use std::sync::Arc;
+    /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {
+    /// dc.send(BytesMut::from(&b"Hello, WebRTC!"[..])).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn send(&self, data: BytesMut) -> Result<()>;
     /// Sends text data on this data channel.
     ///
-    /// Blocking/non-blocking behaviour matches [`send`](Self::send); see there.
+    /// Blocking/non-blocking behaviour and error contract match [`send`](Self::send): with a
+    /// configured send-buffer limit it blocks until the buffer is below the limit, and
+    /// returns [`Error::ErrDataChannelClosed`] on a closing/closed channel. Use
+    /// [`try_send_text`](Self::try_send_text) for the non-blocking variant.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use webrtc::error::Result;
+    /// # use webrtc::data_channel::DataChannel;
+    /// # use std::sync::Arc;
+    /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {
+    /// dc.send_text("Hello, WebRTC!").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn send_text(&self, text: &str) -> Result<()>;
     /// Waits until this channel can accept more data — its outstanding send bytes are
     /// below the configured send-buffer limit.
@@ -322,12 +374,7 @@ where
             .negotiated())
     }
 
-    /// ID represents the ID for this DataChannel. The value is initially
-    /// null, which is what will be returned if the ID was not provided at
-    /// channel creation time, and the DTLS role of the SCTP transport has not
-    /// yet been negotiated. Otherwise, it will return the ID that was either
-    /// selected by the script or generated. After the ID is set to a non-null
-    /// value, it will not change.
+    // Documented on `DataChannel::id`.
     fn id(&self) -> RTCDataChannelId {
         self.id
     }
@@ -341,12 +388,7 @@ where
             .ready_state())
     }
 
-    /// buffered_amount_high_threshold represents the threshold at which the
-    /// bufferedAmount is considered to be high. When the bufferedAmount increases
-    /// from below this threshold to equal or above it, the BufferedAmountHigh
-    /// event fires. buffered_amount_high_threshold is initially u32::MAX on each new
-    /// DataChannel, but the application may change its value at any time.
-    /// The threshold is set to u32::MAX by default.
+    // Documented on `DataChannel::buffered_amount_high_threshold`.
     async fn buffered_amount_high_threshold(&self) -> Result<u32> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -370,12 +412,7 @@ where
         Ok(())
     }
 
-    /// buffered_amount_low_threshold represents the threshold at which the
-    /// bufferedAmount is considered to be low. When the bufferedAmount decreases
-    /// from above this threshold to equal or below it, the BufferedAmountLow
-    /// event fires. buffered_amount_low_threshold is initially zero on each new
-    /// DataChannel, but the application may change its value at any time.
-    /// The threshold is set to 0 by default.
+    // Documented on `DataChannel::buffered_amount_low_threshold`.
     async fn buffered_amount_low_threshold(&self) -> Result<u32> {
         let mut peer_connection = self.inner.core.lock().await;
         Ok(peer_connection
@@ -407,35 +444,7 @@ where
         Ok(())
     }
 
-    /// Send binary data.
-    ///
-    /// Queues the message and returns; it never waits for the peer to acknowledge. When a
-    /// send-buffer limit is configured
-    /// ([`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]) it first **blocks**
-    /// until the channel's outstanding bytes are below the limit — mirroring
-    /// `tokio::mpsc::Sender::send`. With no limit (the default) it never blocks, like the
-    /// browser `RTCDataChannel.send()`. For a non-blocking send that fails fast when the
-    /// buffer is full, use [`try_send`](Self::try_send).
-    ///
-    /// # Errors
-    ///
-    /// - [`Error::ErrDataChannelClosed`] if the channel/connection is closed or closing —
-    ///   including a caller blocked awaiting capacity when `close()`/`Drop` runs.
-    ///
-    /// [`PeerConnectionBuilder::with_data_channel_send_buffer_limit`]: crate::peer_connection::PeerConnectionBuilder::with_data_channel_send_buffer_limit
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use bytes::BytesMut;
-    /// # use webrtc::error::Result;
-    /// # use webrtc::data_channel::DataChannel;
-    /// # use std::sync::Arc;
-    /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {
-    /// dc.send(BytesMut::from(&b"Hello, WebRTC!"[..])).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    // Contract (blocking behaviour, errors, example) is documented on `DataChannel::send`.
     async fn send(&self, data: BytesMut) -> Result<()> {
         // Await capacity, then enqueue. `writable()` is a no-op unless a send-buffer limit
         // is configured; when one is, it blocks until the channel's outstanding bytes fall
@@ -457,24 +466,7 @@ where
         Ok(())
     }
 
-    /// Send text data.
-    ///
-    /// Blocking/non-blocking behaviour and error contract match [`send`](Self::send): with a
-    /// configured send-buffer limit it blocks until the buffer is below the limit, and
-    /// returns [`Error::ErrDataChannelClosed`] on a closing/closed channel. Use
-    /// [`try_send_text`](Self::try_send_text) for the non-blocking variant.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use webrtc::error::Result;
-    /// # use webrtc::data_channel::DataChannel;
-    /// # use std::sync::Arc;
-    /// # async fn example(dc: Arc<dyn DataChannel>) -> Result<()> {
-    /// dc.send_text("Hello, WebRTC!").await?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    // Contract is documented on `DataChannel::send_text`.
     async fn send_text(&self, text: &str) -> Result<()> {
         // Await capacity, then enqueue — see `send` for the rationale.
         self.writable().await?;

@@ -117,7 +117,8 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     ///
     /// The tokio and smol implementations keep a process-global pool of at most
     /// `N` dedicated OS threads (each hosting its own single-threaded runtime),
-    /// created lazily and sized by [`reactor_pool_size`]. Each `future` is
+    /// created lazily and sized by [`set_reactor_pool_size`] (or the
+    /// `WEBRTC_REACTOR_POOL_SIZE` env var, falling back to host parallelism). Each `future` is
     /// assigned to one pool thread round-robin and never migrates off it, so the
     /// async runtime never moves a peer-connection driver across a shared worker
     /// pool — the dominant cost for in-process data-channel throughput (issue

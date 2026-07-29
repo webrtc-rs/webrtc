@@ -255,6 +255,11 @@ where
     }
 
     /// Configures the builder with the specified interceptor [`Registry`].
+    ///
+    /// The chain's type parameter stays on the *builder* and never escapes [`Self::build`],
+    /// which hands back an `Arc<dyn PeerConnection>` — so callers do not need
+    /// `rtc`'s [`Registry::boxed`](rtc::interceptor::Registry::boxed) to keep the interceptor
+    /// type out of their own structs. Pass the registry as-is.
     pub fn with_interceptor_registry<P>(
         self,
         interceptor_registry: Registry<P>,
