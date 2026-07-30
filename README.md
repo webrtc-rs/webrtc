@@ -86,10 +86,6 @@ details and roadmap.
 ```toml
 [dependencies]
 webrtc = "0.20"
-
-# The example below also uses these:
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-async-trait = "0.1"
 ```
 
 Or with the smol runtime instead of Tokio:
@@ -194,9 +190,11 @@ callbacks, and tight Tokio coupling:
 
 ✅ **Clean event handling**
 
-- Trait-based event handlers using native `async fn in trait`
+- One trait-based event handler (`PeerConnectionEventHandler`) replaces per-event callback registration, with
+  default no-op methods so you implement only what you need
 - No more callback `Arc` cloning or `Box::new(move |...| Box::pin(async move { ... }))`
-- Centralized state management with `&mut self`
+- Centralized state: the handler is shared as a single `Arc<MyHandler>` instead of an `Arc::clone` per callback.
+  Methods take `&self`, so mutable handler state goes behind one lock rather than being captured per closure
 
 ✅ **Sans-I/O foundation**
 
