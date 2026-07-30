@@ -315,6 +315,10 @@ pub trait AsyncMutex<T: ?Sized>: Send + Sync {
 
     /// Lock the mutex asynchronously
     fn lock(&self) -> Pin<Box<dyn Future<Output = Self::Guard<'_>> + Send + '_>>;
+
+    /// Try to lock the mutex without blocking. Returns `None` if the lock is
+    /// held by another task.
+    fn try_lock(&self) -> Option<Self::Guard<'_>>;
 }
 
 /// An async notification primitive
@@ -337,6 +341,9 @@ pub trait AsyncSender<T>: Send + Sync {
 
     /// Try to send a value without blocking
     fn try_send(&self, value: T) -> Result<(), TrySendError<T>>;
+
+    /// Returns `true` if the receiver for this sender has been dropped
+    fn is_closed(&self) -> bool;
 }
 
 /// Receiver half of an async channel
