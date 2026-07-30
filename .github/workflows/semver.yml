@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Run cargo-semver-checks
         uses: obi1kenobi/cargo-semver-checks-action@v2
