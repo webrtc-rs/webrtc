@@ -25,8 +25,36 @@
 //!
 //! The library supports multiple async runtimes through Cargo features:
 //!
-//! *   **`runtime-tokio` (default)**: Integrates with the Tokio async runtime.
-//! *   **`runtime-smol`**: Integrates with the smol async runtime.
+//! | Feature | Default | Description |
+//! |---------|---------|-------------|
+//! | `runtime-tokio` | ✅ | Timers, task spawning and sockets via Tokio |
+//! | `runtime-smol` | | The same, via smol |
+//!
+//! The two are mutually exclusive in practice, so selecting smol means turning the default
+//! off — otherwise both runtimes are compiled in:
+//!
+//! ```toml
+//! [dependencies]
+//! webrtc = { version = "0.20", default-features = false, features = ["runtime-smol"] }
+//! ```
+//!
+//! Additional runtimes (async-std, embassy) are on the roadmap behind the same
+//! [`Runtime`](crate::runtime::Runtime) abstraction.
+//!
+//! ## Where to Start
+//!
+//! | Module | What lives there |
+//! |--------|------------------|
+//! | [`peer_connection`] | [`PeerConnectionBuilder`](crate::peer_connection::PeerConnectionBuilder), the [`PeerConnection`](crate::peer_connection::PeerConnection) trait, and the [`PeerConnectionEventHandler`](crate::peer_connection::PeerConnectionEventHandler) you implement — start here |
+//! | [`data_channel`] | The [`DataChannel`](crate::data_channel::DataChannel) trait: `send`, `try_send`, and send-buffer back-pressure |
+//! | [`media_stream`] | Local and remote tracks. Sending encoded frames? [`TrackLocalStaticSample`](crate::media_stream::track_local::static_sample::TrackLocalStaticSample). Forwarding RTP? [`TrackLocalStaticRTP`](crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP) |
+//! | [`rtp_transceiver`] | The [`RtpSender`](crate::rtp_transceiver::RtpSender) / [`RtpReceiver`](crate::rtp_transceiver::RtpReceiver) traits and per-stream statistics |
+//! | [`runtime`] | The [`Runtime`](crate::runtime::Runtime) trait, for supplying your own executor |
+//! | [`error`] | [`Error`](crate::error::Error) and [`Result`](crate::error::Result), re-exported so you never import from `rtc-shared` directly |
+//!
+//! Beyond the Quick Start below, the repository ships [35 runnable
+//! examples](https://github.com/webrtc-rs/webrtc/tree/master/examples) covering data
+//! channels, media playback and recording, simulcast, ICE restart, and insertable streams.
 //!
 //! ## Quick Start
 //!

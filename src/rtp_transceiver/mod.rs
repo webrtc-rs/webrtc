@@ -33,10 +33,11 @@
 //! # }
 //! ```
 
-/// Async RTP Receiver API.
-pub mod rtp_receiver;
-/// Async RTP Sender API.
-pub mod rtp_sender;
+// Async RTP receiver/sender implementations. Both modules contain only crate-internal
+// types (`RtpReceiverImpl`/`RtpSenderImpl`); the public API is the `RtpReceiver` and
+// `RtpSender` traits defined below, handed out as `Arc<dyn ...>`.
+pub(crate) mod rtp_receiver;
+pub(crate) mod rtp_sender;
 
 use crate::error::Error;
 use crate::media_stream::track_local::TrackLocalContext;

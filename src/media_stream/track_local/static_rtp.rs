@@ -1,3 +1,43 @@
+//! Local track that accepts pre-packetized RTP packets.
+//!
+//! [`TrackLocalStaticRTP`](crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP) is the pass-through local track: you hand it
+//! [`rtp::Packet`](rtc::rtp::Packet)s and it forwards them to the peer, rewriting only what
+//! the negotiated session requires. Nothing is packetized, sequenced, or re-timestamped for
+//! you.
+//!
+//! Reach for this when your application already holds RTP — an SFU forwarding another
+//! peer's stream, an RTP-over-UDP ingest, a recording being replayed packet-for-packet. If
+//! it holds encoded *frames* instead, use
+//! [`TrackLocalStaticSample`](crate::media_stream::track_local::static_sample::TrackLocalStaticSample), which owns the
+//! packetizer and sequencer.
+//!
+//! # Examples
+//!
+//! Build the track from a [`MediaStreamTrack`], then write packets through the
+//! [`TrackLocal`](crate::media_stream::track_local::TrackLocal) trait's
+//! [`write_rtp`](crate::media_stream::track_local::TrackLocal::write_rtp) — so that trait must be in scope:
+//!
+//! ```no_run
+//! use rtc::media_stream::MediaStreamTrack;
+//! use rtc::rtp;
+//! use webrtc::media_stream::track_local::TrackLocal;
+//! use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+//!
+//! # async fn example(track: MediaStreamTrack, packet: rtp::Packet)
+//! # -> Result<(), Box<dyn std::error::Error>> {
+//! let output_track = TrackLocalStaticRTP::new(track);
+//!
+//! // Forward a packet received from elsewhere, unchanged.
+//! output_track.write_rtp(packet).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! To attach RTP header extensions per packet, use
+//! [`write_rtp_with_extensions`](crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP::write_rtp_with_extensions), which maps
+//! each extension URI onto the id negotiated for this track — and therefore requires the
+//! track to be bound to a peer connection first.
+
 use crate::error::{Error, Result};
 use crate::media_stream::Track;
 use crate::media_stream::track_local::{TrackLocal, TrackLocalContext, TrackLocalEvent};

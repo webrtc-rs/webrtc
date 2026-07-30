@@ -1,3 +1,72 @@
+//! Local track that accepts raw media samples and packetizes them.
+//!
+//! [`TrackLocalStaticSample`](crate::media_stream::track_local::static_sample::TrackLocalStaticSample) takes encoded frames — VP8/VP9/H.264 video, Opus audio — as
+//! [`Sample`](rtc::media::Sample)s and does the RTP work for you: it packetizes each sample
+//! into one or more RTP packets at the codec's MTU, assigns sequence numbers, and sets
+//! timestamps from the sample duration.
+//!
+//! Reach for this when your application holds *media*. If it already holds RTP packets (an
+//! RTP forwarder, an SFU, a media server feed), use
+//! [`TrackLocalStaticRTP`](crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP) instead and skip the
+//! packetizer.
+//!
+//! # Examples
+//!
+//! A track is built from a [`MediaStreamTrack`] describing the stream ids, kind, and one
+//! encoding per SSRC. Construction fails if a codec has no packetizer (see
+//! [`TrackLocalStaticSample::new`](crate::media_stream::track_local::static_sample::TrackLocalStaticSample::new)):
+//!
+//! ```no_run
+//! use rtc::media_stream::MediaStreamTrack;
+//! use rtc::rtp_transceiver::rtp_sender::{
+//!     RTCRtpCodec, RTCRtpCodingParameters, RTCRtpEncodingParameters, RtpCodecKind,
+//! };
+//! use webrtc::media_stream::track_local::static_sample::TrackLocalStaticSample;
+//!
+//! # fn example(video_codec: RTCRtpCodec, ssrc: u32) -> Result<(), Box<dyn std::error::Error>> {
+//! let track = TrackLocalStaticSample::new(MediaStreamTrack::new(
+//!     "stream-id".to_owned(),
+//!     "track-id".to_owned(),
+//!     "track-label".to_owned(),
+//!     RtpCodecKind::Video,
+//!     vec![RTCRtpEncodingParameters {
+//!         rtp_coding_parameters: RTCRtpCodingParameters {
+//!             ssrc: Some(ssrc),
+//!             ..Default::default()
+//!         },
+//!         codec: video_codec,
+//!         ..Default::default()
+//!     }],
+//! ))?;
+//! # let _ = track;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Write samples either directly with
+//! [`write_sample`](crate::media_stream::track_local::static_sample::TrackLocalStaticSample::write_sample), or through
+//! [`sample_writer`](crate::media_stream::track_local::static_sample::TrackLocalStaticSample::sample_writer), which returns a
+//! [`SampleWriter`](crate::media_stream::track_local::static_sample::SampleWriter) builder for attaching per-packet RTP header extensions such as audio
+//! level or video orientation:
+//!
+//! ```no_run
+//! use rtc::media::Sample;
+//! use webrtc::media_stream::track_local::static_sample::TrackLocalStaticSample;
+//!
+//! # async fn example(
+//! #     track: &TrackLocalStaticSample,
+//! #     ssrc: u32,
+//! #     payload_type: u8,
+//! #     sample: &Sample,
+//! # ) -> Result<(), Box<dyn std::error::Error>> {
+//! track
+//!     .sample_writer(ssrc, payload_type)
+//!     .write_sample(sample)
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use crate::error::{Error, Result};
 use crate::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
 use crate::media_stream::track_local::{TrackLocal, TrackLocalContext, TrackLocalEvent};
