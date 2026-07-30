@@ -6,7 +6,7 @@ use super::transports::stun_gatherer::{
     RTCStunGatherEventIn, RTCStunGatherEventOut, RTCStunGatherer,
 };
 use super::transports::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
-use crate::data_channel::{DataChannelEvent, DataChannelImpl};
+use crate::data_channel::{DataChannelEvent, DataChannelImpl, RTCDataChannelId};
 use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
@@ -18,7 +18,9 @@ use crate::peer_connection::transports::{
 };
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
-use crate::runtime::{AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, channel};
+use crate::runtime::{
+    AsyncSender as _, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Sender, channel,
+};
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::future::OptionFuture;
@@ -56,6 +58,25 @@ pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 pub(crate) const TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
+
+/// Insert `sender` for `channel_id`, returning `true` if the channel should be announced.
+pub(crate) fn insert_data_channel_event_sender(
+    data_channels: &mut HashMap<RTCDataChannelId, Sender<DataChannelEvent>>,
+    channel_id: RTCDataChannelId,
+    sender: Sender<DataChannelEvent>,
+) -> bool {
+    match data_channels.entry(channel_id) {
+        Entry::Vacant(e) => {
+            e.insert(sender);
+            true
+        }
+        Entry::Occupied(mut e) if e.get().is_closed() => {
+            e.insert(sender);
+            true
+        }
+        Entry::Occupied(_) => false,
+    }
+}
 
 /// Unified inner message type for the peer connection driver
 #[derive(Debug)]
@@ -573,22 +594,12 @@ where
                     if data_channel_exist {
                         let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
 
-                        // A vacant entry means the peer opened this channel: locally created
-                        // ones are registered by `create_data_channel` before their `OnOpen`
-                        // ever reaches us. Only those get announced through the handler --
-                        // `on_data_channel` is for remotely opened channels.
-                        let opened_by_peer = {
+                        let should_announce = {
                             let mut data_channels = self.inner.data_channel_events_tx.lock().await;
-                            match data_channels.entry(channel_id) {
-                                Entry::Vacant(e) => {
-                                    e.insert(evt_tx);
-                                    true
-                                }
-                                Entry::Occupied(_) => false,
-                            }
+                            insert_data_channel_event_sender(&mut data_channels, channel_id, evt_tx)
                         };
 
-                        if opened_by_peer {
+                        if should_announce {
                             let data_channel = Arc::new(DataChannelImpl::new(
                                 channel_id,
                                 self.inner.clone(),
@@ -1256,5 +1267,46 @@ where
         let mut core = self.inner.core.lock().await;
         core.handle_timeout(now)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::channel;
+
+    #[test]
+    fn insert_data_channel_event_sender_replaces_closed_sender() {
+        let mut map: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> = HashMap::new();
+        let channel_id = 0;
+
+        let (old_tx, old_rx) = channel::<DataChannelEvent>(1);
+        drop(old_rx);
+        map.insert(channel_id, old_tx);
+
+        let (new_tx, _new_rx) = channel::<DataChannelEvent>(1);
+        let should_announce = insert_data_channel_event_sender(&mut map, channel_id, new_tx);
+        // Before the fix this returns false (Occupied check refuses);
+        // after the fix it returns true (closed sender is replaced).
+        assert!(should_announce);
+
+        let sender = map.get(&channel_id).cloned().unwrap();
+        assert!(!sender.is_closed());
+    }
+
+    #[test]
+    fn insert_data_channel_event_sender_skips_live_sender() {
+        let mut map: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> = HashMap::new();
+        let channel_id = 0;
+
+        let (live_tx, _live_rx) = channel::<DataChannelEvent>(1);
+        map.insert(channel_id, live_tx);
+
+        let (new_tx, _new_rx) = channel::<DataChannelEvent>(1);
+        let should_announce = insert_data_channel_event_sender(&mut map, channel_id, new_tx);
+        assert!(!should_announce);
+
+        let sender = map.get(&channel_id).cloned().unwrap();
+        assert!(!sender.is_closed());
     }
 }

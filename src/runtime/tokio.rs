@@ -460,6 +460,10 @@ impl<T: ?Sized + Send> AsyncMutex<T> for TokioMutex<T> {
     fn lock(&self) -> Pin<Box<dyn Future<Output = Self::Guard<'_>> + Send + '_>> {
         Box::pin(self.0.lock())
     }
+
+    fn try_lock(&self) -> Option<Self::Guard<'_>> {
+        self.0.try_lock().ok()
+    }
 }
 
 /// Tokio-based notify wrapper
@@ -549,6 +553,10 @@ impl<T: Send> AsyncSender<T> for TokioSender<T> {
             ::tokio::sync::mpsc::error::TrySendError::Full(v) => TrySendError::Full(v),
             ::tokio::sync::mpsc::error::TrySendError::Closed(v) => TrySendError::Disconnected(v),
         })
+    }
+
+    fn is_closed(&self) -> bool {
+        self.0.is_closed()
     }
 }
 
