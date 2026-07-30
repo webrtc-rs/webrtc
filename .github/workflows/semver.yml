@@ -1,0 +1,21 @@
+name: SemVer Check
+
+on:
+  push:
+    branches: [master, v0.17.x]
+  pull_request:
+    branches: [master, v0.17.x]
+
+jobs:
+  semver:
+    name: Check SemVer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run cargo-semver-checks
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          # Overrides the default heuristic to ONLY use default features
+          feature-group: default-features
