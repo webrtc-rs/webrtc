@@ -27,7 +27,10 @@ use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCIceGatheringState, RTCPeerConnectionState,
 };
-use webrtc::runtime::{block_on, channel, default_runtime, interval, timeout};
+use webrtc::runtime::channel;
+
+mod common;
+use common::{block_on, interval, runtime, timeout};
 
 // ── Event Handlers ────────────────────────────────────────────────────────────
 
@@ -184,7 +187,7 @@ async fn stream_audio(
 #[test]
 fn test_play_from_disk_streaming() {
     block_on(async {
-        let runtime = default_runtime().expect("no runtime");
+        let runtime = runtime();
 
         let video_file = "rtc/examples/test-data/output_vp8.ivf";
         let audio_file = "rtc/examples/test-data/output.ogg";

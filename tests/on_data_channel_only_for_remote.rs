@@ -27,7 +27,10 @@ use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Sender, block_on, channel, default_runtime, timeout};
+use webrtc::runtime::{Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 /// Records the label of every channel announced through `on_data_channel`.
 struct Handler {
@@ -107,7 +110,7 @@ async fn run() -> Result<()> {
         .try_init()
         .ok();
 
-    let runtime = default_runtime().ok_or_else(|| std::io::Error::other("no async runtime"))?;
+    let runtime = runtime();
 
     let mut offerer = build_peer(runtime.clone()).await?;
     let mut answerer = build_peer(runtime.clone()).await?;
@@ -153,7 +156,7 @@ async fn run() -> Result<()> {
 
     // Give the regression a chance to deliver the surplus announcement before asserting —
     // the offerer's own channel is open well before this point.
-    webrtc::runtime::sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(500)).await;
 
     assert_eq!(
         *answerer.announced.lock().unwrap(),
@@ -189,7 +192,7 @@ fn test_negotiated_channel_is_never_announced() {
 }
 
 async fn run_negotiated() -> Result<()> {
-    let runtime = default_runtime().ok_or_else(|| std::io::Error::other("no async runtime"))?;
+    let runtime = runtime();
 
     let mut offerer = build_peer(runtime.clone()).await?;
     let mut answerer = build_peer(runtime.clone()).await?;
@@ -243,7 +246,7 @@ async fn run_negotiated() -> Result<()> {
     timeout(Duration::from_secs(10), open_rx.recv())
         .await
         .map_err(|_| anyhow::anyhow!("timeout: negotiated channel never opened"))?;
-    webrtc::runtime::sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(500)).await;
 
     assert!(
         offerer.announced.lock().unwrap().is_empty(),

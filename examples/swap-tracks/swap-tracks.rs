@@ -27,7 +27,11 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const TRACK_SWAP_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -247,8 +251,7 @@ async fn async_main() -> Result<()> {
             .init();
     }
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     // ── Media engine: VP8 only ────────────────────────────────────────────────
 
@@ -353,7 +356,7 @@ async fn async_main() -> Result<()> {
     let answer = pc.create_answer(None).await?;
     pc.set_local_description(answer).await?;
 
-    let _ = webrtc::runtime::timeout(Duration::from_secs(5), gather_complete_rx.recv()).await;
+    let _ = timeout(Duration::from_secs(5), gather_complete_rx.recv()).await;
 
     if let Some(local_desc) = pc.local_description().await {
         let json_str = serde_json::to_string(&local_desc)?;

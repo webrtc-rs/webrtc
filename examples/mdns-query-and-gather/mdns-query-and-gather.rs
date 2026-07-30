@@ -25,9 +25,14 @@ use webrtc::peer_connection::{
     RTCConfigurationBuilder, RTCIceCandidateType, RTCIceConnectionState, RTCIceGatheringState,
     RTCIceServer, RTCPeerConnectionState, Registry, SettingEngine, register_default_interceptors,
 };
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
+use webrtc::runtime::{Runtime, Sender, channel};
 
 use rtc::ice::mdns::MulticastDnsMode;
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::block_on;
+use common::runtime;
 
 #[derive(Parser)]
 #[command(name = "mdns-query-and-gather")]
@@ -164,7 +169,7 @@ async fn async_main(cli: Cli) -> Result<()> {
     };
     let local_ip = IpAddr::from_str(&host)?;
 
-    let runtime = default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+    let runtime = runtime();
 
     let (done_tx, mut done_rx) = channel::<()>(1);
     let (gather_tx, mut gather_rx) = channel::<()>(1);

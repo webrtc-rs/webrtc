@@ -23,7 +23,11 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCPeerConnectionIceEvent,
     Registry, SettingEngine,
 };
-use webrtc::runtime::{block_on, channel, default_runtime, sleep};
+use webrtc::runtime::channel;
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, sleep};
 
 #[derive(Parser)]
 #[command(name = "ice-tcp-active-offer")]
@@ -139,7 +143,7 @@ async fn async_main(cli: Cli) -> Result<()> {
         let _ = ctrlc_tx.try_send(());
     })?;
 
-    let runtime = default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+    let runtime = runtime();
 
     let mut media = MediaEngine::default();
     media.register_default_codecs()?;

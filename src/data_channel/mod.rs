@@ -44,7 +44,7 @@
 //! ```
 
 use crate::peer_connection::PeerConnectionRef;
-use crate::runtime::{AsyncMutex as _, Mutex, Receiver};
+use crate::runtime::{Mutex, Receiver};
 use bytes::BytesMut;
 use futures::FutureExt;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
@@ -300,7 +300,7 @@ where
     async fn await_send_capacity(&self) {
         futures::select! {
             _ = self.inner.data_channel_backpressure.notified().fuse() => {}
-            _ = crate::runtime::sleep(Duration::from_millis(50)).fuse() => {}
+            _ = self.inner.runtime.sleep(Duration::from_millis(50)).fuse() => {}
         }
     }
 }
@@ -600,7 +600,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::block_on;
+    use futures::executor::block_on;
     use std::sync::atomic::AtomicUsize;
 
     /// A minimal external `DataChannel` that overrides only `send`/`send_text` (to record that
@@ -719,9 +719,10 @@ mod tests {
     #[test]
     fn drop_removes_event_sender() {
         use crate::peer_connection::new_test_peer_connection;
-        use crate::runtime::{block_on, channel};
+        use crate::runtime::{channel, default_runtime};
 
-        block_on(async {
+        let rt = default_runtime().expect("test requires a runtime feature");
+        rt.block_on(Box::pin(async {
             let (inner, _driver_event_rx) = new_test_peer_connection().await;
 
             let channel_id = 0;
@@ -749,6 +750,6 @@ mod tests {
                     .await
                     .contains_key(&channel_id)
             );
-        });
+        }));
     }
 }

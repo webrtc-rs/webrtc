@@ -25,9 +25,11 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{
-    BroadcastSender, Runtime, Sender, block_on, broadcast_channel, channel, default_runtime, sleep,
-};
+use webrtc::runtime::{BroadcastSender, Runtime, Sender, broadcast_channel, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, sleep};
 
 // ── Broadcaster handler ───────────────────────────────────────────────────────
 
@@ -174,8 +176,7 @@ async fn async_main() -> Result<()> {
             .init();
     }
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let mut sdp_chan_rx = signal::http_sdp_server(cli.port).await;
     println!("Waiting for broadcaster offer on port {}", cli.port);

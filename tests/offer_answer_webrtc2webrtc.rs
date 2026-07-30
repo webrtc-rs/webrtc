@@ -10,7 +10,10 @@ use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const TEST_MESSAGE: &str = "Hello from offerer!";
 const ECHO_MESSAGE: &str = "Echo from answerer!";
@@ -107,8 +110,7 @@ async fn run_test() -> Result<()> {
 
     log::info!("Starting offer-answer test: WebRTC offerer -> WebRTC answerer");
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     // ── Channels ───────────────────────────────────────────────────────────────
     let (offerer_gather_tx, mut offerer_gather_rx) = channel::<()>(1);

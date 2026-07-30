@@ -39,7 +39,11 @@ use webrtc::peer_connection::{
     RTCPeerConnectionState,
 };
 use webrtc::rtp_transceiver::RtpSender;
-use webrtc::runtime::{Notify, Runtime, Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{Notify, Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, sleep};
 
 const LABEL_AUDIO: &str = "audio";
 const LABEL_TRACK: &str = "webrtc-rs";
@@ -216,8 +220,7 @@ async fn async_main() -> Result<()> {
         );
     }
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
     let state = Arc::new(AppState {
         runtime: runtime.clone(),
         tracks,

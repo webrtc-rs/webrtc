@@ -37,9 +37,11 @@ use webrtc::peer_connection::{
     RTCPeerConnectionState,
 };
 use webrtc::rtp_transceiver::RtpSender;
-use webrtc::runtime::{
-    Mutex, Notify, Receiver, Runtime, Sender, block_on, channel, default_runtime, interval,
-};
+use webrtc::runtime::{Mutex, Notify, Receiver, Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, interval, runtime};
 
 #[derive(Clone)]
 struct AppState {
@@ -400,8 +402,7 @@ async fn async_main() -> Result<()> {
         let _ = ctrlc_tx.try_send(());
     })?;
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let connection_notify = Notify::new();
     let handler = Arc::new(TestHandler {

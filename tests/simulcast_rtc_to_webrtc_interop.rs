@@ -42,7 +42,10 @@ use std::time::{Duration, Instant};
 use webrtc::media_stream::track_remote::TrackRemoteEvent;
 use webrtc::peer_connection::RTCIceGatheringState;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 
@@ -106,8 +109,7 @@ async fn run_test() -> Result<()> {
     let (state_tx, mut state_rx) = channel::<RTCPeerConnectionState>(16);
     let (packets_tx, mut packets_rx) = channel::<String>(256);
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let config = RTCConfigurationBuilder::new().build();
 
@@ -288,7 +290,7 @@ async fn run_test() -> Result<()> {
 
     let answer = webrtc_pc.create_answer(None).await?;
     webrtc_pc.set_local_description(answer.clone()).await?;
-    let _ = webrtc::runtime::timeout(Duration::from_secs(5), gather_complete_rx.recv()).await;
+    let _ = timeout(Duration::from_secs(5), gather_complete_rx.recv()).await;
     let answer_with_cands = webrtc_pc
         .local_description()
         .await

@@ -25,7 +25,10 @@ use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCIceGatheringState, RTCPeerConnectionState,
 };
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 struct OffererHandler {
     gather_complete_tx: Sender<()>,
@@ -134,8 +137,7 @@ async fn run_test() -> anyhow::Result<()> {
         .try_init()
         .ok();
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let mut offerer_media = MediaEngine::default();
     offerer_media.register_default_codecs()?;

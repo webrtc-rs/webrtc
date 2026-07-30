@@ -15,7 +15,10 @@ use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 struct SenderHandler {
     gather_tx: Sender<()>,
@@ -68,7 +71,7 @@ impl PeerConnectionEventHandler for ReceiverHandler {
 /// Build a sender+receiver pair, both with the given SCTP receive window, open a
 /// data channel and deliver `msg`; assert it arrives (i.e. the association formed).
 async fn exchange_one_message(recv_buf: u32, msg: &[u8]) -> Result<()> {
-    let runtime = default_runtime().ok_or_else(|| std::io::Error::other("no async runtime"))?;
+    let runtime = runtime();
 
     let (snd_gather_tx, mut snd_gather_rx) = channel::<()>(1);
     let (snd_conn_tx, mut snd_conn_rx) = channel::<()>(1);

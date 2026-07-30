@@ -7,6 +7,10 @@ mod trickle_ice_common;
 
 use trickle_ice_common::{TrickleCli, TrickleExampleConfig, init_logging, run_example};
 
+#[path = "../common/mod.rs"]
+mod common;
+use common::block_on;
+
 #[derive(Parser)]
 #[command(name = "trickle-ice-relay")]
 #[command(author = "Rain Liu <yliu@webrtc.rs>")]
@@ -28,7 +32,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    webrtc::runtime::block_on(async_main())
+    block_on(async_main())
 }
 
 async fn async_main() -> Result<()> {

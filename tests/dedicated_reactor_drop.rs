@@ -22,7 +22,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{block_on, set_reactor_pool_size, sleep};
+
+mod common;
+use common::{block_on, sleep};
 
 /// Small pool so `N_CONNECTIONS > POOL_SIZE` and the bound actually bites.
 const POOL_SIZE: usize = 2;
@@ -36,7 +38,6 @@ impl PeerConnectionEventHandler for NoopHandler {}
 #[test]
 fn test_reactor_pool_is_bounded_and_drop_stops_driver_task() {
     // Size the process-global pool before the first dedicated-reactor build.
-    set_reactor_pool_size(POOL_SIZE);
     block_on(run());
 }
 
@@ -57,6 +58,7 @@ async fn run() {
             .with_handler(handler) // moves the only app-side strong ref into the builder
             .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
             .with_dedicated_reactor_thread(true)
+            .with_reactor_pool_size(POOL_SIZE)
             .build()
             .await
             .expect("build dedicated-reactor peer connection");

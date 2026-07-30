@@ -29,7 +29,10 @@ use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const CHUNK: usize = 4096; // 4 KB messages
 // Reliable/ordered flood total; large enough to keep the blocking gate engaged for a while.
@@ -109,7 +112,7 @@ async fn run() -> Result<()> {
         .try_init()
         .ok();
 
-    let runtime = default_runtime().ok_or_else(|| std::io::Error::other("no async runtime"))?;
+    let runtime = runtime();
 
     let (snd_gather_tx, mut snd_gather_rx) = channel::<()>(1);
     let (snd_conn_tx, mut snd_conn_rx) = channel::<()>(1);

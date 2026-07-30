@@ -176,7 +176,7 @@ where
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
     dedicated_reactor: bool,
-    reactor_pool_size: Option<usize>,
+    reactor_pool_size: usize,
     data_channel_send_buffer_limit: usize,
 }
 
@@ -190,7 +190,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             udp_addrs: vec![],
             tcp_addrs: vec![],
             dedicated_reactor: false,
-            reactor_pool_size: None,
+            reactor_pool_size: 0,
             // `usize::MAX` = unbounded: no send back-pressure unless the application
             // opts in via `with_data_channel_send_buffer_limit`. This keeps `send`/
             // `send_text` non-blocking by default (zero behaviour change).
@@ -313,9 +313,8 @@ where
     /// data-channel throughput on multi-threaded runtimes (issue #101).
     ///
     /// The reactor thread comes from a process-global pool of at most `N` threads
-    /// (see [`with_reactor_pool_size`](Self::with_reactor_pool_size) /
-    /// [`set_reactor_pool_size`](crate::runtime::set_reactor_pool_size);
-    /// default: host parallelism). Drivers are assigned round-robin, so up to a
+    /// (see [`with_reactor_pool_size`](Self::with_reactor_pool_size); default: a single
+    /// thread). Drivers are assigned round-robin, so up to a
     /// few I/O-bound drivers share a thread cooperatively and the reactor-thread
     /// count stays **bounded by the pool size regardless of connection count** —
     /// unlike the earlier model, which spent one OS thread per connection. This
@@ -347,19 +346,26 @@ where
     /// is enabled — the maximum number of reactor threads across the whole process,
     /// regardless of how many connections use the pool.
     ///
-    /// The pool is process-global and sized **once**, lazily, when the first
-    /// dedicated-reactor connection is built. This method forwards to
-    /// [`set_reactor_pool_size`](crate::runtime::set_reactor_pool_size) at
-    /// [`build`](Self::build) time, so only the first such connection's value
-    /// takes effect; prefer setting it once at startup (here or via that function,
-    /// or the `WEBRTC_REACTOR_POOL_SIZE` environment variable). Passing `0`
-    /// restores the default resolution (env var, then host parallelism).
+    /// **Defaults to `0`, which the built-in runtimes clamp to `1`** — a single shared reactor
+    /// thread carrying every dedicated-reactor driver. `0` does not mean "unbounded" or "one
+    /// thread per core"; pass an explicit value for a wider pool. Values above `1024` are
+    /// clamped down to it.
+    ///
+    /// The value is handed to
+    /// [`Runtime::spawn_reactor`](crate::runtime::Runtime::spawn_reactor) when this
+    /// connection's driver is spawned, but each built-in runtime builds its pool **once**,
+    /// lazily, on first use. Only the first dedicated-reactor connection's value therefore
+    /// takes effect for the process — set it consistently across connections, or set it on
+    /// whichever you build first.
+    ///
+    /// Ignored unless `with_dedicated_reactor_thread(true)` is also set, since the pool is
+    /// only used on that path.
     ///
     /// Smaller pools use fewer threads and less memory (fewer per-thread allocator
     /// arenas) at the cost of more drivers sharing each thread; size it to trade
     /// resident memory against per-connection isolation for your workload.
-    pub fn with_reactor_pool_size(mut self, size: usize) -> Self {
-        self.reactor_pool_size = Some(size);
+    pub fn with_reactor_pool_size(mut self, reactor_pool_size: usize) -> Self {
+        self.reactor_pool_size = reactor_pool_size;
         self
     }
 
@@ -401,15 +407,6 @@ where
 
         let core = self.builder.build()?;
 
-        // Apply the reactor-pool size before the first `spawn_reactor` builds the
-        // process-global pool. Only meaningful when this connection uses the pool
-        // (dedicated reactor enabled), so don't touch the global otherwise; and the
-        // pool is sized once, lazily, so the value in effect when the first
-        // dedicated-reactor connection is built wins — see `with_reactor_pool_size`.
-        if let Some(size) = self.reactor_pool_size.filter(|_| self.dedicated_reactor) {
-            crate::runtime::set_reactor_pool_size(size);
-        }
-
         // `0` = unbounded (same as the `usize::MAX` default); normalise it to `usize::MAX`
         // so the send-buffer gate (and `writable()`) short-circuits to a no-op.
         let data_channel_send_buffer_limit = if self.data_channel_send_buffer_limit == 0 {
@@ -427,6 +424,7 @@ where
             self.udp_addrs,
             self.tcp_addrs,
             self.dedicated_reactor,
+            self.reactor_pool_size,
             data_channel_send_buffer_limit,
         )
         .await
@@ -545,7 +543,7 @@ where
     I: Interceptor,
 {
     inner: Arc<PeerConnectionRef<I>>,
-    driver_handle: Mutex<Option<JoinHandle>>,
+    driver_handle: Mutex<Option<Box<dyn JoinHandle>>>,
     /// Whether the driver runs on the shared bounded reactor pool (a task pinned to
     /// one pool thread) rather than the general async runtime. When true, `close()`
     /// waits for that task to finish and then aborts it, and `Drop` signals it to
@@ -649,7 +647,7 @@ where
         } else if self.write_backpressure.fetch_add(1, Ordering::Relaxed) % WRITE_YIELD_INTERVAL
             == WRITE_YIELD_INTERVAL - 1
         {
-            crate::runtime::yield_now().await;
+            self.runtime.yield_now().await;
         }
     }
 }
@@ -668,6 +666,7 @@ where
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
         dedicated_reactor: bool,
+        reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
     ) -> Result<Self> {
         // Bind the std sockets up front (synchronous, and needed to compute the
@@ -728,9 +727,18 @@ where
             .iter()
             .map(|(addr, _)| *addr)
             .collect::<Vec<_>>();
-        let stun_gatherer =
-            RTCStunGatherer::new(local_addrs.clone(), ice_servers.clone(), ice_gather_policy);
-        let turn_relayer = RTCTurnRelayer::new(local_addrs, ice_servers, ice_gather_policy);
+        let stun_gatherer = RTCStunGatherer::new(
+            local_addrs.clone(),
+            ice_servers.clone(),
+            ice_gather_policy,
+            Arc::clone(&runtime),
+        );
+        let turn_relayer = RTCTurnRelayer::new(
+            local_addrs,
+            ice_servers,
+            ice_gather_policy,
+            Arc::clone(&runtime),
+        );
 
         // Init-result oneshot. `new()` awaits this so that socket wrapping and
         // driver construction errors propagate out of `build()`, instead of being
@@ -797,7 +805,7 @@ where
         };
 
         let driver_handle = if dedicated_reactor {
-            runtime.spawn_reactor(Box::pin(run_driver))
+            runtime.spawn_reactor(reactor_pool_size, Box::pin(run_driver))
         } else {
             runtime.spawn(Box::pin(run_driver))
         };
@@ -894,7 +902,7 @@ where
                 let max = std::time::Duration::from_secs(2);
                 let mut waited = std::time::Duration::ZERO;
                 while !driver_handle.is_finished() && waited < max {
-                    crate::runtime::sleep(step).await;
+                    self.inner.runtime.sleep(step).await;
                     waited += step;
                 }
                 driver_handle.abort();
@@ -1250,7 +1258,7 @@ pub(crate) use tests::new_test_peer_connection;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::{block_on, channel, default_runtime, timeout};
+    use crate::runtime::{channel, default_runtime, timeout};
     use rtc::peer_connection::RTCPeerConnectionBuilder;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -1293,7 +1301,10 @@ mod tests {
 
     #[test]
     fn create_data_channel_wakes_driver() {
-        block_on(async {
+        // Drive on the runtime under test rather than a bare executor: `timeout` below arms
+        // a real timer, which needs that runtime's reactor.
+        let rt = default_runtime().expect("test requires a runtime feature");
+        rt.block_on(Box::pin(async {
             let (inner, mut driver_event_rx) = new_test_peer_connection().await;
 
             let pc = PeerConnectionImpl {
@@ -1304,11 +1315,11 @@ mod tests {
 
             let _dc = pc.create_data_channel("test", None).await.unwrap();
 
-            let event = timeout(Duration::from_secs(1), driver_event_rx.recv())
+            let event = timeout(&*rt, Duration::from_secs(1), driver_event_rx.recv())
                 .await
                 .expect("driver should be woken within 1s")
                 .expect("driver event channel should not be closed");
             assert!(matches!(event, PeerConnectionDriverEvent::WriteNotify));
-        });
+        }));
     }
 }

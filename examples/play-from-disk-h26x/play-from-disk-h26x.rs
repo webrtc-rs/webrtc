@@ -37,7 +37,11 @@ use webrtc::peer_connection::{
     RTCPeerConnectionState,
 };
 use webrtc::rtp_transceiver::RtpSender;
-use webrtc::runtime::{Sender, block_on, channel, default_runtime, interval};
+use webrtc::runtime::{Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, interval, runtime};
 
 const OGG_PAGE_DURATION: Duration = Duration::from_millis(20);
 const H26X_FRAME_DURATION: Duration = Duration::from_millis(33); // ~30 fps
@@ -216,8 +220,7 @@ async fn async_main() -> Result<()> {
         let _ = ctrlc_tx.try_send(());
     })?;
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let handler = Arc::new(Handler {
         gather_complete_tx,

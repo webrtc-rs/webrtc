@@ -15,7 +15,10 @@ use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCIceGatheringState, RTCPeerConnectionState,
 };
-use webrtc::runtime::{block_on, channel, default_runtime, timeout};
+use webrtc::runtime::channel;
+
+mod common;
+use common::{block_on, runtime, timeout};
 
 // ── Event Handlers ────────────────────────────────────────────────────────────
 
@@ -64,7 +67,7 @@ impl PeerConnectionEventHandler for AnswererHandler {
 #[test]
 fn test_media_rejection_audio_rejected_video_connected() {
     block_on(async {
-        let runtime = default_runtime().expect("no runtime");
+        let runtime = runtime();
 
         // Offerer MediaEngine: Video + Audio (defaults)
         let mut offerer_media = MediaEngine::default();

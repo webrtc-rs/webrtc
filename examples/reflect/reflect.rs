@@ -27,7 +27,11 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{Mutex, Runtime, Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{Mutex, Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, sleep};
 
 #[derive(Clone)]
 struct TestHandler {
@@ -234,8 +238,7 @@ async fn async_main() -> anyhow::Result<()> {
     ctrlc::set_handler(move || {
         let _ = ctrlc_tx.try_send(());
     })?;
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let tracks = Arc::new(Mutex::new(HashMap::new()));
     let handler = Arc::new(TestHandler {

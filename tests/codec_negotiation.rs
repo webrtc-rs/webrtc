@@ -15,7 +15,9 @@ use webrtc::peer_connection::{
 use webrtc::rtp_transceiver::{
     RTCRtpTransceiverDirection, RTCRtpTransceiverInit, RtpSender, RtpTransceiver,
 };
-use webrtc::runtime::block_on;
+
+mod common;
+use common::block_on;
 
 const BASE_SSRC: u32 = 0x1111_1111;
 const ALT_SSRC: u32 = 0x2222_2222;

@@ -1,6 +1,6 @@
 //! TURN relayer for async peer connections.
 
-use crate::runtime;
+use crate::runtime::Runtime;
 use log::{debug, error, trace, warn};
 use rtc::ice::url::SchemeType;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
@@ -18,6 +18,7 @@ use rtc::turn::client::{
 use rtc::turn::proto::chandata::ChannelData;
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Instant;
 
 const MAX_PENDING_PACKETS_PER_PEER: usize = 64;
@@ -53,6 +54,8 @@ pub(crate) struct RTCTurnRelayer {
     ice_servers: Vec<RTCIceServer>,
     ice_gather_policy: RTCIceTransportPolicy,
     state: RTCIceGatheringState,
+    /// Host runtime, used to resolve TURN server hostnames.
+    runtime: Arc<dyn Runtime>,
     clients: HashMap<FourTuple, ManagedTurnClient>,
     relay_addrs: HashMap<SocketAddr, FourTuple>,
     pending_permissions: HashMap<rtc::stun::message::TransactionId, PendingPermission>,
@@ -68,12 +71,14 @@ impl RTCTurnRelayer {
         local_addrs: Vec<SocketAddr>,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
+        runtime: Arc<dyn Runtime>,
     ) -> Self {
         Self {
             local_addrs,
             ice_servers,
             ice_gather_policy,
             state: RTCIceGatheringState::New,
+            runtime,
             clients: HashMap::new(),
             relay_addrs: HashMap::new(),
             pending_permissions: HashMap::new(),
@@ -132,6 +137,9 @@ impl RTCTurnRelayer {
 
         self.state = RTCIceGatheringState::Gathering;
 
+        // Clone the handle up front so the per-server borrows below stay disjoint.
+        let runtime = Arc::clone(&self.runtime);
+
         for ice_server in &self.ice_servers {
             let urls = ice_server.urls()?;
 
@@ -151,7 +159,7 @@ impl RTCTurnRelayer {
                 }
 
                 let turn_server_addr = format!("{}:{}", url.host, url.port);
-                let resolved_addrs = match runtime::resolve_host(&turn_server_addr).await {
+                let resolved_addrs = match runtime.resolve_host(&turn_server_addr).await {
                     Ok(addrs) => addrs,
                     Err(err) => {
                         error!(
@@ -657,7 +665,7 @@ mod tests {
 
     #[test]
     fn routes_turn_allocate_response_by_local_addr_and_port() {
-        crate::runtime::block_on(async {
+        futures::executor::block_on(async {
             let local_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 50000);
             let turn_peer_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3478);
             let mut relayer = RTCTurnRelayer::new(
@@ -668,6 +676,7 @@ mod tests {
                     credential: "pass".to_owned(),
                 }],
                 RTCIceTransportPolicy::Relay,
+                crate::runtime::default_runtime().expect("test requires a runtime feature"),
             );
 
             relayer.gather().await.expect("TURN gather should start");

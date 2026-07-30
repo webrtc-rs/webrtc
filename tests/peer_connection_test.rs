@@ -6,7 +6,9 @@ use webrtc::peer_connection::{
     RTCConfigurationBuilder, RTCIceConnectionState, RTCPeerConnectionIceEvent,
     RTCPeerConnectionState, RTCSdpType,
 };
-use webrtc::runtime::block_on;
+
+mod common;
+use common::block_on;
 
 #[derive(Clone)]
 struct TestHandler;

@@ -14,7 +14,10 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::channel;
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 // ── Event Handlers ────────────────────────────────────────────────────────────
 
@@ -68,7 +71,7 @@ impl PeerConnectionEventHandler for AnswererHandler {
 #[test]
 fn test_peer_connection_statistics() {
     block_on(async {
-        let runtime = default_runtime().expect("no runtime");
+        let runtime = runtime();
 
         // --- Offerer ---
         let (off_gather_tx, mut off_gather_rx) = channel(1);

@@ -12,7 +12,10 @@ use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const TEST_MESSAGE: &str = "Hello over a dedicated reactor!";
 const ECHO_MESSAGE: &str = "Echo over a dedicated reactor!";
@@ -97,8 +100,7 @@ async fn run_test(with_tcp: bool) -> Result<()> {
         .try_init()
         .ok();
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let (offerer_gather_tx, mut offerer_gather_rx) = channel::<()>(1);
     let (offerer_connected_tx, mut offerer_connected_rx) = channel::<()>(1);

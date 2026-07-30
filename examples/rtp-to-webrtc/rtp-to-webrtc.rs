@@ -23,7 +23,12 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{AsyncUdpSocket, Sender, block_on, channel, default_runtime};
+use webrtc::runtime::{AsyncUdpSocket, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::block_on;
+use common::runtime;
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -152,8 +157,7 @@ async fn async_main() -> Result<()> {
         let _ = ctrlc_tx.try_send(());
     })?;
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let handler = Arc::new(Handler {
         gather_complete_tx,

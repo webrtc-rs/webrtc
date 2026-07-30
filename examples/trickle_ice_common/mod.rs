@@ -18,7 +18,12 @@ use webrtc::peer_connection::{
     RTCIceTransportPolicy, RTCPeerConnectionIceEvent, RTCPeerConnectionState, Registry,
     SettingEngine, register_default_interceptors,
 };
-use webrtc::runtime::{AsyncTcpStream, Runtime, Sender, channel, default_runtime, sleep};
+use webrtc::runtime::{AsyncTcpStream, Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::runtime;
+use common::sleep;
 
 const INDEX_HTML: &str = r#"<html>
 <head>
@@ -246,7 +251,7 @@ impl PeerConnectionEventHandler for TrickleHandler {
 }
 
 pub async fn run_example(_cli: TrickleCli, config: TrickleExampleConfig) -> Result<()> {
-    let runtime = default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+    let runtime = runtime();
     let (done_tx, mut done_rx) = channel::<()>(1);
     let (ctrlc_tx, mut ctrlc_rx) = channel::<()>(1);
     ctrlc::set_handler(move || {

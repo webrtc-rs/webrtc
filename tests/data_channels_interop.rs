@@ -24,7 +24,10 @@ use rtc::peer_connection::transport::{CandidateConfig, CandidateHostConfig};
 use webrtc::data_channel::DataChannelEvent;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState as WebrtcPCState};
-use webrtc::runtime::{Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 
@@ -68,8 +71,7 @@ async fn run_test() -> Result<()> {
     let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>(256);
     let (rtc_msg_tx, mut rtc_msg_rx) = channel::<String>(256);
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let handler = Arc::new(WebrtcHandler {
         gather_complete_tx,

@@ -19,7 +19,7 @@ use crate::peer_connection::transports::{
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{
-    AsyncSender as _, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Sender, channel,
+    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Sender, TrySendError, channel,
 };
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
@@ -76,6 +76,24 @@ pub(crate) fn insert_data_channel_event_sender(
         }
         Entry::Occupied(_) => false,
     }
+}
+
+/// Send `buf` to `target` without allocating.
+///
+/// Polls [`AsyncUdpSocket::poll_send`] directly rather than going through the trait's
+/// boxed-future conveniences (`send_to` / `send_segments`), which would cost one heap
+/// allocation per datagram on the hot path. `segment_size` of `0` sends a single datagram;
+/// non-zero requests UDP GSO.
+async fn send_datagrams(
+    socket: &dyn AsyncUdpSocket,
+    buf: &[u8],
+    segment_size: usize,
+    target: SocketAddr,
+    ecn: Option<u8>,
+) -> Result<usize> {
+    futures::future::poll_fn(|cx| socket.poll_send(cx, buf, segment_size, target, ecn))
+        .await
+        .map_err(Error::from)
 }
 
 /// Unified inner message type for the peer connection driver
@@ -286,7 +304,7 @@ where
                 continue;
             }
 
-            let timer = crate::runtime::sleep(delay_from_now);
+            let timer = self.inner.runtime.sleep(delay_from_now);
             futures::pin_mut!(timer);
 
             let udp_recv_future: OptionFuture<_> = if !udp_recv_futures.is_empty() {
@@ -354,9 +372,15 @@ where
 
                                 // Batch-drain: drain a bounded burst of additional
                                 // ready datagrams from this socket without blocking.
+                                //
+                                // Probes via `poll_once` on the poll-based primitive, so a
+                                // "nothing ready" answer — the common case that ends every
+                                // burst — costs no allocation. The previous
+                                // `recv_gro(..).now_or_never()` boxed a future per probe
+                                // just to discard it.
                                 let mut burst = 0;
                                 while burst < MAX_UDP_RECV_BURST {
-                                    match socket.recv_gro(&mut burst_buf).now_or_never() {
+                                    match crate::runtime::poll_once(|cx| socket.poll_recv(cx, &mut burst_buf)) {
                                         Some(Ok(gro)) => {
                                             self.deliver_udp_batch(&burst_buf, gro.len, gro.stride, socket_local_addr, gro.peer_addr).await;
                                             burst += 1;
@@ -638,7 +662,7 @@ where
                     }
                 } else {
                     error!(
-                        "Failed to get data_channel: {:?} for RTCDataChannelEvent",
+                        "Failed to get data_channel: {} for RTCDataChannelEvent",
                         channel_id
                     );
                 }
@@ -760,10 +784,7 @@ where
                         );
                     }
                 } else {
-                    error!(
-                        "Failed to get track_remote: {:?} for RTCTrackEvent",
-                        track_id
-                    );
+                    error!("Failed to get track_remote: {} for RTCTrackEvent", track_id);
                 }
 
                 if let Some(track_remote) = pending_on_track {
@@ -779,14 +800,18 @@ where
                 let data_channels = self.inner.data_channel_events_tx.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
                     if let Err(err) = evt_tx.try_send(DataChannelEvent::OnMessage(dc_message)) {
+                        let err_msg = match err {
+                            TrySendError::Full(_) => "Full",
+                            TrySendError::Disconnected(_) => "Disconnected",
+                        };
                         error!(
-                            "Failed to send DataChannelMessage to data channel {}: {:?}",
-                            channel_id, err
+                            "Failed to send DataChannelMessage to data channel {}: {}",
+                            channel_id, err_msg,
                         );
                     }
                 } else {
                     error!(
-                        "Failed to get data_channel: {:?} for DataChannelMessage",
+                        "Failed to get data_channel: {} for DataChannelMessage",
                         channel_id
                     );
                 }
@@ -801,7 +826,7 @@ where
                         );
                     }
                 } else {
-                    error!("Failed to get track_remote: {:?} for RtpPacket", track_id);
+                    error!("Failed to get track_remote: {} for RtpPacket", track_id);
                 }
             }
             RTCMessage::RtcpPacket(track_id, packets) => {
@@ -840,7 +865,7 @@ where
                         );
                     }
                 } else {
-                    error!("Failed to route RtcpPacket: no track for {:?}", track_id);
+                    error!("Failed to route RtcpPacket: no track for {}", track_id);
                 }
             }
         }
@@ -1178,7 +1203,7 @@ where
                 for w in &writes[i..end] {
                     scratch.extend_from_slice(&w.message);
                 }
-                if let Err(err) = socket.send_segments(&scratch, seg, tp.peer_addr, ecn).await {
+                if let Err(err) = send_datagrams(&*socket, &scratch, seg, tp.peer_addr, ecn).await {
                     error!(
                         "Failed to GSO-send {} datagrams to {:?} from {:?}: {}",
                         end - i,
@@ -1192,7 +1217,9 @@ where
                 // setup. (ECN is carried only on the GSO run path; inert today since the
                 // rtc core always emits ecn: None.)
                 for w in &writes[i..end] {
-                    if let Err(err) = socket.send_to(&w.message, tp.peer_addr).await {
+                    if let Err(err) =
+                        send_datagrams(&*socket, &w.message, 0, tp.peer_addr, None).await
+                    {
                         error!(
                             "Failed to write packet to {:?} from {:?}: {}",
                             tp.peer_addr, tp.local_addr, err

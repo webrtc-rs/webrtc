@@ -74,6 +74,10 @@ check [Pion Examples](https://github.com/pion/webrtc/tree/master/examples#readme
 - ✅ [ICE TCP Active-Passive](ice-tcp-active-passive) Example ice-tcp-active-passive demonstrates RTC's ICE TCP active
   mode abilities.
 - ✅ [Stats](stats): Stats demonstrates how to use the webrtc-stats implementation provided by WebRTC-rs.
+- ✅ [Custom Runtime](custom-runtime): Example custom-runtime demonstrates that webrtc-rs is runtime-agnostic by
+  implementing the `Runtime` trait over `async-executor` + `async-io` — neither Tokio nor smol — and injecting it with
+  `with_runtime`. Run it with `--no-default-features` to prove nothing in the library is hard-wired to a built-in
+  runtime.
 
 ### TODO
 

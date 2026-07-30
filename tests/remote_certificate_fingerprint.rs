@@ -23,7 +23,10 @@ use webrtc::peer_connection::{
     StatsSelector,
 };
 use webrtc::peer_connection::{RTCIceGatheringState, RTCPeerConnectionState};
-use webrtc::runtime::{Sender, block_on, channel, default_runtime, timeout};
+use webrtc::runtime::{Sender, channel};
+
+mod common;
+use common::{block_on, runtime, timeout};
 
 /// Which end of the connection a certificate belongs to.
 #[derive(Clone, Copy)]
@@ -121,7 +124,7 @@ fn test_remote_certificate_fingerprint_is_the_peers() {
 }
 
 async fn run() -> Result<()> {
-    let runtime = default_runtime().ok_or_else(|| std::io::Error::other("no async runtime"))?;
+    let runtime = runtime();
 
     let mut offerer = build_peer(runtime.clone()).await?;
     let mut answerer = build_peer(runtime.clone()).await?;

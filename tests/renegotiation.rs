@@ -15,7 +15,10 @@ use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCIceGatheringState, RTCPeerConnectionState, RTCSessionDescription,
 };
-use webrtc::runtime::{block_on, channel, default_runtime, timeout};
+use webrtc::runtime::channel;
+
+mod common;
+use common::{block_on, runtime, timeout};
 
 // ── Event Handlers ────────────────────────────────────────────────────────────
 
@@ -94,7 +97,7 @@ fn collect_mids(sdp: &RTCSessionDescription) -> Vec<String> {
 #[test]
 fn test_renegotiation_no_duplicate_mids() {
     block_on(async {
-        let runtime = default_runtime().expect("no runtime");
+        let runtime = runtime();
 
         let mut me = MediaEngine::default();
         me.register_default_codecs().unwrap();

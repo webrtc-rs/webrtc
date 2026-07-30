@@ -20,7 +20,11 @@ use webrtc::peer_connection::{
     RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceGatheringState, RTCIceServer,
     RTCPeerConnectionState, RTCSessionDescription,
 };
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, timeout};
 
 const DEMO_HTML: &str = include_str!("demo.html");
 
@@ -91,8 +95,7 @@ fn main() -> Result<()> {
 async fn async_main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let (offer_tx, mut offer_rx) = channel::<(
         RTCSessionDescription,

@@ -16,7 +16,11 @@ use webrtc::peer_connection::{
     RTCPeerConnectionState, RTCSessionDescription, Registry, register_default_interceptors,
 };
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Mutex, Sender, block_on, channel, default_runtime, interval};
+use webrtc::runtime::{Mutex, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, interval, runtime};
 
 const STATS_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -117,7 +121,7 @@ async fn async_main() -> Result<()> {
     let (done_tx, mut done_rx) = channel::<()>(1);
     let (gather_complete_tx, mut gather_complete_rx) = channel::<()>(1);
 
-    let runtime = default_runtime().unwrap();
+    let runtime = runtime();
     let track_id_to_codec = Arc::new(Mutex::new(HashMap::new()));
 
     let handler = Arc::new(TestHandler {

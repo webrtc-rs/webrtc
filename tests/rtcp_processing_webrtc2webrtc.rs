@@ -40,7 +40,10 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, interval, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, interval, runtime, timeout};
 
 // ============================================================================
 // RTCP Forwarder Interceptor — surfaces inbound RTCP to the application.
@@ -249,7 +252,7 @@ async fn build_peer(
 #[test]
 fn test_rtcp_processing_webrtc2webrtc() {
     block_on(async {
-        let runtime = default_runtime().expect("no async runtime");
+        let runtime = runtime();
 
         const VIDEO_SSRC: u32 = 0x00DE_CAFE;
 

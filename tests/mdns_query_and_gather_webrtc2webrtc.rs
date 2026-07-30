@@ -8,7 +8,10 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState, SettingEngine,
 };
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const TEST_MESSAGE: &str = "hello over mdns";
 const ECHO_MESSAGE: &str = "echo over mdns";
@@ -93,8 +96,7 @@ async fn run_test() -> Result<()> {
         .try_init()
         .ok();
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let (offerer_gather_tx, mut offerer_gather_rx) = channel::<()>(1);
     let (offerer_connected_tx, mut offerer_connected_rx) = channel::<()>(1);

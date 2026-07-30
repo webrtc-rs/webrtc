@@ -25,7 +25,11 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{AsyncUdpSocket, Runtime, Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{AsyncUdpSocket, Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, sleep};
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -234,8 +238,7 @@ async fn async_main() -> Result<()> {
         let _ = ctrlc_tx.try_send(());
     })?;
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let audio_addr: SocketAddr = "127.0.0.1:4000".parse()?;
     let video_addr: SocketAddr = "127.0.0.1:4002".parse()?;

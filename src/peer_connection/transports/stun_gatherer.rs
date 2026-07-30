@@ -4,7 +4,7 @@
 //! Unlike the old async version, this gatherer is a configuration object that holds
 //! the ICE servers and state.
 
-use crate::runtime;
+use crate::runtime::Runtime;
 use rtc::ice::candidate::CandidateConfig;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::transport::{
@@ -17,6 +17,7 @@ use rtc::stun::{
     client::Client as StunClient, client::ClientBuilder as StunClientBuilder,
     message::BINDING_REQUEST, message::Message as StunMessage, message::TransactionId,
 };
+use std::sync::Arc;
 /*use rtc::turn::client::{
     Client as TurnClient, ClientConfig as TurnClientConfig, Event as TurnEvent,
 };*/
@@ -49,6 +50,8 @@ pub(crate) struct RTCStunGatherer {
     ice_servers: Vec<RTCIceServer>,
     ice_gather_policy: RTCIceTransportPolicy,
     state: RTCIceGatheringState,
+    /// Host runtime, used to resolve STUN server hostnames.
+    runtime: Arc<dyn Runtime>,
 
     stun_clients: HashMap<FourTuple, StunClient>,
 
@@ -62,12 +65,14 @@ impl RTCStunGatherer {
         local_addrs: Vec<SocketAddr>,
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
+        runtime: Arc<dyn Runtime>,
     ) -> Self {
         Self {
             local_addrs,
             ice_servers,
             ice_gather_policy,
             state: RTCIceGatheringState::New,
+            runtime,
 
             stun_clients: HashMap::new(),
 
@@ -151,6 +156,8 @@ impl RTCStunGatherer {
     /// This performs actual I/O to query STUN servers and should be called
     /// in an async context.
     async fn gather_srflx_candidates(&mut self) -> Result<(), Error> {
+        // Clone the handle up front so the per-server borrows below stay disjoint.
+        let runtime = Arc::clone(&self.runtime);
         for ice_server in &self.ice_servers {
             for url in &ice_server.urls {
                 // Only handle stun: URLs for now
@@ -159,7 +166,9 @@ impl RTCStunGatherer {
                 }
 
                 for local_addr in &self.local_addrs {
-                    match RTCStunGatherer::gather_from_stun_server(*local_addr, url).await {
+                    match RTCStunGatherer::gather_from_stun_server(&*runtime, *local_addr, url)
+                        .await
+                    {
                         Ok(stun_client) => {
                             self.stun_clients.insert(
                                 FourTuple {
@@ -182,6 +191,7 @@ impl RTCStunGatherer {
 
     /// Gather a single srflx candidate from a STUN server
     async fn gather_from_stun_server(
+        runtime: &dyn Runtime,
         local_addr: SocketAddr,
         stun_url: &str,
     ) -> Result<StunClient, Error> {
@@ -201,7 +211,7 @@ impl RTCStunGatherer {
         debug!("Resolving STUN server: {}", stun_server_addr_str);
 
         // Resolve hostname to IP address using runtime-agnostic helper
-        let resolved_addrs = runtime::resolve_host(&stun_server_addr_str).await?;
+        let resolved_addrs = runtime.resolve_host(&stun_server_addr_str).await?;
 
         // Filter addresses to match the local_addr IP version (IPv4 or IPv6)
         let stun_server_addr: SocketAddr = resolved_addrs

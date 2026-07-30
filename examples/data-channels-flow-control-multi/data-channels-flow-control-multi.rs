@@ -24,7 +24,12 @@ use webrtc::peer_connection::{
     register_default_interceptors,
 };
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::block_on;
+use common::runtime;
 
 const BUFFERED_LOW: u32 = 512 * 1024; // 512 KB
 const BUFFERED_HIGH: u32 = 1024 * 1024; // 1 MB
@@ -263,8 +268,7 @@ async fn async_main() -> anyhow::Result<()> {
         .map(|v| v != "0")
         .unwrap_or(true);
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
     let (mbps_tx, mut mbps_rx) = channel::<f64>(pairs.max(1));
 
     let start = Instant::now();

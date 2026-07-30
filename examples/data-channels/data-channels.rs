@@ -12,7 +12,11 @@ use webrtc::peer_connection::{
     RTCPeerConnectionState, RTCSessionDescription, Registry, register_default_interceptors,
 };
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+#[path = "../common/mod.rs"]
+mod common;
+use common::{block_on, runtime, sleep};
 
 #[derive(Parser)]
 #[command(name = "data-channels")]
@@ -154,8 +158,7 @@ async fn async_main() -> anyhow::Result<()> {
     ctrlc::set_handler(move || {
         let _ = ctrlc_tx.try_send(());
     })?;
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     let handler = Arc::new(TestHandler {
         runtime: runtime.clone(),

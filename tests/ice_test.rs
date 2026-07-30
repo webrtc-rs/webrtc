@@ -20,9 +20,12 @@ use webrtc::peer_connection::{
     RTCIceGatheringState, RTCIceServer, RTCIceTransportPolicy, RTCPeerConnectionIceEvent,
     RTCPeerConnectionState,
 };
-use webrtc::runtime::{AsyncUdpSocket, default_runtime, timeout};
+use webrtc::runtime::AsyncUdpSocket;
+use webrtc::runtime::channel;
 use webrtc::runtime::{Mutex, Sender};
-use webrtc::runtime::{block_on, channel};
+
+mod common;
+use common::{block_on, runtime, timeout};
 
 #[derive(Clone)]
 struct IceTestHandler;
@@ -496,7 +499,7 @@ fn test_mdns_query_and_gather_rewrites_host_candidate() {
 #[test]
 fn test_turn_relay_gathering_with_mock_turn_server() {
     block_on(async {
-        let runtime = default_runtime().expect("no async runtime available");
+        let runtime = runtime();
         let turn_socket =
             std::net::UdpSocket::bind("127.0.0.1:0").expect("failed to bind mock TURN server");
         let turn_addr = turn_socket
@@ -574,7 +577,7 @@ fn test_turn_relay_gathering_with_mock_turn_server() {
 #[test]
 fn test_set_configuration_updates_turn_credentials_on_ice_restart() {
     block_on(async {
-        let runtime = default_runtime().expect("no async runtime available");
+        let runtime = runtime();
         let turn_socket =
             std::net::UdpSocket::bind("127.0.0.1:0").expect("failed to bind mock TURN server");
         let turn_addr = turn_socket
@@ -672,7 +675,7 @@ fn test_ice_tcp_only_connection() {
             .try_init()
             .ok();
 
-        let runtime = default_runtime().expect("no async runtime found");
+        let runtime = runtime();
 
         let (a_candidate_tx, mut a_candidate_rx) = channel::<RTCIceCandidateInit>(32);
         let (b_candidate_tx, mut b_candidate_rx) = channel::<RTCIceCandidateInit>(32);

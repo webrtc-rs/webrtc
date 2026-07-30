@@ -13,8 +13,15 @@ description = "Async-friendly WebRTC implementation in Rust"
 
 [features]
 default = ["runtime-tokio"]
-runtime-tokio = ["dep:tokio", "dep:quinn-udp"]
-runtime-smol = ["dep:smol", "dep:async-broadcast", "dep:quinn-udp"]
+# Runtime features are purely additive: each one only makes a built-in `Runtime`
+# implementation available. They never select which primitives the library uses,
+# so enabling both is safe and a process may drive connections on either.
+runtime-tokio = ["dep:tokio"]
+runtime-smol = ["dep:smol"]
+# Deterministic virtual-clock runtime (`MockRuntime`). Test-only: it implements the same
+# `Runtime` trait as the two above, but drives timers from a manually advanced clock and
+# does not perform I/O.
+runtime-mock = []
 
 [dependencies]
 rtc = { version = "0.20.0-rc.4", path = "rtc" }
@@ -24,16 +31,17 @@ async-trait = "0.1.89"
 log = "0.4.33"
 futures = "0.3.32"
 
+# Executor-agnostic primitives. These are plain data structures driven by wakers,
+# so they work on any runtime and are NOT feature-gated — only reactor-bound
+# operations (timers, I/O, spawning) go through the `Runtime` trait.
+async-channel = "2.5.0"
+async-broadcast = "0.7.2"
+event-listener = "5.4.1"
+quinn-udp = { version = "0.6.1", default-features = false, features = ["log"] }
+
 # Async runtimes (all optional)
 tokio = { version = "1.52.3", features = ["net", "time", "sync", "rt", "rt-multi-thread"], optional = true }
 smol = { version = "2.0.2", optional = true }
-async-broadcast = { version = "0.7.2", optional = true }
-
-# UDP GSO (UDP_SEGMENT) send batching + GRO receive coalescing. Runtime-agnostic
-# (sync, non-blocking); driven through each runtime's readiness loop. Pulled in by
-# whichever runtime feature is enabled. `default-features = false` drops its optional
-# tracing/log integration (we use `log` directly in the wrappers).
-quinn-udp = { version = "0.6", default-features = false, optional = true }
 
 [dev-dependencies]
 signal = { version = "0.20.0-rc.4", path = "rtc/examples/signal", package = "rtc-signal" }
@@ -47,6 +55,17 @@ serde_json = "1.0.150"
 hyper = { version = "0.14.32", features = ["full"] }
 rand = "0.10.1"
 base64 = "0.22.1"
+
+# For `examples/custom-runtime`: a third-party runtime built on neither tokio nor smol,
+# proving the `Runtime` trait is pluggable.
+async-executor = "1.14.0"
+async-io = "2.6.0"
+futures-lite = "2.6.1"
+
+[[example]]
+name = "custom-runtime"
+path = "examples/custom-runtime/custom-runtime.rs"
+bench = false
 
 [[example]]
 name = "broadcast"

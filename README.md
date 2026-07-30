@@ -64,7 +64,7 @@ alt="Recall.ai">
 
 ## Overview
 
-WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion stack. The async `webrtc` crate is a clean, ergonomic, runtime-agnostic rewrite on top of a Sans-I/O core; it ships with Tokio and smol runtime backends, with async-std and embassy on the roadmap.
+WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion stack. The async `webrtc` crate is a clean, ergonomic, runtime-agnostic rewrite on top of a Sans-I/O core; it ships with Tokio and smol runtime backends, and any other runtime can be plugged in by implementing one trait.
 
 **Architecture:**
 
@@ -97,10 +97,15 @@ webrtc = { version = "0.20", default-features = false, features = ["runtime-smol
 
 **Feature flags:**
 
-| Feature          | Default | Description                                    |
-|------------------|---------|------------------------------------------------|
-| `runtime-tokio`  | ✅       | Timers, task spawning and sockets via Tokio    |
-| `runtime-smol`   |         | The same, via smol                             |
+| Feature         | Default | Description                                                             |
+|-----------------|---------|-------------------------------------------------------------------------|
+| `runtime-tokio` | ✅      | Timers, task spawning and sockets via Tokio                             |
+| `runtime-smol`  |         | The same, via smol                                                      |
+| `runtime-mock`  |         | `MockRuntime`, a deterministic virtual-clock runtime for tests (no I/O) |
+
+The runtime features are **additive**: each one only makes a built-in runtime *available*, so enabling several is safe and a single process can drive different connections on different runtimes.
+
+**Bringing your own runtime.** The built-ins are not privileged — implement `webrtc::runtime::Runtime` and pass it per connection with `with_runtime`, with no `#[cfg]` edits and no fork. See the [custom-runtime example](examples/custom-runtime), which runs the full stack on `async-executor` + `async-io` with `--no-default-features` (neither Tokio nor smol compiled in).
 
 Build a peer connection and create an offer:
 
@@ -184,9 +189,10 @@ callbacks, and tight Tokio coupling:
 
 ✅ **Runtime independence**
 
-- Runtime-agnostic via a Quinn-style `Runtime` abstraction (timers, task spawning, sockets)
-- Feature flags: **`runtime-tokio`** (default) and **`runtime-smol`**; additional runtimes (async-std, embassy) are on
-  the roadmap behind the same abstraction
+- Runtime-agnostic via a Quinn-style `Runtime` abstraction (timers, task spawning, sockets, DNS)
+- Feature flags: **`runtime-tokio`** (default) and **`runtime-smol`**, additive rather than mutually exclusive
+- Any third-party runtime works today: implement `Runtime`, inject it per connection with `with_runtime`. The [custom-runtime example](examples/custom-runtime) does exactly that on `async-executor` + `async-io`, with neither built-in runtime compiled in
+- **`runtime-mock`** gives tests a deterministic virtual clock, so timing-dependent behaviour is testable instantly and without sockets
 
 ✅ **Clean event handling**
 

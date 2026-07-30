@@ -23,7 +23,10 @@ use rtc::peer_connection::transport::{CandidateConfig, CandidateHostConfig};
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::RTCIceGatheringState;
 use webrtc::peer_connection::{PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler};
-use webrtc::runtime::{Runtime, Sender, block_on, channel, default_runtime, sleep, timeout};
+use webrtc::runtime::{Runtime, Sender, channel};
+
+mod common;
+use common::{block_on, runtime, sleep, timeout};
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 const TEST_MESSAGE: &str = "Hello before restart!";
@@ -91,8 +94,7 @@ async fn run_test() -> Result<()> {
     let (state_tx, mut state_rx) = channel::<RTCPeerConnectionState>(8);
     let (webrtc_msg_tx, mut webrtc_msg_rx) = channel::<String>(256);
 
-    let runtime =
-        default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    let runtime = runtime();
 
     // Create RTC peer (offerer, creates DC)
     let std_socket = std::net::UdpSocket::bind("127.0.0.1:0")?;

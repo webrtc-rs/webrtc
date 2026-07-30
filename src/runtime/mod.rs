@@ -1,100 +1,92 @@
 //! Async Runtime Abstraction
 //!
-//! This module provides the [`Runtime`] trait, which abstracts all asynchronous operations
-//! and primitives required by the WebRTC stack. This makes the `webrtc` crate runtime-agnostic,
-//! allowing it to support multiple async runtimes through feature flags.
+//! This module provides the [`Runtime`] trait, which abstracts every asynchronous
+//! operation the WebRTC stack needs from its host runtime. Implement it to plug in any
+//! async runtime and pass it per connection via
+//! [`with_runtime`](crate::peer_connection::PeerConnectionBuilder::with_runtime).
 //!
-//! # Active Runtime
+//! # What is injected, and what is not
 //!
-//! The active runtime is selected at compile time via Cargo features:
-//! *   **`runtime-tokio` (default)**: Uses the Tokio runtime.
-//! *   **`runtime-smol`**: Uses the smol runtime.
+//! The abstraction is partitioned by a single question: *does this touch the reactor?*
 //!
-//! This module exports concrete type aliases (e.g., [`Mutex`], [`Sender`], [`Receiver`], [`Interval`])
-//! which map to the selected runtime's primitives, ensuring zero-cost abstraction without
-//! dynamic dispatch in the hot path.
+//! * **Reactor-bound** — task spawning, timers, UDP/TCP sockets, DNS, `block_on`. These
+//!   go through [`Runtime`], because only the host runtime can drive them.
+//! * **Executor-agnostic** — channels, broadcast, mutexes, notifications. These are plain
+//!   waker-driven data structures that work anywhere, so they live in
+//!   [`primitives`] with one implementation and are *not* feature-gated.
+//!
+//! Keeping the second group out of [`Runtime`] is what keeps the trait object-safe: a
+//! generic method like `fn channel<T>(&self, …)` could not be called through
+//! `dyn Runtime`.
+//!
+//! # Built-in runtimes
+//!
+//! Cargo features make built-in implementations available. They are **purely additive** —
+//! a feature only decides whether a type exists, never which primitives the library uses:
+//!
+//! * **`runtime-tokio` (default)**: [`TokioRuntime`]
+//! * **`runtime-smol`**: [`SmolRuntime`]
+//! * **`runtime-mock`**: [`MockRuntime`](mock::MockRuntime), a deterministic virtual-clock
+//!   runtime for tests.
+//!
+//! Enabling several at once is safe, and one process may drive different connections on
+//! different runtimes. [`default_runtime`] returns the compiled-in default for callers
+//! with no preference; it is a factory, not a settable registry.
+//!
+//! # Performance note
+//!
+//! [`Runtime`]'s async methods return boxed futures, so each call costs one allocation.
+//! That is negligible for spawning, timers and connection setup.
+//!
+//! The packet path is different, so [`AsyncUdpSocket`] is **poll-based**:
+//! [`poll_send`](AsyncUdpSocket::poll_send) and [`poll_recv`](AsyncUdpSocket::poll_recv)
+//! are synchronous and readiness-driven, mirroring `quinn`'s socket trait. Callers on the
+//! hot path (the peer-connection driver) poll them directly and allocate nothing per
+//! datagram; the `async` methods on the trait are conveniences layered over them for
+//! control-plane use. Use [`poll_once`] to probe readiness without allocating.
 
 #![allow(clippy::type_complexity)]
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::task::{Context, Poll};
 use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
 
-/// Process-global override for the shared reactor pool's thread count, set via
-/// [`set_reactor_pool_size`]. `0` means "unset": fall back to the
-/// `WEBRTC_REACTOR_POOL_SIZE` environment variable, then to host parallelism.
-static REACTOR_POOL_SIZE: AtomicUsize = AtomicUsize::new(0);
+pub mod primitives;
 
-/// Upper clamp on the reactor-pool thread count, guarding against a fat-fingered
-/// `WEBRTC_REACTOR_POOL_SIZE` / [`set_reactor_pool_size`] value eagerly allocating a
-/// slot table large enough to OOM (or overflow). Far above any sane reactor count.
+pub use primitives::{
+    BroadcastReceiver, BroadcastRecvError, BroadcastSendError, BroadcastSender, Mutex, Notify,
+    Receiver, SendError, Sender, TryRecvError, TrySendError, UdpBatchState, UdpSockRef,
+    broadcast_channel, channel,
+};
+
 pub(crate) const MAX_REACTOR_POOL_SIZE: usize = 1024;
 
-/// Set the size of the shared reactor-thread pool used by
-/// [`Runtime::spawn_reactor`] (i.e. by connections built with
-/// [`with_dedicated_reactor_thread(true)`](crate::peer_connection::PeerConnectionBuilder::with_dedicated_reactor_thread)).
+/// A boxed, `Send` future — the return shape of the async [`Runtime`] methods.
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// A boxed future that need **not** be `Send`.
 ///
-/// The pool is process-global and sized **once**, lazily, on first use. Call this
-/// before building the first dedicated-reactor `PeerConnection`; later calls (or
-/// calls after the pool has been created) have no effect. `0` restores the
-/// default resolution (env var, then host parallelism).
+/// Used by [`Runtime::block_on`], which drives the future on the calling thread and so
+/// never moves it across threads — matching `tokio::runtime::Runtime::block_on`,
+/// `smol::block_on` and `futures::executor::block_on`, none of which require `Send`.
+pub type LocalBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+
+/// A handle to a task spawned via [`Runtime::spawn`].
 ///
-/// Prefer this or the `WEBRTC_REACTOR_POOL_SIZE` env var for a global default;
-/// [`PeerConnectionBuilder::with_reactor_pool_size`](crate::peer_connection::PeerConnectionBuilder::with_reactor_pool_size)
-/// is a convenience that forwards here at build time.
-pub fn set_reactor_pool_size(size: usize) {
-    REACTOR_POOL_SIZE.store(size, Ordering::Relaxed);
-}
-
-/// Resolve the reactor-pool size, in precedence order: an explicit override (via
-/// [`set_reactor_pool_size`]), then the `WEBRTC_REACTOR_POOL_SIZE` env var, then
-/// host parallelism (`available_parallelism`, falling back to 4). Read once by
-/// each runtime when it lazily builds its pool.
-pub(crate) fn reactor_pool_size() -> usize {
-    let override_size = REACTOR_POOL_SIZE.load(Ordering::Relaxed);
-    let resolved = if override_size != 0 {
-        override_size
-    } else {
-        std::env::var("WEBRTC_REACTOR_POOL_SIZE")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .filter(|&n| n != 0)
-            .unwrap_or_else(|| {
-                std::thread::available_parallelism()
-                    .map(|n| n.get())
-                    .unwrap_or(4)
-            })
-    };
-    resolved.clamp(1, MAX_REACTOR_POOL_SIZE)
-}
-
-/// Handle to a spawned task that can be used to manage its lifecycle
-pub struct JoinHandle {
-    inner: Box<dyn JoinHandleInner>,
-}
-
-impl JoinHandle {
-    /// Abort the spawned task
-    pub fn abort(&self) {
-        self.inner.abort();
-    }
-
-    /// Check if the task is finished
-    pub fn is_finished(&self) -> bool {
-        self.inner.is_finished()
-    }
-}
-
-impl Drop for JoinHandle {
-    fn drop(&mut self) {
-        self.inner.detach();
-    }
-}
-
-trait JoinHandleInner: Send + Sync {
-    /// Detach the task so it keeps running independently after the handle is dropped.
+/// Returned boxed, so a runtime supplies its own type without the crate wrapping it.
+pub trait JoinHandle: Send + Sync {
+    /// Let the task run to completion independently of this handle.
+    ///
+    /// Idempotent, and safe to call from `Drop` — which is where implementations wrapping a
+    /// cancel-on-drop task should call it, so that dropping the handle detaches rather than
+    /// cancelling.
+    ///
+    /// Also useful directly, to hand a task off without dropping the handle.
     fn detach(&self);
-    /// Cancel the task cooperatively.
+
+    /// Cancel the task cooperatively, at its next await point.
     fn abort(&self);
+
+    /// Whether the task has run to completion (or been cancelled).
     fn is_finished(&self) -> bool;
 }
 
@@ -110,15 +102,16 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// Dropping the handle detaches the task; the task keeps running until it
     /// completes or the runtime is shut down. Call `.abort()` to cancel explicitly.
     #[track_caller]
-    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle;
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> Box<dyn JoinHandle>;
 
     /// Drive `future` to completion on a **shared, bounded pool** of
     /// single-threaded reactors, pinned to one pool thread for its lifetime.
     ///
     /// The tokio and smol implementations keep a process-global pool of at most
-    /// `N` dedicated OS threads (each hosting its own single-threaded runtime),
-    /// created lazily and sized by [`set_reactor_pool_size`] (or the
-    /// `WEBRTC_REACTOR_POOL_SIZE` env var, falling back to host parallelism). Each `future` is
+    /// `reactor_pool_size` dedicated OS threads (each hosting its own single-threaded
+    /// runtime), created lazily on first use and clamped to `1..=1024` — so the `0` default
+    /// yields a single shared reactor thread. The pool is built once, so the size supplied by
+    /// the first caller is the one that takes effect. Each `future` is
     /// assigned to one pool thread round-robin and never migrates off it, so the
     /// async runtime never moves a peer-connection driver across a shared worker
     /// pool — the dominant cost for in-process data-channel throughput (issue
@@ -138,7 +131,11 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     ///
     /// The default implementation falls back to [`Runtime::spawn`] on the ambient
     /// runtime, so custom runtimes keep working (without the confinement benefit).
-    fn spawn_reactor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> JoinHandle {
+    fn spawn_reactor(
+        &self,
+        _reactor_pool_size: usize,
+        future: Pin<Box<dyn Future<Output = ()> + Send>>,
+    ) -> Box<dyn JoinHandle> {
         self.spawn(future)
     }
 
@@ -160,6 +157,87 @@ pub trait Runtime: Send + Sync + Debug + 'static {
         &'a self,
         remote_addr: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>>;
+
+    /// Resolve a host string (`"host:port"`) to socket addresses.
+    fn resolve_host<'a>(&'a self, host: &'a str) -> BoxFuture<'a, io::Result<Vec<SocketAddr>>>;
+
+    /// Complete after `duration` has elapsed.
+    ///
+    /// Reactor-bound: only the host runtime can arm a timer, which is why this cannot be a
+    /// free function.
+    fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()>;
+
+    /// A repeating timer firing every `period`. The first tick fires immediately.
+    fn interval(&self, period: Duration) -> Box<dyn AsyncInterval>;
+
+    /// Drive `future` to completion on this runtime, blocking the calling thread.
+    ///
+    /// The synchronous entry point for `main` and test harnesses. Restricted to a `()`
+    /// output to stay object-safe — move a value out through a channel or `Arc<Mutex<_>>`.
+    ///
+    /// The future need not be `Send`: it is driven on the calling thread.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if called from inside their own executor.
+    fn block_on(&self, future: LocalBoxFuture<'_, ()>);
+
+    /// Cooperatively reschedule the current task so other ready tasks get a turn.
+    ///
+    /// The default wakes immediately and yields once. Override to integrate with a
+    /// runtime's scheduling budget (e.g. tokio's cooperative yielding).
+    fn yield_now(&self) -> BoxFuture<'static, ()> {
+        let mut yielded = false;
+        Box::pin(futures::future::poll_fn(move |cx| {
+            if yielded {
+                return std::task::Poll::Ready(());
+            }
+            yielded = true;
+            cx.waker().wake_by_ref();
+            std::task::Poll::Pending
+        }))
+    }
+
+    /// Short name for this runtime, used in log and error messages.
+    fn name(&self) -> &'static str {
+        "custom"
+    }
+}
+
+/// A repeating timer, created by [`Runtime::interval`].
+///
+/// Object-safe: `tick` borrows `self` mutably and returns a boxed future.
+pub trait AsyncInterval: Send + Sync {
+    /// Wait until the next tick fires.
+    fn tick(&mut self) -> BoxFuture<'_, ()>;
+}
+
+/// Returned by [`timeout`] when the deadline expires before the future completes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Elapsed;
+
+impl std::fmt::Display for Elapsed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "deadline has elapsed")
+    }
+}
+
+impl std::error::Error for Elapsed {}
+
+/// Run `future`, cancelling it if `duration` elapses first.
+///
+/// Derived generically from [`Runtime::sleep`], so every runtime gets it with no
+/// per-runtime implementation.
+pub async fn timeout<T>(
+    runtime: &dyn Runtime,
+    duration: Duration,
+    future: impl Future<Output = T>,
+) -> Result<T, Elapsed> {
+    use futures::future::{Either, select};
+    match select(Box::pin(future), runtime.sleep(duration)).await {
+        Either::Left((value, _)) => Ok(value),
+        Either::Right(_) => Err(Elapsed),
+    }
 }
 
 /// Outcome of a batched UDP receive ([`AsyncUdpSocket::recv_gro`]).
@@ -181,25 +259,47 @@ pub struct GroRecv {
     pub peer_addr: SocketAddr,
 }
 
-/// Abstract implementation of a UDP socket for runtime independence
+/// Abstract implementation of a UDP socket for runtime independence.
 ///
-/// Simple async wrapper around UDP sockets
+/// # Poll-based, by design
+///
+/// The two primitives — [`poll_send`](Self::poll_send) and [`poll_recv`](Self::poll_recv) —
+/// are **synchronous and readiness-based**, mirroring `quinn`'s `AsyncUdpSocket`. This is
+/// what keeps the packet path allocation-free: a boxed future per datagram would cost one
+/// heap allocation per send and per receive, and callers that merely want to *test*
+/// readiness (see the driver's burst drain) would allocate just to discard.
+///
+/// The four `async` methods are conveniences with defaults written over the poll
+/// primitives, so an implementor supplies two methods and gets all six.
 pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
-    /// Send data to the specified address
-    fn send_to<'a>(
-        &'a self,
-        buf: &'a [u8],
-        target: SocketAddr,
-    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>>;
-
-    /// Receive a datagram from the socket
-    fn recv_from<'a>(
-        &'a self,
-        buf: &'a mut [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>>;
-
     /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
+
+    /// Attempt to send `buf` to `target`, registering `cx`'s waker if the socket is not
+    /// writable yet.
+    ///
+    /// `segment_size` of `0` sends `buf` as a single datagram. A non-zero value requests
+    /// UDP GSO: `buf` is split into consecutive datagrams of that size (the last may be
+    /// shorter) and emitted in one syscall. Callers should only pass a `buf` spanning more
+    /// than one segment when [`max_gso_segments`](Self::max_gso_segments) reports `> 1`.
+    ///
+    /// `ecn`, when `Some`, stamps the ECN codepoint bits on every segment.
+    ///
+    /// Returns the number of payload bytes accepted.
+    fn poll_send(
+        &self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        segment_size: usize,
+        target: SocketAddr,
+        ecn: Option<u8>,
+    ) -> Poll<io::Result<usize>>;
+
+    /// Attempt to receive into `buf`, registering `cx`'s waker if no datagram is ready.
+    ///
+    /// May return several datagrams coalesced by UDP GRO — see [`GroRecv`] for how to
+    /// split them back apart.
+    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<GroRecv>>;
 
     /// Maximum number of segments a single [`send_segments`](Self::send_segments)
     /// call can emit in one syscall via UDP GSO. Returns `1` when GSO is
@@ -215,15 +315,38 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
         1
     }
 
+    /// Send `buf` as a single datagram to `target`.
+    fn send_to<'a>(
+        &'a self,
+        buf: &'a [u8],
+        target: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        Box::pin(futures::future::poll_fn(move |cx| {
+            self.poll_send(cx, buf, 0, target, None)
+        }))
+    }
+
+    /// Receive a single datagram from the socket.
+    fn recv_from<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>> {
+        Box::pin(async move {
+            let gro = futures::future::poll_fn(|cx| self.poll_recv(cx, buf)).await?;
+            Ok((gro.len, gro.peer_addr))
+        })
+    }
+
     /// Send `buf` as consecutive datagrams of `segment_size` bytes to `target`
     /// using a single UDP GSO (`UDP_SEGMENT`) syscall — the final datagram may be
     /// shorter than `segment_size`. `ecn`, when `Some`, stamps the ECN codepoint
     /// bits on every segment. Returns the number of payload bytes accepted.
     ///
-    /// The default implementation falls back to a loop of [`send_to`](Self::send_to),
-    /// so implementors without GSO support (and external impls) need not override it.
-    /// Callers should only batch (`buf` spanning more than one segment) when
-    /// [`max_gso_segments`](Self::max_gso_segments) reports `> 1`.
+    /// When the socket reports no GSO capability
+    /// ([`max_gso_segments`](Self::max_gso_segments) `== 1`) but `buf` spans more than one
+    /// segment, this splits into individual datagrams rather than emitting one oversized
+    /// one — so an implementation that ignores `segment_size` still produces the correct
+    /// wire format. Callers should nonetheless only batch when GSO is available.
     fn send_segments<'a>(
         &'a self,
         buf: &'a [u8],
@@ -231,18 +354,18 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
         target: SocketAddr,
         ecn: Option<u8>,
     ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        let needs_split =
+            segment_size != 0 && buf.len() > segment_size && self.max_gso_segments() <= 1;
+        if !needs_split {
+            return Box::pin(futures::future::poll_fn(move |cx| {
+                self.poll_send(cx, buf, segment_size, target, ecn)
+            }));
+        }
         Box::pin(async move {
-            let _ = ecn;
-            // `segment_size == 0` means "no segmentation" — send the whole buffer as a
-            // single datagram rather than shredding it into 1-byte sends.
-            let step = if segment_size == 0 {
-                buf.len().max(1)
-            } else {
-                segment_size
-            };
             let mut sent = 0;
-            for chunk in buf.chunks(step) {
-                sent += self.send_to(chunk, target).await?;
+            for chunk in buf.chunks(segment_size) {
+                sent += futures::future::poll_fn(|cx| self.poll_send(cx, chunk, 0, target, ecn))
+                    .await?;
             }
             Ok(sent)
         })
@@ -251,21 +374,26 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     /// Receive one or more datagrams into `buf` in a single syscall, using UDP GRO
     /// to coalesce consecutive same-flow datagrams when available. See [`GroRecv`]
     /// for how to split the buffer back into individual datagrams.
-    ///
-    /// The default implementation receives a single datagram (`stride == len`), so
-    /// implementors without GRO support (and external impls) need not override it.
     fn recv_gro<'a>(
         &'a self,
         buf: &'a mut [u8],
     ) -> Pin<Box<dyn Future<Output = io::Result<GroRecv>> + Send + 'a>> {
-        Box::pin(async move {
-            let (len, peer_addr) = self.recv_from(buf).await?;
-            Ok(GroRecv {
-                len,
-                stride: if len == 0 { 1 } else { len },
-                peer_addr,
-            })
-        })
+        Box::pin(futures::future::poll_fn(move |cx| self.poll_recv(cx, buf)))
+    }
+}
+
+/// Poll `f` once with a no-op waker, returning `None` if it is not ready.
+///
+/// For readiness probes on the poll-based socket primitives — draining datagrams that are
+/// already queued without arming a wakeup, and **without allocating**. The previous
+/// `recv_gro(..).now_or_never()` idiom boxed a future on every probe, including the common
+/// case where the answer was "nothing ready".
+pub fn poll_once<T>(f: impl FnOnce(&mut Context<'_>) -> Poll<T>) -> Option<T> {
+    let waker = std::task::Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    match f(&mut cx) {
+        Poll::Ready(v) => Some(v),
+        Poll::Pending => None,
     }
 }
 
@@ -305,222 +433,57 @@ pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
     fn peer_addr(&self) -> io::Result<SocketAddr>;
 }
 
-/// An async mutex that works across different runtimes
-pub trait AsyncMutex<T: ?Sized>: Send + Sync {
-    /// The guard type returned by lock()
-    type Guard<'a>: std::ops::Deref<Target = T> + std::ops::DerefMut + Send + 'a
-    where
-        Self: 'a,
-        T: 'a;
-
-    /// Lock the mutex asynchronously
-    fn lock(&self) -> Pin<Box<dyn Future<Output = Self::Guard<'_>> + Send + '_>>;
-
-    /// Try to lock the mutex without blocking. Returns `None` if the lock is
-    /// held by another task.
-    fn try_lock(&self) -> Option<Self::Guard<'_>>;
-}
-
-/// An async notification primitive
-pub trait AsyncNotify: Send + Sync {
-    /// Notify one waiting task
-    fn notify_one(&self);
-
-    /// Notify all waiting tasks
-    fn notify_waiters(&self);
-
-    /// Wait for a notification
-    fn notified(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
-}
-
-/// Sender half of an async channel
-pub trait AsyncSender<T>: Send + Sync {
-    /// Send a value, waiting if the channel is full
-    fn send(&self, value: T)
-    -> Pin<Box<dyn Future<Output = Result<(), SendError<T>>> + Send + '_>>;
-
-    /// Try to send a value without blocking
-    fn try_send(&self, value: T) -> Result<(), TrySendError<T>>;
-
-    /// Returns `true` if the receiver for this sender has been dropped
-    fn is_closed(&self) -> bool;
-}
-
-/// Receiver half of an async channel
-pub trait AsyncReceiver<T>: Send {
-    /// Receive a value, waiting if the channel is empty
-    fn recv(&mut self) -> Pin<Box<dyn Future<Output = Option<T>> + Send + '_>>;
-
-    /// Try to receive a value without blocking
-    fn try_recv(&mut self) -> Result<T, TryRecvError>;
-}
-
-/// Error returned when send fails
-#[derive(Debug)]
-pub struct SendError<T>(pub T);
-
-/// Error returned when try_send fails
-#[derive(Debug)]
-pub enum TrySendError<T> {
-    /// The channel is full.
-    Full(T),
-    /// The channel is disconnected.
-    Disconnected(T),
-}
-
-/// Error returned when try_recv fails
-#[derive(Debug)]
-pub enum TryRecvError {
-    /// The channel is empty.
-    Empty,
-    /// The channel is disconnected.
-    Disconnected,
-}
-
-impl<T> std::fmt::Display for SendError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "channel disconnected")
-    }
-}
-
-impl<T: std::fmt::Debug> std::error::Error for SendError<T> {}
-
-/// Error returned when a broadcast send fails (no receivers)
-#[derive(Debug)]
-pub struct BroadcastSendError<T>(pub T);
-
-/// Error returned when a broadcast receive fails
-#[derive(Debug)]
-pub enum BroadcastRecvError {
-    /// Channel closed, no more senders
-    Closed,
-    /// Receiver lagged behind; this many messages were skipped
-    Lagged(u64),
-}
-
-impl<T> std::fmt::Display for BroadcastSendError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "broadcast send failed: no receivers")
-    }
-}
-
-impl<T: std::fmt::Debug> std::error::Error for BroadcastSendError<T> {}
-
-impl std::fmt::Display for BroadcastRecvError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BroadcastRecvError::Closed => write!(f, "broadcast channel closed"),
-            BroadcastRecvError::Lagged(n) => write!(f, "broadcast receiver lagged by {n}"),
-        }
-    }
-}
-
-impl std::error::Error for BroadcastRecvError {}
-
-/// Get the default runtime for the current build configuration
+/// Construct the compiled-in default runtime.
 ///
-/// Returns the runtime for whichever runtime feature is enabled.
-/// If multiple runtimes are enabled, tokio takes precedence.
-#[cfg(any(feature = "runtime-tokio", feature = "runtime-smol"))]
-pub fn default_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
+/// Returns [`TokioRuntime`] when `runtime-tokio` is enabled, else [`SmolRuntime`] when
+/// `runtime-smol` is enabled, else `None`.
+///
+/// This is a convenience for callers with no runtime preference — it is **not** a
+/// registry, and there is no way to overwrite what it returns. To use a custom runtime,
+/// pass it explicitly to
+/// [`with_runtime`](crate::peer_connection::PeerConnectionBuilder::with_runtime); that
+/// also allows different connections in one process to use different runtimes.
+pub fn default_runtime() -> Option<Arc<dyn Runtime>> {
     #[cfg(feature = "runtime-tokio")]
     {
-        Some(std::sync::Arc::new(TokioRuntime))
+        Some(Arc::new(TokioRuntime))
     }
-
     #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
     {
-        Some(std::sync::Arc::new(smol::SmolRuntime))
+        Some(Arc::new(SmolRuntime))
     }
-}
-
-#[cfg(not(any(feature = "runtime-tokio", feature = "runtime-smol")))]
-pub fn default_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
-    None
-}
-
-/// Get smol runtime if enabled
-#[cfg(any(feature = "runtime-tokio", feature = "runtime-smol"))]
-pub fn smol_runtime() -> Option<std::sync::Arc<dyn Runtime>> {
-    #[cfg(feature = "runtime-smol")]
+    #[cfg(not(any(feature = "runtime-tokio", feature = "runtime-smol")))]
     {
-        Some(std::sync::Arc::new(smol::SmolRuntime))
+        None
     }
-
-    #[cfg(not(feature = "runtime-smol"))]
-    None
 }
 
-// Runtime implementations
+// ── Built-in runtime implementations ──────────────────────────────────────────
+//
+// These modules are additive: a feature only decides whether an implementation type
+// exists. Nothing else in the crate is feature-gated, so enabling several is safe.
+
 #[cfg(feature = "runtime-tokio")]
 mod tokio;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::TokioRuntime;
-#[cfg(feature = "runtime-tokio")]
-pub use tokio::{
-    TokioInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
-    yield_now,
-};
-/// The concrete Interval type for the active runtime.
-#[cfg(feature = "runtime-tokio")]
-pub type Interval = TokioInterval;
-/// The concrete Mutex type for the active runtime.
-#[cfg(feature = "runtime-tokio")]
-pub type Mutex<T> = tokio::TokioMutex<T>;
-/// The concrete Notify type for the active runtime.
-#[cfg(feature = "runtime-tokio")]
-pub type Notify = tokio::TokioNotify;
-/// The concrete channel Sender type for the active runtime.
-#[cfg(feature = "runtime-tokio")]
-pub type Sender<T> = tokio::TokioSender<T>;
-/// The concrete channel Receiver type for the active runtime.
-#[cfg(feature = "runtime-tokio")]
-pub type Receiver<T> = tokio::TokioReceiver<T>;
-/// The concrete broadcast channel Sender type for the active runtime.
-#[cfg(feature = "runtime-tokio")]
-pub type BroadcastSender<T> = tokio::TokioBroadcastSender<T>;
-/// The concrete broadcast channel Receiver type for the active runtime.
-#[cfg(feature = "runtime-tokio")]
-pub type BroadcastReceiver<T> = tokio::TokioBroadcastReceiver<T>;
 
 #[cfg(feature = "runtime-smol")]
 mod smol;
-
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
+#[cfg(feature = "runtime-smol")]
 pub use smol::SmolRuntime;
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub use smol::{
-    SmolInterval, block_on, broadcast_channel, channel, interval, resolve_host, sleep, timeout,
-    yield_now,
-};
-/// The concrete Interval type for the active runtime.
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub type Interval = SmolInterval;
-/// The concrete Mutex type for the active runtime.
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub type Mutex<T> = smol::SmolMutex<T>;
-/// The concrete Notify type for the active runtime.
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub type Notify = smol::SmolNotify;
-/// The concrete channel Sender type for the active runtime.
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub type Sender<T> = smol::SmolSender<T>;
-/// The concrete channel Receiver type for the active runtime.
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub type Receiver<T> = smol::SmolReceiver<T>;
-/// The concrete broadcast channel Sender type for the active runtime.
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub type BroadcastSender<T> = smol::SmolBroadcastSender<T>;
-/// The concrete broadcast channel Receiver type for the active runtime.
-#[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
-pub type BroadcastReceiver<T> = smol::SmolBroadcastReceiver<T>;
+
+#[cfg(feature = "runtime-mock")]
+pub mod mock;
+#[cfg(feature = "runtime-mock")]
+pub use mock::MockRuntime;
 
 #[cfg(test)]
 mod default_impl_tests {
-    //! Cover the `AsyncUdpSocket` DEFAULT method bodies (send_segments / recv_gro /
-    //! max_gso_segments / max_gro_segments). The concrete tokio/smol impls override
-    //! them, so nothing else exercises the defaults — a minimal fake that implements
-    //! only the required methods does.
+    //! Cover the `AsyncUdpSocket` DEFAULT method bodies (`send_to` / `recv_from` /
+    //! `send_segments` / `recv_gro` / the capability getters) plus [`poll_once`]. The
+    //! concrete tokio/smol impls override the capabilities, so a minimal fake that
+    //! implements only the two poll primitives is what exercises the defaults.
     use super::*;
     use std::sync::Mutex;
 
@@ -528,32 +491,48 @@ mod default_impl_tests {
     struct FakeUdp {
         sent: Mutex<Vec<Vec<u8>>>,
         to_recv: Mutex<Vec<u8>>,
+        /// When true, report GSO capability so `send_segments` forwards instead of splitting.
+        gso: bool,
+        /// When true, never become ready — used to test `poll_once` on a pending socket.
+        never_ready: bool,
     }
 
     impl AsyncUdpSocket for FakeUdp {
-        fn send_to<'a>(
-            &'a self,
-            buf: &'a [u8],
-            _target: SocketAddr,
-        ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
-            Box::pin(async move {
-                self.sent.lock().unwrap().push(buf.to_vec());
-                Ok(buf.len())
-            })
-        }
-        fn recv_from<'a>(
-            &'a self,
-            buf: &'a mut [u8],
-        ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>> {
-            Box::pin(async move {
-                let data = self.to_recv.lock().unwrap();
-                let n = data.len().min(buf.len());
-                buf[..n].copy_from_slice(&data[..n]);
-                Ok((n, "127.0.0.1:9".parse::<SocketAddr>().unwrap()))
-            })
-        }
         fn local_addr(&self) -> io::Result<SocketAddr> {
             Ok("127.0.0.1:0".parse::<SocketAddr>().unwrap())
+        }
+
+        fn max_gso_segments(&self) -> usize {
+            if self.gso { 8 } else { 1 }
+        }
+
+        fn poll_send(
+            &self,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+            _segment_size: usize,
+            _target: SocketAddr,
+            _ecn: Option<u8>,
+        ) -> Poll<io::Result<usize>> {
+            if self.never_ready {
+                return Poll::Pending;
+            }
+            self.sent.lock().unwrap().push(buf.to_vec());
+            Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_recv(&self, _cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<GroRecv>> {
+            if self.never_ready {
+                return Poll::Pending;
+            }
+            let data = self.to_recv.lock().unwrap();
+            let n = data.len().min(buf.len());
+            buf[..n].copy_from_slice(&data[..n]);
+            Poll::Ready(Ok(GroRecv {
+                len: n,
+                stride: n.max(1),
+                peer_addr: "127.0.0.1:9".parse::<SocketAddr>().unwrap(),
+            }))
         }
     }
 
@@ -569,43 +548,90 @@ mod default_impl_tests {
     }
 
     #[test]
-    fn default_send_segments_loops_send_to() {
+    fn default_send_to_forwards_one_datagram() {
         let s = FakeUdp::default();
-        // 11 bytes, segment_size 3 -> datagrams of 3,3,3,2.
+        let n = futures::executor::block_on(s.send_to(b"abcd", addr())).unwrap();
+        assert_eq!(n, 4);
+        assert_eq!(s.sent.lock().unwrap().as_slice(), &[b"abcd".to_vec()]);
+    }
+
+    #[test]
+    fn default_recv_from_derives_from_poll_recv() {
+        let s = FakeUdp::default();
+        *s.to_recv.lock().unwrap() = vec![7, 7, 7];
+        let mut buf = [0u8; 16];
+        let (n, from) = futures::executor::block_on(s.recv_from(&mut buf)).unwrap();
+        assert_eq!(n, 3);
+        assert_eq!(from, "127.0.0.1:9".parse::<SocketAddr>().unwrap());
+    }
+
+    #[test]
+    fn send_segments_splits_when_socket_lacks_gso() {
+        // Without GSO, a multi-segment buffer must become individual datagrams rather than
+        // one oversized send — otherwise the wire format would be wrong.
+        let s = FakeUdp::default();
         let buf = [1u8, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4];
         let sent = futures::executor::block_on(s.send_segments(&buf, 3, addr(), None)).unwrap();
         assert_eq!(sent, 11);
         let calls = s.sent.lock().unwrap();
-        assert_eq!(calls.len(), 4);
+        assert_eq!(calls.len(), 4, "3,3,3,2");
         assert_eq!(calls[0], vec![1, 1, 1]);
         assert_eq!(calls[3], vec![4, 4]);
     }
 
     #[test]
-    fn default_send_segments_zero_size_is_one_datagram() {
+    fn send_segments_forwards_whole_buffer_when_gso_available() {
+        // With GSO the kernel does the segmenting, so it must be a single syscall.
+        let s = FakeUdp {
+            gso: true,
+            ..Default::default()
+        };
+        let buf = [9u8; 11];
+        let sent = futures::executor::block_on(s.send_segments(&buf, 3, addr(), None)).unwrap();
+        assert_eq!(sent, 11);
+        assert_eq!(
+            s.sent.lock().unwrap().len(),
+            1,
+            "GSO-capable socket gets one batched send"
+        );
+    }
+
+    #[test]
+    fn send_segments_zero_size_is_one_datagram() {
         let s = FakeUdp::default();
         let buf = [7u8; 10];
         futures::executor::block_on(s.send_segments(&buf, 0, addr(), Some(2))).unwrap();
         let calls = s.sent.lock().unwrap();
-        assert_eq!(
-            calls.len(),
-            1,
-            "segment_size 0 must send one datagram, not shred"
-        );
+        assert_eq!(calls.len(), 1, "segment_size 0 must not shred the buffer");
         assert_eq!(calls[0].len(), 10);
     }
 
     #[test]
-    fn default_recv_gro_is_single_datagram() {
+    fn default_recv_gro_reports_single_datagram_stride() {
         let s = FakeUdp::default();
         *s.to_recv.lock().unwrap() = vec![9, 9, 9, 9, 9];
         let mut buf = [0u8; 32];
         let gro = futures::executor::block_on(s.recv_gro(&mut buf)).unwrap();
         assert_eq!(gro.len, 5);
-        assert_eq!(
-            gro.stride, 5,
-            "stride == len for a single (non-GRO) datagram"
+        assert_eq!(gro.stride, 5, "stride == len for a non-GRO datagram");
+    }
+
+    #[test]
+    fn poll_once_probes_without_blocking_or_allocating() {
+        let ready = FakeUdp::default();
+        let mut buf = [0u8; 8];
+        assert!(
+            poll_once(|cx| ready.poll_recv(cx, &mut buf)).is_some(),
+            "ready socket yields a value"
         );
-        assert_eq!(gro.peer_addr, "127.0.0.1:9".parse::<SocketAddr>().unwrap());
+
+        let pending = FakeUdp {
+            never_ready: true,
+            ..Default::default()
+        };
+        assert!(
+            poll_once(|cx| pending.poll_recv(cx, &mut buf)).is_none(),
+            "pending socket yields None instead of parking"
+        );
     }
 }
