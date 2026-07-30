@@ -172,11 +172,14 @@ impl Runtime for SmolRuntime {
         })
     }
 
-    fn resolve_host<'a>(&'a self, host: &'a str) -> BoxFuture<'a, io::Result<Vec<SocketAddr>>> {
+    fn resolve_host<'a>(
+        &'a self,
+        host: &'a str,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'a>> {
         Box::pin(async move { ::smol::net::resolve(host).await })
     }
 
-    fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
+    fn sleep(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         Box::pin(async move {
             ::smol::Timer::after(duration).await;
         })
@@ -190,7 +193,7 @@ impl Runtime for SmolRuntime {
         })
     }
 
-    fn block_on(&self, future: LocalBoxFuture<'_, ()>) {
+    fn block_on(&self, future: Pin<Box<dyn Future<Output = ()> + '_>>) {
         ::smol::block_on(future);
     }
 
@@ -211,7 +214,7 @@ struct SmolInterval {
 }
 
 impl AsyncInterval for SmolInterval {
-    fn tick(&mut self) -> BoxFuture<'_, ()> {
+    fn tick(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
             if self.first {
                 self.first = false;
@@ -223,20 +226,29 @@ impl AsyncInterval for SmolInterval {
     }
 }
 
-#[derive(Debug)]
 struct UdpSocket {
     io: Arc<::smol::Async<std::net::UdpSocket>>,
-    /// Shared, runtime-agnostic GSO/GRO syscall helper (see [`super::primitives`]).
-    batch: Arc<super::primitives::UdpBatchState>,
+    /// Per-socket GSO/GRO capability state (see [`super::primitives`]).
+    batch: Arc<UdpSocketState>,
+}
+
+/// Hand-written because `quinn_udp::UdpSocketState` implements no `Debug`, so `UdpSocket`
+/// cannot derive it — and `AsyncUdpSocket` requires it.
+impl std::fmt::Debug for UdpSocket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UdpSocket")
+            .field("io", &self.io)
+            .field("max_gso_segments", &self.batch.max_gso_segments())
+            .field("gro_segments", &self.batch.gro_segments())
+            .finish()
+    }
 }
 
 impl UdpSocket {
     fn new(sock: std::net::UdpSocket) -> io::Result<Self> {
         // Wrap std socket in smol's Async (sets non-blocking).
         let async_sock = ::smol::Async::new(sock)?;
-        let batch = super::primitives::UdpBatchState::new(::quinn_udp::UdpSockRef::from(
-            async_sock.get_ref(),
-        ))?;
+        let batch = UdpSocketState::new(::quinn_udp::UdpSockRef::from(async_sock.get_ref()))?;
         Ok(Self {
             io: Arc::new(async_sock),
             batch: Arc::new(batch),
@@ -254,30 +266,21 @@ impl AsyncUdpSocket for UdpSocket {
     }
 
     fn max_gro_segments(&self) -> usize {
-        self.batch.max_gro_segments()
+        self.batch.gro_segments()
     }
 
-    fn poll_send(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        segment_size: usize,
-        target: SocketAddr,
-        ecn: Option<u8>,
-    ) -> Poll<io::Result<usize>> {
+    fn poll_send(&self, cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>> {
         loop {
             // Attempt the syscall BEFORE consulting readiness, mirroring `Async::write_with`.
             // async-io's readiness is event/ticket-based: `poll_writable` reports a *newly
             // delivered* event and consumes it. Polling first and acting second would strand
             // capacity that is already available — no fresh event is emitted for it — so a
             // burst would stall waiting on an event that never comes.
-            match self.batch.try_send(
-                ::quinn_udp::UdpSockRef::from(self.io.get_ref()),
-                buf,
-                segment_size,
-                target,
-                ecn,
-            ) {
+            match self
+                .batch
+                .send(::quinn_udp::UdpSockRef::from(self.io.get_ref()), transmit)
+                .map(|()| transmit.contents.len())
+            {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
                 other => return Poll::Ready(other),
             }
@@ -290,17 +293,34 @@ impl AsyncUdpSocket for UdpSocket {
         }
     }
 
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<GroRecv>> {
+    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
         loop {
             // Syscall first, for the same reason as `poll_send`: datagrams already queued in
             // the socket buffer produce no new readability event, so reading only after a
             // fresh event would leave them stranded and stall a burst.
-            match self
-                .batch
-                .try_recv(::quinn_udp::UdpSockRef::from(self.io.get_ref()), buf)
-            {
+            // `UdpSocketState::recv` is a scatter/gather API returning a message count, so
+            // adapt it to the single-datagram shape `poll_recv` returns.
+            let mut meta = [RecvMeta::default(); 1];
+            let mut bufs = [std::io::IoSliceMut::new(&mut *buf)];
+            match self.batch.recv(
+                ::quinn_udp::UdpSockRef::from(self.io.get_ref()),
+                &mut bufs,
+                &mut meta,
+            ) {
+                // Nothing queued: fall through and wait for a readability event.
+                Ok(0) => {}
+                Ok(_) => {
+                    // `RecvMeta` is `#[non_exhaustive]`, so return the one `recv` filled in,
+                    // normalizing only `stride`: it mirrors `len`, and a `0` there would make
+                    // de-segmentation divide by zero.
+                    let mut m = meta[0];
+                    if m.stride == 0 {
+                        m.stride = m.len.max(1);
+                    }
+                    return Poll::Ready(Ok(m));
+                }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                other => return Poll::Ready(other),
+                Err(e) => return Poll::Ready(Err(e)),
             }
             match self.io.poll_readable(cx) {
                 Poll::Pending => return Poll::Pending,

@@ -50,7 +50,7 @@ Eight required `Runtime` methods, plus the three socket traits:
 
 `spawn_reactor`, `yield_now` and `name` have working defaults, so they are optional. `timeout` needs no implementation at all — it is derived generically from `sleep`.
 
-The socket wrapper leaves `send_segments` / `recv_gro` to their trait defaults (one datagram per syscall). A production runtime would override them to batch, either via `webrtc::runtime::UdpBatchState` (the shared UDP GSO/GRO helper the built-in runtimes use) or its own equivalent.
+The socket wrapper sends and receives one datagram per syscall: it ignores `Transmit::segment_size` and leaves `max_gso_segments` / `max_gro_segments` at their default of 1, so the driver never asks it to batch. A production runtime would enable UDP GSO/GRO the way the built-in ones do — construct a `webrtc::runtime::UdpSocketState` at wrap time, report its `max_gso_segments()` / `gro_segments()`, pass the whole `Transmit` to its `send`, and adapt its scatter/gather `recv` to the single-datagram shape `poll_recv` returns (see `src/runtime/tokio.rs` or `smol.rs`).
 
 ## Using it for a real connection
 

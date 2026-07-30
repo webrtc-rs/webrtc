@@ -35,10 +35,7 @@
 //! [`io::ErrorKind::Unsupported`]: in-memory transports are a planned follow-up. Use it for
 //! timing- and protocol-logic tests, not for end-to-end connection tests.
 
-use super::{
-    AsyncInterval, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, BoxFuture, JoinHandle,
-    LocalBoxFuture, Runtime,
-};
+use super::{AsyncInterval, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, JoinHandle, Runtime};
 use std::collections::HashMap;
 use std::future::Future;
 use std::io;
@@ -194,7 +191,7 @@ struct MockInterval {
 }
 
 impl AsyncInterval for MockInterval {
-    fn tick(&mut self) -> BoxFuture<'_, ()> {
+    fn tick(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         // First tick fires immediately, matching the built-in runtimes.
         if self.first {
             self.first = false;
@@ -281,7 +278,10 @@ impl Runtime for MockRuntime {
         Box::pin(async move { Err(unsupported("connect_tcp")) })
     }
 
-    fn resolve_host<'a>(&'a self, host: &'a str) -> BoxFuture<'a, io::Result<Vec<SocketAddr>>> {
+    fn resolve_host<'a>(
+        &'a self,
+        host: &'a str,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'a>> {
         // Accept literal addresses so tests can exercise ICE paths without DNS.
         Box::pin(async move {
             match host.parse::<SocketAddr>() {
@@ -291,7 +291,7 @@ impl Runtime for MockRuntime {
         })
     }
 
-    fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
+    fn sleep(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         let id = self.clock.register(duration);
         Box::pin(Sleep {
             clock: Arc::clone(&self.clock),
@@ -307,7 +307,7 @@ impl Runtime for MockRuntime {
         })
     }
 
-    fn block_on(&self, future: LocalBoxFuture<'_, ()>) {
+    fn block_on(&self, future: Pin<Box<dyn Future<Output = ()> + '_>>) {
         futures::executor::block_on(future);
     }
 

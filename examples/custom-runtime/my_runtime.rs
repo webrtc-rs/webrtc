@@ -20,8 +20,8 @@ use std::time::Duration;
 use futures::Future;
 use std::task::{Context, Poll};
 use webrtc::runtime::{
-    AsyncInterval, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, BoxFuture, GroRecv,
-    JoinHandle, LocalBoxFuture, Runtime,
+    AsyncInterval, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, JoinHandle, RecvMeta, Runtime,
+    Transmit,
 };
 
 // ── The runtime ───────────────────────────────────────────────────────────────
@@ -127,7 +127,10 @@ impl Runtime for MyRuntime {
         })
     }
 
-    fn resolve_host<'a>(&'a self, host: &'a str) -> BoxFuture<'a, io::Result<Vec<SocketAddr>>> {
+    fn resolve_host<'a>(
+        &'a self,
+        host: &'a str,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'a>> {
         // `std`'s resolver blocks, so run it off the executor threads.
         let host = host.to_owned();
         Box::pin(async move {
@@ -139,7 +142,7 @@ impl Runtime for MyRuntime {
         })
     }
 
-    fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
+    fn sleep(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         Box::pin(async move {
             async_io::Timer::after(duration).await;
         })
@@ -152,7 +155,7 @@ impl Runtime for MyRuntime {
         })
     }
 
-    fn block_on(&self, future: LocalBoxFuture<'_, ()>) {
+    fn block_on(&self, future: Pin<Box<dyn Future<Output = ()> + '_>>) {
         futures_lite::future::block_on(future);
     }
 
@@ -181,7 +184,7 @@ struct MyInterval {
 }
 
 impl AsyncInterval for MyInterval {
-    fn tick(&mut self) -> BoxFuture<'_, ()> {
+    fn tick(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         if self.first {
             self.first = false;
             return Box::pin(std::future::ready(()));
@@ -205,32 +208,34 @@ impl AsyncUdpSocket for MyUdpSocket {
         self.io.get_ref().local_addr()
     }
 
-    fn poll_send(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        segment_size: usize,
-        target: SocketAddr,
-        _ecn: Option<u8>,
-    ) -> Poll<io::Result<usize>> {
+    fn poll_send(&self, cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>> {
         // No GSO here: `max_gso_segments` stays at its default of 1, so the caller never
-        // hands us a multi-segment buffer. A production runtime would batch via
-        // `quinn-udp` (see `src/runtime/udp_batch.rs`).
-        debug_assert!(segment_size == 0 || segment_size >= buf.len());
+        // hands us a multi-segment buffer, and ECN marking is not applied. A production
+        // runtime would batch via `webrtc::runtime::UdpSocketState`, handing it the whole
+        // `Transmit`.
+        debug_assert!(
+            transmit
+                .segment_size
+                .is_none_or(|seg| seg >= transmit.contents.len())
+        );
         loop {
             match self.io.poll_writable(cx) {
                 Poll::Pending => return Poll::Pending,
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
                 Poll::Ready(Ok(())) => {}
             }
-            match self.io.get_ref().send_to(buf, target) {
+            match self
+                .io
+                .get_ref()
+                .send_to(transmit.contents, transmit.destination)
+            {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 other => return Poll::Ready(other),
             }
         }
     }
 
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<GroRecv>> {
+    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
         loop {
             match self.io.poll_readable(cx) {
                 Poll::Pending => return Poll::Pending,
@@ -240,13 +245,14 @@ impl AsyncUdpSocket for MyUdpSocket {
             match self.io.get_ref().recv_from(buf) {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 Err(e) => return Poll::Ready(Err(e)),
-                // No GRO: exactly one datagram, so `stride == len`.
+                // No GRO: exactly one datagram, so `stride == len`. `RecvMeta` is
+                // `#[non_exhaustive]`, so fill in the default rather than using a literal.
                 Ok((len, peer_addr)) => {
-                    return Poll::Ready(Ok(GroRecv {
-                        len,
-                        stride: len.max(1),
-                        peer_addr,
-                    }));
+                    let mut meta = RecvMeta::default();
+                    meta.len = len;
+                    meta.stride = len.max(1);
+                    meta.addr = peer_addr;
+                    return Poll::Ready(Ok(meta));
                 }
             }
         }

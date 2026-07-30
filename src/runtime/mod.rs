@@ -42,7 +42,8 @@
 //! [`poll_send`](AsyncUdpSocket::poll_send) and [`poll_recv`](AsyncUdpSocket::poll_recv)
 //! are synchronous and readiness-driven, mirroring `quinn`'s socket trait. Callers on the
 //! hot path (the peer-connection driver) poll them directly and allocate nothing per
-//! datagram; the `async` methods on the trait are conveniences layered over them for
+//! datagram — including the batched GSO/GRO paths, which have no boxed-future wrappers at
+//! all. The two remaining `async` socket methods are single-datagram conveniences for
 //! control-plane use. Use [`poll_once`] to probe readiness without allocating.
 
 #![allow(clippy::type_complexity)]
@@ -53,22 +54,12 @@ use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, 
 pub mod primitives;
 
 pub use primitives::{
-    BroadcastReceiver, BroadcastRecvError, BroadcastSendError, BroadcastSender, Mutex, Notify,
-    Receiver, SendError, Sender, TryRecvError, TrySendError, UdpBatchState, UdpSockRef,
+    BroadcastReceiver, BroadcastRecvError, BroadcastSendError, BroadcastSender, EcnCodepoint,
+    Mutex, Notify, Receiver, RecvMeta, SendError, Sender, Transmit, TryRecvError, TrySendError,
     broadcast_channel, channel,
 };
 
 pub(crate) const MAX_REACTOR_POOL_SIZE: usize = 1024;
-
-/// A boxed, `Send` future — the return shape of the async [`Runtime`] methods.
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-/// A boxed future that need **not** be `Send`.
-///
-/// Used by [`Runtime::block_on`], which drives the future on the calling thread and so
-/// never moves it across threads — matching `tokio::runtime::Runtime::block_on`,
-/// `smol::block_on` and `futures::executor::block_on`, none of which require `Send`.
-pub type LocalBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
 /// A handle to a task spawned via [`Runtime::spawn`].
 ///
@@ -159,13 +150,16 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     ) -> Pin<Box<dyn Future<Output = io::Result<Arc<dyn AsyncTcpStream>>> + Send + 'a>>;
 
     /// Resolve a host string (`"host:port"`) to socket addresses.
-    fn resolve_host<'a>(&'a self, host: &'a str) -> BoxFuture<'a, io::Result<Vec<SocketAddr>>>;
+    fn resolve_host<'a>(
+        &'a self,
+        host: &'a str,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'a>>;
 
     /// Complete after `duration` has elapsed.
     ///
     /// Reactor-bound: only the host runtime can arm a timer, which is why this cannot be a
     /// free function.
-    fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()>;
+    fn sleep(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
     /// A repeating timer firing every `period`. The first tick fires immediately.
     fn interval(&self, period: Duration) -> Box<dyn AsyncInterval>;
@@ -180,13 +174,13 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// # Panics
     ///
     /// Implementations may panic if called from inside their own executor.
-    fn block_on(&self, future: LocalBoxFuture<'_, ()>);
+    fn block_on(&self, future: Pin<Box<dyn Future<Output = ()> + '_>>);
 
     /// Cooperatively reschedule the current task so other ready tasks get a turn.
     ///
     /// The default wakes immediately and yields once. Override to integrate with a
     /// runtime's scheduling budget (e.g. tokio's cooperative yielding).
-    fn yield_now(&self) -> BoxFuture<'static, ()> {
+    fn yield_now(&self) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         let mut yielded = false;
         Box::pin(futures::future::poll_fn(move |cx| {
             if yielded {
@@ -209,7 +203,7 @@ pub trait Runtime: Send + Sync + Debug + 'static {
 /// Object-safe: `tick` borrows `self` mutably and returns a boxed future.
 pub trait AsyncInterval: Send + Sync {
     /// Wait until the next tick fires.
-    fn tick(&mut self) -> BoxFuture<'_, ()>;
+    fn tick(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
 /// Returned by [`timeout`] when the deadline expires before the future completes.
@@ -240,76 +234,63 @@ pub async fn timeout<T>(
     }
 }
 
-/// Outcome of a batched UDP receive ([`AsyncUdpSocket::recv_gro`]).
-///
-/// `buf[..len]` holds one or more datagrams received in a single syscall. When the
-/// kernel coalesced consecutive same-flow datagrams via UDP GRO, each is `stride`
-/// bytes except possibly the last — walk `buf[..len]` in `stride`-sized steps to
-/// recover the individual datagrams. Without GRO (or for a lone datagram)
-/// `stride == len` and there is exactly one datagram. Every datagram in the batch
-/// shares `peer_addr` (GRO only coalesces a single source flow).
-#[derive(Debug, Clone, Copy)]
-pub struct GroRecv {
-    /// Total bytes written to the buffer across all coalesced datagrams.
-    pub len: usize,
-    /// Size of each datagram in the batch; the final one may be shorter. Always
-    /// `>= 1` when `len > 0`.
-    pub stride: usize,
-    /// Source address shared by every datagram in the batch.
-    pub peer_addr: SocketAddr,
-}
-
 /// Abstract implementation of a UDP socket for runtime independence.
 ///
 /// # Poll-based, by design
 ///
-/// The two primitives — [`poll_send`](Self::poll_send) and [`poll_recv`](Self::poll_recv) —
-/// are **synchronous and readiness-based**, mirroring `quinn`'s `AsyncUdpSocket`. This is
-/// what keeps the packet path allocation-free: a boxed future per datagram would cost one
-/// heap allocation per send and per receive, and callers that merely want to *test*
-/// readiness (see the driver's burst drain) would allocate just to discard.
+/// The two packet primitives — [`poll_send`](Self::poll_send) and
+/// [`poll_recv`](Self::poll_recv) — are **synchronous and readiness-based**, mirroring
+/// `quinn`'s `AsyncUdpSocket`. This is what keeps the packet path allocation-free: a boxed
+/// future per datagram would cost one heap allocation per send and per receive, and callers
+/// that merely want to *test* readiness (see the driver's burst drain) would allocate just
+/// to discard.
 ///
-/// The four `async` methods are conveniences with defaults written over the poll
-/// primitives, so an implementor supplies two methods and gets all six.
+/// An implementor supplies [`local_addr`](Self::local_addr) and the two poll primitives;
+/// everything else is defaulted. The remaining `async` methods
+/// ([`send_to`](Self::send_to), [`recv_from`](Self::recv_from)) are single-datagram
+/// conveniences for control-plane use, written over the primitives — they each box a
+/// future, so the packet path polls instead. Batched send (GSO) and batched receive (GRO)
+/// have no convenience wrappers by design: set `Transmit::segment_size` for `poll_send`,
+/// and read [`RecvMeta::stride`] from `poll_recv`.
 pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
 
-    /// Attempt to send `buf` to `target`, registering `cx`'s waker if the socket is not
-    /// writable yet.
+    /// Attempt to send `transmit`, registering `cx`'s waker if the socket is not writable
+    /// yet.
     ///
-    /// `segment_size` of `0` sends `buf` as a single datagram. A non-zero value requests
-    /// UDP GSO: `buf` is split into consecutive datagrams of that size (the last may be
-    /// shorter) and emitted in one syscall. Callers should only pass a `buf` spanning more
-    /// than one segment when [`max_gso_segments`](Self::max_gso_segments) reports `> 1`.
+    /// [`contents`](Transmit::contents) goes to [`destination`](Transmit::destination) as a
+    /// single datagram when [`segment_size`](Transmit::segment_size) is `None`. `Some(n)`
+    /// requests UDP GSO: the buffer is split into consecutive `n`-byte datagrams (the last
+    /// may be shorter) and emitted in one syscall. Callers should only supply contents
+    /// spanning more than one segment when [`max_gso_segments`](Self::max_gso_segments)
+    /// reports `> 1` — a socket reporting `1` may ignore `segment_size` and emit one
+    /// oversized datagram.
     ///
-    /// `ecn`, when `Some`, stamps the ECN codepoint bits on every segment.
+    /// [`ecn`](Transmit::ecn), when `Some`, stamps the ECN codepoint bits on every segment.
     ///
     /// Returns the number of payload bytes accepted.
-    fn poll_send(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        segment_size: usize,
-        target: SocketAddr,
-        ecn: Option<u8>,
-    ) -> Poll<io::Result<usize>>;
+    fn poll_send(&self, cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>>;
 
     /// Attempt to receive into `buf`, registering `cx`'s waker if no datagram is ready.
     ///
-    /// May return several datagrams coalesced by UDP GRO — see [`GroRecv`] for how to
+    /// May return several datagrams coalesced by UDP GRO — see [`RecvMeta`] for how to
     /// split them back apart.
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<GroRecv>>;
+    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>>;
 
-    /// Maximum number of segments a single [`send_segments`](Self::send_segments)
-    /// call can emit in one syscall via UDP GSO. Returns `1` when GSO is
-    /// unavailable (each segment then costs one syscall).
+    /// Maximum number of segments a single [`poll_send`](Self::poll_send) call can emit in
+    /// one syscall via UDP GSO. Returns `1` when GSO is unavailable (each segment then costs
+    /// one syscall).
+    ///
+    /// Callers must consult this before passing a `segment_size` that spans more than one
+    /// datagram: a socket reporting `1` may ignore `segment_size` and emit one oversized
+    /// datagram.
     fn max_gso_segments(&self) -> usize {
         1
     }
 
     /// Maximum number of datagrams the kernel may coalesce into one
-    /// [`recv_gro`](Self::recv_gro) via UDP GRO. Returns `1` when GRO is
+    /// [`poll_recv`](Self::poll_recv) via UDP GRO. Returns `1` when GRO is
     /// unavailable. Used to size receive buffers.
     fn max_gro_segments(&self) -> usize {
         1
@@ -321,8 +302,15 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
         buf: &'a [u8],
         target: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
+        let transmit = Transmit {
+            destination: target,
+            ecn: None,
+            contents: buf,
+            segment_size: None,
+            src_ip: None,
+        };
         Box::pin(futures::future::poll_fn(move |cx| {
-            self.poll_send(cx, buf, 0, target, None)
+            self.poll_send(cx, &transmit)
         }))
     }
 
@@ -333,61 +321,17 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>> {
         Box::pin(async move {
             let gro = futures::future::poll_fn(|cx| self.poll_recv(cx, buf)).await?;
-            Ok((gro.len, gro.peer_addr))
+            Ok((gro.len, gro.addr))
         })
-    }
-
-    /// Send `buf` as consecutive datagrams of `segment_size` bytes to `target`
-    /// using a single UDP GSO (`UDP_SEGMENT`) syscall — the final datagram may be
-    /// shorter than `segment_size`. `ecn`, when `Some`, stamps the ECN codepoint
-    /// bits on every segment. Returns the number of payload bytes accepted.
-    ///
-    /// When the socket reports no GSO capability
-    /// ([`max_gso_segments`](Self::max_gso_segments) `== 1`) but `buf` spans more than one
-    /// segment, this splits into individual datagrams rather than emitting one oversized
-    /// one — so an implementation that ignores `segment_size` still produces the correct
-    /// wire format. Callers should nonetheless only batch when GSO is available.
-    fn send_segments<'a>(
-        &'a self,
-        buf: &'a [u8],
-        segment_size: usize,
-        target: SocketAddr,
-        ecn: Option<u8>,
-    ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + 'a>> {
-        let needs_split =
-            segment_size != 0 && buf.len() > segment_size && self.max_gso_segments() <= 1;
-        if !needs_split {
-            return Box::pin(futures::future::poll_fn(move |cx| {
-                self.poll_send(cx, buf, segment_size, target, ecn)
-            }));
-        }
-        Box::pin(async move {
-            let mut sent = 0;
-            for chunk in buf.chunks(segment_size) {
-                sent += futures::future::poll_fn(|cx| self.poll_send(cx, chunk, 0, target, ecn))
-                    .await?;
-            }
-            Ok(sent)
-        })
-    }
-
-    /// Receive one or more datagrams into `buf` in a single syscall, using UDP GRO
-    /// to coalesce consecutive same-flow datagrams when available. See [`GroRecv`]
-    /// for how to split the buffer back into individual datagrams.
-    fn recv_gro<'a>(
-        &'a self,
-        buf: &'a mut [u8],
-    ) -> Pin<Box<dyn Future<Output = io::Result<GroRecv>> + Send + 'a>> {
-        Box::pin(futures::future::poll_fn(move |cx| self.poll_recv(cx, buf)))
     }
 }
 
 /// Poll `f` once with a no-op waker, returning `None` if it is not ready.
 ///
 /// For readiness probes on the poll-based socket primitives — draining datagrams that are
-/// already queued without arming a wakeup, and **without allocating**. The previous
-/// `recv_gro(..).now_or_never()` idiom boxed a future on every probe, including the common
-/// case where the answer was "nothing ready".
+/// already queued without arming a wakeup, and **without allocating**. A
+/// `poll_fn(..).now_or_never()` idiom would box a future on every probe, including the
+/// common case where the answer is "nothing ready".
 pub fn poll_once<T>(f: impl FnOnce(&mut Context<'_>) -> Poll<T>) -> Option<T> {
     let waker = std::task::Waker::noop();
     let mut cx = Context::from_waker(waker);
@@ -480,10 +424,10 @@ pub use mock::MockRuntime;
 
 #[cfg(test)]
 mod default_impl_tests {
-    //! Cover the `AsyncUdpSocket` DEFAULT method bodies (`send_to` / `recv_from` /
-    //! `send_segments` / `recv_gro` / the capability getters) plus [`poll_once`]. The
-    //! concrete tokio/smol impls override the capabilities, so a minimal fake that
-    //! implements only the two poll primitives is what exercises the defaults.
+    //! Cover the `AsyncUdpSocket` DEFAULT method bodies (`send_to` / `recv_from` and the
+    //! capability getters) plus [`poll_once`]. The concrete tokio/smol impls override the
+    //! capabilities, so a minimal fake that implements only the two poll primitives is what
+    //! exercises the defaults.
     use super::*;
     use std::sync::Mutex;
 
@@ -491,8 +435,6 @@ mod default_impl_tests {
     struct FakeUdp {
         sent: Mutex<Vec<Vec<u8>>>,
         to_recv: Mutex<Vec<u8>>,
-        /// When true, report GSO capability so `send_segments` forwards instead of splitting.
-        gso: bool,
         /// When true, never become ready — used to test `poll_once` on a pending socket.
         never_ready: bool,
     }
@@ -502,37 +444,32 @@ mod default_impl_tests {
             Ok("127.0.0.1:0".parse::<SocketAddr>().unwrap())
         }
 
-        fn max_gso_segments(&self) -> usize {
-            if self.gso { 8 } else { 1 }
-        }
-
         fn poll_send(
             &self,
             _cx: &mut Context<'_>,
-            buf: &[u8],
-            _segment_size: usize,
-            _target: SocketAddr,
-            _ecn: Option<u8>,
+            transmit: &Transmit<'_>,
         ) -> Poll<io::Result<usize>> {
             if self.never_ready {
                 return Poll::Pending;
             }
-            self.sent.lock().unwrap().push(buf.to_vec());
-            Poll::Ready(Ok(buf.len()))
+            self.sent.lock().unwrap().push(transmit.contents.to_vec());
+            Poll::Ready(Ok(transmit.contents.len()))
         }
 
-        fn poll_recv(&self, _cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<GroRecv>> {
+        fn poll_recv(&self, _cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
             if self.never_ready {
                 return Poll::Pending;
             }
             let data = self.to_recv.lock().unwrap();
             let n = data.len().min(buf.len());
             buf[..n].copy_from_slice(&data[..n]);
-            Poll::Ready(Ok(GroRecv {
-                len: n,
-                stride: n.max(1),
-                peer_addr: "127.0.0.1:9".parse::<SocketAddr>().unwrap(),
-            }))
+            // `RecvMeta` is `#[non_exhaustive]`: start from the default and fill fields in
+            // rather than using a struct literal, which is not permitted outside `quinn-udp`.
+            let mut meta = RecvMeta::default();
+            meta.len = n;
+            meta.stride = n.max(1);
+            meta.addr = "127.0.0.1:9".parse::<SocketAddr>().unwrap();
+            Poll::Ready(Ok(meta))
         }
     }
 
@@ -563,57 +500,6 @@ mod default_impl_tests {
         let (n, from) = futures::executor::block_on(s.recv_from(&mut buf)).unwrap();
         assert_eq!(n, 3);
         assert_eq!(from, "127.0.0.1:9".parse::<SocketAddr>().unwrap());
-    }
-
-    #[test]
-    fn send_segments_splits_when_socket_lacks_gso() {
-        // Without GSO, a multi-segment buffer must become individual datagrams rather than
-        // one oversized send — otherwise the wire format would be wrong.
-        let s = FakeUdp::default();
-        let buf = [1u8, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4];
-        let sent = futures::executor::block_on(s.send_segments(&buf, 3, addr(), None)).unwrap();
-        assert_eq!(sent, 11);
-        let calls = s.sent.lock().unwrap();
-        assert_eq!(calls.len(), 4, "3,3,3,2");
-        assert_eq!(calls[0], vec![1, 1, 1]);
-        assert_eq!(calls[3], vec![4, 4]);
-    }
-
-    #[test]
-    fn send_segments_forwards_whole_buffer_when_gso_available() {
-        // With GSO the kernel does the segmenting, so it must be a single syscall.
-        let s = FakeUdp {
-            gso: true,
-            ..Default::default()
-        };
-        let buf = [9u8; 11];
-        let sent = futures::executor::block_on(s.send_segments(&buf, 3, addr(), None)).unwrap();
-        assert_eq!(sent, 11);
-        assert_eq!(
-            s.sent.lock().unwrap().len(),
-            1,
-            "GSO-capable socket gets one batched send"
-        );
-    }
-
-    #[test]
-    fn send_segments_zero_size_is_one_datagram() {
-        let s = FakeUdp::default();
-        let buf = [7u8; 10];
-        futures::executor::block_on(s.send_segments(&buf, 0, addr(), Some(2))).unwrap();
-        let calls = s.sent.lock().unwrap();
-        assert_eq!(calls.len(), 1, "segment_size 0 must not shred the buffer");
-        assert_eq!(calls[0].len(), 10);
-    }
-
-    #[test]
-    fn default_recv_gro_reports_single_datagram_stride() {
-        let s = FakeUdp::default();
-        *s.to_recv.lock().unwrap() = vec![9, 9, 9, 9, 9];
-        let mut buf = [0u8; 32];
-        let gro = futures::executor::block_on(s.recv_gro(&mut buf)).unwrap();
-        assert_eq!(gro.len, 5);
-        assert_eq!(gro.stride, 5, "stride == len for a non-GRO datagram");
     }
 
     #[test]

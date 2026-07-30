@@ -146,8 +146,8 @@ impl Runtime for TokioRuntime {
         let io = ::tokio::net::UdpSocket::from_std(sock)?;
         // Probe + enable UDP GSO/GRO (and ECN/MTU options) on the socket. This is a
         // one-time reconfiguration; `send_to`/`recv_from` keep working, but the recv
-        // path must now use `recv_gro` to decode GRO-coalesced buffers.
-        let batch = super::primitives::UdpBatchState::new(::quinn_udp::UdpSockRef::from(&io))?;
+        // path must now decode GRO-coalesced buffers via `stride`.
+        let batch = ::quinn_udp::UdpSocketState::new(::quinn_udp::UdpSockRef::from(&io))?;
         Ok(Arc::new(UdpSocket {
             io: Arc::new(io),
             batch: Arc::new(batch),
@@ -182,7 +182,10 @@ impl Runtime for TokioRuntime {
         })
     }
 
-    fn resolve_host<'a>(&'a self, host: &'a str) -> BoxFuture<'a, io::Result<Vec<SocketAddr>>> {
+    fn resolve_host<'a>(
+        &'a self,
+        host: &'a str,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'a>> {
         Box::pin(async move {
             ::tokio::net::lookup_host(host)
                 .await
@@ -190,7 +193,7 @@ impl Runtime for TokioRuntime {
         })
     }
 
-    fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
+    fn sleep(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         Box::pin(::tokio::time::sleep(duration))
     }
 
@@ -198,7 +201,7 @@ impl Runtime for TokioRuntime {
         Box::new(TokioInterval(::tokio::time::interval(period)))
     }
 
-    fn block_on(&self, future: LocalBoxFuture<'_, ()>) {
+    fn block_on(&self, future: Pin<Box<dyn Future<Output = ()> + '_>>) {
         ::tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -206,7 +209,7 @@ impl Runtime for TokioRuntime {
             .block_on(future);
     }
 
-    fn yield_now(&self) -> BoxFuture<'static, ()> {
+    fn yield_now(&self) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         // Use tokio's own yield so this participates in its cooperative scheduling
         // budget, rather than the generic wake-once default.
         Box::pin(::tokio::task::yield_now())
@@ -221,18 +224,30 @@ impl Runtime for TokioRuntime {
 struct TokioInterval(::tokio::time::Interval);
 
 impl AsyncInterval for TokioInterval {
-    fn tick(&mut self) -> BoxFuture<'_, ()> {
+    fn tick(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
             self.0.tick().await;
         })
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct UdpSocket {
     io: Arc<::tokio::net::UdpSocket>,
-    /// Shared, runtime-agnostic GSO/GRO syscall helper (see [`super::primitives`]).
-    batch: Arc<super::primitives::UdpBatchState>,
+    /// Per-socket GSO/GRO capability state (see [`super::primitives`]).
+    batch: Arc<::quinn_udp::UdpSocketState>,
+}
+
+/// Hand-written because `quinn_udp::UdpSocketState` implements no `Debug`, so `UdpSocket`
+/// cannot derive it — and `AsyncUdpSocket` requires it.
+impl std::fmt::Debug for UdpSocket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UdpSocket")
+            .field("io", &self.io)
+            .field("max_gso_segments", &self.batch.max_gso_segments())
+            .field("gro_segments", &self.batch.gro_segments())
+            .finish()
+    }
 }
 
 impl AsyncUdpSocket for UdpSocket {
@@ -245,17 +260,10 @@ impl AsyncUdpSocket for UdpSocket {
     }
 
     fn max_gro_segments(&self) -> usize {
-        self.batch.max_gro_segments()
+        self.batch.gro_segments()
     }
 
-    fn poll_send(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        segment_size: usize,
-        target: SocketAddr,
-        ecn: Option<u8>,
-    ) -> Poll<io::Result<usize>> {
+    fn poll_send(&self, cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>> {
         loop {
             match self.io.poll_send_ready(cx) {
                 Poll::Pending => return Poll::Pending,
@@ -268,13 +276,9 @@ impl AsyncUdpSocket for UdpSocket {
             // leave that cache stale, so `poll_send_ready` would keep returning `Ready`
             // and this loop would spin hot inside a single poll.
             match self.io.try_io(::tokio::io::Interest::WRITABLE, || {
-                self.batch.try_send(
-                    ::quinn_udp::UdpSockRef::from(&self.io),
-                    buf,
-                    segment_size,
-                    target,
-                    ecn,
-                )
+                self.batch
+                    .send(::quinn_udp::UdpSockRef::from(&self.io), transmit)
+                    .map(|()| transmit.contents.len())
             }) {
                 // `try_io` has cleared the cached readiness, so the next iteration's
                 // `poll_send_ready` registers the waker and yields `Pending`.
@@ -284,7 +288,7 @@ impl AsyncUdpSocket for UdpSocket {
         }
     }
 
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<GroRecv>> {
+    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
         loop {
             match self.io.poll_recv_ready(cx) {
                 Poll::Pending => return Poll::Pending,
@@ -293,8 +297,28 @@ impl AsyncUdpSocket for UdpSocket {
             }
             // Via `try_io` for the same readiness-bookkeeping reason as `poll_send`.
             match self.io.try_io(::tokio::io::Interest::READABLE, || {
-                self.batch
-                    .try_recv(::quinn_udp::UdpSockRef::from(&self.io), buf)
+                // `UdpSocketState::recv` is a scatter/gather API returning a message count,
+                // so adapt it to the single-datagram shape `poll_recv` returns.
+                let mut meta = [RecvMeta::default(); 1];
+                let mut bufs = [std::io::IoSliceMut::new(buf)];
+                let msgs = self.batch.recv(
+                    ::quinn_udp::UdpSockRef::from(&self.io),
+                    &mut bufs,
+                    &mut meta,
+                )?;
+                if msgs == 0 {
+                    // Report unreadiness the way `try_io` expects, so it clears the cached
+                    // readiness and the next `poll_recv_ready` parks the waker.
+                    return Err(io::ErrorKind::WouldBlock.into());
+                }
+                // `RecvMeta` is `#[non_exhaustive]`, so return the one `recv` filled in,
+                // normalizing only `stride`: it mirrors `len`, and a `0` there would make
+                // de-segmentation divide by zero.
+                let mut m = meta[0];
+                if m.stride == 0 {
+                    m.stride = m.len.max(1);
+                }
+                Ok(m)
             }) {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 other => return Poll::Ready(other),

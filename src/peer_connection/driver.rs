@@ -19,7 +19,8 @@ use crate::peer_connection::transports::{
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{
-    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, Receiver, Sender, TrySendError, channel,
+    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, EcnCodepoint, Receiver, Sender, Transmit,
+    TrySendError, channel,
 };
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
@@ -81,9 +82,10 @@ pub(crate) fn insert_data_channel_event_sender(
 /// Send `buf` to `target` without allocating.
 ///
 /// Polls [`AsyncUdpSocket::poll_send`] directly rather than going through the trait's
-/// boxed-future conveniences (`send_to` / `send_segments`), which would cost one heap
-/// allocation per datagram on the hot path. `segment_size` of `0` sends a single datagram;
-/// non-zero requests UDP GSO.
+/// boxed-future convenience (`send_to`), which would cost one heap allocation per datagram
+/// on the hot path. `segment_size` of `0` sends a single datagram; non-zero requests UDP
+/// GSO — only valid when the socket reports `max_gso_segments() > 1`. `ecn` carries the raw
+/// two codepoint bits.
 async fn send_datagrams(
     socket: &dyn AsyncUdpSocket,
     buf: &[u8],
@@ -91,7 +93,16 @@ async fn send_datagrams(
     target: SocketAddr,
     ecn: Option<u8>,
 ) -> Result<usize> {
-    futures::future::poll_fn(|cx| socket.poll_send(cx, buf, segment_size, target, ecn))
+    let transmit = Transmit {
+        destination: target,
+        ecn: ecn.and_then(EcnCodepoint::from_bits),
+        contents: buf,
+        // `0` means "no segmentation": hand the whole buffer over as one datagram rather
+        // than asking the kernel to shred it into 0-byte segments.
+        segment_size: (segment_size != 0).then_some(segment_size),
+        src_ip: None,
+    };
+    futures::future::poll_fn(|cx| socket.poll_send(cx, &transmit))
         .await
         .map_err(Error::from)
 }
@@ -203,26 +214,27 @@ where
             .collect();
 
         // Pre-allocate buffers once - one per socket, these will be reused forever.
-        // Sized for the socket's GRO coalescing capacity so a single `recv_gro` can
+        // Sized for the socket's GRO coalescing capacity so a single `poll_recv` can
         // hold up to `max_gro_segments()` datagrams without truncation.
         let mut udp_socket_buffers: Vec<Vec<u8>> = udp_socket_list
             .iter()
             .map(|(_, socket)| vec![0u8; gro_recv_buf_len(socket.max_gro_segments())])
             .collect();
 
-        // Helper function to create a recv future for a specific socket. Uses GRO
-        // (`recv_gro`) so one syscall may return several coalesced datagrams; `stride`
-        // carries the per-datagram size for de-segmentation by the caller.
+        // Helper function to create a recv future for a specific socket. Polls
+        // `poll_recv` directly rather than boxing a future per receive; one syscall may
+        // return several GRO-coalesced datagrams, and `stride` carries the per-datagram
+        // size for de-segmentation by the caller.
         let create_udp_recv_future = |idx: usize,
                                       local_addr: SocketAddr,
                                       socket: Arc<dyn AsyncUdpSocket>,
                                       mut buf: Vec<u8>| async move {
-            match socket.recv_gro(&mut buf).await {
+            match futures::future::poll_fn(|cx| socket.poll_recv(cx, &mut buf)).await {
                 Ok(gro) => SocketRecvResult::Packet {
                     n: gro.len,
                     stride: gro.stride,
                     local_addr,
-                    peer_addr: gro.peer_addr,
+                    peer_addr: gro.addr,
                     idx,
                     buf,
                 },
@@ -376,13 +388,13 @@ where
                                 // Probes via `poll_once` on the poll-based primitive, so a
                                 // "nothing ready" answer — the common case that ends every
                                 // burst — costs no allocation. The previous
-                                // `recv_gro(..).now_or_never()` boxed a future per probe
+                                // A boxed-future probe would allocate per attempt
                                 // just to discard it.
                                 let mut burst = 0;
                                 while burst < MAX_UDP_RECV_BURST {
                                     match crate::runtime::poll_once(|cx| socket.poll_recv(cx, &mut burst_buf)) {
                                         Some(Ok(gro)) => {
-                                            self.deliver_udp_batch(&burst_buf, gro.len, gro.stride, socket_local_addr, gro.peer_addr).await;
+                                            self.deliver_udp_batch(&burst_buf, gro.len, gro.stride, socket_local_addr, gro.addr).await;
                                             burst += 1;
                                         }
                                         _ => break, // would-block (pending) or error

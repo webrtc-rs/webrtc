@@ -4,24 +4,46 @@
 //! never feature-gated. Two distinct groups live in this module, agnostic for different
 //! reasons:
 //!
-//! 1. **Waker-driven primitives** — [`Mutex`], [`Notify`], [`channel`], [`broadcast_channel`].
+//! **Waker-driven primitives** — [`Mutex`], [`Notify`], [`channel`], [`broadcast_channel`].
 //!    Plain data structures that never register with a reactor, so one implementation
 //!    suffices everywhere. Keeping them out of the [`Runtime`](super::Runtime) trait is also
 //!    what keeps that trait object-safe: a generic method such as `fn channel<T>(&self, …)`
 //!    could not be called through `dyn Runtime`.
 //!
-//! 2. **UDP GSO/GRO batching** — [`UdpBatchState`]. This one *does* issue syscalls, but they
-//!    are synchronous and non-blocking, so the only runtime-specific part is readiness.
-//!    Once [`AsyncUdpSocket`](super::AsyncUdpSocket) became poll-based, readiness moved to
-//!    the caller and the syscall half became shareable.
-//!
 //! Reactor-bound operations — task spawning, timers, socket readiness, DNS — are *not* here;
 //! they are injected through the [`Runtime`](super::Runtime) trait.
 
-use super::GroRecv;
-use std::io;
-use std::net::SocketAddr;
 use std::sync::Arc;
+
+/// Metadata describing one UDP receive: `len`, `stride`, `addr`, and the ECN codepoint.
+///
+/// Re-exported from `quinn-udp`, since it appears in [`AsyncUdpSocket::poll_recv`]'s
+/// signature and so must be nameable by out-of-tree runtimes. When the kernel coalesced
+/// consecutive same-flow datagrams via UDP GRO, `buf[..len]` holds several datagrams of
+/// `stride` bytes each (the last may be shorter); without GRO `stride == len` and there is
+/// exactly one. Every datagram in a batch shares `addr`.
+///
+/// It is `#[non_exhaustive]`, so build one with [`RecvMeta::default`] and assign fields
+/// rather than using a struct literal.
+///
+/// [`AsyncUdpSocket::poll_recv`]: super::AsyncUdpSocket::poll_recv
+pub use quinn_udp::RecvMeta;
+
+/// One outbound UDP send: `contents` to `destination`, optionally segmented and ECN-marked.
+///
+/// Re-exported from `quinn-udp`, since it appears in [`AsyncUdpSocket::poll_send`]'s
+/// signature. `segment_size` of `None` sends `contents` as a single datagram; `Some(n)`
+/// requests UDP GSO, splitting it into consecutive `n`-byte datagrams emitted in one
+/// syscall — valid only when the socket reports `max_gso_segments() > 1`.
+///
+/// [`AsyncUdpSocket::poll_send`]: super::AsyncUdpSocket::poll_send
+pub use quinn_udp::Transmit;
+
+/// ECN codepoint carried on [`Transmit::ecn`]. Build one from the raw two bits with
+/// [`EcnCodepoint::from_bits`].
+///
+/// Re-exported from `quinn-udp`, since constructing a [`Transmit`] requires naming it.
+pub use quinn_udp::EcnCodepoint;
 
 // ── Mutex ─────────────────────────────────────────────────────────────────────
 
@@ -317,110 +339,6 @@ pub fn broadcast_channel<T: Clone>(capacity: usize) -> BroadcastSender<T> {
     BroadcastSender {
         tx,
         inactive: rx.deactivate(),
-    }
-}
-
-// ── UDP GSO/GRO batching (over `quinn-udp`) ───────────────────────────────────
-//
-// Before `AsyncUdpSocket` was poll-based this could not be shared: the readiness *loop* was
-// interleaved with the syscall (`try_io` + `writable().await` for tokio, `write_with(..).await`
-// for smol), so both runtimes carried near-identical copies. Each is now a readiness poll
-// plus a call into here.
-//
-// An out-of-tree runtime can use `UdpBatchState` directly to get batching rather than
-// falling back to the `AsyncUdpSocket` defaults of one datagram per syscall. Note that
-// `UdpSockRef` is re-exported below, so callers need no direct `quinn-udp` dependency — but
-// this ties part of the crate's public API to `quinn-udp`'s major version.
-
-/// Borrowed handle to a socket, as required by the batching syscalls.
-///
-/// Re-exported from `quinn-udp`. Build one with `UdpSockRef::from(&sock)` for any socket
-/// implementing the platform's raw-fd/socket trait.
-pub use quinn_udp::UdpSockRef;
-
-/// Per-socket GSO/GRO capability state, established once at wrap time.
-pub struct UdpBatchState {
-    inner: quinn_udp::UdpSocketState,
-}
-
-impl std::fmt::Debug for UdpBatchState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UdpBatchState")
-            .field("max_gso_segments", &self.max_gso_segments())
-            .field("gro_segments", &self.max_gro_segments())
-            .finish()
-    }
-}
-
-impl UdpBatchState {
-    /// Probe and enable UDP GSO/GRO (plus ECN and MTU options) on `sock`.
-    ///
-    /// A one-time reconfiguration: plain sends keep working, but the receive path must go
-    /// through [`try_recv`](Self::try_recv) to decode GRO-coalesced buffers.
-    pub fn new(sock: UdpSockRef<'_>) -> io::Result<Self> {
-        Ok(Self {
-            inner: quinn_udp::UdpSocketState::new(sock)?,
-        })
-    }
-
-    /// Maximum datagrams one [`try_send`](Self::try_send) may emit in a single syscall.
-    pub fn max_gso_segments(&self) -> usize {
-        self.inner.max_gso_segments()
-    }
-
-    /// Maximum datagrams the kernel may coalesce into one [`try_recv`](Self::try_recv).
-    pub fn max_gro_segments(&self) -> usize {
-        self.inner.gro_segments()
-    }
-
-    /// Send `buf` to `target` in one syscall, segmented at `segment_size` when non-zero.
-    ///
-    /// Non-blocking: returns [`io::ErrorKind::WouldBlock`] if the socket is not writable,
-    /// which the caller translates into `Poll::Pending` after arming its own readiness.
-    /// Returns the number of payload bytes accepted.
-    pub fn try_send(
-        &self,
-        sock: UdpSockRef<'_>,
-        buf: &[u8],
-        segment_size: usize,
-        target: SocketAddr,
-        ecn: Option<u8>,
-    ) -> io::Result<usize> {
-        let transmit = quinn_udp::Transmit {
-            destination: target,
-            ecn: ecn.and_then(quinn_udp::EcnCodepoint::from_bits),
-            contents: buf,
-            // `0` means "no segmentation": hand the whole buffer over as one datagram
-            // rather than asking the kernel to shred it into 0-byte segments.
-            segment_size: (segment_size != 0).then_some(segment_size),
-            src_ip: None,
-        };
-        self.inner.send(sock, &transmit)?;
-        Ok(buf.len())
-    }
-
-    /// Receive into `buf` in one syscall, decoding any GRO coalescing.
-    ///
-    /// Non-blocking: returns [`io::ErrorKind::WouldBlock`] when nothing is queued.
-    pub fn try_recv(&self, sock: UdpSockRef<'_>, buf: &mut [u8]) -> io::Result<GroRecv> {
-        let mut meta = [quinn_udp::RecvMeta::default(); 1];
-        let mut bufs = [std::io::IoSliceMut::new(buf)];
-        let msgs = self.inner.recv(sock, &mut bufs, &mut meta)?;
-        if msgs == 0 {
-            return Err(io::ErrorKind::WouldBlock.into());
-        }
-        let m = &meta[0];
-        Ok(GroRecv {
-            len: m.len,
-            // `stride == 0` would make de-segmentation divide by zero; a lone datagram
-            // reports its own length as the stride.
-            stride: if m.stride == 0 {
-                m.len.max(1)
-            } else {
-                m.stride
-            },
-            peer_addr: m.addr,
-        })
     }
 }
 
