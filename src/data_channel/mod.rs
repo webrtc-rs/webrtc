@@ -718,44 +718,11 @@ mod tests {
 
     #[test]
     fn drop_removes_event_sender() {
-        use crate::peer_connection::PeerConnectionEventHandler;
-        use crate::runtime::{Notify, channel, default_runtime};
-        use rtc::peer_connection::RTCPeerConnectionBuilder;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-        use std::sync::atomic::AtomicBool;
-
-        #[derive(Clone)]
-        struct DummyHandler;
-
-        unsafe impl Send for DummyHandler {}
-        unsafe impl Sync for DummyHandler {}
-
-        #[async_trait::async_trait]
-        impl PeerConnectionEventHandler for DummyHandler {}
+        use crate::peer_connection::new_test_peer_connection;
+        use crate::runtime::{block_on, channel};
 
         block_on(async {
-            let core = RTCPeerConnectionBuilder::new().build().unwrap();
-            let runtime = default_runtime().expect("test requires a runtime feature");
-            let handler: Arc<dyn PeerConnectionEventHandler> = Arc::new(DummyHandler);
-            let (driver_event_tx, _driver_event_rx) =
-                channel::<crate::peer_connection::driver::PeerConnectionDriverEvent>(1);
-
-            let inner = Arc::new(PeerConnectionRef {
-                core: Mutex::new(core),
-                runtime,
-                handler,
-                driver_event_tx,
-                write_pending: AtomicBool::new(false),
-                write_backpressure: AtomicUsize::new(0),
-                closing: AtomicBool::new(false),
-                data_channel_send_buffer_limit: usize::MAX,
-                data_channel_backpressure: Notify::new(),
-                data_channel_events_tx: Mutex::new(HashMap::new()),
-                track_remote_events_tx: Mutex::new(HashMap::new()),
-                track_local_events_tx: Mutex::new(HashMap::new()),
-                rtp_transceivers: Mutex::new(HashMap::new()),
-            });
+            let (inner, _driver_event_rx) = new_test_peer_connection().await;
 
             let channel_id = 0;
             let (evt_tx, evt_rx) = channel::<DataChannelEvent>(1);

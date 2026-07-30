@@ -1070,6 +1070,8 @@ where
             data_channels.insert(channel_id, evt_tx);
         }
 
+        self.inner.wake_writes().await;
+
         Ok(Arc::new(DataChannelImpl::new(
             channel_id,
             self.inner.clone(),
@@ -1239,5 +1241,74 @@ where
     async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport {
         let mut core = self.inner.core.lock().await;
         core.get_stats(now, selector)
+    }
+}
+
+#[cfg(test)]
+pub(crate) use tests::new_test_peer_connection;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::{block_on, channel, default_runtime, timeout};
+    use rtc::peer_connection::RTCPeerConnectionBuilder;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use std::time::Duration;
+
+    #[derive(Clone)]
+    struct DummyHandler;
+
+    #[async_trait::async_trait]
+    impl PeerConnectionEventHandler for DummyHandler {}
+
+    pub(crate) async fn new_test_peer_connection() -> (
+        Arc<PeerConnectionRef>,
+        crate::runtime::Receiver<PeerConnectionDriverEvent>,
+    ) {
+        let core = RTCPeerConnectionBuilder::new().build().unwrap();
+        let runtime = default_runtime().expect("test requires a runtime feature");
+        let handler: Arc<dyn PeerConnectionEventHandler> = Arc::new(DummyHandler);
+        let (driver_event_tx, driver_event_rx) = channel::<PeerConnectionDriverEvent>(1);
+
+        let inner = Arc::new(PeerConnectionRef {
+            core: Mutex::new(core),
+            runtime,
+            handler,
+            driver_event_tx,
+            write_pending: AtomicBool::new(false),
+            write_backpressure: AtomicUsize::new(0),
+            closing: AtomicBool::new(false),
+            data_channel_send_buffer_limit: usize::MAX,
+            data_channel_backpressure: crate::runtime::Notify::new(),
+            data_channel_events_tx: Mutex::new(HashMap::new()),
+            track_remote_events_tx: Mutex::new(HashMap::new()),
+            track_local_events_tx: Mutex::new(HashMap::new()),
+            rtp_transceivers: Mutex::new(HashMap::new()),
+        });
+
+        (inner, driver_event_rx)
+    }
+
+    #[test]
+    fn create_data_channel_wakes_driver() {
+        block_on(async {
+            let (inner, mut driver_event_rx) = new_test_peer_connection().await;
+
+            let pc = PeerConnectionImpl {
+                inner,
+                driver_handle: Mutex::new(None),
+                dedicated_reactor: false,
+            };
+
+            let _dc = pc.create_data_channel("test", None).await.unwrap();
+
+            let event = timeout(Duration::from_secs(1), driver_event_rx.recv())
+                .await
+                .expect("driver should be woken within 1s")
+                .expect("driver event channel should not be closed");
+            assert!(matches!(event, PeerConnectionDriverEvent::WriteNotify));
+        });
     }
 }
