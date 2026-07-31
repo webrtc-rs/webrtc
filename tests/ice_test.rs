@@ -6,7 +6,7 @@ use rtc::stun::attributes::{ATTR_NONCE, ATTR_REALM, ATTR_USERNAME};
 use rtc::stun::error_code::CODE_UNAUTHORIZED;
 use rtc::stun::message::{
     CLASS_ERROR_RESPONSE, CLASS_SUCCESS_RESPONSE, Getter, METHOD_ALLOCATE,
-    METHOD_CREATE_PERMISSION, Message as StunMessage, MessageType,
+    METHOD_CREATE_PERMISSION, METHOD_REFRESH, Message as StunMessage, MessageType,
 };
 use rtc::stun::textattrs::{Nonce, Realm, Username};
 use rtc::turn::proto::lifetime::Lifetime;
@@ -79,10 +79,15 @@ impl PeerConnectionEventHandler for CandidateTypeTracker {
     }
 }
 
+/// Minimal TURN server for the gathering tests.
+///
+/// `username_tx` reports `(method, username)` for every authenticated request that carries
+/// a credential, so a test can tell *how* a credential reached the server — an `Allocate`
+/// for a fresh allocation, or a `Refresh` re-signing an existing one (issue #835).
 async fn run_mock_turn_server(
     turn_socket: Arc<dyn AsyncUdpSocket>,
     relay_addr: SocketAddr,
-    username_tx: Option<Sender<String>>,
+    username_tx: Option<Sender<(&'static str, String)>>,
 ) {
     let mut buf = vec![0u8; 2048];
     loop {
@@ -99,16 +104,15 @@ async fn run_mock_turn_server(
         let response = match msg.typ.method {
             METHOD_ALLOCATE => {
                 if msg.get(ATTR_NONCE).is_ok() {
-                    if let Some(username_tx) = &username_tx {
-                        let mut username = Username::new(ATTR_USERNAME, String::new());
-                        if username.get_from(&msg).is_ok() {
-                            let _ = username_tx.try_send(username.text);
-                        }
-                    }
+                    report_username(&username_tx, "allocate", &msg);
                     build_turn_allocate_success(msg.transaction_id, relay_addr)
                 } else {
                     build_turn_allocate_unauthorized(msg.transaction_id)
                 }
+            }
+            METHOD_REFRESH => {
+                report_username(&username_tx, "refresh", &msg);
+                build_turn_refresh_success(msg.transaction_id)
             }
             METHOD_CREATE_PERMISSION => build_turn_create_permission_success(msg.transaction_id),
             _ => continue,
@@ -118,6 +122,30 @@ async fn run_mock_turn_server(
             break;
         }
     }
+}
+
+fn report_username(
+    username_tx: &Option<Sender<(&'static str, String)>>,
+    method: &'static str,
+    msg: &StunMessage,
+) {
+    if let Some(tx) = username_tx {
+        let mut username = Username::new(ATTR_USERNAME, String::new());
+        if username.get_from(msg).is_ok() {
+            let _ = tx.try_send((method, username.text.clone()));
+        }
+    }
+}
+
+fn build_turn_refresh_success(transaction_id: rtc::stun::message::TransactionId) -> StunMessage {
+    let mut msg = StunMessage::new();
+    msg.build(&[
+        Box::new(transaction_id),
+        Box::new(MessageType::new(METHOD_REFRESH, CLASS_SUCCESS_RESPONSE)),
+        Box::new(Lifetime(Duration::from_secs(600))),
+    ])
+    .expect("failed to build TURN refresh success response");
+    msg
 }
 
 fn build_turn_allocate_unauthorized(
@@ -651,11 +679,15 @@ fn test_set_configuration_updates_turn_credentials_on_ice_restart() {
         timeout(Duration::from_secs(5), gathering_rx.recv())
             .await
             .expect("Timed out waiting for initial relay gathering");
-        let initial_username = timeout(Duration::from_secs(5), username_rx.recv())
-            .await
-            .expect("Timed out waiting for initial authenticated Allocate")
-            .expect("TURN username channel closed");
-        assert_eq!(initial_username, "username-a");
+        let (initial_method, initial_username) =
+            timeout(Duration::from_secs(5), username_rx.recv())
+                .await
+                .expect("Timed out waiting for initial authenticated Allocate")
+                .expect("TURN username channel closed");
+        assert_eq!(
+            (initial_method, initial_username.as_str()),
+            ("allocate", "username-a")
+        );
 
         let new_config = RTCConfigurationBuilder::new()
             .with_ice_servers(vec![RTCIceServer {
@@ -670,11 +702,24 @@ fn test_set_configuration_updates_turn_credentials_on_ice_restart() {
             .expect("Failed to update ICE server configuration");
         pc.restart_ice().await.expect("Failed to restart ICE");
 
-        let restarted_username = timeout(Duration::from_secs(5), username_rx.recv())
-            .await
-            .expect("Timed out waiting for restarted authenticated Allocate")
-            .expect("TURN username channel closed");
-        assert_eq!(restarted_username, "username-b");
+        // The rotated credential must reach the server — but as a **Refresh** re-signing the
+        // existing allocation, not a second Allocate. An allocation is a 5-tuple resource
+        // independent of the credential that created it, and `local_addrs` is fixed at
+        // relayer construction, so re-Allocating here would reuse the same 5-tuple and a
+        // conforming server would reject it with 437 (RFC 5766 §6.2) — issue #835. This mock
+        // answers every Allocate with success, so the method assertion is what guards it;
+        // `turn_credential_rotation.rs` covers the same property against a real server.
+        let (restarted_method, restarted_username) =
+            timeout(Duration::from_secs(5), username_rx.recv())
+                .await
+                .expect("Timed out waiting for the rotated credential to reach the server")
+                .expect("TURN username channel closed");
+        assert_eq!(
+            (restarted_method, restarted_username.as_str()),
+            ("refresh", "username-b"),
+            "a pure credential rotation must re-sign the existing allocation with a Refresh, \
+             not re-Allocate on the same 5-tuple (issue #835)"
+        );
         timeout(Duration::from_secs(5), gathering_rx.recv())
             .await
             .expect("Timed out waiting for restarted relay gathering");
