@@ -2,9 +2,9 @@ name: cargo
 
 on:
   push:
-    branches: [master, v0.17.x]
+    branches: [ master, v0.17.x ]
   pull_request:
-    branches: [master, v0.17.x]
+    branches: [ master, v0.17.x ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,11 +14,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build
+  build-os:
+    name: Build (${{ matrix.os }})
     strategy:
       matrix:
-        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+        os: [ 'ubuntu-latest', 'macos-latest', 'windows-latest' ]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -26,6 +26,31 @@ jobs:
           submodules: recursive
       - name: Build
         run: cargo build --verbose
+
+  build-features:
+    # The runtime features are additive and each only decides whether a built-in `Runtime`
+    # type exists, so a build with any one of them — or with none at all — must compile.
+    # `--no-default-features` with no runtime is the configuration an application supplying
+    # its own `Runtime` uses; nothing in the library may reach for a built-in.
+    #
+    # Feature resolution is platform-independent, so one OS is enough here; the `build` job
+    # above still covers Linux/macOS/Windows for the default feature set.
+    name: Build (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - '--no-default-features'
+          - '--no-default-features --features runtime-tokio'
+          - '--no-default-features --features runtime-smol'
+          - '--no-default-features --features runtime-mock'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Build
+        run: cargo build --verbose ${{ matrix.features }}
 
   test:
     name: Test
