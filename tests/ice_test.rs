@@ -355,8 +355,8 @@ fn test_automatic_host_candidate_gathering() {
 fn test_stun_gathering_with_google_stun() {
     block_on(async {
         env_logger::builder()
-            .filter_level(log::LevelFilter::Trace)
-            .is_test(false)
+            .filter_level(log::LevelFilter::Info)
+            .is_test(true)
             .try_init()
             .ok();
 
