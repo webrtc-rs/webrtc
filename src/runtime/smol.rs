@@ -36,8 +36,8 @@ impl super::JoinHandle for SmolJoinHandle {
 
     fn is_finished(&self) -> bool {
         // Once detached the task is untracked here (treated as finished); otherwise
-        // report the underlying task's completion. The reactor-pool teardown relies
-        // on this to wait for a driver task to actually stop.
+        // report the underlying task's completion. `PeerConnection`'s drop path polls
+        // this to wait, bounded, for the driver task to actually stop.
         self.0
             .lock()
             .unwrap()

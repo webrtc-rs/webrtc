@@ -145,8 +145,9 @@ impl Runtime for TokioRuntime {
         sock.set_nonblocking(true)?;
         let io = ::tokio::net::UdpSocket::from_std(sock)?;
         // Probe + enable UDP GSO/GRO (and ECN/MTU options) on the socket. This is a
-        // one-time reconfiguration; `send_to`/`recv_from` keep working, but the recv
-        // path must now decode GRO-coalesced buffers via `stride`.
+        // one-time reconfiguration of the socket itself: plain sends still work, but a
+        // receive may now return several datagrams coalesced into one buffer, so the read
+        // path has to de-segment by `stride`.
         let batch = ::quinn_udp::UdpSocketState::new(::quinn_udp::UdpSockRef::from(&io))?;
         Ok(Arc::new(UdpSocket {
             io: Arc::new(io),

@@ -44,8 +44,8 @@
 //! [`poll_send`](AsyncUdpSocket::poll_send) and [`poll_recv`](AsyncUdpSocket::poll_recv)
 //! are synchronous and readiness-driven, mirroring `quinn`'s socket trait. Callers on the
 //! hot path (the peer-connection driver) poll them directly and allocate nothing per
-//! datagram — including the batched GSO/GRO paths, which have no boxed-future wrappers at
-//! all. The two remaining `async` socket methods are single-datagram conveniences for
+//! datagram — including the batched send and receive paths, which have no boxed-future
+//! wrappers at all. The two `async` socket methods are single-datagram conveniences for
 //! control-plane use.
 
 #![allow(clippy::type_complexity)]
@@ -249,12 +249,12 @@ pub async fn timeout<T>(
 /// to discard.
 ///
 /// An implementor supplies [`local_addr`](Self::local_addr) and the two poll primitives;
-/// everything else is defaulted. The remaining `async` methods
-/// ([`send_to`](Self::send_to), [`recv_from`](Self::recv_from)) are single-datagram
-/// conveniences for control-plane use, written over the primitives — they each box a
-/// future, so the packet path polls instead. Batched send (GSO) and batched receive (GRO)
-/// have no convenience wrappers by design: set `Transmit::segment_size` for `poll_send`,
-/// and read [`RecvMeta::stride`] from `poll_recv`.
+/// everything else is defaulted. The two `async` methods ([`send_to`](Self::send_to),
+/// [`recv_from`](Self::recv_from)) are single-datagram conveniences for control-plane use,
+/// written over the primitives — they each box a future, so the packet path polls instead.
+/// Batching has no convenience wrappers by design: set `Transmit::segment_size` for
+/// `poll_send`, and on the receive side pass more than one buffer to `poll_recv` and read
+/// [`RecvMeta::stride`] from each message it fills.
 pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     /// Get the local address this socket is bound to
     fn local_addr(&self) -> io::Result<SocketAddr>;
@@ -310,9 +310,10 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
         1
     }
 
-    /// Maximum number of datagrams the kernel may coalesce into one
-    /// [`poll_recv`](Self::poll_recv) via UDP GRO. Returns `1` when GRO is
-    /// unavailable. Used to size receive buffers.
+    /// Maximum number of datagrams the kernel may coalesce into a **single message** via
+    /// UDP GRO — not into a whole [`poll_recv`](Self::poll_recv) call, which may return up
+    /// to [`BATCH_SIZE`] messages. Returns `1` when GRO is unavailable. Used to size each
+    /// receive buffer.
     fn max_gro_segments(&self) -> usize {
         1
     }

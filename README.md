@@ -115,6 +115,7 @@ use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCConfigurationBuilder, RTCIceServer, RTCPeerConnectionIceEvent,
 };
+use webrtc::runtime::TokioRuntime;
 
 // 1. Implement the PeerConnectionEventHandler trait to handle events
 #[derive(Clone)]
@@ -137,9 +138,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }])
         .build();
 
-    // 3. Build the PeerConnection — the background driver starts here
+    // 3. Build the PeerConnection — the background driver starts here.
+    //    The runtime is a value, injected per connection: swap `TokioRuntime` for
+    //    `SmolRuntime`, or for your own `Runtime` impl, and nothing else changes.
+    //    (Omit `with_runtime` entirely and `build()` uses the compiled-in default.)
     let pc = PeerConnectionBuilder::new()
         .with_configuration(config)
+        .with_runtime(Arc::new(TokioRuntime))
         .with_handler(Arc::new(MyHandler))
         .with_udp_addrs(vec!["0.0.0.0:0"])
         .build()

@@ -10,8 +10,9 @@
 //!    what keeps that trait object-safe: a generic method such as `fn channel<T>(&self, …)`
 //!    could not be called through `dyn Runtime`.
 //!
-//! 2. **UDP socket types** — [`Transmit`], [`RecvMeta`], [`EcnCodepoint`], [`UdpSockRef`]
-//!    and [`UdpSocketState`], re-exported from `quinn-udp`. The first two appear in
+//! 2. **UDP socket types** — [`Transmit`], [`RecvMeta`], [`EcnCodepoint`], [`UdpSockRef`],
+//!    [`UdpSocketState`] and [`BATCH_SIZE`], re-exported from `quinn-udp`. The first two
+//!    appear in
 //!    [`AsyncUdpSocket`](super::AsyncUdpSocket)'s signatures, so every runtime must be able
 //!    to name them; the rest are what a runtime needs to enable GSO/GRO batching. Nothing
 //!    is wrapped — the built-in runtimes drive `UdpSocketState` directly and an out-of-tree
@@ -72,14 +73,19 @@ pub use quinn_udp::BATCH_SIZE;
 /// `poll_recv`. Its syscalls are synchronous and non-blocking, so the only runtime-specific
 /// part is readiness, which each socket implementation supplies around them.
 ///
-/// Two things an implementation must handle. `recv` is a scatter/gather API returning a
-/// message count, so adapting it to the single-datagram shape
-/// [`AsyncUdpSocket::poll_recv`] returns means passing one-element buffer and metadata
-/// arrays, treating a count of `0` as "nothing ready", and ensuring the reported `stride`
-/// is at least 1 — `quinn-udp` sets `stride == len`, which is `0` for a zero-length
-/// datagram and would make de-segmentation divide by zero. And it implements no `Debug`, so
-/// a socket type holding one cannot derive `Debug` and must write the impl by hand to
-/// satisfy [`AsyncUdpSocket`](super::AsyncUdpSocket)'s supertrait.
+/// `recv` takes the same `bufs`/`meta` slices [`AsyncUdpSocket::poll_recv`] does and returns
+/// the same message count, so an implementation forwards them rather than adapting them.
+/// Two things it must still handle:
+///
+/// * **A count of `0`** means nothing was ready — translate it into whatever the host
+///   runtime's readiness protocol expects, not into a received message.
+/// * **`stride` must be at least 1** for every filled message: `quinn-udp` mirrors `len`
+///   into `stride`, which is `0` for a zero-length datagram and would make de-segmentation
+///   divide by zero.
+///
+/// Note also that it implements no `Debug`, so a socket type holding one cannot derive
+/// `Debug` and must write the impl by hand to satisfy
+/// [`AsyncUdpSocket`](super::AsyncUdpSocket)'s supertrait.
 ///
 /// [`AsyncUdpSocket::poll_recv`]: super::AsyncUdpSocket::poll_recv
 pub use quinn_udp::UdpSocketState;
