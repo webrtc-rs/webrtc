@@ -90,6 +90,13 @@ use crate::media_stream::track_remote::TrackRemoteEvent;
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
+
+// Argument types for `SettingEngine`'s DTLS/SRTP setters. Re-exported because `rtc` is a
+// private dependency of this crate: without these, calling `set_dtls_cipher_suites` or
+// `set_srtp_protection_profiles` would force an application to add a second, version-locked
+// dependency just to name the enum it passes in.
+pub use rtc::dtls::cipher_suite::CipherSuiteId;
+pub use rtc::dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use rtc::media_stream::MediaStreamTrackId;
 pub use rtc::peer_connection::{
     RTCPeerConnection,
