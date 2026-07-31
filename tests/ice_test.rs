@@ -355,8 +355,8 @@ fn test_automatic_host_candidate_gathering() {
 fn test_stun_gathering_with_google_stun() {
     block_on(async {
         env_logger::builder()
-            .filter_level(log::LevelFilter::Info)
-            .is_test(true)
+            .filter_level(log::LevelFilter::Trace)
+            .is_test(false)
             .try_init()
             .ok();
 
@@ -404,7 +404,24 @@ fn test_stun_gathering_with_google_stun() {
         // Wait for both host and STUN candidates to arrive
         // We expect at least: 1 host + 1 srflx = 2 candidates
         println!("⏳ Waiting for ICE candidates...");
-        let _ = gathering_rx.recv().await;
+        // Bounded on purpose. This is the only await here that depends on the network: a
+        // srflx candidate needs UDP egress to stun.l.google.com:19302, and where that is
+        // blocked (some CI networks) gathering never reports Complete — see the note in
+        // `stun_gatherer::poll_event` about timed-out STUN transactions. An unbounded
+        // `recv()` then hangs the whole test binary instead of failing it, so cap the wait
+        // and report what did arrive.
+        if timeout(Duration::from_secs(30), gathering_rx.recv())
+            .await
+            .is_err()
+        {
+            let gathered: Vec<RTCIceCandidateType> = candidates.lock().await.clone();
+            panic!(
+                "timed out after 30s waiting for ICE gathering to complete; got {} \
+                 candidate(s) so far: {gathered:?}. A srflx candidate requires UDP egress \
+                 to stun.l.google.com:19302 — check the runner's network if this is CI.",
+                gathered.len()
+            );
+        }
 
         println!("⏳ ICE Gathering Completed!...");
 

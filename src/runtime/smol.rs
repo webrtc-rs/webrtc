@@ -278,7 +278,7 @@ impl AsyncUdpSocket for UdpSocket {
             // burst would stall waiting on an event that never comes.
             match self
                 .batch
-                .send(::quinn_udp::UdpSockRef::from(self.io.get_ref()), transmit)
+                .try_send(::quinn_udp::UdpSockRef::from(self.io.get_ref()), transmit)
                 .map(|()| transmit.contents.len())
             {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}

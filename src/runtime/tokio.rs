@@ -277,7 +277,7 @@ impl AsyncUdpSocket for UdpSocket {
             // and this loop would spin hot inside a single poll.
             match self.io.try_io(::tokio::io::Interest::WRITABLE, || {
                 self.batch
-                    .send(::quinn_udp::UdpSockRef::from(&self.io), transmit)
+                    .try_send(::quinn_udp::UdpSockRef::from(&self.io), transmit)
                     .map(|()| transmit.contents.len())
             }) {
                 // `try_io` has cleared the cached readiness, so the next iteration's
