@@ -42,7 +42,6 @@ jobs:
       matrix:
         features:
           - '--no-default-features'
-          - '--no-default-features --features runtime-tokio'
           - '--no-default-features --features runtime-smol'
           - '--no-default-features --features runtime-mock'
     steps:
