@@ -424,15 +424,35 @@ pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
 /// [`with_runtime`](crate::peer_connection::PeerConnectionBuilder::with_runtime); that
 /// also allows different connections in one process to use different runtimes.
 pub fn default_runtime() -> Option<Arc<dyn Runtime>> {
-    #[cfg(feature = "runtime-tokio")]
+    #[cfg(all(
+        feature = "runtime-tokio",
+        not(feature = "runtime-smol"),
+        not(feature = "runtime-mock")
+    ))]
     {
         Some(Arc::new(TokioRuntime))
     }
-    #[cfg(all(not(feature = "runtime-tokio"), feature = "runtime-smol"))]
+    #[cfg(all(
+        not(feature = "runtime-tokio"),
+        feature = "runtime-smol",
+        not(feature = "runtime-mock")
+    ))]
     {
         Some(Arc::new(SmolRuntime))
     }
-    #[cfg(not(any(feature = "runtime-tokio", feature = "runtime-smol")))]
+    #[cfg(all(
+        not(feature = "runtime-tokio"),
+        not(feature = "runtime-smol"),
+        feature = "runtime-mock"
+    ))]
+    {
+        Some(Arc::new(MockRuntime::new()))
+    }
+    #[cfg(not(any(
+        feature = "runtime-tokio",
+        feature = "runtime-smol",
+        feature = "runtime-mock"
+    )))]
     {
         None
     }

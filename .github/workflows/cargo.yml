@@ -27,29 +27,31 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
-  build-features:
-    # The runtime features are additive and each only decides whether a built-in `Runtime`
-    # type exists, so a build with any one of them — or with none at all — must compile.
-    # `--no-default-features` with no runtime is the configuration an application supplying
-    # its own `Runtime` uses; nothing in the library may reach for a built-in.
-    #
-    # Feature resolution is platform-independent, so one OS is enough here; the `build` job
-    # above still covers Linux/macOS/Windows for the default feature set.
-    name: Build (${{ matrix.features }})
+  build-no-features:
+    name: Build with No Default Features
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        features:
-          - '--no-default-features'
-          - '--no-default-features --features runtime-smol'
-          - '--no-default-features --features runtime-mock'
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Build
-        run: cargo build --verbose ${{ matrix.features }}
+        run: cargo build --verbose --no-default-features
+
+  test-features:
+    name: Unit Test with ${{ matrix.features }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - 'runtime-smol'
+          - 'runtime-mock'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Build
+        run: cargo test --lib --verbose --no-default-features --features ${{ matrix.features }}
 
   test:
     name: Test
