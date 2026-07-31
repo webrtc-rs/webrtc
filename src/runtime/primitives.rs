@@ -4,11 +4,19 @@
 //! never feature-gated. Two distinct groups live in this module, agnostic for different
 //! reasons:
 //!
-//! **Waker-driven primitives** — [`Mutex`], [`Notify`], [`channel`], [`broadcast_channel`].
+//! 1. **Waker-driven primitives** — [`Mutex`], [`Notify`], [`channel`], [`broadcast_channel`].
 //!    Plain data structures that never register with a reactor, so one implementation
 //!    suffices everywhere. Keeping them out of the [`Runtime`](super::Runtime) trait is also
 //!    what keeps that trait object-safe: a generic method such as `fn channel<T>(&self, …)`
 //!    could not be called through `dyn Runtime`.
+//!
+//! 2. **UDP socket types** — [`Transmit`], [`RecvMeta`], [`EcnCodepoint`], [`UdpSockRef`]
+//!    and [`UdpSocketState`], re-exported from `quinn-udp`. The first two appear in
+//!    [`AsyncUdpSocket`](super::AsyncUdpSocket)'s signatures, so every runtime must be able
+//!    to name them; the rest are what a runtime needs to enable GSO/GRO batching. Nothing
+//!    is wrapped — the built-in runtimes drive `UdpSocketState` directly and an out-of-tree
+//!    one can do the same — which does tie part of this crate's public API to `quinn-udp`'s
+//!    major version.
 //!
 //! Reactor-bound operations — task spawning, timers, socket readiness, DNS — are *not* here;
 //! they are injected through the [`Runtime`](super::Runtime) trait.
@@ -44,6 +52,37 @@ pub use quinn_udp::Transmit;
 ///
 /// Re-exported from `quinn-udp`, since constructing a [`Transmit`] requires naming it.
 pub use quinn_udp::EcnCodepoint;
+
+/// Borrowed handle to a socket, as required by the batching syscalls.
+///
+/// Re-exported from `quinn-udp`. Build one with `UdpSockRef::from(&sock)` for any socket
+/// implementing the platform's raw-fd/socket trait.
+pub use quinn_udp::UdpSockRef;
+
+/// Maximum messages one [`AsyncUdpSocket::poll_recv`](super::AsyncUdpSocket::poll_recv)
+/// call can return: 32 where the platform has `recvmmsg` or an equivalent, otherwise 1.
+///
+/// Re-exported from `quinn-udp`, for sizing the buffer and metadata arrays.
+pub use quinn_udp::BATCH_SIZE;
+
+/// Per-socket UDP GSO/GRO capability state, established once at wrap time.
+///
+/// Re-exported from `quinn-udp`: construct with `UdpSocketState::new(sock)` to probe and
+/// enable GSO/GRO (plus ECN and MTU options), then drive it from a socket's `poll_send` and
+/// `poll_recv`. Its syscalls are synchronous and non-blocking, so the only runtime-specific
+/// part is readiness, which each socket implementation supplies around them.
+///
+/// Two things an implementation must handle. `recv` is a scatter/gather API returning a
+/// message count, so adapting it to the single-datagram shape
+/// [`AsyncUdpSocket::poll_recv`] returns means passing one-element buffer and metadata
+/// arrays, treating a count of `0` as "nothing ready", and ensuring the reported `stride`
+/// is at least 1 — `quinn-udp` sets `stride == len`, which is `0` for a zero-length
+/// datagram and would make de-segmentation divide by zero. And it implements no `Debug`, so
+/// a socket type holding one cannot derive `Debug` and must write the impl by hand to
+/// satisfy [`AsyncUdpSocket`](super::AsyncUdpSocket)'s supertrait.
+///
+/// [`AsyncUdpSocket::poll_recv`]: super::AsyncUdpSocket::poll_recv
+pub use quinn_udp::UdpSocketState;
 
 // ── Mutex ─────────────────────────────────────────────────────────────────────
 

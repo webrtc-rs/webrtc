@@ -19,8 +19,8 @@ use crate::peer_connection::transports::{
 use crate::rtp_transceiver::rtp_receiver::RtpReceiverImpl;
 use crate::rtp_transceiver::{RtpReceiver, RtpTransceiverImpl};
 use crate::runtime::{
-    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, EcnCodepoint, Receiver, Sender, Transmit,
-    TrySendError, channel,
+    AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, EcnCodepoint, Receiver, RecvMeta, Sender,
+    Transmit, TrySendError, channel,
 };
 use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
@@ -43,6 +43,7 @@ use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::io::IoSliceMut;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -222,19 +223,30 @@ where
             .collect();
 
         // Helper function to create a recv future for a specific socket. Polls
-        // `poll_recv` directly rather than boxing a future per receive; one syscall may
-        // return several GRO-coalesced datagrams, and `stride` carries the per-datagram
+        // `poll_recv` directly rather than boxing a future per receive; one message may
+        // hold several GRO-coalesced datagrams, and `stride` carries the per-datagram
         // size for de-segmentation by the caller.
+        //
+        // TODO(perf): `poll_recv` accepts up to `BATCH_SIZE` messages per syscall
+        // (`recvmmsg` on Linux), but this asks for one. Widening it to a slab of
+        // `BATCH_SIZE` buffers would collapse the burst-drain loop below into a single
+        // syscall; the buffer bookkeeping is the only reason it is staged separately.
         let create_udp_recv_future = |idx: usize,
                                       local_addr: SocketAddr,
                                       socket: Arc<dyn AsyncUdpSocket>,
                                       mut buf: Vec<u8>| async move {
-            match futures::future::poll_fn(|cx| socket.poll_recv(cx, &mut buf)).await {
-                Ok(gro) => SocketRecvResult::Packet {
-                    n: gro.len,
-                    stride: gro.stride,
+            let mut meta = [RecvMeta::default(); 1];
+            let recv = futures::future::poll_fn(|cx| {
+                let mut bufs = [IoSliceMut::new(&mut buf)];
+                socket.poll_recv(cx, &mut bufs, &mut meta)
+            })
+            .await;
+            match recv {
+                Ok(_) => SocketRecvResult::Packet {
+                    n: meta[0].len,
+                    stride: meta[0].stride,
                     local_addr,
-                    peer_addr: gro.addr,
+                    peer_addr: meta[0].addr,
                     idx,
                     buf,
                 },
@@ -387,14 +399,23 @@ where
                                 //
                                 // Probes via `poll_once` on the poll-based primitive, so a
                                 // "nothing ready" answer — the common case that ends every
-                                // burst — costs no allocation. The previous
-                                // A boxed-future probe would allocate per attempt
-                                // just to discard it.
+                                // burst — costs no allocation. A boxed-future probe would
+                                // allocate per attempt just to discard it.
+                                //
+                                // TODO(perf): each probe is one syscall for one message.
+                                // On `recvmmsg` platforms a slab of `BATCH_SIZE` buffers
+                                // would drain the same burst in a single call.
                                 let mut burst = 0;
+                                let mut burst_meta = [RecvMeta::default(); 1];
                                 while burst < MAX_UDP_RECV_BURST {
-                                    match crate::runtime::poll_once(|cx| socket.poll_recv(cx, &mut burst_buf)) {
-                                        Some(Ok(gro)) => {
-                                            self.deliver_udp_batch(&burst_buf, gro.len, gro.stride, socket_local_addr, gro.addr).await;
+                                    let probe = crate::runtime::poll_once(|cx| {
+                                        let mut bufs = [IoSliceMut::new(&mut burst_buf)];
+                                        socket.poll_recv(cx, &mut bufs, &mut burst_meta)
+                                    });
+                                    match probe {
+                                        Some(Ok(_)) => {
+                                            let m = burst_meta[0];
+                                            self.deliver_udp_batch(&burst_buf, m.len, m.stride, socket_local_addr, m.addr).await;
                                             burst += 1;
                                         }
                                         _ => break, // would-block (pending) or error

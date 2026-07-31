@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::Future;
+use std::io::IoSliceMut;
 use std::task::{Context, Poll};
 use webrtc::runtime::{
     AsyncInterval, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, JoinHandle, RecvMeta, Runtime,
@@ -235,24 +236,33 @@ impl AsyncUdpSocket for MyUdpSocket {
         }
     }
 
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
+    fn poll_recv(
+        &self,
+        cx: &mut Context<'_>,
+        bufs: &mut [IoSliceMut<'_>],
+        meta: &mut [RecvMeta],
+    ) -> Poll<io::Result<usize>> {
+        // The minimal shape the trait allows: fill one buffer per call and return `Ok(1)`,
+        // as a platform without `recvmmsg` would. A production runtime would hand `bufs`
+        // and `meta` straight to `UdpSocketState::recv`, which fills up to `BATCH_SIZE` of
+        // them in one syscall.
         loop {
             match self.io.poll_readable(cx) {
                 Poll::Pending => return Poll::Pending,
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
                 Poll::Ready(Ok(())) => {}
             }
-            match self.io.get_ref().recv_from(buf) {
+            match self.io.get_ref().recv_from(&mut bufs[0]) {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 Err(e) => return Poll::Ready(Err(e)),
                 // No GRO: exactly one datagram, so `stride == len`. `RecvMeta` is
-                // `#[non_exhaustive]`, so fill in the default rather than using a literal.
+                // `#[non_exhaustive]`, so assign fields rather than using a literal.
                 Ok((len, peer_addr)) => {
-                    let mut meta = RecvMeta::default();
-                    meta.len = len;
-                    meta.stride = len.max(1);
-                    meta.addr = peer_addr;
-                    return Poll::Ready(Ok(meta));
+                    meta[0] = RecvMeta::default();
+                    meta[0].len = len;
+                    meta[0].stride = len.max(1);
+                    meta[0].addr = peer_addr;
+                    return Poll::Ready(Ok(1));
                 }
             }
         }

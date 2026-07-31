@@ -352,7 +352,7 @@ where
     /// clamped down to it.
     ///
     /// The value is handed to
-    /// [`Runtime::spawn_reactor`](crate::runtime::Runtime::spawn_reactor) when this
+    /// [`Runtime::spawn_reactor`] when this
     /// connection's driver is spawned, but each built-in runtime builds its pool **once**,
     /// lazily, on first use. Only the first dedicated-reactor connection's value therefore
     /// takes effect for the process — set it consistently across connections, or set it on

@@ -24,10 +24,12 @@
 //! Cargo features make built-in implementations available. They are **purely additive** —
 //! a feature only decides whether a type exists, never which primitives the library uses:
 //!
-//! * **`runtime-tokio` (default)**: [`TokioRuntime`]
-//! * **`runtime-smol`**: [`SmolRuntime`]
-//! * **`runtime-mock`**: [`MockRuntime`](mock::MockRuntime), a deterministic virtual-clock
-//!   runtime for tests.
+//! * **`runtime-tokio` (default)**: `TokioRuntime`
+//! * **`runtime-smol`**: `SmolRuntime`
+//! * **`runtime-mock`**: `MockRuntime`, a deterministic virtual-clock runtime for tests.
+//!
+//! Each type exists only when its feature is enabled, which is why they are named here
+//! rather than linked — a link would dangle in any build without that feature.
 //!
 //! Enabling several at once is safe, and one process may drive different connections on
 //! different runtimes. [`default_runtime`] returns the compiled-in default for callers
@@ -44,19 +46,20 @@
 //! hot path (the peer-connection driver) poll them directly and allocate nothing per
 //! datagram — including the batched GSO/GRO paths, which have no boxed-future wrappers at
 //! all. The two remaining `async` socket methods are single-datagram conveniences for
-//! control-plane use. Use [`poll_once`] to probe readiness without allocating.
+//! control-plane use.
 
 #![allow(clippy::type_complexity)]
 
+use std::io::IoSliceMut;
 use std::task::{Context, Poll};
 use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
 
 pub mod primitives;
 
 pub use primitives::{
-    BroadcastReceiver, BroadcastRecvError, BroadcastSendError, BroadcastSender, EcnCodepoint,
-    Mutex, Notify, Receiver, RecvMeta, SendError, Sender, Transmit, TryRecvError, TrySendError,
-    broadcast_channel, channel,
+    BATCH_SIZE, BroadcastReceiver, BroadcastRecvError, BroadcastSendError, BroadcastSender,
+    EcnCodepoint, Mutex, Notify, Receiver, RecvMeta, SendError, Sender, Transmit, TryRecvError,
+    TrySendError, UdpSockRef, UdpSocketState, broadcast_channel, channel,
 };
 
 pub(crate) const MAX_REACTOR_POOL_SIZE: usize = 1024;
@@ -272,11 +275,29 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     /// Returns the number of payload bytes accepted.
     fn poll_send(&self, cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>>;
 
-    /// Attempt to receive into `buf`, registering `cx`'s waker if no datagram is ready.
+    /// Attempt to receive up to `bufs.len()` messages, registering `cx`'s waker if none is
+    /// ready.
     ///
-    /// May return several datagrams coalesced by UDP GRO — see [`RecvMeta`] for how to
-    /// split them back apart.
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>>;
+    /// Fills `bufs[..n]` and `meta[..n]` and returns `n`, never more than
+    /// `bufs.len().min(meta.len())`. Two independent kinds of batching are in play:
+    ///
+    /// * **Multiple messages per syscall.** Where the platform offers `recvmmsg` (Linux) or
+    ///   an equivalent, one call returns up to [`BATCH_SIZE`] datagrams *from different
+    ///   peers*. Elsewhere `n` is always 1, so a caller must never assume more.
+    /// * **GRO coalescing within a message.** Each filled buffer may itself hold several
+    ///   consecutive same-flow datagrams — see [`RecvMeta::stride`].
+    ///
+    /// Implementations must report a `stride` of at least 1 for every filled message:
+    /// `quinn-udp` mirrors `len` into `stride`, which is `0` for a zero-length datagram and
+    /// would make de-segmentation divide by zero.
+    ///
+    /// A minimal implementation may fill only `bufs[0]` and return `Ok(1)`.
+    fn poll_recv(
+        &self,
+        cx: &mut Context<'_>,
+        bufs: &mut [IoSliceMut<'_>],
+        meta: &mut [RecvMeta],
+    ) -> Poll<io::Result<usize>>;
 
     /// Maximum number of segments a single [`poll_send`](Self::poll_send) call can emit in
     /// one syscall via UDP GSO. Returns `1` when GSO is unavailable (each segment then costs
@@ -315,13 +336,22 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     }
 
     /// Receive a single datagram from the socket.
+    ///
+    /// Convenience over [`poll_recv`](Self::poll_recv) for control-plane callers wanting one
+    /// datagram and no batching. It discards [`RecvMeta::stride`], so do not use it where
+    /// GRO coalescing is possible — the packet path polls instead.
     fn recv_from<'a>(
         &'a self,
         buf: &'a mut [u8],
     ) -> Pin<Box<dyn Future<Output = io::Result<(usize, SocketAddr)>> + Send + 'a>> {
         Box::pin(async move {
-            let gro = futures::future::poll_fn(|cx| self.poll_recv(cx, buf)).await?;
-            Ok((gro.len, gro.addr))
+            let mut meta = [RecvMeta::default(); 1];
+            futures::future::poll_fn(|cx| {
+                let mut bufs = [IoSliceMut::new(buf)];
+                self.poll_recv(cx, &mut bufs, &mut meta)
+            })
+            .await?;
+            Ok((meta[0].len, meta[0].addr))
         })
     }
 }
@@ -332,7 +362,11 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
 /// already queued without arming a wakeup, and **without allocating**. A
 /// `poll_fn(..).now_or_never()` idiom would box a future on every probe, including the
 /// common case where the answer is "nothing ready".
-pub fn poll_once<T>(f: impl FnOnce(&mut Context<'_>) -> Poll<T>) -> Option<T> {
+///
+/// Crate-internal: it is a generic poll utility with nothing WebRTC- or runtime-specific
+/// about it, and a runtime *implements* the socket traits rather than polling them, so
+/// there is no reason to put it in the public API.
+pub(crate) fn poll_once<T>(f: impl FnOnce(&mut Context<'_>) -> Poll<T>) -> Option<T> {
     let waker = std::task::Waker::noop();
     let mut cx = Context::from_waker(waker);
     match f(&mut cx) {
@@ -379,8 +413,9 @@ pub trait AsyncTcpStream: Send + Sync + Debug + 'static {
 
 /// Construct the compiled-in default runtime.
 ///
-/// Returns [`TokioRuntime`] when `runtime-tokio` is enabled, else [`SmolRuntime`] when
-/// `runtime-smol` is enabled, else `None`.
+/// Returns `TokioRuntime` when `runtime-tokio` is enabled, else `SmolRuntime` when
+/// `runtime-smol` is enabled, else `None`. (Named rather than linked: each type exists only
+/// under its own feature.)
 ///
 /// This is a convenience for callers with no runtime preference — it is **not** a
 /// registry, and there is no way to overwrite what it returns. To use a custom runtime,
@@ -456,20 +491,26 @@ mod default_impl_tests {
             Poll::Ready(Ok(transmit.contents.len()))
         }
 
-        fn poll_recv(&self, _cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
+        fn poll_recv(
+            &self,
+            _cx: &mut Context<'_>,
+            bufs: &mut [IoSliceMut<'_>],
+            meta: &mut [RecvMeta],
+        ) -> Poll<io::Result<usize>> {
             if self.never_ready {
                 return Poll::Pending;
             }
+            // Minimal implementation: one message per call, as a non-`recvmmsg` platform.
             let data = self.to_recv.lock().unwrap();
-            let n = data.len().min(buf.len());
-            buf[..n].copy_from_slice(&data[..n]);
-            // `RecvMeta` is `#[non_exhaustive]`: start from the default and fill fields in
-            // rather than using a struct literal, which is not permitted outside `quinn-udp`.
-            let mut meta = RecvMeta::default();
-            meta.len = n;
-            meta.stride = n.max(1);
-            meta.addr = "127.0.0.1:9".parse::<SocketAddr>().unwrap();
-            Poll::Ready(Ok(meta))
+            let n = data.len().min(bufs[0].len());
+            bufs[0][..n].copy_from_slice(&data[..n]);
+            // `RecvMeta` is `#[non_exhaustive]`: assign fields rather than using a struct
+            // literal, which is not permitted outside `quinn-udp`.
+            meta[0] = RecvMeta::default();
+            meta[0].len = n;
+            meta[0].stride = n.max(1);
+            meta[0].addr = "127.0.0.1:9".parse::<SocketAddr>().unwrap();
+            Poll::Ready(Ok(1))
         }
     }
 
@@ -506,8 +547,13 @@ mod default_impl_tests {
     fn poll_once_probes_without_blocking_or_allocating() {
         let ready = FakeUdp::default();
         let mut buf = [0u8; 8];
+        let mut meta = [RecvMeta::default(); 1];
         assert!(
-            poll_once(|cx| ready.poll_recv(cx, &mut buf)).is_some(),
+            poll_once(|cx| {
+                let mut bufs = [IoSliceMut::new(&mut buf)];
+                ready.poll_recv(cx, &mut bufs, &mut meta)
+            })
+            .is_some(),
             "ready socket yields a value"
         );
 
@@ -516,7 +562,11 @@ mod default_impl_tests {
             ..Default::default()
         };
         assert!(
-            poll_once(|cx| pending.poll_recv(cx, &mut buf)).is_none(),
+            poll_once(|cx| {
+                let mut bufs = [IoSliceMut::new(&mut buf)];
+                pending.poll_recv(cx, &mut bufs, &mut meta)
+            })
+            .is_none(),
             "pending socket yields None instead of parking"
         );
     }

@@ -293,31 +293,32 @@ impl AsyncUdpSocket for UdpSocket {
         }
     }
 
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
+    fn poll_recv(
+        &self,
+        cx: &mut Context<'_>,
+        bufs: &mut [IoSliceMut<'_>],
+        meta: &mut [RecvMeta],
+    ) -> Poll<io::Result<usize>> {
         loop {
             // Syscall first, for the same reason as `poll_send`: datagrams already queued in
             // the socket buffer produce no new readability event, so reading only after a
             // fresh event would leave them stranded and stall a burst.
-            // `UdpSocketState::recv` is a scatter/gather API returning a message count, so
-            // adapt it to the single-datagram shape `poll_recv` returns.
-            let mut meta = [RecvMeta::default(); 1];
-            let mut bufs = [std::io::IoSliceMut::new(&mut *buf)];
             match self.batch.recv(
                 ::quinn_udp::UdpSockRef::from(self.io.get_ref()),
-                &mut bufs,
-                &mut meta,
+                &mut *bufs,
+                &mut *meta,
             ) {
                 // Nothing queued: fall through and wait for a readability event.
                 Ok(0) => {}
-                Ok(_) => {
-                    // `RecvMeta` is `#[non_exhaustive]`, so return the one `recv` filled in,
-                    // normalizing only `stride`: it mirrors `len`, and a `0` there would make
-                    // de-segmentation divide by zero.
-                    let mut m = meta[0];
-                    if m.stride == 0 {
-                        m.stride = m.len.max(1);
+                Ok(n) => {
+                    // `quinn-udp` mirrors `len` into `stride`, so a zero-length datagram
+                    // reports `stride == 0` and would make de-segmentation divide by zero.
+                    for m in &mut meta[..n] {
+                        if m.stride == 0 {
+                            m.stride = m.len.max(1);
+                        }
                     }
-                    return Poll::Ready(Ok(m));
+                    return Poll::Ready(Ok(n));
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
                 Err(e) => return Poll::Ready(Err(e)),

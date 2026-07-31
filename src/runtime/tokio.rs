@@ -288,7 +288,12 @@ impl AsyncUdpSocket for UdpSocket {
         }
     }
 
-    fn poll_recv(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<RecvMeta>> {
+    fn poll_recv(
+        &self,
+        cx: &mut Context<'_>,
+        bufs: &mut [IoSliceMut<'_>],
+        meta: &mut [RecvMeta],
+    ) -> Poll<io::Result<usize>> {
         loop {
             match self.io.poll_recv_ready(cx) {
                 Poll::Pending => return Poll::Pending,
@@ -296,29 +301,25 @@ impl AsyncUdpSocket for UdpSocket {
                 Poll::Ready(Ok(())) => {}
             }
             // Via `try_io` for the same readiness-bookkeeping reason as `poll_send`.
+            let bufs = &mut *bufs;
+            let meta = &mut *meta;
             match self.io.try_io(::tokio::io::Interest::READABLE, || {
-                // `UdpSocketState::recv` is a scatter/gather API returning a message count,
-                // so adapt it to the single-datagram shape `poll_recv` returns.
-                let mut meta = [RecvMeta::default(); 1];
-                let mut bufs = [std::io::IoSliceMut::new(buf)];
-                let msgs = self.batch.recv(
-                    ::quinn_udp::UdpSockRef::from(&self.io),
-                    &mut bufs,
-                    &mut meta,
-                )?;
-                if msgs == 0 {
+                let n = self
+                    .batch
+                    .recv(::quinn_udp::UdpSockRef::from(&self.io), bufs, meta)?;
+                if n == 0 {
                     // Report unreadiness the way `try_io` expects, so it clears the cached
                     // readiness and the next `poll_recv_ready` parks the waker.
                     return Err(io::ErrorKind::WouldBlock.into());
                 }
-                // `RecvMeta` is `#[non_exhaustive]`, so return the one `recv` filled in,
-                // normalizing only `stride`: it mirrors `len`, and a `0` there would make
-                // de-segmentation divide by zero.
-                let mut m = meta[0];
-                if m.stride == 0 {
-                    m.stride = m.len.max(1);
+                // `quinn-udp` mirrors `len` into `stride`, so a zero-length datagram
+                // reports `stride == 0` and would make de-segmentation divide by zero.
+                for m in &mut meta[..n] {
+                    if m.stride == 0 {
+                        m.stride = m.len.max(1);
+                    }
                 }
-                Ok(m)
+                Ok(n)
             }) {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 other => return Poll::Ready(other),
