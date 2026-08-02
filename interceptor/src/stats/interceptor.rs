@@ -583,9 +583,7 @@ where
                 self.tx.send(Message::StatUpdate {
                     ssrc,
                     update: StatsUpdate::InboundSenderRerport {
-                        packets_and_bytes_sent: sr
-                            .sr_packets_sent
-                            .and_then(|ps| sr.sr_bytes_sent.map(|bs| (ps, bs))),
+                        packets_and_bytes_sent: sr.sr_packets_sent.zip(sr.sr_bytes_sent),
                         rtt_ms,
                     },
                 })

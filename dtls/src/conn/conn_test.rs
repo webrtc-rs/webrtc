@@ -493,7 +493,7 @@ async fn test_export_keying_material() -> Result<()> {
     assert_eq!(
         &keying_material, &expected_server_key,
         "ExportKeyingMaterial client export: expected ({:?}) actual ({:?})",
-        &expected_server_key, &keying_material,
+        expected_server_key, keying_material,
     );
 
     c.state.is_client = true;
@@ -502,7 +502,7 @@ async fn test_export_keying_material() -> Result<()> {
     assert_eq!(
         &keying_material, &expected_client_key,
         "ExportKeyingMaterial client export: expected ({:?}) actual ({:?})",
-        &expected_client_key, &keying_material,
+        expected_client_key, keying_material,
     );
 
     Ok(())
@@ -2321,7 +2321,7 @@ async fn test_multiple_hello_verify_request() -> Result<()> {
                     assert_eq!(
                         &client_hello.cookie, cookie,
                         "Wrong cookie {}, expected: {:?}, got: {:?}",
-                        i, &client_hello.cookie, cookie
+                        i, client_hello.cookie, cookie
                     );
                 }
                 _ => panic!("unexpected handshake message"),

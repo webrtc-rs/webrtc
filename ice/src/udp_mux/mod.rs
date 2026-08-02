@@ -131,7 +131,7 @@ impl UDPMuxDefault {
             Ok(_) => {
                 let (attr, found) = message.attributes.get(ATTR_USERNAME);
                 if !found {
-                    log::warn!("No username attribute in STUN message from {}", &addr);
+                    log::warn!("No username attribute in STUN message from {}", addr);
                     return None;
                 }
 
@@ -190,7 +190,7 @@ impl UDPMuxDefault {
 
                                 match conn {
                                     None => {
-                                        log::trace!("Dropping packet from {}", &addr);
+                                        log::trace!("Dropping packet from {}", addr);
                                     }
                                     Some(conn) => {
                                         if let Err(err) = conn.write_packet(&buffer[..len], addr).await {

@@ -37,7 +37,7 @@ const REMB_OFFSET: usize = 16;
 
 /// Keep a table of powers to units for fast conversion.
 const BIT_UNITS: [&str; 7] = ["b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"];
-const UNIQUE_IDENTIFIER: [u8; 4] = [b'R', b'E', b'M', b'B'];
+const UNIQUE_IDENTIFIER: [u8; 4] = *b"REMB";
 
 /// String prints the REMB packet in a human-readable format.
 impl fmt::Display for ReceiverEstimatedMaximumBitrate {
