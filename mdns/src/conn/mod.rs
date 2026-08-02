@@ -361,7 +361,7 @@ async fn run(
                         Err(e) => {
                             log::warn!(
                                 "Failed to get local interface to communicate with {}: {:?}",
-                                &src,
+                                src,
                                 e
                             );
                             continue;
