@@ -472,7 +472,7 @@ where
 /// # }
 /// ```
 #[async_trait::async_trait]
-pub trait PeerConnection: Send + Sync + 'static {
+pub trait PeerConnection: crate::sealed::Sealed + Send + Sync + 'static {
     /// Close the peer connection
     async fn close(&self) -> Result<()>;
     /// Create an SDP offer
@@ -860,6 +860,8 @@ where
         }
     }
 }
+
+impl<I> crate::sealed::Sealed for PeerConnectionImpl<I> where I: Interceptor + 'static {}
 
 #[async_trait::async_trait]
 impl<I> PeerConnection for PeerConnectionImpl<I>

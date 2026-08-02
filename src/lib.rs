@@ -115,6 +115,23 @@ pub mod peer_connection;
 pub mod rtp_transceiver;
 pub mod runtime;
 
+/// Private supertrait used to seal the traits this library alone implements.
+///
+/// [`PeerConnection`](peer_connection::PeerConnection),
+/// [`DataChannel`](data_channel::DataChannel), [`RtpSender`](rtp_transceiver::RtpSender),
+/// [`RtpReceiver`](rtp_transceiver::RtpReceiver) and
+/// [`RtpTransceiver`](rtp_transceiver::RtpTransceiver) describe objects that only `webrtc`
+/// can construct, so downstream implementations would be meaningless. Sealing them lets us
+/// add methods in a minor release instead of a major one — see `docs/semver.md`.
+///
+/// Extension points deliberately left open — [`Runtime`](runtime::Runtime), the socket and
+/// timer traits, [`PeerConnectionEventHandler`](peer_connection::PeerConnectionEventHandler)
+/// and the application-provided track traits — do not have this supertrait.
+pub(crate) mod sealed {
+    /// Implemented only by this crate's concrete types.
+    pub trait Sealed {}
+}
+
 /// Error and Result types
 ///
 /// Re-exports [`error::Error`] and [`error::Result`] from `rtc-shared` so that

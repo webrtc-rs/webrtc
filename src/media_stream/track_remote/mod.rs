@@ -43,6 +43,7 @@ use rtc::{rtcp, rtp};
 
 /// Events that can occur on a [`TrackRemote`].
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum TrackRemoteEvent {
     /// Fired when the track is opened and ready to receive packets.
     OnOpen(RTCTrackEventInit),

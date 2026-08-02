@@ -640,6 +640,10 @@ where
                     RTCDataChannelEvent::OnClose(id) => id,
                     RTCDataChannelEvent::OnBufferedAmountLow(id) => id,
                     RTCDataChannelEvent::OnBufferedAmountHigh(id) => id,
+                    _ => {
+                        warn!("Ignoring unknown RTCDataChannelEvent variant");
+                        return;
+                    }
                 };
 
                 if let RTCDataChannelEvent::OnOpen(_) = &evt {
@@ -686,6 +690,10 @@ where
                         RTCDataChannelEvent::OnBufferedAmountHigh(_) => {
                             evt_tx.try_send(DataChannelEvent::OnBufferedAmountHigh)
                         }
+                        _ => {
+                            warn!("Ignoring unknown RTCDataChannelEvent variant");
+                            return;
+                        }
                     };
                     if let Err(err) = result {
                         error!(
@@ -706,6 +714,10 @@ where
                     RTCTrackEvent::OnError(id) => id,
                     RTCTrackEvent::OnClosing(id) => id,
                     RTCTrackEvent::OnClose(id) => id,
+                    _ => {
+                        warn!("Ignoring unknown RTCTrackEvent variant");
+                        return;
+                    }
                 };
 
                 let mut pending_on_track = None;
@@ -809,6 +821,10 @@ where
                         RTCTrackEvent::OnClose(track_id) => {
                             (track_id, evt_tx.try_send(TrackRemoteEvent::OnEnded))
                         }
+                        _ => {
+                            warn!("Ignoring unknown RTCTrackEvent variant");
+                            return;
+                        }
                     };
                     if let Err(err) = result {
                         error!(
@@ -823,6 +839,9 @@ where
                 if let Some(track_remote) = pending_on_track {
                     self.inner.handler.on_track(track_remote).await;
                 }
+            }
+            _ => {
+                warn!("Ignoring unknown RTCPeerConnectionEvent variant");
             }
         }
     }
@@ -900,6 +919,9 @@ where
                 } else {
                     error!("Failed to route RtcpPacket: no track for {}", track_id);
                 }
+            }
+            _ => {
+                warn!("Ignoring unknown RTCMessage variant");
             }
         }
     }

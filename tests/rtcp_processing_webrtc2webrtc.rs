@@ -363,8 +363,9 @@ fn test_rtcp_processing_webrtc2webrtc() {
             let poll_track = Arc::clone(&video_track);
             runtime.spawn(Box::pin(async move {
                 while let Some(evt) = poll_track.poll().await {
-                    let TrackLocalEvent::OnRtcpPacket(_packets) = evt;
-                    local_rtcp_count.fetch_add(1, Ordering::SeqCst);
+                    if let TrackLocalEvent::OnRtcpPacket(_packets) = evt {
+                        local_rtcp_count.fetch_add(1, Ordering::SeqCst);
+                    }
                 }
             }));
         }

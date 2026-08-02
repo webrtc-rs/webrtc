@@ -63,7 +63,7 @@ use std::time::Instant;
 
 /// An RTP Receiver that receives media from a remote peer.
 #[async_trait::async_trait]
-pub trait RtpReceiver: Send + Sync + 'static {
+pub trait RtpReceiver: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the unique ID of the RTP receiver.
     fn id(&self) -> RTCRtpReceiverId;
     /// Returns the remote track associated with this receiver.
@@ -82,7 +82,7 @@ pub trait RtpReceiver: Send + Sync + 'static {
 
 /// An RTP Sender that sends media to a remote peer.
 #[async_trait::async_trait]
-pub trait RtpSender: Send + Sync + 'static {
+pub trait RtpSender: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the unique ID of the RTP sender.
     fn id(&self) -> RTCRtpSenderId;
     /// Returns the local track associated with this sender.
@@ -107,7 +107,7 @@ pub trait RtpSender: Send + Sync + 'static {
 
 /// An RTP Transceiver that represents a combination of an RTP Sender and Receiver.
 #[async_trait::async_trait]
-pub trait RtpTransceiver: Send + Sync + 'static {
+pub trait RtpTransceiver: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the unique ID of the transceiver.
     fn id(&self) -> RTCRtpTransceiverId;
     /// Returns the media ID (MID) assigned to this transceiver.
@@ -205,6 +205,8 @@ where
         *receiver = rtp_receiver;
     }
 }
+
+impl<I> crate::sealed::Sealed for RtpTransceiverImpl<I> where I: Interceptor + 'static {}
 
 #[async_trait::async_trait]
 impl<I> RtpTransceiver for RtpTransceiverImpl<I>

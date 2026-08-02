@@ -107,7 +107,7 @@ impl PeerConnectionEventHandler for Handler {
             .unwrap_or_else(|| match kind {
                 RtpCodecKind::Audio => MIME_TYPE_OPUS.to_lowercase(),
                 RtpCodecKind::Video if self.is_hevc => MIME_TYPE_HEVC.to_lowercase(),
-                RtpCodecKind::Video | RtpCodecKind::Unspecified => MIME_TYPE_H264.to_lowercase(),
+                _ => MIME_TYPE_H264.to_lowercase(),
             });
 
         // Send PLI every 3 seconds for video tracks to request keyframes

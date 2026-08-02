@@ -169,6 +169,11 @@ impl Notify {
 pub struct SendError<T>(pub T);
 
 /// Error returned by [`Sender::try_send`].
+///
+/// Deliberately left exhaustive (see `docs/semver.md`): "at capacity" and "closed" are the
+/// complete set of reasons a non-blocking send can fail, and callers routinely branch on
+/// them — retry on [`Full`](Self::Full), give up on [`Disconnected`](Self::Disconnected).
+/// `std`, `tokio`, and `async-channel` all leave their equivalents exhaustive.
 #[derive(Debug)]
 pub enum TrySendError<T> {
     /// The channel is at capacity.
@@ -178,6 +183,8 @@ pub enum TrySendError<T> {
 }
 
 /// Error returned by [`Receiver::try_recv`].
+///
+/// Deliberately left exhaustive — see [`TrySendError`].
 #[derive(Debug)]
 pub enum TryRecvError {
     /// No message is currently available.
@@ -274,6 +281,8 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 pub struct BroadcastSendError<T>(pub T);
 
 /// Error returned when a broadcast receive fails.
+///
+/// Deliberately left exhaustive — see [`TrySendError`].
 #[derive(Debug)]
 pub enum BroadcastRecvError {
     /// The channel is closed and no senders remain.

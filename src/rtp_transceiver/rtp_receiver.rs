@@ -40,6 +40,8 @@ where
     }
 }
 
+impl<I> crate::sealed::Sealed for RtpReceiverImpl<I> where I: Interceptor + 'static {}
+
 #[async_trait::async_trait]
 impl<I> RtpReceiver for RtpReceiverImpl<I>
 where
