@@ -54,12 +54,8 @@ impl UdpConnMap {
         let port_map = self.port_map.lock().await;
         if let Some(conns) = port_map.get(&addr.port()) {
             if addr.ip().is_unspecified() {
-                // pick the first one appears in the iteration
-                if let Some(c) = conns.first() {
-                    return Some(Arc::clone(c));
-                } else {
-                    return None;
-                }
+                let c = conns.first()?;
+                return Some(Arc::clone(c));
             }
 
             for c in conns {

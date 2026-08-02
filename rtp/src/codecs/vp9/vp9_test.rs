@@ -234,11 +234,9 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
 
 #[test]
 fn test_vp9_payloader_payload() -> Result<()> {
-    let mut r0 = 8692;
     let mut rands = vec![];
-    for _ in 0..10 {
+    for (r0, _) in (8692..).zip(0..10) {
         rands.push(vec![(r0 >> 8) as u8 | 0x80, (r0 & 0xFF) as u8]);
-        r0 += 1;
     }
 
     let tests = vec![
