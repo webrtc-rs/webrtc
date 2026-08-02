@@ -63,7 +63,7 @@ pub use rtc::data_channel::{
 /// `Arc<dyn DataChannel>` without the event handler trait itself needing to
 /// be generic over the interceptor type `I`.
 #[async_trait::async_trait]
-pub trait DataChannel: Send + Sync + 'static {
+pub trait DataChannel: crate::sealed::Sealed + Send + Sync + 'static {
     /// Returns the label of this data channel.
     async fn label(&self) -> Result<String>;
     /// Returns whether this data channel guarantees in-order delivery.
@@ -108,8 +108,9 @@ pub trait DataChannel: Send + Sync + 'static {
     /// outstanding send-side memory, including bytes still queued in the send
     /// pipeline (unlike `bufferedAmount`, which counts only post-packetization).
     ///
-    /// Defaults to `0` so external implementors of this trait keep compiling; the
+    /// Has a default so that adding it did not have to touch every implementation; the
     /// built-in channel overrides it with the real counter that drives send back-pressure.
+    /// (This trait is sealed, so the only implementations are in-crate — see `docs/semver.md`.)
     async fn outstanding_bytes(&self) -> Result<usize> {
         Ok(0)
     }
@@ -174,7 +175,8 @@ pub trait DataChannel: Send + Sync + 'static {
     /// channel the limit is a soft bound (each admitted sender may add one in-flight
     /// message over it) — the same semantics as `bufferedAmount`-based flow control.
     ///
-    /// Defaults to `Ok(())` so external implementors of this trait keep compiling.
+    /// Defaults to `Ok(())`; the built-in channel overrides it. This trait is sealed, so
+    /// the default exists for in-crate implementations, not downstream ones.
     async fn writable(&self) -> Result<()> {
         Ok(())
     }
@@ -204,6 +206,7 @@ pub trait DataChannel: Send + Sync + 'static {
 
 /// Events that can occur on a [`DataChannel`].
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum DataChannelEvent {
     /// Data channel has opened and is ready to send/receive data.
     ///
@@ -315,6 +318,8 @@ where
         }
     }
 }
+
+impl<I> crate::sealed::Sealed for DataChannelImpl<I> where I: Interceptor + 'static {}
 
 #[async_trait::async_trait]
 impl<I> DataChannel for DataChannelImpl<I>
@@ -618,6 +623,8 @@ mod tests {
         sends: AtomicUsize,
         text_sends: AtomicUsize,
     }
+
+    impl crate::sealed::Sealed for DefaultDataChannel {}
 
     #[async_trait::async_trait]
     impl DataChannel for DefaultDataChannel {

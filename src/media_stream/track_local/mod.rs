@@ -53,6 +53,7 @@ use rtc::{rtcp, rtp};
 
 /// Events that can occur on a [`TrackLocal`] (a track we send).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum TrackLocalEvent {
     /// Fired when RTCP feedback about this sent track is received from the remote peer —
     /// e.g. Receiver Reports, or PLI/FIR keyframe requests. An SFU relays such feedback

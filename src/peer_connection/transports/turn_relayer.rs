@@ -617,28 +617,28 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
             if let Some(managed_client) = self.clients.get_mut(&four_tuple) {
                 while let Some(event) = managed_client.client.poll_event() {
                     match event {
-                        TurnEvent::AllocateResponse(tid, relay_addr) => {
-                            if tid == managed_client.allocate_tid {
-                                managed_client.relay_addr = Some(relay_addr);
-                                managed_client.gather_finished = true;
-                                self.relay_addrs.insert(relay_addr, four_tuple);
-                                local_candidate = Some(Self::build_local_candidate(
-                                    relay_addr,
-                                    managed_client.local_addr,
-                                    &managed_client.url,
-                                ));
-                                gathered_complete = true;
-                            }
+                        TurnEvent::AllocateResponse(tid, relay_addr)
+                            if tid == managed_client.allocate_tid =>
+                        {
+                            managed_client.relay_addr = Some(relay_addr);
+                            managed_client.gather_finished = true;
+                            self.relay_addrs.insert(relay_addr, four_tuple);
+                            local_candidate = Some(Self::build_local_candidate(
+                                relay_addr,
+                                managed_client.local_addr,
+                                &managed_client.url,
+                            ));
+                            gathered_complete = true;
                         }
-                        TurnEvent::AllocateError(tid, err) => {
-                            if tid == managed_client.allocate_tid {
-                                error!(
-                                    "TURN allocation failed from {} to {}: {}",
-                                    four_tuple.local_addr, four_tuple.peer_addr, err
-                                );
-                                managed_client.gather_finished = true;
-                                gathered_complete = true;
-                            }
+                        TurnEvent::AllocateError(tid, err)
+                            if tid == managed_client.allocate_tid =>
+                        {
+                            error!(
+                                "TURN allocation failed from {} to {}: {}",
+                                four_tuple.local_addr, four_tuple.peer_addr, err
+                            );
+                            managed_client.gather_finished = true;
+                            gathered_complete = true;
                         }
                         TurnEvent::CreatePermissionResponse(tid, peer_addr) => {
                             if let Some(pending) = self.pending_permissions.remove(&tid) {
@@ -681,6 +681,9 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
                             }
                         }
                         TurnEvent::BindingResponse(_, _) | TurnEvent::BindingError(_, _) => {}
+                        _ => {
+                            warn!("Ignoring unknown TurnEvent variant");
+                        }
                     }
                 }
             }
