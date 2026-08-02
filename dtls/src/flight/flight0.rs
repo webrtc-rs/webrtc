@@ -135,10 +135,10 @@ impl Flight for Flight0 {
                             ));
                         }
                     }
-                    Extension::UseExtendedMasterSecret(_) => {
-                        if cfg.extended_master_secret != ExtendedMasterSecretType::Disable {
-                            state.extended_master_secret = true;
-                        }
+                    Extension::UseExtendedMasterSecret(_)
+                        if cfg.extended_master_secret != ExtendedMasterSecretType::Disable =>
+                    {
+                        state.extended_master_secret = true;
                     }
                     Extension::ServerName(e) => {
                         state.server_name.clone_from(&e.server_name); // remote server name

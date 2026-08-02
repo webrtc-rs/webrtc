@@ -541,10 +541,9 @@ where
         ) in updates.into_iter()
         {
             // Sort RR by seq number low to high
-            receiver_reports.sort_by(|a, b| a.ext_seq_num.cmp(&b.ext_seq_num));
+            receiver_reports.sort_by_key(|a| a.ext_seq_num);
             // Sort SR by ntp time, low to high
-            sender_reports
-                .sort_by(|a, b| a.sr_ntp_time.unwrap_or(0).cmp(&b.sr_ntp_time.unwrap_or(0)));
+            sender_reports.sort_by_key(|a| a.sr_ntp_time.unwrap_or(0));
 
             let _ = self
                 .tx
