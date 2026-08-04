@@ -118,7 +118,7 @@ async fn run_test(with_tcp: bool) -> Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(true);
+        .with_dedicated_reactor_pool_size(1);
     if with_tcp {
         offerer_builder = offerer_builder.with_tcp_addrs(vec!["127.0.0.1:0".to_string()]);
     }
@@ -165,7 +165,7 @@ async fn run_test(with_tcp: bool) -> Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(true);
+        .with_dedicated_reactor_pool_size(1);
     if with_tcp {
         answerer_builder = answerer_builder.with_tcp_addrs(vec!["127.0.0.1:0".to_string()]);
     }

@@ -158,12 +158,14 @@ impl PeerConnectionEventHandler for ResponderHandler {
 
 async fn build_pc(
     runtime: Arc<dyn Runtime>,
-    dedicated: bool,
+    dedicated_reactor: bool,
     handler: Arc<dyn PeerConnectionEventHandler>,
 ) -> anyhow::Result<Arc<dyn PeerConnection>> {
     let mut media = MediaEngine::default();
     media.register_default_codecs()?;
     let registry = register_default_interceptors(Registry::new(), &mut media)?;
+    let dedicated_reactor_pool_size = if dedicated_reactor { 1 } else { 0 };
+
     let mut builder = PeerConnectionBuilder::new()
         .with_configuration(RTCConfigurationBuilder::new().build())
         .with_media_engine(media)
@@ -171,7 +173,7 @@ async fn build_pc(
         .with_handler(handler)
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(dedicated);
+        .with_dedicated_reactor_pool_size(dedicated_reactor_pool_size);
     // A/B knob for the send-buffer cap: `STRESS_SEND_BUFFER_LIMIT` (bytes; `0` = unbounded).
     // Unset ⇒ the library default (16 MiB). This is what toggles the two arms of the bench.
     if let Ok(v) = std::env::var("STRESS_SEND_BUFFER_LIMIT") {
