@@ -366,9 +366,8 @@ fn test_automatic_host_candidate_gathering() {
 
         // Verify that a host candidate was gathered
         let mut candidate_count = 0;
-        while let Some(_) = candidate_rx.recv().await {
+        if candidate_rx.recv().await.is_some() {
             candidate_count += 1;
-            break;
         }
         assert!(
             candidate_count > 0,
