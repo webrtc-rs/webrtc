@@ -12,7 +12,7 @@ categories = ["network-programming"]
 description = "Async-friendly WebRTC implementation in Rust"
 
 [features]
-default = ["runtime-tokio"]
+default = ["runtime-tokio", "crypto-ring"]
 # Runtime features are purely additive: each one only makes a built-in `Runtime`
 # implementation available. They never select which primitives the library uses,
 # so enabling both is safe and a process may drive connections on either.
@@ -22,9 +22,15 @@ runtime-smol = ["dep:smol"]
 # `Runtime` trait as the two above, but drives timers from a manually advanced clock and
 # does not perform I/O.
 runtime-mock = []
+# Crypto provider features forward to `rtc` and are additive, matching the core semantics:
+# enabling both compiles both built-in providers and `ring` remains the default selection.
+# A `--no-default-features` build has no built-in provider and requires the application to
+# supply one through `SettingEngine::set_crypto_provider`.
+crypto-ring = ["rtc/crypto-ring"]
+crypto-aws-lc-rs = ["rtc/crypto-aws-lc-rs"]
 
 [dependencies]
-rtc = { version = "0.21.0", path = "rtc" }
+rtc = { version = "0.21.0", path = "rtc", default-features = false }
 
 bytes = "1.12.0"
 async-trait = "0.1.89"

@@ -27,7 +27,10 @@ jobs:
           - name: tokio
             flags: ""
           - name: smol
-            flags: "--no-default-features --features runtime-smol"
+            # A provider is paired with the runtime: this job varies the *runtime*, and
+            # constructing a peer connection resolves one. `--no-default-features` alone drops
+            # the crypto feature too.
+            flags: "--no-default-features --features runtime-smol,crypto-ring"
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4

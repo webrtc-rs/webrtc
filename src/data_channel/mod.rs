@@ -602,7 +602,10 @@ where
     }
 }
 
-#[cfg(test)]
+// A built-in provider is required: these construct real peer connections, and construction
+// resolves a provider. The no-built-in configuration is exercised by the provider tests in
+// `tests/`, which supply their own.
+#[cfg(all(test, any(feature = "crypto-ring", feature = "crypto-aws-lc-rs")))]
 mod tests {
     use super::*;
     use futures::executor::block_on;

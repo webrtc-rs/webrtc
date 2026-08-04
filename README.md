@@ -102,10 +102,30 @@ webrtc = { version = "0.20", default-features = false, features = ["runtime-smol
 | `runtime-tokio` | ✅      | Timers, task spawning and sockets via Tokio                             |
 | `runtime-smol`  |         | The same, via smol                                                      |
 | `runtime-mock`  |         | `MockRuntime`, a deterministic virtual-clock runtime for tests (no I/O) |
+| `crypto-ring`   | ✅      | The `ring`-based crypto provider                                        |
+| `crypto-aws-lc-rs` |      | The `aws-lc-rs`-based crypto provider                                   |
 
 The runtime features are **additive**: each one only makes a built-in runtime *available*, so enabling several is safe and a single process can drive different connections on different runtimes.
 
+The crypto features work the same way. Enabling both compiles both providers, and `ring` stays the default selection — so a dependency that turns on `crypto-aws-lc-rs` cannot silently change which one your application runs. Building with neither compiles no provider, and you supply your own.
+
 **Bringing your own runtime.** The built-ins are not privileged — implement `webrtc::runtime::Runtime` and pass it per connection with `with_runtime`, with no `#[cfg]` edits and no fork. See the [custom-runtime example](examples/custom-runtime), which runs the full stack on `async-executor` + `async-io` with `--no-default-features` (neither Tokio nor smol compiled in).
+
+**Choosing a crypto provider.** Same story: pass one per connection through `SettingEngine`, which also means two connections in one process can use different providers.
+
+```rust
+use std::sync::Arc;
+use webrtc::peer_connection::crypto;
+use webrtc::peer_connection::SettingEngine;
+
+let mut setting_engine = SettingEngine::default();
+setting_engine.set_crypto_provider(Arc::new(crypto::providers::AwsLcRsProvider::new()));
+```
+
+Applications needing a FIPS-validated module, an HSM, or a platform backend implement
+`crypto::RTCCryptoProvider` and pass it the same way; `rtc-crypto`'s conformance suite validates
+an implementation against the same RFC vectors the built-ins pass. No cryptography happens in this
+crate — it forwards the provider to `rtc`.
 
 Build a peer connection and create an offer:
 

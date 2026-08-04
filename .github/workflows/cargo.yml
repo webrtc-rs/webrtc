@@ -44,14 +44,85 @@ jobs:
       fail-fast: false
       matrix:
         features:
-          - 'runtime-smol'
-          - 'runtime-mock'
+          # A crypto provider is paired with each runtime: this job varies the *runtime*, and a
+          # peer connection cannot be constructed without a provider. The no-provider
+          # configuration is covered separately by `crypto-provider-features`.
+          - 'runtime-smol,crypto-ring'
+          - 'runtime-mock,crypto-ring'
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Build
         run: cargo test --lib --verbose --no-default-features --features ${{ matrix.features }}
+
+  crypto-provider-features:
+    name: Crypto provider (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            args: ""
+          - name: ring only
+            args: --no-default-features --features runtime-tokio,crypto-ring
+          - name: aws-lc-rs only
+            args: --no-default-features --features runtime-tokio,crypto-aws-lc-rs
+          # Both backends in one graph. The core crates rejected this before G3; here it is the
+          # guard that the forwarding features stay additive and that `ring` remains the resolved
+          # default, which `tests/crypto_provider_features.rs` asserts.
+          - name: ring + aws-lc-rs
+            args: --features crypto-ring,crypto-aws-lc-rs
+          # No built-in provider: an application must supply its own through
+          # `SettingEngine::set_crypto_provider`.
+          - name: no built-in provider
+            args: --no-default-features --features runtime-tokio
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Build
+        run: cargo build --all-targets --verbose ${{ matrix.args }}
+      - name: Feature-semantics tests
+        run: cargo test --test crypto_provider_features --verbose ${{ matrix.args }}
+      # End-to-end: ICE/STUN integrity, the DTLS handshake, and SRTP media over a real
+      # connection, per provider pairing. Skipped in the no-built-in configuration, where the
+      # test file is `#![cfg]`-ed out.
+      - name: Provider integration tests
+        run: cargo test --test crypto_provider_integration --verbose ${{ matrix.args }}
+
+  crypto-provider-boundary:
+    name: Crypto stays in the core crates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      # The async layer forwards provider features and threads the provider through; it must not
+      # depend on a crypto implementation or perform crypto itself. The script parses dependency
+      # sections so that feature forwarding (`ring = ["rtc/crypto-ring"]`) is not mistaken for one.
+      - name: No crypto implementation dependency in webrtc
+        run: python3 scripts/check-crypto-boundary.py
+      # `webrtc` cannot be packaged until the core crates it depends on are published: cargo
+      # resolves against the registry and the path dependency is stripped from the published
+      # manifest. Publication order is rtc-crypto, then the rtc protocol crates, then rtc, then
+      # webrtc. This asserts the failure is exactly that missing version and nothing else, so a
+      # different packaging break is still caught.
+      - name: Confirm packaging blocks only on core publication
+        run: |
+          if cargo package --allow-dirty 2>package.log; then
+            echo "webrtc packaged; the core crates appear to be published."
+            echo "Replace this step with a normal packaging check."
+            exit 0
+          fi
+          if grep -q 'failed to select a version for the requirement `rtc' package.log; then
+            echo "Expected: webrtc awaits the rtc 0.21.0 publish."
+            exit 0
+          fi
+          echo "webrtc packaging failed for an unexpected reason:"
+          cat package.log
+          exit 1
 
   test:
     name: Test

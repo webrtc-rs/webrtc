@@ -2,6 +2,7 @@
 
 use crate::runtime::Runtime;
 use log::{debug, error, trace, warn};
+use rtc::crypto::RTCCryptoProvider;
 use rtc::ice::url::SchemeType;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::state::RTCIceGatheringState;
@@ -56,6 +57,9 @@ pub(crate) struct RTCTurnRelayer {
     state: RTCIceGatheringState,
     /// Host runtime, used to resolve TURN server hostnames.
     runtime: Arc<dyn Runtime>,
+    /// Taken from the peer connection rather than resolved here: the whole connection shares one
+    /// provider, and no async-layer code selects crypto on its own.
+    crypto_provider: Arc<dyn RTCCryptoProvider>,
     clients: HashMap<FourTuple, ManagedTurnClient>,
     relay_addrs: HashMap<SocketAddr, FourTuple>,
     pending_permissions: HashMap<rtc::stun::message::TransactionId, PendingPermission>,
@@ -72,6 +76,7 @@ impl RTCTurnRelayer {
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
         runtime: Arc<dyn Runtime>,
+        crypto_provider: Arc<dyn RTCCryptoProvider>,
     ) -> Self {
         Self {
             local_addrs,
@@ -79,6 +84,7 @@ impl RTCTurnRelayer {
             ice_gather_policy,
             state: RTCIceGatheringState::New,
             runtime,
+            crypto_provider,
             clients: HashMap::new(),
             relay_addrs: HashMap::new(),
             pending_permissions: HashMap::new(),
@@ -201,7 +207,7 @@ impl RTCTurnRelayer {
                 continue;
             };
 
-            managed
+            let _ = managed
                 .client
                 .update_credentials(username.clone(), password.clone());
 
@@ -291,17 +297,20 @@ impl RTCTurnRelayer {
                         continue;
                     }
 
-                    let mut client = TurnClient::new(TurnClientConfig {
-                        stun_serv_addr: peer_addr.to_string(),
-                        turn_serv_addr: peer_addr.to_string(),
-                        local_addr: *local_addr,
-                        transport_protocol: TransportProtocol::UDP,
-                        username: url.username.clone(),
-                        password: url.password.clone(),
-                        realm: String::new(),
-                        software: String::new(),
-                        rto_in_ms: 0,
-                    })?;
+                    let mut client = TurnClient::new(
+                        TurnClientConfig {
+                            stun_serv_addr: peer_addr.to_string(),
+                            turn_serv_addr: peer_addr.to_string(),
+                            local_addr: *local_addr,
+                            transport_protocol: TransportProtocol::UDP,
+                            username: url.username.clone(),
+                            password: url.password.clone(),
+                            realm: String::new(),
+                            software: String::new(),
+                            rto_in_ms: 0,
+                        },
+                        Arc::clone(&self.crypto_provider),
+                    )?;
 
                     let allocate_tid = client.allocate()?;
                     debug!(
@@ -743,7 +752,10 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
     }
 }
 
-#[cfg(test)]
+// A built-in provider is required: these construct real peer connections, and construction
+// resolves a provider. The no-built-in configuration is exercised by the provider tests in
+// `tests/`, which supply their own.
+#[cfg(all(test, any(feature = "crypto-ring", feature = "crypto-aws-lc-rs")))]
 mod tests {
     use super::*;
     use bytes::BytesMut;
@@ -784,6 +796,7 @@ mod tests {
                 }],
                 RTCIceTransportPolicy::Relay,
                 crate::runtime::default_runtime().expect("test requires a runtime feature"),
+                rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
             );
 
             relayer.gather().await.expect("TURN gather should start");
