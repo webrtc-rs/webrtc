@@ -2,9 +2,9 @@ name: coverage
 
 on:
   push:
-    branches: [ master, v0.20.x, v0.17.x ]
+    branches: [ master, v0.21.x, v0.20.x, v0.17.x ]
   pull_request:
-    branches: [ master, v0.20.x, v0.17.x ]
+    branches: [ master, v0.21.x, v0.20.x, v0.17.x ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,7 +27,10 @@ jobs:
           - name: tokio
             flags: ""
           - name: smol
-            flags: "--no-default-features --features runtime-smol"
+            # A provider is paired with the runtime: this job varies the *runtime*, and
+            # constructing a peer connection resolves one. `--no-default-features` alone drops
+            # the crypto feature too.
+            flags: "--no-default-features --features runtime-smol,crypto-ring"
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4

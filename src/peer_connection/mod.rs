@@ -95,6 +95,10 @@ pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 // private dependency of this crate: without these, calling `set_dtls_cipher_suites` or
 // `set_srtp_protection_profiles` would force an application to add a second, version-locked
 // dependency just to name the enum it passes in.
+/// The crypto provider API, re-exported for the same reason: `SettingEngine::set_crypto_provider`
+/// takes an `Arc<dyn RTCCryptoProvider>`, and an application implementing its own provider needs
+/// the traits too.
+pub use rtc::crypto;
 pub use rtc::dtls::cipher_suite::CipherSuiteId;
 pub use rtc::dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use rtc::media_stream::MediaStreamTrackId;
@@ -704,6 +708,9 @@ where
             std_tcp_listeners.push((local_addr, listener));
         }
 
+        // The provider the core peer connection resolved at construction. Taken from there so
+        // the async layer shares one provider rather than selecting a second.
+        let crypto_provider = core.crypto_provider().clone();
         let configuration = core.get_configuration();
         let ice_servers = configuration.ice_servers().to_vec();
         let ice_gather_policy = configuration.ice_transport_policy();
@@ -745,6 +752,7 @@ where
             ice_servers,
             ice_gather_policy,
             Arc::clone(&runtime),
+            crypto_provider,
         );
 
         // Init-result oneshot. `new()` awaits this so that socket wrapping and
@@ -1261,10 +1269,13 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "crypto-ring", feature = "crypto-aws-lc-rs")))]
 pub(crate) use tests::new_test_peer_connection;
 
-#[cfg(test)]
+// A built-in provider is required: these construct real peer connections, and construction
+// resolves a provider. The no-built-in configuration is exercised by the provider tests in
+// `tests/`, which supply their own.
+#[cfg(all(test, any(feature = "crypto-ring", feature = "crypto-aws-lc-rs")))]
 mod tests {
     use super::*;
     use crate::runtime::{channel, default_runtime, timeout};
