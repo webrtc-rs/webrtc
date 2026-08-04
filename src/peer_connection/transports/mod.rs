@@ -7,11 +7,11 @@ pub(crate) mod tcp_transport;
 pub(crate) mod turn_relayer;
 
 /// Plain single-datagram UDP receive buffer size (no GRO coalescing).
-pub(crate) const UDP_RECV_BUF_LEN: usize = 2000;
+pub const UDP_RECV_BUF_LEN: usize = 2000;
 
 /// Upper bound on the number of datagrams the kernel may coalesce into one UDP GRO
 /// receive (`UDP_SEGMENT`/GRO cap is 64 per buffer).
-pub(crate) const MAX_GRO_SEGMENTS: usize = 64;
+pub const MAX_GRO_SEGMENTS: usize = 64;
 
 /// Upper bound on datagrams coalesced into one UDP GSO send. The kernel caps
 /// `UDP_SEGMENT` at 64 segments per `sendmsg`; a socket may report fewer.
@@ -43,7 +43,7 @@ pub(crate) const MIN_GSO_RUN: usize = 16;
 /// datagrams well under this (DTLS/SCTP MTU ~1200); the 1500 headroom covers a peer
 /// sending up to standard-MTU-sized datagrams. Jumbo-frame paths (MTU > 1500) are not
 /// supported for GRO and would truncate.
-pub(crate) const GRO_RECV_SEGMENT_LEN: usize = 1500;
+pub const GRO_RECV_SEGMENT_LEN: usize = 1500;
 
 /// Size a UDP receive buffer for a socket that may coalesce `max_gro` datagrams via
 /// GRO. Falls back to the plain single-datagram size when GRO is unavailable.
@@ -54,7 +54,7 @@ pub(crate) const GRO_RECV_SEGMENT_LEN: usize = 1500;
 /// [`GRO_RECV_SEGMENT_LEN`]); the buffers are zero-initialized so pages stay unmapped
 /// until actually written. Measured net effect is still an RSS *reduction* under load
 /// because batching cuts per-packet allocator churn far more than the buffers cost.
-pub(crate) fn gro_recv_buf_len(max_gro: usize) -> usize {
+pub fn gro_recv_buf_len(max_gro: usize) -> usize {
     if max_gro > 1 {
         max_gro.min(MAX_GRO_SEGMENTS) * GRO_RECV_SEGMENT_LEN
     } else {
@@ -96,7 +96,27 @@ pub(crate) enum TcpReadResult {
     },
 }
 
-pub(crate) fn is_retryable_socket_recv_error(err: &io::Error) -> bool {
+/// Whether a socket receive error is one peer's problem rather than a failure of the
+/// socket itself.
+///
+/// A socket serving many peers learns about per-peer failures through the *socket*: an
+/// ICMP port-unreachable from a peer that went away can surface on a later receive as
+/// [`ConnectionRefused`] (Linux) or [`ConnectionReset`] (Windows). [`Interrupted`]
+/// (a signal delivered mid-`recvmsg`), [`WouldBlock`] and [`TimedOut`] are transient for
+/// the same reason — nothing about the socket has changed. A receive loop has to resume
+/// after all of these; treating any one of them as fatal tears down a listener that is
+/// perfectly healthy, with no way back short of rebinding.
+///
+/// Both the UDP and the TCP receive paths classify errors with this, and so must anything
+/// that implements or drives an [`AsyncUdpSocket`](crate::runtime::AsyncUdpSocket) of its
+/// own.
+///
+/// [`ConnectionRefused`]: io::ErrorKind::ConnectionRefused
+/// [`ConnectionReset`]: io::ErrorKind::ConnectionReset
+/// [`Interrupted`]: io::ErrorKind::Interrupted
+/// [`WouldBlock`]: io::ErrorKind::WouldBlock
+/// [`TimedOut`]: io::ErrorKind::TimedOut
+pub fn is_retryable_socket_recv_error(err: &io::Error) -> bool {
     matches!(
         err.kind(),
         io::ErrorKind::Interrupted
@@ -123,5 +143,47 @@ mod gro_buf_tests {
         );
         // GRO unavailable (max_gro <= 1): plain single-datagram buffer.
         assert_eq!(gro_recv_buf_len(1), UDP_RECV_BUF_LEN);
+    }
+}
+
+#[cfg(test)]
+mod recv_error_tests {
+    use super::is_retryable_socket_recv_error;
+    use std::io;
+
+    /// Pin the whole set: the way this goes wrong is by *omitting* a variant, and each
+    /// omission is a receive loop that tears down a healthy socket. `ConnectionRefused`
+    /// is the one to watch — it is how an ICMP port-unreachable can surface on Linux, so
+    /// dropping it lets any peer that goes away kill a listener.
+    #[test]
+    fn transient_errors_keep_the_receive_loop_alive() {
+        for kind in [
+            io::ErrorKind::Interrupted,
+            io::ErrorKind::WouldBlock,
+            io::ErrorKind::ConnectionRefused,
+            io::ErrorKind::ConnectionReset,
+            io::ErrorKind::TimedOut,
+        ] {
+            assert!(
+                is_retryable_socket_recv_error(&io::Error::from(kind)),
+                "{kind:?} must not be treated as fatal"
+            );
+        }
+    }
+
+    /// The complement: errors that really do mean the socket is unusable must stay
+    /// fatal, or a dead socket spins the receive loop forever.
+    #[test]
+    fn fatal_errors_are_not_retried() {
+        for kind in [
+            io::ErrorKind::AddrNotAvailable,
+            io::ErrorKind::NotConnected,
+            io::ErrorKind::PermissionDenied,
+        ] {
+            assert!(
+                !is_retryable_socket_recv_error(&io::Error::from(kind)),
+                "{kind:?} must be treated as fatal"
+            );
+        }
     }
 }

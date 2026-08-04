@@ -62,6 +62,16 @@ pub use primitives::{
     TrySendError, UdpSockRef, UdpSocketState, broadcast_channel, channel,
 };
 
+/// Receive-path helpers an [`AsyncUdpSocket`] implementor (or anything driving one)
+/// needs to match what this crate's own driver does: how large a receive buffer must be
+/// for a socket that may coalesce datagrams via GRO, and which receive errors are
+/// transient. Defined alongside the driver that uses them and re-exported here, next to
+/// the socket traits they belong to.
+pub use crate::peer_connection::transports::{
+    GRO_RECV_SEGMENT_LEN, MAX_GRO_SEGMENTS, UDP_RECV_BUF_LEN, gro_recv_buf_len,
+    is_retryable_socket_recv_error,
+};
+
 pub(crate) const MAX_REACTOR_POOL_SIZE: usize = 1024;
 
 /// A handle to a task spawned via [`Runtime::spawn`].
