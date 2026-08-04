@@ -114,12 +114,14 @@ impl PeerConnectionEventHandler for ResponderHandler {
 
 async fn build_pc(
     runtime: Arc<dyn Runtime>,
-    dedicated: bool,
+    dedicated_reactor: bool,
     handler: Arc<dyn PeerConnectionEventHandler>,
 ) -> anyhow::Result<Arc<dyn PeerConnection>> {
     let mut media = MediaEngine::default();
     media.register_default_codecs()?;
     let registry = register_default_interceptors(Registry::new(), &mut media)?;
+    let dedicated_reactor_pool_size = if dedicated_reactor { 1 } else { 0 };
+
     let pc = PeerConnectionBuilder::new()
         .with_configuration(RTCConfigurationBuilder::new().build())
         .with_media_engine(media)
@@ -127,7 +129,7 @@ async fn build_pc(
         .with_handler(handler)
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(dedicated)
+        .with_dedicated_reactor_pool_size(dedicated_reactor_pool_size)
         .build()
         .await?;
     Ok(Arc::new(pc) as Arc<dyn PeerConnection>)

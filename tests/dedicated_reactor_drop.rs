@@ -57,8 +57,7 @@ async fn run() {
         let pc = PeerConnectionBuilder::new()
             .with_handler(handler) // moves the only app-side strong ref into the builder
             .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-            .with_dedicated_reactor_thread(true)
-            .with_reactor_pool_size(POOL_SIZE)
+            .with_dedicated_reactor_pool_size(POOL_SIZE)
             .build()
             .await
             .expect("build dedicated-reactor peer connection");
@@ -115,8 +114,7 @@ async fn run() {
     let pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(NoopHandler))
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(true)
-        .with_reactor_pool_size(POOL_SIZE)
+        .with_dedicated_reactor_pool_size(POOL_SIZE)
         .build()
         .await
         .expect("reactor pool unusable after drops");

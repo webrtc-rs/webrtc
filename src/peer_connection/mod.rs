@@ -183,12 +183,13 @@ where
     builder: RTCPeerConnectionBuilder<I>,
     runtime: Option<Arc<dyn Runtime>>,
     handler: Option<Arc<dyn PeerConnectionEventHandler>>,
-    mdns_mode: MulticastDnsMode,
     udp_addrs: Vec<A>,
     tcp_addrs: Vec<A>,
-    dedicated_reactor: bool,
-    reactor_pool_size: usize,
+    dedicated_reactor_pool_size: usize,
     data_channel_send_buffer_limit: usize,
+    /// Held rather than forwarded immediately, so [`build`](Self::build) can resolve the crypto
+    /// provider and inject it before the core connection is constructed — see there for why.
+    setting_engine: SettingEngine,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -197,11 +198,10 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             builder: RTCPeerConnectionBuilder::new(),
             runtime: None,
             handler: None,
-            mdns_mode: MulticastDnsMode::Disabled,
             udp_addrs: vec![],
             tcp_addrs: vec![],
-            dedicated_reactor: false,
-            reactor_pool_size: 0,
+            dedicated_reactor_pool_size: 0,
+            setting_engine: SettingEngine::default(),
             // `usize::MAX` = unbounded: no send back-pressure unless the application
             // opts in via `with_data_channel_send_buffer_limit`. This keeps `send`/
             // `send_text` non-blocking by default (zero behaviour change).
@@ -235,33 +235,7 @@ where
 
     /// Configures the builder with the specified [`SettingEngine`].
     pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
-        self.mdns_mode = setting_engine.multicast_dns().mode;
-        self.builder = self.builder.with_setting_engine(setting_engine);
-        self
-    }
-
-    /// Sets the SCTP receive-buffer size (the a_rwnd flow-control window), in bytes.
-    ///
-    /// This bounds how much unacknowledged data a remote peer may have in flight toward
-    /// this connection — a bandwidth-delay-product ceiling. The buffer fills only under
-    /// load, so lowering it trims per-connection resident memory (useful for servers
-    /// holding many connections — it stacks with the shared reactor pool, see
-    /// [`with_dedicated_reactor_thread`](Self::with_dedicated_reactor_thread)); but a
-    /// smaller window can throttle throughput on high-latency, high-bandwidth paths,
-    /// where more data must be in flight to keep the pipe full.
-    ///
-    /// **Default: 1 MiB** (left unset), which suits typical internet paths. Lower it
-    /// (e.g. 256 KiB) for memory-bound, many-connection or low-RTT (LAN/loopback)
-    /// deployments. Applies to whichever [`SettingEngine`] is set, so call it *after*
-    /// [`with_setting_engine`](Self::with_setting_engine) when supplying a custom engine.
-    ///
-    /// **Bounds:** values below the RFC 4960 §6 floor of 1500 bytes (including `0`) are
-    /// raised to it — a smaller window would break the SCTP handshake. Keep it **≥ the
-    /// largest data-channel message you expect to receive** (default max is 64 KiB) or a
-    /// full-size inbound message stalls. `0` is *not* "unbounded" here — leave this unset
-    /// to keep the 1 MiB default.
-    pub fn with_sctp_receive_buffer_size(mut self, size: u32) -> Self {
-        self.builder = self.builder.with_sctp_receive_buffer_size(size);
+        self.setting_engine = setting_engine;
         self
     }
 
@@ -282,12 +256,11 @@ where
             builder: self.builder.with_interceptor_registry(interceptor_registry),
             runtime: self.runtime,
             handler: self.handler,
-            mdns_mode: self.mdns_mode,
             udp_addrs: self.udp_addrs,
             tcp_addrs: self.tcp_addrs,
-            dedicated_reactor: self.dedicated_reactor,
-            reactor_pool_size: self.reactor_pool_size,
+            dedicated_reactor_pool_size: self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit: self.data_channel_send_buffer_limit,
+            setting_engine: self.setting_engine,
         }
     }
 
@@ -315,52 +288,8 @@ where
         self
     }
 
-    /// Run this peer connection's driver on the shared **bounded reactor pool**
-    /// instead of on the general-purpose async runtime.
-    ///
-    /// This *confines* the driver (and thus its SCTP/DTLS/SRTP state and I/O
-    /// reactor) to a single reactor thread for its lifetime, so the async runtime
-    /// never migrates it across its worker pool — the dominant cost for in-process
-    /// data-channel throughput on multi-threaded runtimes (issue #101).
-    ///
-    /// The reactor thread comes from a process-global pool of at most `N` threads
-    /// (see [`with_reactor_pool_size`](Self::with_reactor_pool_size); default: a single
-    /// thread). Drivers are assigned round-robin, so up to a
-    /// few I/O-bound drivers share a thread cooperatively and the reactor-thread
-    /// count stays **bounded by the pool size regardless of connection count** —
-    /// unlike the earlier model, which spent one OS thread per connection. This
-    /// makes it viable even for large-scale servers (e.g. SFUs); it is still
-    /// **off by default** because the general runtime is the right choice when the
-    /// application already schedules its own work across all cores.
-    ///
-    /// Note: this is *thread confinement*, not CPU-core affinity — the OS
-    /// scheduler may still move a pool thread between cores.
-    /// TODO(#101): pin pool threads to specific cores (via `core_affinity`)
-    /// for cache/NUMA locality as a follow-up.
-    ///
-    /// Note: with this enabled, event-handler callbacks run on a shared reactor
-    /// pool thread, so they must not block (blocking one stalls its co-tenant
-    /// drivers as well as itself).
-    ///
-    /// Note: the first time each pool thread is used, [`build`](Self::build) briefly
-    /// blocks the calling task's runtime thread while that thread's runtime starts
-    /// (a one-time, sub-millisecond rendezvous per pool slot, at most pool-size times
-    /// per process). Prefer building connections off a latency-critical runtime thread
-    /// if that matters.
-    pub fn with_dedicated_reactor_thread(mut self, enabled: bool) -> Self {
-        self.dedicated_reactor = enabled;
-        self
-    }
-
-    /// Set the size of the shared reactor pool used when
-    /// [`with_dedicated_reactor_thread(true)`](Self::with_dedicated_reactor_thread)
-    /// is enabled — the maximum number of reactor threads across the whole process,
-    /// regardless of how many connections use the pool.
-    ///
-    /// **Defaults to `0`, which the built-in runtimes clamp to `1`** — a single shared reactor
-    /// thread carrying every dedicated-reactor driver. `0` does not mean "unbounded" or "one
-    /// thread per core"; pass an explicit value for a wider pool. Values above `1024` are
-    /// clamped down to it.
+    /// Set the size of the dedicated reactor pool used. Defaults to `0`, means disabled.
+    /// Values above `1024` are clamped down to it.
     ///
     /// The value is handed to
     /// [`Runtime::spawn_reactor`] when this
@@ -369,14 +298,13 @@ where
     /// takes effect for the process — set it consistently across connections, or set it on
     /// whichever you build first.
     ///
-    /// Ignored unless `with_dedicated_reactor_thread(true)` is also set, since the pool is
-    /// only used on that path.
+    /// Setting this to `0` disables the dedicated reactor pool; any non-zero value enables it.
     ///
     /// Smaller pools use fewer threads and less memory (fewer per-thread allocator
     /// arenas) at the cost of more drivers sharing each thread; size it to trade
     /// resident memory against per-connection isolation for your workload.
-    pub fn with_reactor_pool_size(mut self, reactor_pool_size: usize) -> Self {
-        self.reactor_pool_size = reactor_pool_size;
+    pub fn with_dedicated_reactor_pool_size(mut self, dedicated_reactor_pool_size: usize) -> Self {
+        self.dedicated_reactor_pool_size = dedicated_reactor_pool_size;
         self
     }
 
@@ -409,14 +337,34 @@ where
     }
 
     /// Builds the [`PeerConnection`] and starts the background event loop driver.
-    pub async fn build(self) -> Result<impl PeerConnection> {
+    pub async fn build(mut self) -> Result<impl PeerConnection> {
         let runtime = if let Some(runtime) = self.runtime {
             runtime
         } else {
             default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?
         };
 
-        let core = self.builder.build()?;
+        // Resolve the crypto provider here, once, and hand the *same* `Arc` to both the core
+        // connection and the async layer's TURN client. `crypto::default_provider()` allocates a
+        // fresh provider per call, so resolving independently on each side would leave the
+        // connection using two — hence: read what the caller configured, fall back to the
+        // built-in, then inject it so `rtc` construction adopts it rather than resolving again.
+        let crypto_provider = match self.setting_engine.crypto_provider() {
+            Some(provider) => provider.clone(),
+            None => crypto::default_provider().map_err(|error| {
+                Error::Crypto(format!(
+                    "failed to resolve a default crypto provider: {error}"
+                ))
+            })?,
+        };
+        self.setting_engine
+            .set_crypto_provider(crypto_provider.clone());
+        let mdns_mode = self.setting_engine.multicast_dns().mode;
+
+        let core = self
+            .builder
+            .with_setting_engine(self.setting_engine)
+            .build()?;
 
         // `0` = unbounded (same as the `usize::MAX` default); normalise it to `usize::MAX`
         // so the send-buffer gate (and `writable()`) short-circuits to a no-op.
@@ -431,12 +379,12 @@ where
             runtime,
             self.handler
                 .ok_or_else(|| std::io::Error::other("no event handler found"))?,
-            self.mdns_mode,
+            mdns_mode,
             self.udp_addrs,
             self.tcp_addrs,
-            self.dedicated_reactor,
-            self.reactor_pool_size,
+            self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit,
+            crypto_provider,
         )
         .await
     }
@@ -676,9 +624,9 @@ where
         mdns_mode: MulticastDnsMode,
         udp_addrs: Vec<A>,
         tcp_addrs: Vec<A>,
-        dedicated_reactor: bool,
-        reactor_pool_size: usize,
+        dedicated_reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
+        crypto_provider: Arc<dyn crypto::RTCCryptoProvider>,
     ) -> Result<Self> {
         // Bind the std sockets up front (synchronous, and needed to compute the
         // local addresses used for ICE gathering / SDP). Wrapping them into async
@@ -708,9 +656,6 @@ where
             std_tcp_listeners.push((local_addr, listener));
         }
 
-        // The provider the core peer connection resolved at construction. Taken from there so
-        // the async layer shares one provider rather than selecting a second.
-        let crypto_provider = core.crypto_provider().clone();
         let configuration = core.get_configuration();
         let ice_servers = configuration.ice_servers().to_vec();
         let ice_gather_policy = configuration.ice_transport_policy();
@@ -734,7 +679,7 @@ where
                 data_channel_backpressure: crate::runtime::Notify::new(),
             }),
             driver_handle: Mutex::new(None),
-            dedicated_reactor,
+            dedicated_reactor: dedicated_reactor_pool_size > 0,
         };
 
         let local_addrs = std_udp_sockets
@@ -819,8 +764,8 @@ where
             driver.signal_stopped();
         };
 
-        let driver_handle = if dedicated_reactor {
-            runtime.spawn_reactor(reactor_pool_size, Box::pin(run_driver))
+        let driver_handle = if dedicated_reactor_pool_size > 0 {
+            runtime.spawn_reactor(dedicated_reactor_pool_size, Box::pin(run_driver))
         } else {
             runtime.spawn(Box::pin(run_driver))
         };

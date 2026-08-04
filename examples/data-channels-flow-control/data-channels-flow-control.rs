@@ -234,6 +234,7 @@ async fn async_main() -> anyhow::Result<()> {
 
     // Opt into the dedicated per-connection reactor thread (issue #101) via env.
     let dedicated_reactor = std::env::var("FLOW_DEDICATED_REACTOR").is_ok();
+    let dedicated_reactor_pool_size = if dedicated_reactor { 1 } else { 0 };
 
     // ── Build requester peer connection ──────────────────────────────────────
     let (req_gather_tx, mut req_gather_rx) = channel::<()>(1);
@@ -251,7 +252,7 @@ async fn async_main() -> anyhow::Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(dedicated_reactor)
+        .with_dedicated_reactor_pool_size(dedicated_reactor_pool_size)
         .build()
         .await?;
 
@@ -362,7 +363,7 @@ async fn async_main() -> anyhow::Result<()> {
         }))
         .with_runtime(runtime.clone())
         .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
-        .with_dedicated_reactor_thread(dedicated_reactor)
+        .with_dedicated_reactor_pool_size(dedicated_reactor_pool_size)
         .build()
         .await?;
 
