@@ -292,6 +292,16 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
     /// would make de-segmentation divide by zero.
     ///
     /// A minimal implementation may fill only `bufs[0]` and return `Ok(1)`.
+    ///
+    /// # Errors
+    ///
+    /// Return the error rather than retrying inside the implementation: the driver
+    /// classifies it and resumes the receive loop for anything transient. A socket serving
+    /// many peers learns about per-peer failures through the socket itself, so
+    /// `ConnectionRefused` (how an ICMP port-unreachable surfaces on Linux),
+    /// `ConnectionReset` (the same on Windows), `Interrupted`, `WouldBlock` and `TimedOut`
+    /// are all treated as transient and do not tear the socket down. Anything else is taken
+    /// to mean the socket is unusable.
     fn poll_recv(
         &self,
         cx: &mut Context<'_>,
@@ -312,8 +322,26 @@ pub trait AsyncUdpSocket: Send + Sync + Debug + 'static {
 
     /// Maximum number of datagrams the kernel may coalesce into a **single message** via
     /// UDP GRO — not into a whole [`poll_recv`](Self::poll_recv) call, which may return up
-    /// to [`BATCH_SIZE`] messages. Returns `1` when GRO is unavailable. Used to size each
-    /// receive buffer.
+    /// to [`BATCH_SIZE`] messages. Returns `1` when GRO is unavailable.
+    ///
+    /// # Buffer sizing
+    ///
+    /// This value decides how large a buffer the driver hands to
+    /// [`poll_recv`](Self::poll_recv): reporting `n > 1` asks for roughly `n × 1500` bytes
+    /// per message, because **a coalesced segment is bounded by the path MTU, not by the
+    /// largest datagram the application sends**. Sizing against your own maximum datagram
+    /// size instead is the easy mistake, and it fails quietly — the kernel drops the tail of
+    /// a coalesced read, which looks like unexplained packet loss rather than an error.
+    ///
+    /// Two consequences worth knowing before reporting `> 1`:
+    ///
+    /// * Buffers are allocated per socket per receive, so the count is an allocation
+    ///   multiplier. It is clamped internally, and `1500` is assumed per segment; paths with
+    ///   an MTU above 1500 are not supported for GRO and would truncate.
+    /// * The exact formula is the driver's own policy and may change. Report what the socket
+    ///   can actually coalesce and let the driver size accordingly — an implementation that
+    ///   allocates its own receive buffers to some other rule (a shared socket demultiplexed
+    ///   across connections, say) is responsible for the same MTU bound in its own loop.
     fn max_gro_segments(&self) -> usize {
         1
     }
