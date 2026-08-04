@@ -298,8 +298,7 @@ where
     /// takes effect for the process — set it consistently across connections, or set it on
     /// whichever you build first.
     ///
-    /// Ignored unless `with_dedicated_reactor_thread(true)` is also set, since the pool is
-    /// only used on that path.
+    /// Setting this to `0` disables the dedicated reactor pool; any non-zero value enables it.
     ///
     /// Smaller pools use fewer threads and less memory (fewer per-thread allocator
     /// arenas) at the cost of more drivers sharing each thread; size it to trade
