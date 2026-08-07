@@ -1302,7 +1302,7 @@ mod tests {
 #[cfg(all(test, feature = "runtime-mock"))]
 mod virtual_clock_tests {
     use super::*;
-    use crate::runtime::mock::{MockNetwork, MockRuntime};
+    use crate::runtime::mock::{MockRuntime, MockUDPNetwork};
     use std::sync::Mutex as StdMutex;
     use std::time::Duration;
 
@@ -1392,7 +1392,7 @@ mod virtual_clock_tests {
     /// core computes, and nothing works at all.
     const CLOCK_OFFSET: Duration = Duration::from_secs(3600);
 
-    async fn build_peer(network: &Arc<MockNetwork>) -> Peer {
+    async fn build_peer(network: &Arc<MockUDPNetwork>) -> Peer {
         let rt = Arc::new(MockRuntime::with_network(Arc::clone(network)));
         rt.clock().advance(CLOCK_OFFSET);
         let rec = Arc::new(StateRecorder::default());
@@ -1419,7 +1419,7 @@ mod virtual_clock_tests {
     /// Two peers, ICE-connected, entirely on the mock network under virtual clocks.
     ///
     /// Returns once both report `Connected`, or panics with what they did report.
-    async fn connect_pair(network: &Arc<MockNetwork>) -> (Peer, Peer) {
+    async fn connect_pair(network: &Arc<MockUDPNetwork>) -> (Peer, Peer) {
         let offerer = build_peer(network).await;
         let answerer = build_peer(network).await;
 
@@ -1488,7 +1488,7 @@ mod virtual_clock_tests {
     /// them, and no wall-clock time is available for either.
     #[test]
     fn dtls_and_sctp_complete_under_a_virtual_clock() {
-        let network = Arc::new(MockNetwork::new());
+        let network = Arc::new(MockUDPNetwork::new());
         let driver = MockRuntime::new();
         let wall_clock_start = std::time::Instant::now();
 
@@ -1532,7 +1532,7 @@ mod virtual_clock_tests {
     /// answers arrive within the window.
     #[test]
     fn ice_consent_expires_when_only_the_virtual_clock_advances() {
-        let network = Arc::new(MockNetwork::new());
+        let network = Arc::new(MockUDPNetwork::new());
         let driver = MockRuntime::new();
         let wall_clock_start = std::time::Instant::now();
 
@@ -1624,7 +1624,7 @@ mod virtual_clock_tests {
 
     #[test]
     fn ice_connects_under_a_virtual_clock() {
-        let network = Arc::new(MockNetwork::new());
+        let network = Arc::new(MockUDPNetwork::new());
         let driver = MockRuntime::new();
         driver.block_on(Box::pin(async {
             let (offerer, answerer) = connect_pair(&network).await;

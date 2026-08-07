@@ -31,7 +31,7 @@
 //!
 //! # Scope
 //!
-//! This runtime covers **timers, task execution and UDP**. [`MockNetwork`] delivers datagrams
+//! This runtime covers **timers, task execution and UDP**. [`MockUDPNetwork`] delivers datagrams
 //! in memory, synchronously, so two peers sharing one can complete ICE, DTLS and SCTP without
 //! a socket or a millisecond of wall-clock time — which is what makes an end-to-end test of
 //! timing-dependent behaviour possible at all.
@@ -268,7 +268,7 @@ impl super::JoinHandle for MockJoinHandle {
 ///
 /// Sending to an address nobody has bound is a silent drop, matching UDP.
 #[derive(Debug, Default)]
-pub struct MockNetwork {
+pub struct MockUDPNetwork {
     inboxes: Mutex<HashMap<SocketAddr, Inbox>>,
 }
 
@@ -280,7 +280,7 @@ struct Inbox {
     waker: Option<Waker>,
 }
 
-impl MockNetwork {
+impl MockUDPNetwork {
     /// Create an empty network with no sockets bound.
     pub fn new() -> Self {
         Self::default()
@@ -302,7 +302,7 @@ impl MockNetwork {
         inboxes.insert(addr, Inbox::default());
         Ok(Arc::new(MockUdpSocket {
             local_addr: addr,
-            network: Arc::clone(self),
+            udp_network: Arc::clone(self),
         }))
     }
 
@@ -323,11 +323,22 @@ impl MockNetwork {
     }
 }
 
-/// A UDP socket on a [`MockNetwork`].
+/// A UDP socket on a [`MockUDPNetwork`].
 #[derive(Debug)]
 pub struct MockUdpSocket {
     local_addr: SocketAddr,
-    network: Arc<MockNetwork>,
+    udp_network: Arc<MockUDPNetwork>,
+}
+
+impl Drop for MockUdpSocket {
+    fn drop(&mut self) {
+        // Match UDP semantics: dropping a socket releases its bound address.
+        self.udp_network
+            .inboxes
+            .lock()
+            .expect("udp network poisoned")
+            .remove(&self.local_addr);
+    }
 }
 
 impl AsyncUdpSocket for MockUdpSocket {
@@ -344,12 +355,12 @@ impl AsyncUdpSocket for MockUdpSocket {
         match transmit.segment_size {
             Some(size) if size > 0 => {
                 for chunk in transmit.contents.chunks(size) {
-                    self.network
+                    self.udp_network
                         .deliver(self.local_addr, transmit.destination, chunk);
                 }
             }
             _ => self
-                .network
+                .udp_network
                 .deliver(self.local_addr, transmit.destination, transmit.contents),
         }
         Poll::Ready(Ok(transmit.contents.len()))
@@ -366,7 +377,7 @@ impl AsyncUdpSocket for MockUdpSocket {
             return Poll::Ready(Ok(0));
         }
 
-        let mut inboxes = self.network.inboxes.lock().expect("network poisoned");
+        let mut inboxes = self.udp_network.inboxes.lock().expect("network poisoned");
         let inbox = inboxes.get_mut(&self.local_addr).ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotConnected, "mock socket is not bound")
         })?;
@@ -406,7 +417,7 @@ impl AsyncUdpSocket for MockUdpSocket {
 #[derive(Debug, Default)]
 pub struct MockRuntime {
     clock: Arc<VirtualClock>,
-    network: Arc<MockNetwork>,
+    udp_network: Arc<MockUDPNetwork>,
 }
 
 impl MockRuntime {
@@ -421,10 +432,10 @@ impl MockRuntime {
     /// the network first and hands the same handle to both runtimes. Each keeps its own clock:
     /// advancing one does not advance the other, which is deliberate — a test that wants the
     /// two peers to see the same time must advance both.
-    pub fn with_network(network: Arc<MockNetwork>) -> Self {
+    pub fn with_network(network: Arc<MockUDPNetwork>) -> Self {
         Self {
             clock: Arc::new(VirtualClock::new()),
-            network,
+            udp_network: network,
         }
     }
 
@@ -434,8 +445,8 @@ impl MockRuntime {
     }
 
     /// Handle to this runtime's network, for binding further sockets or sharing it.
-    pub fn network(&self) -> Arc<MockNetwork> {
-        Arc::clone(&self.network)
+    pub fn network(&self) -> Arc<MockUDPNetwork> {
+        Arc::clone(&self.udp_network)
     }
 }
 
@@ -472,7 +483,7 @@ impl Runtime for MockRuntime {
     fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
         let addr = socket.local_addr()?;
         drop(socket);
-        Ok(self.network.bind(addr)? as Arc<dyn AsyncUdpSocket>)
+        Ok(self.udp_network.bind(addr)? as Arc<dyn AsyncUdpSocket>)
     }
 
     fn wrap_tcp_listener(
@@ -640,7 +651,7 @@ mod tests {
     /// delay and no reactor: delivery happens inside `poll_send`.
     #[test]
     fn udp_datagrams_round_trip_in_memory() {
-        let network = Arc::new(MockNetwork::new());
+        let network = Arc::new(MockUDPNetwork::new());
         let a: SocketAddr = "127.0.0.1:4000".parse().expect("literal addr");
         let b: SocketAddr = "127.0.0.1:4001".parse().expect("literal addr");
         let sock_a = network.bind(a).expect("bind a");
@@ -685,7 +696,7 @@ mod tests {
     /// Sending to an address nobody bound is a silent drop, as UDP is.
     #[test]
     fn udp_send_to_unbound_address_is_dropped() {
-        let network = Arc::new(MockNetwork::new());
+        let network = Arc::new(MockUDPNetwork::new());
         let a: SocketAddr = "127.0.0.1:4002".parse().expect("literal addr");
         let sock_a = network.bind(a).expect("bind a");
         let waker = futures::task::noop_waker();

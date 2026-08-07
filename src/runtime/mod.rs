@@ -527,7 +527,7 @@ pub use smol::SmolRuntime;
 #[cfg(feature = "runtime-mock")]
 pub mod mock;
 #[cfg(feature = "runtime-mock")]
-pub use mock::{MockNetwork, MockRuntime};
+pub use mock::{MockRuntime, MockUDPNetwork};
 
 #[cfg(test)]
 mod default_impl_tests {
