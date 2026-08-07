@@ -52,7 +52,10 @@
 
 use std::io::IoSliceMut;
 use std::task::{Context, Poll};
-use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration,
+    time::Instant,
+};
 
 pub mod primitives;
 
@@ -157,6 +160,26 @@ pub trait Runtime: Send + Sync + Debug + 'static {
         &'a self,
         host: &'a str,
     ) -> Pin<Box<dyn Future<Output = io::Result<Vec<SocketAddr>>> + Send + 'a>>;
+
+    /// The current instant, as this runtime measures it.
+    ///
+    /// **This is the clock the sans-I/O core sees.** The core is *told* the time — through
+    /// `handle_timeout(now)` and the timestamps on inbound messages — and never reads one
+    /// itself, so whatever the driver passes down is the only clock protocol logic has. Routing
+    /// that through the runtime is what makes [`MockRuntime`](crate::runtime::mock::MockRuntime)'s
+    /// virtual clock reach ICE timeouts, DTLS retransmits and SCTP RTO.
+    ///
+    /// Defaulted to the wall clock, so existing `Runtime` implementations keep working
+    /// unchanged. A runtime with a controllable clock should override it and return that
+    /// clock's instant; one that does not will simply behave as before.
+    ///
+    /// Implementations must be consistent with [`sleep`](Self::sleep) and
+    /// [`interval`](Self::interval): if those are driven by a virtual clock, this must read the
+    /// same clock, or the driver will arm timers against one time base and stamp packets with
+    /// another.
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
 
     /// Complete after `duration` has elapsed.
     ///

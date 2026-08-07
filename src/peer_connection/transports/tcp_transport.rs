@@ -182,7 +182,9 @@ impl RTCTcpTransport {
         Some(four_tuple)
     }
 
-    pub(crate) fn on_read(&mut self, res: TcpReadResult) -> Vec<TaggedBytesMut> {
+    /// `now` is when these bytes were observed; the caller supplies it so the packets carry the
+    /// driver's clock rather than the wall clock.
+    pub(crate) fn on_read(&mut self, now: Instant, res: TcpReadResult) -> Vec<TaggedBytesMut> {
         let mut out = Vec::new();
         match res {
             TcpReadResult::Packet { four_tuple, n, buf } => {
@@ -194,7 +196,7 @@ impl RTCTcpTransport {
                         decoder.extend_from_slice(&buf[..n]);
                         while let Some(packet) = decoder.next_packet() {
                             out.push(TaggedBytesMut {
-                                now: Instant::now(),
+                                now,
                                 transport: TransportContext {
                                     local_addr: four_tuple.local_addr,
                                     peer_addr: four_tuple.peer_addr,

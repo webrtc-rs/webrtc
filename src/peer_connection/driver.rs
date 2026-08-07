@@ -33,7 +33,7 @@ use rtc::mdns::MDNS_PORT;
 use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::{RTCIceServer, RTCIceTransportPolicy};
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent, RTCTrackEvent};
-use rtc::peer_connection::message::RTCMessage;
+use rtc::peer_connection::message::{RTCMessage, TaggedRTCMessage};
 use rtc::peer_connection::state::RTCIceGatheringState;
 use rtc::peer_connection::transport::RTCIceCandidateInit;
 use rtc::rtp_transceiver::{RTCRtpReceiverId, RTCRtpSenderId};
@@ -319,7 +319,9 @@ where
 
             // 4.a poll next timeout
             let timeout = self.poll_timeout().await;
-            let now = Instant::now();
+            // The runtime's clock, not the wall clock: this instant is what reaches
+            // `core.handle_timeout(now)`, so under a `MockRuntime` it is the virtual one.
+            let now = self.inner.runtime.now();
             let delay_from_now = timeout.checked_duration_since(now).unwrap_or_default();
 
             // 4.b handle immediate timeout
@@ -360,7 +362,7 @@ where
             futures::select! {
                 // Timer expired
                 _ = timer.fuse() => {
-                    self.handle_timeout(Instant::now()).await?;
+                    self.handle_timeout(self.inner.runtime.now()).await?;
                 }
 
                 // Driver events (RTP, RTCP, or ICE candidate)
@@ -460,7 +462,7 @@ where
                 // Incoming TCP frame data from any tcp stream
                 tcp_read_result = tcp_read_future => {
                     if let Some(Some(res) ) = tcp_read_result {
-                        let packets = self.tcp_transport.on_read(res);
+                        let packets = self.tcp_transport.on_read(self.inner.runtime.now(), res);
                         for packet in packets {
                             if let Err(err) = self.handle_read(packet).await {
                                 error!("handle_read error on TCP: {}", err);
@@ -529,7 +531,7 @@ where
             let end = (off + step).min(n);
             if let Err(err) = self
                 .handle_read(TaggedBytesMut {
-                    now: Instant::now(),
+                    now: self.inner.runtime.now(),
                     transport: TransportContext {
                         local_addr,
                         peer_addr,
@@ -846,7 +848,10 @@ where
         }
     }
 
-    async fn handle_rtc_message(&mut self, message: RTCMessage) {
+    async fn handle_rtc_message(&mut self, message: TaggedRTCMessage) {
+        // The core reports when the packet was observed at the socket; the async layer above
+        // does not need it yet, but discarding it here would be the wrong default.
+        let TaggedRTCMessage { now: _, message } = message;
         match message {
             RTCMessage::DataChannelMessage(channel_id, dc_message) => {
                 let data_channels = self.inner.data_channel_events_tx.lock().await;
@@ -927,11 +932,13 @@ where
     }
 
     async fn handle_driver_event(&mut self, evt: PeerConnectionDriverEvent) -> bool {
+        // One instant for the whole event: everything this dispatches is caused by it.
+        let now = self.inner.runtime.now();
         match evt {
             PeerConnectionDriverEvent::SenderRtp(sender_id, packet) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut sender) = core.rtp_sender(sender_id) {
-                    if let Err(err) = sender.write_rtp(packet) {
+                    if let Err(err) = sender.write_rtp(now, packet) {
                         error!("Failed to send RTP: {}", err);
                     }
                 } else {
@@ -944,7 +951,7 @@ where
             PeerConnectionDriverEvent::SenderRtcp(sender_id, rtcp_packets) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut sender) = core.rtp_sender(sender_id) {
-                    if let Err(err) = sender.write_rtcp(rtcp_packets) {
+                    if let Err(err) = sender.write_rtcp(now, rtcp_packets) {
                         error!("Failed to send RTCP: {}", err);
                     }
                 } else {
@@ -957,7 +964,7 @@ where
             PeerConnectionDriverEvent::ReceiverRtcp(receiver_id, rtcp_packets) => {
                 let mut core = self.inner.core.lock().await;
                 if let Some(mut receiver) = core.rtp_receiver(receiver_id) {
-                    if let Err(err) = receiver.write_rtcp(rtcp_packets) {
+                    if let Err(err) = receiver.write_rtcp(now, rtcp_packets) {
                         error!("Failed to send RTCP feedback: {}", err);
                     }
                 } else {
@@ -1101,7 +1108,7 @@ where
         events
     }
 
-    async fn drain_core_reads(inner: Arc<PeerConnectionRef<I>>) -> Vec<RTCMessage> {
+    async fn drain_core_reads(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedRTCMessage> {
         let mut messages = Vec::new();
         let mut core = inner.core.lock().await;
         while let Some(message) = core.poll_read() {
@@ -1340,7 +1347,7 @@ where
             .into_iter()
             .flatten()
             .min()
-            .unwrap_or_else(|| Instant::now() + DEFAULT_TIMEOUT_DURATION)
+            .unwrap_or_else(|| self.inner.runtime.now() + DEFAULT_TIMEOUT_DURATION)
     }
 
     async fn handle_timeout(&mut self, now: Instant) -> Result<()> {

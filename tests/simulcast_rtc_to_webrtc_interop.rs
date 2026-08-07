@@ -224,7 +224,7 @@ async fn run_test() -> Result<()> {
         .with_setting_engine(setting_engine)
         .with_media_engine(media_engine)
         .with_interceptor_registry(registry)
-        .build()?;
+        .build(Instant::now())?;
     log::info!("Created RTC peer connection");
 
     let mid = "0".to_owned();
@@ -278,7 +278,7 @@ async fn run_test() -> Result<()> {
 
     // ──── Signaling ────
     let offer = rtc_pc.create_offer(None)?;
-    rtc_pc.set_local_description(offer.clone())?;
+    rtc_pc.set_local_description(Instant::now(), offer.clone())?;
     log::info!("RTC created and set offer");
 
     webrtc_pc
@@ -299,7 +299,7 @@ async fn run_test() -> Result<()> {
 
     let rtc_answer =
         rtc::peer_connection::sdp::RTCSessionDescription::answer(answer_with_cands.sdp)?;
-    rtc_pc.set_remote_description(rtc_answer)?;
+    rtc_pc.set_remote_description(Instant::now(), rtc_answer)?;
     log::info!("RTC set remote description (answer)");
 
     // ──── Connection + streaming loop ────
@@ -415,7 +415,7 @@ async fn run_test() -> Result<()> {
                     header,
                     payload: bytes::Bytes::from(dummy_frame.clone()),
                 };
-                if let Err(e) = rtp_sender.write_rtp(packet) {
+                if let Err(e) = rtp_sender.write_rtp(Instant::now(), packet) {
                     log::debug!("Failed to send RTP on {}: {}", rid, e);
                 }
                 sequence_number = sequence_number.wrapping_add(1);

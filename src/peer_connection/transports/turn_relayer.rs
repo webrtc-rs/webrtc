@@ -211,7 +211,7 @@ impl RTCTurnRelayer {
                 .client
                 .update_credentials(username.clone(), password.clone());
 
-            if let Err(err) = managed.client.refresh_allocations() {
+            if let Err(err) = managed.client.refresh_allocations(self.runtime.now()) {
                 warn!(
                     "TURN credential rotation: refresh failed for {} via {}: {}",
                     managed.local_addr, managed.url, err
@@ -312,7 +312,7 @@ impl RTCTurnRelayer {
                         Arc::clone(&self.crypto_provider),
                     )?;
 
-                    let allocate_tid = client.allocate()?;
+                    let allocate_tid = client.allocate(self.runtime.now())?;
                     debug!(
                         "TURN allocation started from {} to {} via {}",
                         local_addr, peer_addr, url
@@ -504,7 +504,7 @@ impl RTCTurnRelayer {
             match managed_client
                 .client
                 .relay(relay_addr)
-                .and_then(|mut relay| relay.send_to(&packet.message, peer_addr))
+                .and_then(|mut relay| relay.send_to(packet.now, &packet.message, peer_addr))
             {
                 Ok(()) => {}
                 Err(Error::ErrNoPermission) => {
@@ -565,7 +565,7 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
         match managed_client
             .client
             .relay(relay_addr)
-            .and_then(|mut relay| relay.send_to(&msg.message, peer_addr))
+            .and_then(|mut relay| relay.send_to(msg.now, &msg.message, peer_addr))
         {
             Ok(()) => Ok(()),
             Err(Error::ErrNoPermission) => {
@@ -575,7 +575,7 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
                     && let Some(tid) = managed_client
                         .client
                         .relay(relay_addr)?
-                        .create_permission(peer_addr)?
+                        .create_permission(msg.now, peer_addr)?
                 {
                     self.pending_permissions.insert(
                         tid,
@@ -667,7 +667,7 @@ impl Protocol<TaggedBytesMut, TaggedBytesMut, RTCTurnRelayEventIn> for RTCTurnRe
                         TurnEvent::DataIndicationOrChannelData(_, peer_addr, data) => {
                             if let Some(relay_addr) = managed_client.relay_addr {
                                 read_msgs.push(TaggedBytesMut {
-                                    now: Instant::now(),
+                                    now: self.runtime.now(),
                                     transport: TransportContext {
                                         local_addr: relay_addr,
                                         peer_addr,
@@ -811,7 +811,7 @@ mod tests {
 
             let response = build_turn_allocate_unauthorized(initial_request_msg.transaction_id);
             let msg = TaggedBytesMut {
-                now: Instant::now(),
+                now: Instant::now(), // Exemption: usage in #test code
                 transport: TransportContext {
                     local_addr,
                     peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)), 3478),

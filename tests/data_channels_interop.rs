@@ -5,6 +5,7 @@
 use anyhow::Result;
 use bytes::BytesMut;
 use futures::FutureExt;
+use rtc::peer_connection::message::TaggedRTCMessage;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use std::sync::Arc;
@@ -148,11 +149,11 @@ async fn run_test() -> Result<()> {
     let mut rtc_pc = RTCPeerConnectionBuilder::new()
         .with_configuration(config)
         .with_setting_engine(setting_engine)
-        .build()?;
+        .build(Instant::now())?;
     log::info!("Created RTC peer connection");
 
     log::info!("RTC set remote description {}", rtc_offer);
-    rtc_pc.set_remote_description(rtc_offer)?;
+    rtc_pc.set_remote_description(Instant::now(), rtc_offer)?;
 
     let candidate = CandidateHostConfig {
         base_config: CandidateConfig {
@@ -171,7 +172,7 @@ async fn run_test() -> Result<()> {
 
     let answer = rtc_pc.create_answer(None)?;
     log::info!("RTC created answer");
-    rtc_pc.set_local_description(answer.clone())?;
+    rtc_pc.set_local_description(Instant::now(), answer.clone())?;
     log::info!("RTC set local description {}", answer);
 
     // Set remote description on webrtc (same RTCSessionDescription type, no conversion needed)
@@ -237,7 +238,7 @@ async fn run_test() -> Result<()> {
         }
 
         // Process rtc incoming messages and echo back
-        while let Some(message) = rtc_pc.poll_read() {
+        while let Some(TaggedRTCMessage { message, .. }) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(channel_id, data_channel_message) = message {
                 let mut dc = rtc_pc
                     .data_channel(channel_id)
@@ -250,7 +251,7 @@ async fn run_test() -> Result<()> {
                 );
                 rtc_msg_tx.try_send(msg_str.clone()).ok();
                 log::info!("RTC echoing message back: '{}'", msg_str);
-                dc.send_text(msg_str)?;
+                dc.send_text(Instant::now(), msg_str)?;
             }
         }
 

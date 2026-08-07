@@ -15,7 +15,7 @@
 //! use rtc::media_stream::{MediaStreamTrack, MediaStreamTrackId, MediaStreamId};
 //! use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 //! use rtc::media::Sample;
-//! use std::time::Duration;
+//! use std::time::{Duration, Instant};
 //! use std::sync::Arc;
 //!
 //! # async fn example() -> webrtc::error::Result<()> {
@@ -27,13 +27,13 @@
 //!     RtpCodecKind::Video,
 //!     vec![],
 //! );
-//! let local_track = Arc::new(TrackLocalStaticSample::new(track)?);
+//! let local_track = Arc::new(TrackLocalStaticSample::new(Instant::now(), track)?); // Exemption: usage in #doctest code
 //!
 //! // Write a raw VP8/H.264 frame as a sample
 //! let sample = Sample {
 //!     data: bytes::Bytes::from(vec![0x00, 0x01, 0x02]),
 //!     duration: Duration::from_millis(33), // ~30 fps
-//!     ..Default::default()
+//!     ..Sample::new(Instant::now())
 //! };
 //!
 //! // Write the sample to SSRC 1234 and PT 96

@@ -5,7 +5,7 @@
 //!
 //! ```
 //! # use std::sync::Arc;
-//! # use std::time::Duration;
+//! # use std::time::{Duration, Instant};
 //! # use webrtc::runtime::{Runtime, mock::MockRuntime};
 //! let rt = Arc::new(MockRuntime::new());
 //! let clock = rt.clock();
@@ -44,19 +44,36 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// A manually advanced clock. Timers registered against it fire only when
 /// [`advance`](Self::advance) moves past their deadline.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct VirtualClock {
     state: Mutex<ClockState>,
+    /// The real instant this clock was created at.
+    ///
+    /// [`Instant`] is opaque and cannot be constructed from nothing, so a virtual instant is
+    /// this base plus the elapsed virtual [`Duration`]. Only differences between instants are
+    /// meaningful, so where the base actually sits is irrelevant — what matters is that
+    /// [`now_instant`](Self::now_instant) advances *only* when [`advance`](Self::advance) is
+    /// called, never with the wall clock.
+    base: Instant,
+}
+
+impl Default for VirtualClock {
+    fn default() -> Self {
+        Self {
+            state: ClockState::default().into(),
+            base: Instant::now(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
 struct ClockState {
     /// Time elapsed since the clock was created.
-    now: Duration,
+    time_elapsed: Duration,
     /// Pending timers, keyed by registration id.
     timers: HashMap<u64, Timer>,
     next_id: u64,
@@ -75,8 +92,17 @@ impl VirtualClock {
     }
 
     /// Time elapsed since this clock was created.
-    pub fn now(&self) -> Duration {
-        self.state.lock().expect("clock poisoned").now
+    pub fn elapsed(&self) -> Duration {
+        self.state.lock().expect("clock poisoned").time_elapsed
+    }
+
+    /// The current virtual time as an [`Instant`], for handing to the sans-I/O core.
+    ///
+    /// This is what makes `clock.advance(..)` visible to protocol logic: the core is *told* the
+    /// time through `handle_timeout(now)` and the timestamps on inbound messages, so a clock the
+    /// driver reads is the only clock the core sees.
+    pub fn now(&self) -> Instant {
+        self.base + self.elapsed()
     }
 
     /// Advance the clock by `delta`, waking every timer whose deadline has passed.
@@ -86,8 +112,8 @@ impl VirtualClock {
     pub fn advance(&self, delta: Duration) {
         let wakers = {
             let mut state = self.state.lock().expect("clock poisoned");
-            state.now += delta;
-            let now = state.now;
+            state.time_elapsed += delta;
+            let now = state.time_elapsed;
             let due: Vec<u64> = state
                 .timers
                 .iter()
@@ -115,7 +141,7 @@ impl VirtualClock {
         if delay.is_zero() {
             return None;
         }
-        let deadline = state.now + delay;
+        let deadline = state.time_elapsed + delay;
         let id = state.next_id;
         state.next_id += 1;
         state.timers.insert(
@@ -246,6 +272,15 @@ impl MockRuntime {
 }
 
 impl Runtime for MockRuntime {
+    /// The virtual clock's current instant.
+    ///
+    /// This is the override that makes the whole thing work: `clock.advance(30s)` moves this,
+    /// the driver passes it to `handle_timeout`, and the core's ICE consent / DTLS retransmit /
+    /// SCTP RTO logic decides against it — with no wall-clock time having passed.
+    fn now(&self) -> Instant {
+        self.clock.now()
+    }
+
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) -> Box<dyn JoinHandle> {
         // One OS thread per task, driven by a minimal executor. Adequate for tests and
         // avoids pulling a work-stealing scheduler into the mock; determinism comes from
@@ -348,10 +383,10 @@ mod tests {
     fn advance_is_instant_and_cumulative() {
         let rt = MockRuntime::new();
         let clock = rt.clock();
-        assert_eq!(clock.now(), Duration::ZERO);
+        assert_eq!(clock.elapsed(), Duration::ZERO);
         clock.advance(Duration::from_millis(250));
         clock.advance(Duration::from_millis(750));
-        assert_eq!(clock.now(), Duration::from_secs(1));
+        assert_eq!(clock.elapsed(), Duration::from_secs(1));
     }
 
     #[test]
@@ -392,8 +427,8 @@ mod tests {
         let a = MockRuntime::new();
         let b = MockRuntime::new();
         a.clock().advance(Duration::from_secs(5));
-        assert_eq!(a.clock().now(), Duration::from_secs(5));
-        assert_eq!(b.clock().now(), Duration::ZERO);
+        assert_eq!(a.clock().elapsed(), Duration::from_secs(5));
+        assert_eq!(b.clock().elapsed(), Duration::ZERO);
     }
 
     #[test]

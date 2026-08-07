@@ -22,9 +22,10 @@
 //!     RTCRtpCodec, RTCRtpCodingParameters, RTCRtpEncodingParameters, RtpCodecKind,
 //! };
 //! use webrtc::media_stream::track_local::static_sample::TrackLocalStaticSample;
+//! use std::time::Instant;
 //!
 //! # fn example(video_codec: RTCRtpCodec, ssrc: u32) -> Result<(), Box<dyn std::error::Error>> {
-//! let track = TrackLocalStaticSample::new(MediaStreamTrack::new(
+//! let track = TrackLocalStaticSample::new(Instant::now(), MediaStreamTrack::new( // Exemption: usage in #doctest code
 //!     "stream-id".to_owned(),
 //!     "track-id".to_owned(),
 //!     "track-label".to_owned(),
@@ -83,6 +84,7 @@ use rtc::rtp_transceiver::{PayloadType, RtpStreamId, SSRC};
 use rtc::shared::error::flatten_errs;
 use rtc::{rtcp, rtp};
 use std::collections::HashMap;
+use std::time::Instant;
 
 const RTP_OUTBOUND_MTU: usize = 1200;
 
@@ -97,7 +99,7 @@ pub struct TrackLocalStaticSample {
 
 impl TrackLocalStaticSample {
     /// Creates a new `TrackLocalStaticSample` with the given [`MediaStreamTrack`].
-    pub fn new(track: MediaStreamTrack) -> Result<Self> {
+    pub fn new(now: Instant, track: MediaStreamTrack) -> Result<Self> {
         let (mut packetizers, mut sequencers) = (HashMap::new(), HashMap::new());
         for ssrc in track.ssrcs() {
             if let Some(codec) = track.codec(ssrc) {
@@ -105,6 +107,7 @@ impl TrackLocalStaticSample {
                 let sequencer: Box<dyn Sequencer> = Box::new(rtp::sequence::new_random_sequencer());
                 let packetizer: Mutex<Box<dyn Packetizer>> =
                     Mutex::new(Box::new(rtp::packetizer::new_packetizer(
+                        now,
                         RTP_OUTBOUND_MTU,
                         0, // Value is handled when writing
                         ssrc,
@@ -156,7 +159,9 @@ impl TrackLocalStaticSample {
             if sample.prev_dropped_packets > 0 {
                 packetizer.skip_samples(samples * sample.prev_dropped_packets as u32);
             }
-            packetizer.packetize(&sample.data, samples)?
+            // The sample's own instant: when the frame was generated, which is what the
+            // absolute-send-time extension should carry — not when this task got round to it.
+            packetizer.packetize(sample.timestamp, &sample.data, samples)?
         } else {
             vec![]
         };

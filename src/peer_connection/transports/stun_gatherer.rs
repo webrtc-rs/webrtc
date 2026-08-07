@@ -15,7 +15,8 @@ use rtc::shared::error::Error;
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportProtocol};
 use rtc::stun::{
     client::Client as StunClient, client::ClientBuilder as StunClientBuilder,
-    message::BINDING_REQUEST, message::Message as StunMessage, message::TransactionId,
+    client::TaggedMessage, message::BINDING_REQUEST, message::Message as StunMessage,
+    message::TransactionId,
 };
 use std::sync::Arc;
 /*use rtc::turn::client::{
@@ -232,16 +233,22 @@ impl RTCStunGatherer {
 
         debug!("STUN client bound to {}", local_addr);
 
-        // Create STUN client using the sans-I/O pattern
-        let mut stun_client =
-            StunClientBuilder::new().build(local_addr, stun_server_addr, TransportProtocol::UDP)?;
+        // Create STUN client using the sans-I/O pattern. The client is told the time; it
+        // reads no clock of its own, so its transaction deadlines follow this runtime's.
+        let now = runtime.now();
+        let mut stun_client = StunClientBuilder::new().build(
+            now,
+            local_addr,
+            stun_server_addr,
+            TransportProtocol::UDP,
+        )?;
 
         // Create STUN binding request
         let mut msg = StunMessage::new();
         msg.build(&[Box::<TransactionId>::default(), Box::new(BINDING_REQUEST)])?;
 
         // Send the request
-        stun_client.handle_write(msg)?;
+        stun_client.handle_write(TaggedMessage { now, message: msg })?;
 
         Ok(stun_client)
     }

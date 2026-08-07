@@ -361,10 +361,12 @@ where
             .set_crypto_provider(crypto_provider.clone());
         let mdns_mode = self.setting_engine.multicast_dns().mode;
 
+        // The core is told the time from here on; this is the seed every construction-time
+        // instant inside it derives from, and under a `MockRuntime` it is the virtual clock's.
         let core = self
             .builder
             .with_setting_engine(self.setting_engine)
-            .build()?;
+            .build(runtime.now())?;
 
         // `0` = unbounded (same as the `usize::MAX` default); normalise it to `usize::MAX`
         // so the send-buffer gate (and `writable()`) short-circuits to a no-op.
@@ -895,7 +897,7 @@ where
     async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
-            core.set_local_description(desc)?;
+            core.set_local_description(self.inner.runtime.now(), desc)?;
         }
 
         // Wake the driver with MessageInner::IceGathering. Without this
@@ -931,7 +933,7 @@ where
     async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
-            core.set_remote_description(desc)?;
+            core.set_remote_description(self.inner.runtime.now(), desc)?;
         }
         // Wake the driver so it re-polls its timeout. When both local and remote
         // descriptions are set, set_remote_description triggers start_transports
@@ -1240,7 +1242,9 @@ mod tests {
         Arc<PeerConnectionRef>,
         crate::runtime::Receiver<PeerConnectionDriverEvent>,
     ) {
-        let core = RTCPeerConnectionBuilder::new().build().unwrap();
+        let core = RTCPeerConnectionBuilder::new()
+            .build(Instant::now())
+            .unwrap();
         let runtime = default_runtime().expect("test requires a runtime feature");
         let handler: Arc<dyn PeerConnectionEventHandler> = Arc::new(DummyHandler);
         let (driver_event_tx, driver_event_rx) = channel::<PeerConnectionDriverEvent>(1);

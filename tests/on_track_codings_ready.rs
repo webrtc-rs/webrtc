@@ -138,7 +138,7 @@ async fn run_test() -> Result<()> {
         .with_setting_engine(setting_engine)
         .with_media_engine(rtc_media_engine)
         .with_interceptor_registry(registry)
-        .build()?;
+        .build(Instant::now())?;
 
     let test_ssrc = 0x1020_3040;
     let output_track = MediaStreamTrack::new(
@@ -171,7 +171,7 @@ async fn run_test() -> Result<()> {
     rtc_pc.add_local_candidate(RTCIceCandidate::from(&candidate).to_json()?)?;
 
     let offer = rtc_pc.create_offer(None)?;
-    rtc_pc.set_local_description(offer.clone())?;
+    rtc_pc.set_local_description(Instant::now(), offer.clone())?;
 
     webrtc_pc
         .set_remote_description(rtc::peer_connection::sdp::RTCSessionDescription::offer(
@@ -186,9 +186,10 @@ async fn run_test() -> Result<()> {
         .local_description()
         .await
         .expect("local description should be set");
-    rtc_pc.set_remote_description(rtc::peer_connection::sdp::RTCSessionDescription::answer(
-        answer_with_cands.sdp,
-    )?)?;
+    rtc_pc.set_remote_description(
+        Instant::now(),
+        rtc::peer_connection::sdp::RTCSessionDescription::answer(answer_with_cands.sdp)?,
+    )?;
 
     let mut buf = vec![0u8; 2000];
     let mut rtc_connected = false;
@@ -248,7 +249,7 @@ async fn run_test() -> Result<()> {
                 },
                 payload: bytes::Bytes::from_static(&[0x90, 0x90, 0x90, 0x90]),
             };
-            let _ = rtp_sender.write_rtp(packet);
+            let _ = rtp_sender.write_rtp(Instant::now(), packet);
             sequence_number = sequence_number.wrapping_add(1);
         }
 
