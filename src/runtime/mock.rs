@@ -31,14 +31,22 @@
 //!
 //! # Scope
 //!
-//! This runtime covers **timers and task execution**. Socket operations return
-//! [`io::ErrorKind::Unsupported`]: in-memory transports are a planned follow-up. Use it for
-//! timing- and protocol-logic tests, not for end-to-end connection tests.
+//! This runtime covers **timers, task execution and UDP**. [`MockNetwork`] delivers datagrams
+//! in memory, synchronously, so two peers sharing one can complete ICE, DTLS and SCTP without
+//! a socket or a millisecond of wall-clock time — which is what makes an end-to-end test of
+//! timing-dependent behaviour possible at all.
+//!
+//! TCP operations (`wrap_tcp_listener`, `connect_tcp`) still return
+//! [`io::ErrorKind::Unsupported`]; ICE-TCP under the mock is a follow-up.
 
-use super::{AsyncInterval, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, JoinHandle, Runtime};
-use std::collections::HashMap;
+use super::{
+    AsyncInterval, AsyncTcpListener, AsyncTcpStream, AsyncUdpSocket, JoinHandle, RecvMeta, Runtime,
+    Transmit,
+};
+use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::io;
+use std::io::IoSliceMut;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -251,23 +259,183 @@ impl super::JoinHandle for MockJoinHandle {
     }
 }
 
+/// An in-memory UDP network shared by the sockets of one or more [`MockRuntime`]s.
+///
+/// Datagrams are delivered synchronously into the destination's inbox at `poll_send` time and
+/// the receiver's waker is fired, so delivery costs no wall-clock time and needs no reactor.
+/// That is what lets an end-to-end connection run entirely under a [`VirtualClock`]: nothing in
+/// the path waits on the operating system.
+///
+/// Sending to an address nobody has bound is a silent drop, matching UDP.
+#[derive(Debug, Default)]
+pub struct MockNetwork {
+    inboxes: Mutex<HashMap<SocketAddr, Inbox>>,
+}
+
+#[derive(Debug, Default)]
+struct Inbox {
+    /// Datagrams waiting to be read, as `(source, payload)`.
+    packets: VecDeque<(SocketAddr, Vec<u8>)>,
+    /// Waker of a task parked in `poll_recv` on this address.
+    waker: Option<Waker>,
+}
+
+impl MockNetwork {
+    /// Create an empty network with no sockets bound.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Bind `addr`, returning a socket that sends and receives on this network.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`io::ErrorKind::AddrInUse`] if `addr` is already bound.
+    pub fn bind(self: &Arc<Self>, addr: SocketAddr) -> io::Result<Arc<MockUdpSocket>> {
+        let mut inboxes = self.inboxes.lock().expect("network poisoned");
+        if inboxes.contains_key(&addr) {
+            return Err(io::Error::new(
+                io::ErrorKind::AddrInUse,
+                format!("mock network: {addr} is already bound"),
+            ));
+        }
+        inboxes.insert(addr, Inbox::default());
+        Ok(Arc::new(MockUdpSocket {
+            local_addr: addr,
+            network: Arc::clone(self),
+        }))
+    }
+
+    /// Deliver one datagram, waking a parked receiver. Unbound destinations are dropped.
+    fn deliver(&self, from: SocketAddr, to: SocketAddr, payload: &[u8]) {
+        let waker = {
+            let mut inboxes = self.inboxes.lock().expect("network poisoned");
+            let Some(inbox) = inboxes.get_mut(&to) else {
+                return; // nothing bound: a UDP datagram into the void
+            };
+            inbox.packets.push_back((from, payload.to_vec()));
+            inbox.waker.take()
+        };
+        // Wake outside the lock: the woken task may immediately re-register.
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+    }
+}
+
+/// A UDP socket on a [`MockNetwork`].
+#[derive(Debug)]
+pub struct MockUdpSocket {
+    local_addr: SocketAddr,
+    network: Arc<MockNetwork>,
+}
+
+impl AsyncUdpSocket for MockUdpSocket {
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(self.local_addr)
+    }
+
+    fn poll_send(&self, _cx: &mut Context<'_>, transmit: &Transmit<'_>) -> Poll<io::Result<usize>> {
+        // Always writable: there is no send buffer to fill.
+        //
+        // `segment_size` is honoured even though `max_gso_segments` reports 1, because
+        // splitting here is trivial and keeps the mock honest if a caller sends a GSO batch
+        // anyway — the alternative (one oversized datagram) would corrupt the stream.
+        match transmit.segment_size {
+            Some(size) if size > 0 => {
+                for chunk in transmit.contents.chunks(size) {
+                    self.network
+                        .deliver(self.local_addr, transmit.destination, chunk);
+                }
+            }
+            _ => self
+                .network
+                .deliver(self.local_addr, transmit.destination, transmit.contents),
+        }
+        Poll::Ready(Ok(transmit.contents.len()))
+    }
+
+    fn poll_recv(
+        &self,
+        cx: &mut Context<'_>,
+        bufs: &mut [IoSliceMut<'_>],
+        meta: &mut [RecvMeta],
+    ) -> Poll<io::Result<usize>> {
+        let capacity = bufs.len().min(meta.len());
+        if capacity == 0 {
+            return Poll::Ready(Ok(0));
+        }
+
+        let mut inboxes = self.network.inboxes.lock().expect("network poisoned");
+        let inbox = inboxes.get_mut(&self.local_addr).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotConnected, "mock socket is not bound")
+        })?;
+
+        if inbox.packets.is_empty() {
+            // Park. The waker is fired by `deliver`, never by the clock: an idle socket must
+            // not wake just because time advanced.
+            inbox.waker = Some(cx.waker().clone());
+            return Poll::Pending;
+        }
+
+        let mut n = 0;
+        while n < capacity {
+            let Some((from, payload)) = inbox.packets.pop_front() else {
+                break;
+            };
+            let len = payload.len().min(bufs[n].len());
+            bufs[n][..len].copy_from_slice(&payload[..len]);
+            // `RecvMeta` is `#[non_exhaustive]`: build from `default()` and assign.
+            let mut m = RecvMeta::default();
+            m.addr = from;
+            m.len = len;
+            // One datagram per message: no GRO coalescing here. Must be >= 1 even for a
+            // zero-length datagram, or the driver's de-segmentation divides by zero.
+            m.stride = len.max(1);
+            m.dst_ip = Some(self.local_addr.ip());
+            meta[n] = m;
+            n += 1;
+        }
+        Poll::Ready(Ok(n))
+    }
+}
+
 /// A deterministic [`Runtime`] backed by a [`VirtualClock`].
 ///
 /// See the [module docs](self) for usage and scope.
 #[derive(Debug, Default)]
 pub struct MockRuntime {
     clock: Arc<VirtualClock>,
+    network: Arc<MockNetwork>,
 }
 
 impl MockRuntime {
-    /// Create a runtime with a fresh clock at time zero.
+    /// Create a runtime with a fresh clock at time zero and a private network.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a runtime whose sockets live on `network`.
+    ///
+    /// Two peers can only exchange datagrams if they share one, so an end-to-end test builds
+    /// the network first and hands the same handle to both runtimes. Each keeps its own clock:
+    /// advancing one does not advance the other, which is deliberate — a test that wants the
+    /// two peers to see the same time must advance both.
+    pub fn with_network(network: Arc<MockNetwork>) -> Self {
+        Self {
+            clock: Arc::new(VirtualClock::new()),
+            network,
+        }
     }
 
     /// Handle to this runtime's clock, for advancing time in tests.
     pub fn clock(&self) -> Arc<VirtualClock> {
         Arc::clone(&self.clock)
+    }
+
+    /// Handle to this runtime's network, for binding further sockets or sharing it.
+    pub fn network(&self) -> Arc<MockNetwork> {
+        Arc::clone(&self.network)
     }
 }
 
@@ -295,8 +463,16 @@ impl Runtime for MockRuntime {
         Box::new(MockJoinHandle { abort, finished })
     }
 
-    fn wrap_udp_socket(&self, _socket: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
-        Err(unsupported("wrap_udp_socket"))
+    /// Re-bind `socket`'s address on this runtime's in-memory network.
+    ///
+    /// The real socket is only consulted for the address it bound, then dropped: the caller
+    /// binds a `std::net::UdpSocket` to get an ephemeral port allocated by the OS, and this
+    /// takes that address into the mock network. Nothing is sent over the real socket, so no
+    /// datagram leaves the process and no wall-clock time is spent waiting on one.
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
+        let addr = socket.local_addr()?;
+        drop(socket);
+        Ok(self.network.bind(addr)? as Arc<dyn AsyncUdpSocket>)
     }
 
     fn wrap_tcp_listener(
@@ -447,13 +623,84 @@ mod tests {
     }
 
     #[test]
-    fn socket_operations_report_unsupported() {
+    fn tcp_operations_report_unsupported() {
         let rt = MockRuntime::new();
-        let sock = std::net::UdpSocket::bind("127.0.0.1:0");
-        if let Ok(sock) = sock {
-            let err = rt.wrap_udp_socket(sock).unwrap_err();
+        if let Ok(listener) = std::net::TcpListener::bind("127.0.0.1:0") {
+            let err = rt.wrap_tcp_listener(listener).unwrap_err();
             assert_eq!(err.kind(), io::ErrorKind::Unsupported);
         }
+        let err = futures::executor::block_on(
+            rt.connect_tcp("127.0.0.1:1".parse().expect("literal addr")),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Unsupported);
+    }
+
+    /// A datagram sent on the shared network lands in the peer's inbox with no wall-clock
+    /// delay and no reactor: delivery happens inside `poll_send`.
+    #[test]
+    fn udp_datagrams_round_trip_in_memory() {
+        let network = Arc::new(MockNetwork::new());
+        let a: SocketAddr = "127.0.0.1:4000".parse().expect("literal addr");
+        let b: SocketAddr = "127.0.0.1:4001".parse().expect("literal addr");
+        let sock_a = network.bind(a).expect("bind a");
+        let sock_b = network.bind(b).expect("bind b");
+
+        assert_eq!(
+            network.bind(a).unwrap_err().kind(),
+            io::ErrorKind::AddrInUse,
+            "a bound address cannot be bound twice"
+        );
+
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        // Nothing sent yet: the receiver parks.
+        let mut buf = [0u8; 64];
+        let mut bufs = [IoSliceMut::new(&mut buf)];
+        let mut meta = [RecvMeta::default()];
+        assert!(sock_b.poll_recv(&mut cx, &mut bufs, &mut meta).is_pending());
+
+        let payload = b"hello";
+        let sent = sock_a.poll_send(
+            &mut cx,
+            &Transmit {
+                destination: b,
+                ecn: None,
+                contents: payload,
+                segment_size: None,
+                src_ip: None,
+            },
+        );
+        assert!(matches!(sent, Poll::Ready(Ok(n)) if n == payload.len()));
+
+        let got = sock_b.poll_recv(&mut cx, &mut bufs, &mut meta);
+        assert!(matches!(got, Poll::Ready(Ok(1))));
+        assert_eq!(meta[0].addr, a, "the source address is preserved");
+        assert_eq!(meta[0].len, payload.len());
+        assert!(meta[0].stride >= 1, "stride must never be zero");
+        assert_eq!(&buf[..payload.len()], payload);
+    }
+
+    /// Sending to an address nobody bound is a silent drop, as UDP is.
+    #[test]
+    fn udp_send_to_unbound_address_is_dropped() {
+        let network = Arc::new(MockNetwork::new());
+        let a: SocketAddr = "127.0.0.1:4002".parse().expect("literal addr");
+        let sock_a = network.bind(a).expect("bind a");
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        let sent = sock_a.poll_send(
+            &mut cx,
+            &Transmit {
+                destination: "127.0.0.1:9999".parse().expect("literal addr"),
+                ecn: None,
+                contents: b"into the void",
+                segment_size: None,
+                src_ip: None,
+            },
+        );
+        assert!(matches!(sent, Poll::Ready(Ok(_))), "send still succeeds");
     }
 
     #[test]
