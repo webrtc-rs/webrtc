@@ -473,7 +473,7 @@ where
             let mut dc = peer_connection
                 .data_channel(self.id)
                 .ok_or(Error::ErrDataChannelClosed)?;
-            dc.send(data)?;
+            dc.send(self.inner.runtime.now(), data)?;
         }
 
         // Wake the driver so it flushes SCTP output (poll_write) and checks
@@ -491,7 +491,7 @@ where
             let mut dc = peer_connection
                 .data_channel(self.id)
                 .ok_or(Error::ErrDataChannelClosed)?;
-            dc.send_text(text)?;
+            dc.send_text(self.inner.runtime.now(), text)?;
         }
 
         self.inner.wake_writes().await;
@@ -555,7 +555,7 @@ where
             if outstanding != 0 && outstanding.saturating_add(data.len()) > limit {
                 return Err(Error::ErrSendBufferFull);
             }
-            dc.send(data)?;
+            dc.send(self.inner.runtime.now(), data)?;
         }
 
         self.inner.wake_writes().await;
@@ -577,7 +577,7 @@ where
             if outstanding != 0 && outstanding.saturating_add(text.len()) > limit {
                 return Err(Error::ErrSendBufferFull);
             }
-            dc.send_text(text)?;
+            dc.send_text(self.inner.runtime.now(), text)?;
         }
 
         self.inner.wake_writes().await;

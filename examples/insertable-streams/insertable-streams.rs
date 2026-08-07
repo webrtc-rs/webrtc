@@ -18,7 +18,7 @@ use rtc::rtp_transceiver::rtp_sender::{
 };
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{
     fs,
     fs::{File, OpenOptions},
@@ -187,20 +187,23 @@ async fn async_main() -> Result<()> {
         .await?;
 
     let ssrc = rand::random::<u32>();
-    let video_track = Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
-        format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
-        format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
-        format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
-        RtpCodecKind::Video,
-        vec![RTCRtpEncodingParameters {
-            rtp_coding_parameters: RTCRtpCodingParameters {
-                ssrc: Some(ssrc),
+    let video_track = Arc::new(TrackLocalStaticSample::new(
+        Instant::now(),
+        MediaStreamTrack::new(
+            format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
+            format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
+            format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
+            RtpCodecKind::Video,
+            vec![RTCRtpEncodingParameters {
+                rtp_coding_parameters: RTCRtpCodingParameters {
+                    ssrc: Some(ssrc),
+                    ..Default::default()
+                },
+                codec: video_codec.rtp_codec.clone(),
                 ..Default::default()
-            },
-            codec: video_codec.rtp_codec.clone(),
-            ..Default::default()
-        }],
-    ))?);
+            }],
+        ),
+    )?);
     let video_sender = peer_connection
         .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal>)
         .await?;
@@ -312,7 +315,7 @@ async fn stream_video(
             .write_sample(&Sample {
                 data: frame.freeze(),
                 duration: frame_duration,
-                ..Default::default()
+                ..Sample::new(Instant::now())
             })
             .await?;
 

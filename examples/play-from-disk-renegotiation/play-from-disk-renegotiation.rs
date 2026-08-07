@@ -22,7 +22,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{
     fs::{File, OpenOptions},
     io::{BufReader, Write},
@@ -170,26 +170,29 @@ async fn create_peer_connection(
 // Add a single video track
 async fn add_video(r: Request<Body>, state: Arc<AppState>) -> Result<Response<Body>, hyper::Error> {
     let video_track: Arc<TrackLocalStaticSample> = Arc::new(
-        TrackLocalStaticSample::new(MediaStreamTrack::new(
-            format!("webrtc-rs-stream-id-{}", rand::random::<u32>()),
-            format!("webrtc-rs-track-id-{}", rand::random::<u32>()),
-            format!("webrtc-rs-track-label-{}", rand::random::<u32>()),
-            RtpCodecKind::Video,
-            vec![RTCRtpEncodingParameters {
-                rtp_coding_parameters: RTCRtpCodingParameters {
-                    ssrc: Some(rand::random::<u32>()),
+        TrackLocalStaticSample::new(
+            Instant::now(),
+            MediaStreamTrack::new(
+                format!("webrtc-rs-stream-id-{}", rand::random::<u32>()),
+                format!("webrtc-rs-track-id-{}", rand::random::<u32>()),
+                format!("webrtc-rs-track-label-{}", rand::random::<u32>()),
+                RtpCodecKind::Video,
+                vec![RTCRtpEncodingParameters {
+                    rtp_coding_parameters: RTCRtpCodingParameters {
+                        ssrc: Some(rand::random::<u32>()),
+                        ..Default::default()
+                    },
+                    codec: RTCRtpCodec {
+                        mime_type: MIME_TYPE_VP8.to_owned(),
+                        clock_rate: 90000,
+                        channels: 0,
+                        sdp_fmtp_line: "".to_owned(),
+                        rtcp_feedback: vec![],
+                    },
                     ..Default::default()
-                },
-                codec: RTCRtpCodec {
-                    mime_type: MIME_TYPE_VP8.to_owned(),
-                    clock_rate: 90000,
-                    channels: 0,
-                    sdp_fmtp_line: "".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                ..Default::default()
-            }],
-        ))
+                }],
+            ),
+        )
         .unwrap(),
     );
 
@@ -538,7 +541,7 @@ async fn write_video_to_track(
             .write_sample(&Sample {
                 data: frame.freeze(),
                 duration: Duration::from_secs(1),
-                ..Default::default()
+                ..Sample::new(Instant::now())
             })
             .await?;
 

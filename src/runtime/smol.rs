@@ -188,7 +188,7 @@ impl Runtime for SmolRuntime {
     fn interval(&self, period: Duration) -> Box<dyn AsyncInterval> {
         Box::new(SmolInterval {
             period,
-            deadline: std::time::Instant::now() + period,
+            deadline: Instant::now() + period,
             first: true,
         })
     }

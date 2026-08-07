@@ -5,6 +5,7 @@
 use anyhow::Result;
 use bytes::BytesMut;
 use futures::FutureExt;
+use rtc::peer_connection::message::TaggedRTCMessage;
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use std::sync::Arc;
@@ -110,7 +111,7 @@ async fn run_test() -> Result<()> {
     let mut rtc_pc = RTCPeerConnectionBuilder::new()
         .with_configuration(config.clone())
         .with_setting_engine(setting_engine)
-        .build()?;
+        .build(Instant::now())?;
     log::info!("Created RTC peer connection");
 
     let dc_label = "test";
@@ -133,7 +134,7 @@ async fn run_test() -> Result<()> {
     rtc_pc.add_local_candidate(rtc_candidate_init)?;
 
     let offer = rtc_pc.create_offer(None)?;
-    rtc_pc.set_local_description(offer.clone())?;
+    rtc_pc.set_local_description(Instant::now(), offer.clone())?;
     log::info!("RTC created offer");
 
     // Create WebRTC peer (answerer)
@@ -171,7 +172,7 @@ async fn run_test() -> Result<()> {
 
     let rtc_answer =
         rtc::peer_connection::sdp::RTCSessionDescription::answer(answer_with_cands.sdp.clone())?;
-    rtc_pc.set_remote_description(rtc_answer)?;
+    rtc_pc.set_remote_description(Instant::now(), rtc_answer)?;
     log::info!("RTC set remote description (answer)");
 
     // ──────────── Phase 1: wait for initial connection + DC open ────────────
@@ -227,7 +228,7 @@ async fn run_test() -> Result<()> {
             }
         }
 
-        while let Some(message) = rtc_pc.poll_read() {
+        while let Some(TaggedRTCMessage { message, .. }) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
                 let s = String::from_utf8(dc_msg.data.to_vec()).unwrap_or_default();
                 rtc_received.push(s);
@@ -286,7 +287,7 @@ async fn run_test() -> Result<()> {
 
     if let Some(channel_id) = rtc_dc_id {
         let mut dc = rtc_pc.data_channel(channel_id).expect("dc should exist");
-        dc.send_text(TEST_MESSAGE)?;
+        dc.send_text(Instant::now(), TEST_MESSAGE)?;
         log::info!("RTC sent: {}", TEST_MESSAGE);
     }
 
@@ -306,7 +307,7 @@ async fn run_test() -> Result<()> {
                 log::error!("Failed to send message to peer {}", err);
             }
         }
-        while let Some(message) = rtc_pc.poll_read() {
+        while let Some(TaggedRTCMessage { message, .. }) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
                 let s = String::from_utf8(dc_msg.data.to_vec()).unwrap_or_default();
                 rtc_received.push(s);
@@ -392,7 +393,7 @@ async fn run_test() -> Result<()> {
         new_ufrag
     );
 
-    rtc_pc.set_local_description(restart_offer.clone())?;
+    rtc_pc.set_local_description(Instant::now(), restart_offer.clone())?;
 
     // Add candidate again for the restart offer
     let restart_candidate = CandidateHostConfig {
@@ -444,7 +445,7 @@ async fn run_test() -> Result<()> {
     let rtc_restart_answer = rtc::peer_connection::sdp::RTCSessionDescription::answer(
         restart_answer_with_cands.sdp.clone(),
     )?;
-    rtc_pc.set_remote_description(rtc_restart_answer)?;
+    rtc_pc.set_remote_description(Instant::now(), rtc_restart_answer)?;
     log::info!("RTC set remote description for restart (answer)");
 
     // ──────────── Phase 4: wait for reconnection ────────────
@@ -478,7 +479,7 @@ async fn run_test() -> Result<()> {
                 _ => {}
             }
         }
-        while let Some(message) = rtc_pc.poll_read() {
+        while let Some(TaggedRTCMessage { message, .. }) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
                 let s = String::from_utf8(dc_msg.data.to_vec()).unwrap_or_default();
                 rtc_received.push(s);
@@ -536,7 +537,7 @@ async fn run_test() -> Result<()> {
 
     if let Some(channel_id) = rtc_dc_id {
         let mut dc = rtc_pc.data_channel(channel_id).expect("dc should exist");
-        dc.send_text(TEST_MESSAGE_AFTER_RESTART)?;
+        dc.send_text(Instant::now(), TEST_MESSAGE_AFTER_RESTART)?;
         log::info!("RTC sent: {}", TEST_MESSAGE_AFTER_RESTART);
     }
 
@@ -555,7 +556,7 @@ async fn run_test() -> Result<()> {
                 log::error!("Failed to send message to peer {}", err);
             }
         }
-        while let Some(message) = rtc_pc.poll_read() {
+        while let Some(TaggedRTCMessage { message, .. }) = rtc_pc.poll_read() {
             if let RTCMessage::DataChannelMessage(_, dc_msg) = message {
                 let s = String::from_utf8(dc_msg.data.to_vec()).unwrap_or_default();
                 rtc_received.push(s);

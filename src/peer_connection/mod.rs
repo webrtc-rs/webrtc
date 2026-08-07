@@ -361,10 +361,12 @@ where
             .set_crypto_provider(crypto_provider.clone());
         let mdns_mode = self.setting_engine.multicast_dns().mode;
 
+        // The core is told the time from here on; this is the seed every construction-time
+        // instant inside it derives from, and under a `MockRuntime` it is the virtual clock's.
         let core = self
             .builder
             .with_setting_engine(self.setting_engine)
-            .build()?;
+            .build(runtime.now())?;
 
         // `0` = unbounded (same as the `usize::MAX` default); normalise it to `usize::MAX`
         // so the send-buffer gate (and `writable()`) short-circuits to a no-op.
@@ -895,7 +897,7 @@ where
     async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
-            core.set_local_description(desc)?;
+            core.set_local_description(self.inner.runtime.now(), desc)?;
         }
 
         // Wake the driver with MessageInner::IceGathering. Without this
@@ -931,7 +933,7 @@ where
     async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
-            core.set_remote_description(desc)?;
+            core.set_remote_description(self.inner.runtime.now(), desc)?;
         }
         // Wake the driver so it re-polls its timeout. When both local and remote
         // descriptions are set, set_remote_description triggers start_transports
@@ -1240,7 +1242,9 @@ mod tests {
         Arc<PeerConnectionRef>,
         crate::runtime::Receiver<PeerConnectionDriverEvent>,
     ) {
-        let core = RTCPeerConnectionBuilder::new().build().unwrap();
+        let core = RTCPeerConnectionBuilder::new()
+            .build(Instant::now())
+            .unwrap();
         let runtime = default_runtime().expect("test requires a runtime feature");
         let handler: Arc<dyn PeerConnectionEventHandler> = Arc::new(DummyHandler);
         let (driver_event_tx, driver_event_rx) = channel::<PeerConnectionDriverEvent>(1);
@@ -1285,6 +1289,347 @@ mod tests {
                 .expect("driver should be woken within 1s")
                 .expect("driver event channel should not be closed");
             assert!(matches!(event, PeerConnectionDriverEvent::WriteNotify));
+        }));
+    }
+}
+
+/// End-to-end tests that the sans-I/O core's timing-dependent behaviour is driven by the
+/// runtime's clock rather than the wall clock.
+///
+/// These are the acceptance criteria for the deterministic-time work: the pluggable-runtime
+/// post claims `MockRuntime` makes ICE timeouts, DTLS retransmits and SCTP RTO testable
+/// instantly, and until the driver read `Runtime::now()` that was not true.
+#[cfg(all(test, feature = "runtime-mock"))]
+mod virtual_clock_tests {
+    use super::*;
+    use crate::runtime::mock::{MockRuntime, MockUDPNetwork};
+    use std::sync::Mutex as StdMutex;
+    use std::time::Duration;
+
+    /// Records the ICE connection states a peer reports, so a test can assert a transition
+    /// without polling internal state.
+    #[derive(Debug, Default)]
+    struct StateRecorder {
+        ice: StdMutex<Vec<RTCIceConnectionState>>,
+        /// Locally gathered candidates not yet handed to the peer.
+        pending_candidates: StdMutex<Vec<RTCIceCandidateInit>>,
+        conn: StdMutex<Vec<RTCPeerConnectionState>>,
+    }
+
+    impl StateRecorder {
+        fn ice_states(&self) -> Vec<RTCIceConnectionState> {
+            self.ice.lock().expect("recorder poisoned").clone()
+        }
+
+        fn saw_ice(&self, state: RTCIceConnectionState) -> bool {
+            self.ice_states().contains(&state)
+        }
+
+        fn saw_conn(&self, state: RTCPeerConnectionState) -> bool {
+            self.conn
+                .lock()
+                .expect("recorder poisoned")
+                .contains(&state)
+        }
+
+        fn conn_states(&self) -> Vec<RTCPeerConnectionState> {
+            self.conn.lock().expect("recorder poisoned").clone()
+        }
+
+        fn take_candidates(&self) -> Vec<RTCIceCandidateInit> {
+            std::mem::take(&mut *self.pending_candidates.lock().expect("recorder poisoned"))
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl PeerConnectionEventHandler for StateRecorder {
+        async fn on_ice_connection_state_change(&self, state: RTCIceConnectionState) {
+            self.ice.lock().expect("recorder poisoned").push(state);
+        }
+
+        async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+            self.conn.lock().expect("recorder poisoned").push(state);
+        }
+
+        async fn on_ice_candidate(&self, event: RTCPeerConnectionIceEvent) {
+            if let Ok(init) = event.candidate.to_json() {
+                self.pending_candidates
+                    .lock()
+                    .expect("recorder poisoned")
+                    .push(init);
+            }
+        }
+    }
+
+    /// Let the driver threads run. `MockRuntime::spawn` gives each task its own OS thread, so
+    /// the test thread has to yield for them to make progress — but it yields, it does not
+    /// wait on a protocol deadline. Every *protocol* timeout is reached by advancing the
+    /// virtual clock, never by sleeping.
+    fn settle() {
+        std::thread::yield_now();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+
+    /// Advance both peers' clocks together and let their drivers run.
+    fn advance_both(a: &MockRuntime, b: &MockRuntime, delta: Duration) {
+        a.clock().advance(delta);
+        b.clock().advance(delta);
+        settle();
+    }
+
+    struct Peer {
+        pc: Box<dyn PeerConnection>,
+        rt: Arc<MockRuntime>,
+        rec: Arc<StateRecorder>,
+    }
+
+    /// How far the virtual clock is pushed ahead of the wall clock before anything is built.
+    ///
+    /// This is what makes these tests *falsifiable*. Both clocks start at roughly the same
+    /// instant, so a driver reading the wall clock behaves almost identically to one reading a
+    /// virtual clock that has barely moved — the bug hides. Offsetting the virtual clock by an
+    /// hour first means a wall-clock read is an hour in the past relative to every deadline the
+    /// core computes, and nothing works at all.
+    const CLOCK_OFFSET: Duration = Duration::from_secs(3600);
+
+    async fn build_peer(network: &Arc<MockUDPNetwork>) -> Peer {
+        let rt = Arc::new(MockRuntime::with_network(Arc::clone(network)));
+        rt.clock().advance(CLOCK_OFFSET);
+        let rec = Arc::new(StateRecorder::default());
+        // mDNS binds the fixed port 5353, which two peers on one mock network would collide
+        // on (a real stack shares it via SO_REUSEADDR). Resolving `.local` candidates is not
+        // what these tests are about, so turn it off rather than model port sharing.
+        let mut setting_engine = SettingEngine::default();
+        setting_engine.set_multicast_dns_mode(rtc::ice::mdns::MulticastDnsMode::Disabled);
+        let pc = PeerConnectionBuilder::new()
+            .with_setting_engine(setting_engine)
+            .with_runtime(Arc::clone(&rt) as Arc<dyn Runtime>)
+            .with_handler(Arc::clone(&rec) as Arc<dyn PeerConnectionEventHandler>)
+            .with_udp_addrs(vec!["127.0.0.1:0"])
+            .build()
+            .await
+            .expect("a peer connection builds on the mock runtime");
+        Peer {
+            pc: Box::new(pc),
+            rt,
+            rec,
+        }
+    }
+
+    /// Two peers, ICE-connected, entirely on the mock network under virtual clocks.
+    ///
+    /// Returns once both report `Connected`, or panics with what they did report.
+    async fn connect_pair(network: &Arc<MockUDPNetwork>) -> (Peer, Peer) {
+        let offerer = build_peer(network).await;
+        let answerer = build_peer(network).await;
+
+        offerer
+            .pc
+            .create_data_channel("probe", None)
+            .await
+            .expect("create data channel");
+
+        let offer = offerer.pc.create_offer(None).await.expect("create offer");
+        offerer
+            .pc
+            .set_local_description(offer.clone())
+            .await
+            .expect("set local description");
+        answerer
+            .pc
+            .set_remote_description(offer)
+            .await
+            .expect("set remote description");
+        let answer = answerer
+            .pc
+            .create_answer(None)
+            .await
+            .expect("create answer");
+        answerer
+            .pc
+            .set_local_description(answer.clone())
+            .await
+            .expect("set local description");
+        offerer
+            .pc
+            .set_remote_description(answer)
+            .await
+            .expect("set remote description");
+
+        // Drive the connectivity checks by advancing time, not by waiting for it, trickling
+        // each peer's gathered candidates to the other as they appear.
+        for _ in 0..200 {
+            for c in offerer.rec.take_candidates() {
+                answerer.pc.add_ice_candidate(c).await.ok();
+            }
+            for c in answerer.rec.take_candidates() {
+                offerer.pc.add_ice_candidate(c).await.ok();
+            }
+            if offerer.rec.saw_ice(RTCIceConnectionState::Connected)
+                && answerer.rec.saw_ice(RTCIceConnectionState::Connected)
+            {
+                return (offerer, answerer);
+            }
+            advance_both(&offerer.rt, &answerer.rt, Duration::from_millis(50));
+        }
+
+        panic!(
+            "ICE did not connect under the virtual clock; offerer saw {:?}, answerer saw {:?}",
+            offerer.rec.ice_states(),
+            answerer.rec.ice_states()
+        );
+    }
+
+    /// DTLS and SCTP are the other two behaviours the pluggable-runtime post names. Both sit
+    /// *behind* ICE: the handshake only starts once a candidate pair is selected, and SCTP's
+    /// association only once DTLS completes. So a data channel opening at all is the
+    /// end-to-end proof that both of their timers ran on the virtual clock — the DTLS
+    /// handshake's retransmit timer and SCTP's INIT/RTO are the only things that can drive
+    /// them, and no wall-clock time is available for either.
+    #[test]
+    fn dtls_and_sctp_complete_under_a_virtual_clock() {
+        let network = Arc::new(MockUDPNetwork::new());
+        let driver = MockRuntime::new();
+        let wall_clock_start = std::time::Instant::now();
+
+        driver.block_on(Box::pin(async {
+            let (offerer, answerer) = connect_pair(&network).await;
+
+            // The data channel created during `connect_pair` can only open once DTLS has
+            // handshaken and SCTP has established its association.
+            let mut opened = false;
+            for _ in 0..400 {
+                if offerer.rec.saw_conn(RTCPeerConnectionState::Connected)
+                    && answerer.rec.saw_conn(RTCPeerConnectionState::Connected)
+                {
+                    opened = true;
+                    break;
+                }
+                advance_both(&offerer.rt, &answerer.rt, Duration::from_millis(25));
+            }
+
+            assert!(
+                opened,
+                "DTLS + SCTP must complete on the virtual clock; offerer {:?}, answerer {:?}",
+                offerer.rec.conn_states(),
+                answerer.rec.conn_states()
+            );
+        }));
+
+        assert!(
+            wall_clock_start.elapsed() < Duration::from_secs(5),
+            "a virtual-clock test must not spend real time: took {:?}",
+            wall_clock_start.elapsed()
+        );
+    }
+
+    /// **The headline claim.** ICE consent freshness (RFC 7675) fails when a peer stops
+    /// answering; advancing only the virtual clock must produce that transition, with no
+    /// wall-clock time spent waiting for it.
+    ///
+    /// The answerer's clock is deliberately left frozen: it stops responding to consent
+    /// checks not because it is gone but because, from the offerer's point of view, no
+    /// answers arrive within the window.
+    #[test]
+    fn ice_consent_expires_when_only_the_virtual_clock_advances() {
+        let network = Arc::new(MockUDPNetwork::new());
+        let driver = MockRuntime::new();
+        let wall_clock_start = std::time::Instant::now();
+
+        driver.block_on(Box::pin(async {
+            let (offerer, answerer) = connect_pair(&network).await;
+
+            // Stop the answerer answering: it can no longer confirm consent.
+            answerer.pc.close().await.expect("close answerer");
+            settle();
+
+            // Consent has not expired yet: the transition below is produced by advancing the
+            // clock, not by closing the peer.
+            settle();
+            assert!(
+                !offerer.rec.saw_ice(RTCIceConnectionState::Disconnected),
+                "closing the peer must not by itself disconnect the offerer"
+            );
+
+            // Thirty seconds of protocol time, none of it real.
+            for _ in 0..120 {
+                if offerer.rec.saw_ice(RTCIceConnectionState::Disconnected)
+                    || offerer.rec.saw_ice(RTCIceConnectionState::Failed)
+                {
+                    break;
+                }
+                offerer.rt.clock().advance(Duration::from_secs(1));
+                settle();
+            }
+
+            let states = offerer.rec.ice_states();
+            assert!(
+                states.contains(&RTCIceConnectionState::Disconnected)
+                    || states.contains(&RTCIceConnectionState::Failed),
+                "consent should have expired once the virtual clock passed the window; saw {states:?}"
+            );
+        }));
+
+        // The negative half: the whole scenario covered ~2 minutes of protocol time. If any
+        // of it had been spent on the wall clock, this would fail — which is exactly how a
+        // regression that reintroduced `Instant::now()` in the driver would surface.
+        assert!(
+            wall_clock_start.elapsed() < Duration::from_secs(5),
+            "a virtual-clock test must not spend real time: took {:?}",
+            wall_clock_start.elapsed()
+        );
+    }
+
+    /// Advancing a mock clock moves the instant the core is told, and moves the wall clock
+    /// not at all. Removing `Runtime::now()` from the driver breaks the first assertion.
+    #[test]
+    fn advancing_the_mock_clock_does_not_advance_the_wall_clock() {
+        let rt = MockRuntime::new();
+        let clock = rt.clock();
+
+        let virtual_before = rt.now();
+        let wall_before = std::time::Instant::now();
+
+        clock.advance(Duration::from_secs(30));
+
+        assert_eq!(
+            rt.now().duration_since(virtual_before),
+            Duration::from_secs(30),
+            "the runtime's clock must report exactly what was advanced"
+        );
+        assert!(
+            wall_before.elapsed() < Duration::from_millis(500),
+            "advancing virtual time must not sleep: {:?} of real time passed",
+            wall_before.elapsed()
+        );
+    }
+
+    /// Each `MockRuntime` owns its clock, so advancing one leaves the other where it was.
+    /// That independence is what lets these tests run in parallel without interfering.
+    #[test]
+    fn clocks_are_independent_across_runtimes() {
+        let a = MockRuntime::new();
+        let b = MockRuntime::new();
+
+        let b_before = b.now();
+        a.clock().advance(Duration::from_secs(60));
+
+        assert_eq!(
+            b.now(),
+            b_before,
+            "advancing one clock must not move another"
+        );
+        assert!(a.now() > b.now());
+    }
+
+    #[test]
+    fn ice_connects_under_a_virtual_clock() {
+        let network = Arc::new(MockUDPNetwork::new());
+        let driver = MockRuntime::new();
+        driver.block_on(Box::pin(async {
+            let (offerer, answerer) = connect_pair(&network).await;
+            assert!(offerer.rec.saw_ice(RTCIceConnectionState::Connected));
+            assert!(answerer.rec.saw_ice(RTCIceConnectionState::Connected));
         }));
     }
 }

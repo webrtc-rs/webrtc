@@ -132,7 +132,7 @@ async fn stream_video(
             .write_sample(&Sample {
                 data: frame.freeze(),
                 duration: Duration::from_secs(1),
-                ..Default::default()
+                ..Sample::new(Instant::now())
             })
             .await?;
 
@@ -172,7 +172,7 @@ async fn stream_audio(
             .write_sample(&Sample {
                 data: page_data.freeze(),
                 duration: sample_duration,
-                ..Default::default()
+                ..Sample::new(Instant::now())
             })
             .await?;
 
@@ -201,51 +201,57 @@ fn test_play_from_disk_streaming() {
         // Add Offer tracks using TrackLocalStaticSample
         let video_ssrc = rand::random::<u32>();
         let video_track = Arc::new(
-            TrackLocalStaticSample::new(MediaStreamTrack::new(
-                "video-stream".to_owned(),
-                "video-track".to_owned(),
-                "video-label".to_owned(),
-                RtpCodecKind::Video,
-                vec![RTCRtpEncodingParameters {
-                    rtp_coding_parameters: RTCRtpCodingParameters {
-                        ssrc: Some(video_ssrc),
+            TrackLocalStaticSample::new(
+                Instant::now(),
+                MediaStreamTrack::new(
+                    "video-stream".to_owned(),
+                    "video-track".to_owned(),
+                    "video-label".to_owned(),
+                    RtpCodecKind::Video,
+                    vec![RTCRtpEncodingParameters {
+                        rtp_coding_parameters: RTCRtpCodingParameters {
+                            ssrc: Some(video_ssrc),
+                            ..Default::default()
+                        },
+                        codec: RTCRtpCodec {
+                            mime_type: MIME_TYPE_VP8.to_owned(),
+                            clock_rate: 90000,
+                            channels: 0,
+                            sdp_fmtp_line: String::new(),
+                            rtcp_feedback: vec![],
+                        },
                         ..Default::default()
-                    },
-                    codec: RTCRtpCodec {
-                        mime_type: MIME_TYPE_VP8.to_owned(),
-                        clock_rate: 90000,
-                        channels: 0,
-                        sdp_fmtp_line: String::new(),
-                        rtcp_feedback: vec![],
-                    },
-                    ..Default::default()
-                }],
-            ))
+                    }],
+                ),
+            )
             .unwrap(),
         );
 
         let audio_ssrc = rand::random::<u32>();
         let audio_track = Arc::new(
-            TrackLocalStaticSample::new(MediaStreamTrack::new(
-                "audio-stream".to_owned(),
-                "audio-track".to_owned(),
-                "audio-label".to_owned(),
-                RtpCodecKind::Audio,
-                vec![RTCRtpEncodingParameters {
-                    rtp_coding_parameters: RTCRtpCodingParameters {
-                        ssrc: Some(audio_ssrc),
+            TrackLocalStaticSample::new(
+                Instant::now(),
+                MediaStreamTrack::new(
+                    "audio-stream".to_owned(),
+                    "audio-track".to_owned(),
+                    "audio-label".to_owned(),
+                    RtpCodecKind::Audio,
+                    vec![RTCRtpEncodingParameters {
+                        rtp_coding_parameters: RTCRtpCodingParameters {
+                            ssrc: Some(audio_ssrc),
+                            ..Default::default()
+                        },
+                        codec: RTCRtpCodec {
+                            mime_type: MIME_TYPE_OPUS.to_owned(),
+                            clock_rate: 48000,
+                            channels: 2,
+                            sdp_fmtp_line: String::new(),
+                            rtcp_feedback: vec![],
+                        },
                         ..Default::default()
-                    },
-                    codec: RTCRtpCodec {
-                        mime_type: MIME_TYPE_OPUS.to_owned(),
-                        clock_rate: 48000,
-                        channels: 2,
-                        sdp_fmtp_line: String::new(),
-                        rtcp_feedback: vec![],
-                    },
-                    ..Default::default()
-                }],
-            ))
+                    }],
+                ),
+            )
             .unwrap(),
         );
 

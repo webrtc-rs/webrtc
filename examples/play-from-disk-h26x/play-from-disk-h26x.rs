@@ -21,7 +21,7 @@ use rtc::rtp_transceiver::rtp_sender::{
 };
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{
     fs,
     fs::{File, OpenOptions},
@@ -242,8 +242,9 @@ async fn async_main() -> Result<()> {
     let video_track: Option<(Arc<TrackLocalStaticSample>, Arc<dyn RtpSender>)> =
         if video_file.is_some() {
             let ssrc = rand::random::<u32>();
-            let track: Arc<TrackLocalStaticSample> =
-                Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
+            let track: Arc<TrackLocalStaticSample> = Arc::new(TrackLocalStaticSample::new(
+                Instant::now(),
+                MediaStreamTrack::new(
                     format!("webrtc-rs-stream-id-{}", RtpCodecKind::Video),
                     format!("webrtc-rs-track-id-{}", RtpCodecKind::Video),
                     format!("webrtc-rs-track-label-{}", RtpCodecKind::Video),
@@ -256,7 +257,8 @@ async fn async_main() -> Result<()> {
                         codec: video_codec.rtp_codec.clone(),
                         ..Default::default()
                     }],
-                ))?);
+                ),
+            )?);
             let sender = peer_connection
                 .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
                 .await?;
@@ -269,8 +271,9 @@ async fn async_main() -> Result<()> {
     let audio_track: Option<(Arc<TrackLocalStaticSample>, Arc<dyn RtpSender>)> =
         if audio_file.is_some() {
             let ssrc = rand::random::<u32>();
-            let track: Arc<TrackLocalStaticSample> =
-                Arc::new(TrackLocalStaticSample::new(MediaStreamTrack::new(
+            let track: Arc<TrackLocalStaticSample> = Arc::new(TrackLocalStaticSample::new(
+                Instant::now(),
+                MediaStreamTrack::new(
                     format!("webrtc-rs-stream-id-{}", RtpCodecKind::Audio),
                     format!("webrtc-rs-track-id-{}", RtpCodecKind::Audio),
                     format!("webrtc-rs-track-label-{}", RtpCodecKind::Audio),
@@ -283,7 +286,8 @@ async fn async_main() -> Result<()> {
                         codec: audio_codec.rtp_codec.clone(),
                         ..Default::default()
                     }],
-                ))?);
+                ),
+            )?);
             let sender = peer_connection
                 .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
                 .await?;
@@ -425,7 +429,7 @@ async fn stream_video(
                 } else {
                     Duration::ZERO
                 },
-                ..Default::default()
+                ..Sample::new(Instant::now())
             })
             .await?;
 
@@ -476,7 +480,7 @@ async fn stream_audio(
             .write_sample(&Sample {
                 data: page_data.freeze(),
                 duration: sample_duration,
-                ..Default::default()
+                ..Sample::new(Instant::now())
             })
             .await?;
 
