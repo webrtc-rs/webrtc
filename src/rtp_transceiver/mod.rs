@@ -42,7 +42,7 @@ pub(crate) mod rtp_sender;
 use crate::error::Error;
 use crate::media_stream::track_local::TrackLocalContext;
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
-use crate::peer_connection::driver::TRACK_LOCAL_EVENT_CHANNEL_CAPACITY;
+use crate::peer_connection::driver::DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY;
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::runtime::Mutex;
 use crate::runtime::channel;
@@ -179,7 +179,7 @@ where
             // (Receiver Reports, PLI/FIR) can be read via `TrackLocal::poll`. The driver
             // routes inbound RTCP tagged with this track id to `evt_tx`.
             let track_id = rtp_sender.track().track_id().await;
-            let (evt_tx, evt_rx) = channel(TRACK_LOCAL_EVENT_CHANNEL_CAPACITY);
+            let (evt_tx, evt_rx) = channel(DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY);
             self.inner
                 .track_local_events_tx
                 .lock()

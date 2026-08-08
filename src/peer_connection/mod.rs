@@ -66,7 +66,7 @@ use crate::runtime::{Mutex, Sender, channel};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use driver::{
-    DATA_CHANNEL_EVENT_CHANNEL_CAPACITY, PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY,
+    APPLICATION_TO_DRIVER_EVENT_CHANNEL_CAPACITY, DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY,
     PeerConnectionDriver,
 };
 use transports::stun_gatherer::RTCStunGatherer;
@@ -663,7 +663,7 @@ where
         let ice_gather_policy = configuration.ice_transport_policy();
 
         let (driver_event_tx, driver_event_rx) =
-            channel(PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY);
+            channel(APPLICATION_TO_DRIVER_EVENT_CHANNEL_CAPACITY);
         let peer_connection = Self {
             inner: Arc::new(PeerConnectionRef {
                 core: Mutex::new(core),
@@ -1036,7 +1036,7 @@ where
             rtc_dc.id()
         };
 
-        let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
+        let (evt_tx, evt_rx) = channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
         {
             let mut data_channels = self.inner.data_channel_events_tx.lock().await;
             data_channels.insert(channel_id, evt_tx);

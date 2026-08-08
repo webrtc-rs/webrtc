@@ -49,15 +49,22 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-/// Capacity of the internal driver event channel (WriteNotify, IceGathering, Close, …).
-pub(crate) const PEER_CONNECTION_DRIVER_EVENT_CHANNEL_CAPACITY: usize = 256;
+/// Capacity of the **application → driver** event channel (WriteNotify, IceGathering, Close, …).
+///
+/// Producers block (`send().await`) rather than dropping, except for two flag-backed nudges —
+/// `WriteNotify` and `Close` from `Drop` — whose real signal is an `AtomicBool` this loop polls
+/// every iteration, so a dropped nudge loses nothing.
+pub(crate) const APPLICATION_TO_DRIVER_EVENT_CHANNEL_CAPACITY: usize = 256;
 
-/// Capacity of each data-channel event channel (OnOpen, OnMessage, OnClose, …).
-pub(crate) const DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
+/// Capacity of each **driver → data-channel** event channel (OnOpen, OnMessage, OnClose, …).
+pub(crate) const DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
-/// Capacity of each track-remote event channel (OnMute, OnUnmute, OnEnded, OnRtpPacket, OnRtcpPacket, …).
-pub(crate) const TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
-pub(crate) const TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
+/// Capacity of each **driver → track-remote** event channel
+/// (OnMute, OnUnmute, OnEnded, OnRtpPacket, OnRtcpPacket, …).
+pub(crate) const DRIVER_TO_TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
+
+/// Capacity of each **driver → track-local** event channel (OnRtcpPacket, lifecycle, …).
+pub(crate) const DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
 
@@ -655,7 +662,8 @@ where
                     };
 
                     if data_channel_exist {
-                        let (evt_tx, evt_rx) = channel(DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
+                        let (evt_tx, evt_rx) =
+                            channel(DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY);
 
                         let should_announce = {
                             let mut data_channels = self.inner.data_channel_events_tx.lock().await;
@@ -754,7 +762,8 @@ where
                             .contains_key(track_id);
 
                         if !already_open {
-                            let (evt_tx, evt_rx) = channel(TRACK_REMOTE_EVENT_CHANNEL_CAPACITY);
+                            let (evt_tx, evt_rx) =
+                                channel(DRIVER_TO_TRACK_REMOTE_EVENT_CHANNEL_CAPACITY);
                             let track_remote: Arc<dyn TrackRemote> =
                                 Arc::new(TrackRemoteStaticRTP::new(
                                     track,
