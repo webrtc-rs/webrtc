@@ -857,7 +857,7 @@ where
                     // cost; E1-01 makes the loss counted and distinctly logged instead, and
                     // the jitter buffer (#846) shrinks the window by pacing media on playout
                     // time rather than arrival.
-                    let (track_id, result) = match evt {
+                    let (track_id, event_name, result) = match evt {
                         RTCTrackEvent::OnOpen(init) => {
                             Self::populate_track_remote_codings(
                                 self.inner.clone(),
@@ -868,28 +868,43 @@ where
                             .await;
                             (
                                 init.track_id.clone(),
+                                "OnOpen",
                                 evt_tx.try_send(TrackRemoteEvent::OnOpen(init)),
                             )
                         }
                         // overflow: DROPS — accepted residual, as above.
-                        RTCTrackEvent::OnError(track_id) => {
-                            (track_id, evt_tx.try_send(TrackRemoteEvent::OnError))
-                        }
-                        RTCTrackEvent::OnClosing(track_id) => {
-                            (track_id, evt_tx.try_send(TrackRemoteEvent::OnEnding))
-                        }
-                        RTCTrackEvent::OnClose(track_id) => {
-                            (track_id, evt_tx.try_send(TrackRemoteEvent::OnEnded))
-                        }
+                        RTCTrackEvent::OnError(track_id) => (
+                            track_id,
+                            "OnError",
+                            evt_tx.try_send(TrackRemoteEvent::OnError),
+                        ),
+                        RTCTrackEvent::OnClosing(track_id) => (
+                            track_id,
+                            "OnEnding",
+                            evt_tx.try_send(TrackRemoteEvent::OnEnding),
+                        ),
+                        RTCTrackEvent::OnClose(track_id) => (
+                            track_id,
+                            "OnEnded",
+                            evt_tx.try_send(TrackRemoteEvent::OnEnded),
+                        ),
                         _ => {
                             warn!("Ignoring unknown RTCTrackEvent variant");
                             return;
                         }
                     };
                     if let Err(err) = result {
+                        let err_msg = match err {
+                            TrySendError::Full(_) => "Full",
+                            TrySendError::Disconnected(_) => "Disconnected",
+                        };
+                        // Naming the event matters here: on `Full` this is in practice a
+                        // simulcast layer's `OnOpen` losing its slot to media from a layer
+                        // already flowing, and that layer then stays invisible for the life
+                        // of the connection.
                         error!(
-                            "Failed to send RTCTrackEvent to track remote {}: {:?}",
-                            track_id, err
+                            "Failed to send RTCTrackEvent {} to track remote {}: {}",
+                            event_name, track_id, err_msg,
                         );
                     }
                 } else {
