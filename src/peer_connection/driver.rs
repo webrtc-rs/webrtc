@@ -49,6 +49,30 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+// ---------------------------------------------------------------------------------------
+// Internal channel overflow policy
+//
+// Four bounded channels connect the application to this driver. When one is full the send
+// site must do one of five things, and **every** send site on them is tagged with which,
+// in a `overflow:` comment. Grep `overflow:` to enumerate them; an untagged send site on
+// one of these channels is unreviewed, not "fine by default".
+//
+//   overflow: awaited   the producer is the application, which blocks. Nothing is lost.
+//   overflow: nudge     a flag-backed notification. The durable state is an `AtomicBool`
+//                       this loop polls unconditionally, so dropping the wake loses
+//                       nothing. Do NOT "fix" these into awaits — see `wake_writes`.
+//   overflow: detached  the producer is a spawned task with nothing else to do; it blocks,
+//                       parking itself and never this loop.
+//   overflow: DROPS     currently discards on `Full`. A bug where the payload has a
+//                       delivery guarantee (data channel — webrtc#858), inherent loss
+//                       where it does not (media). Tagged with the task that resolves it.
+//
+// The one rule that constrains the fix: **this loop must never block on a send.** It also
+// drives ICE consent, DTLS retransmits and SCTP timers, so awaiting a slow consumer here
+// would expire consent and drop the connection. Back-pressure on a driver → application
+// channel means *stop pulling from the core*, never *wait here*.
+// ---------------------------------------------------------------------------------------
+
 /// Capacity of the **application → driver** event channel (WriteNotify, IceGathering, Close, …).
 ///
 /// Producers block (`send().await`) rather than dropping, except for two flag-backed nudges —
@@ -57,13 +81,24 @@ use std::time::{Duration, Instant};
 pub(crate) const APPLICATION_TO_DRIVER_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 /// Capacity of each **driver → data-channel** event channel (OnOpen, OnMessage, OnClose, …).
+///
+/// Every variant on this queue carries a delivery guarantee: `OnMessage` because a reliable
+/// channel promises it, the lifecycle events because losing one leaves the application's view
+/// of the channel permanently wrong. Overflow here is [webrtc#858](https://github.com/webrtc-rs/webrtc/issues/858).
 pub(crate) const DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 /// Capacity of each **driver → track-remote** event channel
-/// (OnMute, OnUnmute, OnEnded, OnRtpPacket, OnRtcpPacket, …).
+/// (OnOpen, OnEnding, OnEnded, OnError, OnRtpPacket, OnRtcpPacket).
+///
+/// Mixed contracts: media may be dropped (there is no flow control upstream of RTP to push
+/// back to), lifecycle may not. Splitting the queue was considered and rejected; the residual
+/// is accepted and made observable instead.
 pub(crate) const DRIVER_TO_TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 
-/// Capacity of each **driver → track-local** event channel (OnRtcpPacket, lifecycle, …).
+/// Capacity of each **driver → track-local** event channel.
+///
+/// `TrackLocalEvent::OnRtcpPacket` is its only variant and only producer — this queue carries
+/// no lifecycle traffic at all, so unlike track-remote it has nothing that must not be dropped.
 pub(crate) const DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
@@ -683,6 +718,11 @@ where
 
                 let data_channels = self.inner.data_channel_events_tx.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
+                    // overflow: DROPS — six lifecycle sends, resolved by E2-02 (webrtc#858).
+                    // These share the queue with `OnMessage` (see `handle_rtc_message`), so
+                    // they must be retained by the same mechanism and in the same order: a
+                    // retained `OnClose` must not overtake messages that preceded it, which
+                    // is what W3C's task-queue ordering requires.
                     let result = match evt {
                         RTCDataChannelEvent::OnOpen(_) => evt_tx.try_send(DataChannelEvent::OnOpen),
                         RTCDataChannelEvent::OnError(_) => {
@@ -809,6 +849,14 @@ where
                     .map(|(evt_tx, track_remote)| (evt_tx.clone(), Arc::clone(track_remote)));
 
                 if let Some((evt_tx, track_remote)) = track_remote_entry {
+                    // overflow: DROPS — four lifecycle sends. This is the *accepted residual*:
+                    // the queue is shared with bulk RTP (`handle_rtc_message`), and since RTP
+                    // has no upstream absorber it cannot be made never-drop the way the data
+                    // channel can. A flood can therefore starve `OnEnded`, leaking a track on
+                    // the application side. Splitting the queue was rejected as not worth its
+                    // cost; E1-01 makes the loss counted and distinctly logged instead, and
+                    // the jitter buffer (#846) shrinks the window by pacing media on playout
+                    // time rather than arrival.
                     let (track_id, result) = match evt {
                         RTCTrackEvent::OnOpen(init) => {
                             Self::populate_track_remote_codings(
@@ -823,6 +871,7 @@ where
                                 evt_tx.try_send(TrackRemoteEvent::OnOpen(init)),
                             )
                         }
+                        // overflow: DROPS — accepted residual, as above.
                         RTCTrackEvent::OnError(track_id) => {
                             (track_id, evt_tx.try_send(TrackRemoteEvent::OnError))
                         }
@@ -865,6 +914,13 @@ where
             RTCMessage::DataChannelMessage(channel_id, dc_message) => {
                 let data_channels = self.inner.data_channel_events_tx.lock().await;
                 if let Some(evt_tx) = data_channels.get(&channel_id) {
+                    // overflow: DROPS — **this is webrtc#858**, resolved by E2-02.
+                    // A reliable ordered channel promises delivery and this discards it.
+                    // `TrySendError::Full(value)` hands the message back; the fix keeps it
+                    // and stops pulling from the core for this channel until the consumer
+                    // drains, so the back-pressure reaches SCTP's receive window (E2-01) and
+                    // the peer throttles. It must not become `.send().await` — see the
+                    // overflow-policy block at the top of this file.
                     if let Err(err) = evt_tx.try_send(DataChannelEvent::OnMessage(dc_message)) {
                         let err_msg = match err {
                             TrySendError::Full(_) => "Full",
@@ -885,6 +941,14 @@ where
             RTCMessage::RtpPacket(track_id, packet) => {
                 let track_remotes = self.inner.track_remote_events_tx.lock().await;
                 if let Some(evt_tx) = track_remotes.get(&track_id) {
+                    // overflow: DROPS — inherent, not a bug. UDP has no flow control, so
+                    // there is nothing upstream to push back to; refusing to drop would
+                    // mean buffering until the process dies. E3-01 makes the loss *counted*
+                    // (`RTCInboundRtpStreamStats::packets_discarded`) rather than merely
+                    // logged, and E3-02 rate-limits the log. The eviction *policy* — which
+                    // packet to shed — belongs in the jitter buffer (#846), which knows
+                    // playout deadlines; deciding it here would discard packets NACK had
+                    // just recovered.
                     if let Err(err) = evt_tx.0.try_send(TrackRemoteEvent::OnRtpPacket(packet)) {
                         error!(
                             "Failed to send RtpPacket to track remote {}: {:?}",
@@ -907,6 +971,7 @@ where
                     .get(&track_id)
                     .map(|(evt_tx, _)| evt_tx.clone());
                 if let Some(evt_tx) = remote_tx {
+                    // overflow: DROPS — inherent, as for RTP above; counted by E3-01.
                     if let Err(err) = evt_tx.try_send(TrackRemoteEvent::OnRtcpPacket(packets)) {
                         error!(
                             "Failed to send RtcpPacket to track remote {}: {:?}",
@@ -924,6 +989,9 @@ where
                     .get(&track_id)
                     .cloned();
                 if let Some(evt_tx) = local_tx {
+                    // overflow: DROPS — inherent; counted by E3-01. The only send site on
+                    // the track-local channel, and `OnRtcpPacket` is that event type's only
+                    // variant, so this queue has no lifecycle traffic to starve.
                     if let Err(err) = evt_tx.try_send(TrackLocalEvent::OnRtcpPacket(packets)) {
                         error!(
                             "Failed to send RtcpPacket to track local {}: {:?}",

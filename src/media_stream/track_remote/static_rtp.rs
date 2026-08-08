@@ -137,6 +137,7 @@ impl Track for TrackRemoteStaticRTP {
 #[async_trait::async_trait]
 impl TrackRemote for TrackRemoteStaticRTP {
     async fn write_rtcp(&self, packets: Vec<Box<dyn rtc::rtcp::Packet>>) -> Result<()> {
+        // overflow: awaited — producer is the application in `write_rtcp`.
         self.msg_tx
             .send(PeerConnectionDriverEvent::ReceiverRtcp(
                 self.receiver_id,

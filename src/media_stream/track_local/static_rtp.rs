@@ -252,6 +252,8 @@ impl TrackLocal for TrackLocalStaticRTP {
             let tx = ctx.driver_event_tx.clone();
             let rtp_sender_id = ctx.rtp_sender_id;
             drop(ctx_opt);
+            // overflow: awaited — producer is the application in `write_rtp`. Blocking
+            // the sender is the outbound back-pressure mechanism, not a failure mode.
             tx.send(PeerConnectionDriverEvent::SenderRtp(rtp_sender_id, packet))
                 .await
                 .map_err(|e| Error::Other(format!("{:?}", e)))
@@ -266,6 +268,7 @@ impl TrackLocal for TrackLocalStaticRTP {
             let tx = ctx.driver_event_tx.clone();
             let rtp_sender_id = ctx.rtp_sender_id;
             drop(ctx_opt);
+            // overflow: awaited — producer is the application in `write_rtcp`.
             tx.send(PeerConnectionDriverEvent::SenderRtcp(
                 rtp_sender_id,
                 packets,

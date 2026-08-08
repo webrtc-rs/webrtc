@@ -104,6 +104,13 @@ jobs:
       # sections so that feature forwarding (`ring = ["rtc/crypto-ring"]`) is not mistaken for one.
       - name: No crypto implementation dependency in webrtc
         run: python3 scripts/check-crypto-boundary.py
+      # Every send on one of the four bounded internal channels must declare what it does when
+      # the channel is full — block the application, drop a flag-backed nudge, park a detached
+      # task, or discard. The script only checks that a decision was recorded at the site; it
+      # cannot tell a correct classification from a wrong one, but an *absent* one is how
+      # webrtc#858 got in. See docs/internal-channel-overflow-policy.md.
+      - name: Bounded channels declare an overflow policy
+        run: python3 scripts/check-channel-overflow-policy.py
       # `webrtc` cannot be packaged until the core crates it depends on are published: cargo
       # resolves against the registry and the path dependency is stripped from the published
       # manifest. Publication order is rtc-crypto, then the rtc protocol crates, then rtc, then
