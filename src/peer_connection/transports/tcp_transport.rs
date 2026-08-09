@@ -294,6 +294,9 @@ impl RTCTcpTransport {
                             local_addr,
                             peer_addr,
                         };
+                        // overflow: detached — this is a per-candidate task spawned by
+                        // `connect`, whose only remaining job is to hand the stream over. A
+                        // full channel parks this task alone; the driver is unaffected.
                         let _ = tx
                             .send(PeerConnectionDriverEvent::IncomingTcpStream(
                                 four_tuple, stream,

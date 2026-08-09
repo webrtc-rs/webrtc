@@ -585,7 +585,24 @@ where
     }
 
     async fn poll(&self) -> Option<DataChannelEvent> {
-        self.evt_rx.lock().await.recv().await
+        let event = self.evt_rx.lock().await.recv().await;
+        // Taking an event frees a slot. If the driver is holding something it could not
+        // deliver, say so now — it has no timer to fall back on.
+        //
+        // `Acquire`, pairing with the driver's `Release` store. Observing a stale `false`
+        // means skipping the notify, and the driver then waits on the next inbound packet
+        // instead — which under back-pressure is a throttled peer's zero-window probe, i.e.
+        // a long time. Cheap enough not to trade for that: one load per received message,
+        // and only reached when a message actually arrived.
+        if event.is_some()
+            && self
+                .inner
+                .data_channel_delivery_blocked
+                .load(Ordering::Acquire)
+        {
+            self.inner.data_channel_consumed.notify_waiters();
+        }
+        event
     }
 
     async fn close(&self) -> Result<()> {

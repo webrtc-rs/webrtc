@@ -570,6 +570,18 @@ where
         Mutex<HashMap<MediaStreamTrackId, (Sender<TrackRemoteEvent>, Arc<dyn TrackRemote>)>>,
     /// Channels for delivering RTCP feedback to local (sent) tracks, keyed by track id.
     pub(crate) track_local_events_tx: Mutex<HashMap<MediaStreamTrackId, Sender<TrackLocalEvent>>>,
+    /// Set while the driver is holding data-channel events the application's queue had no room
+    /// for. Read by [`DataChannel::poll`] to decide whether draining is worth a wake.
+    ///
+    /// The inbound mirror of `write_pending`: one relaxed load per received message, so the
+    /// common case (nothing retained) costs an atomic and no lock.
+    pub(crate) data_channel_delivery_blocked: AtomicBool,
+    /// Woken by [`DataChannel::poll`] when it frees a slot on a channel the driver is blocked
+    /// on, so retained events are handed over at once rather than at the next backstop tick.
+    ///
+    /// The inbound counterpart of `data_channel_backpressure`, which does the same job in the
+    /// send direction.
+    pub(crate) data_channel_consumed: crate::runtime::Notify,
 }
 
 /// Number of coalesced (driver-behind) sends between cooperative yields in
@@ -602,6 +614,9 @@ where
     #[inline]
     pub(crate) async fn wake_writes(&self) {
         if !self.write_pending.swap(true, Ordering::AcqRel) {
+            // overflow: nudge — `write_pending` is the durable signal and the driver clears
+            // it every iteration, so a dropped wake loses nothing. Deliberately not an
+            // await: see this function's doc comment for why that collapses throughput.
             let _ = self
                 .driver_event_tx
                 .try_send(PeerConnectionDriverEvent::WriteNotify);
@@ -679,6 +694,8 @@ where
                 closing: AtomicBool::new(false),
                 data_channel_send_buffer_limit,
                 data_channel_backpressure: crate::runtime::Notify::new(),
+                data_channel_delivery_blocked: AtomicBool::new(false),
+                data_channel_consumed: crate::runtime::Notify::new(),
             }),
             driver_handle: Mutex::new(None),
             dedicated_reactor: dedicated_reactor_pool_size > 0,
@@ -808,6 +825,8 @@ where
             // Wake a sender blocked in `DataChannel::writable()` so it returns promptly
             // instead of waiting out its 50 ms backstop past teardown (mirrors `close`).
             self.inner.data_channel_backpressure.notify_waiters();
+            // overflow: nudge — `closing` is the durable signal, checked at the top of the
+            // driver loop. `Drop` cannot await, and does not need to.
             let _ = self
                 .inner
                 .driver_event_tx
@@ -840,6 +859,8 @@ where
         // have observed the flag and dropped the receiver via its independent
         // top-of-loop exit path — in which case the channel is closed. Treating
         // that as an error would make a perfectly clean shutdown return `Err`.
+        // overflow: awaited — `close()` is called by the application, so blocking it is
+        // correct. (The result is discarded for an unrelated reason, explained above.)
         let _ = self
             .inner
             .driver_event_tx
@@ -903,6 +924,7 @@ where
         // Wake the driver with MessageInner::IceGathering. Without this
         // notify the driver would sleep until its previous (possibly 1-day default)
         // timer expired and never send STUN binding requests.
+        // overflow: awaited — producer is the application in `set_local_description`.
         self.inner
             .driver_event_tx
             .send(PeerConnectionDriverEvent::IceGathering)
@@ -975,6 +997,7 @@ where
             && c.network_type().is_tcp()
             && c.tcp_type() == rtc::ice::tcp_type::TcpType::Passive
         {
+            // overflow: awaited — producer is the application in `add_ice_candidate`.
             self.inner
                 .driver_event_tx
                 .send(PeerConnectionDriverEvent::RemoteIceTcpPassiveCandidate(c))
@@ -991,6 +1014,7 @@ where
             core.restart_ice();
         }
 
+        // overflow: awaited — producer is the application in `restart_ice`.
         self.inner
             .driver_event_tx
             .send(PeerConnectionDriverEvent::IceGathering)
@@ -1014,6 +1038,7 @@ where
             )
         };
 
+        // overflow: awaited — producer is the application in `set_configuration`.
         self.inner
             .driver_event_tx
             .send(PeerConnectionDriverEvent::UpdateIceConfiguration {
@@ -1259,6 +1284,8 @@ mod tests {
             closing: AtomicBool::new(false),
             data_channel_send_buffer_limit: usize::MAX,
             data_channel_backpressure: crate::runtime::Notify::new(),
+            data_channel_delivery_blocked: AtomicBool::new(false),
+            data_channel_consumed: crate::runtime::Notify::new(),
             data_channel_events_tx: Mutex::new(HashMap::new()),
             track_remote_events_tx: Mutex::new(HashMap::new()),
             track_local_events_tx: Mutex::new(HashMap::new()),
