@@ -166,8 +166,11 @@ pub trait Runtime: Send + Sync + Debug + 'static {
     /// **This is the clock the sans-I/O core sees.** The core is *told* the time — through
     /// `handle_timeout(now)` and the timestamps on inbound messages — and never reads one
     /// itself, so whatever the driver passes down is the only clock protocol logic has. Routing
-    /// that through the runtime is what makes [`MockRuntime`](crate::runtime::mock::MockRuntime)'s
+    /// that through the runtime is what makes the `runtime-mock` feature's `MockRuntime`
     /// virtual clock reach ICE timeouts, DTLS retransmits and SCTP RTO.
+    ///
+    /// (Named rather than linked: `mock` is behind the `runtime-mock` feature, so an
+    /// intra-doc link to it does not resolve in a default-feature doc build.)
     ///
     /// Defaulted to the wall clock, so existing `Runtime` implementations keep working
     /// unchanged. A runtime with a controllable clock should override it and return that
