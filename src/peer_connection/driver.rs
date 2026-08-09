@@ -102,6 +102,49 @@ pub(crate) const DRIVER_TO_TRACK_REMOTE_EVENT_CHANNEL_CAPACITY: usize = 256;
 pub(crate) const DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
+const NON_ADVANCING_TIMEOUT_INITIAL_BACKOFF: Duration = Duration::from_millis(10);
+const NON_ADVANCING_TIMEOUT_MAX_BACKOFF: Duration = Duration::from_secs(1);
+
+/// Prevent a non-advancing Sans-I/O timeout from monopolizing the async executor.
+///
+/// Expired deadlines are normal: the executor can wake late, and a protocol can request an
+/// immediate callback. After `handle_timeout`, however, returning the exact same deadline means
+/// another immediate call cannot make timer progress. Back off exponentially while it remains
+/// unchanged, but keep the driver's `select!` active so network input and close commands can
+/// still move the connection forward.
+#[derive(Debug, Default)]
+struct ImmediateTimeoutGuard {
+    stalled_deadline: Option<Instant>,
+    consecutive_stalls: u32,
+}
+
+impl ImmediateTimeoutGuard {
+    fn observe(&mut self, handled_deadline: Instant, next_deadline: Instant) -> Option<Duration> {
+        if next_deadline != handled_deadline {
+            self.reset();
+            return None;
+        }
+
+        if self.stalled_deadline == Some(handled_deadline) {
+            self.consecutive_stalls = self.consecutive_stalls.saturating_add(1);
+        } else {
+            self.stalled_deadline = Some(handled_deadline);
+            self.consecutive_stalls = 1;
+        }
+
+        let exponent = self.consecutive_stalls.saturating_sub(1).min(31);
+        Some(
+            NON_ADVANCING_TIMEOUT_INITIAL_BACKOFF
+                .saturating_mul(1_u32 << exponent)
+                .min(NON_ADVANCING_TIMEOUT_MAX_BACKOFF),
+        )
+    }
+
+    fn reset(&mut self) {
+        self.stalled_deadline = None;
+        self.consecutive_stalls = 0;
+    }
+}
 
 /// Insert `sender` for `channel_id`, returning `true` if the channel should be announced.
 pub(crate) fn insert_data_channel_event_sender(
@@ -324,6 +367,7 @@ where
             })
             .collect();
         let mut active_socket_count = udp_socket_list.len();
+        let mut immediate_timeout_guard = ImmediateTimeoutGuard::default();
 
         // Batch-drain: after one datagram wakes the select, non-blockingly drain a
         // bounded burst of additional ready datagrams from the same socket and feed
@@ -378,12 +422,29 @@ where
             // `core.handle_timeout(now)`, so under a `MockRuntime` it is the virtual one.
             let now = self.inner.runtime.now();
             let delay_from_now = timeout.checked_duration_since(now).unwrap_or_default();
+            let mut timeout_already_handled = false;
 
             // 4.b handle immediate timeout
-            if delay_from_now.is_zero() {
+            let delay_from_now = if delay_from_now.is_zero() {
                 self.handle_timeout(now).await?;
-                continue;
-            }
+                let next_timeout = self.poll_timeout().await;
+
+                if let Some(backoff) = immediate_timeout_guard.observe(timeout, next_timeout) {
+                    if backoff == NON_ADVANCING_TIMEOUT_INITIAL_BACKOFF {
+                        warn!(
+                            "PeerConnection timeout did not advance after handle_timeout; \
+                             backing off the driver loop"
+                        );
+                    }
+                    timeout_already_handled = true;
+                    backoff
+                } else {
+                    continue;
+                }
+            } else {
+                immediate_timeout_guard.reset();
+                delay_from_now
+            };
 
             // Wake as soon as a blocked consumer frees a slot. `Notify` stores no permit, so
             // a naive "check, then wait" drops any wake published in between and the loop
@@ -448,7 +509,9 @@ where
 
                 // Timer expired
                 _ = timer.fuse() => {
-                    self.handle_timeout(self.inner.runtime.now()).await?;
+                    if !timeout_already_handled {
+                        self.handle_timeout(self.inner.runtime.now()).await?;
+                    }
                 }
 
                 // Driver events (RTP, RTCP, or ICE candidate)
@@ -1624,5 +1687,45 @@ mod tests {
 
         let sender = map.get(&channel_id).cloned().unwrap();
         assert!(!sender.is_closed());
+    }
+
+    #[test]
+    fn immediate_timeout_guard_backs_off_an_unchanged_deadline() {
+        let deadline = Instant::now();
+        let mut guard = ImmediateTimeoutGuard::default();
+
+        assert_eq!(
+            guard.observe(deadline, deadline),
+            Some(NON_ADVANCING_TIMEOUT_INITIAL_BACKOFF)
+        );
+        assert_eq!(
+            guard.observe(deadline, deadline),
+            Some(NON_ADVANCING_TIMEOUT_INITIAL_BACKOFF * 2)
+        );
+
+        for _ in 0..32 {
+            let delay = guard.observe(deadline, deadline).unwrap();
+            assert!(delay <= NON_ADVANCING_TIMEOUT_MAX_BACKOFF);
+        }
+        assert_eq!(
+            guard.observe(deadline, deadline),
+            Some(NON_ADVANCING_TIMEOUT_MAX_BACKOFF)
+        );
+    }
+
+    #[test]
+    fn immediate_timeout_guard_resets_when_deadline_advances() {
+        let deadline = Instant::now();
+        let mut guard = ImmediateTimeoutGuard::default();
+
+        assert!(guard.observe(deadline, deadline).is_some());
+        assert_eq!(
+            guard.observe(deadline, deadline + Duration::from_millis(1)),
+            None
+        );
+        assert_eq!(
+            guard.observe(deadline, deadline),
+            Some(NON_ADVANCING_TIMEOUT_INITIAL_BACKOFF)
+        );
     }
 }
