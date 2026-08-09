@@ -2,15 +2,16 @@
 """Assert every send on a bounded internal channel declares its overflow policy.
 
 Four bounded channels connect the application to the peer-connection driver. When one is
-full, the send site has to do something, and the four acceptable somethings are:
+full, the send site has to do something, and the acceptable somethings are:
 
     awaited   the producer is the application, which blocks — nothing is lost
     nudge     a flag-backed notification whose durable state is an `AtomicBool` the driver
               polls unconditionally, so dropping the wake loses nothing
     detached  the producer is a spawned task with nothing else to do; it blocks itself,
               never the driver loop
-    DROPS     discards on `Full` — a bug where the payload carries a delivery guarantee
-              (webrtc#858), inherent loss where it does not (media)
+    retained  the payload is kept on `Full` and retried, and the producer stops pulling
+              from the core so the back-pressure reaches a transport that can absorb it
+    DROPS     discards on `Full` — inherent loss with no upstream absorber (media)
 
 A `try_send` whose `Err` is discarded without falling into one of those is a silent drop.
 This script does not decide which category a site belongs in; it only enforces that
@@ -33,15 +34,22 @@ import re
 import sys
 from pathlib import Path
 
-# A send whose payload is one of the four bounded channels' event types. Other channels in
-# the crate (one-shot init signals, test fixtures) are out of scope: they are unbounded,
-# capacity-1-by-construction, or not on the driver's path.
+# Sends onto one of the four bounded channels. Other channels in the crate (one-shot init
+# signals, test fixtures) are out of scope: they are unbounded, capacity-1-by-construction,
+# or not on the driver's path.
+#
+# Two forms. A send whose argument names one of the four channels' event types directly, and
+# a send on a sender bound to `evt_tx` — the convention for a driver -> application sender,
+# used where the payload has already been built into a variable. The second form is not
+# cosmetic: collapsing several literal sends into one helper that takes an `event` parameter
+# is exactly the refactor that silently drops sites out of this audit.
 SEND_SITE = re.compile(
     r"(?:try_send|\.send)\s*\(\s*"
     r"(PeerConnectionDriverEvent|DataChannelEvent|TrackRemoteEvent|TrackLocalEvent)::"
+    r"|\bevt_tx(?:\.\d+)?\.(?:try_send|send)\s*\("
 )
 
-POLICY_TAG = re.compile(r"//\s*overflow:\s*(awaited|nudge|detached|DROPS)\b")
+POLICY_TAG = re.compile(r"//\s*overflow:\s*(awaited|nudge|detached|retained|DROPS)\b")
 
 # A tag may sit above the `match` it covers rather than on every arm. Kept deliberately
 # tight: a generous window would let a genuinely untagged site inherit an unrelated tag,
@@ -62,7 +70,7 @@ def classify(path: Path) -> tuple[list[tuple[int, str, str]], list[tuple[int, st
         match = SEND_SITE.search(line)
         if not match:
             continue
-        event_type = match.group(1)
+        event_type = match.group(1) or "evt_tx"
 
         category = None
         for back in range(index, max(-1, index - LOOKBACK_LINES), -1):
@@ -102,12 +110,12 @@ def main() -> int:
         for offender in offenders:
             print(offender)
         print()
-        print("Add a `// overflow: awaited|nudge|detached|DROPS — <why>` comment at the site.")
+        print("Add a `// overflow: awaited|nudge|detached|retained|DROPS — <why>` comment.")
         print("See docs/internal-channel-overflow-policy.md for what each category promises.")
         return 1
 
     print(f"Overflow policy declared at all {total_sites} bounded-channel send sites:")
-    for category in ("awaited", "nudge", "detached", "DROPS"):
+    for category in ("awaited", "nudge", "detached", "retained", "DROPS"):
         print(f"  {category:9} {totals.get(category, 0)}")
     return 0
 

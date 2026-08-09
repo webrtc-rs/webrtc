@@ -1,22 +1,24 @@
 //! A reliable, ordered data channel must deliver **every** message even when the
 //! application drains it slowly.
 //!
-//! This is the regression test for [webrtc#858](https://github.com/webrtc-rs/webrtc/issues/858)
-//! (work plan task E0-01). Today it fails: the driver hands messages to the application
-//! over a bounded 256-slot channel with `try_send`, and on `TrySendError::Full` the
-//! message is logged and dropped. A consumer that stalls for longer than it takes the
-//! peer to push 256 messages therefore loses data on a channel whose whole contract is
-//! that it does not.
+//! Regression test for [webrtc#858](https://github.com/webrtc-rs/webrtc/issues/858).
 //!
-//! The fix (E2) is *not* a bigger queue — any finite queue plus `try_send` still drops.
-//! It is to stop draining SCTP's reassembly queue eagerly, so `a_rwnd` falls and the
-//! peer throttles, and to have the driver retain-and-retry instead of discarding.
+//! Before the fix, the driver handed messages to the application over a bounded 256-slot
+//! channel with `try_send` and, on `TrySendError::Full`, logged and dropped them: a consumer
+//! that stalled long enough for the peer to push 256 messages lost data on a channel whose
+//! whole contract is that it does not. This delivered 255 of 2000.
 //!
-//! **`#[ignore]` is temporary.** Both tests are written to fail on `master` and are
-//! ignored so CI stays green until the fix lands; E2-02 removes the attributes. Run them
-//! with `cargo test --test data_channel_slow_consumer -- --ignored`.
+//! The fix was not a bigger queue — any finite queue plus `try_send` still drops. It is two
+//! halves that only work together: the driver keeps what does not fit and **stops pulling**
+//! from the core (E2-02), and the core then stops draining SCTP's reassembly queues while
+//! that backlog persists (E2-01), so `a_rwnd` falls and the peer is finally told to slow
+//! down. Back-pressure with nowhere to go would just be a slower leak.
+//!
+//! The second test is the guard rail on *how* that was done: the driver must never `await`
+//! the send, because the same loop drives ICE consent, DTLS retransmits and SCTP timers.
 use anyhow::Result;
 use bytes::BytesMut;
+use rtc::peer_connection::configuration::setting_engine::SettingEngine;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -393,13 +395,176 @@ async fn slow_consumer_does_not_stall_the_connection() -> Result<()> {
 }
 
 #[test]
-#[ignore = "E0-01: fails until #858 is fixed in E2 (driver retains; rtc bounds the SCTP drain)"]
 fn test_slow_consumer_loses_nothing() {
     block_on(slow_consumer_loses_nothing()).unwrap();
 }
 
 #[test]
-#[ignore = "E0-01: guards the E2 fix against blocking the driver loop; runs with --ignored"]
 fn test_slow_consumer_does_not_stall_the_connection() {
     block_on(slow_consumer_does_not_stall_the_connection()).unwrap();
+}
+
+// ---------------------------------------------------------------------------------------
+// Back-pressure actually reaching SCTP, and through it the sender.
+//
+// The test above proves the driver does not *lose* messages. It does not prove the driver
+// stops pulling from the core — with an unbounded retain map it would deliver everything
+// just the same, having moved the backlog into this process's heap and throttled nobody.
+// That is the "memory leak with extra steps" the design warns about, and it needs the
+// window to be the binding constraint to be observable at all: 2000 × 16 bytes is 32 KB,
+// nowhere near SCTP's 1 MiB default, so the test above never engages SCTP flow control.
+//
+// Here the receive window is small and the payloads are large, so an undrained receiver
+// closes the window; and the sender has a send-buffer limit, so a closed window blocks
+// `send()`. The sender being blocked *is* the end-to-end proof: it means bytes stayed in
+// the receiver's reassembly queue, `a_rwnd` fell, and the peer was told to slow down.
+// ---------------------------------------------------------------------------------------
+
+/// Small enough that an undrained consumer closes the window quickly, and above the RFC 4960
+/// 1500-byte floor the setter clamps to.
+const SMALL_RECV_WINDOW: u32 = 64 * 1024;
+
+/// Bounds the sender's own buffer so a closed peer window surfaces as a blocked `send()`
+/// rather than unbounded local queuing. Without this the default is `usize::MAX` and `send`
+/// never blocks, so back-pressure would be invisible from the application.
+const SEND_BUFFER_LIMIT: usize = 32 * 1024;
+
+const BULK_PAYLOAD: usize = 4 * 1024;
+
+/// Must exceed `DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY` (256), or the driver never
+/// retains anything and never stops pulling — 256 messages fit in the hand-off channel
+/// untouched, so the whole chain under test stays dormant and the sender finishes freely.
+/// That was the first version of this test, and it failed for that reason rather than a bug.
+const BULK_MESSAGES: u32 = 600;
+
+async fn backpressure_reaches_the_sender() -> Result<()> {
+    let runtime = runtime();
+    let received = Arc::new(Received::default());
+    let consumer_started = Arc::new(AtomicBool::new(false));
+
+    let (snd_gather_tx, mut snd_gather_rx) = channel::<()>(1);
+    let (snd_conn_tx, mut snd_conn_rx) = channel::<()>(1);
+    let (rcv_gather_tx, mut rcv_gather_rx) = channel::<()>(1);
+
+    let sender_pc: Arc<dyn PeerConnection> = Arc::new(
+        PeerConnectionBuilder::new()
+            .with_handler(Arc::new(SenderHandler {
+                gather_tx: snd_gather_tx,
+                connected_tx: snd_conn_tx,
+                watch: Arc::new(ConnectionWatch::default()),
+            }))
+            .with_runtime(runtime.clone())
+            .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+            .with_data_channel_send_buffer_limit(SEND_BUFFER_LIMIT)
+            .build()
+            .await?,
+    );
+
+    let dc = sender_pc
+        .create_data_channel("backpressure", Some(RTCDataChannelInit::default()))
+        .await?;
+    let (open_tx, mut open_rx) = channel::<()>(1);
+    {
+        let dc = dc.clone();
+        runtime.spawn(Box::pin(async move {
+            while let Some(event) = dc.poll().await {
+                match event {
+                    DataChannelEvent::OnOpen => {
+                        let _ = open_tx.try_send(());
+                    }
+                    DataChannelEvent::OnClose => break,
+                    _ => {}
+                }
+            }
+        }));
+    }
+
+    let offer = sender_pc.create_offer(None).await?;
+    sender_pc.set_local_description(offer).await?;
+    let _ = timeout(Duration::from_secs(5), snd_gather_rx.recv()).await;
+    let offer_sdp = sender_pc.local_description().await.expect("offer");
+
+    let mut setting_engine = SettingEngine::default();
+    setting_engine.set_sctp_max_receive_buffer_size(SMALL_RECV_WINDOW);
+
+    let receiver_pc: Arc<dyn PeerConnection> = Arc::new(
+        PeerConnectionBuilder::new()
+            .with_handler(Arc::new(SlowReceiverHandler {
+                gather_tx: rcv_gather_tx,
+                received,
+                consumer_started: consumer_started.clone(),
+                watch: Arc::new(ConnectionWatch::default()),
+                // Long enough that the window is still shut when the assertion runs.
+                stall: Duration::from_secs(10),
+                runtime: runtime.clone(),
+            }))
+            .with_runtime(runtime.clone())
+            .with_udp_addrs(vec!["127.0.0.1:0".to_string()])
+            .with_setting_engine(setting_engine)
+            .build()
+            .await?,
+    );
+
+    receiver_pc.set_remote_description(offer_sdp).await?;
+    let answer = receiver_pc.create_answer(None).await?;
+    receiver_pc.set_local_description(answer).await?;
+    let _ = timeout(Duration::from_secs(5), rcv_gather_rx.recv()).await;
+    let answer_sdp = receiver_pc.local_description().await.expect("answer");
+    sender_pc.set_remote_description(answer_sdp).await?;
+
+    timeout(Duration::from_secs(15), snd_conn_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("timeout: peers did not connect"))?;
+    timeout(Duration::from_secs(10), open_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("timeout: data channel did not open"))?;
+
+    for _ in 0..100 {
+        if consumer_started.load(Ordering::Acquire) {
+            break;
+        }
+        sleep(Duration::from_millis(10)).await;
+    }
+
+    // Push 1 MiB at a receiver that is not reading, with only 64 KiB of window and 32 KiB of
+    // local send buffer. If back-pressure works this cannot complete: the window shuts and
+    // `send` parks. If the driver keeps draining the core into an unbounded retain map, the
+    // reassembly queue empties, the window never shuts, and this races to completion.
+    let sent = Arc::new(AtomicUsize::new(0));
+    {
+        let dc = dc.clone();
+        let sent = sent.clone();
+        runtime.spawn(Box::pin(async move {
+            for i in 0..BULK_MESSAGES {
+                let mut buf = BytesMut::from(&i.to_be_bytes()[..]);
+                buf.resize(BULK_PAYLOAD, 0);
+                if dc.send(buf).await.is_err() {
+                    break;
+                }
+                sent.fetch_add(1, Ordering::Relaxed);
+            }
+        }));
+    }
+
+    sleep(Duration::from_secs(3)).await;
+    let sent_while_stalled = sent.load(Ordering::Relaxed);
+
+    assert!(
+        sent_while_stalled < BULK_MESSAGES as usize,
+        "sender pushed all {} messages ({} KiB) at a consumer that never read a byte — \
+         back-pressure never reached it. The driver is draining the core into its own \
+         unbounded retain map instead of leaving bytes in SCTP's reassembly queue, so \
+         `a_rwnd` never fell and the peer was never throttled.",
+        BULK_MESSAGES,
+        BULK_MESSAGES as usize * BULK_PAYLOAD / 1024,
+    );
+
+    sender_pc.close().await?;
+    receiver_pc.close().await?;
+    Ok(())
+}
+
+#[test]
+fn test_backpressure_reaches_the_sender() {
+    block_on(backpressure_reaches_the_sender()).unwrap();
 }

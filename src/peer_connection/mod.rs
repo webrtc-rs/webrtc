@@ -570,6 +570,18 @@ where
         Mutex<HashMap<MediaStreamTrackId, (Sender<TrackRemoteEvent>, Arc<dyn TrackRemote>)>>,
     /// Channels for delivering RTCP feedback to local (sent) tracks, keyed by track id.
     pub(crate) track_local_events_tx: Mutex<HashMap<MediaStreamTrackId, Sender<TrackLocalEvent>>>,
+    /// Set while the driver is holding data-channel events the application's queue had no room
+    /// for. Read by [`DataChannel::poll`] to decide whether draining is worth a wake.
+    ///
+    /// The inbound mirror of `write_pending`: one relaxed load per received message, so the
+    /// common case (nothing retained) costs an atomic and no lock.
+    pub(crate) data_channel_delivery_blocked: AtomicBool,
+    /// Woken by [`DataChannel::poll`] when it frees a slot on a channel the driver is blocked
+    /// on, so retained events are handed over at once rather than at the next backstop tick.
+    ///
+    /// The inbound counterpart of `data_channel_backpressure`, which does the same job in the
+    /// send direction.
+    pub(crate) data_channel_consumed: crate::runtime::Notify,
 }
 
 /// Number of coalesced (driver-behind) sends between cooperative yields in
@@ -682,6 +694,8 @@ where
                 closing: AtomicBool::new(false),
                 data_channel_send_buffer_limit,
                 data_channel_backpressure: crate::runtime::Notify::new(),
+                data_channel_delivery_blocked: AtomicBool::new(false),
+                data_channel_consumed: crate::runtime::Notify::new(),
             }),
             driver_handle: Mutex::new(None),
             dedicated_reactor: dedicated_reactor_pool_size > 0,
@@ -1270,6 +1284,8 @@ mod tests {
             closing: AtomicBool::new(false),
             data_channel_send_buffer_limit: usize::MAX,
             data_channel_backpressure: crate::runtime::Notify::new(),
+            data_channel_delivery_blocked: AtomicBool::new(false),
+            data_channel_consumed: crate::runtime::Notify::new(),
             data_channel_events_tx: Mutex::new(HashMap::new()),
             track_remote_events_tx: Mutex::new(HashMap::new()),
             track_local_events_tx: Mutex::new(HashMap::new()),

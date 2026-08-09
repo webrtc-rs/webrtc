@@ -26,7 +26,7 @@ use bytes::BytesMut;
 use futures::FutureExt; // For .fuse() in futures::select!
 use futures::future::OptionFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{error, trace, warn};
+use log::{debug, error, trace, warn};
 use rtc::ice::candidate::Candidate;
 use rtc::interceptor::{Interceptor, NoopInterceptor};
 use rtc::mdns::MDNS_PORT;
@@ -41,8 +41,8 @@ use rtc::sansio::Protocol;
 use rtc::shared::error::{Error, Result};
 use rtc::shared::{FourTuple, TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc::{rtcp, rtp};
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, VecDeque};
 use std::io::IoSliceMut;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -187,6 +187,18 @@ where
     stun_gathering_complete: bool,
     turn_gathering_complete: bool,
     pending_ice_configuration: Option<(Vec<RTCIceServer>, RTCIceTransportPolicy)>,
+    /// Data-channel events that did not fit in their channel's queue, kept in arrival order.
+    ///
+    /// This is the retain half of the #858 fix. `TrySendError::Full(value)` hands the payload
+    /// back; keeping it here — instead of logging and dropping it — is what makes a reliable
+    /// channel actually reliable. While any entry exists the driver stops pulling reads from
+    /// the core, which is what lets the backlog build in `pipeline_context.read_outs`, where
+    /// the SCTP handler sees it and stops draining its reassembly queues, which shrinks
+    /// `a_rwnd` and finally throttles the peer.
+    ///
+    /// Every variant goes in here, not just `OnMessage`: lifecycle events share the queue, so
+    /// retaining uniformly is what preserves their order relative to the data around them.
+    pending_data_channel_events: HashMap<RTCDataChannelId, VecDeque<DataChannelEvent>>,
 }
 
 impl<I> PeerConnectionDriver<I>
@@ -218,6 +230,7 @@ where
             stun_gathering_complete: false,
             turn_gathering_complete: false,
             pending_ice_configuration: None,
+            pending_data_channel_events: HashMap::new(),
         })
     }
 
@@ -372,6 +385,34 @@ where
                 continue;
             }
 
+            // Wake as soon as a blocked consumer frees a slot. `Notify` stores no permit, so
+            // a naive "check, then wait" drops any wake published in between and the loop
+            // sleeps on a condition that already changed — which is why this needs the
+            // register-then-recheck order: subscribe first, then retry delivery. A wake
+            // published before the retry is caught by the retry; one published after it is
+            // caught by the listener. Neither can be lost, so no timer backstop is needed.
+            //
+            // Registering allocates, so it happens only when something is actually retained
+            // — the healthy path pays one `is_empty` check. Deliberately an async block
+            // rather than an `OptionFuture`: the latter's `None` reports `Ready` immediately,
+            // which would fire this arm every iteration and spin the loop.
+            let consumed_listener = (!self.pending_data_channel_events.is_empty())
+                .then(|| self.inner.data_channel_consumed.listen());
+            let delivery_blocked = match consumed_listener {
+                Some(listener) => self
+                    .flush_pending_data_channel_events()
+                    .await
+                    .then_some(listener),
+                None => None,
+            };
+            let consumed = async move {
+                match delivery_blocked {
+                    Some(listener) => listener.await,
+                    None => futures::future::pending::<()>().await,
+                }
+            };
+            futures::pin_mut!(consumed);
+
             let timer = self.inner.runtime.sleep(delay_from_now);
             futures::pin_mut!(timer);
 
@@ -402,6 +443,9 @@ where
 
             // Runtime-agnostic select!
             futures::select! {
+                // A blocked consumer freed a slot: hand over what was retained, now.
+                _ = consumed.fuse() => {}
+
                 // Timer expired
                 _ = timer.fuse() => {
                     self.handle_timeout(self.inner.runtime.now()).await?;
@@ -716,47 +760,28 @@ where
                     }
                 }
 
-                let data_channels = self.inner.data_channel_events_tx.lock().await;
-                if let Some(evt_tx) = data_channels.get(&channel_id) {
-                    // overflow: DROPS — six lifecycle sends, resolved by E2-02 (webrtc#858).
-                    // These share the queue with `OnMessage` (see `handle_rtc_message`), so
-                    // they must be retained by the same mechanism and in the same order: a
-                    // retained `OnClose` must not overtake messages that preceded it, which
-                    // is what W3C's task-queue ordering requires.
-                    let result = match evt {
-                        RTCDataChannelEvent::OnOpen(_) => evt_tx.try_send(DataChannelEvent::OnOpen),
-                        RTCDataChannelEvent::OnError(_) => {
-                            evt_tx.try_send(DataChannelEvent::OnError)
-                        }
-                        RTCDataChannelEvent::OnClosing(_) => {
-                            evt_tx.try_send(DataChannelEvent::OnClosing)
-                        }
-                        RTCDataChannelEvent::OnClose(_) => {
-                            evt_tx.try_send(DataChannelEvent::OnClose)
-                        }
-                        RTCDataChannelEvent::OnBufferedAmountLow(_) => {
-                            evt_tx.try_send(DataChannelEvent::OnBufferedAmountLow)
-                        }
-                        RTCDataChannelEvent::OnBufferedAmountHigh(_) => {
-                            evt_tx.try_send(DataChannelEvent::OnBufferedAmountHigh)
-                        }
-                        _ => {
-                            warn!("Ignoring unknown RTCDataChannelEvent variant");
-                            return;
-                        }
-                    };
-                    if let Err(err) = result {
-                        error!(
-                            "Failed to send RTCDataChannelEvent to data channel {}: {:?}",
-                            channel_id, err
-                        );
+                // overflow: retained — six lifecycle sends. They share the queue with
+                // `OnMessage` (see `handle_rtc_message`), so they go through the same
+                // retain-and-retry path and in the same order: a retained `OnClose` must not
+                // overtake messages that preceded it, which W3C's task-queue ordering
+                // requires.
+                let event = match evt {
+                    RTCDataChannelEvent::OnOpen(_) => DataChannelEvent::OnOpen,
+                    RTCDataChannelEvent::OnError(_) => DataChannelEvent::OnError,
+                    RTCDataChannelEvent::OnClosing(_) => DataChannelEvent::OnClosing,
+                    RTCDataChannelEvent::OnClose(_) => DataChannelEvent::OnClose,
+                    RTCDataChannelEvent::OnBufferedAmountLow(_) => {
+                        DataChannelEvent::OnBufferedAmountLow
                     }
-                } else {
-                    error!(
-                        "Failed to get data_channel: {} for RTCDataChannelEvent",
-                        channel_id
-                    );
-                }
+                    RTCDataChannelEvent::OnBufferedAmountHigh(_) => {
+                        DataChannelEvent::OnBufferedAmountHigh
+                    }
+                    _ => {
+                        warn!("Ignoring unknown RTCDataChannelEvent variant");
+                        return;
+                    }
+                };
+                self.deliver_data_channel_event(channel_id, event).await;
             }
             RTCPeerConnectionEvent::OnTrack(evt) => {
                 let track_id = match &evt {
@@ -927,31 +952,16 @@ where
         let TaggedRTCMessage { now: _, message } = message;
         match message {
             RTCMessage::DataChannelMessage(channel_id, dc_message) => {
-                let data_channels = self.inner.data_channel_events_tx.lock().await;
-                if let Some(evt_tx) = data_channels.get(&channel_id) {
-                    // overflow: DROPS — **this is webrtc#858**, resolved by E2-02.
-                    // A reliable ordered channel promises delivery and this discards it.
-                    // `TrySendError::Full(value)` hands the message back; the fix keeps it
-                    // and stops pulling from the core for this channel until the consumer
-                    // drains, so the back-pressure reaches SCTP's receive window (E2-01) and
-                    // the peer throttles. It must not become `.send().await` — see the
-                    // overflow-policy block at the top of this file.
-                    if let Err(err) = evt_tx.try_send(DataChannelEvent::OnMessage(dc_message)) {
-                        let err_msg = match err {
-                            TrySendError::Full(_) => "Full",
-                            TrySendError::Disconnected(_) => "Disconnected",
-                        };
-                        error!(
-                            "Failed to send DataChannelMessage to data channel {}: {}",
-                            channel_id, err_msg,
-                        );
-                    }
-                } else {
-                    error!(
-                        "Failed to get data_channel: {} for DataChannelMessage",
-                        channel_id
-                    );
-                }
+                // overflow: retained — **this was webrtc#858**. A reliable ordered channel
+                // promises delivery; this used to discard it on a full queue. Now the
+                // message is kept and the driver stops pulling reads from the core until the
+                // consumer drains, so back-pressure reaches SCTP's receive window and the
+                // peer throttles.
+                self.deliver_data_channel_event(
+                    channel_id,
+                    DataChannelEvent::OnMessage(dc_message),
+                )
+                .await;
             }
             RTCMessage::RtpPacket(track_id, packet) => {
                 let track_remotes = self.inner.track_remote_events_tx.lock().await;
@@ -1200,10 +1210,119 @@ where
         events
     }
 
-    async fn drain_core_reads(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedRTCMessage> {
+    /// Hand `event` to `channel_id`, retaining it if the application is behind.
+    ///
+    /// Never awaits *the send*. This runs on the loop that also drives ICE consent, DTLS
+    /// retransmits and SCTP timers, so blocking on a slow consumer would expire consent and
+    /// drop the connection — a worse outcome than the drop this replaces. Back-pressure on
+    /// this channel means *stop pulling from the core*, which is what `poll_reads` does while
+    /// anything is retained.
+    async fn deliver_data_channel_event(
+        &mut self,
+        channel_id: RTCDataChannelId,
+        event: DataChannelEvent,
+    ) {
+        // Anything already retained for this channel must go first, or a later event would
+        // overtake an earlier one — W3C queues `message` and `close` as tasks on the same
+        // event loop, so a close must never arrive before data that preceded it.
+        if let Some(pending) = self.pending_data_channel_events.get_mut(&channel_id) {
+            pending.push_back(event);
+            return;
+        }
+
+        let evt_tx = {
+            let data_channels = self.inner.data_channel_events_tx.lock().await;
+            data_channels.get(&channel_id).cloned()
+        };
+        let Some(evt_tx) = evt_tx else {
+            error!("Failed to get data_channel: {} for event", channel_id);
+            return;
+        };
+
+        // overflow: retained — `Full` hands the event back and it is kept, not dropped.
+        match evt_tx.try_send(event) {
+            Ok(()) => {}
+            Err(TrySendError::Full(event)) => {
+                self.pending_data_channel_events
+                    .entry(channel_id)
+                    .or_default()
+                    .push_back(event);
+                self.inner
+                    .data_channel_delivery_blocked
+                    .store(true, Ordering::Release);
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                // The application dropped its `DataChannel`; there is nobody to deliver to.
+                debug!("data channel {} has no live receiver", channel_id);
+            }
+        }
+    }
+
+    /// Retry retained events. Returns `true` while any remain undelivered.
+    async fn flush_pending_data_channel_events(&mut self) -> bool {
+        if self.pending_data_channel_events.is_empty() {
+            return false;
+        }
+
+        let senders: HashMap<RTCDataChannelId, Sender<DataChannelEvent>> =
+            self.inner.data_channel_events_tx.lock().await.clone();
+
+        for (channel_id, pending) in self.pending_data_channel_events.iter_mut() {
+            let Some(evt_tx) = senders.get(channel_id) else {
+                // The channel is gone; nothing can be delivered to it.
+                pending.clear();
+                continue;
+            };
+            while let Some(event) = pending.pop_front() {
+                // overflow: retained — on `Full` it goes back on the front and delivery
+                // stops for this channel, so order holds.
+                match evt_tx.try_send(event) {
+                    Ok(()) => {}
+                    Err(TrySendError::Full(event)) => {
+                        pending.push_front(event);
+                        break;
+                    }
+                    Err(TrySendError::Disconnected(_)) => {
+                        pending.clear();
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.pending_data_channel_events
+            .retain(|_, pending| !pending.is_empty());
+
+        let blocked = !self.pending_data_channel_events.is_empty();
+        self.inner
+            .data_channel_delivery_blocked
+            .store(blocked, Ordering::Release);
+        blocked
+    }
+
+    /// Drain media (RTP/RTCP) from the core.
+    ///
+    /// Always safe to call: media arrives over SRTP and is subject to none of SCTP's flow
+    /// control, so nothing about data-channel back-pressure may gate it.
+    async fn drain_core_media(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedRTCMessage> {
         let mut messages = Vec::new();
         let mut core = inner.core.lock().await;
-        while let Some(message) = core.poll_read() {
+        while let Some(message) = core.poll_media_read() {
+            messages.push(message);
+        }
+        messages
+    }
+
+    /// Drain data-channel messages from the core.
+    ///
+    /// Called only while the application can take them. **Not** calling it is how
+    /// back-pressure is applied: the messages stay in the core, its data-channel queue grows,
+    /// the SCTP handler bounds its drain against that, bytes stay in the reassembly queue,
+    /// `a_rwnd` falls and the peer slows down.
+    async fn drain_core_data(inner: Arc<PeerConnectionRef<I>>) -> Vec<TaggedRTCMessage> {
+        let mut messages = Vec::new();
+        let mut core = inner.core.lock().await;
+        while let Some(message) = core.poll_data_read() {
             messages.push(message);
         }
         messages
@@ -1419,8 +1538,24 @@ where
             }
         }
 
-        // 3.b peer_connection poll_read() - Process incoming messages
-        for message in Self::drain_core_reads(self.inner.clone()).await {
+        // 3.b Media, unconditionally. It shares nothing with data-channel flow control, and
+        // gating it on that was a real defect: a slow signalling consumer froze video on the
+        // same connection for as long as it stalled.
+        for message in Self::drain_core_media(self.inner.clone()).await {
+            self.handle_rtc_message(message).await;
+        }
+
+        // 3.c Retry anything the application was too slow to take last iteration. While a
+        // retained event remains, do NOT pull more data-channel messages out of the core:
+        // leaving them there is the whole mechanism. The core's data-channel queue grows, the
+        // SCTP handler bounds its drain against it, bytes stay in the reassembly queue,
+        // `a_rwnd` falls, and the peer slows down. Draining regardless would move the backlog
+        // into this process's heap and throttle nobody.
+        if self.flush_pending_data_channel_events().await {
+            return Ok(());
+        }
+
+        for message in Self::drain_core_data(self.inner.clone()).await {
             self.handle_rtc_message(message).await;
         }
 
