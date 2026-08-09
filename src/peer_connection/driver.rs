@@ -61,6 +61,26 @@ pub(crate) const TRACK_LOCAL_EVENT_CHANNEL_CAPACITY: usize = 256;
 
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(86400); // 1 day duration
 
+/// The resolution at which an already-expired deadline is worth re-handling.
+///
+/// Network protocol timers are millisecond-grained — SCTP retransmits, ICE consent, DTLS
+/// backoff, TURN refresh. Handling an expired deadline more than once within the same
+/// millisecond therefore cannot advance any of them; it can only spin. So when a deadline is
+/// already past *and* less than this has elapsed since the last time one was handled, the loop
+/// waits out the remainder instead of looping straight back.
+///
+/// That waiting is the point. `select!` is the only place this loop reads sockets, takes driver
+/// events, or notices `Close`, and the previous code reached it only when a deadline was in the
+/// future — so a source that never advanced past `now` starved the connection *and* the
+/// shutdown meant to end it. See [webrtc#862](https://github.com/webrtc-rs/webrtc/issues/862).
+///
+/// Deliberately a time bound rather than a comparison of successive deadlines. A source stuck
+/// at one instant is only the easiest shape to spot; one returning a *different* expired
+/// instant each time — a timer advancing slower than the clock, or a deadline derived from the
+/// newest packet's arrival — spins exactly as hard while never repeating a value. Rate-limiting
+/// by elapsed time catches every shape.
+const MIN_IMMEDIATE_TIMEOUT_INTERVAL: Duration = Duration::from_millis(1);
+
 /// Insert `sender` for `channel_id`, returning `true` if the channel should be announced.
 pub(crate) fn insert_data_channel_event_sender(
     data_channels: &mut HashMap<RTCDataChannelId, Sender<DataChannelEvent>>,
@@ -269,6 +289,10 @@ where
             })
             .collect();
         let mut active_socket_count = udp_socket_list.len();
+        // When an already-expired deadline was last handled, so the loop can decline to do it
+        // again within the same millisecond. `None` once a deadline lands in the future, so a
+        // connection behaving normally never carries state from an earlier stall.
+        let mut last_immediate_timeout: Option<Instant> = None;
 
         // Batch-drain: after one datagram wakes the select, non-blockingly drain a
         // bounded burst of additional ready datagrams from the same socket and feed
@@ -320,13 +344,36 @@ where
             // 4.a poll next timeout
             let timeout = self.poll_timeout().await;
             let now = Instant::now();
-            let delay_from_now = timeout.checked_duration_since(now).unwrap_or_default();
+            let delay_from_now = timeout.saturating_duration_since(now);
 
             // 4.b handle immediate timeout
-            if delay_from_now.is_zero() {
-                self.handle_timeout(now).await?;
-                continue;
-            }
+            // Rate-limited, not unconditional. Handling an expired deadline and looping
+            // straight back is the right fast path, but it is also the only way this loop can
+            // fail to reach `select!` — where sockets, driver events and `Close` are read.
+            let delay_from_now = if delay_from_now.is_zero() {
+                let too_soon = last_immediate_timeout
+                    .map(|last| now.saturating_duration_since(last))
+                    .filter(|elapsed| *elapsed < MIN_IMMEDIATE_TIMEOUT_INTERVAL);
+
+                match too_soon {
+                    // Less than a millisecond since the last one: no protocol timer can have
+                    // become due, so wait out the remainder in `select!` rather than spin.
+                    // The timeout is handled on the next pass, with a clock that has moved.
+                    Some(elapsed) => {
+                        last_immediate_timeout = None;
+                        MIN_IMMEDIATE_TIMEOUT_INTERVAL - elapsed
+                    }
+                    // First expired deadline, or a millisecond has passed: handle it now.
+                    None => {
+                        last_immediate_timeout = Some(now);
+                        self.handle_timeout(now).await?;
+                        continue;
+                    }
+                }
+            } else {
+                last_immediate_timeout = None;
+                delay_from_now
+            };
 
             let timer = self.inner.runtime.sleep(delay_from_now);
             futures::pin_mut!(timer);
