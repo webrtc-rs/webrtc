@@ -50,8 +50,9 @@
 //! ```
 
 pub(crate) mod driver;
-pub(crate) mod transports;
+pub mod transport;
 
+use crate::peer_connection::transport::{SctpTransport, SctpTransportImpl};
 use log::error;
 use std::collections::{HashMap, HashSet};
 use std::net::ToSocketAddrs;
@@ -69,8 +70,8 @@ use driver::{
     APPLICATION_TO_DRIVER_EVENT_CHANNEL_CAPACITY, DRIVER_TO_DATA_CHANNEL_EVENT_CHANNEL_CAPACITY,
     PeerConnectionDriver,
 };
-use transports::stun_gatherer::RTCStunGatherer;
-use transports::turn_relayer::RTCTurnRelayer;
+use transport::stun_gatherer::RTCStunGatherer;
+use transport::turn_relayer::RTCTurnRelayer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
 use rtc::ice::mdns::MulticastDnsMode;
@@ -495,6 +496,20 @@ pub trait PeerConnection: crate::sealed::Sealed + Send + Sync + 'static {
     ) -> Result<Arc<dyn RtpTransceiver>>;
     /// Get a snapshot of accumulated statistics.
     async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport;
+    /// The SCTP transport carrying this connection's data channels.
+    ///
+    /// `None` until SCTP has been negotiated; a connection carrying only media never has one.
+    /// This is the only transport accessor here, matching the W3C interface — the DTLS and ICE
+    /// transports are reached by walking from it, or from a sender or receiver:
+    ///
+    /// ```text
+    /// pc.sctp().await.expect("SCTP negotiated").transport().ice_transport()
+    /// ```
+    ///
+    /// ## Specifications
+    ///
+    /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-sctp)
+    async fn sctp(&self) -> Option<Arc<dyn SctpTransport>>;
 }
 
 /// Concrete async peer connection implementation (generic over interceptor type).
@@ -1240,6 +1255,26 @@ where
     async fn get_stats(&self, now: Instant, selector: StatsSelector) -> RTCStatsReport {
         let mut core = self.inner.core.lock().await;
         core.get_stats(now, selector)
+    }
+
+    async fn sctp(&self) -> Option<Arc<dyn SctpTransport>> {
+        let core = self.inner.core.lock().await;
+
+        // Walk the core's graph once, under the lock, and keep only the ids. A borrowed view
+        // cannot cross an await, so the handle re-walks per call — and carries the ids so that
+        // `id()` can stay synchronous.
+        let (id, dtls_id, ice_id) = {
+            let sctp = core.sctp()?;
+            let dtls = sctp.transport();
+            (sctp.id(), dtls.id(), dtls.ice_transport().id())
+        };
+
+        Some(Arc::new(SctpTransportImpl::new(
+            id,
+            dtls_id,
+            ice_id,
+            Arc::clone(&self.inner),
+        )))
     }
 }
 

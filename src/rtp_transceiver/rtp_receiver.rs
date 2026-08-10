@@ -1,5 +1,6 @@
 use crate::error::{Error, Result};
 use crate::media_stream::track_remote::TrackRemote;
+use crate::peer_connection::transport::{DtlsRoute, DtlsTransport, DtlsTransportImpl};
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::rtp_transceiver::RtpReceiver;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
@@ -102,5 +103,27 @@ where
             .rtp_receiver(self.id)
             .ok_or(Error::ErrRTPReceiverNotExisted)?;
         Ok(peer_connection.get_stats(now, StatsSelector::Receiver(self.id)))
+    }
+    async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>> {
+        let mut peer_connection = self.inner.core.lock().await;
+
+        // Walk under the lock and keep only the ids: a borrowed view cannot cross an await, so
+        // the handle re-walks per call and carries the ids so `id()` can stay synchronous.
+        let ids = match peer_connection.rtp_receiver(self.id) {
+            Some(receiver) => receiver
+                .transport()
+                .map(|dtls| (dtls.id(), dtls.ice_transport().id())),
+            None => return Err(Error::ErrRTPReceiverNotExisted),
+        };
+        drop(peer_connection);
+
+        Ok(ids.map(|(id, ice_id)| {
+            Arc::new(DtlsTransportImpl::new(
+                id,
+                ice_id,
+                DtlsRoute::Receiver(self.id),
+                Arc::clone(&self.inner),
+            )) as Arc<dyn DtlsTransport>
+        }))
     }
 }

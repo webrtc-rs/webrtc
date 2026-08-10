@@ -1,5 +1,5 @@
 use crate::peer_connection::driver::PeerConnectionDriverEvent;
-use crate::peer_connection::transports::{TcpReadResult, is_retryable_socket_recv_error};
+use crate::peer_connection::transport::{TcpReadResult, is_retryable_socket_recv_error};
 use crate::runtime::{AsyncTcpListener, AsyncTcpStream, Runtime, Sender};
 use bytes::BytesMut;
 use futures::FutureExt;

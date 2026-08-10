@@ -43,6 +43,7 @@ use crate::error::Error;
 use crate::media_stream::track_local::TrackLocalContext;
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
 use crate::peer_connection::driver::DRIVER_TO_TRACK_LOCAL_EVENT_CHANNEL_CAPACITY;
+use crate::peer_connection::transport::DtlsTransport;
 use crate::peer_connection::{Interceptor, NoopInterceptor, PeerConnectionRef};
 use crate::runtime::Mutex;
 use crate::runtime::channel;
@@ -78,6 +79,17 @@ pub trait RtpReceiver: crate::sealed::Sealed + Send + Sync + 'static {
     async fn get_synchronization_sources(&self) -> Result<Vec<RTCRtpSynchronizationSource>>;
     /// Returns a statistics report for this receiver.
     async fn get_stats(&self, now: Instant) -> Result<RTCStatsReport>;
+    /// The DTLS transport over which this receiver's RTP packets are received.
+    ///
+    /// `Ok(None)` until this receiver's transceiver has been associated by negotiation — the spec
+    /// sources this from the per-receiver `[[ReceiverTransport]]` slot, which is filled while
+    /// applying a local or remote description. Under bundling every sender and receiver shares
+    /// one transport, so all of them compare equal by `id()`.
+    ///
+    /// ## Specifications
+    ///
+    /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcrtpreceiver-transport)
+    async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>>;
 }
 
 /// An RTP Sender that sends media to a remote peer.
@@ -103,6 +115,21 @@ pub trait RtpSender: crate::sealed::Sealed + Send + Sync + 'static {
     async fn set_streams(&self, streams: Vec<MediaStreamId>) -> Result<()>;
     /// Returns a statistics report for this sender.
     async fn get_stats(&self, now: Instant) -> Result<RTCStatsReport>;
+    /// The DTLS transport over which this sender's RTP packets are sent.
+    ///
+    /// `Ok(None)` until this sender's transceiver has been associated by negotiation — the spec
+    /// sources this from the per-sender `[[SenderTransport]]` slot, which is filled while
+    /// applying a local or remote description. Under bundling every sender and receiver shares
+    /// one transport, so all of them compare equal by `id()`.
+    ///
+    /// `Err` means something different from `Ok(None)`: the sender itself no longer exists.
+    /// Note this is *not* keyed on the DTLS handshake having started — see
+    /// [`docs/transport-objects.md`](https://github.com/webrtc-rs/webrtc/blob/master/docs/transport-objects.md).
+    ///
+    /// ## Specifications
+    ///
+    /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcrtpsender-transport)
+    async fn transport(&self) -> Result<Option<Arc<dyn DtlsTransport>>>;
 }
 
 /// An RTP Transceiver that represents a combination of an RTP Sender and Receiver.
