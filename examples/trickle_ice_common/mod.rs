@@ -16,7 +16,7 @@ use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceGatheringState, RTCIceServer,
     RTCIceTransportPolicy, RTCPeerConnectionIceEvent, RTCPeerConnectionState, Registry,
-    SettingEngine, register_default_interceptors,
+    SettingEngineBuilder, register_default_interceptors,
 };
 use webrtc::runtime::{AsyncTcpStream, Runtime, Sender, channel};
 
@@ -329,10 +329,11 @@ pub async fn run_example(_cli: TrickleCli, config: TrickleExampleConfig) -> Resu
                         let mut media = MediaEngine::default();
                         media.register_default_codecs()?;
                         let registry = register_default_interceptors(Registry::new(), &mut media)?;
-                        let mut setting_engine = SettingEngine::default();
-                        setting_engine.set_answering_dtls_role(RTCDtlsRole::Server)?;
-                        setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryOnly);
-                        setting_engine.set_multicast_dns_timeout(Some(Duration::from_secs(10)));
+                        let setting_engine = SettingEngineBuilder::new()
+                            .with_answering_dtls_role(RTCDtlsRole::Server)
+                            .with_multicast_dns_mode(MulticastDnsMode::QueryOnly)
+                            .with_multicast_dns_timeout(Some(Duration::from_secs(10)))
+                            .build();
 
                         let pc = PeerConnectionBuilder::new()
                             .with_configuration(

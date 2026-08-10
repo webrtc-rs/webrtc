@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
-use rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use rtc::peer_connection::event::RTCDataChannelEvent;
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
 use rtc::peer_connection::message::RTCMessage;
@@ -140,8 +140,9 @@ async fn run_test() -> Result<()> {
     let rtc_socket = runtime.wrap_udp_socket(std_socket)?;
     log::info!("RTC peer bound to {}", rtc_local_addr);
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(RTCDtlsRole::Client)?;
+    let setting_engine = SettingEngineBuilder::new()
+        .with_answering_dtls_role(RTCDtlsRole::Client)
+        .build();
 
     let mut rtc_pc = RTCPeerConnectionBuilder::new()
         .with_configuration(config.clone())

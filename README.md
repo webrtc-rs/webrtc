@@ -64,7 +64,9 @@ alt="Recall.ai">
 
 ## Overview
 
-WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion stack. The async `webrtc` crate is a clean, ergonomic, runtime-agnostic rewrite on top of a Sans-I/O core; it ships with Tokio and smol runtime backends, and any other runtime can be plugged in by implementing one trait.
+WebRTC.rs is an async-friendly WebRTC implementation in Rust, originally inspired by and largely rewriting the Pion
+stack. The async `webrtc` crate is a clean, ergonomic, runtime-agnostic rewrite on top of a Sans-I/O core; it ships with
+Tokio and smol runtime backends, and any other runtime can be plugged in by implementing one trait.
 
 **Architecture:**
 
@@ -83,43 +85,45 @@ details and roadmap.
 
 ## Getting Started
 
-```toml
-[dependencies]
-webrtc = "0.20"
-```
-
-Or with the smol runtime instead of Tokio:
+**Trying the `0.21` pre-release?** Cargo does not select pre-release versions from a plain
+`"0.21"` requirement, so name it in full:
 
 ```toml
 [dependencies]
-webrtc = { version = "0.20", default-features = false, features = ["runtime-smol"] }
+webrtc = "0.21.0-alpha.1"
 ```
 
 **Feature flags:**
 
-| Feature         | Default | Description                                                             |
-|-----------------|---------|-------------------------------------------------------------------------|
-| `runtime-tokio` | ✅      | Timers, task spawning and sockets via Tokio                             |
-| `runtime-smol`  |         | The same, via smol                                                      |
-| `runtime-mock`  |         | `MockRuntime`, a deterministic virtual-clock runtime for tests (no I/O) |
-| `crypto-ring`   | ✅      | The `ring`-based crypto provider                                        |
-| `crypto-aws-lc-rs` |      | The `aws-lc-rs`-based crypto provider                                   |
+| Feature            | Default | Description                                                             |
+|--------------------|---------|-------------------------------------------------------------------------|
+| `runtime-tokio`    | ✅       | Timers, task spawning and sockets via Tokio                             |
+| `runtime-smol`     |         | The same, via smol                                                      |
+| `runtime-mock`     |         | `MockRuntime`, a deterministic virtual-clock runtime for tests (no I/O) |
+| `crypto-ring`      | ✅       | The `ring`-based crypto provider                                        |
+| `crypto-aws-lc-rs` |         | The `aws-lc-rs`-based crypto provider                                   |
 
-The runtime features are **additive**: each one only makes a built-in runtime *available*, so enabling several is safe and a single process can drive different connections on different runtimes.
+The runtime features are **additive**: each one only makes a built-in runtime *available*, so enabling several is safe
+and a single process can drive different connections on different runtimes.
 
-The crypto features work the same way. Enabling both compiles both providers, and `ring` stays the default selection — so a dependency that turns on `crypto-aws-lc-rs` cannot silently change which one your application runs. Building with neither compiles no provider, and you supply your own.
+The crypto features work the same way. Enabling both compiles both providers, and `ring` stays the default selection —
+so a dependency that turns on `crypto-aws-lc-rs` cannot silently change which one your application runs. Building with
+neither compiles no provider, and you supply your own.
 
-**Bringing your own runtime.** The built-ins are not privileged — implement `webrtc::runtime::Runtime` and pass it per connection with `with_runtime`, with no `#[cfg]` edits and no fork. See the [custom-runtime example](examples/custom-runtime), which runs the full stack on `async-executor` + `async-io` with `--no-default-features` (neither Tokio nor smol compiled in).
+**Bringing your own runtime.** The built-ins are not privileged — implement `webrtc::runtime::Runtime` and pass it per
+connection with `with_runtime`, with no `#[cfg]` edits and no fork. See
+the [custom-runtime example](examples/custom-runtime), which runs the full stack on `async-executor` + `async-io` with
+`--no-default-features` (neither Tokio nor smol compiled in).
 
-**Choosing a crypto provider.** Same story: pass one per connection through `SettingEngine`, which also means two connections in one process can use different providers.
+**Choosing a crypto provider.** Same story: pass one per connection through `SettingEngine`, which also means two
+connections in one process can use different providers.
 
 ```rust
 use std::sync::Arc;
 use webrtc::peer_connection::crypto;
-use webrtc::peer_connection::SettingEngine;
+use webrtc::peer_connection::SettingEngineBuilder;
 
-let mut setting_engine = SettingEngine::default();
-setting_engine.set_crypto_provider(Arc::new(crypto::providers::AwsLcRsProvider::new()));
+let setting_engine = SettingEngineBuilder::new().with_crypto_provider(Arc::new(crypto::providers::AwsLcRsProvider::new()));
 ```
 
 Applications needing a FIPS-validated module, an HSM, or a platform backend implement
@@ -133,7 +137,7 @@ Build a peer connection and create an offer:
 use std::sync::Arc;
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
-    RTCConfigurationBuilder, RTCIceServer, RTCPeerConnectionIceEvent,
+    RTCConfigurationBuilder, RTCIceServer, RTCPeerConnectionIceEvent, SettingEngine, crypto,
 };
 use webrtc::runtime::TokioRuntime;
 
@@ -158,19 +162,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }])
         .build();
 
-    // 3. Build the PeerConnection — the background driver starts here.
+    // 3. Choose the crypto provider (optional).
+    //    `crypto-ring` is on by default, so this states what you would get anyway — but the
+    //    choice is per connection, not per process, so two connections here could use
+    //    different providers. Enable `crypto-aws-lc-rs` for `AwsLcRsProvider`, or build with
+    //    neither feature and pass your own `RTCCryptoProvider`.
+    let mut setting_engine = SettingEngine::default();
+    setting_engine.set_crypto_provider(Arc::new(crypto::providers::RingProvider::new()));
+
+    // 4. Build the PeerConnection — the background driver starts here.
     //    The runtime is a value, injected per connection: swap `TokioRuntime` for
     //    `SmolRuntime`, or for your own `Runtime` impl, and nothing else changes.
     //    (Omit `with_runtime` entirely and `build()` uses the compiled-in default.)
     let pc = PeerConnectionBuilder::new()
         .with_configuration(config)
+        .with_setting_engine(setting_engine)
         .with_runtime(Arc::new(TokioRuntime))
         .with_handler(Arc::new(MyHandler))
         .with_udp_addrs(vec!["0.0.0.0:0"])
         .build()
         .await?;
 
-    // 4. Create an SDP offer and set it as the local description
+    // 5. Create an SDP offer and set it as the local description
     let offer = pc.create_offer(None).await?;
     pc.set_local_description(offer).await?;
 
@@ -188,44 +201,27 @@ let pc: Arc<dyn PeerConnection> = Arc::new(pc);
 Either way no runtime or interceptor type parameters leak into your own types.
 
 **Next steps:** browse the [API docs](https://docs.rs/webrtc) or the
-[35 runnable examples](https://github.com/webrtc-rs/webrtc/tree/master/examples) — data channels, media playback,
+[37 runnable examples](https://github.com/webrtc-rs/webrtc/tree/master/examples) — data channels, media playback,
 simulcast, ICE restart, insertable streams, and more.
 
-### 🚨 v0.17.x → v0.20.0: the Sans-I/O rewrite
-
-**`v0.20.0` is the first stable release of the new Sans-I/O, runtime-agnostic architecture.** It supersedes the
-Tokio-coupled `v0.17.x` line, which is now in bug-fix-only maintenance.
-
-#### Current Status
-
-- **`v0.20.x`** (master): The current line, and the recommended choice for all new projects. Runtime-agnostic,
-  Sans-I/O, with the `PeerConnection` handle + background driver design described above.
-- **`v0.17.x`**: Receives **bug fixes only** (no new features). Still a valid choice if you have an existing
-  Tokio-coupled integration you are not ready to migrate.
-
-Note that `v0.20.0` is a breaking change from `v0.17.x` — the event-handler traits replace callbacks, and the API is
-async throughout. While the version is `0.x`, a minor bump may carry breaking changes
-(see [Semantic Versioning](#semantic-versioning)).
-
-#### What v0.20.0 delivers
-
-The rewrite resolves the core pain points of `v0.17.x` — callback hell and `Arc` explosion, resource leaks in
-callbacks, and tight Tokio coupling:
+### The architecture
 
 ✅ **Runtime independence**
 
 - Runtime-agnostic via a Quinn-style `Runtime` abstraction (timers, task spawning, sockets, DNS)
 - Feature flags: **`runtime-tokio`** (default) and **`runtime-smol`**, additive rather than mutually exclusive
-- Any third-party runtime works today: implement `Runtime`, inject it per connection with `with_runtime`. The [custom-runtime example](examples/custom-runtime) does exactly that on `async-executor` + `async-io`, with neither built-in runtime compiled in
-- **`runtime-mock`** gives tests a deterministic virtual clock, so timing-dependent behaviour is testable instantly and without sockets
+- Any third-party runtime works today: implement `Runtime`, inject it per connection with `with_runtime`.
+  The [custom-runtime example](examples/custom-runtime) does exactly that on `async-executor` + `async-io`, with neither
+  built-in runtime compiled in
+- **`runtime-mock`** gives tests a deterministic virtual clock, so timing-dependent behaviour is testable instantly and
+  without sockets
 
 ✅ **Clean event handling**
 
-- One trait-based event handler (`PeerConnectionEventHandler`) replaces per-event callback registration, with
-  default no-op methods so you implement only what you need
-- No more callback `Arc` cloning or `Box::new(move |...| Box::pin(async move { ... }))`
-- Centralized state: the handler is shared as a single `Arc<MyHandler>` instead of an `Arc::clone` per callback.
-  Methods take `&self`, so mutable handler state goes behind one lock rather than being captured per closure
+- One trait-based event handler (`PeerConnectionEventHandler`) for every event, with default no-op methods so you
+  implement only what you need — no per-event callback registration
+- Centralized state: the handler is one shared `Arc<MyHandler>`. Methods take `&self`, so mutable handler state
+  goes behind a single lock rather than being captured per closure
 
 ✅ **Sans-I/O foundation**
 
@@ -233,16 +229,50 @@ callbacks, and tight Tokio coupling:
 - Deterministic testing without real network I/O
 - A thin async driver (`PeerConnection` handle + background `PeerConnectionDriver`) over the core
 
-#### How to Provide Feedback
+### Release lines
 
-We welcome your input as `v0.20.x` grows:
+- **`v0.21.x`** — in development, currently `v0.21.0-alpha.1`. The pre-1.0 line, working towards a stable public
+  API; see [what's in 0.21](#whats-in-021) below. APIs may change between alphas.
+- **`v0.20.x`** — the current stable line, and the recommended choice for production today.
+
+While the version is `0.x`, a minor bump may carry breaking changes
+(see [Semantic Versioning](#semantic-versioning)). Once `1.0` ships, that stops being true — which is the whole
+point of the `0.21` work.
+
+### What's in 0.21
+
+`v0.21` is the run-up to `1.0`, whose goal is a **stable public API** — not every feature, but an API that will
+not break under you. Work so far:
+
+✅ **Extensibility, before the freeze** — public enums are `#[non_exhaustive]` and the traits this crate alone
+implements are sealed, so variants and methods can be added later without a major bump. This cannot be done
+*after* `1.0`, which is why it came first.
+
+✅ **Crypto provider selection** — `crypto-ring` (default) and `crypto-aws-lc-rs` features, chosen per peer
+connection, so two connections in one process can use different providers. Build with neither and supply your
+own. No cryptography happens in this crate; a CI check enforces that.
+
+✅ **Deterministic time** — the Sans-I/O core no longer reads a clock. Time is an input, threaded from
+`Runtime::now()`, so `runtime-mock`'s virtual clock genuinely drives ICE timeouts, DTLS retransmits and SCTP
+RTO. Advancing a mock clock by 30 s now produces real protocol transitions instead of nothing.
+
+✅ **No silent drops on data channels** — a slow consumer used to lose messages on a *reliable* channel once
+the internal hand-off queue filled. The driver now keeps them and stops pulling from the core, so back-pressure
+reaches SCTP's receive window and the peer is throttled instead. Media is unaffected by a stalled data channel.
+
+Track the remaining work in [The path to webrtc 1.0](https://github.com/webrtc-rs/webrtc/issues/836).
+
+### How to Provide Feedback
+
+We welcome your input as `v0.20.x` and `v0.21.x` grow:
 
 - Review the [architecture blog post](https://webrtc.rs/blog/2026/01/31/async-friendly-webrtc-architecture.html)
 - Join discussions on [GitHub Issues](https://github.com/webrtc-rs/webrtc/issues)
 - Chat with us on [Discord](https://discord.gg/4Ju8UHdXMs)
 
-**New projects:** start on `v0.20`.  
-**Migrating from `v0.17.x`?** Open an issue if you hit a gap — migration reports directly shape what we prioritise.
+**New projects:** start on `v0.20`, or on `v0.21.0-alpha.1` if you want the pre-1.0 API and can absorb changes
+between alphas.  
+**Hit a gap?** Open an issue — reports of what is missing directly shape what we prioritise before `1.0`.
 
 ## Building and Testing
 

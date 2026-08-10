@@ -6,7 +6,7 @@ use std::time::Duration;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
-    RTCPeerConnectionState, SettingEngine,
+    RTCPeerConnectionState, SettingEngine, SettingEngineBuilder,
 };
 use webrtc::runtime::{Runtime, Sender, channel};
 
@@ -76,11 +76,12 @@ impl PeerConnectionEventHandler for AnswererHandler {
 }
 
 fn mdns_setting_engine(name: &str, local_ip: IpAddr) -> SettingEngine {
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
-    setting_engine.set_multicast_dns_timeout(Some(Duration::from_secs(5)));
-    setting_engine.set_multicast_dns_local_name(name.to_owned());
-    setting_engine.set_multicast_dns_local_ip(Some(local_ip));
+    let setting_engine = SettingEngineBuilder::new()
+        .with_multicast_dns_mode(MulticastDnsMode::QueryAndGather)
+        .with_multicast_dns_timeout(Some(Duration::from_secs(5)))
+        .with_multicast_dns_local_name(name.to_owned())
+        .with_multicast_dns_local_ip(Some(local_ip))
+        .build();
     setting_engine
 }
 

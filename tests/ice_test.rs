@@ -495,11 +495,12 @@ fn test_mdns_query_and_gather_rewrites_host_candidate() {
             gathering_tx,
         });
 
-        let mut setting_engine = SettingEngine::default();
-        setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
-        setting_engine.set_multicast_dns_timeout(Some(std::time::Duration::from_secs(5)));
-        setting_engine.set_multicast_dns_local_name("async-mdns-host.local".to_owned());
-        setting_engine.set_multicast_dns_local_ip(Some(std::net::Ipv4Addr::LOCALHOST.into()));
+        let setting_engine = SettingEngineBuilder::new()
+            .with_multicast_dns_mode(MulticastDnsMode::QueryAndGather)
+            .with_multicast_dns_timeout(Some(std::time::Duration::from_secs(5)))
+            .with_multicast_dns_local_name("async-mdns-host.local".to_owned())
+            .with_multicast_dns_local_ip(Some(std::net::Ipv4Addr::LOCALHOST.into()))
+            .build();
 
         let pc = PeerConnectionBuilder::new()
             .with_configuration(config)

@@ -21,7 +21,7 @@ use rtc::peer_connection::state::RTCPeerConnectionState;
 use webrtc::data_channel::DataChannelEvent;
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCPeerConnectionIceEvent,
-    Registry, SettingEngine,
+    Registry, SettingEngineBuilder,
 };
 use webrtc::runtime::channel;
 
@@ -149,11 +149,12 @@ async fn async_main(cli: Cli) -> Result<()> {
     media.register_default_codecs()?;
     let registry = register_default_interceptors(Registry::new(), &mut media)?;
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_network_types(vec![
-        rtc::ice::network_type::NetworkType::Tcp4,
-        rtc::ice::network_type::NetworkType::Tcp6,
-    ]);
+    let setting_engine = SettingEngineBuilder::new()
+        .with_network_types(vec![
+            rtc::ice::network_type::NetworkType::Tcp4,
+            rtc::ice::network_type::NetworkType::Tcp6,
+        ])
+        .build();
 
     let pc = PeerConnectionBuilder::new()
         .with_configuration(RTCConfigurationBuilder::new().build())

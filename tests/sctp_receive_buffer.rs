@@ -8,7 +8,7 @@
 //! chains `TransportConfig::with_max_receive_buffer_size`.
 use anyhow::Result;
 use bytes::BytesMut;
-use rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -78,8 +78,9 @@ async fn exchange_one_message(recv_buf: u32, msg: &[u8]) -> Result<()> {
     let (rcv_gather_tx, mut rcv_gather_rx) = channel::<()>(1);
     let received = Arc::new(AtomicUsize::new(0));
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_sctp_max_receive_buffer_size(recv_buf);
+    let setting_engine = SettingEngineBuilder::new()
+        .with_sctp_max_receive_buffer_size(recv_buf)
+        .build();
 
     let sender_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(SenderHandler {
@@ -116,8 +117,9 @@ async fn exchange_one_message(recv_buf: u32, msg: &[u8]) -> Result<()> {
     let _ = timeout(Duration::from_secs(5), snd_gather_rx.recv()).await;
     let offer_sdp = sender_pc.local_description().await.expect("offer");
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_sctp_max_receive_buffer_size(recv_buf);
+    let setting_engine = SettingEngineBuilder::new()
+        .with_sctp_max_receive_buffer_size(recv_buf)
+        .build();
 
     let receiver_pc = PeerConnectionBuilder::new()
         .with_handler(Arc::new(ReceiverHandler {

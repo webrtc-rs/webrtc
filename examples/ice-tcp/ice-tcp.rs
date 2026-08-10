@@ -28,7 +28,7 @@ use rtc::peer_connection::transport::RTCDtlsRole;
 use signal::get_local_ip;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
-    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, SettingEngine,
+    PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, SettingEngineBuilder,
 };
 use webrtc::runtime::{Mutex, Runtime, Sender, channel};
 
@@ -259,8 +259,9 @@ async fn async_main(_cli: Cli) -> Result<()> {
     media.register_default_codecs()?;
     let registry = register_default_interceptors(Registry::new(), &mut media)?;
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(RTCDtlsRole::Client)?;
+    let setting_engine = SettingEngineBuilder::new()
+        .with_answering_dtls_role(RTCDtlsRole::Client)
+        .build();
 
     let local_ip = get_local_ip();
     println!("Server local IP address is: {local_ip}");
