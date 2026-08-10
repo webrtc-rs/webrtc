@@ -2,17 +2,17 @@
 //!
 //! Follows the rtc EventLoop pattern with async select
 
-use super::transports::stun_gatherer::{
+use super::transport::stun_gatherer::{
     RTCStunGatherEventIn, RTCStunGatherEventOut, RTCStunGatherer,
 };
-use super::transports::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
+use super::transport::turn_relayer::{RTCTurnRelayEventIn, RTCTurnRelayEventOut, RTCTurnRelayer};
 use crate::data_channel::{DataChannelEvent, DataChannelImpl, RTCDataChannelId};
 use crate::media_stream::track_local::TrackLocalEvent;
 use crate::media_stream::track_remote::static_rtp::TrackRemoteStaticRTP;
 use crate::media_stream::track_remote::{TrackRemote, TrackRemoteEvent};
 use crate::peer_connection::PeerConnectionRef;
-use crate::peer_connection::transports::tcp_transport::RTCTcpTransport;
-use crate::peer_connection::transports::{
+use crate::peer_connection::transport::tcp_transport::RTCTcpTransport;
+use crate::peer_connection::transport::{
     MAX_GSO_BATCH_BYTES, MAX_GSO_SEGMENTS, MIN_GSO_RUN, SocketRecvResult, UDP_RECV_BUF_LEN,
     gro_recv_buf_len, is_retryable_socket_recv_error,
 };
