@@ -308,6 +308,7 @@ impl RTCTurnRelayer {
                             realm: String::new(),
                             software: String::new(),
                             rto_in_ms: 0,
+                            ..Default::default()
                         },
                         Arc::clone(&self.crypto_provider),
                     )?;
