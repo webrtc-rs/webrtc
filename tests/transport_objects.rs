@@ -15,7 +15,8 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
 use webrtc::data_channel::{DataChannelEvent, RTCDataChannelInit};
-use webrtc::media_stream::track_local::static_rtp::TrackLocalStaticRTP;
+use webrtc::media_stream::track_local::{TrackLocal, static_rtp::TrackLocalStaticRTP};
+use webrtc::media_stream::track_remote::TrackRemote;
 use webrtc::peer_connection::transport::{DtlsTransport, IceTransport, SctpTransport};
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
@@ -29,6 +30,7 @@ use rtc::peer_connection::state::RTCIceGatheringState as CoreGatheringState;
 use rtc::peer_connection::transport::{
     RTCDtlsTransportState, RTCIceComponent, RTCIceRole, RTCIceTransportState, RTCSctpTransportState,
 };
+use rtc::rtp;
 use rtc::rtp_transceiver::rtp_sender::{
     RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
     RtpCodecKind,
@@ -40,6 +42,7 @@ use common::{block_on, runtime, timeout};
 struct Handler {
     gather_tx: Sender<()>,
     connected_tx: Sender<()>,
+    track_tx: Option<Sender<()>>,
 }
 
 #[async_trait::async_trait]
@@ -53,6 +56,12 @@ impl PeerConnectionEventHandler for Handler {
     async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
         if state == RTCPeerConnectionState::Connected {
             let _ = self.connected_tx.try_send(());
+        }
+    }
+
+    async fn on_track(&self, _track: Arc<dyn TrackRemote>) {
+        if let Some(track_tx) = &self.track_tx {
+            let _ = track_tx.try_send(());
         }
     }
 }
@@ -103,11 +112,14 @@ async fn transport_objects_are_reachable() -> Result<()> {
     let (a_conn_tx, mut a_conn_rx) = channel::<()>(1);
     let (b_gather_tx, mut b_gather_rx) = channel::<()>(1);
     let (b_conn_tx, mut _b_conn_rx) = channel::<()>(1);
+    let (b_track_tx, mut b_track_rx) = channel::<()>(1);
+    let mut b_track_tx = Some(b_track_tx);
 
     let pc_a = PeerConnectionBuilder::new()
         .with_handler(Arc::new(Handler {
             gather_tx: a_gather_tx,
             connected_tx: a_conn_tx,
+            track_tx: None,
         }))
         .with_runtime(runtime.clone())
         .with_media_engine(video_media_engine())
@@ -134,7 +146,8 @@ async fn transport_objects_are_reachable() -> Result<()> {
             }
         }));
     }
-    let sender = pc_a.add_track(video_track()).await?;
+    let track = video_track();
+    let sender = pc_a.add_track(track.clone()).await?;
 
     // Before negotiation there is no SCTP transport, and the sender is unassociated.
     assert!(
@@ -155,6 +168,7 @@ async fn transport_objects_are_reachable() -> Result<()> {
         .with_handler(Arc::new(Handler {
             gather_tx: b_gather_tx,
             connected_tx: b_conn_tx,
+            track_tx: b_track_tx.take(),
         }))
         .with_runtime(runtime.clone())
         .with_media_engine(video_media_engine())
@@ -260,6 +274,59 @@ async fn transport_objects_are_reachable() -> Result<()> {
     assert_ne!(dtls.id(), ice.id());
     assert_ne!(sctp.id(), ice.id());
 
+    // The receiving end reaches the same graph through its *receiver*, which is the other half
+    // of the `[[SenderTransport]]` / `[[ReceiverTransport]]` pair and the only §3 member the
+    // sender path does not cover.
+    // The receiving end reaches the graph through its *receiver* — the other half of the
+    // `[[SenderTransport]]` / `[[ReceiverTransport]]` pair, and the one §3 member the sender path
+    // does not cover. A receiver only exists once a track actually arrives, so send RTP until
+    // `on_track` fires.
+    {
+        let track = track.clone();
+        let runtime = runtime.clone();
+        runtime.clone().spawn(Box::pin(async move {
+            for sequence_number in 0..200u16 {
+                let _ = track
+                    .write_rtp(rtp::packet::Packet {
+                        header: rtp::header::Header {
+                            version: 2,
+                            payload_type: 96,
+                            sequence_number,
+                            timestamp: u32::from(sequence_number) * 3000,
+                            ssrc: 0x1234_5678,
+                            ..Default::default()
+                        },
+                        payload: bytes::Bytes::from_static(&[0x90, 0x90, 0x90, 0x90]),
+                    })
+                    .await;
+                runtime.sleep(Duration::from_millis(20)).await;
+            }
+        }));
+    }
+    timeout(Duration::from_secs(10), b_track_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("timeout waiting for on_track"))?;
+
+    let receivers = pc_b.get_receivers().await;
+    let receiver = receivers.first().expect("pc_b received pc_a's track");
+    let receiver_dtls = receiver
+        .transport()
+        .await?
+        .expect("an associated receiver has a transport");
+    assert_eq!(
+        RTCDtlsTransportState::Connected,
+        receiver_dtls.state().await?
+    );
+    assert_eq!(
+        pc_b.sctp()
+            .await
+            .expect("peer negotiated SCTP")
+            .transport()
+            .id(),
+        receiver_dtls.id(),
+        "on its own connection, the receiver names the same DTLS transport the data channels use"
+    );
+
     // A different connection's transports are never equal to this one's.
     let other_dtls = pc_b
         .sctp()
@@ -270,6 +337,16 @@ async fn transport_objects_are_reachable() -> Result<()> {
         dtls.id(),
         other_dtls.id(),
         "transports of two peer connections must not compare equal"
+    );
+    assert_eq!(
+        other_dtls.id(),
+        receiver_dtls.id(),
+        "both are pc_b's own DTLS transport, reached two different ways"
+    );
+    assert_ne!(
+        dtls.id(),
+        receiver_dtls.id(),
+        "...and neither equals pc_a's, since they are different connections"
     );
 
     pc_a.close().await?;
@@ -289,11 +366,14 @@ async fn media_only_connection_reaches_dtls_through_the_sender() -> Result<()> {
     let (a_conn_tx, mut a_conn_rx) = channel::<()>(1);
     let (b_gather_tx, mut b_gather_rx) = channel::<()>(1);
     let (b_conn_tx, mut _b_conn_rx) = channel::<()>(1);
+    let (b_track_tx, mut b_track_rx) = channel::<()>(1);
+    let mut b_track_tx = Some(b_track_tx);
 
     let pc_a = PeerConnectionBuilder::new()
         .with_handler(Arc::new(Handler {
             gather_tx: a_gather_tx,
             connected_tx: a_conn_tx,
+            track_tx: None,
         }))
         .with_runtime(runtime.clone())
         .with_media_engine(video_media_engine())
@@ -302,7 +382,8 @@ async fn media_only_connection_reaches_dtls_through_the_sender() -> Result<()> {
         .await?;
 
     // A track and no data channel.
-    let sender = pc_a.add_track(video_track()).await?;
+    let track = video_track();
+    let sender = pc_a.add_track(track.clone()).await?;
 
     let offer = pc_a.create_offer(None).await?;
     pc_a.set_local_description(offer).await?;
@@ -313,6 +394,7 @@ async fn media_only_connection_reaches_dtls_through_the_sender() -> Result<()> {
         .with_handler(Arc::new(Handler {
             gather_tx: b_gather_tx,
             connected_tx: b_conn_tx,
+            track_tx: b_track_tx.take(),
         }))
         .with_runtime(runtime.clone())
         .with_media_engine(video_media_engine())
@@ -353,6 +435,47 @@ async fn media_only_connection_reaches_dtls_through_the_sender() -> Result<()> {
     ));
     assert!(!ice.get_local_candidates().await?.is_empty());
     assert_ne!(dtls.id(), ice.id());
+
+    // The same on the receiving side, whose only route in is its receiver: `pc_b` has no SCTP
+    // either, so a handle that resolved through `pc.sctp()` would fail here.
+    {
+        let track = track.clone();
+        let runtime = runtime.clone();
+        runtime.clone().spawn(Box::pin(async move {
+            for sequence_number in 0..200u16 {
+                let _ = track
+                    .write_rtp(rtp::packet::Packet {
+                        header: rtp::header::Header {
+                            version: 2,
+                            payload_type: 96,
+                            sequence_number,
+                            timestamp: u32::from(sequence_number) * 3000,
+                            ssrc: 0x1234_5678,
+                            ..Default::default()
+                        },
+                        payload: bytes::Bytes::from_static(&[0x90, 0x90, 0x90, 0x90]),
+                    })
+                    .await;
+                runtime.sleep(Duration::from_millis(20)).await;
+            }
+        }));
+    }
+    timeout(Duration::from_secs(10), b_track_rx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("timeout waiting for on_track"))?;
+
+    assert!(pc_b.sctp().await.is_none(), "the peer has no SCTP either");
+    let receivers = pc_b.get_receivers().await;
+    let receiver = receivers.first().expect("pc_b received pc_a's track");
+    let receiver_dtls = receiver
+        .transport()
+        .await?
+        .expect("an associated receiver has a transport");
+    assert_eq!(
+        RTCDtlsTransportState::Connected,
+        receiver_dtls.state().await?,
+        "the receiver's route reaches a live DTLS transport with no SCTP to walk through"
+    );
 
     pc_a.close().await?;
     pc_b.close().await?;

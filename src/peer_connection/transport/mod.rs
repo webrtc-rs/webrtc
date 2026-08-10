@@ -31,6 +31,12 @@
 //! `onselectedcandidatepairchange`. ICE state remains observable through the existing
 //! peer-connection events; DTLS and SCTP are poll-only.
 //!
+//! Those two are the differences you notice first. Eight more are smaller but can still surprise
+//! — `maxMessageSize` is always finite, `sender.transport()` is null until its transceiver is
+//! associated, `sctp()` never returns to `None` after a renegotiation that drops data, and
+//! `RTCIceRole` never reports `"unknown"`. All ten are listed, with their reasons, in
+//! [`docs/transport-objects.md`](https://github.com/webrtc-rs/webrtc/blob/master/docs/transport-objects.md).
+//!
 //! ## Why some methods are `async` and others are not
 //!
 //! This follows the IDL's nullability rather than a house style. `id()`, the two non-null edges

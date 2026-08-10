@@ -122,6 +122,10 @@ pub trait RtpSender: crate::sealed::Sealed + Send + Sync + 'static {
     /// applying a local or remote description. Under bundling every sender and receiver shares
     /// one transport, so all of them compare equal by `id()`.
     ///
+    /// `Err` means something different from `Ok(None)`: the sender itself no longer exists.
+    /// Note this is *not* keyed on the DTLS handshake having started — see
+    /// [`docs/transport-objects.md`](https://github.com/webrtc-rs/webrtc/blob/master/docs/transport-objects.md).
+    ///
     /// ## Specifications
     ///
     /// * [W3C](https://www.w3.org/TR/webrtc/#dom-rtcrtpsender-transport)
