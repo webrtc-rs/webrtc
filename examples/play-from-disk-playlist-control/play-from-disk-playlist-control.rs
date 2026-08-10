@@ -11,7 +11,7 @@ use rtc::media_stream::MediaStreamTrack;
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
 use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_OPUS, MediaEngine};
-use rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::state::RTCSignalingState;
 use rtc::peer_connection::transport::RTCDtlsRole;
@@ -463,8 +463,9 @@ async fn handle_whep_connection(
     tracks: Arc<Vec<OggTrack>>,
     runtime: Arc<dyn Runtime>,
 ) -> Result<String> {
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(RTCDtlsRole::Server)?;
+    let setting_engine = SettingEngineBuilder::new()
+        .with_answering_dtls_role(RTCDtlsRole::Server)
+        .build();
 
     let mut media_engine = MediaEngine::default();
     let opus_codec = RTCRtpCodecParameters {

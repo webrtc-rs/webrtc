@@ -9,7 +9,7 @@ use rtc::media::io::ivf_writer::IVFWriter;
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use rtc::peer_connection::configuration::interceptor_registry::register_default_interceptors;
 use rtc::peer_connection::configuration::media_engine::{MIME_TYPE_AV1, MediaEngine};
-use rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use rtc::peer_connection::sdp::RTCSessionDescription;
 use rtc::peer_connection::transport::RTCDtlsRole;
 use rtc::peer_connection::transport::RTCIceServer;
@@ -200,12 +200,13 @@ async fn async_main() -> Result<()> {
         },
     )?)));
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(if cli.client {
-        RTCDtlsRole::Client
-    } else {
-        RTCDtlsRole::Server
-    })?;
+    let setting_engine = SettingEngineBuilder::new()
+        .with_answering_dtls_role(if cli.client {
+            RTCDtlsRole::Client
+        } else {
+            RTCDtlsRole::Server
+        })
+        .build();
 
     let mut media_engine = MediaEngine::default();
     media_engine.register_codec(

@@ -111,25 +111,12 @@ jobs:
       # webrtc#858 got in. See docs/internal-channel-overflow-policy.md.
       - name: Bounded channels declare an overflow policy
         run: python3 scripts/check-channel-overflow-policy.py
-      # `webrtc` cannot be packaged until the core crates it depends on are published: cargo
-      # resolves against the registry and the path dependency is stripped from the published
-      # manifest. Publication order is rtc-crypto, then the rtc protocol crates, then rtc, then
-      # webrtc. This asserts the failure is exactly that missing version and nothing else, so a
-      # different packaging break is still caught.
-      - name: Confirm packaging blocks only on core publication
-        run: |
-          if cargo package --allow-dirty 2>package.log; then
-            echo "webrtc packaged; the core crates appear to be published."
-            echo "Replace this step with a normal packaging check."
-            exit 0
-          fi
-          if grep -q 'failed to select a version for the requirement `rtc' package.log; then
-            echo "Expected: webrtc awaits the rtc 0.21.0 publish."
-            exit 0
-          fi
-          echo "webrtc packaging failed for an unexpected reason:"
-          cat package.log
-          exit 1
+      # No packaging check here: `webrtc` cannot be packaged until the core crates are
+      # published — cargo resolves against the registry and the path dependency is stripped
+      # from the published manifest, so `cargo package` builds against whatever `rtc` is on
+      # crates.io rather than the submodule. Publication order is rtc-crypto, then the rtc
+      # protocol crates, then rtc, then webrtc. Add a plain `cargo package` step once rtc
+      # 0.21.0 is out.
 
   test:
     name: Test

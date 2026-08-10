@@ -23,7 +23,7 @@ use rtc::peer_connection::transport::RTCDtlsRole;
 use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCPeerConnectionIceEvent,
-    SettingEngine,
+    SettingEngineBuilder,
 };
 use webrtc::runtime::channel;
 
@@ -259,12 +259,13 @@ async fn async_main(cli: Cli) -> Result<()> {
     media.register_default_codecs()?;
     let registry = register_default_interceptors(Registry::new(), &mut media)?;
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(RTCDtlsRole::Client)?;
-    setting_engine.set_network_types(vec![
-        rtc::ice::network_type::NetworkType::Tcp4,
-        rtc::ice::network_type::NetworkType::Tcp6,
-    ]);
+    let setting_engine = SettingEngineBuilder::new()
+        .with_answering_dtls_role(RTCDtlsRole::Client)
+        .with_network_types(vec![
+            rtc::ice::network_type::NetworkType::Tcp4,
+            rtc::ice::network_type::NetworkType::Tcp6,
+        ])
+        .build();
 
     let pc: Arc<dyn PeerConnection> = Arc::new(
         PeerConnectionBuilder::new()

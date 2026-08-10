@@ -23,7 +23,8 @@ use webrtc::data_channel::{DataChannel, DataChannelEvent};
 use webrtc::peer_connection::{
     MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
     RTCConfigurationBuilder, RTCIceCandidateType, RTCIceConnectionState, RTCIceGatheringState,
-    RTCIceServer, RTCPeerConnectionState, Registry, SettingEngine, register_default_interceptors,
+    RTCIceServer, RTCPeerConnectionState, Registry, SettingEngineBuilder,
+    register_default_interceptors,
 };
 use webrtc::runtime::{Runtime, Sender, channel};
 
@@ -182,21 +183,23 @@ async fn async_main(cli: Cli) -> Result<()> {
     media.register_default_codecs()?;
     let registry = register_default_interceptors(Registry::new(), &mut media)?;
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(if cli.client {
-        RTCDtlsRole::Client
+    let builder = SettingEngineBuilder::new()
+        .with_answering_dtls_role(if cli.client {
+            RTCDtlsRole::Client
+        } else {
+            RTCDtlsRole::Server
+        })
+        .with_multicast_dns_timeout(Some(Duration::from_secs(10)));
+
+    let setting_engine = if cli.query_only {
+        builder.with_multicast_dns_mode(MulticastDnsMode::QueryOnly)
     } else {
-        RTCDtlsRole::Server
-    })?;
-    setting_engine.set_multicast_dns_timeout(Some(Duration::from_secs(10)));
-    if cli.query_only {
-        setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryOnly);
-    } else {
-        setting_engine.set_multicast_dns_mode(MulticastDnsMode::QueryAndGather);
-        setting_engine
-            .set_multicast_dns_local_name("webrtc-rs-hides-local-ip-by-mdns.local".to_string());
-        setting_engine.set_multicast_dns_local_ip(Some(local_ip));
+        builder
+            .with_multicast_dns_mode(MulticastDnsMode::QueryAndGather)
+            .with_multicast_dns_local_name("webrtc-rs-hides-local-ip-by-mdns.local".to_string())
+            .with_multicast_dns_local_ip(Some(local_ip))
     }
+    .build();
 
     let peer_connection = PeerConnectionBuilder::new()
         .with_configuration(

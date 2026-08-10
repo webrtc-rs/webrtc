@@ -18,7 +18,7 @@
 //! the send, because the same loop drives ICE consent, DTLS retransmits and SCTP timers.
 use anyhow::Result;
 use bytes::BytesMut;
-use rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -484,8 +484,9 @@ async fn backpressure_reaches_the_sender() -> Result<()> {
     let _ = timeout(Duration::from_secs(5), snd_gather_rx.recv()).await;
     let offer_sdp = sender_pc.local_description().await.expect("offer");
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_sctp_max_receive_buffer_size(SMALL_RECV_WINDOW);
+    let setting_engine = SettingEngineBuilder::new()
+        .with_sctp_max_receive_buffer_size(SMALL_RECV_WINDOW)
+        .build();
 
     let receiver_pc: Arc<dyn PeerConnection> = Arc::new(
         PeerConnectionBuilder::new()

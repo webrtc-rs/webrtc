@@ -19,7 +19,7 @@ use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use rtc::peer_connection::configuration::media_engine::{
     MIME_TYPE_OPUS, MIME_TYPE_VP8, MediaEngine,
 };
-use rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use rtc::peer_connection::event::RTCPeerConnectionEvent;
 use rtc::peer_connection::state::{RTCIceConnectionState, RTCPeerConnectionState};
 use rtc::peer_connection::transport::RTCDtlsRole;
@@ -166,8 +166,9 @@ async fn run_test() -> Result<()> {
     let rtc_socket = runtime.wrap_udp_socket(std_socket)?;
     log::info!("RTC peer bound to {}", rtc_local_addr);
 
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_answering_dtls_role(RTCDtlsRole::Server)?;
+    let setting_engine = SettingEngineBuilder::new()
+        .with_answering_dtls_role(RTCDtlsRole::Server)
+        .build();
 
     let mut media_engine = MediaEngine::default();
 

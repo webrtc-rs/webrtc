@@ -107,8 +107,10 @@ pub use rtc::peer_connection::{
     certificate::RTCCertificate,
     configuration::{
         RTCBundlePolicy, RTCConfiguration, RTCConfigurationBuilder, RTCIceServer,
-        RTCIceTransportPolicy, RTCRtcpMuxPolicy, interceptor_registry::*,
-        media_engine::MediaEngine, setting_engine::SettingEngine,
+        RTCIceTransportPolicy, RTCRtcpMuxPolicy,
+        interceptor_registry::*,
+        media_engine::MediaEngine,
+        setting_engine::{SettingEngine, SettingEngineBuilder},
     },
     event::{
         RTCDataChannelEvent, RTCPeerConnectionEvent, RTCPeerConnectionIceErrorEvent,
@@ -1426,8 +1428,9 @@ mod virtual_clock_tests {
         // mDNS binds the fixed port 5353, which two peers on one mock network would collide
         // on (a real stack shares it via SO_REUSEADDR). Resolving `.local` candidates is not
         // what these tests are about, so turn it off rather than model port sharing.
-        let mut setting_engine = SettingEngine::default();
-        setting_engine.set_multicast_dns_mode(rtc::ice::mdns::MulticastDnsMode::Disabled);
+        let setting_engine = SettingEngineBuilder::new()
+            .with_multicast_dns_mode(rtc::ice::mdns::MulticastDnsMode::Disabled)
+            .build();
         let pc = PeerConnectionBuilder::new()
             .with_setting_engine(setting_engine)
             .with_runtime(Arc::clone(&rt) as Arc<dyn Runtime>)
