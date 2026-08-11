@@ -137,7 +137,7 @@ Build a peer connection and create an offer:
 use std::sync::Arc;
 use webrtc::peer_connection::{
     PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
-    RTCConfigurationBuilder, RTCIceServer, RTCPeerConnectionIceEvent, SettingEngine, crypto,
+    RTCConfigurationBuilder, RTCIceServer, RTCPeerConnectionIceEvent, SettingEngineBuilder, crypto,
 };
 use webrtc::runtime::TokioRuntime;
 
@@ -167,8 +167,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //    choice is per connection, not per process, so two connections here could use
     //    different providers. Enable `crypto-aws-lc-rs` for `AwsLcRsProvider`, or build with
     //    neither feature and pass your own `RTCCryptoProvider`.
-    let mut setting_engine = SettingEngine::default();
-    setting_engine.set_crypto_provider(Arc::new(crypto::providers::RingProvider::new()));
+    let setting_engine = SettingEngineBuilder::default()
+        .with_crypto_provider(Arc::new(crypto::providers::RingProvider::new()));
 
     // 4. Build the PeerConnection — the background driver starts here.
     //    The runtime is a value, injected per connection: swap `TokioRuntime` for
