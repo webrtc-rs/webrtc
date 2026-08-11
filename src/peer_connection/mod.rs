@@ -1081,19 +1081,9 @@ where
     }
 
     async fn restart_ice(&self) -> Result<()> {
-        {
-            let mut core = self.inner.core.lock().await;
-            core.restart_ice();
-        }
-
-        // overflow: awaited — producer is the application in `restart_ice`.
-        self.inner
-            .driver_event_tx
-            .send(PeerConnectionDriverEvent::IceGathering {
-                rebind_udp_sockets: false,
-            })
-            .await
-            .map_err(|e| Error::Other(format!("{:?}", e)))
+        let mut core = self.inner.core.lock().await;
+        core.restart_ice();
+        Ok(())
     }
 
     async fn get_configuration(&self) -> RTCConfiguration {
