@@ -74,7 +74,6 @@ use transport::stun_gatherer::RTCStunGatherer;
 use transport::turn_relayer::RTCTurnRelayer;
 
 use rtc::data_channel::{RTCDataChannelId, RTCDataChannelInit};
-use rtc::ice::mdns::MulticastDnsMode;
 use rtc::mdns::MulticastSocket;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::peer_connection::configuration::{RTCAnswerOptions, RTCOfferOptions};
@@ -92,26 +91,40 @@ use crate::peer_connection::driver::PeerConnectionDriverEvent;
 use crate::rtp_transceiver::rtp_sender::RtpSenderImpl;
 pub use rtc::interceptor::{Interceptor, NoopInterceptor, Registry};
 
-// Argument types for `SettingEngine`'s DTLS/SRTP setters. Re-exported because `rtc` is a
-// private dependency of this crate: without these, calling `set_dtls_cipher_suites` or
-// `set_srtp_protection_profiles` would force an application to add a second, version-locked
-// dependency just to name the enum it passes in.
-/// The crypto provider API, re-exported for the same reason: `SettingEngine::set_crypto_provider`
-/// takes an `Arc<dyn RTCCryptoProvider>`, and an application implementing its own provider needs
-/// the traits too.
+// Argument types for this crate's public API. Re-exported because `rtc` is a private
+// dependency: naming one of these types otherwise forces an application to add its own
+// `rtc` dependency, which resolves to a *different* source than the submodule used here.
+// The two copies are then distinct types and the call does not compile — a confusing way
+// to discover a missing re-export, since both spellings look identical in the error.
+//
+// The rule is that every type reachable in a public signature is nameable from `webrtc`.
+// It currently covers:
+//
+//   crypto::*            with_crypto_provider, and `SignatureScheme` for RTCCertificate
+//   CipherSuiteId        with_dtls_cipher_suites
+//   SrtpProtectionProfile with_srtp_protection_profiles
+//   MulticastDnsMode     with_multicast_dns_mode
+//   NetworkType          with_network_types
+//   RTCDtlsRole          with_answering_dtls_role
+//   SctpMaxMessageSize   with_sctp_max_message_size
+//   CertificateParams    RTCCertificate::{generate, generate_from_signing_key}
+//
+// `tests/public_api_is_nameable_from_webrtc.rs` names each of them through `webrtc::` and
+// never imports `rtc`, so a future setter taking an un-exported type fails to compile there.
 pub use rtc::crypto;
 pub use rtc::dtls::cipher_suite::CipherSuiteId;
 pub use rtc::dtls::extension::extension_use_srtp::SrtpProtectionProfile;
+pub use rtc::ice::{mdns::MulticastDnsMode, network_type::NetworkType};
 use rtc::media_stream::MediaStreamTrackId;
 pub use rtc::peer_connection::{
     RTCPeerConnection,
-    certificate::RTCCertificate,
+    certificate::{CertificateParams, RTCCertificate},
     configuration::{
         RTCBundlePolicy, RTCConfiguration, RTCConfigurationBuilder, RTCIceServer,
         RTCIceTransportPolicy, RTCRtcpMuxPolicy,
         interceptor_registry::*,
         media_engine::MediaEngine,
-        setting_engine::{SettingEngine, SettingEngineBuilder},
+        setting_engine::{SctpMaxMessageSize, SettingEngine, SettingEngineBuilder},
     },
     event::{
         RTCDataChannelEvent, RTCPeerConnectionEvent, RTCPeerConnectionIceErrorEvent,
@@ -121,7 +134,9 @@ pub use rtc::peer_connection::{
     state::{
         RTCIceConnectionState, RTCIceGatheringState, RTCPeerConnectionState, RTCSignalingState,
     },
-    transport::{RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceProtocol},
+    transport::{
+        RTCDtlsRole, RTCIceCandidate, RTCIceCandidateInit, RTCIceCandidateType, RTCIceProtocol,
+    },
 };
 
 /// Trait for handling peer connection events asynchronously
