@@ -57,7 +57,7 @@ use log::error;
 use std::collections::{HashMap, HashSet};
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::data_channel::{DataChannel, DataChannelEvent, DataChannelImpl};
 use crate::media_stream::{track_local::TrackLocal, track_remote::TrackRemote};
@@ -363,6 +363,8 @@ where
         self.setting_engine
             .set_crypto_provider(crypto_provider.clone());
         let mdns_mode = self.setting_engine.multicast_dns().mode;
+        let turn_allocation_refresh_interval_cap =
+            self.setting_engine.turn_allocation_refresh_interval_cap();
 
         // The core is told the time from here on; this is the seed every construction-time
         // instant inside it derives from, and under a `MockRuntime` it is the virtual clock's.
@@ -389,6 +391,7 @@ where
             self.tcp_addrs,
             self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit,
+            turn_allocation_refresh_interval_cap,
             crypto_provider,
         )
         .await
@@ -660,6 +663,7 @@ where
         tcp_addrs: Vec<A>,
         dedicated_reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
+        turn_allocation_refresh_interval_cap: Option<Duration>,
         crypto_provider: Arc<dyn crypto::RTCCryptoProvider>,
     ) -> Result<Self> {
         // Bind the std sockets up front (synchronous, and needed to compute the
@@ -733,6 +737,7 @@ where
             ice_servers,
             ice_gather_policy,
             Arc::clone(&runtime),
+            turn_allocation_refresh_interval_cap,
             crypto_provider,
         );
 

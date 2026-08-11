@@ -20,7 +20,7 @@ use rtc::turn::proto::chandata::ChannelData;
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const MAX_PENDING_PACKETS_PER_PEER: usize = 64;
 
@@ -60,6 +60,7 @@ pub(crate) struct RTCTurnRelayer {
     /// Taken from the peer connection rather than resolved here: the whole connection shares one
     /// provider, and no async-layer code selects crypto on its own.
     crypto_provider: Arc<dyn RTCCryptoProvider>,
+    allocation_refresh_interval_cap: Option<Duration>,
     clients: HashMap<FourTuple, ManagedTurnClient>,
     relay_addrs: HashMap<SocketAddr, FourTuple>,
     pending_permissions: HashMap<rtc::stun::message::TransactionId, PendingPermission>,
@@ -76,6 +77,7 @@ impl RTCTurnRelayer {
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
         runtime: Arc<dyn Runtime>,
+        allocation_refresh_interval_cap: Option<Duration>,
         crypto_provider: Arc<dyn RTCCryptoProvider>,
     ) -> Self {
         Self {
@@ -85,6 +87,7 @@ impl RTCTurnRelayer {
             state: RTCIceGatheringState::New,
             runtime,
             crypto_provider,
+            allocation_refresh_interval_cap,
             clients: HashMap::new(),
             relay_addrs: HashMap::new(),
             pending_permissions: HashMap::new(),
@@ -308,6 +311,7 @@ impl RTCTurnRelayer {
                             realm: String::new(),
                             software: String::new(),
                             rto_in_ms: 0,
+                            allocation_refresh_interval_cap: self.allocation_refresh_interval_cap,
                             ..Default::default()
                         },
                         Arc::clone(&self.crypto_provider),
@@ -797,6 +801,7 @@ mod tests {
                 }],
                 RTCIceTransportPolicy::Relay,
                 crate::runtime::default_runtime().expect("test requires a runtime feature"),
+                None,
                 rtc::crypto::default_provider().expect("a built-in crypto provider for tests"),
             );
 
