@@ -123,6 +123,17 @@ impl RTCTurnRelayer {
             return;
         }
 
+        self.reset();
+        self.ice_servers = ice_servers;
+        self.ice_gather_policy = ice_gather_policy;
+    }
+
+    pub(crate) fn restart_with_local_addrs(&mut self, local_addrs: Vec<SocketAddr>) {
+        self.reset();
+        self.local_addrs = local_addrs;
+    }
+
+    fn reset(&mut self) {
         let keys: Vec<FourTuple> = self.clients.keys().copied().collect();
         for key in keys {
             self.remove_client(key);
@@ -134,8 +145,6 @@ impl RTCTurnRelayer {
         self.wouts.clear();
         self.routs.clear();
         self.events.clear();
-        self.ice_servers = ice_servers;
-        self.ice_gather_policy = ice_gather_policy;
         self.state = RTCIceGatheringState::New;
     }
 

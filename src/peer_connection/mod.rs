@@ -193,6 +193,7 @@ where
     /// Held rather than forwarded immediately, so [`build`](Self::build) can resolve the crypto
     /// provider and inject it before the core connection is constructed — see there for why.
     setting_engine: SettingEngine,
+    fresh_udp_sockets_on_ice_restart: bool,
 }
 
 impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
@@ -205,6 +206,7 @@ impl<A: ToSocketAddrs> Default for PeerConnectionBuilder<A, NoopInterceptor> {
             tcp_addrs: vec![],
             dedicated_reactor_pool_size: 0,
             setting_engine: SettingEngine::default(),
+            fresh_udp_sockets_on_ice_restart: false,
             // `usize::MAX` = unbounded: no send back-pressure unless the application
             // opts in via `with_data_channel_send_buffer_limit`. This keeps `send`/
             // `send_text` non-blocking by default (zero behaviour change).
@@ -264,6 +266,7 @@ where
             dedicated_reactor_pool_size: self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit: self.data_channel_send_buffer_limit,
             setting_engine: self.setting_engine,
+            fresh_udp_sockets_on_ice_restart: self.fresh_udp_sockets_on_ice_restart,
         }
     }
 
@@ -282,6 +285,18 @@ where
     /// Configures the builder with the local UDP socket addresses to bind.
     pub fn with_udp_addrs(mut self, udp_addrs: Vec<A>) -> Self {
         self.udp_addrs = udp_addrs;
+        self
+    }
+
+    /// Rebinds the configured UDP addresses when the ICE core applies a restart.
+    ///
+    /// This is intended to be paired with
+    /// [`SettingEngine::set_discard_local_candidates_during_ice_restart`]. The
+    /// setting removes the previous candidate generation from the ICE agent;
+    /// this option replaces the sockets that back those candidates so ephemeral
+    /// addresses receive fresh ports and network mappings.
+    pub fn with_fresh_udp_sockets_on_ice_restart(mut self, enabled: bool) -> Self {
+        self.fresh_udp_sockets_on_ice_restart = enabled;
         self
     }
 
@@ -390,6 +405,7 @@ where
             self.dedicated_reactor_pool_size,
             data_channel_send_buffer_limit,
             crypto_provider,
+            self.fresh_udp_sockets_on_ice_restart,
         )
         .await
     }
@@ -564,6 +580,12 @@ where
     /// that closes the reactor-thread leak window; the `Close` event is only the
     /// fast wake.
     pub(crate) closing: AtomicBool,
+    /// Whether an applied ICE restart should replace the UDP sockets before
+    /// the next local candidate gathering phase.
+    pub(crate) fresh_udp_sockets_on_ice_restart: bool,
+    /// Set when the sans-I/O core applies an ICE restart and consumed by the
+    /// next `set_local_description` gathering notification.
+    pub(crate) udp_socket_rebind_pending: AtomicBool,
     /// Per-channel data-channel send-buffer limit in bytes (`usize::MAX` = unbounded,
     /// the default). When a limit is configured, [`DataChannel::send`]/[`send_text`](DataChannel::send_text)
     /// block until a channel's `outstanding_bytes` drops below it, and
@@ -611,6 +633,13 @@ impl<I> PeerConnectionRef<I>
 where
     I: Interceptor,
 {
+    fn observe_ice_restart(&self, before: u64, after: u64) {
+        if self.fresh_udp_sockets_on_ice_restart && before != after {
+            self.udp_socket_rebind_pending
+                .store(true, Ordering::Release);
+        }
+    }
+
     /// Coalescing driver wake for pending writes — the pion `awakeWriteLoop`
     /// equivalent. Marks a flush as pending and pokes the driver only on the
     /// `false -> true` transition, so a burst of sends yields at most one wake.
@@ -661,6 +690,7 @@ where
         dedicated_reactor_pool_size: usize,
         data_channel_send_buffer_limit: usize,
         crypto_provider: Arc<dyn crypto::RTCCryptoProvider>,
+        fresh_udp_sockets_on_ice_restart: bool,
     ) -> Result<Self> {
         // Bind the std sockets up front (synchronous, and needed to compute the
         // local addresses used for ICE gathering / SDP). Wrapping them into async
@@ -674,11 +704,19 @@ where
             None
         };
 
+        let mut udp_bind_addrs = Vec::new();
         let mut std_udp_sockets = Vec::new();
         for addr in udp_addrs {
-            let socket = std::net::UdpSocket::bind(addr)?;
+            let resolved = addr.to_socket_addrs()?.collect::<Vec<_>>();
+            let socket = std::net::UdpSocket::bind(resolved.as_slice())?;
             socket.set_nonblocking(true)?;
             let local_addr = socket.local_addr()?;
+            let bind_addr = resolved
+                .iter()
+                .copied()
+                .find(|candidate| candidate.ip() == local_addr.ip())
+                .unwrap_or(local_addr);
+            udp_bind_addrs.push(bind_addr);
             std_udp_sockets.push((local_addr, socket));
         }
 
@@ -709,6 +747,8 @@ where
                 write_pending: AtomicBool::new(false),
                 write_backpressure: std::sync::atomic::AtomicUsize::new(0),
                 closing: AtomicBool::new(false),
+                fresh_udp_sockets_on_ice_restart,
+                udp_socket_rebind_pending: AtomicBool::new(false),
                 data_channel_send_buffer_limit,
                 data_channel_backpressure: crate::runtime::Notify::new(),
                 data_channel_delivery_blocked: AtomicBool::new(false),
@@ -772,6 +812,7 @@ where
                     turn_relayer,
                     async_mdns_socket,
                     async_udp_sockets,
+                    udp_bind_addrs,
                     async_tcp_listeners,
                 )
                 .await
@@ -921,7 +962,11 @@ where
         options: Option<RTCOfferOptions>,
     ) -> Result<RTCSessionDescription> {
         let mut core = self.inner.core.lock().await;
-        core.create_offer(options)
+        let before = core.ice_restart_generation();
+        let offer = core.create_offer(options);
+        let after = core.ice_restart_generation();
+        self.inner.observe_ice_restart(before, after);
+        offer
     }
 
     async fn create_answer(
@@ -935,16 +980,23 @@ where
     async fn set_local_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
+            let before = core.ice_restart_generation();
             core.set_local_description(self.inner.runtime.now(), desc)?;
+            let after = core.ice_restart_generation();
+            self.inner.observe_ice_restart(before, after);
         }
 
         // Wake the driver with MessageInner::IceGathering. Without this
         // notify the driver would sleep until its previous (possibly 1-day default)
         // timer expired and never send STUN binding requests.
+        let rebind_udp_sockets = self
+            .inner
+            .udp_socket_rebind_pending
+            .swap(false, Ordering::AcqRel);
         // overflow: awaited — producer is the application in `set_local_description`.
         self.inner
             .driver_event_tx
-            .send(PeerConnectionDriverEvent::IceGathering)
+            .send(PeerConnectionDriverEvent::IceGathering { rebind_udp_sockets })
             .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
@@ -972,7 +1024,10 @@ where
     async fn set_remote_description(&self, desc: RTCSessionDescription) -> Result<()> {
         {
             let mut core = self.inner.core.lock().await;
+            let before = core.ice_restart_generation();
             core.set_remote_description(self.inner.runtime.now(), desc)?;
+            let after = core.ice_restart_generation();
+            self.inner.observe_ice_restart(before, after);
         }
         // Wake the driver so it re-polls its timeout. When both local and remote
         // descriptions are set, set_remote_description triggers start_transports
@@ -1034,7 +1089,9 @@ where
         // overflow: awaited — producer is the application in `restart_ice`.
         self.inner
             .driver_event_tx
-            .send(PeerConnectionDriverEvent::IceGathering)
+            .send(PeerConnectionDriverEvent::IceGathering {
+                rebind_udp_sockets: false,
+            })
             .await
             .map_err(|e| Error::Other(format!("{:?}", e)))
     }
@@ -1319,6 +1376,8 @@ mod tests {
             write_pending: AtomicBool::new(false),
             write_backpressure: AtomicUsize::new(0),
             closing: AtomicBool::new(false),
+            fresh_udp_sockets_on_ice_restart: false,
+            udp_socket_rebind_pending: AtomicBool::new(false),
             data_channel_send_buffer_limit: usize::MAX,
             data_channel_backpressure: crate::runtime::Notify::new(),
             data_channel_delivery_blocked: AtomicBool::new(false),

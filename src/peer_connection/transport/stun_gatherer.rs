@@ -91,13 +91,22 @@ impl RTCStunGatherer {
         ice_servers: Vec<RTCIceServer>,
         ice_gather_policy: RTCIceTransportPolicy,
     ) {
+        self.reset();
+        self.ice_servers = ice_servers;
+        self.ice_gather_policy = ice_gather_policy;
+    }
+
+    pub(crate) fn restart_with_local_addrs(&mut self, local_addrs: Vec<SocketAddr>) {
+        self.reset();
+        self.local_addrs = local_addrs;
+    }
+
+    fn reset(&mut self) {
         for (_, mut stun_client) in self.stun_clients.drain() {
             let _ = stun_client.close();
         }
         self.wouts.clear();
         self.events.clear();
-        self.ice_servers = ice_servers;
-        self.ice_gather_policy = ice_gather_policy;
         self.state = RTCIceGatheringState::New;
     }
 
